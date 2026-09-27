@@ -31,6 +31,8 @@ grep -Eq 'docker[[:space:]]+(stop|rm|kill)[[:space:]]+\$\(docker[[:space:]]+ps' 
 if grep -Eq '(^|[|;&[:space:]])ssh[[:space:]]' <<<"$cmd"; then
   grep -Eq 'sudo|apt|systemctl|rm[[:space:]]+-rf|docker[[:space:]]+build' <<<"$cmd" && \
     block "privileged / build commands must not run on the VPS. Use ./scripts/deploy.sh."
+  grep -Eq 'authorized_keys|passwd|mkfs|ufw[[:space:]]|iptables|shutdown|reboot' <<<"$cmd" && \
+    block "commands that change host access, firewall or power state are the human's job."
 fi
 
 # --- secrets stay out of the transcript ---
