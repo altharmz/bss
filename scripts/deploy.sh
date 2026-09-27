@@ -7,7 +7,7 @@ set -euo pipefail
 
 REMOTE="${REMOTE:-vps-test}"
 REMOTE_DIR="${REMOTE_DIR:-lab}"
-IMAGE_NAME="${IMAGE_NAME:-vps-lab-app}"
+IMAGE_NAME="${IMAGE_NAME:-__PROJECT__-app}"
 TAG="${TAG:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
 COMPOSE=(docker compose -f compose.yaml -f compose.prod.yaml)
 KEEP_IMAGES=3
@@ -26,16 +26,27 @@ docker save "${IMAGE_NAME}:${TAG}" | gzip -1 | ssh "${REMOTE}" 'gunzip | docker 
 log "Syncing compose files"
 ssh "${REMOTE}" "mkdir -p ${REMOTE_DIR}"
 
-# up -d only diffs container config (image, env, volume list), never the *contents* of a
-# bind-mounted file - so a Caddyfile edit needs an explicit, scoped recreate of caddy to
-# actually take effect. Hash what's on the VPS now, before rsync overwrites it, so we know
-# after the stack is (re)started whether that recreate is actually needed.
-local_caddy_hash="$(sha256sum Caddyfile | awk '{print $1}')"
-remote_caddy_hash="$(ssh "${REMOTE}" "sha256sum ${REMOTE_DIR}/Caddyfile 2>/dev/null | awk '{print \$1}'")"
-caddy_changed=false
-[[ "${local_caddy_hash}" != "${remote_caddy_hash}" ]] && caddy_changed=true
+# WITH_CADDY selects whether this deployment owns a Caddy container at all - see
+# .env.prod / README.md. Read straight from the file rather than sourcing it, so the rest
+# of .env.prod's variables never leak into this script's own environment.
+WITH_CADDY="$(grep -E '^WITH_CADDY=' .env.prod 2>/dev/null | cut -d= -f2- || true)"
+WITH_CADDY="${WITH_CADDY:-false}"
+CADDY_PROFILE=()
+[[ "${WITH_CADDY}" == "true" ]] && CADDY_PROFILE=(--profile caddy)
 
-rsync -az compose.yaml compose.prod.yaml Caddyfile scripts/cron-backup.sh "${REMOTE}:${REMOTE_DIR}/"
+caddy_changed=false
+if [[ "${WITH_CADDY}" == "true" ]]; then
+  # up -d only diffs container config (image, env, volume list), never the *contents* of a
+  # bind-mounted file - so a Caddyfile edit needs an explicit, scoped recreate of caddy to
+  # actually take effect. Hash what's on the VPS now, before rsync overwrites it, so we know
+  # after the stack is (re)started whether that recreate is actually needed.
+  local_caddy_hash="$(sha256sum Caddyfile | awk '{print $1}')"
+  remote_caddy_hash="$(ssh "${REMOTE}" "sha256sum ${REMOTE_DIR}/Caddyfile 2>/dev/null | awk '{print \$1}'")"
+  [[ "${local_caddy_hash}" != "${remote_caddy_hash}" ]] && caddy_changed=true
+  rsync -az compose.yaml compose.prod.yaml Caddyfile scripts/cron-backup.sh "${REMOTE}:${REMOTE_DIR}/"
+else
+  rsync -az compose.yaml compose.prod.yaml scripts/cron-backup.sh "${REMOTE}:${REMOTE_DIR}/"
+fi
 ssh "${REMOTE}" "chmod +x ${REMOTE_DIR}/cron-backup.sh"
 # compose auto-loads a file named .env from its project directory, so EVERY remote
 # compose call sees the secrets - not just the one that starts the stack
@@ -55,15 +66,17 @@ ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
 
 log "Starting the rest of the stack"
 ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
-  IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} up -d --quiet-pull --remove-orphans"
+  IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} ${CADDY_PROFILE[*]} up -d --quiet-pull --remove-orphans"
 
-if [[ "${caddy_changed}" == true ]]; then
-  log "Caddyfile changed — recreating the caddy container to pick it up"
-  ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
-    IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} up -d --force-recreate --no-deps caddy" \
-    || fail "failed to recreate caddy after a config change"
-else
-  log "Caddyfile unchanged — leaving caddy running as-is"
+if [[ "${WITH_CADDY}" == "true" ]]; then
+  if [[ "${caddy_changed}" == true ]]; then
+    log "Caddyfile changed — recreating the caddy container to pick it up"
+    ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
+      IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} ${CADDY_PROFILE[*]} up -d --force-recreate --no-deps caddy" \
+      || fail "failed to recreate caddy after a config change"
+  else
+    log "Caddyfile unchanged — leaving caddy running as-is"
+  fi
 fi
 
 log "Waiting for the app container to become healthy"
@@ -86,7 +99,7 @@ if [[ "${status}" != "healthy" ]]; then
 fi
 
 log "Remote smoke test"
-ssh "${REMOTE}" "curl -fsS --max-time 5 http://127.0.0.1:18080/healthz" \
+ssh "${REMOTE}" "curl -fsS --max-time 5 http://127.0.0.1:__APP_PORT__/healthz" \
   || { ssh "${REMOTE}" "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2; fail "smoke test failed"; }
 printf '\n'
 
@@ -95,4 +108,4 @@ ssh "${REMOTE}" "docker images '${IMAGE_NAME}' --format '{{.ID}} {{.CreatedAt}}'
   | sort -k2 -r | tail -n +$((KEEP_IMAGES + 1)) | awk '{print \$1}' \
   | xargs -r docker rmi" || true
 
-log "Deployed ${IMAGE_NAME}:${TAG} — reachable at 127.0.0.1:18080 on ${REMOTE}"
+log "Deployed ${IMAGE_NAME}:${TAG} — reachable at 127.0.0.1:__APP_PORT__ on ${REMOTE}"

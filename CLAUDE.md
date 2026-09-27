@@ -1,4 +1,14 @@
-# vps-lab
+# __PROJECT__
+
+This project was generated from a shared template (`vps-lab-template`). `make init
+NAME=... APP_PORT=... HTTPS_PORT=... DOMAIN=...` filled in the project name, the local/VPS
+app port, the HTTPS port, and the public domain everywhere they appear (compose files,
+Makefile, scripts, this file, `Caddyfile`), created `.env` and `.env.prod` from
+`.env.example` with a generated database password, and then removed itself from the
+Makefile so it can't run twice. If an `init:` target still exists in the Makefile, or a
+double-underscore token still shows up in a `grep -r` over the repo, `make init` was never
+run — do that before anything else, not a manual find-and-replace, since it also creates
+the `.env` files and only it knows to remove itself afterward.
 
 FastAPI + PostgreSQL service. Developed locally in WSL2, verified on a remote VPS.
 
@@ -27,7 +37,7 @@ make ssh       # open a shell on the VPS
 make migrate   # apply Alembic migrations against the local stack
 make fmt       # auto-format (ruff format + check --fix)
 make clean     # stop the local stack AND drop the local database volume
-make tunnel    # forward the remote app to localhost:18080
+make tunnel    # forward the remote app to localhost:__APP_PORT__
 make restore FILE=...  # restore a dump onto the VPS (human confirmation required)
 make remote CMD="..."  # run a one-off command against the deployed image on the VPS
 make hooks     # install the local pre-commit hook (make lint + make test)
@@ -60,8 +70,8 @@ failure.
   or reconfigure anything VPN-related.
 - Never run `docker system prune`, `docker volume rm`, `docker network prune`,
   or stop/remove containers you did not start. Other people's containers may be there.
-- On the VPS the app binds to `127.0.0.1:18080` only. Nothing is published to 0.0.0.0.
-  To reach it from the workstation use an SSH tunnel: `make tunnel`.
+- On the VPS the app binds to `127.0.0.1:__APP_PORT__` only. Nothing is published to
+  0.0.0.0. To reach it from the workstation use an SSH tunnel: `make tunnel`.
 - Remote commands go through `scripts/deploy.sh` only. Do not open ad-hoc `ssh vps-test '...'`
   sessions that mutate state.
 - Never read, print or commit `.env` / `.env.prod`. Use `.env.example` as the reference.
@@ -79,24 +89,25 @@ failure.
 ## Layout
 
 ```
-app/main.py               FastAPI app, page routes and redirects
-app/api.py                /api router: auth, game results, leaderboard
-app/repo.py               data access (psycopg 3, parameterised SQL)
-app/auth.py               password hashing (passlib + bcrypt)
-app/static/               style.css + game.html, login.html, leaderboard.html
+app/main.py               FastAPI app: /healthz and a JSON status root
+app/config.py              settings from environment variables (pydantic-settings)
+app/db.py                  psycopg 3 connection + the liveness probe /healthz calls
 alembic/                  migrations; alembic.ini reads DATABASE_URL from the env
-Caddyfile                 reverse proxy config, shipped to the VPS by deploy.sh
-tests/                    pytest suite (conftest.py spins up throwaway databases)
-Dockerfile                multi-stage: builder -> dev -> runtime
+Caddyfile                 reverse proxy config, used only when WITH_CADDY=true (see below)
 compose.yaml              base definition (app + db)
 compose.override.yaml     local dev only (bind mount, --reload, exposed ports)
 compose.prod.yaml         VPS only (resource limits, restart policy, log rotation)
+scripts/init.sh           one-time: fills in placeholders, creates .env/.env.prod
 scripts/deploy.sh         build -> save -> ssh load -> up -> healthcheck -> smoke
 scripts/smoke.sh          HTTP smoke test against a base URL
 scripts/pre-commit.sh     make lint + make test; installed via `make hooks`
 scripts/cron-backup.sh    lives on the VPS (shipped by deploy.sh); daily dump + rotation
 scripts/cron-install.sh   installs/refreshes the crontab entry that runs cron-backup.sh
 scripts/backup-list.sh    lists the dumps cron-backup.sh has left on the VPS
+tests/                    pytest suite (conftest.py spins up throwaway databases);
+                          test_health.py and test_migrations.py check the infrastructure
+                          this template provides and must keep passing on an otherwise
+                          empty service
 ```
 
 `docker compose` picks up `compose.override.yaml` automatically, so plain
@@ -122,12 +133,30 @@ scripts/backup-list.sh    lists the dumps cron-backup.sh has left on the VPS
   server", run `make verify`.
 - When a container misbehaves, read `make logs` before changing code.
 
-## Reverse proxy (added after the initial setup)
+## Reverse proxy
 
-A Caddy container fronts the app on the VPS: TLS + basic auth on port 8443,
-port 80 for ACME only. Public URL: https://vpn2811.duckdns.org:8443
+A Caddy container can front the app on the VPS: TLS + basic auth on `__HTTPS_PORT__`,
+port 80 for ACME only. Public URL: `https://__DOMAIN__:__HTTPS_PORT__`
 
-- `Caddyfile` is shipped to the VPS by `scripts/deploy.sh` alongside the compose files.
+Whether *this* project's compose stack runs that Caddy container is controlled by
+`WITH_CADDY` in `.env.prod`, via a compose profile — not by adding or removing the
+`caddy` service:
+
+- **`WITH_CADDY=true`** — this is the first service set up on the VPS, so it owns the
+  shared Caddy. `compose.prod.yaml`'s `caddy` service (`profiles: ["caddy"]`) is started
+  by passing `--profile caddy`, which `scripts/deploy.sh` does automatically when it reads
+  `WITH_CADDY=true`. `Caddyfile` (checked into this repo, with placeholders filled in by
+  `make init`) is the config that container runs.
+- **`WITH_CADDY=false`** — another service on this VPS already runs Caddy. This stack
+  never starts a `caddy` container at all; instead, this project's reverse-proxy block is
+  added by hand to that already-running Caddy's Caddyfile on the server. See README.md for
+  the block to copy and where it goes.
+
+Do not "fix" a missing local Caddy container by flipping `WITH_CADDY` to true or by adding
+a second, unconditional `caddy` service — on a VPS that already has one, that starts a
+second Caddy fighting the first for ports 80/`__HTTPS_PORT__`. The profile is the whole
+point: it lets both scenarios share one compose file.
+
 - The bcrypt hash in `Caddyfile` is inlined on purpose: `basic_auth` does NOT expand
   `{env.*}` placeholders in the password field — the hash is parsed before placeholder
   substitution. Do not "fix" this by moving it back to an environment variable.
@@ -137,22 +166,23 @@ port 80 for ACME only. Public URL: https://vpn2811.duckdns.org:8443
   External monitoring on a separate machine polls it directly. It returns nothing beyond
   service status and DB reachability, so exposing it unauthenticated doesn't leak
   anything — do not put other routes in that block.
-- Do not touch ports 80 or 8443 in `compose.prod.yaml` without saying why.
+- Do not touch ports 80 or `__HTTPS_PORT__` in `compose.prod.yaml` without saying why.
 - Bind-mounted configs (the Caddyfile) are not picked up by a plain `up -d` — compose
   only diffs container config (image, env, volume list), never the *contents* of a
   mounted file, so an edited Caddyfile keeps running the old config in memory until the
-  container is recreated. `scripts/deploy.sh` handles this itself: it checksums the
-  Caddyfile before vs. after syncing and only when it actually changed runs a scoped
-  `up -d --force-recreate --no-deps caddy`. Don't "fix" this class of problem elsewhere
-  with an unconditional `--force-recreate` — it bounces the proxy on every deploy.
+  container is recreated. `scripts/deploy.sh` handles this itself (when `WITH_CADDY=true`):
+  it checksums the Caddyfile before vs. after syncing and only when it actually changed
+  runs a scoped `up -d --force-recreate --no-deps caddy`. Don't "fix" this class of problem
+  elsewhere with an unconditional `--force-recreate` — it bounces the proxy on every deploy.
 - The VPS reboots nightly at 03:00 (root cron). Everything must come back on its own —
   never rely on manually started containers.
 
 ## Frontend conventions
 
-Static assets are plain HTML/CSS/JS in `app/static/`, served by FastAPI via `StaticFiles`.
-No bundlers, no npm, no build step, no external CDN dependencies. If a task seems to need
-a framework, say so and stop rather than adding a Node toolchain to the image.
+If this service grows a UI, static assets belong in `app/static/`, served by FastAPI via
+`StaticFiles` — plain HTML/CSS/JS. No bundlers, no npm, no build step, no external CDN
+dependencies. If a task seems to need a framework, say so and stop rather than adding a
+Node toolchain to the image.
 
 ## Backups
 
@@ -172,14 +202,3 @@ losing the VPS itself; only a copy pulled to the workstation does.
   or removes existing data.
 - `make restore FILE=...` is never run automatically or by an agent. It overwrites the
   live database and requires a human to type `yes` after seeing the current row counts.
-
-## Tile size cap
-
-The game ends at tile 65536 with a win overlay and no "continue" option. This is
-deliberate: it keeps every tile at five digits or fewer, so the tile typography rule
-needs only the single `.tile[data-len="5"]` exception. Do not remove that threshold to
-"allow bigger tiles" without also adding a six-digit CSS rule.
-
-The `max_tile` validator in `app/api.py` still accepts up to 131072 — deliberately
-wider than the client can produce, so a stricter client never gets rejected by the
-server. Don't tighten it to match.

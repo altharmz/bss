@@ -1,59 +1,106 @@
-# vps-lab
+# vps-lab-template
 
-FastAPI + PostgreSQL service, developed in WSL2 and verified on a small VPS.
-The point of this skeleton is a tight, honest feedback loop for agent-assisted work:
-one command interface, real health checks, and a deployment that fails loudly.
+A reusable skeleton for small FastAPI + PostgreSQL services: one command interface, real
+health checks, and a deployment that fails loudly. Built in WSL2, verified on a small VPS
+that also runs other things — a production VPN server, and possibly other services from
+this same template.
 
-## Architecture of the workflow
+What it gives you out of the box:
 
-```
-WSL2 (Ubuntu)                                  VPS "vps-test" (Debian 12, 1 vCPU / 2 GB)
-------------                                   ----------------------------------------
-edit -> make test -> make up -> make smoke     docker load  ->  compose up -d
-                 |                                    ^                |
-                 +--------- make deploy --------------+          healthcheck + smoke
-                                                                        |
-                            failure -> remote logs printed locally <----+
-```
+- FastAPI app with a database-checking `/healthz` and a JSON status root, wired to
+  PostgreSQL via psycopg 3 and Alembic migrations.
+- A `Makefile` covering the whole loop: build, run, lint, test, smoke-test, deploy, verify.
+- A multi-stage `Dockerfile` (build once locally, run the same image everywhere) and a
+  layered compose setup (local dev vs. VPS overlay).
+- A deploy script that builds locally, ships the image over SSH, migrates, restarts, waits
+  for a real health check, and prints remote logs on failure — never builds on the VPS.
+- Automated + manual database backups, and a `make restore` that requires a human to
+  confirm before it overwrites anything.
+- Claude Code guardrails (`CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/guard.sh`)
+  that keep an agent off the VPN ports and off destructive commands.
 
-Images are always built in WSL. The VPS has one core and runs a production VPN server,
-so it only ever loads and runs a finished image.
-
-## First run
+## Creating a project from this template
 
 ```bash
-cp .env.example .env          # local
-cp .env.example .env.prod     # VPS (use a different password)
-make up
-make smoke
+git clone <this-template> my-service && cd my-service
+make init NAME=bss APP_PORT=18081 HTTPS_PORT=8443 DOMAIN=example.org
 ```
 
-Keep the repository inside the Linux filesystem (`~/projects/vps-lab`), not under
+This fills in the project name, ports and domain everywhere they appear in the repo
+(compose files, `Makefile`, scripts, `CLAUDE.md`, `Caddyfile`), creates `.env` and
+`.env.prod` from `.env.example` with a freshly generated database password in each, and
+then deletes the `init` target from the `Makefile` so it can't run a second time and
+re-mangle an already-substituted tree. Run it exactly once, right after cloning, before
+you touch anything else.
+
+```bash
+make up      # start the local stack (app + postgres, hot reload)
+make smoke   # confirm it responds
+```
+
+Keep the repository inside the Linux filesystem (e.g. `~/projects/my-service`), not under
 `/mnt/c/...`. Bind mounts across the Windows boundary are slow and inotify events do not
 propagate, which silently breaks `--reload`.
+
+## What `make init` does NOT set up for you
+
+- **An SSH alias for the VPS.** `Makefile`/`scripts/deploy.sh` talk to a host named
+  `vps-test` by default (override with `REMOTE=...`). Add a matching entry to your
+  `~/.ssh/config` on the workstation, using key-only auth.
+- **A `deploy` user on the server.** Create one, add it to the `docker` group, and drop
+  your public key in its `authorized_keys`. Nothing here provisions the VPS itself.
+- **The reverse-proxy block**, if this VPS already runs Caddy for another service. Set
+  `WITH_CADDY=false` in `.env.prod` (the default), and add this block by hand to the
+  Caddyfile that's already running there:
+
+  ```
+  __DOMAIN__:__HTTPS_PORT__ {
+      handle /healthz {
+          reverse_proxy 127.0.0.1:__APP_PORT__
+      }
+      handle {
+          basic_auth {
+              <user> <bcrypt-hash>
+          }
+          reverse_proxy 127.0.0.1:__APP_PORT__
+      }
+  }
+  ```
+
+  (Reached via the host's published port because that Caddy lives in a different compose
+  project's network.) Then reload that Caddy's config — deploying this service does not do
+  it for you.
+
+  If this is instead the *first* service on the VPS, set `WITH_CADDY=true` and
+  `scripts/deploy.sh` will start and manage this repo's own `Caddyfile` and `caddy`
+  container for you.
+- **The DNS record** for `__DOMAIN__`, pointing at the VPS's public IP.
 
 ## Deploying
 
 ```bash
 make deploy    # build -> ship -> restart -> wait for healthy -> remote smoke test
 make verify    # lint + test + deploy, the full gate
-make tunnel    # then open http://localhost:18080
+make tunnel    # then open http://localhost:__APP_PORT__
 ```
 
-Prerequisites on the VPS: a `deploy` user in the `docker` group, key-only SSH, and an
-`~/.ssh/config` entry named `vps-test` on the WSL side.
+## Built-in checks
 
-## Why things are the way they are
-
-- **`/healthz` checks the database.** Docker's HEALTHCHECK and `deploy.sh` both gate on
-  it, so a green health status means the service can actually serve, not merely that a
-  process is alive.
-- **Resource limits in `compose.prod.yaml`.** On a 2 GB box the OOM killer picks its own
-  victim, and that victim could be the VPN. Limits make our stack the one that dies.
-- **Log rotation.** 30 GB of disk disappears fast under unrotated json-file logs.
-- **`127.0.0.1` binds only.** Nothing of ours is exposed on the public interface.
-- **A `Makefile` instead of ad-hoc commands.** Stable names and honest exit codes are
-  what an agent can act on; twenty variations of a `docker compose exec` line are not.
+- **`/healthz` checks the database**, not just that a process is alive. Docker's
+  HEALTHCHECK and `deploy.sh` both gate on it, and it's the one route Caddy leaves
+  unauthenticated for external monitoring.
+- **`make verify`** is the single source of truth for "does it actually work on the
+  server": deploy, wait for healthy, remote smoke test, non-zero exit and printed remote
+  logs on any failure.
+- **`make lint` / `make test`**, and a pre-commit hook (`make hooks` to install) that runs
+  both before every commit.
+- **Resource limits in `compose.prod.yaml`.** On a small box the OOM killer picks its own
+  victim, and that victim could be something else entirely. Limits make this stack the one
+  that dies, not its neighbor.
+- **Log rotation**, so unrotated json-file logs don't fill the disk.
+- **`127.0.0.1` binds only.** Nothing of this service is exposed on the public interface
+  directly; only the reverse proxy (this project's own, or another service's shared one)
+  faces the internet.
 
 ## Claude Code setup
 

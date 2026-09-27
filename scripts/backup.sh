@@ -13,7 +13,7 @@ fail() { printf '\033[1;31mFAILED:\033[0m %s\n' "$*" >&2; exit 1; }
 
 mkdir -p backups
 ts="$(date +%Y%m%d-%H%M%S)"
-out="backups/vps-lab-${ts}.sql.gz"
+out="backups/__PROJECT__-${ts}.sql.gz"
 
 log "Dumping database on ${REMOTE} to ${out}"
 # --clean --if-exists so the dump can be loaded back onto a database that already has the

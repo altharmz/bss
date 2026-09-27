@@ -1,10 +1,10 @@
 # Base definition. Local dev is this file + compose.override.yaml (auto-loaded).
 # Production is this file + compose.prod.yaml (explicit, see scripts/deploy.sh).
-name: vps-lab
+name: __PROJECT__
 
 services:
   app:
-    image: ${IMAGE_NAME:-vps-lab-app}:${TAG:-dev}
+    image: ${IMAGE_NAME:-__PROJECT__-app}:${TAG:-dev}
     environment:
       APP_ENV: ${APP_ENV:-dev}
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-app}

@@ -1,0 +1,35 @@
+# Reverse proxy for __PROJECT__. Bind-mounted into the caddy service in compose.prod.yaml,
+# which only exists when WITH_CADDY=true in .env.prod - i.e. this is the first service set
+# up on this VPS and it owns the shared Caddy. If WITH_CADDY=false, this file is never
+# shipped or read; the app's block instead lives by hand in the Caddyfile of whichever
+# earlier service already runs Caddy - see README.md for that block.
+#
+# The domain and HTTPS port below are filled in by `make init`. The basic-auth hash is
+# not - `make init` only does literal placeholder substitution, and a password hash isn't
+# a configuration constant. Generate one with `docker run --rm caddy caddy hash-password`
+# and paste the result in below, then pick your own basic-auth username.
+#
+# Caddy and the app share the "lab" docker network (see compose.yaml/compose.prod.yaml),
+# so it reaches the app by service name - not by the app's host-published port, which
+# exists only for `make tunnel` from the workstation.
+
+:80 {
+	# ACME HTTP-01 challenge only. Nothing else is served here.
+}
+
+__DOMAIN__:__HTTPS_PORT__ {
+	# Unauthenticated on purpose: external monitoring polls this directly, and it returns
+	# nothing beyond service status and DB reachability, so it doesn't need basic auth.
+	# handle blocks are mutually exclusive and the first match wins - keep this block
+	# ahead of the catch-all below, and don't add other routes to it.
+	handle /healthz {
+		reverse_proxy app:8080
+	}
+
+	handle {
+		basic_auth {
+			__BASIC_AUTH_USER__ __BASIC_AUTH_HASH__
+		}
+		reverse_proxy app:8080
+	}
+}

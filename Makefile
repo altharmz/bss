@@ -5,10 +5,10 @@ SHELL := /bin/bash
 COMPOSE_PROD := docker compose -f compose.yaml -f compose.prod.yaml
 REMOTE ?= vps-test
 REMOTE_DIR ?= lab
-IMAGE_NAME ?= vps-lab-app
+IMAGE_NAME ?= __PROJECT__-app
 TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote backup restore hooks cron-install backup-list
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote backup restore hooks cron-install backup-list init
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -54,8 +54,8 @@ deploy: ## Build locally and ship to the VPS
 verify: lint test deploy ## Full gate: lint, tests, then a real deployment that must go healthy
 	@echo "verified: local checks passed and the remote instance is healthy"
 
-tunnel: ## Forward the remote app to localhost:18080 (Ctrl-C to stop)
-	ssh -N -L 18080:127.0.0.1:18080 $(REMOTE)
+tunnel: ## Forward the remote app to localhost:__APP_PORT__ (Ctrl-C to stop)
+	ssh -N -L __APP_PORT__:127.0.0.1:__APP_PORT__ $(REMOTE)
 
 ssh: ## Shell on the VPS
 	ssh $(REMOTE)
@@ -73,7 +73,7 @@ backup: ## Dump the remote database into backups/
 backup-list: ## List backup dumps sitting on the VPS, with dates and sizes
 	./scripts/backup-list.sh
 
-restore: ## Restore a dump onto the VPS: make restore FILE=backups/vps-lab-<ts>.sql.gz
+restore: ## Restore a dump onto the VPS: make restore FILE=backups/__PROJECT__-<ts>.sql.gz
 	FILE="$(FILE)" ./scripts/restore.sh
 
 hooks: ## Install the pre-commit hook (make lint + make test before every commit)
@@ -84,6 +84,15 @@ hooks: ## Install the pre-commit hook (make lint + make test before every commit
 
 cron-install: ## Install/refresh the daily 02:30 backup cron job on the VPS (idempotent)
 	./scripts/cron-install.sh
+
+# --- init:begin (this whole block removes itself after one successful run) ---
+init: ## One-time: fill in placeholders and create .env/.env.prod. make init NAME=bss APP_PORT=18081 HTTPS_PORT=8443 DOMAIN=example.org
+	@if [ -z "$(NAME)" ] || [ -z "$(APP_PORT)" ] || [ -z "$(HTTPS_PORT)" ] || [ -z "$(DOMAIN)" ]; then \
+		echo 'usage: make init NAME=bss APP_PORT=18081 HTTPS_PORT=8443 DOMAIN=example.org' >&2; \
+		exit 1; \
+	fi
+	./scripts/init.sh "$(NAME)" "$(APP_PORT)" "$(HTTPS_PORT)" "$(DOMAIN)"
+# --- init:end ---
 
 clean: ## Remove local containers AND the local database volume
 	docker compose down -v

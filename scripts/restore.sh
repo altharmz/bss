@@ -9,7 +9,7 @@ set -euo pipefail
 REMOTE="${REMOTE:-vps-test}"
 REMOTE_DIR="${REMOTE_DIR:-lab}"
 COMPOSE=(docker compose -f compose.yaml -f compose.prod.yaml)
-FILE="${FILE:?usage: make restore FILE=backups/vps-lab-<timestamp>.sql.gz}"
+FILE="${FILE:?usage: make restore FILE=backups/__PROJECT__-<timestamp>.sql.gz}"
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31mFAILED:\033[0m %s\n' "$*" >&2; exit 1; }

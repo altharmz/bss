@@ -7,10 +7,10 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_root_without_session_redirects_to_login():
-    resp = client.get("/", follow_redirects=False)
-    assert resp.status_code == 302
-    assert resp.headers["location"] == "/login"
+def test_root_reports_service_status():
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
 
 
 def test_healthz_ok_when_db_reachable():

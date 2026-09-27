@@ -11,7 +11,7 @@ KEEP=7
 
 mkdir -p backups
 ts="$(date +%Y%m%d-%H%M%S)"
-out="backups/vps-lab-${ts}.sql.gz"
+out="backups/__PROJECT__-${ts}.sql.gz"
 trap 'rm -f "${out}.tmp"' EXIT
 
 # --clean --if-exists so the dump can be loaded back onto a database that already has the
@@ -22,4 +22,4 @@ trap 'rm -f "${out}.tmp"' EXIT
 mv "${out}.tmp" "${out}"
 
 # keep the KEEP most recent dumps, delete the rest
-ls -1t backups/vps-lab-*.sql.gz 2>/dev/null | tail -n +$((KEEP + 1)) | xargs -r rm -f
+ls -1t backups/__PROJECT__-*.sql.gz 2>/dev/null | tail -n +$((KEEP + 1)) | xargs -r rm -f

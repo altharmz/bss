@@ -12,10 +12,7 @@ grep -q '"db": *"up"' /tmp/smoke.out || fail "/healthz reports the database is d
 
 code="$(curl -sS -o /tmp/smoke.out -w '%{http_code}' --max-time 5 "${BASE}/")" \
   || fail "cannot reach ${BASE}/"
-[[ "${code}" == "302" ]] || fail "/ (no session) returned ${code}, expected 302 redirect to /login"
-
-code="$(curl -sS -o /tmp/smoke.out -w '%{http_code}' --max-time 5 "${BASE}/login")" \
-  || fail "cannot reach ${BASE}/login"
-[[ "${code}" == "200" ]] || fail "/login returned ${code}"
+[[ "${code}" == "200" ]] || fail "/ returned ${code}: $(cat /tmp/smoke.out)"
+grep -q '"status": *"ok"' /tmp/smoke.out || fail "/ did not report status ok: $(cat /tmp/smoke.out)"
 
 printf '\033[1;32mSMOKE OK\033[0m %s\n' "${BASE}"

@@ -8,7 +8,7 @@ services:
     # No build section anywhere in this composition: the image is pre-built in WSL,
     # shipped with `docker save | ssh ... docker load`, and only started here.
     ports:
-      - "127.0.0.1:18080:8080"
+      - "127.0.0.1:__APP_PORT__:8080"
     restart: unless-stopped
     mem_limit: 384m
     memswap_limit: 384m
@@ -41,11 +41,15 @@ services:
         max-file: "3"
 
   caddy:
+    # Only started when WITH_CADDY=true (see .env.prod / README.md). deploy.sh passes
+    # --profile caddy when it reads that; otherwise this service is never created, on the
+    # assumption another service on this VPS already runs the shared Caddy.
+    profiles: ["caddy"]
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
       - "80:80"
-      - "8443:8443"
+      - "__HTTPS_PORT__:__HTTPS_PORT__"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
