@@ -1,0 +1,67 @@
+# VPS overlay. Used explicitly: docker compose -f compose.yaml -f compose.prod.yaml ...
+#
+# The VPS has 1 vCPU / 2 GB and runs a production VPN server. Every limit below exists
+# so that this stack can never starve it: without mem_limit the OOM killer is free to
+# pick the VPN process instead of us.
+services:
+  app:
+    # No build section anywhere in this composition: the image is pre-built in WSL,
+    # shipped with `docker save | ssh ... docker load`, and only started here.
+    ports:
+      - "127.0.0.1:18080:8080"
+    restart: unless-stopped
+    mem_limit: 384m
+    memswap_limit: 384m
+    cpus: 0.50
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      APP_ENV: staging
+      LOG_LEVEL: info
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  db:
+    restart: unless-stopped
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 0.40
+    command: >
+      postgres -c shared_buffers=128MB -c max_connections=20
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8443:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    mem_limit: 128m
+    memswap_limit: 128m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks: [lab]
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,40 @@
+# Base definition. Local dev is this file + compose.override.yaml (auto-loaded).
+# Production is this file + compose.prod.yaml (explicit, see scripts/deploy.sh).
+name: vps-lab
+
+services:
+  app:
+    image: ${IMAGE_NAME:-vps-lab-app}:${TAG:-dev}
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-app}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [lab]
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    healthcheck:
+      # pg_isready alone only checks that the server accepts connections, not that our
+      # credentials are valid — a stale/mismatched POSTGRES_PASSWORD would still report
+      # healthy. Run an authenticated query too. $$VAR (not ${VAR}) so the password is
+      # read from the container's own env at check time, not baked into the compose file.
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB && PGPASSWORD=$$POSTGRES_PASSWORD psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c 'SELECT 1' -tAq >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [lab]
+
+volumes:
+  pgdata:
+
+networks:
+  lab:
