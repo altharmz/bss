@@ -41,9 +41,8 @@ lint: ## Lint and format check
 	docker compose run --rm --no-deps app ruff check .
 	docker compose run --rm --no-deps app ruff format --check .
 
-fmt: ## Auto-format the code
-	docker compose run --rm --no-deps app ruff format .
-	docker compose run --rm --no-deps app ruff check --fix .
+fmt: ## Auto-format the code (writable `tools` service; `app` mounts sources read-only)
+	docker compose run --rm tools sh -c 'ruff format . && ruff check --fix .'
 
 smoke: ## Smoke-test the local instance
 	./scripts/smoke.sh http://localhost:8080

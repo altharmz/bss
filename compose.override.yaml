@@ -23,6 +23,21 @@ services:
         condition: service_healthy
     networks: [lab]
 
+  # Writable twin of `app` for code-mutating tooling (make fmt, .claude/hooks/format.sh).
+  # `app` keeps its read-only source mounts. Same dev image, so the same ruff version.
+  # The whole project is mounted at /app (where `app` sees its sources); the venv lives
+  # in /opt/venv, outside the mount. Only started explicitly: docker compose run tools ...
+  tools:
+    build:
+      context: .
+      target: dev
+    image: ${IMAGE_NAME:-bss-app}:${TAG:-dev}
+    profiles: [tools]
+    volumes:
+      - .:/app
+    network_mode: none
+    command: ["ruff", "--version"]
+
   db:
     image: postgres:16-alpine
     environment:

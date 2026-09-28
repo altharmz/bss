@@ -96,7 +96,8 @@ app/config.py              settings from environment variables (pydantic-setting
 app/db.py                  psycopg 3 connection + the liveness probe /healthz calls
 alembic/                  migrations; alembic.ini reads DATABASE_URL from the env
 compose.yaml              base definition: only what both modes share (the app image)
-compose.override.yaml     local dev only (own postgres on `lab`, bind mount, --reload, ports)
+compose.override.yaml     local dev only (own postgres on `lab`, bind mount, --reload, ports;
+                          `tools` service: writable mount for make fmt + format hook)
 compose.prod.yaml         VPS only (shared network + alias, DATABASE_URL, limits, log rotation)
 scripts/init.sh           one-time: fills in placeholders, creates .env/.env.prod
 scripts/deploy.sh         build -> save -> ssh load -> migrate -> up -> healthcheck -> smoke
@@ -128,6 +129,27 @@ would attach the prod container to both `lab` and `shared`).
 - Dependencies: add to `requirements.txt` (runtime) or `requirements-dev.txt` (tooling),
   then rebuild. Do not `pip install` inside a running container.
 - Before every commit: `make lint && make test`. Small, focused commits.
+
+## Open questions
+
+- **Port the format fix to vps-lab-template** (fixed here, not there). In the template,
+  `make fmt` and `.claude/hooks/format.sh` both fail silently:
+  - `compose.override.yaml` mounts `app/` and `tests/` read-only on `app`, so
+    `docker compose run app ruff format` cannot write ("Read-only file system");
+  - the hook passes Claude Code's absolute host path into the container, where it does not
+    exist, sends format output to /dev/null, prints `ruff check` to stdout (not shown for
+    PostToolUse) and always exits 0.
+
+  Fix as done here: a `tools` service in `compose.override.yaml` (same `dev` target and
+  image, `profiles: [tools]`, whole project mounted read-write at `/app`, venv stays in
+  `/opt/venv`, no ports, no DB, `network_mode: none`); `make fmt` runs
+  `docker compose run --rm tools sh -c 'ruff format . && ruff check --fix .'`, `make lint`
+  stays on `app`. The hook: no host-ruff branch (the container pins the ruff version);
+  acts only on `*.py` under `$CLAUDE_PROJECT_DIR`, passes the project-relative path; one
+  container start running `ruff format --force-exclude` then `ruff check --fix
+  --force-exclude --output-format concise`; clean -> exit 0 silently, findings -> stderr +
+  exit 2, any failure to run -> "format hook FAILED to run: <reason>" + exit 2; explicit
+  `timeout` in `.claude/settings.json`.
 
 ## Working style
 
