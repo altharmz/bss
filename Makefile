@@ -8,7 +8,7 @@ REMOTE_DIR ?= __PROJECT__
 IMAGE_NAME ?= __PROJECT__-app
 TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote backup restore hooks cron-install backup-list init
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote hooks init
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -67,23 +67,11 @@ remote: ## Run a one-off command against the deployed image on the VPS: make rem
 	fi
 	ssh $(REMOTE) "cd $(REMOTE_DIR) && IMAGE_NAME=$(IMAGE_NAME) TAG=$(TAG) $(COMPOSE_PROD) run --rm --no-deps app $(CMD)"
 
-backup: ## Dump the remote database into backups/
-	./scripts/backup.sh
-
-backup-list: ## List backup dumps sitting on the VPS, with dates and sizes
-	./scripts/backup-list.sh
-
-restore: ## Restore a dump onto the VPS: make restore FILE=backups/__PROJECT__-<ts>.sql.gz
-	FILE="$(FILE)" ./scripts/restore.sh
-
 hooks: ## Install the pre-commit hook (make lint + make test before every commit)
 	@mkdir -p .git/hooks
 	@ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit
 	@chmod +x scripts/pre-commit.sh
 	@echo "installed pre-commit hook -> scripts/pre-commit.sh (bypass with git commit --no-verify)"
-
-cron-install: ## Install/refresh the daily 02:30 backup cron job on the VPS (idempotent)
-	./scripts/cron-install.sh
 
 # --- init:begin (this whole block removes itself after one successful run) ---
 init: ## One-time: fill in placeholders and create .env/.env.prod. make init NAME=bss APP_PORT=18081 HTTPS_PORT=8443 DOMAIN=example.org
