@@ -12,7 +12,7 @@ services:
     # No build section anywhere in this composition: the image is pre-built in WSL,
     # shipped with `docker save | ssh ... docker load`, and only started here.
     ports:
-      - "127.0.0.1:__APP_PORT__:8080"
+      - "127.0.0.1:18081:8080"
     restart: unless-stopped
     mem_limit: 384m
     memswap_limit: 384m
@@ -26,13 +26,13 @@ services:
       APP_ENV: staging
       LOG_LEVEL: info
       # `postgres` is the service name in vps-infra; database and role are both
-      # __PROJECT__, created there with `make add-db NAME=__PROJECT__`.
-      DATABASE_URL: postgresql://__PROJECT__:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/__PROJECT__
+      # bss, created there with `make add-db NAME=bss`.
+      DATABASE_URL: postgresql://bss:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/bss
     networks:
       shared:
         # Every app on the shared network calls its service `app`, so that name is
-        # ambiguous there. vps-infra's Caddyfile reaches us as __PROJECT__:8080.
-        aliases: [__PROJECT__]
+        # ambiguous there. vps-infra's Caddyfile reaches us as bss:8080.
+        aliases: [bss]
     logging:
       driver: json-file
       options:

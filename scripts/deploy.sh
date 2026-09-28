@@ -6,10 +6,10 @@
 set -euo pipefail
 
 REMOTE="${REMOTE:-vps-test}"
-# Relative to the deploy user's home, i.e. ~/__PROJECT__ - one directory per project, so
+# Relative to the deploy user's home, i.e. ~/bss - one directory per project, so
 # two apps from this template on the same VPS never overwrite each other's files.
-REMOTE_DIR="${REMOTE_DIR:-__PROJECT__}"
-IMAGE_NAME="${IMAGE_NAME:-__PROJECT__-app}"
+REMOTE_DIR="${REMOTE_DIR:-bss}"
+IMAGE_NAME="${IMAGE_NAME:-bss-app}"
 TAG="${TAG:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
 COMPOSE=(docker compose -f compose.yaml -f compose.prod.yaml)
 KEEP_IMAGES=3
@@ -60,9 +60,9 @@ if (( migrate_rc == 124 )); then
   # Matched by compose's own labels (this project + oneoff), so nothing else on the host
   # is touched. A fixed name would be simpler, but `compose run --name` hangs instead of
   # running.
-  ssh "${REMOTE}" "docker ps -aq --filter 'label=com.docker.compose.project=__PROJECT__' --filter 'label=com.docker.compose.oneoff=True' | xargs -r docker rm -f >/dev/null 2>&1" || true
+  ssh "${REMOTE}" "docker ps -aq --filter 'label=com.docker.compose.project=bss' --filter 'label=com.docker.compose.oneoff=True' | xargs -r docker rm -f >/dev/null 2>&1" || true
   fail "migrations did not finish within ${MIGRATE_TIMEOUT}s - the database is most likely unreachable.
-  Check ${REMOTE_DIR}/.env on ${REMOTE} (POSTGRES_PASSWORD must be the __PROJECT__ role's password in vps-infra)
+  Check ${REMOTE_DIR}/.env on ${REMOTE} (POSTGRES_PASSWORD must be the bss role's password in vps-infra)
   and that the vps-infra postgres is running and attached to the 'shared' network:
     docker network inspect shared --format '{{range .Containers}}{{.Name}} {{end}}'"
 elif (( migrate_rc != 0 )); then
@@ -93,7 +93,7 @@ if [[ "${status}" != "healthy" ]]; then
 fi
 
 log "Remote smoke test"
-ssh "${REMOTE}" "curl -fsS --max-time 5 http://127.0.0.1:__APP_PORT__/healthz" \
+ssh "${REMOTE}" "curl -fsS --max-time 5 http://127.0.0.1:18081/healthz" \
   || { ssh "${REMOTE}" "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2; fail "smoke test failed"; }
 printf '\n'
 
@@ -102,4 +102,4 @@ ssh "${REMOTE}" "docker images '${IMAGE_NAME}' --format '{{.ID}} {{.CreatedAt}}'
   | sort -k2 -r | tail -n +$((KEEP_IMAGES + 1)) | awk '{print \$1}' \
   | xargs -r docker rmi" || true
 
-log "Deployed ${IMAGE_NAME}:${TAG} — reachable at 127.0.0.1:__APP_PORT__ on ${REMOTE}"
+log "Deployed ${IMAGE_NAME}:${TAG} — reachable at 127.0.0.1:18081 on ${REMOTE}"

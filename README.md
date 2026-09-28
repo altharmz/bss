@@ -52,10 +52,10 @@ deploy, and `deploy.sh` refuses to run without it.
 
    ```bash
    # in the vps-infra project
-   make add-db NAME=__PROJECT__
+   make add-db NAME=bss
    ```
 
-   This creates database and role `__PROJECT__` in the shared Postgres, with the password
+   This creates database and role `bss` in the shared Postgres, with the password
    taken from `DB_PASSWORD_<NAME in upper case>` in vps-infra's `.env.prod`. **Replace
    `POSTGRES_PASSWORD` in this project's `.env.prod` with that same password**:
    the value `make init` put there is only a temporary placeholder the shared Postgres
@@ -67,7 +67,7 @@ deploy, and `deploy.sh` refuses to run without it.
    Caddy picks it up:
 
    ```
-   __DOMAIN__:__HTTPS_PORT__ {
+   vpn2811.duckdns.org:8444 {
        encode gzip
        log {
            output stdout
@@ -77,7 +77,7 @@ deploy, and `deploy.sh` refuses to run without it.
        # Unauthenticated on purpose: external monitoring polls it. Must stay ahead of the
        # catch-all below (handle blocks are exclusive, first match wins).
        handle /healthz {
-           reverse_proxy __PROJECT__:8080
+           reverse_proxy bss:8080
        }
 
        handle {
@@ -86,12 +86,12 @@ deploy, and `deploy.sh` refuses to run without it.
            basic_auth {
                <user> <bcrypt-hash>
            }
-           reverse_proxy __PROJECT__:8080
+           reverse_proxy bss:8080
        }
    }
    ```
 
-   Caddy reaches the app by its alias on the `shared` network (`__PROJECT__:8080`, the
+   Caddy reaches the app by its alias on the `shared` network (`bss:8080`, the
    port inside the container), not by the host port — that one exists only for
    `make tunnel`.
 
@@ -116,17 +116,17 @@ propagate, which silently breaks `--reload`.
   your public key in its `authorized_keys`. Nothing here provisions the VPS itself.
 - **Anything in vps-infra**: the `shared` network, the database (`make add-db`) and the
   Caddyfile block — steps 1, 3 and 4 above.
-- **The DNS record** for `__DOMAIN__`, pointing at the VPS's public IP.
+- **The DNS record** for `vpn2811.duckdns.org`, pointing at the VPS's public IP.
 
 ## Deploying
 
 ```bash
 make deploy    # build -> ship -> restart -> wait for healthy -> remote smoke test
 make verify    # lint + test + deploy, the full gate
-make tunnel    # then open http://localhost:__APP_PORT__
+make tunnel    # then open http://localhost:18081
 ```
 
-On the VPS the project lives in `~/__PROJECT__` (`REMOTE_DIR`, filled in from `NAME` by
+On the VPS the project lives in `~/bss` (`REMOTE_DIR`, filled in from `NAME` by
 `make init`): its compose files and `.env` go there. One directory per project, so several
 apps from this template can share a VPS without overwriting each other's files.
 

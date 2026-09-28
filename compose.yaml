@@ -5,10 +5,10 @@
 #
 # Deliberately no database, DATABASE_URL, depends_on or networks here: each mode wires
 # those differently, and anything listed in this file is merged into both.
-name: __PROJECT__
+name: bss
 
 services:
   app:
-    image: ${IMAGE_NAME:-__PROJECT__-app}:${TAG:-dev}
+    image: ${IMAGE_NAME:-bss-app}:${TAG:-dev}
     environment:
       APP_ENV: ${APP_ENV:-dev}

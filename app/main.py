@@ -9,12 +9,12 @@ from app.config import settings
 logging.basicConfig(level=settings.log_level.upper())
 log = logging.getLogger("app")
 
-app = FastAPI(title="__PROJECT__", version="0.1.0")
+app = FastAPI(title="bss", version="0.1.0")
 
 
 @app.get("/")
 def root() -> JSONResponse:
-    return JSONResponse(status_code=200, content={"service": "__PROJECT__", "status": "ok"})
+    return JSONResponse(status_code=200, content={"service": "bss", "status": "ok"})
 
 
 @app.get("/healthz")

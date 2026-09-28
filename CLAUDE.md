@@ -1,4 +1,4 @@
-# __PROJECT__
+# bss
 
 This project was generated from a shared template (`vps-lab-template`). `make init
 NAME=... APP_PORT=... HTTPS_PORT=... DOMAIN=...` filled in the project name, the local/VPS
@@ -37,7 +37,7 @@ make ssh       # open a shell on the VPS
 make migrate   # apply Alembic migrations against the local stack
 make fmt       # auto-format (ruff format + check --fix)
 make clean     # stop the local stack AND drop the local database volume
-make tunnel    # forward the remote app to localhost:__APP_PORT__
+make tunnel    # forward the remote app to localhost:18081
 make remote CMD="..."  # run a one-off command against the deployed image on the VPS
 make hooks     # install the local pre-commit hook (make lint + make test)
 ```
@@ -66,9 +66,9 @@ failure.
   or reconfigure anything VPN-related.
 - Never run `docker system prune`, `docker volume rm`, `docker network prune`,
   or stop/remove containers you did not start. Other people's containers may be there.
-- On the VPS the app binds to `127.0.0.1:__APP_PORT__` only. Nothing is published to
+- On the VPS the app binds to `127.0.0.1:18081` only. Nothing is published to
   0.0.0.0. To reach it from the workstation use an SSH tunnel: `make tunnel`.
-- On the VPS this project lives in `~/__PROJECT__` (`REMOTE_DIR`, filled in by `make init`).
+- On the VPS this project lives in `~/bss` (`REMOTE_DIR`, filled in by `make init`).
   Every app from this template gets its own directory; never point two projects at the
   same one — each deploy overwrites `compose*.yaml` and `.env` there.
 - Remote commands go through `scripts/deploy.sh` only. Do not open ad-hoc `ssh vps-test '...'`
@@ -147,21 +147,21 @@ their config, data, TLS and backups. This repo only ships the app container.
   exist before `make deploy`; `scripts/deploy.sh` checks for it and fails early with
   "deploy vps-infra first" otherwise. vps-infra is never needed locally — do not start it
   for development.
-- **Alias**: on `shared` the app is reachable as `__PROJECT__` (network alias in
+- **Alias**: on `shared` the app is reachable as `bss` (network alias in
   `compose.prod.yaml`). Every app there names its service `app`, so that name is
-  ambiguous; always use `__PROJECT__`.
-- **Database**: `DATABASE_URL` on the VPS is `postgres:5432/__PROJECT__`, role
-  `__PROJECT__`; `postgres` is the service name in vps-infra, and the database + role are
-  created there with `make add-db NAME=__PROJECT__`. The password is `POSTGRES_PASSWORD`
+  ambiguous; always use `bss`.
+- **Database**: `DATABASE_URL` on the VPS is `postgres:5432/bss`, role
+  `bss`; `postgres` is the service name in vps-infra, and the database + role are
+  created there with `make add-db NAME=bss`. The password is `POSTGRES_PASSWORD`
   from `.env.prod`, which must equal the role password `make add-db` used (`DB_PASSWORD_<NAME>` in
   vps-infra's `.env.prod`) — the value `make init`
   generated is temporary, and a mismatch makes migrations hang until the 120s timeout
   instead of failing clearly. Migrations still run from this repo (`deploy.sh`, before the app
   starts).
-- **Reverse proxy**: this app's site block (TLS + basic auth on `__HTTPS_PORT__`,
-  `https://__DOMAIN__:__HTTPS_PORT__`, `/healthz` carved out without auth for external
+- **Reverse proxy**: this app's site block (TLS + basic auth on `8444`,
+  `https://vpn2811.duckdns.org:8444`, `/healthz` carved out without auth for external
   monitoring) is added **by hand** to vps-infra's Caddyfile and proxies to
-  `__PROJECT__:8080`. Routing, auth and TLS changes are made there, not here. `/healthz`
+  `bss:8080`. Routing, auth and TLS changes are made there, not here. `/healthz`
   must still stay cheap, check the DB and return nothing beyond status — the external
   monitoring depends on it.
 - **Backups**: vps-infra dumps all databases, this one included. This project has no
@@ -176,7 +176,7 @@ Both of these only showed up against the real VPS, never locally:
 
 - **`docker compose run --name ...` hangs** instead of starting the container. Don't use it
   to get a predictable name for the one-off migration container; `deploy.sh` finds a
-  leftover one by compose's labels (`com.docker.compose.project=__PROJECT__` +
+  leftover one by compose's labels (`com.docker.compose.project=bss` +
   `com.docker.compose.oneoff=True`) instead.
 - **`--quiet-pull` hangs when the image was only loaded locally.** The image reaches the
   VPS via `docker save | docker load`, with no registry behind it; with `--quiet-pull`

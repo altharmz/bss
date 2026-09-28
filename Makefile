@@ -4,11 +4,11 @@
 SHELL := /bin/bash
 COMPOSE_PROD := docker compose -f compose.yaml -f compose.prod.yaml
 REMOTE ?= vps-test
-REMOTE_DIR ?= __PROJECT__
-IMAGE_NAME ?= __PROJECT__-app
+REMOTE_DIR ?= bss
+IMAGE_NAME ?= bss-app
 TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote hooks init
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote hooks
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -54,8 +54,8 @@ deploy: ## Build locally and ship to the VPS
 verify: lint test deploy ## Full gate: lint, tests, then a real deployment that must go healthy
 	@echo "verified: local checks passed and the remote instance is healthy"
 
-tunnel: ## Forward the remote app to localhost:__APP_PORT__ (Ctrl-C to stop)
-	ssh -N -L __APP_PORT__:127.0.0.1:__APP_PORT__ $(REMOTE)
+tunnel: ## Forward the remote app to localhost:18081 (Ctrl-C to stop)
+	ssh -N -L 18081:127.0.0.1:18081 $(REMOTE)
 
 ssh: ## Shell on the VPS
 	ssh $(REMOTE)
@@ -73,14 +73,6 @@ hooks: ## Install the pre-commit hook (make lint + make test before every commit
 	@chmod +x scripts/pre-commit.sh
 	@echo "installed pre-commit hook -> scripts/pre-commit.sh (bypass with git commit --no-verify)"
 
-# --- init:begin (this whole block removes itself after one successful run) ---
-init: ## One-time: fill in placeholders and create .env/.env.prod. make init NAME=bss APP_PORT=18081 HTTPS_PORT=8443 DOMAIN=example.org
-	@if [ -z "$(NAME)" ] || [ -z "$(APP_PORT)" ] || [ -z "$(HTTPS_PORT)" ] || [ -z "$(DOMAIN)" ]; then \
-		echo 'usage: make init NAME=bss APP_PORT=18081 HTTPS_PORT=8443 DOMAIN=example.org' >&2; \
-		exit 1; \
-	fi
-	./scripts/init.sh "$(NAME)" "$(APP_PORT)" "$(HTTPS_PORT)" "$(DOMAIN)"
-# --- init:end ---
 
 clean: ## Remove local containers AND the local database volume
 	docker compose down -v
