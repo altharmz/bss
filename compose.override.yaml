@@ -12,6 +12,8 @@ services:
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini:ro
+      # TMF specs, read by tests/test_enum_lock.py. Never part of the runtime image.
+      - ./spec:/app/spec:ro
     ports:
       - "127.0.0.1:8080:8080"
     environment:

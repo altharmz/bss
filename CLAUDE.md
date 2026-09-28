@@ -94,6 +94,9 @@ failure.
 app/main.py               FastAPI app: /healthz and a JSON status root
 app/config.py              settings from environment variables (pydantic-settings)
 app/db.py                  psycopg 3 connection + the liveness probe /healthz calls
+app/clock.py               Clock protocol, SystemClock, FixedClock; the only wall-clock reader
+app/repository/            data access: plain functions on a psycopg.Connection, never commit
+spec/                      vendored TMF OpenAPI files (README.md: source, SHA, license)
 alembic/                  migrations; alembic.ini reads DATABASE_URL from the env
 compose.yaml              base definition: only what both modes share (the app image)
 compose.override.yaml     local dev only (own postgres on `lab`, bind mount, --reload, ports;
@@ -130,8 +133,59 @@ would attach the prod container to both `lab` and `shared`).
   then rebuild. Do not `pip install` inside a running container.
 - Before every commit: `make lint && make test`. Small, focused commits.
 
+## Domain model & decisions
+
+- **SID for the database, TMF Open API v5 for the surface** (TMF676 Payment only exists
+  as v4, so v4 there). Specs live in `spec/`, pinned by commit; see `spec/README.md`.
+- **Orders are the only way to create or terminate products.** `product.created_by_item_id`
+  is NOT NULL; termination records `terminated_by_item_id`.
+- **Only the billing run writes ABRs** (`applied_customer_billing_rate.billing_run_id` is
+  NOT NULL).
+- **Half-open ranges everywhere.** `valid_for` is `tstzrange [start, end)`, NULL upper =
+  open-ended (TMF TimePeriod without endDateTime). Billing periods are `daterange [start,
+  end)`. `product.termination_date` is exclusive. Billability is driven by dates, not
+  status: `start_date <= d < termination_date`, excluding only `cancelled`/`aborted`.
+- **Enums verbatim from the spec**, camelCase included (`pendingActive`). One exception
+  rule: values are compared after `strip()` - upstream `ProductStatusType` has the typo
+  `'aborted '`, stored as `aborted`. `tests/test_enum_lock.py` locks TMF-derived enums
+  against `spec/`. Where the spec field is a free string we define our own enum ("ours,
+  not TMF" in the migration); casing: if the spec gives example values, use their exact
+  spelling (`In Design`, `Active`), otherwise lowerCamel.
+- **No balance column.** Balance = payments (`done`) - sum of all ABRs; refunds are stored
+  negative, so they already count as credits.
+- **Money** is `numeric(12,2)` / `Decimal`, never float. One currency per billing account,
+  enforced by composite FKs to `billing_account (id, currency)`. Taxes are out of scope.
+- **Injected clock.** Nothing in `app/` may call `datetime.now()`, `date.today()`,
+  `datetime.utcnow()` or `time.time()` except `app/clock.py` (a test greps for it).
+  "Today" for billing is the date in `BILLING_TZ` (default `Europe/Moscow`). Repository
+  functions take `now`/`today` as arguments.
+- **`bill_cycle_day` 1..28** with calendar-aligned billing periods (no month has fewer
+  than 28 days, so every cycle day exists every month).
+- **Exclusion constraints** (prices, ABRs, bills) forbid overlapping ranges, not just equal
+  ones. `ON CONFLICT` with a conflict target does not work with exclusion constraints;
+  only a bare `ON CONFLICT DO NOTHING` does.
+- **Out of scope for now:** taxes, `modify` items and cancelProductOrder. A `modify` item
+  is still storable - order processing rejects it with a reason instead of the schema
+  raising an IntegrityError.
+- **`frontend/`** is planned (stage 5): a separate directory built to static files and
+  served by the shared Caddy.
+- Stage 1 runs the migration as a NOSUPERUSER database owner in a test, like vps-infra's
+  `make add-db` does; `btree_gist` works because it is a trusted extension (PG13+).
+
 ## Open questions
 
+- **Stale billing runs (stage 3).** A run killed mid-way (e.g. by the nightly 03:00
+  reboot) stays `running`, and `UNIQUE (run_date)` blocks a new one. `start_run` must be
+  able to take over a stale run. Not implemented yet; today it raises
+  `BillingRunConflict`.
+- **`start_run` semantics (stage 3).** A completed run for the date should be a no-op
+  (`AlreadyCompleted`), not an error; only a concurrently running run is a conflict.
+  Today both raise `BillingRunConflict`. The stale-running takeover above is still open.
+- **Billing core inputs (stage 2).** The core takes frozen dataclasses, not repository
+  dicts; mapping happens at the repository boundary.
+- **`attach_abrs_to_bill(conn, bill_id, account_id, period)` (stage 2/3).** Bills are
+  created after the charges and collect the account's unbilled ABRs of the period. Not
+  written yet; today `customer_bill_id` can only be set on `insert_abr`.
 - **Port the format fix to vps-lab-template** (fixed here, not there). In the template,
   `make fmt` and `.claude/hooks/format.sh` both fail silently:
   - `compose.override.yaml` mounts `app/` and `tests/` read-only on `app`, so
