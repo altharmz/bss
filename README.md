@@ -67,7 +67,7 @@ deploy, and `deploy.sh` refuses to run without it.
    Caddy picks it up:
 
    ```
-   vpn2811.duckdns.org:8444 {
+   vpn2811.duckdns.org:8445 {
        encode gzip
        log {
            output stdout
