@@ -54,4 +54,12 @@ log "Removing the init target from the Makefile (one-time use)"
 sed -i '/# --- init:begin/,/# --- init:end/d' Makefile
 sed -i '/^\.PHONY:/s/[[:space:]]*\binit\b//' Makefile
 
-log "Done. Review the diff, fill in WITH_CADDY in .env.prod, then run: make up && make smoke"
+log "Done. Review the diff, then run: make up && make smoke"
+printf '\n\033[1;33mIMPORTANT:\033[0m POSTGRES_PASSWORD in .env.prod is TEMPORARY - it is a random value that\n' >&2
+printf 'the shared Postgres on the VPS does not know. Before the first deploy, run\n' >&2
+printf '    make add-db NAME=%s\n' "${NAME}" >&2
+printf 'in vps-infra and REPLACE POSTGRES_PASSWORD in .env.prod with the role password it\n' >&2
+printf 'used: DB_PASSWORD_%s from vps-infra'"'"'s .env.prod.\n' "${NAME^^}" >&2
+printf 'If the two differ, the deploy does not fail with a clear error: migrations hang on\n' >&2
+printf 'connection retries until the 120s timeout. (.env is local-only and stays as it is.)\n' >&2
+printf 'Also add this app'"'"'s block to vps-infra'"'"'s Caddyfile - see README.md.\n' >&2

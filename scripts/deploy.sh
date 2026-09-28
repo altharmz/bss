@@ -6,16 +6,25 @@
 set -euo pipefail
 
 REMOTE="${REMOTE:-vps-test}"
-REMOTE_DIR="${REMOTE_DIR:-lab}"
+# Relative to the deploy user's home, i.e. ~/__PROJECT__ - one directory per project, so
+# two apps from this template on the same VPS never overwrite each other's files.
+REMOTE_DIR="${REMOTE_DIR:-__PROJECT__}"
 IMAGE_NAME="${IMAGE_NAME:-__PROJECT__-app}"
 TAG="${TAG:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
 COMPOSE=(docker compose -f compose.yaml -f compose.prod.yaml)
 KEEP_IMAGES=3
+MIGRATE_TIMEOUT=120
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31mFAILED:\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ -f .env.prod ]] || fail ".env.prod is missing (copy .env.example and fill it in)"
+
+log "Checking that the shared network from vps-infra exists on ${REMOTE}"
+# Postgres and Caddy live in the vps-infra project, which also creates this network.
+# Without it compose fails with a vaguer error, so check up front.
+ssh "${REMOTE}" "docker network inspect shared >/dev/null 2>&1" \
+  || fail "network 'shared' not found on ${REMOTE} - deploy vps-infra first"
 
 log "Building ${IMAGE_NAME}:${TAG} locally (runtime stage)"
 docker build --target runtime -t "${IMAGE_NAME}:${TAG}" .
@@ -25,59 +34,44 @@ docker save "${IMAGE_NAME}:${TAG}" | gzip -1 | ssh "${REMOTE}" 'gunzip | docker 
 
 log "Syncing compose files"
 ssh "${REMOTE}" "mkdir -p ${REMOTE_DIR}"
-
-# WITH_CADDY selects whether this deployment owns a Caddy container at all - see
-# .env.prod / README.md. Read straight from the file rather than sourcing it, so the rest
-# of .env.prod's variables never leak into this script's own environment.
-WITH_CADDY="$(grep -E '^WITH_CADDY=' .env.prod 2>/dev/null | cut -d= -f2- || true)"
-WITH_CADDY="${WITH_CADDY:-false}"
-CADDY_PROFILE=()
-[[ "${WITH_CADDY}" == "true" ]] && CADDY_PROFILE=(--profile caddy)
-
-caddy_changed=false
-if [[ "${WITH_CADDY}" == "true" ]]; then
-  # up -d only diffs container config (image, env, volume list), never the *contents* of a
-  # bind-mounted file - so a Caddyfile edit needs an explicit, scoped recreate of caddy to
-  # actually take effect. Hash what's on the VPS now, before rsync overwrites it, so we know
-  # after the stack is (re)started whether that recreate is actually needed.
-  local_caddy_hash="$(sha256sum Caddyfile | awk '{print $1}')"
-  remote_caddy_hash="$(ssh "${REMOTE}" "sha256sum ${REMOTE_DIR}/Caddyfile 2>/dev/null | awk '{print \$1}'")"
-  [[ "${local_caddy_hash}" != "${remote_caddy_hash}" ]] && caddy_changed=true
-  rsync -az compose.yaml compose.prod.yaml Caddyfile scripts/cron-backup.sh "${REMOTE}:${REMOTE_DIR}/"
-else
-  rsync -az compose.yaml compose.prod.yaml scripts/cron-backup.sh "${REMOTE}:${REMOTE_DIR}/"
-fi
-ssh "${REMOTE}" "chmod +x ${REMOTE_DIR}/cron-backup.sh"
+rsync -az compose.yaml compose.prod.yaml "${REMOTE}:${REMOTE_DIR}/"
 # compose auto-loads a file named .env from its project directory, so EVERY remote
 # compose call sees the secrets - not just the one that starts the stack
 rsync -az .env.prod "${REMOTE}:${REMOTE_DIR}/.env"
 
-log "Starting database only"
-ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
-  IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} up -d --quiet-pull --wait db" \
-  || fail "database did not start"
+# No --quiet-pull on any compose call below: the image only exists locally on the VPS
+# (docker load, no registry), and with that flag compose hangs trying to check a
+# repository that doesn't exist.
 
 # Migrations run against the NEW image before the app serves any traffic: starting the
-# app first would leave a window where new code talks to the old schema.
-log "Running database migrations"
-ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
+# app first would leave a window where new code talks to the old schema. The database
+# itself is not in this stack (vps-infra runs it), so there is nothing to start first.
+#
+# An unreachable database or a wrong password does not fail fast: the client keeps
+# retrying the connection, so without a deadline the deploy just looks slow. Killing the
+# local ssh does not reliably stop the remote one-off container, so a timed-out run is
+# removed explicitly and cannot finish later behind our back.
+log "Running database migrations (timeout ${MIGRATE_TIMEOUT}s)"
+migrate_rc=0
+timeout "${MIGRATE_TIMEOUT}" ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
   IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} run --rm --no-deps app alembic upgrade head" \
-  || fail "database migration failed (see output above)"
-
-log "Starting the rest of the stack"
-ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
-  IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} ${CADDY_PROFILE[*]} up -d --quiet-pull --remove-orphans"
-
-if [[ "${WITH_CADDY}" == "true" ]]; then
-  if [[ "${caddy_changed}" == true ]]; then
-    log "Caddyfile changed — recreating the caddy container to pick it up"
-    ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
-      IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} ${CADDY_PROFILE[*]} up -d --force-recreate --no-deps caddy" \
-      || fail "failed to recreate caddy after a config change"
-  else
-    log "Caddyfile unchanged — leaving caddy running as-is"
-  fi
+  || migrate_rc=$?
+if (( migrate_rc == 124 )); then
+  # Matched by compose's own labels (this project + oneoff), so nothing else on the host
+  # is touched. A fixed name would be simpler, but `compose run --name` hangs instead of
+  # running.
+  ssh "${REMOTE}" "docker ps -aq --filter 'label=com.docker.compose.project=__PROJECT__' --filter 'label=com.docker.compose.oneoff=True' | xargs -r docker rm -f >/dev/null 2>&1" || true
+  fail "migrations did not finish within ${MIGRATE_TIMEOUT}s - the database is most likely unreachable.
+  Check ${REMOTE_DIR}/.env on ${REMOTE} (POSTGRES_PASSWORD must be the __PROJECT__ role's password in vps-infra)
+  and that the vps-infra postgres is running and attached to the 'shared' network:
+    docker network inspect shared --format '{{range .Containers}}{{.Name}} {{end}}'"
+elif (( migrate_rc != 0 )); then
+  fail "database migration failed (see output above)"
 fi
+
+log "Starting the app"
+ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
+  IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} up -d --remove-orphans"
 
 log "Waiting for the app container to become healthy"
 deadline=$(( SECONDS + 90 ))

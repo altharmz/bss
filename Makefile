@@ -4,7 +4,7 @@
 SHELL := /bin/bash
 COMPOSE_PROD := docker compose -f compose.yaml -f compose.prod.yaml
 REMOTE ?= vps-test
-REMOTE_DIR ?= lab
+REMOTE_DIR ?= __PROJECT__
 IMAGE_NAME ?= __PROJECT__-app
 TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 
