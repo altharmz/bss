@@ -3,7 +3,7 @@
 This project was generated from a shared template (`vps-lab-template`). `make init
 NAME=... APP_PORT=... HTTPS_PORT=... DOMAIN=...` filled in the project name, the local/VPS
 app port, the HTTPS port, and the public domain everywhere they appear (compose files,
-Makefile, scripts, this file, `Caddyfile`), created `.env` and `.env.prod` from
+Makefile, scripts, this file, README.md), created `.env` and `.env.prod` from
 `.env.example` with a generated database password, and then removed itself from the
 Makefile so it can't run twice. If an `init:` target still exists in the Makefile, or a
 double-underscore token still shows up in a `grep -r` over the repo, `make init` was never
@@ -38,12 +38,8 @@ make migrate   # apply Alembic migrations against the local stack
 make fmt       # auto-format (ruff format + check --fix)
 make clean     # stop the local stack AND drop the local database volume
 make tunnel    # forward the remote app to localhost:__APP_PORT__
-make restore FILE=...  # restore a dump onto the VPS (human confirmation required)
 make remote CMD="..."  # run a one-off command against the deployed image on the VPS
 make hooks     # install the local pre-commit hook (make lint + make test)
-make backup    # pull a database dump from the VPS to backups/ (local, manual)
-make backup-list  # list the automated dumps sitting on the VPS
-make cron-install # install/refresh the daily 02:30 backup cron job on the VPS
 ```
 
 `make verify` is the single source of truth for "does it actually work on the server".
@@ -72,6 +68,9 @@ failure.
   or stop/remove containers you did not start. Other people's containers may be there.
 - On the VPS the app binds to `127.0.0.1:__APP_PORT__` only. Nothing is published to
   0.0.0.0. To reach it from the workstation use an SSH tunnel: `make tunnel`.
+- On the VPS this project lives in `~/__PROJECT__` (`REMOTE_DIR`, filled in by `make init`).
+  Every app from this template gets its own directory; never point two projects at the
+  same one — each deploy overwrites `compose*.yaml` and `.env` there.
 - Remote commands go through `scripts/deploy.sh` only. Do not open ad-hoc `ssh vps-test '...'`
   sessions that mutate state.
 - Never read, print or commit `.env` / `.env.prod`. Use `.env.example` as the reference.
@@ -80,6 +79,9 @@ failure.
   containers silently pick up production values. For a one-off check against prod
   variables, scope them to a single command instead: `env $(grep -v '^#' .env.prod | xargs) <command>`.
 - Do not `git push`. Commit locally; the human pushes.
+- **Do not add `db` or `caddy` services back to the production configuration**
+  (`compose.prod.yaml`), and do not re-add a Caddyfile or backup scripts to this repo.
+  On the VPS they live in the separate vps-infra project — see "Shared infrastructure".
 - `make deploy` is no longer fully reversible once a migration has shipped. Rolling the
   image back to a previous tag restores the old code, but not the database schema — if a
   migration already ran, reverting the image leaves the schema ahead of the code. Rolling
@@ -93,17 +95,13 @@ app/main.py               FastAPI app: /healthz and a JSON status root
 app/config.py              settings from environment variables (pydantic-settings)
 app/db.py                  psycopg 3 connection + the liveness probe /healthz calls
 alembic/                  migrations; alembic.ini reads DATABASE_URL from the env
-Caddyfile                 reverse proxy config, used only when WITH_CADDY=true (see below)
-compose.yaml              base definition (app + db)
-compose.override.yaml     local dev only (bind mount, --reload, exposed ports)
-compose.prod.yaml         VPS only (resource limits, restart policy, log rotation)
+compose.yaml              base definition: only what both modes share (the app image)
+compose.override.yaml     local dev only (own postgres on `lab`, bind mount, --reload, ports)
+compose.prod.yaml         VPS only (shared network + alias, DATABASE_URL, limits, log rotation)
 scripts/init.sh           one-time: fills in placeholders, creates .env/.env.prod
-scripts/deploy.sh         build -> save -> ssh load -> up -> healthcheck -> smoke
+scripts/deploy.sh         build -> save -> ssh load -> migrate -> up -> healthcheck -> smoke
 scripts/smoke.sh          HTTP smoke test against a base URL
 scripts/pre-commit.sh     make lint + make test; installed via `make hooks`
-scripts/cron-backup.sh    lives on the VPS (shipped by deploy.sh); daily dump + rotation
-scripts/cron-install.sh   installs/refreshes the crontab entry that runs cron-backup.sh
-scripts/backup-list.sh    lists the dumps cron-backup.sh has left on the VPS
 tests/                    pytest suite (conftest.py spins up throwaway databases);
                           test_health.py and test_migrations.py check the infrastructure
                           this template provides and must keep passing on an otherwise
@@ -113,6 +111,12 @@ tests/                    pytest suite (conftest.py spins up throwaway databases
 `docker compose` picks up `compose.override.yaml` automatically, so plain
 `docker compose up` is always the *local dev* stack. Production composition is explicit:
 `-f compose.yaml -f compose.prod.yaml`.
+
+Because `compose.yaml` is merged into both, it holds only what both modes share. The
+local postgres (`db`, its healthcheck and `pgdata` volume), the app's `depends_on`,
+`DATABASE_URL` and the `lab` network all live in `compose.override.yaml`; anything put
+back into the base file would also end up in the production stack (a `lab` network there
+would attach the prod container to both `lab` and `shared`).
 
 ## Conventions
 
@@ -133,49 +137,51 @@ tests/                    pytest suite (conftest.py spins up throwaway databases
   server", run `make verify`.
 - When a container misbehaves, read `make logs` before changing code.
 
-## Reverse proxy
+## Shared infrastructure (vps-infra)
 
-A Caddy container can front the app on the VPS: TLS + basic auth on `__HTTPS_PORT__`,
-port 80 for ACME only. Public URL: `https://__DOMAIN__:__HTTPS_PORT__`
+On the VPS, Postgres and Caddy are **not ours**. The separate vps-infra project is
+deployed once per host and runs one Postgres and one Caddy for every app there, owning
+their config, data, TLS and backups. This repo only ships the app container.
 
-Whether *this* project's compose stack runs that Caddy container is controlled by
-`WITH_CADDY` in `.env.prod`, via a compose profile — not by adding or removing the
-`caddy` service:
-
-- **`WITH_CADDY=true`** — this is the first service set up on the VPS, so it owns the
-  shared Caddy. `compose.prod.yaml`'s `caddy` service (`profiles: ["caddy"]`) is started
-  by passing `--profile caddy`, which `scripts/deploy.sh` does automatically when it reads
-  `WITH_CADDY=true`. `Caddyfile` (checked into this repo, with placeholders filled in by
-  `make init`) is the config that container runs.
-- **`WITH_CADDY=false`** — another service on this VPS already runs Caddy. This stack
-  never starts a `caddy` container at all; instead, this project's reverse-proxy block is
-  added by hand to that already-running Caddy's Caddyfile on the server. See README.md for
-  the block to copy and where it goes.
-
-Do not "fix" a missing local Caddy container by flipping `WITH_CADDY` to true or by adding
-a second, unconditional `caddy` service — on a VPS that already has one, that starts a
-second Caddy fighting the first for ports 80/`__HTTPS_PORT__`. The profile is the whole
-point: it lets both scenarios share one compose file.
-
-- The bcrypt hash in `Caddyfile` is inlined on purpose: `basic_auth` does NOT expand
-  `{env.*}` placeholders in the password field — the hash is parsed before placeholder
-  substitution. Do not "fix" this by moving it back to an environment variable.
-- `/healthz` is intentionally reachable without the basic auth password — carved out via
-  its own `handle /healthz` block ahead of the catch-all `handle` that carries
-  `basic_auth`, since `handle` blocks are mutually exclusive and the first match wins.
-  External monitoring on a separate machine polls it directly. It returns nothing beyond
-  service status and DB reachability, so exposing it unauthenticated doesn't leak
-  anything — do not put other routes in that block.
-- Do not touch ports 80 or `__HTTPS_PORT__` in `compose.prod.yaml` without saying why.
-- Bind-mounted configs (the Caddyfile) are not picked up by a plain `up -d` — compose
-  only diffs container config (image, env, volume list), never the *contents* of a
-  mounted file, so an edited Caddyfile keeps running the old config in memory until the
-  container is recreated. `scripts/deploy.sh` handles this itself (when `WITH_CADDY=true`):
-  it checksums the Caddyfile before vs. after syncing and only when it actually changed
-  runs a scoped `up -d --force-recreate --no-deps caddy`. Don't "fix" this class of problem
-  elsewhere with an unconditional `--force-recreate` — it bounces the proxy on every deploy.
+- **Network**: the app joins the external network `shared`, created by vps-infra. It must
+  exist before `make deploy`; `scripts/deploy.sh` checks for it and fails early with
+  "deploy vps-infra first" otherwise. vps-infra is never needed locally — do not start it
+  for development.
+- **Alias**: on `shared` the app is reachable as `__PROJECT__` (network alias in
+  `compose.prod.yaml`). Every app there names its service `app`, so that name is
+  ambiguous; always use `__PROJECT__`.
+- **Database**: `DATABASE_URL` on the VPS is `postgres:5432/__PROJECT__`, role
+  `__PROJECT__`; `postgres` is the service name in vps-infra, and the database + role are
+  created there with `make add-db NAME=__PROJECT__`. The password is `POSTGRES_PASSWORD`
+  from `.env.prod`, which must equal the role password `make add-db` used (`DB_PASSWORD_<NAME>` in
+  vps-infra's `.env.prod`) — the value `make init`
+  generated is temporary, and a mismatch makes migrations hang until the 120s timeout
+  instead of failing clearly. Migrations still run from this repo (`deploy.sh`, before the app
+  starts).
+- **Reverse proxy**: this app's site block (TLS + basic auth on `__HTTPS_PORT__`,
+  `https://__DOMAIN__:__HTTPS_PORT__`, `/healthz` carved out without auth for external
+  monitoring) is added **by hand** to vps-infra's Caddyfile and proxies to
+  `__PROJECT__:8080`. Routing, auth and TLS changes are made there, not here. `/healthz`
+  must still stay cheap, check the DB and return nothing beyond status — the external
+  monitoring depends on it.
+- **Backups**: vps-infra dumps all databases, this one included. This project has no
+  backup or restore tooling. Make sure a fresh vps-infra dump exists before any migration
+  that alters or removes existing data.
 - The VPS reboots nightly at 03:00 (root cron). Everything must come back on its own —
   never rely on manually started containers.
+
+## Known compose pitfalls (found on live deploys)
+
+Both of these only showed up against the real VPS, never locally:
+
+- **`docker compose run --name ...` hangs** instead of starting the container. Don't use it
+  to get a predictable name for the one-off migration container; `deploy.sh` finds a
+  leftover one by compose's labels (`com.docker.compose.project=__PROJECT__` +
+  `com.docker.compose.oneoff=True`) instead.
+- **`--quiet-pull` hangs when the image was only loaded locally.** The image reaches the
+  VPS via `docker save | docker load`, with no registry behind it; with `--quiet-pull`
+  compose tries to check that nonexistent repository and never returns. Keep it off every
+  remote compose call.
 
 ## Frontend conventions
 
@@ -183,22 +189,3 @@ If this service grows a UI, static assets belong in `app/static/`, served by Fas
 `StaticFiles` — plain HTML/CSS/JS. No bundlers, no npm, no build step, no external CDN
 dependencies. If a task seems to need a framework, say so and stop rather than adding a
 Node toolchain to the image.
-
-## Backups
-
-Two independent, non-overlapping paths — a server backup does **not** protect against
-losing the VPS itself; only a copy pulled to the workstation does.
-
-- **Automatic, server-side**: `cron-backup.sh` runs on the VPS itself (shipped there by
-  `scripts/deploy.sh`, installed into the `deploy` user's crontab by `make cron-install`,
-  idempotent to re-run). Fires daily at 02:30 — 30 minutes before the nightly 03:00
-  reboot — dumping into `~/lab/backups/` on the VPS and keeping the 7 most recent dumps.
-  Inspect what's there with `make backup-list`. This is a rolling safety net against a bad
-  migration or accidental data loss; it lives on the same disk as the database it's
-  backing up.
-- **Manual, pulled locally**: `make backup` dumps the remote database and pulls it into
-  `backups/` on the workstation (gitignored — dumps never go into the repository). This is
-  the one that survives losing the VPS entirely. Take one before any migration that alters
-  or removes existing data.
-- `make restore FILE=...` is never run automatically or by an agent. It overwrites the
-  live database and requires a human to type `yes` after seeing the current row counts.

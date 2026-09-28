@@ -14,29 +14,94 @@ What it gives you out of the box:
   layered compose setup (local dev vs. VPS overlay).
 - A deploy script that builds locally, ships the image over SSH, migrates, restarts, waits
   for a real health check, and prints remote logs on failure — never builds on the VPS.
-- Automated + manual database backups, and a `make restore` that requires a human to
-  confirm before it overwrites anything.
+- On the VPS, plugs into the shared infrastructure from **vps-infra** (one Postgres and
+  one Caddy for every app on the host) instead of carrying its own copies; database
+  backups are vps-infra's job too.
 - Claude Code guardrails (`CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/guard.sh`)
   that keep an agent off the VPN ports and off destructive commands.
 
 ## Creating a project from this template
 
-```bash
-git clone <this-template> my-service && cd my-service
-make init NAME=bss APP_PORT=18081 HTTPS_PORT=8443 DOMAIN=example.org
-```
+The order matters: the VPS side (vps-infra) has to exist before this project's first
+deploy, and `deploy.sh` refuses to run without it.
 
-This fills in the project name, ports and domain everywhere they appear in the repo
-(compose files, `Makefile`, scripts, `CLAUDE.md`, `Caddyfile`), creates `.env` and
-`.env.prod` from `.env.example` with a freshly generated database password in each, and
-then deletes the `init` target from the `Makefile` so it can't run a second time and
-re-mangle an already-substituted tree. Run it exactly once, right after cloning, before
-you touch anything else.
+1. **vps-infra is deployed on the VPS** — once per host, not per project. It creates the
+   external `shared` docker network and runs the one Postgres and the one Caddy that all
+   apps use. If it isn't there yet, deploy it first (see its own README).
 
-```bash
-make up      # start the local stack (app + postgres, hot reload)
-make smoke   # confirm it responds
-```
+2. **Create and initialise this project:**
+
+   ```bash
+   git clone <this-template> my-service && cd my-service
+   make init NAME=bss APP_PORT=18081 HTTPS_PORT=8443 DOMAIN=example.org
+   ```
+
+   This fills in the project name, ports and domain everywhere they appear in the repo
+   (compose files, `Makefile`, scripts, `CLAUDE.md`, this README), creates `.env` and
+   `.env.prod` from `.env.example` with a freshly generated database password in each,
+   and then deletes the `init` target from the `Makefile` so it can't run a second time
+   and re-mangle an already-substituted tree. Run it exactly once, right after cloning,
+   before you touch anything else.
+
+   `NAME` doubles as the Postgres database and role name on the VPS and as the app's
+   alias on the `shared` network, so keep it to lowercase letters, digits and `_`.
+   `HTTPS_PORT` is the port vps-infra's Caddy serves HTTPS on (never 443 — that belongs
+   to the VPN side of the host).
+
+3. **Create the database in vps-infra:**
+
+   ```bash
+   # in the vps-infra project
+   make add-db NAME=__PROJECT__
+   ```
+
+   This creates database and role `__PROJECT__` in the shared Postgres, with the password
+   taken from `DB_PASSWORD_<NAME in upper case>` in vps-infra's `.env.prod`. **Replace
+   `POSTGRES_PASSWORD` in this project's `.env.prod` with that same password**:
+   the value `make init` put there is only a temporary placeholder the shared Postgres
+   doesn't know. A mismatch doesn't fail with a clear error — the migration step hangs on
+   connection retries until `deploy.sh`'s 120s timeout. (`.env` stays as it is: local dev
+   runs its own Postgres and never talks to vps-infra.)
+
+4. **Add this app's block to vps-infra's `Caddyfile`** by hand, then deploy vps-infra so
+   Caddy picks it up:
+
+   ```
+   __DOMAIN__:__HTTPS_PORT__ {
+       encode gzip
+       log {
+           output stdout
+           format console
+       }
+
+       # Unauthenticated on purpose: external monitoring polls it. Must stay ahead of the
+       # catch-all below (handle blocks are exclusive, first match wins).
+       handle /healthz {
+           reverse_proxy __PROJECT__:8080
+       }
+
+       handle {
+           # Inline bcrypt hash - basic_auth does not expand {env.*} in the password field.
+           # Generate one with: docker run --rm caddy caddy hash-password
+           basic_auth {
+               <user> <bcrypt-hash>
+           }
+           reverse_proxy __PROJECT__:8080
+       }
+   }
+   ```
+
+   Caddy reaches the app by its alias on the `shared` network (`__PROJECT__:8080`, the
+   port inside the container), not by the host port — that one exists only for
+   `make tunnel`.
+
+5. **Run it locally, then deploy:**
+
+   ```bash
+   make up      # start the local stack (app + its own postgres, hot reload)
+   make smoke   # confirm it responds
+   make verify  # lint + test + deploy to the VPS, must go healthy
+   ```
 
 Keep the repository inside the Linux filesystem (e.g. `~/projects/my-service`), not under
 `/mnt/c/...`. Bind mounts across the Windows boundary are slow and inotify events do not
@@ -49,31 +114,8 @@ propagate, which silently breaks `--reload`.
   `~/.ssh/config` on the workstation, using key-only auth.
 - **A `deploy` user on the server.** Create one, add it to the `docker` group, and drop
   your public key in its `authorized_keys`. Nothing here provisions the VPS itself.
-- **The reverse-proxy block**, if this VPS already runs Caddy for another service. Set
-  `WITH_CADDY=false` in `.env.prod` (the default), and add this block by hand to the
-  Caddyfile that's already running there:
-
-  ```
-  __DOMAIN__:__HTTPS_PORT__ {
-      handle /healthz {
-          reverse_proxy 127.0.0.1:__APP_PORT__
-      }
-      handle {
-          basic_auth {
-              <user> <bcrypt-hash>
-          }
-          reverse_proxy 127.0.0.1:__APP_PORT__
-      }
-  }
-  ```
-
-  (Reached via the host's published port because that Caddy lives in a different compose
-  project's network.) Then reload that Caddy's config — deploying this service does not do
-  it for you.
-
-  If this is instead the *first* service on the VPS, set `WITH_CADDY=true` and
-  `scripts/deploy.sh` will start and manage this repo's own `Caddyfile` and `caddy`
-  container for you.
+- **Anything in vps-infra**: the `shared` network, the database (`make add-db`) and the
+  Caddyfile block — steps 1, 3 and 4 above.
 - **The DNS record** for `__DOMAIN__`, pointing at the VPS's public IP.
 
 ## Deploying
@@ -84,11 +126,15 @@ make verify    # lint + test + deploy, the full gate
 make tunnel    # then open http://localhost:__APP_PORT__
 ```
 
+On the VPS the project lives in `~/__PROJECT__` (`REMOTE_DIR`, filled in from `NAME` by
+`make init`): its compose files and `.env` go there. One directory per project, so several
+apps from this template can share a VPS without overwriting each other's files.
+
 ## Built-in checks
 
 - **`/healthz` checks the database**, not just that a process is alive. Docker's
-  HEALTHCHECK and `deploy.sh` both gate on it, and it's the one route Caddy leaves
-  unauthenticated for external monitoring.
+  HEALTHCHECK and `deploy.sh` both gate on it, and it's the one route vps-infra's Caddy
+  leaves unauthenticated for external monitoring.
 - **`make verify`** is the single source of truth for "does it actually work on the
   server": deploy, wait for healthy, remote smoke test, non-zero exit and printed remote
   logs on any failure.
@@ -99,8 +145,7 @@ make tunnel    # then open http://localhost:__APP_PORT__
   that dies, not its neighbor.
 - **Log rotation**, so unrotated json-file logs don't fill the disk.
 - **`127.0.0.1` binds only.** Nothing of this service is exposed on the public interface
-  directly; only the reverse proxy (this project's own, or another service's shared one)
-  faces the internet.
+  directly; only vps-infra's shared reverse proxy faces the internet.
 
 ## Claude Code setup
 
