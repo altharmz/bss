@@ -212,6 +212,16 @@ would attach the prod container to both `lab` and `shared`).
 - **Out of scope for now:** taxes, `modify` items and cancelProductOrder. A `modify` item
   is still storable - order processing rejects it with a reason instead of the schema
   raising an IntegrityError.
+- **Stage order:** 1. schema + repository (done) -> 2. TMF Open API backend -> 3. billing
+  core as pure functions -> 4. worker with the daily run -> 5. frontend. Stage 2 contains
+  no billing logic: it never writes an ABR; bill and ABR endpoints are read-only and
+  return empty lists until stage 3.
+- **Rounding (decided for stage 3, not implemented yet):** banker's rounding
+  (`ROUND_HALF_EVEN`) to 2 decimals, applied once per ABR, never on intermediate values.
+- **Billable days (decided for stage 3):** the activation day is billed, the termination
+  day is not. This is the existing half-open `[start_date, termination_date)`: a product
+  terminated "today" has `termination_date = today`, so today is not charged. A product
+  activated and terminated on the same day is charged 0 days.
 - **`frontend/`** is planned (stage 5): a separate directory built to static files and
   served by the shared Caddy.
 - Stage 1 runs the migration as a NOSUPERUSER database owner in a test, like vps-infra's
@@ -219,16 +229,16 @@ would attach the prod container to both `lab` and `shared`).
 
 ## Open questions
 
-- **Stale billing runs (stage 3).** A run killed mid-way (e.g. by the nightly 03:00
+- **Stale billing runs (stage 4).** A run killed mid-way (e.g. by the nightly 03:00
   reboot) stays `running`, and `UNIQUE (run_date)` blocks a new one. `start_run` must be
   able to take over a stale run. Not implemented yet; today it raises
   `BillingRunConflict`.
-- **`start_run` semantics (stage 3).** A completed run for the date should be a no-op
+- **`start_run` semantics (stage 4).** A completed run for the date should be a no-op
   (`AlreadyCompleted`), not an error; only a concurrently running run is a conflict.
   Today both raise `BillingRunConflict`. The stale-running takeover above is still open.
-- **Billing core inputs (stage 2).** The core takes frozen dataclasses, not repository
+- **Billing core inputs (stage 3).** The core takes frozen dataclasses, not repository
   dicts; mapping happens at the repository boundary.
-- **`attach_abrs_to_bill(conn, bill_id, account_id, period)` (stage 2/3).** Bills are
+- **`attach_abrs_to_bill(conn, bill_id, account_id, period)` (stage 3/4).** Bills are
   created after the charges and collect the account's unbilled ABRs of the period. Not
   written yet; today `customer_bill_id` can only be set on `insert_abr`.
 - **Port the format fix to vps-lab-template** (fixed here, not there). In the template,
