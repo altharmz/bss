@@ -3,8 +3,8 @@ productOfferingPrice.
 
 A price is created on its own and attached by the offering (productOfferingPrice[]), as
 in the spec. A price belongs to at most one offering and is never detached or re-priced:
-billing needs the historical price, so changing a price means ending its validFor and
-attaching a new one.
+billing needs the historical price, so changing a price means ending its validFor - not
+retroactively - and attaching a new one.
 """
 
 from typing import Any, Literal
@@ -31,7 +31,7 @@ from app.api.common import (
     utc,
     without_nulls,
 )
-from app.api.deps import JsonBody, MergePatchBody, Tx
+from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.repository import catalog
@@ -262,7 +262,7 @@ def create_price(body: JsonBody, tx: Tx) -> TmfJSONResponse:
 
 
 @router.patch("/productOfferingPrice/{price_id}")
-def patch_price(price_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONResponse:
+def patch_price(price_id: str, body: MergePatchBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     check_type(body, "ProductOfferingPrice")
     data = parse(PricePatch, body, read_only=("lastUpdate", *PRICE_IMMUTABLE))
     not_null(data, "name", "lifecycle_status", "valid_for")
@@ -277,6 +277,16 @@ def patch_price(price_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONResponse:
             if new_range.lower != current["valid_for"].lower:
                 # moving the start would rewrite which price applied in the past
                 raise conflict("validFor.startDateTime cannot be changed; only the end can")
+            old_end, new_end, now = current["valid_for"].upper, new_range.upper, clock.now()
+            if new_end != old_end and any(
+                end is not None and end < now for end in (old_end, new_end)
+            ):
+                # a retroactive end (or reopening a price that already ended) would change
+                # which price applied to periods that may already be billed
+                raise conflict(
+                    "validFor.endDateTime can only be set or moved to the present or the"
+                    " future, and only while the price has not ended yet"
+                )
             changes["valid_for"] = new_range
         try:
             row = catalog.update_product_offering_price(conn, uid, changes)

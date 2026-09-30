@@ -198,7 +198,7 @@ def test_overlapping_prices_cannot_be_attached_to_one_offering(api):
 def test_changing_a_price_means_ending_it_and_attaching_a_new_one(api):
     old = make_price(api)
     offering = make_offering(api, productOfferingPrice=price_refs(old))
-    switch = "2026-06-01T00:00:00+03:00"
+    switch = "2026-11-01T00:00:00+03:00"  # after the fixture clock (2026-10-01T09:00Z)
 
     for attribute, value in (
         ("price", {"unit": "RUB", "value": 600}),
@@ -214,7 +214,7 @@ def test_changing_a_price_means_ending_it_and_attaching_a_new_one(api):
 
     ended = api.patch(old["href"], {"validFor": {"startDateTime": START, "endDateTime": switch}})
     assert ended.status_code == 200
-    assert ended.json()["validFor"]["endDateTime"] == "2026-05-31T21:00:00Z"
+    assert ended.json()["validFor"]["endDateTime"] == "2026-10-31T21:00:00Z"
     new = make_price(api, price={"unit": "RUB", "value": 600}, validFor={"startDateTime": switch})
     attached = api.patch(offering["href"], {"productOfferingPrice": price_refs(old, new)})
     assert attached.status_code == 200
@@ -237,3 +237,36 @@ def test_offering_patch(api):
     assert api.patch(offering["href"], {"isSellable": None}).status_code == 422
     assert api.patch(offering["href"], {"validFor": {}}).status_code == 422
     assert api.patch(f"{OFFERING}/{NIL}", {"name": "x"}).status_code == 404
+
+
+def test_a_price_cannot_be_ended_retroactively(api):
+    """Clock: 2026-10-01T09:00Z. An end before that would change which price applied to
+    periods that may already be billed."""
+    price = make_price(api)
+
+    def end_at(when: str | None):
+        period = {"startDateTime": START} | ({"endDateTime": when} if when else {})
+        return api.patch(price["href"], {"validFor": period})
+
+    for past in ("2026-06-01T00:00:00Z", "2026-10-01T08:59:59Z"):
+        response = end_at(past)
+        assert response.status_code == 409, past
+        assert "present or the future" in response.json()["message"]
+    assert "endDateTime" not in api.get(price["href"]).json()["validFor"]
+
+    assert end_at("2026-10-01T09:00:00Z").status_code == 200  # exactly now
+    assert end_at("2026-12-01T00:00:00Z").status_code == 200  # moved later
+    assert end_at("2026-10-01T08:00:00Z").status_code == 409  # moved back into the past
+    assert end_at(None).status_code == 200  # reopened: the end was still in the future
+
+    api.clock.set(api.clock.now().replace(year=2027))
+    ended = end_at("2027-10-01T09:00:00Z")
+    assert ended.status_code == 200
+    api.clock.set(api.clock.now().replace(year=2028))
+    # the price ended a year ago: neither extending nor reopening it is allowed any more
+    assert end_at("2029-01-01T00:00:00Z").status_code == 409
+    assert end_at(None).status_code == 409
+    # patching something else, or repeating the same period, is still fine
+    assert api.patch(price["href"], {"name": "Old monthly"}).status_code == 200
+    same = {"startDateTime": START, "endDateTime": "2027-10-01T09:00:00Z"}
+    assert api.patch(price["href"], {"validFor": same}).status_code == 200

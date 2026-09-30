@@ -280,11 +280,17 @@ Built once in `app/api/` and shared by every API. Status: TMF620 is implemented
 - **Transactions:** one per request (`app/api/deps.py`, `Tx`), committed when the handler's
   block ends, rolled back if it raises.
 - **Clock:** the `get_clock` dependency; tests override it with `FixedClock`.
+- **The contract is the vendored TMF specs, not FastAPI's `/openapi.json`.** Response
+  bodies are plain dicts written by `tmfjson` (no Pydantic response models), so the
+  generated `/docs` has no response schemas - on purpose. Stage 5 generates the frontend
+  types from `spec/*.yaml` (and the extension schemas we serve), never from `/openapi.json`.
 - **Contract tests:** `tests/apiclient.py` validates every response in the suite against
   the schema in `spec/` for its path (`Error` for non-2xx). `tests/contract.py` uses
   openapi-schema-validator's OAS 3.0 dialect with its discriminator handling replaced:
   upstream recurses forever on the TMF v5 schemas (each has a self-mapping discriminator
   next to `allOf`), and plain JSON Schema cannot validate the `...RefOrValue` `oneOf`s.
+  Because it overrides the library's keyword handlers, `openapi-schema-validator` is
+  pinned to an exact version in `requirements-dev.txt`; re-run the suite when bumping it.
 
 ### TMF620 mapping
 
@@ -303,6 +309,13 @@ Built once in `app/api/` and shared by every API. Status: TMF620 is implemented
   `productOfferingPrice[]` is a 409; `price`, `priceType` and the recurring period are
   read-only (400); `validFor.startDateTime` cannot move (409). Changing a price = end its
   `validFor` and attach a new one - stage 3 billing needs the historical price.
+- **A price is never ended retroactively.** `validFor.endDateTime` can only be set or
+  moved to a value >= now (the injected clock), and only while the current end, if any,
+  is not in the past (409 otherwise): a retroactive end, or reopening a price that has
+  already ended, would change prices already used for billed periods.
+- **Deviation: only references in `productOfferingPrice[]`.** The spec's
+  `ProductOfferingPriceRefOrValue` also allows an inline price; we accept references only
+  (an entry without `id` is a 422). Create the price first, then reference it.
 - `productSpecification` of an offering is read-only on PATCH.
 - **Migration 0002** adds what the API needs and 0001 had no place for. Its NOT NULL
   columns have no default on purpose: if the tables are not empty the migration fails
