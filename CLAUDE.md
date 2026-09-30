@@ -195,11 +195,14 @@ would attach the prod container to both `lab` and `shared`).
     PostToolUse) and always exits 0.
 
   Fix as done here: a `tools` service in `compose.override.yaml` (same `dev` target and
-  image, `profiles: [tools]`, whole project mounted read-write at `/app`, venv stays in
-  `/opt/venv`, no ports, no DB, `network_mode: none`); `make fmt` runs
+  image, `profiles: [tools]`, only `./app`, `./tests`, `./alembic` mounted read-write and
+  `./pyproject.toml` read-only under `/app` - not the whole project, so the container
+  never sees `.env`, `.env.prod`, `.git` or `.claude` - venv stays in `/opt/venv`, no
+  ports, no DB, `network_mode: none`); `make fmt` runs
   `docker compose run --rm tools sh -c 'ruff format . && ruff check --fix .'`, `make lint`
   stays on `app`. The hook: no host-ruff branch (the container pins the ruff version);
-  acts only on `*.py` under `$CLAUDE_PROJECT_DIR`, passes the project-relative path; one
+  acts only on `*.py` under `$CLAUDE_PROJECT_DIR`, passes the project-relative path; a
+  `.py` outside the mounted directories is reported as FAILED, not skipped silently; one
   container start running `ruff format --force-exclude` then `ruff check --fix
   --force-exclude --output-format concise`; clean -> exit 0 silently, findings -> stderr +
   exit 2, any failure to run -> "format hook FAILED to run: <reason>" + exit 2; explicit

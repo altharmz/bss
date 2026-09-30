@@ -25,6 +25,13 @@ abs="$(realpath -m -- "$file")"
 [[ -f "$abs" ]] || exit 0
 rel="${abs#"$project"/}"
 
+# The tools service mounts only these directories (see compose.override.yaml). Anything
+# else would not exist in the container - say so instead of passing silently.
+case "$rel" in
+  app/* | tests/* | alembic/*) ;;
+  *) fail "$rel is outside the tools service mounts (app/, tests/, alembic/) - not formatted" ;;
+esac
+
 cd "$project" || fail "cannot cd to $project"
 
 # --force-exclude: honour extend-exclude (alembic/versions) even for explicit paths.

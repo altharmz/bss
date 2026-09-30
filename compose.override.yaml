@@ -27,8 +27,11 @@ services:
 
   # Writable twin of `app` for code-mutating tooling (make fmt, .claude/hooks/format.sh).
   # `app` keeps its read-only source mounts. Same dev image, so the same ruff version.
-  # The whole project is mounted at /app (where `app` sees its sources); the venv lives
-  # in /opt/venv, outside the mount. Only started explicitly: docker compose run tools ...
+  # Only the code ruff may rewrite is mounted (at /app, where `app` sees its sources) - not
+  # the whole project, so the container never sees .env, .env.prod, .git, .claude or the
+  # compose files. A .py elsewhere is not formatted; the format hook reports that instead
+  # of passing silently. The venv lives in /opt/venv. Only started explicitly:
+  # docker compose run tools ...
   tools:
     build:
       context: .
@@ -36,7 +39,10 @@ services:
     image: ${IMAGE_NAME:-bss-app}:${TAG:-dev}
     profiles: [tools]
     volumes:
-      - .:/app
+      - ./app:/app/app
+      - ./tests:/app/tests
+      - ./alembic:/app/alembic
+      - ./pyproject.toml:/app/pyproject.toml:ro
     network_mode: none
     command: ["ruff", "--version"]
 
