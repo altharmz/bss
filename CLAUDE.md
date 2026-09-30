@@ -515,6 +515,8 @@ Payments are never changed or deleted (405).
 
 Nothing below has been run; remove an item only when it has passed.
 
+- bss deploy of stage 2 (migration 0002) pending; aborted on 2026-09-30 because
+  home->VPS throughput was ~70 kbit/s with heavy retransmits.
 - **Restore drill.** On 2026-09-30 `~/infra/backups` on the VPS was empty and no backup
   cron was installed; this is being fixed in vps-infra. Use the first cron-made `bss` dump:
   `pg_restore --list` on the server (no databases created and no `pg_restore` into a
