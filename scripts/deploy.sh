@@ -18,26 +18,102 @@ MIGRATE_TIMEOUT=120
 log() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31mFAILED:\033[0m %s\n' "$*" >&2; exit 1; }
 
+# One SSH connection per deploy. Every ssh/rsync below is multiplexed over a single master
+# opened up front: the VPS has been seen to stall *new* connections at the banner exchange
+# (kex_exchange_identification: Connection timed out), and a deploy used to open ~15.
+# ConnectTimeout also bounds the banner exchange, ServerAlive* detect a dead link, and
+# BatchMode forbids prompts - every failure is a fast, visible exit instead of a hang.
+SSH_OPTS=(
+  -o ControlMaster=auto -o "ControlPath=${HOME}/.ssh/cm-%C" -o ControlPersist=60
+  -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes
+)
+rssh() { ssh "${SSH_OPTS[@]}" "${REMOTE}" "$@"; }
+RSYNC=(rsync -az --timeout=60 -e "ssh ${SSH_OPTS[*]}")
+
+# The master is backgrounded, so its own errors (e.g. "Timeout, server not responding")
+# would vanish. It logs verbosely to a file instead; on any failure the tail is printed.
+MASTER_LOG="$(mktemp -t bss-deploy-ssh.XXXXXX)"
+MASTER_OPTS=(-o ControlMaster=yes -o LogLevel=VERBOSE -E "${MASTER_LOG}")
+
+opened_master=""
+finish() {
+  local rc=$?
+  if [[ -n "${opened_master}" ]]; then
+    ssh "${SSH_OPTS[@]}" -O exit "${REMOTE}" 2>/dev/null || true
+  fi
+  if (( rc != 0 )) && [[ -s "${MASTER_LOG}" ]]; then
+    printf '\n--- ssh master log (last 20 lines) ---\n' >&2
+    tail -n 20 "${MASTER_LOG}" >&2
+  fi
+  rm -f "${MASTER_LOG}"
+}
+trap finish EXIT
+
+open_master() {
+  if ssh "${SSH_OPTS[@]}" -O check "${REMOTE}" 2>/dev/null; then
+    log "Reusing the existing SSH master connection to ${REMOTE}"
+    return 0
+  fi
+  local rc=0
+  ssh "${SSH_OPTS[@]}" "${MASTER_OPTS[@]}" -MNf "${REMOTE}" || rc=$?
+  if (( rc == 255 )); then
+    # 255 = ssh itself failed (connect/banner/auth), not a remote command. Retry once.
+    log "Could not open the SSH connection to ${REMOTE} (exit 255) - retrying once in 5s"
+    sleep 5
+    rc=0
+    ssh "${SSH_OPTS[@]}" "${MASTER_OPTS[@]}" -MNf "${REMOTE}" || rc=$?
+  fi
+  (( rc == 0 )) || fail "cannot open an SSH connection to ${REMOTE} (exit ${rc}, after 1 retry).
+  Nothing on the VPS was changed. Check the network and sshd on ${REMOTE}."
+  opened_master=1
+  ssh "${SSH_OPTS[@]}" -O check "${REMOTE}" 2>/dev/null \
+    || fail "SSH master connection to ${REMOTE} did not come up"
+}
+
 [[ -f .env.prod ]] || fail ".env.prod is missing (copy .env.example and fill it in)"
+
+# TAG is the commit hash. A dirty tree would ship different content (image or compose
+# files) under a clean-looking tag, so refuse before touching the network.
+dirty="$(git status --porcelain)" || fail "not a git work tree - cannot tell what would be deployed"
+[[ -z "${dirty}" ]] || fail "working tree is not clean - ${IMAGE_NAME}:${TAG} would not describe what ships.
+Commit or stash first:
+${dirty}"
+
+log "Opening one SSH connection to ${REMOTE} for the whole deploy"
+open_master
 
 log "Checking that the shared network from vps-infra exists on ${REMOTE}"
 # Postgres and Caddy live in the vps-infra project, which also creates this network.
 # Without it compose fails with a vaguer error, so check up front.
-ssh "${REMOTE}" "docker network inspect shared >/dev/null 2>&1" \
+rssh "docker network inspect shared >/dev/null 2>&1" \
   || fail "network 'shared' not found on ${REMOTE} - deploy vps-infra first"
 
 log "Building ${IMAGE_NAME}:${TAG} locally (runtime stage)"
 docker build --target runtime -t "${IMAGE_NAME}:${TAG}" .
 
-log "Shipping image to ${REMOTE} (gzip over ssh)"
-docker save "${IMAGE_NAME}:${TAG}" | gzip -1 | ssh "${REMOTE}" 'gunzip | docker load'
+# Skip the ship if the server already has this exact image. Not by .Id: both sides use the
+# containerd image store, where .Id is the manifest digest, and that differs between two
+# builds of identical content - so after a rebuild .Id never matches what the server holds.
+# Instead fingerprint what defines the image on both sides: the layer diff IDs plus the
+# full Config (CMD/ENV/HEALTHCHECK changes add no layer). Prints nothing if the image is
+# missing, so a missing image never matches.
+FINGERPRINT='out=$(docker image inspect --format "{{json .RootFS.Layers}}{{json .Config}}" "$1" 2>/dev/null) && printf "%s\n" "$out" | sha256sum | cut -d" " -f1'
+local_fp="$(sh -c "${FINGERPRINT}" _ "${IMAGE_NAME}:${TAG}")"
+remote_fp="$(rssh "sh -c $(printf '%q' "${FINGERPRINT}") _ ${IMAGE_NAME}:${TAG}" || true)"
+[[ -n "${local_fp}" ]] || fail "cannot fingerprint local image ${IMAGE_NAME}:${TAG}"
+if [[ "${remote_fp}" == "${local_fp}" ]]; then
+  log "image already on server, skipping ship (${IMAGE_NAME}:${TAG} fingerprint ${local_fp:0:12})"
+else
+  log "Shipping image to ${REMOTE} (gzip over ssh)"
+  docker save "${IMAGE_NAME}:${TAG}" | gzip -1 | rssh 'gunzip | docker load'
+fi
 
 log "Syncing compose files"
-ssh "${REMOTE}" "mkdir -p ${REMOTE_DIR}"
-rsync -az compose.yaml compose.prod.yaml "${REMOTE}:${REMOTE_DIR}/"
+rssh "mkdir -p ${REMOTE_DIR}"
+"${RSYNC[@]}" compose.yaml compose.prod.yaml "${REMOTE}:${REMOTE_DIR}/"
 # compose auto-loads a file named .env from its project directory, so EVERY remote
 # compose call sees the secrets - not just the one that starts the stack
-rsync -az .env.prod "${REMOTE}:${REMOTE_DIR}/.env"
+"${RSYNC[@]}" .env.prod "${REMOTE}:${REMOTE_DIR}/.env"
 
 # No --quiet-pull on any compose call below: the image only exists locally on the VPS
 # (docker load, no registry), and with that flag compose hangs trying to check a
@@ -53,14 +129,14 @@ rsync -az .env.prod "${REMOTE}:${REMOTE_DIR}/.env"
 # removed explicitly and cannot finish later behind our back.
 log "Running database migrations (timeout ${MIGRATE_TIMEOUT}s)"
 migrate_rc=0
-timeout "${MIGRATE_TIMEOUT}" ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
+timeout "${MIGRATE_TIMEOUT}" ssh "${SSH_OPTS[@]}" "${REMOTE}" "cd ${REMOTE_DIR} && \
   IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} run --rm --no-deps app alembic upgrade head" \
   || migrate_rc=$?
 if (( migrate_rc == 124 )); then
   # Matched by compose's own labels (this project + oneoff), so nothing else on the host
   # is touched. A fixed name would be simpler, but `compose run --name` hangs instead of
   # running.
-  ssh "${REMOTE}" "docker ps -aq --filter 'label=com.docker.compose.project=bss' --filter 'label=com.docker.compose.oneoff=True' | xargs -r docker rm -f >/dev/null 2>&1" || true
+  rssh "docker ps -aq --filter 'label=com.docker.compose.project=bss' --filter 'label=com.docker.compose.oneoff=True' | xargs -r docker rm -f >/dev/null 2>&1" || true
   fail "migrations did not finish within ${MIGRATE_TIMEOUT}s - the database is most likely unreachable.
   Check ${REMOTE_DIR}/.env on ${REMOTE} (POSTGRES_PASSWORD must be the bss role's password in vps-infra)
   and that the vps-infra postgres is running and attached to the 'shared' network:
@@ -70,16 +146,16 @@ elif (( migrate_rc != 0 )); then
 fi
 
 log "Starting the app"
-ssh "${REMOTE}" "cd ${REMOTE_DIR} && \
+rssh "cd ${REMOTE_DIR} && \
   IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} up -d --remove-orphans"
 
 log "Waiting for the app container to become healthy"
 deadline=$(( SECONDS + 90 ))
 status=""
 while (( SECONDS < deadline )); do
-  cid="$(ssh "${REMOTE}" "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} ps -q app" || true)"
+  cid="$(rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} ps -q app" || true)"
   if [[ -n "${cid}" ]]; then
-    status="$(ssh "${REMOTE}" "docker inspect -f '{{.State.Health.Status}}' ${cid}" 2>/dev/null || echo unknown)"
+    status="$(rssh "docker inspect -f '{{.State.Health.Status}}' ${cid}" 2>/dev/null || echo unknown)"
     [[ "${status}" == "healthy" ]] && break
     [[ "${status}" == "unhealthy" ]] && break
   fi
@@ -88,17 +164,17 @@ done
 
 if [[ "${status}" != "healthy" ]]; then
   printf '\n--- remote logs (last 100 lines) ---\n' >&2
-  ssh "${REMOTE}" "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2 || true
+  rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2 || true
   fail "container did not become healthy (last status: ${status:-none})"
 fi
 
 log "Remote smoke test"
-ssh "${REMOTE}" "curl -fsS --max-time 5 http://127.0.0.1:18081/healthz" \
-  || { ssh "${REMOTE}" "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2; fail "smoke test failed"; }
+rssh "curl -fsS --max-time 5 http://127.0.0.1:18081/healthz" \
+  || { rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2; fail "smoke test failed"; }
 printf '\n'
 
 log "Pruning old ${IMAGE_NAME} images on ${REMOTE} (keeping ${KEEP_IMAGES}, nothing else is touched)"
-ssh "${REMOTE}" "docker images '${IMAGE_NAME}' --format '{{.ID}} {{.CreatedAt}}' \
+rssh "docker images '${IMAGE_NAME}' --format '{{.ID}} {{.CreatedAt}}' \
   | sort -k2 -r | tail -n +$((KEEP_IMAGES + 1)) | awk '{print \$1}' \
   | xargs -r docker rmi" || true
 

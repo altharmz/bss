@@ -204,6 +204,37 @@ would attach the prod container to both `lab` and `shared`).
   --force-exclude --output-format concise`; clean -> exit 0 silently, findings -> stderr +
   exit 2, any failure to run -> "format hook FAILED to run: <reason>" + exit 2; explicit
   `timeout` in `.claude/settings.json`.
+- **Port the SSH hardening to vps-lab-template** (fixed here, not there). The template's
+  `deploy.sh` opens a new SSH connection per step (~15 per deploy) with no timeouts. The
+  VPS intermittently stalls *new* connections at the banner exchange
+  (`kex_exchange_identification: read: Connection timed out`); an rsync hung for minutes
+  and a `docker save | ssh` ship hung 17 min before failing. Fix as done here:
+  - refuse a dirty tree first, before any network call: `git status --porcelain` must be
+    empty - the tag is the commit hash, so a dirty build (image or compose files) would
+    ship different content under a clean-looking tag;
+  - one master per deploy: `SSH_OPTS=(-o ControlMaster=auto -o ControlPath=~/.ssh/cm-%C
+    -o ControlPersist=60 -o ConnectTimeout=15 -o ServerAliveInterval=15
+    -o ServerAliveCountMax=4 -o BatchMode=yes)`, opened explicitly with `ssh -MNf` before
+    the build (or reused if `ssh -O check` already finds one), verified with `ssh -O check`;
+  - the master is backgrounded, so it logs to a file: `-o ControlMaster=yes -o
+    LogLevel=VERBOSE -E "$(mktemp)"`. One `trap finish EXIT` closes the master with
+    `ssh -O exit` (only if this deploy opened it), prints the last 20 lines of that log
+    when the exit code is non-zero, and removes the log;
+  - every remote call rides the master: an `rssh` wrapper, `rsync -az --timeout=60 -e "ssh
+    <same opts>"`, and `timeout N ssh "${SSH_OPTS[@]}"` where `timeout` needs a binary;
+  - exactly one retry, 5 s apart, and only when opening the master exits 255; later steps
+    are never retried;
+  - skip the ship when the server already has the image. Not by `.Id`: both sides use the
+    containerd image store, where `.Id` is the manifest digest and differs between two
+    builds of identical content. Compare a fingerprint instead, computed by the same `sh`
+    snippet locally and remotely: sha256 of `docker image inspect --format '{{json
+    .RootFS.Layers}}{{json .Config}}'` (Layers alone miss a CMD/ENV/HEALTHCHECK-only
+    change). A missing image yields an empty fingerprint and never matches;
+  - Makefile `ssh`/`tunnel`/`remote` get the same timeouts and `BatchMode=yes` (no
+    multiplexing there).
+
+  Proven here: 1 TCP connection per deploy (sampled with `ss`), a dead endpoint (silent
+  listener or blackhole IP) fails in ~35 s (15 + 5 + 15) with a clear message.
 
 ## Working style
 

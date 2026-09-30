@@ -3,6 +3,8 @@
 
 SHELL := /bin/bash
 COMPOSE_PROD := docker compose -f compose.yaml -f compose.prod.yaml
+# Same timeouts as scripts/deploy.sh: a stalled connection fails fast instead of hanging.
+SSH_OPTS := -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes
 REMOTE ?= vps-test
 REMOTE_DIR ?= bss
 IMAGE_NAME ?= bss-app
@@ -54,17 +56,17 @@ verify: lint test deploy ## Full gate: lint, tests, then a real deployment that 
 	@echo "verified: local checks passed and the remote instance is healthy"
 
 tunnel: ## Forward the remote app to localhost:18081 (Ctrl-C to stop)
-	ssh -N -L 18081:127.0.0.1:18081 $(REMOTE)
+	ssh $(SSH_OPTS) -N -L 18081:127.0.0.1:18081 $(REMOTE)
 
 ssh: ## Shell on the VPS
-	ssh $(REMOTE)
+	ssh $(SSH_OPTS) $(REMOTE)
 
 remote: ## Run a one-off command against the deployed image on the VPS: make remote CMD="alembic current"
 	@if [ -z "$(CMD)" ]; then \
 		echo 'usage: make remote CMD="alembic current"' >&2; \
 		exit 1; \
 	fi
-	ssh $(REMOTE) "cd $(REMOTE_DIR) && IMAGE_NAME=$(IMAGE_NAME) TAG=$(TAG) $(COMPOSE_PROD) run --rm --no-deps app $(CMD)"
+	ssh $(SSH_OPTS) $(REMOTE) "cd $(REMOTE_DIR) && IMAGE_NAME=$(IMAGE_NAME) TAG=$(TAG) $(COMPOSE_PROD) run --rm --no-deps app $(CMD)"
 
 hooks: ## Install the pre-commit hook (make lint + make test before every commit)
 	@mkdir -p .git/hooks
