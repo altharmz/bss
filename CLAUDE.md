@@ -59,6 +59,14 @@ failure.
   or any other non-interactive caller.
 - To skip it deliberately (e.g. a WIP commit): `git commit --no-verify`. The hook's own
   failure output reminds you of this.
+- It tests the **working tree, not the index**. With a partial commit (some changes left
+  unstaged or untracked) the hook passes or fails on content the commit does not contain.
+  To verify one commit in isolation, check it out on its own: stop the local stack
+  (`make down`; port 5432/8080 conflict), `git worktree add ../bss-check <commit>`, then
+  in that directory `COMPOSE_PROJECT_NAME=bss-check IMAGE_NAME=bss-check-app
+  POSTGRES_PASSWORD=throwaway make lint test` (compose.yaml pins `name: bss`, so without
+  the override the worktree would share this project's containers and database volume),
+  then `docker compose down -v` with the same variables and `git worktree remove`.
 
 ## Hard constraints
 
@@ -270,6 +278,36 @@ would attach the prod container to both `lab` and `shared`).
 
   Proven here: 1 TCP connection per deploy (sampled with `ss`), a dead endpoint (silent
   listener or blackhole IP) fails in ~35 s (15 + 5 + 15) with a clear message.
+
+## Open checks
+
+Waiting for SSH to the VPS (down on the server side since 2026-09-30). Nothing below has
+been run; remove an item only when it has passed.
+
+- **Deploy hardening, real proofs** (`d1f05e8`). Prod still runs the test tag
+  `bss-app:bac85aa-mux`. With a clean tree and a background sampler counting distinct
+  connections to the VPS port 22 (only sockets seen in SYN-SENT or ESTAB):
+  - Run 1: plain `make verify`. Expected: the new commit-hash tag is shipped through the
+    single master connection; 1 connection.
+  - Run 2: plain `make verify` again. Expected: "image already on server, skipping ship"
+    and 1 connection. This is the proof that the Layers+Config fingerprint matches across
+    hosts after `docker save | docker load`; locally it is only shown that two builds of
+    the same content fingerprint identically.
+  - Then remove the `bac85aa-mux` tag on the server and show `docker image ls bss-app` and
+    the tag the app runs. Prod must end up on a commit-hash tag; only commit-hash tags may
+    remain.
+  - Confirm before each run that no other session has SSH connections open to `vps-test`.
+- **The "skip proven across hosts" line.** After Run 2 passes, add it to "Proven here"
+  under "Port the SSH hardening to vps-lab-template", as a separate small commit.
+- **Restore drill.** On 2026-09-30 `~/infra/backups` on the VPS was empty and no backup
+  cron was installed; this is being fixed in vps-infra. Use the first cron-made `bss` dump:
+  `pg_restore --list` on the server (no databases created and no `pg_restore` into a
+  database there), copy it here, restore into a local `postgres:16-alpine` as a
+  NOSUPERUSER role `bss` with `pg_restore --no-owner --role=bss`, compare tables, enum
+  types and `alembic_version` with prod (14 tables incl. `alembic_version`, 14 enums,
+  `0001`), report every warning, clean up locally.
+- **`"ask"` rules.** Verify in a fresh session, in the normal mode, that an Edit to
+  `Makefile` prompts; if it doesn't, switch these paths from `"ask"` to `"deny"`.
 
 ## Working style
 
