@@ -6,7 +6,20 @@ follows. They are the source of truth for every TMF-derived Postgres enum; a tes
 
 All files come from the [tmforum-apis](https://github.com/tmforum-apis) GitHub org, pinned
 to the commit below, and are licensed under the **Apache License 2.0** (per each repo's
-`LICENSE` file). Integrity: `sha256sum -c SHA256SUMS`.
+`LICENSE` file).
+
+Three checks, which prove different things:
+
+- **README vs upstream** - `make spec-verify-upstream` re-fetches each file's git blob SHA
+  from the GitHub API at the pinned commit and compares it with the SHAs recorded under
+  "Upstream blob SHAs". This is the check that ties the recorded SHAs to upstream. It
+  needs the network, so it is not part of `make test`; run it after re-vendoring.
+- **Files vs README** - `tests/test_spec_provenance.py` recomputes the blob SHA of every
+  local file and compares it with the recorded one. It runs offline in `make test` and
+  only ties the files to this README, not to upstream.
+- **Later tampering** - `sha256sum -c SHA256SUMS` detects a file that changed after it was
+  vendored. `SHA256SUMS` was computed here from the downloaded files, so on its own it
+  says nothing about upstream.
 
 | File | API | Version | Source repo | Upstream commit |
 |------|-----|---------|-------------|-----------------|
@@ -18,6 +31,27 @@ to the commit below, and are licensed under the **Apache License 2.0** (per each
 | `TMF666-Account_Management-v5.0.0.oas.yaml` | Account | 5.0.0 | [TMF666_AccountManagement](https://github.com/tmforum-apis/TMF666_AccountManagement/blob/8b9c4f62cbf8c41f5b71f5836f48486a3fd856b8/TMF666-Account_Management-v5.0.0.oas.yaml) | `8b9c4f62cbf8c41f5b71f5836f48486a3fd856b8` |
 | `TMF678-CustomerBill-v5.0.0.oas.yaml` | Customer Bill | 5.0.0 | [TMF678_CustomerBill](https://github.com/tmforum-apis/TMF678_CustomerBill/blob/6d1628e7ac15f077083216f9bccd469e9f1af74f/TMF678-CustomerBill-v5.0.0.oas.yaml) | `6d1628e7ac15f077083216f9bccd469e9f1af74f` |
 | `TMF676-Payment-v4.0.0.swagger.json` | Payment | 4.0.0 ² | [TMF676_PaymentManagement](https://github.com/tmforum-apis/TMF676_PaymentManagement/blob/1de83fd2dc6d09e250c9d1ca7abf3b1b93688d9f/TMF676-Payment-v4.0.0.swagger.json) | `1de83fd2dc6d09e250c9d1ca7abf3b1b93688d9f` |
+
+## Upstream blob SHAs
+
+The git blob SHA of each file at its pinned commit, as returned by the GitHub API
+(`GET /repos/tmforum-apis/<repo>/git/trees/<commit>`, the entry for the file's path).
+A blob SHA is `sha1("blob <size>\0" + content)`, so it can be recomputed without git.
+This is as trustworthy as the pinned commit and GitHub's answer for it: it shows the files
+are byte-identical to upstream at that commit, not that upstream itself is correct.
+When re-vendoring a file, update its commit above and its blob SHA here together, then
+run `make spec-verify-upstream`.
+
+| File | Upstream blob SHA |
+|------|-------------------|
+| `TMF620-Product_Catalog_Management-v5.0.0.oas.yaml` | `545dedbca967b0949e2df054268ada76e44fd564` |
+| `TMF622-ProductOrdering-v5.0.0.oas.yaml` | `64a933b31d8ad9ce433e174dee330e491319b2e9` |
+| `TMF629-Customer_Management-v5.0.1.oas.yaml` | `467d54a24c6f85541980daf82fbdead6ad57868e` |
+| `TMF632-Party_Management-v5.0.0.oas.yaml` | `72ae9fdab3f19beadb995f24dccf84e1b62fb784` |
+| `TMF637-ProductInventory-v5.0.0.oas.yaml` | `637ee2e7e156adf8e640102d9bd951d229ab24e9` |
+| `TMF666-Account_Management-v5.0.0.oas.yaml` | `082fb3d09777b8c894283f9c6649c5daa690660f` |
+| `TMF678-CustomerBill-v5.0.0.oas.yaml` | `9425d310fda1e739b21595d2b445b7bc6ca6d5cb` |
+| `TMF676-Payment-v4.0.0.swagger.json` | `b3fcf10ad03954ddd2619df48bb6907ac96390f7` |
 
 ## Known upstream typos
 

@@ -10,7 +10,7 @@ REMOTE_DIR ?= bss
 IMAGE_NAME ?= bss-app
 TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote hooks
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote hooks spec-verify-upstream
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -45,6 +45,9 @@ lint: ## Lint and format check
 
 fmt: ## Auto-format the code (writable `tools` service; `app` mounts sources read-only)
 	docker compose run --rm tools sh -c 'ruff format . && ruff check --fix .'
+
+spec-verify-upstream: ## Re-fetch the spec blob SHAs from GitHub and compare with spec/README.md (network; not in make test)
+	python3 scripts/spec-verify-upstream.py
 
 smoke: ## Smoke-test the local instance
 	./scripts/smoke.sh http://localhost:8080

@@ -40,6 +40,7 @@ make clean     # stop the local stack AND drop the local database volume
 make tunnel    # forward the remote app to localhost:18081
 make remote CMD="..."  # run a one-off command against the deployed image on the VPS
 make hooks     # install the local pre-commit hook (make lint + make test)
+make spec-verify-upstream  # re-fetch spec blob SHAs from GitHub, compare with spec/README.md (network)
 ```
 
 `make verify` is the single source of truth for "does it actually work on the server".
