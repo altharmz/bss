@@ -22,6 +22,11 @@ FastAPI + PostgreSQL service. Developed locally in WSL2, verified on a remote VP
 **Images are built locally and shipped to the VPS. Never run `docker build` on the VPS** —
 it has one core and a production VPN server running next to us.
 
+The runtime image is about 74 MB compressed (content size) and 317 MB on disk on the VPS,
+321 MB locally (checked at `921603f`): Debian base 88 MB, Python 41 MB, `/opt/venv` 112 MB,
+app + alembic ~120 kB. Nothing beyond the venv and app code is in it; inside the venv, pip
+(13 MB) is not needed at runtime and sqlalchemy (28 MB) is there only for Alembic.
+
 ## Commands — use these, do not invent your own
 
 ```
@@ -278,27 +283,18 @@ would attach the prod container to both `lab` and `shared`).
 
   Proven here: 1 TCP connection per deploy (sampled with `ss`), a dead endpoint (silent
   listener or blackhole IP) fails in ~35 s (15 + 5 + 15) with a clear message.
+  Skip proven across hosts: two consecutive plain `make verify` runs of the same commit
+  (`921603f`) against the VPS - the first shipped the image, the second printed "image
+  already on server, skipping ship (fingerprint 8258832b6d9c)", so the Layers+Config
+  fingerprint survives `docker save | docker load`. The master-open retry also fired once
+  in real use, in the second run (exit 255, then success on the second attempt).
+  Connection counts were not sampled in these two runs. A run where the retry fires shows
+  2 connection attempts by design: the failed one plus the successful one.
 
 ## Open checks
 
-Waiting for SSH to the VPS (down on the server side since 2026-09-30). Nothing below has
-been run; remove an item only when it has passed.
+Nothing below has been run; remove an item only when it has passed.
 
-- **Deploy hardening, real proofs** (`d1f05e8`). Prod still runs the test tag
-  `bss-app:bac85aa-mux`. With a clean tree and a background sampler counting distinct
-  connections to the VPS port 22 (only sockets seen in SYN-SENT or ESTAB):
-  - Run 1: plain `make verify`. Expected: the new commit-hash tag is shipped through the
-    single master connection; 1 connection.
-  - Run 2: plain `make verify` again. Expected: "image already on server, skipping ship"
-    and 1 connection. This is the proof that the Layers+Config fingerprint matches across
-    hosts after `docker save | docker load`; locally it is only shown that two builds of
-    the same content fingerprint identically.
-  - Then remove the `bac85aa-mux` tag on the server and show `docker image ls bss-app` and
-    the tag the app runs. Prod must end up on a commit-hash tag; only commit-hash tags may
-    remain.
-  - Confirm before each run that no other session has SSH connections open to `vps-test`.
-- **The "skip proven across hosts" line.** After Run 2 passes, add it to "Proven here"
-  under "Port the SSH hardening to vps-lab-template", as a separate small commit.
 - **Restore drill.** On 2026-09-30 `~/infra/backups` on the VPS was empty and no backup
   cron was installed; this is being fixed in vps-infra. Use the first cron-made `bss` dump:
   `pg_restore --list` on the server (no databases created and no `pg_restore` into a
