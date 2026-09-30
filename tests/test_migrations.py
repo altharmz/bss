@@ -50,3 +50,16 @@ def test_0002_fails_loudly_if_the_tables_are_not_empty(temp_db_url, column):
     table, name = column.split(".")
     with pytest.raises(IntegrityError, match=f'column "{name}" of relation "{table}"'):
         command.upgrade(cfg, "head")
+
+
+def test_cloned_test_databases_are_at_the_current_head(db_conn):
+    """Most tests get their database from a template migrated once per session
+    (conftest.template_db). It must be at the head of the migration scripts."""
+    from alembic.script import ScriptDirectory
+
+    head = ScriptDirectory.from_config(Config("alembic.ini")).get_current_head()
+    assert db_conn.execute("SELECT version_num FROM alembic_version").fetchall() == [(head,)]
+    tables = db_conn.execute(
+        "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
+    ).fetchone()[0]
+    assert tables == 15  # 14 domain tables + alembic_version
