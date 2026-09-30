@@ -1,10 +1,11 @@
 """Parties (TMF632), customers (TMF629) and billing accounts (TMF666)."""
 
+from typing import Any
 from uuid import UUID
 
 import psycopg
 
-from app.repository._sql import Row, fetch_one, returning
+from app.repository._sql import Row, fetch_one, returning, select_page, update_by_id
 
 
 def create_individual(
@@ -70,3 +71,35 @@ def create_billing_account(
 
 def get_billing_account(conn: psycopg.Connection, account_id: UUID) -> Row | None:
     return fetch_one(conn, "SELECT * FROM billing_account WHERE id = %s", (account_id,))
+
+
+def list_parties(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(conn, "party", where=where, offset=offset, limit=limit)
+
+
+def update_party(conn: psycopg.Connection, party_id: UUID, changes: dict[str, Any]) -> Row:
+    return update_by_id(conn, "party", party_id, changes)
+
+
+def list_customers(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(conn, "customer", where=where, offset=offset, limit=limit)
+
+
+def update_customer(conn: psycopg.Connection, customer_id: UUID, changes: dict[str, Any]) -> Row:
+    return update_by_id(conn, "customer", customer_id, changes)
+
+
+def list_billing_accounts(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(conn, "billing_account", where=where, offset=offset, limit=limit)
+
+
+def update_billing_account(
+    conn: psycopg.Connection, account_id: UUID, changes: dict[str, Any]
+) -> Row:
+    return update_by_id(conn, "billing_account", account_id, changes)

@@ -94,3 +94,7 @@ def set_order_item_state(conn: psycopg.Connection, order_item_id: UUID, state: s
         "UPDATE product_order_item SET state = %s WHERE id = %s RETURNING *",
         (state, order_item_id),
     )
+
+
+def get_order_item(conn: psycopg.Connection, order_item_id: UUID) -> Row | None:
+    return fetch_one(conn, "SELECT * FROM product_order_item WHERE id = %s", (order_item_id,))

@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 from httpx import Response
+from jsonschema import Draft7Validator
 
 from tests import contract
 
@@ -26,7 +27,24 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
             "productOfferingPrice": "ProductOfferingPrice",
         },
     ),
+    "/tmf-api/partyManagement/v5": (
+        "TMF632",
+        {"individual": "Individual", "organization": "Organization"},
+    ),
+    "/tmf-api/customerManagement/v5": ("TMF629", {"customer": "Customer"}),
+    "/tmf-api/accountManagement/v5": ("TMF666", {"billingAccount": "BillingAccount"}),
+    "/tmf-api/paymentManagement/v4": ("TMF676", {"payment": "Payment"}),
+    "/tmf-api/productInventory/v5": ("TMF637", {"product": "Product"}),
+    "/tmf-api/customerBillManagement/v5": (
+        "TMF678",
+        {
+            "customerBill": "CustomerBill",
+            "appliedCustomerBillingRate": "AppliedCustomerBillingRate",
+        },
+    ),
 }
+# Our own JSON Schemas for TMF extensions, served outside the TMF resource paths.
+SCHEMA_PREFIX = "/tmf-api/schema/"
 # Statuses we return that the specs do not declare on any operation (decided in CLAUDE.md).
 UNDECLARED_BUT_OURS = {"415", "422"}
 
@@ -43,7 +61,7 @@ class TmfClient:
 
     def request(self, method: str, url: str, **kwargs: Any) -> Response:
         response = self.client.request(method, url, **kwargs)
-        self._check(method, url.split("?")[0], response)
+        self._check(method, url.split("?")[0], response, partial="fields=" in url)
         return response
 
     def get(self, url: str, **kwargs: Any) -> Response:
@@ -61,10 +79,13 @@ class TmfClient:
             "PATCH", url, content=json.dumps(body), headers={"Content-Type": content_type}
         )
 
-    def _check(self, method: str, path: str, response: Response) -> None:
+    def _check(self, method: str, path: str, response: Response, partial: bool = False) -> None:
         self.checked += 1
         assert response.headers["content-type"] == "application/json", path
         body = response.json()
+        if path.startswith(SCHEMA_PREFIX) and response.status_code == 200:
+            Draft7Validator.check_schema(body)
+            return
         api, resource, schema, spec_path = self._locate(path)
 
         if response.status_code >= 400:
@@ -80,9 +101,22 @@ class TmfClient:
         if isinstance(body, list):
             assert "X-Total-Count" in response.headers and "X-Result-Count" in response.headers
             for item in body:
-                contract.assert_valid(api, schema, item)
+                self._validate(api, schema, item, partial)
         else:
-            contract.assert_valid(api, schema, body)
+            self._validate(api, schema, body, partial)
+
+    def _validate(self, api: str, schema: str, body: dict[str, Any], partial: bool) -> None:
+        contract.assert_valid(api, schema, body)
+        if api == "TMF666" and not partial:
+            # A TMF extension: the body must name the schema of its additions, the app
+            # must serve it, and the body must satisfy it. (A fields= selection leaves
+            # attributes out on request, so only full bodies are checked.)
+            location = body.get("@schemaLocation")
+            assert location, "an extended resource must carry @schemaLocation"
+            extension = self.client.get(location)
+            assert extension.status_code == 200, f"@schemaLocation {location} is not served"
+            problems = [e.message for e in Draft7Validator(extension.json()).iter_errors(body)]
+            assert not problems, f"body does not conform to {location}: {problems}"
 
     @staticmethod
     def _locate(path: str) -> tuple[str, str | None, str | None, str]:

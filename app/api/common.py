@@ -1,16 +1,19 @@
 """TMF630 building blocks shared by every API: request models, Money, TimePeriod,
 references, and the helpers that turn database rows into response bodies."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from psycopg.types.range import Range
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, field_validator
 from pydantic.alias_generators import to_camel
 
 from app.api.errors import bad_request, not_found, unprocessable, validation_error
+from app.api.tmfjson import TmfJSONResponse
+from app.config import settings
 
 CENT = Decimal("0.01")
 # numeric(12,2): at most 10 digits before the decimal point
@@ -91,10 +94,10 @@ def parse[M: BaseModel](
         raise validation_error(exc) from exc
 
 
-def check_type(body: dict[str, Any], resource_type: str) -> None:
+def check_type(body: dict[str, Any], *resource_types: str) -> None:
     """PATCH may repeat @type (the spec's _MVO schemas require it) but not change it."""
-    if "@type" in body and body["@type"] != resource_type:
-        raise bad_request(f"@type is read-only (this resource is a {resource_type})")
+    if "@type" in body and body["@type"] not in resource_types:
+        raise bad_request(f"@type is read-only (this resource is a {resource_types[0]})")
 
 
 def not_null(data: BaseModel, *names: str) -> None:
@@ -129,13 +132,55 @@ def time_period(value: Range) -> dict[str, Any]:
     return body
 
 
-def ref(resource_type: str, href: str, row_id: UUID, name: str | None = None) -> dict[str, Any]:
+def billing_tz() -> ZoneInfo:
+    return ZoneInfo(settings.billing_tz)
+
+
+def to_billing_date(value: datetime) -> date:
+    """TMF sends date-times where we store dates: the calendar date in BILLING_TZ.
+    2026-10-01T23:30:00Z is 2026-10-02 in Europe/Moscow."""
+    return value.astimezone(billing_tz()).date()
+
+
+def from_billing_date(value: date) -> datetime:
+    """A stored date goes out as midnight of that day in BILLING_TZ."""
+    return utc(datetime.combine(value, time.min, tzinfo=billing_tz()))
+
+
+def date_period(value: Range) -> dict[str, Any]:
+    """A daterange [start, end) as a TimePeriod of BILLING_TZ midnights."""
+    return {
+        "startDateTime": from_billing_date(value.lower),
+        "endDateTime": from_billing_date(value.upper),
+    }
+
+
+def ref(
+    resource_type: str,
+    href: str,
+    row_id: UUID,
+    name: str | None = None,
+    *,
+    ref_type: str | None = None,
+) -> dict[str, Any]:
+    """A TMF reference. `@type` is `<Resource>Ref` unless the spec names it otherwise."""
     body: dict[str, Any] = {"id": str(row_id), "href": href}
     if name is not None:
         body["name"] = name
-    body["@type"] = f"{resource_type}Ref"
+    body["@type"] = ref_type or f"{resource_type}Ref"
     body["@referredType"] = resource_type
     return body
+
+
+def created(body: dict[str, Any]) -> TmfJSONResponse:
+    return TmfJSONResponse(body, status_code=201, headers={"Location": body["href"]})
+
+
+def columns(data: BaseModel, *, exclude: frozenset[str] = frozenset()) -> dict[str, Any]:
+    """The attributes a PATCH body actually carried, as column -> value. The TMF meta
+    attributes are accepted but are not columns."""
+    names = {n for n in data.model_fields_set if not n.startswith("at_")} - exclude
+    return data.model_dump(include=names)
 
 
 def without_nulls(body: dict[str, Any]) -> dict[str, Any]:

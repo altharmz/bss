@@ -1,6 +1,7 @@
 """TMF630 conventions shared by every API, exercised through the catalog (TMF620):
 Money, TimePeriod, lists, merge patch and error bodies."""
 
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -10,13 +11,15 @@ from pydantic import BaseModel
 
 from app.api import tmfjson
 from app.repository import catalog
-from tests import contract
+from tests import contract, timeline
 from tests.apiclient import decimals
+from tests.timeline import iso, z
 
 BASE = "/tmf-api/productCatalogManagement/v5"
 SPEC = f"{BASE}/productSpecification"
 PRICE = f"{BASE}/productOfferingPrice"
-START = "2026-01-01T00:00:00+03:00"
+START = iso(timeline.START)
+END = timeline.START + timedelta(days=31)  # a month later, in BILLING_TZ
 
 
 def spec_body(**over):
@@ -122,24 +125,25 @@ def test_the_encoder_refuses_floats():
 
 def test_missing_end_means_open_ended(api, db_conn):
     body = api.post_raw(PRICE, price_json("1.00")).json()
-    assert body["validFor"] == {"startDateTime": "2025-12-31T21:00:00Z"}
+    assert body["validFor"] == {"startDateTime": z(timeline.START)}
     lower, upper, bounds = db_conn.execute(
         "SELECT lower(valid_for), upper(valid_for), lower_inc(valid_for) AND NOT"
         " upper_inc(valid_for) FROM product_offering_price"
     ).fetchone()
-    assert upper is None and bounds is True and lower.isoformat().startswith("2025-12-31T21:00")
+    assert upper is None and bounds is True and lower == timeline.START
 
 
 def test_period_with_end_is_stored_half_open(api, db_conn):
     text = price_json("1.00").replace(
         f'{{"startDateTime": "{START}"}}',
-        f'{{"startDateTime": "{START}", "endDateTime": "2026-02-01T00:00:00+03:00"}}',
+        f'{{"startDateTime": "{START}", "endDateTime": "{iso(END)}"}}',
     )
     body = api.post_raw(PRICE, text).json()
-    assert body["validFor"]["endDateTime"] == "2026-01-31T21:00:00Z"
+    assert body["validFor"]["endDateTime"] == z(END)
     assert db_conn.execute(
-        "SELECT valid_for @> '2026-01-31T20:59:59Z'::timestamptz,"
-        " valid_for @> '2026-01-31T21:00:00Z'::timestamptz FROM product_offering_price"
+        "SELECT valid_for @> %s::timestamptz, valid_for @> %s::timestamptz"
+        " FROM product_offering_price",
+        (END - timedelta(seconds=1), END),
     ).fetchone() == (True, False)
 
 
@@ -147,9 +151,9 @@ def test_period_with_end_is_stored_half_open(api, db_conn):
     "period",
     [
         "{}",
-        '{"endDateTime": "2026-02-01T00:00:00Z"}',
-        '{"startDateTime": "2026-02-01T00:00:00Z", "endDateTime": "2026-02-01T00:00:00Z"}',
-        '{"startDateTime": "2026-02-01T00:00:00"}',
+        f'{{"endDateTime": "{iso(END)}"}}',
+        f'{{"startDateTime": "{iso(END)}", "endDateTime": "{iso(END)}"}}',
+        f'{{"startDateTime": "{iso(END)[:19]}"}}',  # no offset
     ],
 )
 def test_invalid_periods_are_rejected(api, period):

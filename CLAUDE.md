@@ -234,8 +234,8 @@ would attach the prod container to both `lab` and `shared`).
 
 ## TMF API conventions (stage 2)
 
-Built once in `app/api/` and shared by every API. Status: TMF620 is implemented
-(Checkpoint 2); the other APIs follow the same pattern.
+Built once in `app/api/` and shared by every API. Status: TMF620, 632, 629, 666, 676,
+637 and 678 are implemented; TMF622 ordering is next (Checkpoint 4).
 
 - **Paths:** `/tmf-api/<apiName>/v5/<resource>`: `productCatalogManagement`,
   `partyManagement`, `customerManagement`, `accountManagement`,
@@ -284,6 +284,10 @@ Built once in `app/api/` and shared by every API. Status: TMF620 is implemented
   bodies are plain dicts written by `tmfjson` (no Pydantic response models), so the
   generated `/docs` has no response schemas - on purpose. Stage 5 generates the frontend
   types from `spec/*.yaml` (and the extension schemas we serve), never from `/openapi.json`.
+- **Contract-test limit:** a discriminator that sits next to `allOf` (the TMF subclass
+  pattern) is not dispatched on, so a wrong `@type` on a reference (e.g. `IndividualRef`
+  where the spec says `PartyRef`) passes schema validation. The API tests assert those
+  `@type` values explicitly.
 - **Contract tests:** `tests/apiclient.py` validates every response in the suite against
   the schema in `spec/` for its path (`Error` for non-2xx). `tests/contract.py` uses
   openapi-schema-validator's OAS 3.0 dialect with its discriminator handling replaced:
@@ -309,6 +313,11 @@ Built once in `app/api/` and shared by every API. Status: TMF620 is implemented
   `productOfferingPrice[]` is a 409; `price`, `priceType` and the recurring period are
   read-only (400); `validFor.startDateTime` cannot move (409). Changing a price = end its
   `validFor` and attach a new one - stage 3 billing needs the historical price.
+- **A price never starts in the past.** A price created or attached with
+  `validFor.startDateTime` < now is a 409. Stage 3 catch-up billing charges past days at
+  the price valid then, so a past-starting price would back-charge them. Consequence: an
+  order can only be priced from the next midnight (BILLING_TZ) after the price was
+  created.
 - **A price is never ended retroactively.** `validFor.endDateTime` can only be set or
   moved to a value >= now (the injected clock), and only while the current end, if any,
   is not in the past (409 otherwise): a retroactive end, or reopening a price that has
@@ -321,7 +330,62 @@ Built once in `app/api/` and shared by every API. Status: TMF620 is implemented
   columns have no default on purpose: if the tables are not empty the migration fails
   and the deploy stops before the app starts.
 
+### TMF632, TMF629, TMF666 mapping
+
+| Resource | DB column <-> TMF attribute | Filters |
+|---|---|---|
+| individual | `party` with `party_type = 'Individual'`: `given_name` <-> `givenName`, `family_name` <-> `familyName` (both mandatory, as in the spec's create schema) | `givenName`, `familyName` |
+| organization | `party` with `party_type = 'Organization'`: `organization_name` <-> `name` | `name` |
+| customer | `name`, `status` (`Created`/`Active`/`Inactive`, ours), `party_id` <-> `engagedParty` (`PartyRef`, `@referredType` = the party type; fixed at creation) | `name`, `status`, `engagedParty.id` |
+| billingAccount | `name`, `state` (`Active`/`Suspended`/`Closed`, ours), `customer_id` <-> `relatedParty[0]` (role `customer`, `PartyRoleRef` to the Customer; exactly one, fixed at creation), `bill_cycle_day` <-> `billCycleDay`, `currency` <-> `currency`, computed <-> `accountBalance[]` | `name`, `state`, `relatedParty.id` |
+
+An individual is not reachable under `/organization` and vice versa (404).
+
+- **Extension `BssBillingAccount`** (TMF extension pattern). Responses carry
+  `@type: BssBillingAccount`, `@baseType: BillingAccount` and `@schemaLocation:
+  /tmf-api/schema/BssBillingAccount.schema.json`, a JSON Schema served by the app that
+  adds `billCycleDay` (integer 1..28) and `currency` (ISO 4217). Both are required on
+  create. Both are fixed after creation: `currency` for good (PATCH is a 400, read-only),
+  `billCycleDay` for now (PATCH is a 409 with the reason; see "Open questions"). TMF666 has no currency attribute at all, and
+  `billStructure.cycleSpecification.billingDateShift` means an offset of the bill date
+  from the period start, not the day the period starts - hence the extension. PATCH
+  accepts `@type` `BssBillingAccount` or `BillingAccount`. Every full billingAccount body
+  in the tests is validated against both TMF666 and the served extension schema.
+- **Balance** is the spec's `accountBalance[]` with exactly one read-only entry:
+  `{"balanceType": "currentBalance", "amount": Money, "@type": "AccountBalance"}`,
+  computed on every read as payments (`done`) minus all ABRs. **Positive = the customer
+  is in credit** (has paid more than was charged); negative = the customer owes.
+  `accountBalance` in a POST or PATCH is a 400.
+
+### TMF676 (v4) mapping
+
+| payment | `billing_account_id` <-> `account` (AccountRef, `@referredType: BillingAccount`), `amount` + `currency` <-> `totalAmount` and `amount` (equal: no taxes), `received_at` <-> `paymentDate` and `statusDate` (the clock at POST), `status` (`done`), `payment_method` <-> `paymentMethod` (`{name, @type}`, both the stored word) | `account.id`, `status` |
+|---|---|---|
+
+POST records a received payment: `account`, `totalAmount` and `paymentMethod` (with a
+`name` or an `@type`) are mandatory, as in the spec. `amount`, if sent, must equal
+`totalAmount`; `taxAmount`, if sent, must be zero. `totalAmount.unit` must be the
+account's currency (422); the composite FK behind it maps to 409 if it ever fires.
+Payments are never changed or deleted (405).
+
+### TMF637 and TMF678 mapping (read-only)
+
+| Resource | DB column <-> TMF attribute | Filters |
+|---|---|---|
+| product | `status`, `start_date` <-> `startDate`, `termination_date` <-> `terminationDate` (exclusive: the first day not billed), `created_at` <-> `creationDate`, offering name <-> `name`, `billing_account_id` <-> `billingAccount`, `product_offering_id` <-> `productOffering`, `created_by_item_id` / `terminated_by_item_id` <-> `productOrderItem[]` (`RelatedOrderItem`, role `creation` / `termination`) | `billingAccount.id`, `status` |
+| customerBill | `bill_date` <-> `billDate`, `bill_period` <-> `billingPeriod`, `amount_due` + `currency` <-> `amountDue`, `state`, `billing_account_id` <-> `billingAccount` | `billingAccount.id`, `state` |
+| appliedCustomerBillingRate | `charge_type` <-> `appliedBillingRateType` (`recurring` -> `appliedBillingCharge`, `refund` -> `appliedBillingCredit`), `amount` + `currency` <-> `taxExcludedAmount` (refunds negative), `period` <-> `periodCoverage`, `customer_bill_id` <-> `bill` and `isBilled`, `product_id` <-> `product`, `billing_account_id` <-> `billingAccount`, `created_at` <-> `date` | `billingAccount.id`, `product.id`, `isBilled` |
+
+- Products are only written by orders; POST/PATCH/DELETE on `/product` are 405.
+- Bills and ABRs are only written by the billing run; both lists are empty until stage 3.
+- **Known:** a product ordered with a future start date stays `created` until the stage 4
+  worker activates it. Billing is driven by dates, not status, so money is unaffected.
+
 ## Open questions
+
+- **Changing `billCycleDay` (stage 3).** PATCH is a 409 today. Stage 3 decides how a cycle
+  change treats the current period (close it early, stretch it, or only apply from the
+  next period) and then allows the change.
 
 - **Stale billing runs (stage 4).** A run killed mid-way (e.g. by the nightly 03:00
   reboot) stays `running`, and `UNIQUE (run_date)` blocks a new one. `start_run` must be

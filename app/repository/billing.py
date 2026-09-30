@@ -5,12 +5,13 @@ Only the billing run writes ABRs.
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 import psycopg
 from psycopg.types.range import Range
 
-from app.repository._sql import Row, fetch_all, fetch_one, money, returning
+from app.repository._sql import Row, fetch_all, fetch_one, money, returning, select_page
 
 
 class BillingRunConflict(Exception):
@@ -187,3 +188,25 @@ def account_balance(conn: psycopg.Connection, billing_account_id: UUID) -> Decim
     )
     assert row is not None
     return row["balance"]
+
+
+def get_abr(conn: psycopg.Connection, abr_id: UUID) -> Row | None:
+    return fetch_one(conn, "SELECT * FROM applied_customer_billing_rate WHERE id = %s", (abr_id,))
+
+
+def page_abrs(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(
+        conn, "applied_customer_billing_rate", where=where, offset=offset, limit=limit
+    )
+
+
+def get_bill(conn: psycopg.Connection, bill_id: UUID) -> Row | None:
+    return fetch_one(conn, "SELECT * FROM customer_bill WHERE id = %s", (bill_id,))
+
+
+def page_bills(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(conn, "customer_bill", where=where, offset=offset, limit=limit)

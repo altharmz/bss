@@ -2,11 +2,12 @@
 item - hence the mandatory `created_by_item_id` / `terminated_by_item_id`."""
 
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 import psycopg
 
-from app.repository._sql import Row, fetch_all, fetch_one, returning
+from app.repository._sql import Row, fetch_all, fetch_one, returning, select_page
 
 
 def create_product(
@@ -78,3 +79,9 @@ def list_active_products(conn: psycopg.Connection, billing_account_id: UUID, on:
         """,
         (billing_account_id, on, on),
     )
+
+
+def list_products(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(conn, "product", where=where, offset=offset, limit=limit)

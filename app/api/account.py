@@ -1,0 +1,237 @@
+"""TMF666 Account Management v5: billingAccount.
+
+Two things TMF666 has no attribute for are carried by a documented extension, following
+the TMF extension pattern (`@type` names the subclass, `@baseType` the TMF class,
+`@schemaLocation` the JSON Schema of the additions, served by this app):
+
+- `billCycleDay` (1..28): the day of month on which the account's billing period starts.
+  The closest spec attribute, billStructure.cycleSpecification.billingDateShift, is an
+  offset of the bill date *from* the period start - a different thing.
+- `currency`: the account's single currency. Immutable.
+
+`billCycleDay` is fixed after creation for now (PATCH is a 409): how a change treats the
+current billing period is an open question for stage 3.
+
+The balance is the spec's own `accountBalance[]`: one read-only `currentBalance` entry,
+computed on every read. Positive = the customer is in credit (payments exceed charges).
+"""
+
+from typing import Any, Literal
+
+import psycopg
+from fastapi import APIRouter, Request
+from pydantic import Field
+
+from app.api import listing
+from app.api.common import (
+    CENT,
+    Ref,
+    TmfModel,
+    check_type,
+    columns,
+    created,
+    money,
+    not_null,
+    parse,
+    parse_id,
+    ref,
+    utc,
+)
+from app.api.customer import customer_href
+from app.api.deps import JsonBody, MergePatchBody, Tx
+from app.api.errors import conflict, not_found, unprocessable
+from app.api.tmfjson import TmfJSONResponse
+from app.repository import billing, parties
+from app.repository._sql import Row
+
+BASE = "/tmf-api/accountManagement/v5"
+router = APIRouter(prefix=BASE)
+# Outside the TMF666 resource paths: it is ours, not part of that API.
+schema_router = APIRouter(prefix="/tmf-api/schema")
+
+EXTENSION_TYPE = "BssBillingAccount"
+SCHEMA_LOCATION = f"/tmf-api/schema/{EXTENSION_TYPE}.schema.json"
+EXTENSION_SCHEMA: dict[str, Any] = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": SCHEMA_LOCATION,
+    "title": EXTENSION_TYPE,
+    "description": (
+        "Extension of the TMF666 BillingAccount: the attributes this service adds."
+        " An instance must also satisfy the TMF666 v5 BillingAccount schema."
+    ),
+    "type": "object",
+    "properties": {
+        "@type": {"const": EXTENSION_TYPE},
+        "@baseType": {"const": "BillingAccount"},
+        "billCycleDay": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 28,
+            "description": "Day of month on which the account's billing period starts.",
+        },
+        "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "description": "ISO 4217 code of the account's single currency. Immutable.",
+        },
+    },
+    "required": ["@type", "@baseType", "billCycleDay", "currency"],
+}
+
+AccountState = Literal["Active", "Suspended", "Closed"]
+ATTRIBUTES = (
+    "name",
+    "state",
+    "relatedParty",
+    "accountBalance",
+    "billCycleDay",
+    "currency",
+    "lastUpdate",
+    "@baseType",
+    "@schemaLocation",
+)
+BALANCE_TYPE = "currentBalance"
+
+
+class RelatedParty(TmfModel):
+    role: str | None = None
+    party_or_party_role: Ref
+
+
+class AccountCreate(TmfModel):
+    name: str = Field(min_length=1)
+    related_party: list[RelatedParty] = Field(min_length=1, max_length=1)
+    bill_cycle_day: int = Field(ge=1, le=28, strict=True)
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    state: AccountState = "Active"
+    last_update: Any = None
+
+
+class AccountPatch(TmfModel):
+    name: str | None = Field(default=None, min_length=1)
+    state: AccountState | None = None
+
+
+def account_href(account_id: Any) -> str:
+    return f"{BASE}/billingAccount/{account_id}"
+
+
+def account_ref(row: Row) -> dict[str, Any]:
+    return ref("BillingAccount", account_href(row["id"]), row["id"], row["name"])
+
+
+def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    customer = parties.get_customer(conn, row["customer_id"])
+    assert customer is not None  # foreign key
+    return {
+        "id": str(row["id"]),
+        "href": account_href(row["id"]),
+        "name": row["name"],
+        "state": row["state"],
+        "relatedParty": [
+            {
+                "role": "customer",
+                "partyOrPartyRole": ref(
+                    "Customer",
+                    customer_href(customer["id"]),
+                    customer["id"],
+                    customer["name"],
+                    ref_type="PartyRoleRef",
+                ),
+                "@type": "RelatedPartyRefOrPartyRoleRef",
+            }
+        ],
+        "accountBalance": [
+            {
+                "balanceType": BALANCE_TYPE,
+                "amount": money(
+                    billing.account_balance(conn, row["id"]).quantize(CENT), row["currency"]
+                ),
+                "@type": "AccountBalance",
+            }
+        ],
+        "billCycleDay": row["bill_cycle_day"],
+        "currency": row["currency"],
+        "lastUpdate": utc(row["updated_at"]),
+        "@type": EXTENSION_TYPE,
+        "@baseType": "BillingAccount",
+        "@schemaLocation": SCHEMA_LOCATION,
+    }
+
+
+@schema_router.get(f"/{EXTENSION_TYPE}.schema.json")
+def extension_schema() -> TmfJSONResponse:
+    return TmfJSONResponse(EXTENSION_SCHEMA)
+
+
+@router.get("/billingAccount")
+def list_accounts(request: Request, tx: Tx) -> TmfJSONResponse:
+    query = listing.parse_list_query(
+        request,
+        filters={
+            "name": ("name", listing.as_str),
+            "state": ("state", listing.as_str),
+            "relatedParty.id": ("customer_id", listing.as_uuid),
+        },
+        attributes=ATTRIBUTES,
+    )
+    with tx() as conn:
+        rows, total = parties.list_billing_accounts(
+            conn, where=query.where, offset=query.offset, limit=query.limit
+        )
+        items = [account_body(conn, row) for row in rows]
+    return listing.list_response(items, total, query)
+
+
+@router.get("/billingAccount/{account_id}")
+def get_account(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, ATTRIBUTES)
+    with tx() as conn:
+        row = parties.get_billing_account(conn, parse_id("billingAccount", account_id))
+        if row is None:
+            raise not_found("billingAccount", account_id)
+        body = account_body(conn, row)
+    return TmfJSONResponse(listing.select_fields(body, fields))
+
+
+@router.post("/billingAccount")
+def create_account(body: JsonBody, tx: Tx) -> TmfJSONResponse:
+    data = parse(AccountCreate, body, read_only=("accountBalance",))
+    customer_id = data.related_party[0].party_or_party_role.id
+    with tx() as conn:
+        if parties.get_customer(conn, customer_id) is None:
+            raise unprocessable(f"relatedParty: customer {customer_id} does not exist")
+        row = parties.create_billing_account(
+            conn,
+            customer_id=customer_id,
+            name=data.name,
+            currency=data.currency,
+            bill_cycle_day=data.bill_cycle_day,
+            state=data.state,
+        )
+        new = account_body(conn, row)
+    return created(new)
+
+
+@router.patch("/billingAccount/{account_id}")
+def patch_account(account_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONResponse:
+    check_type(body, EXTENSION_TYPE, "BillingAccount")
+    if "billCycleDay" in body:
+        # Open question for stage 3: how a cycle change treats the current period.
+        raise conflict(
+            "billCycleDay cannot be changed yet: how a change treats the current billing"
+            " period is not decided"
+        )
+    data = parse(
+        AccountPatch,
+        body,
+        read_only=("accountBalance", "currency", "relatedParty", "lastUpdate"),
+    )
+    not_null(data, "name", "state")
+    with tx() as conn:
+        uid = parse_id("billingAccount", account_id)
+        if parties.get_billing_account(conn, uid) is None:
+            raise not_found("billingAccount", account_id)
+        row = parties.update_billing_account(conn, uid, columns(data))
+        patched = account_body(conn, row)
+    return TmfJSONResponse(patched)

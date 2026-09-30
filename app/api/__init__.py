@@ -6,9 +6,20 @@ open exactly one database transaction per request (app.api.deps.Tx).
 
 from fastapi import FastAPI
 
-from app.api import catalog, errors
+from app.api import (
+    account,
+    bill,
+    catalog,
+    customer,
+    errors,
+    inventory,
+    party,
+    payment,
+)
 
 
 def install(app: FastAPI) -> None:
     errors.install(app)
-    app.include_router(catalog.router)
+    for module in (catalog, party, customer, account, payment, inventory, bill):
+        app.include_router(module.router)
+    app.include_router(account.schema_router)

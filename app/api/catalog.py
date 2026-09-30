@@ -4,9 +4,11 @@ productOfferingPrice.
 A price is created on its own and attached by the offering (productOfferingPrice[]), as
 in the spec. A price belongs to at most one offering and is never detached or re-priced:
 billing needs the historical price, so changing a price means ending its validFor - not
-retroactively - and attaching a new one.
+retroactively - and attaching a new one. Nor does a price ever start in the past: one
+created or attached with validFor.startDateTime < now is a 409.
 """
 
+from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -22,6 +24,8 @@ from app.api.common import (
     TimePeriod,
     TmfModel,
     check_type,
+    columns,
+    created,
     money,
     not_null,
     parse,
@@ -69,10 +73,6 @@ PRICE_IMMUTABLE = ("price", "priceType", "recurringChargePeriodType", "recurring
 
 def _href(resource: str, row_id: UUID) -> str:
     return f"{BASE}/{resource}/{row_id}"
-
-
-def _created(body: dict[str, Any]) -> TmfJSONResponse:
-    return TmfJSONResponse(body, status_code=201, headers={"Location": body["href"]})
 
 
 # --- productSpecification ---
@@ -143,7 +143,7 @@ def create_specification(body: JsonBody, tx: Tx) -> TmfJSONResponse:
             lifecycle_status=data.lifecycle_status,
             description=data.description,
         )
-    return _created(specification_body(row))
+    return created(specification_body(row))
 
 
 @router.patch("/productSpecification/{spec_id}")
@@ -151,18 +151,13 @@ def patch_specification(spec_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONRe
     check_type(body, "ProductSpecification")
     data = parse(SpecificationPatch, body, read_only=("lastUpdate",))
     not_null(data, "name", "lifecycle_status")
-    changes = data.model_dump(include=data.model_fields_set - {"at_type"})
+    changes = columns(data)
     with tx() as conn:
         uid = parse_id("productSpecification", spec_id)
         if catalog.get_product_specification(conn, uid) is None:
             raise not_found("productSpecification", spec_id)
-        row = catalog.update_product_specification(conn, uid, _columns(changes))
+        row = catalog.update_product_specification(conn, uid, changes)
     return TmfJSONResponse(specification_body(row))
-
-
-def _columns(changes: dict[str, Any]) -> dict[str, Any]:
-    """Drop the TMF meta attributes: they are accepted but are not columns."""
-    return {k: v for k, v in changes.items() if not k.startswith("at_")}
 
 
 # --- productOfferingPrice ---
@@ -244,8 +239,13 @@ def get_price(price_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/productOfferingPrice")
-def create_price(body: JsonBody, tx: Tx) -> TmfJSONResponse:
+def create_price(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     data = parse(PriceCreate, body)
+    valid_for = data.valid_for.to_range()
+    if valid_for.lower < clock.now():
+        raise conflict(
+            "validFor.startDateTime is in the past; a price can only take effect from now on"
+        )
     with tx() as conn:
         row = catalog.create_product_offering_price(
             conn,
@@ -256,9 +256,9 @@ def create_price(body: JsonBody, tx: Tx) -> TmfJSONResponse:
             recurring_period=data.recurring_charge_period_type,
             amount=data.price.value,
             currency=data.price.unit,
-            valid_for=data.valid_for.to_range(),
+            valid_for=valid_for,
         )
-    return _created(price_body(row))
+    return created(price_body(row))
 
 
 @router.patch("/productOfferingPrice/{price_id}")
@@ -266,7 +266,7 @@ def patch_price(price_id: str, body: MergePatchBody, tx: Tx, clock: ClockDep) ->
     check_type(body, "ProductOfferingPrice")
     data = parse(PricePatch, body, read_only=("lastUpdate", *PRICE_IMMUTABLE))
     not_null(data, "name", "lifecycle_status", "valid_for")
-    changes = _columns(data.model_dump(include=data.model_fields_set))
+    changes = columns(data)
     with tx() as conn:
         uid = parse_id("productOfferingPrice", price_id)
         current = catalog.get_product_offering_price(conn, uid)
@@ -354,8 +354,31 @@ def offering_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     )
 
 
-def _attach_prices(conn: psycopg.Connection, offering_id: UUID, refs: list[Ref]) -> None:
+def _not_in_the_past(price_id: UUID, start: datetime, now: datetime) -> None:
+    # Stage 3 catch-up billing charges every day since a product's start at the price
+    # valid then: a price that starts in the past would add back-charges for days that
+    # were already billed (or were free).
+    if start < now:
+        raise conflict(
+            f"productOfferingPrice {price_id}: validFor.startDateTime is in the past;"
+            " a price can only take effect from now on"
+        )
+
+
+def _attach_prices(
+    conn: psycopg.Connection, offering_id: UUID, refs: list[Ref], now: datetime
+) -> None:
     for price_ref in refs:
+        price = catalog.get_product_offering_price(conn, price_ref.id)
+        if price is None:
+            raise unprocessable(f"productOfferingPrice {price_ref.id} does not exist")
+        if price["product_offering_id"] == offering_id:
+            continue  # already attached: a merge patch repeats the whole list
+        if price["product_offering_id"] is not None:
+            raise conflict(
+                f"productOfferingPrice {price_ref.id} already belongs to another offering"
+            )
+        _not_in_the_past(price_ref.id, price["valid_for"].lower, now)
         try:
             attached = catalog.attach_price(conn, price_ref.id, offering_id)
         except pg_errors.ExclusionViolation:
@@ -363,12 +386,7 @@ def _attach_prices(conn: psycopg.Connection, offering_id: UUID, refs: list[Ref])
                 f"productOfferingPrice {price_ref.id} overlaps a price of the same type and"
                 " currency already on this offering"
             ) from None
-        if attached is not None:
-            continue
-        price = catalog.get_product_offering_price(conn, price_ref.id)
-        if price is None:
-            raise unprocessable(f"productOfferingPrice {price_ref.id} does not exist")
-        if price["product_offering_id"] != offering_id:
+        if attached is None:  # attached elsewhere between our read and the update
             raise conflict(
                 f"productOfferingPrice {price_ref.id} already belongs to another offering"
             )
@@ -406,7 +424,7 @@ def get_offering(offering_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/productOffering")
-def create_offering(body: JsonBody, tx: Tx) -> TmfJSONResponse:
+def create_offering(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     data = parse(OfferingCreate, body)
     valid_for = data.valid_for.to_range()
     with tx() as conn:
@@ -423,19 +441,19 @@ def create_offering(body: JsonBody, tx: Tx) -> TmfJSONResponse:
             is_sellable=data.is_sellable,
             description=data.description,
         )
-        _attach_prices(conn, row["id"], data.product_offering_price)
-        created = offering_body(conn, row)
-    return _created(created)
+        _attach_prices(conn, row["id"], data.product_offering_price, clock.now())
+        new = offering_body(conn, row)
+    return created(new)
 
 
 @router.patch("/productOffering/{offering_id}")
-def patch_offering(offering_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONResponse:
+def patch_offering(
+    offering_id: str, body: MergePatchBody, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
     check_type(body, "ProductOffering")
     data = parse(OfferingPatch, body, read_only=("lastUpdate", "productSpecification"))
     not_null(data, "name", "lifecycle_status", "valid_for", "is_sellable", "product_offering_price")
-    changes = _columns(
-        data.model_dump(include=data.model_fields_set - {"valid_for", "product_offering_price"})
-    )
+    changes = columns(data, exclude=frozenset({"valid_for", "product_offering_price"}))
     if data.valid_for is not None:
         changes["valid_for"] = data.valid_for.to_range()
     with tx() as conn:
@@ -451,7 +469,7 @@ def patch_offering(offering_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONRes
                     "a price cannot be detached from an offering (end its validFor instead):"
                     f" {', '.join(str(p['id']) for p in dropped)}"
                 )
-            _attach_prices(conn, uid, data.product_offering_price)
+            _attach_prices(conn, uid, data.product_offering_price, clock.now())
         row = catalog.update_product_offering(conn, uid, changes)
         patched = offering_body(conn, row)
     return TmfJSONResponse(patched)

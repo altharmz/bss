@@ -7,6 +7,10 @@ from psycopg.rows import dict_row
 
 Row = dict[str, Any]
 
+# Filter values for select_page: `column IS NULL` / `column IS NOT NULL`.
+IS_NULL = object()
+NOT_NULL = object()
+
 
 def fetch_one(conn: psycopg.Connection, query: str, params: Any = None) -> Row | None:
     with conn.cursor(row_factory=dict_row) as cur:
@@ -43,21 +47,26 @@ def select_page(
     offset: int,
     limit: int,
 ) -> tuple[list[Row], int]:
-    """One page of `table` matching every `column = value` in `where`, plus the total
-    number of matching rows. Ordered by creation, so pages are stable.
+    """One page of `table` matching every `column = value` in `where` (a value may also
+    be IS_NULL or NOT_NULL), plus the total number of matching rows. Ordered by creation,
+    so pages are stable.
 
     `table` and the column names are identifiers chosen by the caller's code, never user
     input. String values are compared with `column::text`, so a value that is not a member
     of an enum column matches nothing instead of raising.
     """
-    conds = [
-        sql.SQL("{}::text = %s" if isinstance(value, str) else "{} = %s").format(
-            sql.Identifier(column)
-        )
-        for column, value in where.items()
-    ]
+    conds, params = [], []
+    for column, value in where.items():
+        ident = sql.Identifier(column)
+        if value is IS_NULL:
+            conds.append(sql.SQL("{} IS NULL").format(ident))
+        elif value is NOT_NULL:
+            conds.append(sql.SQL("{} IS NOT NULL").format(ident))
+        else:
+            template = "{}::text = %s" if isinstance(value, str) else "{} = %s"
+            conds.append(sql.SQL(template).format(ident))
+            params.append(value)
     clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conds) if conds else sql.SQL("")
-    params = list(where.values())
     ident = sql.Identifier(table)
     total = fetch_one(conn, sql.SQL("SELECT count(*) AS n FROM {}").format(ident) + clause, params)
     rows = fetch_all(

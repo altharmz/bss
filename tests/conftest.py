@@ -96,16 +96,15 @@ def api(db_conn, migrated_db_url, monkeypatch):
     Only the clock is overridden: requests go through the production transaction
     dependency, pointed at the test database via settings.
     """
-    from datetime import UTC, datetime
-
     from fastapi.testclient import TestClient
 
     from app.api.deps import get_clock
     from app.clock import FixedClock
     from app.main import app
     from tests.apiclient import TmfClient
+    from tests.timeline import NOW
 
-    clock = FixedClock(datetime(2026, 10, 1, 9, 0, tzinfo=UTC))
+    clock = FixedClock(NOW)
     monkeypatch.setattr(settings, "database_url", migrated_db_url)
     app.dependency_overrides[get_clock] = lambda: clock
     client = TmfClient(TestClient(app, raise_server_exceptions=False))

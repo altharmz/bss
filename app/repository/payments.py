@@ -2,11 +2,12 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 import psycopg
 
-from app.repository._sql import Row, money, returning
+from app.repository._sql import Row, fetch_one, money, returning, select_page
 
 
 def insert_payment(
@@ -28,3 +29,13 @@ def insert_payment(
         """,
         (billing_account_id, currency, money(amount), received_at, payment_method, status),
     )
+
+
+def get_payment(conn: psycopg.Connection, payment_id: UUID) -> Row | None:
+    return fetch_one(conn, "SELECT * FROM payment WHERE id = %s", (payment_id,))
+
+
+def list_payments(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(conn, "payment", where=where, offset=offset, limit=limit)
