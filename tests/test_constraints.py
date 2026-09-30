@@ -181,6 +181,7 @@ def test_currency_must_match_billing_account(db_conn):
             billing_account_id=acc["id"],
             amount=Decimal("1.00"),
             currency="USD",
+            payment_method="bankTransfer",
             received_at=NOW,
         )
 

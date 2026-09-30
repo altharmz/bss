@@ -111,7 +111,7 @@ def test_create_organization(db_conn):
 
 def test_create_and_get_customer(db_conn):
     party = parties.create_organization(db_conn, name="Romashka LLC")
-    customer = parties.create_customer(db_conn, party_id=party["id"])
+    customer = parties.create_customer(db_conn, party_id=party["id"], name="Ivanov")
     assert parties.get_customer(db_conn, customer["id"]) == customer
     assert customer["status"] == "Created"
 
@@ -368,6 +368,7 @@ def test_account_balance(db_conn):
             billing_account_id=w.account["id"],
             amount=Decimal(amount),
             currency="RUB",
+            payment_method="bankTransfer",
             received_at=NOW,
         )
     # another account's money must not leak in
@@ -377,6 +378,7 @@ def test_account_balance(db_conn):
         billing_account_id=other["id"],
         amount=Decimal("999.00"),
         currency="RUB",
+        payment_method="bankTransfer",
         received_at=NOW,
     )
 
@@ -403,6 +405,7 @@ def test_insert_payment(db_conn):
         billing_account_id=acc["id"],
         amount=Decimal("1000.00"),
         currency="RUB",
+        payment_method="bankTransfer",
         received_at=received,
     )
     assert (pay["status"], pay["amount"], pay["received_at"]) == (

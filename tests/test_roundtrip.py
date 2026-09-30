@@ -27,6 +27,7 @@ def test_decimal_roundtrip(db_conn, amount):
         billing_account_id=acc["id"],
         amount=Decimal(amount),
         currency="RUB",
+        payment_method="bankTransfer",
         received_at=NOW,
     )
     for stored in (
@@ -41,7 +42,12 @@ def test_float_money_is_refused(db_conn):
     acc = account(db_conn)
     with pytest.raises(TypeError):
         payments.insert_payment(
-            db_conn, billing_account_id=acc["id"], amount=0.1, currency="RUB", received_at=NOW
+            db_conn,
+            billing_account_id=acc["id"],
+            amount=0.1,
+            currency="RUB",
+            payment_method="bankTransfer",
+            received_at=NOW,
         )
 
 

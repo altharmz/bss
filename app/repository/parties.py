@@ -35,11 +35,13 @@ def get_party(conn: psycopg.Connection, party_id: UUID) -> Row | None:
     return fetch_one(conn, "SELECT * FROM party WHERE id = %s", (party_id,))
 
 
-def create_customer(conn: psycopg.Connection, *, party_id: UUID, status: str = "Created") -> Row:
+def create_customer(
+    conn: psycopg.Connection, *, party_id: UUID, name: str, status: str = "Created"
+) -> Row:
     return returning(
         conn,
-        "INSERT INTO customer (party_id, status) VALUES (%s, %s) RETURNING *",
-        (party_id, status),
+        "INSERT INTO customer (party_id, name, status) VALUES (%s, %s, %s) RETURNING *",
+        (party_id, name, status),
     )
 
 

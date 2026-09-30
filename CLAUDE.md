@@ -141,6 +141,9 @@ app/config.py              settings from environment variables (pydantic-setting
 app/db.py                  psycopg 3 connection + the liveness probe /healthz calls
 app/clock.py               Clock protocol, SystemClock, FixedClock; the only wall-clock reader
 app/repository/            data access: plain functions on a psycopg.Connection, never commit
+app/api/                   TMF Open API surface: one module per API (router, request models,
+                           row -> body mapping) + shared conventions (errors, tmfjson, common,
+                           listing, deps). See "TMF API conventions"
 spec/                      vendored TMF OpenAPI files (README.md: source, SHA, license)
 alembic/                  migrations; alembic.ini reads DATABASE_URL from the env
 compose.yaml              base definition: only what both modes share (the app image)
@@ -151,7 +154,9 @@ scripts/init.sh           one-time: fills in placeholders, creates .env/.env.pro
 scripts/deploy.sh         build -> save -> ssh load -> migrate -> up -> healthcheck -> smoke
 scripts/smoke.sh          HTTP smoke test against a base URL
 scripts/pre-commit.sh     make lint + make test; installed via `make hooks`
-tests/                    pytest suite (conftest.py spins up throwaway databases);
+tests/                    pytest suite (conftest.py spins up throwaway databases;
+                          apiclient.py + contract.py validate every API response against
+                          spec/);
                           test_health.py and test_migrations.py check the infrastructure
                           this template provides and must keep passing on an otherwise
                           empty service
@@ -226,6 +231,82 @@ would attach the prod container to both `lab` and `shared`).
   served by the shared Caddy.
 - Stage 1 runs the migration as a NOSUPERUSER database owner in a test, like vps-infra's
   `make add-db` does; `btree_gist` works because it is a trusted extension (PG13+).
+
+## TMF API conventions (stage 2)
+
+Built once in `app/api/` and shared by every API. Status: TMF620 is implemented
+(Checkpoint 2); the other APIs follow the same pattern.
+
+- **Paths:** `/tmf-api/<apiName>/v5/<resource>`: `productCatalogManagement`,
+  `partyManagement`, `customerManagement`, `accountManagement`,
+  `productOrderingManagement`, `productInventory`, `customerBillManagement`, and
+  `paymentManagement/v4` (TMF676 only exists as v4). `href` is the absolute path, no host.
+- **Not exposed:** DELETE anywhere, POST/PATCH on product, cancelProductOrder, `/hub`, the
+  billing run. An unsupported method on an exposed path is a 405.
+- **Errors:** every non-2xx body is the TMF `Error` (`@type`, `code`, `reason`, `message`,
+  `status`), including unknown routes, FastAPI's own validation errors and unhandled
+  exceptions (500 says "internal error", nothing more). 400 = malformed JSON, unknown
+  attribute, read-only attribute, bad query parameter; 404; 405; 409 = conflicts with
+  stored state; 415 = wrong content type; 422 = well-formed but invalid (missing
+  mandatory, wrong type or value, reference to something that does not exist). The specs
+  do not declare 415 and 422; they are ours.
+- **Unknown attributes are rejected (400), never silently dropped.** Always accepted:
+  `@type`, `@baseType`, `@schemaLocation`, and `href`, `name`, `@referredType` inside
+  references. `id` and `href` are server-managed (400 on POST and PATCH). `lastUpdate` is
+  accepted and ignored on POST, because the spec's create schemas make clients send it;
+  it is read-only on PATCH.
+- **Money** is `{"unit": "<ISO 4217>", "value": <JSON number>}`, Decimal end to end.
+  FastAPI's own body parsing goes through float (proven by a test), so handlers parse the
+  raw body with `parse_float=Decimal` (`app/api/deps.py`, `tmfjson.loads`). Responses are
+  written by `tmfjson.dumps`, which emits Decimals as number tokens and raises on a float.
+  An amount with more than 2 decimals is a 422, never rounded (`19.9900` is accepted: it
+  equals `19.99`).
+- **TimePeriod** `validFor {startDateTime, endDateTime}` <-> `tstzrange [start, end)`;
+  no `endDateTime` = open-ended; `startDateTime` is required on create; date-times must
+  carry an offset. Output is UTC (`...Z`).
+- **Dates stored as `date`** (product start/termination, order requested start, bill and
+  ABR periods): an incoming date-time is converted to the calendar date in `BILLING_TZ`
+  and the normalized value is returned (`2026-10-01T23:30:00Z` is `2026-10-02` in Moscow);
+  outgoing dates are midnight in `BILLING_TZ`.
+- **Lists:** `offset` (default 0), `limit` (default 20, max 100; above the max is a 400),
+  ordered by creation. Always 200 - none of the vendored specs declares 206 for a list.
+  `X-Total-Count` = all matching rows, `X-Result-Count` = rows in this response.
+  `fields=` selects top-level attributes (`id`, `href`, `@type` always); an unknown name
+  is a 400. Filters are equality only, on the attributes listed per resource; any other
+  query parameter is a 400.
+- **POST** returns 201 with `Location`. **PATCH** accepts `application/merge-patch+json`
+  only (415 otherwise); `null` removes an optional attribute and is a 422 on a mandatory
+  one; `@type` may be repeated but not changed.
+- **Transactions:** one per request (`app/api/deps.py`, `Tx`), committed when the handler's
+  block ends, rolled back if it raises.
+- **Clock:** the `get_clock` dependency; tests override it with `FixedClock`.
+- **Contract tests:** `tests/apiclient.py` validates every response in the suite against
+  the schema in `spec/` for its path (`Error` for non-2xx). `tests/contract.py` uses
+  openapi-schema-validator's OAS 3.0 dialect with its discriminator handling replaced:
+  upstream recurses forever on the TMF v5 schemas (each has a self-mapping discriminator
+  next to `allOf`), and plain JSON Schema cannot validate the `...RefOrValue` `oneOf`s.
+
+### TMF620 mapping
+
+| Resource | DB column <-> TMF attribute | Filters |
+|---|---|---|
+| productSpecification | `name`, `description`, `lifecycle_status` <-> `lifecycleStatus`, `updated_at` <-> `lastUpdate` | `name`, `lifecycleStatus` |
+| productOffering | `name`, `description`, `lifecycle_status`, `is_sellable` <-> `isSellable`, `valid_for` <-> `validFor`, `product_specification_id` <-> `productSpecification` (ref, mandatory - ours), attached prices <-> `productOfferingPrice[]` (refs) | `name`, `lifecycleStatus`, `isSellable`, `productSpecification.id` |
+| productOfferingPrice | `name`, `lifecycle_status`, `price_type` <-> `priceType` (`recurring`/`oneTime`), `recurring_period` <-> `recurringChargePeriodType` (`monthly`), `recurring_period_length` <-> `recurringChargePeriodLength` (1), `amount` + `currency` <-> `price`, `valid_for` <-> `validFor` | `name`, `priceType`, `lifecycleStatus` |
+
+- **Prices attach through the offering**, as in the spec: a price is created on its own
+  (`product_offering_id` NULL) and attached by `productOfferingPrice[]` on POST/PATCH of
+  the offering; only references are accepted there, not inline prices. A price belongs to
+  at most one offering (409) and may not overlap a price of the same type and currency on
+  it (409, the exclusion constraint).
+- **Prices are never detached or re-priced.** A PATCH that drops a price from
+  `productOfferingPrice[]` is a 409; `price`, `priceType` and the recurring period are
+  read-only (400); `validFor.startDateTime` cannot move (409). Changing a price = end its
+  `validFor` and attach a new one - stage 3 billing needs the historical price.
+- `productSpecification` of an offering is read-only on PATCH.
+- **Migration 0002** adds what the API needs and 0001 had no place for. Its NOT NULL
+  columns have no default on purpose: if the tables are not empty the migration fails
+  and the deploy stops before the app starts.
 
 ## Open questions
 

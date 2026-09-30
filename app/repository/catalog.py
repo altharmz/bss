@@ -2,12 +2,21 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 import psycopg
 from psycopg.types.range import Range
 
-from app.repository._sql import Row, fetch_one, money, returning
+from app.repository._sql import (
+    Row,
+    fetch_all,
+    fetch_one,
+    money,
+    returning,
+    select_page,
+    update_by_id,
+)
 
 
 def create_product_specification(
@@ -60,25 +69,28 @@ def get_product_offering(conn: psycopg.Connection, offering_id: UUID) -> Row | N
 def create_product_offering_price(
     conn: psycopg.Connection,
     *,
-    product_offering_id: UUID,
+    product_offering_id: UUID | None,
     price_type: str,
     amount: Decimal,
     currency: str,
     valid_for: Range,
     recurring_period: str | None = None,
     name: str | None = None,
+    lifecycle_status: str = "Active",
 ) -> Row:
+    """`product_offering_id=None` creates an unattached price (see `attach_price`)."""
     return returning(
         conn,
         """
         INSERT INTO product_offering_price
-            (product_offering_id, name, price_type, recurring_period, amount, currency,
-             valid_for)
-        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *
+            (product_offering_id, name, lifecycle_status, price_type, recurring_period,
+             amount, currency, valid_for)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
         """,
         (
             product_offering_id,
             name,
+            lifecycle_status,
             price_type,
             recurring_period,
             money(amount),
@@ -116,3 +128,65 @@ def price_at(
         """,
         (product_offering_id, price_type, currency, at),
     )
+
+
+def prices_of_offering(conn: psycopg.Connection, offering_id: UUID) -> list[Row]:
+    return fetch_all(
+        conn,
+        """
+        SELECT * FROM product_offering_price WHERE product_offering_id = %s
+        ORDER BY created_at, id
+        """,
+        (offering_id,),
+    )
+
+
+def attach_price(conn: psycopg.Connection, price_id: UUID, offering_id: UUID) -> Row | None:
+    """Attach an unattached price to an offering. Returns None if the price does not
+    exist or already belongs to an offering - a price is never moved or detached, because
+    billing needs the historical price. Raises ExclusionViolation if it would overlap a
+    price of the same type and currency already on the offering."""
+    return fetch_one(
+        conn,
+        """
+        UPDATE product_offering_price SET product_offering_id = %s
+        WHERE id = %s AND product_offering_id IS NULL RETURNING *
+        """,
+        (offering_id, price_id),
+    )
+
+
+def list_product_specifications(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(conn, "product_specification", where=where, offset=offset, limit=limit)
+
+
+def list_product_offerings(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(conn, "product_offering", where=where, offset=offset, limit=limit)
+
+
+def list_product_offering_prices(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(conn, "product_offering_price", where=where, offset=offset, limit=limit)
+
+
+def update_product_specification(
+    conn: psycopg.Connection, spec_id: UUID, changes: dict[str, Any]
+) -> Row:
+    return update_by_id(conn, "product_specification", spec_id, changes)
+
+
+def update_product_offering(
+    conn: psycopg.Connection, offering_id: UUID, changes: dict[str, Any]
+) -> Row:
+    return update_by_id(conn, "product_offering", offering_id, changes)
+
+
+def update_product_offering_price(
+    conn: psycopg.Connection, price_id: UUID, changes: dict[str, Any]
+) -> Row:
+    return update_by_id(conn, "product_offering_price", price_id, changes)

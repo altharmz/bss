@@ -40,3 +40,31 @@ def db_conn(temp_db_url) -> Iterator[psycopg.Connection]:
         yield conn
     finally:
         conn.close()
+
+
+@pytest.fixture
+def api(db_conn, temp_db_url, monkeypatch):
+    """The real app on the throwaway database with a FixedClock, behind a client that
+    validates every response against the TMF schemas (tests/apiclient.py).
+
+    Only the clock is overridden: requests go through the production transaction
+    dependency, pointed at the test database via settings.
+    """
+    from datetime import UTC, datetime
+
+    from fastapi.testclient import TestClient
+
+    from app.api.deps import get_clock
+    from app.clock import FixedClock
+    from app.main import app
+    from tests.apiclient import TmfClient
+
+    clock = FixedClock(datetime(2026, 10, 1, 9, 0, tzinfo=UTC))
+    monkeypatch.setattr(settings, "database_url", temp_db_url)
+    app.dependency_overrides[get_clock] = lambda: clock
+    client = TmfClient(TestClient(app, raise_server_exceptions=False))
+    client.clock = clock
+    try:
+        yield client
+    finally:
+        app.dependency_overrides.clear()

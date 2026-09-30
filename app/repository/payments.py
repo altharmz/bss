@@ -16,13 +16,15 @@ def insert_payment(
     amount: Decimal,
     currency: str,
     received_at: datetime,
+    payment_method: str,
     status: str = "done",
 ) -> Row:
     return returning(
         conn,
         """
-        INSERT INTO payment (billing_account_id, currency, amount, received_at, status)
-        VALUES (%s, %s, %s, %s, %s) RETURNING *
+        INSERT INTO payment
+            (billing_account_id, currency, amount, received_at, payment_method, status)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
         """,
-        (billing_account_id, currency, money(amount), received_at, status),
+        (billing_account_id, currency, money(amount), received_at, payment_method, status),
     )
