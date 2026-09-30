@@ -89,6 +89,29 @@ failure.
   back the schema requires running `alembic downgrade <revision>` by hand against the VPS
   database; there is no automated rollback path.
 
+## Agent guardrails: what they are for
+
+`.claude/settings.json` (allow/deny rules) and `.claude/hooks/guard.sh` protect against
+**agent mistakes, not a hostile agent**. They stop the obvious slip - reading `.env`, a
+destructive docker cleanup, touching the VPN - and explain why. They are not a security
+boundary:
+
+- **Docker access is root-equivalent.** `docker compose:*` and `make:*` are allowed, and
+  anyone who can start a container can bind-mount any host path into it, read or write any
+  file the docker daemon can, and reach every other container on the host.
+- **`.env` values are reachable despite the deny rules.** `docker compose config` prints
+  the compose file with every `${VAR}` already substituted, and `docker compose run ...
+  env` (or `exec ... env`) prints a container's environment. The `Read(./.env)` deny rule
+  and the guard's `cat .env` pattern only cover the direct route. Do not run those
+  commands; `docker compose config --quiet` validates without printing.
+- **`guard.sh` is a pattern matcher over the command text.** It cannot see through
+  variables, scripts, encodings or a command it has no pattern for.
+
+So: the rules in "Hard constraints" bind because they are the rules, not because
+something enforces them. Anything that needs real enforcement (secrets an agent must
+never see, hosts it must never reach) has to be kept out of the environment the agent
+runs in, not filtered here.
+
 ## Layout
 
 ```
