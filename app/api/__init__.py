@@ -13,6 +13,7 @@ from app.api import (
     customer,
     errors,
     inventory,
+    ordering,
     party,
     payment,
 )
@@ -20,6 +21,6 @@ from app.api import (
 
 def install(app: FastAPI) -> None:
     errors.install(app)
-    for module in (catalog, party, customer, account, payment, inventory, bill):
+    for module in (catalog, party, customer, account, payment, inventory, bill, ordering):
         app.include_router(module.router)
     app.include_router(account.schema_router)

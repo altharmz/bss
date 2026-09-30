@@ -234,8 +234,8 @@ would attach the prod container to both `lab` and `shared`).
 
 ## TMF API conventions (stage 2)
 
-Built once in `app/api/` and shared by every API. Status: TMF620, 632, 629, 666, 676,
-637 and 678 are implemented; TMF622 ordering is next (Checkpoint 4).
+Built once in `app/api/` and shared by every API. All eight APIs of stage 2 are
+implemented; order processing lives in `app/ordering/`.
 
 - **Paths:** `/tmf-api/<apiName>/v5/<resource>`: `productCatalogManagement`,
   `partyManagement`, `customerManagement`, `accountManagement`,
@@ -315,9 +315,11 @@ Built once in `app/api/` and shared by every API. Status: TMF620, 632, 629, 666,
   `validFor` and attach a new one - stage 3 billing needs the historical price.
 - **A price never starts in the past.** A price created or attached with
   `validFor.startDateTime` < now is a 409. Stage 3 catch-up billing charges past days at
-  the price valid then, so a past-starting price would back-charge them. Consequence: an
-  order can only be priced from the next midnight (BILLING_TZ) after the price was
-  created.
+  the price valid then, so a past-starting price would back-charge them.
+- **Business rule: a new price becomes sellable from the next midnight in BILLING_TZ at
+  the earliest.** Its start must be >= now, and an order looks up the price at midnight
+  (BILLING_TZ) of the product's start date - so a price created today can only price
+  products starting tomorrow or later.
 - **A price is never ended retroactively.** `validFor.endDateTime` can only be set or
   moved to a value >= now (the injected clock), and only while the current end, if any,
   is not in the past (409 otherwise): a retroactive end, or reopening a price that has
@@ -380,6 +382,56 @@ Payments are never changed or deleted (405).
 - Bills and ABRs are only written by the billing run; both lists are empty until stage 3.
 - **Known:** a product ordered with a future start date stays `created` until the stage 4
   worker activates it. Billing is driven by dates, not status, so money is unaffected.
+- **Likewise `pendingTerminate`:** a delete of a started product with a termination date
+  in the future sets `pendingTerminate`; the stage 4 worker flips it to `terminated` on
+  that date. A termination date of today sets `terminated` directly. The product is
+  billed up to the day before `termination_date` either way.
+
+### TMF622 mapping and order processing
+
+| productOrder | `state`, `order_date` <-> `creationDate`, `completion_date` <-> `completionDate`, `requested_start_date` <-> `requestedStartDate` (the effective date: today when omitted), `billing_account_id` <-> `billingAccount` (mandatory - ours), items <-> `productOrderItem[]` (`item_id` <-> `id`, `action`, `state`, `product_offering_id` <-> `productOffering`, `product_id` <-> `product`; `quantity` is always 1), `product_order_error_message` <-> `productOrderErrorMessage[]` (`code`, `reason`, `timestamp`, `productOrderItem[]` refs) | `state`, `billingAccount.id` |
+|---|---|---|
+
+- **GET list, GET by id, POST only.** PATCH/DELETE are 405, cancelProductOrder is 404.
+- **Synchronous, one transaction** (`app/ordering/process.py`). States come from the pure
+  function in `app/ordering/states.py`: order `acknowledged -> inProgress -> completed`
+  or `acknowledged -> rejected`; items the same, plus `acknowledged -> cancelled`.
+- **4xx vs rejected.** Malformed JSON, an unknown attribute or an empty
+  `productOrderItem[]` is a 400; a missing mandatory field, a reference to a billing
+  account, offering or product that does not exist, duplicate item ids, a product in two
+  delete items, `quantity` other than 1, an add item without `productOffering` (or with a
+  `product`) and a delete item without `product` (or with a `productOffering`) are 422 -
+  nothing is stored. Everything else that is wrong is a business rejection: the order is
+  stored as `rejected` with its reasons and the answer is **201**.
+- **Rejection codes** (ours, in `productOrderErrorMessage[].code`): order level -
+  `accountNotActive`, `requestedStartDateInPast`; item level - `actionNotSupported`
+  (modify, noChange), `billingAccountMismatch` (item account differs from the order's),
+  `offeringNotSellable` (not `isSellable` or not `Active`), `offeringNotValid` (validFor
+  does not cover midnight of the start date), `noRecurringPrice` (none in the account's
+  currency at that midnight), `productOfOtherAccount`, `productAlreadyEnded`,
+  `openDeleteItem`, `productNotStarted`.
+- **All or nothing.** One reason anywhere rejects the order: failing items are
+  `rejected`, the rest `cancelled`, nothing is executed. A rejected order is decided
+  before its rows are inserted, so its items are stored directly in their final states -
+  a rejected delete item must never be stored open, or it would collide with the open
+  delete it is rejected for (the `product_order_item_one_open_delete` index would abort
+  the transaction and the rejected order could not be stored).
+- **Row lock.** The products of delete items are locked (`SELECT ... FOR UPDATE`, in id
+  order) before anything about them is read. A concurrent second delete waits, then sees
+  the product terminated and is rejected with `productAlreadyEnded` (proven with two
+  connections in `tests/test_order_concurrency.py`; without the lock it waits on the
+  product UPDATE instead and terminates the product a second time).
+- **Dates.** `requestedStartDate` is converted to the date in BILLING_TZ and returned
+  normalized (`2026-10-01T23:30:00Z` -> product `startDate` 2026-10-02). It defaults to
+  today and may not be in the past. **Our interpretation:** it is the start date of
+  `add` items and the termination date of `delete` items (TMF has no per-item date).
+- **add** creates the product with `created_by_item_id`; status `active` if it starts
+  today, `created` if later (see the stage 4 note above). The item then references it.
+- **delete** of a started product sets `termination_date` (exclusive),
+  `terminated_by_item_id` and status `terminated` (termination today) or
+  `pendingTerminate` (termination in the future; see the stage 4 note above). **delete of a product that has not started**
+  cancels it: status `cancelled`, `termination_date = start_date` (0 billable days); a
+  requested date after its start date is rejected (`productNotStarted`).
 
 ## Open questions
 

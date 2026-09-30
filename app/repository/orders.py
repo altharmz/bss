@@ -2,11 +2,12 @@
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Any
 from uuid import UUID
 
 import psycopg
 
-from app.repository._sql import Row, fetch_all, fetch_one, returning
+from app.repository._sql import Row, fetch_all, fetch_one, returning, select_page
 
 
 @dataclass(frozen=True)
@@ -98,3 +99,74 @@ def set_order_item_state(conn: psycopg.Connection, order_item_id: UUID, state: s
 
 def get_order_item(conn: psycopg.Connection, order_item_id: UUID) -> Row | None:
     return fetch_one(conn, "SELECT * FROM product_order_item WHERE id = %s", (order_item_id,))
+
+
+def list_orders(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    """A page of orders (without items; see `items_of`)."""
+    return select_page(conn, "product_order", where=where, offset=offset, limit=limit)
+
+
+def items_of(conn: psycopg.Connection, order_id: UUID) -> list[Row]:
+    return fetch_all(
+        conn,
+        "SELECT * FROM product_order_item WHERE product_order_id = %s ORDER BY item_id",
+        (order_id,),
+    )
+
+
+def set_order_item_product(conn: psycopg.Connection, order_item_id: UUID, product_id: UUID) -> Row:
+    """Record the product an `add` item created."""
+    return returning(
+        conn,
+        "UPDATE product_order_item SET product_id = %s WHERE id = %s RETURNING *",
+        (product_id, order_item_id),
+    )
+
+
+def open_delete_items(conn: psycopg.Connection, product_id: UUID) -> list[Row]:
+    """Delete items for this product that are not finished yet (at most one exists: the
+    product_order_item_one_open_delete index)."""
+    return fetch_all(
+        conn,
+        """
+        SELECT * FROM product_order_item
+        WHERE product_id = %s AND action = 'delete'
+          AND state NOT IN ('completed', 'cancelled', 'rejected', 'failed')
+        """,
+        (product_id,),
+    )
+
+
+def add_error_message(
+    conn: psycopg.Connection,
+    *,
+    order_id: UUID,
+    order_item_id: UUID | None,
+    code: str,
+    reason: str,
+    occurred_at: datetime,
+    message: str | None = None,
+) -> Row:
+    return returning(
+        conn,
+        """
+        INSERT INTO product_order_error_message
+            (product_order_id, product_order_item_id, code, reason, message, occurred_at)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
+        """,
+        (order_id, order_item_id, code, reason, message, occurred_at),
+    )
+
+
+def error_messages(conn: psycopg.Connection, order_id: UUID) -> list[Row]:
+    """Order-level messages first, then per item, alphabetically by code."""
+    return fetch_all(
+        conn,
+        """
+        SELECT * FROM product_order_error_message WHERE product_order_id = %s
+        ORDER BY product_order_item_id NULLS FIRST, occurred_at, code, id
+        """,
+        (order_id,),
+    )

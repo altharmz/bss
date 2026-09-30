@@ -130,3 +130,44 @@ def sellable_offering(api, value=600, unit="RUB", name="Fiber 100") -> dict[str,
             "productOfferingPrice": [{"id": price["id"], "@type": "ProductOfferingPriceRef"}],
         },
     )
+
+
+def add_item(offering: dict[str, Any], item_id: str = "1", **over) -> dict[str, Any]:
+    return {
+        "@type": "ProductOrderItem",
+        "id": item_id,
+        "action": "add",
+        "productOffering": {"id": offering["id"], "@type": "ProductOfferingRef"},
+        **over,
+    }
+
+
+def delete_item(product_id: str, item_id: str = "1", **over) -> dict[str, Any]:
+    return {
+        "@type": "ProductOrderItem",
+        "id": item_id,
+        "action": "delete",
+        "product": {"id": product_id, "@type": "ProductRef"},
+        **over,
+    }
+
+
+def order_body(acc: dict[str, Any], *items: dict[str, Any], **over) -> dict[str, Any]:
+    return {
+        "@type": "ProductOrder",
+        "billingAccount": {"id": acc["id"], "@type": "BillingAccountRef"},
+        "productOrderItem": list(items),
+        **over,
+    }
+
+
+def order(api, acc: dict[str, Any], *items: dict[str, Any], **over) -> dict[str, Any]:
+    return _post(api, ORDER, order_body(acc, *items, **over))
+
+
+def product_of(api, placed: dict[str, Any], item_id: str = "1") -> dict[str, Any]:
+    """The product an add item of a completed order created."""
+    (item,) = [i for i in placed["productOrderItem"] if i["id"] == item_id]
+    response = api.get(item["product"]["href"])
+    assert response.status_code == 200
+    return response.json()

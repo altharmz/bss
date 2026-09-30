@@ -85,3 +85,15 @@ def list_products(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
 ) -> tuple[list[Row], int]:
     return select_page(conn, "product", where=where, offset=offset, limit=limit)
+
+
+def lock_products(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[UUID, Row]:
+    """Lock these product rows until the transaction ends (SELECT ... FOR UPDATE), in id
+    order so two orders locking overlapping sets cannot deadlock. A concurrent order that
+    wants the same products waits here, then sees their committed state."""
+    rows = fetch_all(
+        conn,
+        "SELECT * FROM product WHERE id = ANY(%s) ORDER BY id FOR UPDATE",
+        (sorted(set(product_ids)),),
+    )
+    return {row["id"]: row for row in rows}
