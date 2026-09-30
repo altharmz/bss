@@ -43,4 +43,23 @@ grep -Eq '(cat|less|head|tail|grep|strings)[[:space:]]+[^|]*\.env(\.prod)?([[:sp
 grep -Eq 'git[[:space:]]+(push|reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)' <<<"$cmd" && \
   block "pushes and destructive git operations are the human's call."
 
+# --- the harness is changed through the Edit tool, which asks the human first ---
+# Mirrors the "ask" rules in settings.json (.claude/, compose files, Makefile, scripts/):
+# a shell write would bypass that prompt. Covers >, >>, tee, sed -i, mv, cp (as the
+# destination) and rm. Reading, running and copying *from* these paths stays allowed.
+proj="$(printf '%s' "${CLAUDE_PROJECT_DIR:-$PWD}" | sed 's/[][\\.*^$+?(){}|]/\\&/g')"
+prot="(\./|${proj}/)?((\.claude|scripts)(/[^[:space:]\"'|;&]*)?|compose(\.override|\.prod)?\.yaml|Makefile)"
+b="(^|[|;&(\`[:space:]])"       # a command starts here
+a="([^|;&]*[[:space:]\"'=])?"    # its earlier arguments
+e="([\"'[:space:]|;&)]|\$)"      # the path token ends here
+harness_write() {
+  grep -Eq ">[[:space:]]*[\"']?${prot}${e}" <<<"$cmd" && return 0
+  grep -Eq "${b}(tee|rm|mv)[[:space:]]${a}${prot}${e}" <<<"$cmd" && return 0
+  grep -Eq "${b}sed[[:space:]]([^|;&]*[[:space:]])?(--in-place|-[a-zA-Z]*i)[^|;&]*[[:space:]\"']${prot}${e}" <<<"$cmd" && return 0
+  grep -Eq "${b}cp[[:space:]]${a}${prot}[\"']?[[:space:]]*([|;&)]|\$)" <<<"$cmd" && return 0
+  return 1
+}
+harness_write && \
+  block "shell writes to .claude/, compose*.yaml, Makefile or scripts/ are not allowed. Use the Edit tool - it asks the human first."
+
 exit 0

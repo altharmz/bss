@@ -107,6 +107,14 @@ boundary:
 - **`guard.sh` is a pattern matcher over the command text.** It cannot see through
   variables, scripts, encodings or a command it has no pattern for.
 
+- **Harness files need the human's OK.** `.claude/**`, `compose*.yaml`, `Makefile` and
+  `scripts/**` are under `"ask"` for the Edit tool, and `guard.sh` blocks the shell writes
+  that would skip that prompt (`>`, `>>`, `tee`, `sed -i`, `mv`, `cp` as the destination,
+  `rm`). Same limit as above: a write through an interpreter, `git checkout`/`git apply`
+  or a container mount is not caught. Change these files with the Edit tool only.
+  The `"ask"` rules are unverified under auto mode; if they don't prompt there, these
+  paths move to `"deny"`.
+
 So: the rules in "Hard constraints" bind because they are the rules, not because
 something enforces them. Anything that needs real enforcement (secrets an agent must
 never see, hosts it must never reach) has to be kept out of the environment the agent
