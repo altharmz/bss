@@ -1,6 +1,8 @@
 """Billing runs, applied customer billing rates and customer bills (TMF678).
 
-Only the billing run writes ABRs.
+Only the billing run writes ABRs. The `load_*` / `write_*` functions at the end map rows
+to and from the billing core's dataclasses (app/billing/model.py); the core never sees a
+row.
 """
 
 from datetime import date, datetime
@@ -11,6 +13,16 @@ from uuid import UUID
 import psycopg
 from psycopg.types.range import Range
 
+from app.billing.model import (
+    Account,
+    DateRange,
+    NewAbr,
+    NewBill,
+    Price,
+    Product,
+    StoredAbr,
+    StoredBill,
+)
 from app.repository._sql import Row, fetch_all, fetch_one, money, returning, select_page
 
 
@@ -210,3 +222,193 @@ def page_bills(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
 ) -> tuple[list[Row], int]:
     return select_page(conn, "customer_bill", where=where, offset=offset, limit=limit)
+
+
+# --- the billing core's view of one account (rows <-> app/billing/model.py) ---
+
+# A product whose termination order is not visible yet is passed with the status it had
+# before that order: a cancellation only ever happens to a product that has not started.
+STATUS_BEFORE_TERMINATION = {
+    "cancelled": "created",
+    "terminated": "active",
+    "pendingTerminate": "active",
+}
+
+
+def _date_range(value: Range) -> DateRange:
+    return DateRange(value.lower, value.upper)
+
+
+def _daterange(value: DateRange) -> Range:
+    return Range(value.start, value.end, "[)")
+
+
+def running_run_date(conn: psycopg.Connection, run_id: UUID) -> date:
+    """The run date of a run that is still `running`, locked against a concurrent finish."""
+    row = fetch_one(
+        conn, "SELECT run_date, status FROM billing_run WHERE id = %s FOR SHARE", (run_id,)
+    )
+    if row is None or row["status"] != "running":
+        raise LookupError(f"billing run {run_id} is not running")
+    return row["run_date"]
+
+
+def load_account(conn: psycopg.Connection, account_id: UUID) -> Account:
+    """The account, locked until the transaction ends: two runs billing the same account
+    concurrently would both see it unbilled."""
+    row = fetch_one(
+        conn,
+        "SELECT id, currency, bill_cycle_day FROM billing_account WHERE id = %s FOR UPDATE",
+        (account_id,),
+    )
+    if row is None:
+        raise LookupError(f"billing account {account_id} does not exist")
+    return Account(id=row["id"], currency=row["currency"], bill_cycle_day=row["bill_cycle_day"])
+
+
+def load_products(
+    conn: psycopg.Connection, account_id: UUID, *, visible_before: datetime
+) -> tuple[Product, ...]:
+    """The account's products as known at `visible_before`: a product exists once the
+    order that created it completed before that instant, and its termination (or
+    cancellation) counts once the order that set it did. Later orders are invisible."""
+    rows = fetch_all(
+        conn,
+        """
+        SELECT p.id, p.product_offering_id, p.status, p.start_date, p.termination_date,
+               p.terminated_by_item_id IS NULL
+                   OR coalesce(t.completion_date < %(before)s, false) AS termination_known
+        FROM product p
+        JOIN product_order_item ci ON ci.id = p.created_by_item_id
+        JOIN product_order c ON c.id = ci.product_order_id
+        LEFT JOIN product_order_item ti ON ti.id = p.terminated_by_item_id
+        LEFT JOIN product_order t ON t.id = ti.product_order_id
+        WHERE p.billing_account_id = %(account)s AND c.completion_date < %(before)s
+        ORDER BY p.id
+        """,
+        {"account": account_id, "before": visible_before},
+    )
+    return tuple(
+        Product(
+            id=row["id"],
+            offering_id=row["product_offering_id"],
+            status=row["status"]
+            if row["termination_known"]
+            else STATUS_BEFORE_TERMINATION.get(row["status"], row["status"]),
+            start_date=row["start_date"],
+            termination_date=row["termination_date"] if row["termination_known"] else None,
+        )
+        for row in rows
+    )
+
+
+def load_recurring_prices(conn: psycopg.Connection, offering_ids: list[UUID]) -> tuple[Price, ...]:
+    """Every monthly recurring price attached to these offerings, in any currency. Not
+    filtered by time: a price change only takes effect at or after the moment it was made,
+    and the core looks prices up at midnights <= as_of."""
+    rows = fetch_all(
+        conn,
+        """
+        SELECT id, product_offering_id, amount, currency, valid_for
+        FROM product_offering_price
+        WHERE product_offering_id = ANY(%s)
+          AND price_type = 'recurring' AND recurring_period = 'monthly'
+          AND recurring_period_length = 1
+        ORDER BY id
+        """,
+        (sorted(set(offering_ids)),),
+    )
+    return tuple(
+        Price(
+            id=row["id"],
+            offering_id=row["product_offering_id"],
+            amount=row["amount"],
+            currency=row["currency"],
+            valid_from=row["valid_for"].lower,
+            valid_to=row["valid_for"].upper,
+        )
+        for row in rows
+    )
+
+
+def load_abrs(conn: psycopg.Connection, account_id: UUID) -> tuple[StoredAbr, ...]:
+    rows = fetch_all(
+        conn,
+        """
+        SELECT a.*, r.run_date
+        FROM applied_customer_billing_rate a JOIN billing_run r ON r.id = a.billing_run_id
+        WHERE a.billing_account_id = %s
+        ORDER BY lower(a.period), a.charge_type, a.id
+        """,
+        (account_id,),
+    )
+    return tuple(
+        StoredAbr(
+            id=row["id"],
+            product_id=row["product_id"],
+            kind=row["charge_type"],
+            amount=row["amount"],
+            currency=row["currency"],
+            period=_date_range(row["period"]),
+            refunds_id=row["refunds_rate_id"],
+            bill_id=row["customer_bill_id"],
+            run_date=row["run_date"],
+        )
+        for row in rows
+    )
+
+
+def load_bills(conn: psycopg.Connection, account_id: UUID) -> tuple[StoredBill, ...]:
+    rows = fetch_all(
+        conn,
+        "SELECT id, bill_period, bill_date FROM customer_bill WHERE billing_account_id = %s"
+        " ORDER BY bill_date",
+        (account_id,),
+    )
+    return tuple(
+        StoredBill(id=row["id"], period=_date_range(row["bill_period"]), bill_date=row["bill_date"])
+        for row in rows
+    )
+
+
+def write_abr(conn: psycopg.Connection, account: Account, run_id: UUID, abr: NewAbr) -> UUID:
+    return insert_abr(
+        conn,
+        product_id=abr.product_id,
+        billing_account_id=account.id,
+        charge_type=abr.kind,
+        amount=abr.amount,
+        currency=abr.currency,
+        period=_daterange(abr.period),
+        billing_run_id=run_id,
+        refunds_rate_id=abr.refunds_id,
+    )["id"]
+
+
+def write_bill(conn: psycopg.Connection, account: Account, run_id: UUID, bill: NewBill) -> UUID:
+    return insert_bill(
+        conn,
+        billing_account_id=account.id,
+        currency=bill.currency,
+        bill_period=_daterange(bill.period),
+        bill_date=bill.bill_date,
+        amount_due=bill.amount_due,
+        billing_run_id=run_id,
+    )["id"]
+
+
+def attach_abrs_to_bill(
+    conn: psycopg.Connection, bill_id: UUID, account_id: UUID, abr_ids: list[UUID]
+) -> None:
+    """Put these unbilled ABRs of the account on the bill. All of them, or it raises."""
+    rows = fetch_all(
+        conn,
+        """
+        UPDATE applied_customer_billing_rate SET customer_bill_id = %s
+        WHERE id = ANY(%s) AND billing_account_id = %s AND customer_bill_id IS NULL
+        RETURNING id
+        """,
+        (bill_id, abr_ids, account_id),
+    )
+    if len(rows) != len(set(abr_ids)):
+        raise LookupError(f"bill {bill_id}: {len(abr_ids) - len(rows)} ABRs not attachable")
