@@ -103,6 +103,18 @@ def parse_list_query(
     )
 
 
+def parse_page(request: Request) -> tuple[int, int]:
+    """offset and limit with the same rules as parse_list_query, for lists that take no
+    filters and no fields=; any other query parameter is a 400."""
+    for name in request.query_params:
+        if name not in ("offset", "limit"):
+            raise bad_request(f"unknown query parameter {name}")
+    limit = _int_param(request, "limit", DEFAULT_LIMIT, 1)
+    if limit > MAX_LIMIT:
+        raise bad_request(f"limit must be at most {MAX_LIMIT}")
+    return _int_param(request, "offset", 0, 0), limit
+
+
 def retrieve_fields(request: Request, attributes: Collection[str]) -> frozenset[str] | None:
     """Query handling for GET by id: only fields= is allowed."""
     for name in request.query_params:

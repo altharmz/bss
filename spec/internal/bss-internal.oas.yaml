@@ -1,0 +1,327 @@
+openapi: 3.0.3
+info:
+  title: BSS internal API (admin UI)
+  version: 1.0.0
+  description: >-
+    Ours, not TMF. Served by the app under /internal/v1 for the admin UI (stage 5): what
+    the TMF APIs cannot answer without the UI re-implementing billing rules. Same
+    conventions as the TMF surface - TMF Error bodies, Money as {unit, value} with exact
+    2-decimal values, offset/limit paging with X-Total-Count / X-Result-Count - except
+    that dates are plain business dates (YYYY-MM-DD in BILLING_TZ). Every response in the
+    test suite is validated against this file (tests/apiclient.py), and the UI's
+    TypeScript types are generated from it. Schemas are strict (additionalProperties:
+    false) so that any drift between code and contract fails a test.
+servers:
+  - url: /internal/v1
+paths:
+  /context:
+    get:
+      summary: Business date, time zone, environment and operator for the UI chrome.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Context'}
+        '400': {$ref: '#/components/responses/Error'}
+  /billingAccount/{id}/firstCharge:
+    get:
+      summary: Dry run of the first charge an add order would cause.
+      description: >-
+        Runs the stage 3 billing core on the hypothetical product. The charge is written by
+        the billing run of chargeRunDate = max(startDate, businessDate + 1) and lands on the
+        bill of billDate, the first cycle day on or after chargeRunDate.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+        - name: productOffering.id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+        - name: startDate
+          in: query
+          required: true
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/FirstCharge'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /billingAccount/{id}/products:
+    get:
+      summary: The account's products that are not ended, oldest start first.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AccountProduct'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /billingAccount/{id}/charges:
+    get:
+      summary: The account's applied billing rates (charges and refunds), newest first.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Charge'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /billingAccount/{id}/transactions:
+    get:
+      summary: Charges, refunds and payments with the balance after each, newest first.
+      description: >-
+        Positive amounts are credits to the customer, as in TMF666 accountBalance. The
+        newest balanceAfter is the account's balance.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Transaction'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    Offset:
+      name: offset
+      in: query
+      schema: {type: integer, minimum: 0, default: 0}
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    BusinessDate:
+      type: string
+      format: date
+      pattern: '^\d{4}-\d{2}-\d{2}$'
+    Money:
+      type: object
+      additionalProperties: false
+      required: [unit, value]
+      properties:
+        unit: {type: string, pattern: '^[A-Z]{3}$'}
+        value: {type: number, description: 'Exact, at most 2 decimals (checked in tests)'}
+    NullableMoney:
+      description: >-
+        Money or null. (OAS 3.0 cannot make a $ref nullable; nullable next to allOf does
+        not admit null, so the nullable variants are spelled out.)
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [unit, value]
+      properties:
+        unit: {type: string, pattern: '^[A-Z]{3}$'}
+        value: {type: number}
+    NullableBusinessDate:
+      type: string
+      nullable: true
+      format: date
+      pattern: '^\d{4}-\d{2}-\d{2}$'
+    NullableLink:
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [id, href]
+      properties:
+        id: {type: string, format: uuid}
+        href: {type: string}
+    DateRange:
+      description: Half-open [start, end).
+      type: object
+      additionalProperties: false
+      required: [start, end]
+      properties:
+        start: {$ref: '#/components/schemas/BusinessDate'}
+        end: {$ref: '#/components/schemas/BusinessDate'}
+    Link:
+      type: object
+      additionalProperties: false
+      required: [id, href]
+      properties:
+        id: {type: string, format: uuid}
+        href: {type: string}
+    Named:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+    Error:
+      description: The TMF630 Error body, as on the TMF surface.
+      type: object
+      additionalProperties: false
+      required: ['@type', code, reason]  # as TMF630; the app always sends all five
+      properties:
+        '@type': {type: string, enum: [Error]}
+        code: {type: string}
+        reason: {type: string}
+        message: {type: string}
+        status: {type: string}
+    Context:
+      type: object
+      additionalProperties: false
+      required: [businessDate, now, timeZone, utcOffset, environment, operator, currency, billingRunAt]
+      properties:
+        businessDate: {$ref: '#/components/schemas/BusinessDate'}
+        now: {type: string, format: date-time}
+        timeZone: {type: string, description: IANA name of BILLING_TZ}
+        utcOffset: {type: string, pattern: '^[+-]\d{2}:\d{2}$'}
+        environment: {type: string, description: APP_ENV}
+        operator:
+          type: string
+          nullable: true
+          description: >-
+            The basic-auth user, from the X-Remote-User header the shared Caddy sets
+            (overwrites). Null without it (locally).
+        currency: {type: string, pattern: '^[A-Z]{3}$', description: The UI currency}
+        billingRunAt:
+          type: string
+          pattern: '^\d{2}:\d{2}$'
+          description: Local time (BILLING_TZ) of the daily billing run.
+    FirstCharge:
+      type: object
+      additionalProperties: false
+      required: [billingAccount, productOffering, startDate, period, cyclePeriod, billableDays,
+                 periodDays, prorated, price, amount, chargeRunDate, billDate, next, balance,
+                 balanceAfter, creditLimit, exceedsCreditLimit]
+      properties:
+        billingAccount:
+          type: object
+          additionalProperties: false
+          required: [id]
+          properties:
+            id: {type: string, format: uuid}
+        productOffering: {$ref: '#/components/schemas/Named'}
+        startDate: {$ref: '#/components/schemas/BusinessDate'}
+        period: {$ref: '#/components/schemas/DateRange'}
+        cyclePeriod: {$ref: '#/components/schemas/DateRange'}
+        billableDays: {type: integer, minimum: 1}
+        periodDays: {type: integer, minimum: 28, maximum: 31}
+        prorated: {type: boolean}
+        price: {$ref: '#/components/schemas/Money'}
+        amount: {$ref: '#/components/schemas/Money'}
+        chargeRunDate: {$ref: '#/components/schemas/BusinessDate'}
+        billDate: {$ref: '#/components/schemas/BusinessDate'}
+        next:
+          description: The first full period after it; null if no price covers it.
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [start, amount]
+          properties:
+            start: {$ref: '#/components/schemas/BusinessDate'}
+            amount: {$ref: '#/components/schemas/Money'}
+        balance: {$ref: '#/components/schemas/Money'}
+        balanceAfter: {$ref: '#/components/schemas/Money'}
+        creditLimit: {$ref: '#/components/schemas/NullableMoney'}
+        exceedsCreditLimit:
+          type: boolean
+          description: balanceAfter < -creditLimit. Informational; ordering never checks it.
+    AccountProduct:
+      type: object
+      additionalProperties: false
+      required: [id, href, status, startDate, terminationDate, productOffering,
+                 productSpecification, price, nextChargeDate]
+      properties:
+        id: {type: string, format: uuid}
+        href: {type: string}
+        status:
+          type: string
+          enum: [created, pendingActive, active, pendingTerminate, suspended]
+        startDate: {$ref: '#/components/schemas/BusinessDate'}
+        terminationDate:
+          description: Exclusive - the first day not billed.
+          allOf: [{$ref: '#/components/schemas/NullableBusinessDate'}]
+        productOffering:
+          type: object
+          additionalProperties: false
+          required: [id, name, code]
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string}
+            code: {type: string, nullable: true}
+        productSpecification: {$ref: '#/components/schemas/Named'}
+        price: {$ref: '#/components/schemas/NullableMoney'}
+        nextChargeDate: {$ref: '#/components/schemas/NullableBusinessDate'}
+    Charge:
+      type: object
+      additionalProperties: false
+      required: [id, href, kind, runDate, period, billableDays, periodDays, prorated, amount,
+                 product, productOffering, bill]
+      properties:
+        id: {type: string, format: uuid}
+        href: {type: string}
+        kind: {type: string, enum: [charge, refund]}
+        runDate: {$ref: '#/components/schemas/BusinessDate'}
+        period: {$ref: '#/components/schemas/DateRange'}
+        billableDays: {type: integer, minimum: 1}
+        periodDays: {type: integer, minimum: 28, maximum: 31}
+        prorated: {type: boolean}
+        amount:
+          description: As stored - a refund is negative.
+          allOf: [{$ref: '#/components/schemas/Money'}]
+        product: {$ref: '#/components/schemas/Link'}
+        productOffering: {$ref: '#/components/schemas/Named'}
+        bill: {$ref: '#/components/schemas/NullableLink'}
+    Transaction:
+      type: object
+      additionalProperties: false
+      required: [id, href, type, date, note, period, amount, balanceAfter]
+      properties:
+        id: {type: string, format: uuid}
+        href: {type: string}
+        type: {type: string, enum: [charge, refund, payment]}
+        date:
+          description: A charge's or refund's billing run date; a payment's date.
+          allOf: [{$ref: '#/components/schemas/BusinessDate'}]
+        note:
+          type: string
+          description: The offering name for a charge or refund; the payment method for a payment.
+        period:
+          description: Null for a payment.
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [start, end]
+          properties:
+            start: {$ref: '#/components/schemas/BusinessDate'}
+            end: {$ref: '#/components/schemas/BusinessDate'}
+        amount:
+          description: Positive = credit to the customer.
+          allOf: [{$ref: '#/components/schemas/Money'}]
+        balanceAfter: {$ref: '#/components/schemas/Money'}

@@ -44,6 +44,16 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
         },
     ),
 }
+# Our internal API (spec/internal/bss-internal.oas.yaml): spec path -> response schema
+# (of the items, for a list).
+INTERNAL_BASE = "/internal/v1"
+INTERNAL: dict[str, str] = {
+    "/context": "Context",
+    "/billingAccount/{id}/firstCharge": "FirstCharge",
+    "/billingAccount/{id}/products": "AccountProduct",
+    "/billingAccount/{id}/charges": "Charge",
+    "/billingAccount/{id}/transactions": "Transaction",
+}
 # Our own JSON Schemas for TMF extensions, served outside the TMF resource paths.
 SCHEMA_PREFIX = "/tmf-api/schema/"
 # Statuses we return that the specs do not declare on any operation (decided in CLAUDE.md).
@@ -121,6 +131,12 @@ class TmfClient:
 
     @staticmethod
     def _locate(path: str) -> tuple[str, str | None, str | None, str]:
+        if path.startswith(INTERNAL_BASE + "/"):
+            parts = path[len(INTERNAL_BASE) + 1 :].split("/")
+            if len(parts) == 3 and parts[0] == "billingAccount":
+                parts[1] = "{id}"
+            spec_path = "/" + "/".join(parts)
+            return "INTERNAL", parts[0], INTERNAL.get(spec_path), spec_path
         for base, (api, resources) in APIS.items():
             if path.startswith(base + "/"):
                 parts = path[len(base) + 1 :].split("/")

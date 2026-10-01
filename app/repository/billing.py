@@ -412,3 +412,88 @@ def attach_abrs_to_bill(
     )
     if len(rows) != len(set(abr_ids)):
         raise LookupError(f"bill {bill_id}: {len(abr_ids) - len(rows)} ABRs not attachable")
+
+
+# --- the account's history, as the admin UI shows it ---
+
+
+def page_account_charges(
+    conn: psycopg.Connection, account_id: UUID, *, offset: int, limit: int
+) -> tuple[list[Row], int]:
+    """The account's ABRs, newest run first, with the run date and the offering."""
+    rows = fetch_all(
+        conn,
+        """
+        SELECT a.*, r.run_date, o.id AS offering_id, o.name AS offering_name
+        FROM applied_customer_billing_rate a
+        JOIN billing_run r ON r.id = a.billing_run_id
+        JOIN product p ON p.id = a.product_id
+        JOIN product_offering o ON o.id = p.product_offering_id
+        WHERE a.billing_account_id = %s
+        ORDER BY r.run_date DESC, lower(a.period) DESC, a.charge_type, a.id DESC
+        OFFSET %s LIMIT %s
+        """,
+        (account_id, offset, limit),
+    )
+    total = fetch_one(
+        conn,
+        "SELECT count(*) AS n FROM applied_customer_billing_rate WHERE billing_account_id = %s",
+        (account_id,),
+    )
+    assert total is not None
+    return rows, total["n"]
+
+
+def page_account_transactions(
+    conn: psycopg.Connection, account_id: UUID, *, tz: str, offset: int, limit: int
+) -> tuple[list[Row], int]:
+    """Charges, refunds and payments as one ledger with the running balance after each
+    entry, newest first. Signs as in accountBalance: positive = credit to the customer
+    (a charge is -amount, a refund - stored negative - is +|amount|, a payment +amount).
+
+    Order: by day (an ABR's run date, a payment's date in `tz`), then ABRs before
+    payments on the same day - the run of D happens at the start of D - then by the
+    entry's own timestamp and id. The balance after the newest entry is the account
+    balance.
+    """
+    rows = fetch_all(
+        conn,
+        """
+        WITH ledger AS (
+            SELECT a.id, CASE a.charge_type WHEN 'recurring' THEN 'charge' ELSE 'refund' END
+                       AS kind,
+                   -a.amount AS amount, r.run_date AS day, 0 AS rank, a.created_at AS at,
+                   o.name AS note, a.period
+            FROM applied_customer_billing_rate a
+            JOIN billing_run r ON r.id = a.billing_run_id
+            JOIN product p ON p.id = a.product_id
+            JOIN product_offering o ON o.id = p.product_offering_id
+            WHERE a.billing_account_id = %(account)s
+            UNION ALL
+            SELECT id, 'payment', amount, (received_at AT TIME ZONE %(tz)s)::date, 1,
+                   received_at, payment_method, NULL
+            FROM payment
+            WHERE billing_account_id = %(account)s AND status = 'done'
+        ),
+        running AS (
+            SELECT *, sum(amount) OVER (ORDER BY day, rank, at, id) AS balance_after
+            FROM ledger
+        )
+        SELECT * FROM running
+        ORDER BY day DESC, rank DESC, at DESC, id DESC
+        OFFSET %(offset)s LIMIT %(limit)s
+        """,
+        {"account": account_id, "tz": tz, "offset": offset, "limit": limit},
+    )
+    total = fetch_one(
+        conn,
+        """
+        SELECT (SELECT count(*) FROM applied_customer_billing_rate
+                WHERE billing_account_id = %(account)s)
+             + (SELECT count(*) FROM payment
+                WHERE billing_account_id = %(account)s AND status = 'done') AS n
+        """,
+        {"account": account_id},
+    )
+    assert total is not None
+    return rows, total["n"]

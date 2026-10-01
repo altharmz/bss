@@ -97,3 +97,26 @@ def lock_products(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[UUI
         (sorted(set(product_ids)),),
     )
     return {row["id"]: row for row in rows}
+
+
+# Products that are still to be billed or are being billed: not ended. What the admin
+# UI lists as an account's products.
+OPEN_STATUSES = ("created", "pendingActive", "active", "pendingTerminate", "suspended")
+
+
+def list_open_products(conn: psycopg.Connection, billing_account_id: UUID) -> list[Row]:
+    """The account's open products with their offering (name, code) and specification
+    (name), oldest start first."""
+    return fetch_all(
+        conn,
+        """
+        SELECT p.*, o.name AS offering_name, o.code AS offering_code,
+               s.id AS specification_id, s.name AS specification_name
+        FROM product p
+        JOIN product_offering o ON o.id = p.product_offering_id
+        JOIN product_specification s ON s.id = o.product_specification_id
+        WHERE p.billing_account_id = %s AND p.status = ANY(%s)
+        ORDER BY p.start_date, p.created_at, p.id
+        """,
+        (billing_account_id, list(OPEN_STATUSES)),
+    )
