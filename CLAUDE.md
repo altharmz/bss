@@ -374,9 +374,19 @@ implemented; order processing lives in `app/ordering/`.
   missing price is therefore a data bug, fixed case by case with a reviewed one-off script
   and an audit note - there is no waiver feature. Ordering keeps the other side closed
   (`priceEnds`, D-W20): together they give the invariant **"a live product has a price
-  for every future day"**. Still open: an offering's price cannot be changed while a
-  product is live (the successor overlaps the open price until it ends; ending first is
-  refused) - see `docs/stage4-design.md`, D-W21.
+  for every future day"**.
+- **Deviation: changing a live offering's price is one internal operation (D-W21).**
+  `POST /internal/v1/productOffering/{id}/priceChange {amount, currency, validFrom}` -
+  TMF620 cannot express it: there is no cross-request transaction, and with a product
+  live neither order of its two steps works (attaching the successor first violates the
+  no-overlap constraint; ending first is refused by the rule above). In one transaction
+  it ends the open-ended recurring price in `currency` at midnight (BILLING_TZ) of
+  `validFrom` and creates the successor, attached, from that moment; all or nothing
+  (proven by a failure injected after the end). `validFrom` is a business date >=
+  tomorrow (the next midnight); 409 if there is no open-ended price in that currency or
+  a price already starts on or after `validFrom`. Existing products pick up the new price
+  from their first billing period starting on or after `validFrom` (the core prices each
+  period at its first billable day); new orders from `validFrom`.
 - **Offering code (migration 0003):** the spec's `externalIdentifier[]` with exactly one
   entry `{id: <code>, externalIdentifierType: "offeringCode", owner: "bss", @type:
   ExternalIdentifier}`. `owner` may be omitted on POST (any other value is a 422). The
@@ -611,6 +621,7 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
 | `GET /billingAccount/{id}/firstCharge?productOffering.id=&startDate=` | dry run of an add order: the stage 3 core's `compute()` on the hypothetical product. period, cyclePeriod, billableDays of periodDays, price, amount, chargeRunDate = max(startDate, businessDate + 1), billDate = first cycle day >= chargeRunDate, next full period, balance, balanceAfter (= balance - this charge only), creditLimit, exceedsCreditLimit. startDate in the past or no price in the account currency -> 422 |
 | `GET /billingAccount/{id}/products` | not-ended products (created, pendingActive, active, pendingTerminate, suspended) with offering name/code, specification name, price valid today (or on the start date), nextChargeDate (start date if not started, else the next cycle day after today; null if the product ends by then) |
 | `GET /billingAccount/{id}/charges` | ABRs newest run first, with runDate, billableDays of periodDays (the proration), offering, bill |
+| `POST /productOffering/{id}/priceChange` | the atomic price change of a live offering (see the TMF620 deviation above): ends the open price at midnight of `validFrom`, creates and attaches the successor; 201 `{productOffering, endedPrice {endsOn}, newPrice {price, validFrom}}` |
 | `GET /billingAccount/{id}/transactions` | charges, refunds and payments as one ledger with balanceAfter. Positive = credit (as accountBalance); ordered by day (ABR: run date; payment: its date in BILLING_TZ), ABRs before payments on the same day (the run of D happens at its start), then timestamp, id. The newest balanceAfter equals the account balance (tested) |
 
 - **operator** comes from the `X-Remote-User` header, which the shared Caddy must *set*

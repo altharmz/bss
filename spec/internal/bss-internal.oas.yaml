@@ -102,6 +102,36 @@ paths:
                 items: {$ref: '#/components/schemas/Transaction'}
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
+  /productOffering/{id}/priceChange:
+    post:
+      summary: Change an offering's recurring price atomically (ours; TMF620 cannot).
+      description: >-
+        In one transaction: ends the open-ended recurring price in `currency` exactly at
+        midnight (BILLING_TZ) of `validFrom` and creates the successor, attached, from that
+        moment - never a gap, never an overlap; all of it or none of it. TMF620 needs two
+        requests for this, and neither order works while a product is live: the successor
+        would overlap the open price (no-overlap constraint), and ending first would leave
+        the product without a price (refused). Existing products pick up the new price
+        from their first billing period starting on or after validFrom; new orders from
+        validFrom.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PriceChangeRequest'}
+      responses:
+        '201':
+          description: Changed
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PriceChange'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '415': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
 components:
   parameters:
     Id:
@@ -192,6 +222,41 @@ components:
         reason: {type: string}
         message: {type: string}
         status: {type: string}
+    PriceChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [amount, currency, validFrom]
+      properties:
+        amount: {type: number, minimum: 0, description: 'Exact, at most 2 decimals'}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        validFrom:
+          description: Business date; must be tomorrow (BILLING_TZ) or later.
+          allOf: [{$ref: '#/components/schemas/BusinessDate'}]
+    PriceChange:
+      type: object
+      additionalProperties: false
+      required: [productOffering, endedPrice, newPrice]
+      properties:
+        productOffering: {$ref: '#/components/schemas/Link'}
+        endedPrice:
+          type: object
+          additionalProperties: false
+          required: [id, href, endsOn]
+          properties:
+            id: {type: string, format: uuid}
+            href: {type: string}
+            endsOn:
+              description: The first day the old price no longer prices (its exclusive end).
+              allOf: [{$ref: '#/components/schemas/BusinessDate'}]
+        newPrice:
+          type: object
+          additionalProperties: false
+          required: [id, href, price, validFrom]
+          properties:
+            id: {type: string, format: uuid}
+            href: {type: string}
+            price: {$ref: '#/components/schemas/Money'}
+            validFrom: {$ref: '#/components/schemas/BusinessDate'}
     Context:
       type: object
       additionalProperties: false

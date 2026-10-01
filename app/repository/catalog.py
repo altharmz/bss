@@ -140,6 +140,31 @@ def price_at(
     )
 
 
+def lock_offering(conn: psycopg.Connection, offering_id: UUID) -> Row | None:
+    """The offering, locked until the transaction ends (concurrent price changes queue)."""
+    return fetch_one(
+        conn, "SELECT * FROM product_offering WHERE id = %s FOR UPDATE", (offering_id,)
+    )
+
+
+def recurring_prices_from(
+    conn: psycopg.Connection, *, offering_id: UUID, currency: str, at: datetime
+) -> list[Row]:
+    """The offering's recurring prices in `currency` that are still valid at `at` or start
+    later - locked - oldest first."""
+    return fetch_all(
+        conn,
+        """
+        SELECT * FROM product_offering_price
+        WHERE product_offering_id = %s AND price_type = 'recurring' AND currency = %s
+          AND (upper(valid_for) IS NULL OR upper(valid_for) > %s)
+        ORDER BY lower(valid_for)
+        FOR UPDATE
+        """,
+        (offering_id, currency, at),
+    )
+
+
 def successor_price(
     conn: psycopg.Connection,
     *,

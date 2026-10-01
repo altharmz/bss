@@ -53,6 +53,7 @@ INTERNAL: dict[str, str] = {
     "/billingAccount/{id}/products": "AccountProduct",
     "/billingAccount/{id}/charges": "Charge",
     "/billingAccount/{id}/transactions": "Transaction",
+    "/productOffering/{id}/priceChange": "PriceChange",
 }
 # Our own JSON Schemas for TMF extensions, served outside the TMF resource paths.
 SCHEMA_PREFIX = "/tmf-api/schema/"
@@ -133,7 +134,7 @@ class TmfClient:
     def _locate(path: str) -> tuple[str, str | None, str | None, str]:
         if path.startswith(INTERNAL_BASE + "/"):
             parts = path[len(INTERNAL_BASE) + 1 :].split("/")
-            if len(parts) == 3 and parts[0] == "billingAccount":
+            if len(parts) == 3:  # /<resource>/{id}/<view or action>
                 parts[1] = "{id}"
             spec_path = "/" + "/".join(parts)
             return "INTERNAL", parts[0], INTERNAL.get(spec_path), spec_path
