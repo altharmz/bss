@@ -315,6 +315,23 @@ class OfferingCode(TmfModel):
     owner: Literal["bss"] = CODE_OWNER
 
 
+# An offering's lifecycle only moves forward: In Design -> Active -> Retired, and Retired
+# is final. Repeating the current status is not a transition (a merge patch may repeat
+# values). Ordering refuses anything not Active, so reopening a Retired offering would
+# silently make it sellable again; going back to In Design would hide a live offering.
+LIFECYCLE_STEPS = {("In Design", "Active"), ("Active", "Retired")}
+
+
+def _check_lifecycle(current: str, wanted: str) -> None:
+    if wanted == current or (current, wanted) in LIFECYCLE_STEPS:
+        return
+    if current == "Retired":
+        raise conflict("lifecycleStatus: Retired is final; the offering cannot change status")
+    raise conflict(
+        f"lifecycleStatus cannot go from {current} to {wanted}: only In Design -> Active -> Retired"
+    )
+
+
 class OfferingCreate(TmfModel):
     name: str = Field(min_length=1)
     lifecycle_status: LifecycleStatus
@@ -495,8 +512,11 @@ def patch_offering(
         changes["valid_for"] = data.valid_for.to_range()
     with tx() as conn:
         uid = parse_id("productOffering", offering_id)
-        if catalog.get_product_offering(conn, uid) is None:
+        current = catalog.get_product_offering(conn, uid)
+        if current is None:
             raise not_found("productOffering", offering_id)
+        if data.lifecycle_status is not None:
+            _check_lifecycle(current["lifecycle_status"], data.lifecycle_status)
         if data.product_offering_price is not None:
             # merge patch replaces the whole array, so a missing entry would be a detach
             wanted = {price_ref.id for price_ref in data.product_offering_price}

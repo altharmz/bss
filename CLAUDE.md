@@ -340,6 +340,11 @@ implemented; order processing lives in `app/ordering/`.
 | productOffering | `name`, `description`, `lifecycle_status`, `is_sellable` <-> `isSellable`, `valid_for` <-> `validFor`, `product_specification_id` <-> `productSpecification` (ref, mandatory - ours), attached prices <-> `productOfferingPrice[]` (refs), `code` <-> `externalIdentifier[]` (0003; see below) | `name`, `lifecycleStatus`, `isSellable`, `productSpecification.id`, `externalIdentifier.id` |
 | productOfferingPrice | `name`, `lifecycle_status`, `price_type` <-> `priceType` (`recurring`/`oneTime`), `recurring_period` <-> `recurringChargePeriodType` (`monthly`), `recurring_period_length` <-> `recurringChargePeriodLength` (1), `amount` + `currency` <-> `price`, `valid_for` <-> `validFor` | `name`, `priceType`, `lifecycleStatus` |
 
+- **An offering's lifecycle only moves forward**: PATCH `lifecycleStatus` allows In Design
+  -> Active and Active -> Retired; Retired is final. Any other transition is a 409 with
+  the reason, and nothing in that PATCH is applied. Repeating the current status is not
+  a transition (200). POST may still create an offering in any status. The admin UI only
+  offers the forward step; the rule lives here.
 - **Prices attach through the offering**, as in the spec: a price is created on its own
   (`product_offering_id` NULL) and attached by `productOfferingPrice[]` on POST/PATCH of
   the offering; only references are accepted there, not inline prices. A price belongs to
