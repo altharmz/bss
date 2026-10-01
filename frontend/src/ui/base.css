@@ -1,0 +1,45 @@
+/* Self-hosted fonts: only the weights the design uses (README "Type"). */
+@import '@fontsource/golos-text/400.css';
+@import '@fontsource/golos-text/500.css';
+@import '@fontsource/golos-text/600.css';
+@import '@fontsource/golos-text/700.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  min-width: 1280px;
+  min-height: 100vh;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--fs-13);
+  line-height: 1.4;
+}
+
+/* Identifiers, amounts, dates and counts: mono with tabular figures. */
+.num {
+  font-family: var(--font-mono);
+  font-size: var(--fs-125);
+  font-variant-numeric: tabular-nums;
+}
+
+.num-right {
+  text-align: right;
+}
+
+.neg {
+  color: var(--neg);
+}

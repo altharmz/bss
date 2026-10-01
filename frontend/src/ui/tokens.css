@@ -1,0 +1,97 @@
+/* Design tokens: every value from design-ref/design_handoff_bss_admin/README.md
+   ("Design Tokens" and the per-component specs). Light theme only. Components use these
+   variables, never raw values. */
+:root {
+  /* text */
+  --ink: #1c2127;
+  --text-2: #475467;
+  --muted: #667085;
+  --faint: #8a93a0;
+  --num-disabled: #a0a7b1;
+  --crumb-sep: #c0c6ce;
+
+  /* surfaces */
+  --page: #f5f6f8;
+  --surface: #ffffff;
+  --th-bg: #f8f9fa;
+  --foot-bg: #fbfbfc;
+  --preview-bg: #fafbfc;
+  --nav-hover: #eef1f5;
+  --btn-secondary-hover: #f3f4f6;
+
+  /* lines */
+  --border: #e2e5e9;
+  --divider: #eef0f2;
+  --input-border: #d0d5dc;
+  --radio-border: #b8bfc9;
+
+  /* primary */
+  --primary: #2356c7;
+  --primary-hover: #1d49ad;
+  --primary-border: #1f4fb8;
+  --primary-ink: #1a3f94;
+  --focus-ring: rgba(35, 86, 199, 0.15);
+  --sel-1: #eaf0fb; /* active nav, selected segment */
+  --sel-2: #eef3fc; /* selected radio row */
+  --sel-3: #f4f7fd; /* row hover, new row, latest run */
+
+  /* meaning */
+  --neg: #b42318;
+  --neg-bg: #fdecea;
+  --neg-hover-bg: #fdf3f2;
+  --neg-hover-border: #e8b4ae;
+  --alert: #d92d20;
+  --pos: #1f7a4d;
+  --prorate: #a15c00;
+  --skeleton-1: #eceef1;
+  --skeleton-2: #f1f2f4;
+
+  /* status pills: text / background / dot */
+  --st-active-fg: #1f6f46;
+  --st-active-bg: #e7f4ec;
+  --st-active-dot: #2f9e63;
+  --st-inactive-fg: #5b6472;
+  --st-inactive-bg: #eef0f3;
+  --st-inactive-dot: #9aa3af;
+  --st-design-fg: #2350b0;
+  --st-design-bg: #e8effc;
+  --st-design-dot: #4a7be0;
+  --st-retired-fg: #6b6f76;
+  --st-retired-bg: #f0f0f1;
+  --st-retired-dot: #b3b7bd;
+  --st-failed-fg: #ffffff;
+  --st-failed-bg: #d92d20;
+  --st-failed-dot: #ffffff;
+
+  /* type */
+  --font-ui: 'Golos Text', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --fs-105: 10.5px;
+  --fs-11: 11px;
+  --fs-115: 11.5px;
+  --fs-12: 12px;
+  --fs-125: 12.5px;
+  --fs-13: 13px;
+  --fs-14: 14px;
+  --fs-15: 15px;
+  --fs-16: 16px;
+  --fs-17: 17px;
+  --fs-18: 18px;
+  --fs-20: 20px;
+
+  /* shape */
+  --r-tag: 3px;
+  --r-ctl: 4px;
+  --r-panel: 6px;
+  --r-modal: 8px;
+  --shadow-modal: 0 20px 50px rgba(16, 24, 40, 0.25);
+  --shadow-toast: 0 8px 24px rgba(16, 24, 40, 0.25);
+  --overlay: rgba(20, 24, 31, 0.42);
+
+  /* layout */
+  --sidebar-w: 212px;
+  --bar-h: 52px;
+  --pad-page: 20px 24px 48px;
+  --pad-cell: 8px 12px;
+  --gap-panel: 16px;
+}
