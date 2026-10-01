@@ -53,7 +53,7 @@ It exits non-zero and prints remote logs when anything fails.
 
 ## Pre-commit hook
 
-`scripts/pre-commit.sh` runs `make lint` then `make test` (~65s) and blocks the commit on
+`scripts/pre-commit.sh` runs `make lint` then `make test` (~40s) and blocks the commit on
 failure.
 
 - Not installed by default — `.git/hooks/` is never tracked by git, so every clone (this
@@ -188,6 +188,13 @@ would attach the prod container to both `lab` and `shared`).
   examples per property come from a profile selected by `HYPOTHESIS_PROFILE`: `dev` (50)
   for `make test` and the pre-commit hook, `ci` (200) for `make verify` (a target-specific
   variable in the Makefile). Plain `pytest` without the variable uses `dev`.
+- **The local postgres runs with `fsync=off`, `full_page_writes=off`,
+  `synchronous_commit=off`** (`command:` of `db` in `compose.override.yaml`): every test
+  clones and drops a database, and with fsync on each drop waits for a server-wide
+  checkpoint. Local only - production uses vps-infra's postgres and never reads
+  `compose.override.yaml`, so it is unaffected. Not crash-safe: after a WSL crash (or a
+  killed Docker VM) the local database may be corrupt; the recovery is `make clean`
+  (drops the local volume) and `make up`.
 - Spec YAML is parsed with libyaml (`yaml.CSafeLoader`), not `yaml.safe_load`: same
   documents, ~6x faster, and every xdist worker parses all of `spec/` once.
 - Dependencies: add to `requirements.txt` (runtime) or `requirements-dev.txt` (tooling),

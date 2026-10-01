@@ -48,6 +48,11 @@ services:
 
   db:
     image: postgres:16-alpine
+    # Local only, for test speed: every test clones and drops a database, and with fsync on
+    # each drop waits for a server-wide checkpoint. Not crash-safe: after a WSL crash this
+    # database may be corrupt - recover with `make clean`. Production uses vps-infra's
+    # postgres and never sees this file.
+    command: ["postgres", "-c", "fsync=off", "-c", "full_page_writes=off", "-c", "synchronous_commit=off"]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
