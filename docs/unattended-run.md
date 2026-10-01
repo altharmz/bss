@@ -16,7 +16,13 @@ test`, `make web-lint` and `make web-test` pass, through the pre-commit hook.
 | `f6e6679` | UI: product catalog, New offering, lifecycle steps (In Design -> Active -> Retired) |
 | `ae64458` | tests: the admin UI's write requests replayed against the real API |
 | `53cf297` | CLAUDE.md: catalog conventions, UI write requests pinned on both sides |
-| (next) | docs: stage 4 worker design note (checkpoint 1, no code) |
+| `b4723e9` | docs: stage 4 worker design note (checkpoint 1, no code) |
+| (this) | docs: unattended-run log complete |
+
+Final state: all four gates green at every commit (backend 376 tests, UI 173 tests,
+ruff, tsc/eslint/prettier), all through the pre-commit hook. Nothing deployed, no SSH, no
+vps-infra change, nothing pushed. Scope finished: stopped after stage 4 checkpoint 1 as
+instructed.
 
 ## Decisions taken unattended
 
@@ -62,7 +68,7 @@ test`, `make web-lint` and `make web-test` pass, through the pre-commit hook.
 
 ## Stuck / unfinished
 
-(none yet)
+Nothing stuck; no command was refused during the run, and no protected file was needed.
 
 ## Manual review list (`make web-dev`, http://localhost:5173, after `make seed`)
 
