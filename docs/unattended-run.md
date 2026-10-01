@@ -14,7 +14,9 @@ test`, `make web-lint` and `make web-test` pass, through the pre-commit hook.
 | `0419c17` | CLAUDE.md: make seed |
 | `7e6ea69` | docs: unattended-run handoff log |
 | `f6e6679` | UI: product catalog, New offering, lifecycle steps (In Design -> Active -> Retired) |
-| (next) | tests: the UI's write requests replayed against the real API |
+| `ae64458` | tests: the admin UI's write requests replayed against the real API |
+| `53cf297` | CLAUDE.md: catalog conventions, UI write requests pinned on both sides |
+| (next) | docs: stage 4 worker design note (checkpoint 1, no code) |
 
 ## Decisions taken unattended
 
@@ -49,7 +51,14 @@ test`, `make web-lint` and `make web-test` pass, through the pre-commit hook.
 
 ## Pending my approval
 
-(none yet)
+- **Stage 4 decisions D-W1 .. D-W15**: `docs/stage4-design.md`, "Decisions needed from
+  the owner" (each with a recommendation). No stage 4 code was written.
+- When stage 4 is implemented it needs protected files: `compose.prod.yaml` and
+  `compose.override.yaml` (worker service), `scripts/deploy.sh` (start the worker,
+  smoke `/billing-status`, optional wait for idle), `Makefile` (`worker-once`). None was
+  touched in this run.
+- vps-infra (separate project): a Caddy carve-out for `/billing-status` without auth,
+  like `/healthz` - to add to the existing change request.
 
 ## Stuck / unfinished
 
