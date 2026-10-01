@@ -46,6 +46,7 @@ make tunnel    # forward the remote app to localhost:18081
 make remote CMD="..."  # run a one-off command against the deployed image on the VPS
 make hooks     # install the local pre-commit hook (make lint + make test)
 make spec-verify-upstream  # re-fetch spec blob SHAs from GitHub, compare with spec/README.md (network)
+make seed          # LOCAL demo data through the public TMF API (refuses APP_ENV=prod); re-run = no-op
 make web-install   # UI: npm ci into the node_modules volume - the ONLY step that downloads
 make web-dev       # UI: Vite dev server on http://localhost:5173 (proxies /tmf-api, /internal)
 make web-build     # UI: build frontend/dist (offline)
@@ -875,6 +876,18 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   sized by the table's columns), error (call + Retry), empty (copy + optional action),
   no results (Reset filters). The context (`/internal/v1/context`) loads before any
   screen: no date can be shown without the business date and zone.
+- **Demo data: `make seed`** (`tests/seed.py`, also the e2e fixture). Everything goes
+  through the public TMF API - never SQL - run in-process with a FixedClock that starts
+  120 days before today and moves forward a day at a time: each day the billing run for
+  that date (`bill_account` for every account, then `finish_run`) and then the day's
+  orders and payments. The API refuses past-dated prices and orders, which is why the
+  real clock cannot build history. Dates are relative to today, so future-dated and
+  pendingTerminate products are really in the future. 4 offerings with codes (one In
+  Design), 7 accounts (one Suspended, one Closed, several negative balances, credit
+  limits), refunds, payments, bills. Refuses `APP_ENV=prod` and any database but the
+  local `db`. Idempotent: if its catalog exists it does nothing; a partial seed is
+  reported (reset with `make clean && make up`), never patched. Needs migrations at head
+  (`make migrate`). `tests/test_seed.py` runs it on a throwaway database.
 - **Routes:** `/subscribers`, `/subscribers/{accountId}`, `/catalog`; `/` redirects to
   `/subscribers`; anything else is a not-found page. No Billing runs route or nav item
   until stage 4 (D6).
