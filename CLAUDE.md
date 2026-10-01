@@ -866,3 +866,15 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   understanding quotes or heredocs, so a chained `sh -c` inside `docker compose run`, or
   documentation text containing such a chain, is blocked too - use the make targets. The
   format hook runs prettier (in `web-offline`) on edited UI files.
+- **Structure** (`frontend/src/`): `api/` (fetch client: every failure is an `ApiError`
+  whose message is the call, "GET /path → 503 Service Unavailable"; `getPage` requires
+  `X-Total-Count`; `getAll` pages by 100; `useResource` = loading/error/ok + retry, never
+  shows a stale or other key's result), `app/` (router, shell, system context and
+  breadcrumbs), `ui/` (tokens, kit, `Table` on CSS grid, the four list states),
+  `screens/`, `format/`. **Every list renders through `ListState`**: skeleton (8 rows
+  sized by the table's columns), error (call + Retry), empty (copy + optional action),
+  no results (Reset filters). The context (`/internal/v1/context`) loads before any
+  screen: no date can be shown without the business date and zone.
+- **Routes:** `/subscribers`, `/subscribers/{accountId}`, `/catalog`; `/` redirects to
+  `/subscribers`; anything else is a not-found page. No Billing runs route or nav item
+  until stage 4 (D6).
