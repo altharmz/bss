@@ -11,6 +11,22 @@ fail() {
   exit 1
 }
 
+# The checks below run on the working tree, so the working tree must be exactly what is
+# being committed: no unstaged change to a tracked file, and no untracked file where code
+# lives. Otherwise a commit could pass on content it does not contain (a file left out of
+# `git add` but present on disk) - or fail on content it does not contain.
+if ! git diff --quiet; then
+  printf 'Unstaged changes to tracked files:\n' >&2
+  git diff --name-only | sed 's/^/  /' >&2
+  fail "the commit would not contain what the checks test - stage them (git add) or set them aside (git stash push --keep-index)"
+fi
+untracked="$(git ls-files --others --exclude-standard -- app tests frontend spec)"
+if [[ -n "$untracked" ]]; then
+  printf 'Untracked files under app/, tests/, frontend/ or spec/:\n' >&2
+  printf '%s\n' "$untracked" | sed 's/^/  /' >&2
+  fail "the checks would see files the commit does not contain - add them, delete them, or ignore them"
+fi
+
 # </dev/null: docker compose run only allocates a pty when stdin is actually a tty, so
 # this keeps the hook from ever blocking on stdin in a non-interactive context (GUI
 # clients, editors) as well as a plain terminal commit.

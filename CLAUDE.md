@@ -76,11 +76,18 @@ failure.
   `make web-test` (offline, ~+30 s: lint 20 s, test 9 s). They never install: an out-of-date node_modules fails
   with "run make web-install". A change in `app/api` or `app/internal` alone does not
   trigger them, though it can break the UI; `make verify` (`web-e2e`) is the gate for that.
-- It tests the **working tree, not the index**. With a partial commit (some changes left
-  unstaged or untracked) the hook passes or fails on content the commit does not contain.
-  To verify one commit in isolation, check it out on its own: stop the local stack
-  (`make down`; port 5432/8080 conflict), `git worktree add ../bss-check <commit>`, then
-  in that directory `COMPOSE_PROJECT_NAME=bss-check IMAGE_NAME=bss-check-app
+- **It only lets a commit through when the working tree is exactly what is committed.**
+  The checks run on the working tree, so before running them the hook refuses the commit
+  (with the list of files) if a tracked file has unstaged changes (`git diff --quiet`
+  fails) or an untracked file sits under `app/`, `tests/`, `frontend/` or `spec/`. Stage
+  everything that belongs to the commit, or set the rest aside with `git stash push
+  --keep-index`. (This replaced the old caveat that the hook tested the working tree, not
+  the index: a commit once passed while missing two repository functions that were only on
+  disk.) Proven: an untracked file under `frontend/`, and a partially staged change, are
+  each refused before any check runs; the fully staged change commits normally.
+- To check an *older* commit on its own, use a worktree: stop the local stack (`make
+  down`; port 5432/8080 conflict), `git worktree add ../bss-check <commit>`, then in that
+  directory `COMPOSE_PROJECT_NAME=bss-check IMAGE_NAME=bss-check-app
   POSTGRES_PASSWORD=throwaway make lint test` (compose.yaml pins `name: bss`, so without
   the override the worktree would share this project's containers and database volume),
   then `docker compose down -v` with the same variables and `git worktree remove`.
