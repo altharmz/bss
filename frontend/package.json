@@ -12,7 +12,8 @@
       "openapi-typescript": "types generated from spec/*.yaml, never from /openapi.json",
       "vitest, jsdom, @testing-library/react, @testing-library/dom": "unit tests (formatters) and component tests (states)",
       "eslint, @eslint/js, typescript-eslint, eslint-plugin-react-hooks, globals": "lint; react-hooks catches real bugs (missing dependencies, conditional hooks)",
-      "prettier": "formatting, the ruff format of this directory"
+      "prettier": "formatting, the ruff format of this directory",
+      "@playwright/test": "the e2e smoke (make web-e2e), run in the official Playwright image of the same version"
     }
   },
   "scripts": {
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
     "@types/node": "22.20.4",

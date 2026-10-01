@@ -88,6 +88,38 @@ services:
     volumes: *web-volumes
     network_mode: none
 
+  # make web-e2e: the BUILT UI (frontend/dist) served by `vite preview`, proxying /tmf-api
+  # and /internal to the local app - the closest local stand-in for the shared Caddy.
+  web-preview:
+    build: *web-build
+    image: bss-web:dev
+    profiles: [web]
+    volumes: *web-volumes
+    environment:
+      API_URL: http://app:8080
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [lab]
+    command: ["npx", "vite", "preview"]
+
+  # make web-e2e: Playwright in its official image, the same version as @playwright/test
+  # (pinned by digest). Runs as the WSL user against web-preview; writes nothing into
+  # frontend/ (outputDir is /tmp). The JS packages come from the node_modules volume.
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+    profiles: [web]
+    user: "1000:1000"
+    working_dir: /web
+    volumes: *web-volumes
+    environment:
+      E2E_BASE_URL: http://web-preview:4173
+      HOME: /tmp
+    shm_size: 1gb
+    depends_on: [web-preview]
+    networks: [lab]
+    command: ["npx", "playwright", "test"]
+
   db:
     image: postgres:16-alpine
     # Local only, for test speed: every test clones and drops a database, and with fsync on

@@ -12,7 +12,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -84,6 +84,11 @@ web-types: ## Regenerate the UI's TypeScript types from spec/
 web-fmt: ## Format the UI sources (prettier --write)
 	$(WEB) sh -c '$(WEB_DEPS) && npm run format'
 
+web-e2e: ## e2e smoke (Playwright) on the built UI and the seeded local stack; read-only
+	@$(MAKE) --no-print-directory seed
+	@$(MAKE) --no-print-directory web-build
+	docker compose run --rm e2e; rc=$$?; docker compose rm -sf web-preview >/dev/null 2>&1; exit $$rc
+
 spec-verify-upstream: ## Re-fetch the spec blob SHAs from GitHub and compare with spec/README.md (network; not in make test)
 	python3 scripts/spec-verify-upstream.py
 
@@ -95,7 +100,7 @@ deploy: ## Build locally and ship to the VPS
 
 # Target-specific: also applies to verify's `test` prerequisite.
 verify: HYPOTHESIS_PROFILE = ci
-verify: lint test deploy ## Full gate: lint, tests, then a real deployment that must go healthy
+verify: lint test web-lint web-test web-e2e deploy ## Full gate: backend and UI checks, the e2e smoke, then a real deployment that must go healthy
 	@echo "verified: local checks passed and the remote instance is healthy"
 
 tunnel: ## Forward the remote app to localhost:18081 (Ctrl-C to stop)

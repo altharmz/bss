@@ -37,7 +37,7 @@ make test      # pytest inside the container
 make lint      # ruff check + format check
 make smoke     # smoke-test the local instance
 make deploy    # build locally, ship image to VPS, restart there
-make verify    # deploy + wait for healthy + remote smoke test
+make verify    # lint, test, web-lint, web-test, web-e2e, then deploy (+ health, smoke, UI, web smoke)
 make ssh       # open a shell on the VPS
 make migrate   # apply Alembic migrations against the local stack
 make fmt       # auto-format (ruff format + check --fix)
@@ -54,6 +54,7 @@ make web-lint      # UI: tsc, eslint, prettier --check (offline)
 make web-test      # UI: vitest (offline)
 make web-types     # UI: regenerate TypeScript types from spec/ (offline)
 make web-fmt       # UI: prettier --write (offline)
+make web-e2e       # UI: Playwright smoke on the built UI + seeded local stack (read-only)
 ```
 
 `make verify` is the single source of truth for "does it actually work on the server".
@@ -678,35 +679,35 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
   UI** without touching either; `make verify` (which runs `web-e2e`) is the gate that
   catches it.
 
-## vps-infra change request (stage 5, checkpoint 7)
+## Deploying the UI (stage 5, checkpoint 7)
 
-To be applied in the vps-infra project, not here. The `bss` site block on :8445 changes
-from "everything to the app" to:
+The Caddy side is vps-infra's: **`docs/vps-infra-change-request.md`** has the complete
+request - the read-only static mount of `~/bss/web` (created by vps-infra *before* Caddy is
+restarted, else Docker creates it root-owned), the site block (validated with Caddy 2.11.4
+in a local rehearsal), the GET-only `smoke` user, `/billing-status` unauthenticated, and
+the order of deploys (backup, vps-infra, then `make verify`).
 
-1. **`/tmf-api/*` and `/internal/*` -> `reverse_proxy bss:8080`**, both behind the same
-   basic auth. `/internal/*` must be routed explicitly: otherwise it falls through to the
-   file server's `try_files ... /index.html` and silently answers HTML with 200.
-2. On both of those routes, **`header_up X-Remote-User {http.auth.user.id}`** - a SET
-   that overwrites whatever the client sent, never an append or a pass-through.
-3. `/healthz` -> `bss:8080` without auth, as today.
-4. Everything else: **`root * /srv/bss-web`, `try_files {path} /index.html`,
-   `file_server`**; `/assets/*` with `Cache-Control: public, max-age=31536000, immutable`,
-   `index.html` with `Cache-Control: no-cache`.
-5. **Static mount:** the Caddy container mounts `~/bss/web` read-only at `/srv/bss-web`.
-   `deploy.sh` creates the directory before the first mount (otherwise Docker creates it
-   root-owned) and only ever rsyncs *into* it - assets first, `index.html` next, then a
-   `--delete` pass. The directory itself is never replaced or renamed: the bind mount
-   holds its inode, and Caddy would keep serving the old one.
-6. **Smoke user:** a second basic-auth user `smoke` with its own bcrypt hash; for that
-   user any method other than GET/HEAD is answered 403 by Caddy before reaching the app.
-   The plaintext lives only in `.env.prod` here, never printed.
-
-The web smoke test (deploy.sh, checkpoint 7) proves it through Caddy:
-`GET /` -> 401 without auth; as `smoke`: `GET /` -> 200 HTML carrying this build's
-`bss-build` marker, **`GET /internal/v1/context` -> 200 `application/json`** with a JSON
-body (not the index.html fallback) whose `operator` is `smoke` (proves the header is set),
-`GET /tmf-api/.../billingAccount?limit=1` -> 200 JSON, and `POST` to a TMF path as `smoke`
--> 403.
+- **`deploy.sh`** builds the UI locally before any network step (`make web-build
+  WEB_BUILD=<tag>` stamps `index.html`'s `bss-build` marker) and refuses to start without
+  `SMOKE_BASIC_AUTH=smoke:<password>` in `.env.prod`. After the app is healthy it rsyncs
+  `frontend/dist/` **into** `~/bss/web` - hashed assets, then `index.html`, then a
+  `--delete` pass. The directory is never replaced or renamed (the bind mount holds its
+  inode); rehearsed locally: same inode across two deploys, stale assets removed. The UI
+  ships last, so it never calls an API the old app lacks.
+- **`scripts/web-smoke.sh <url> <build>`** then checks the public URL as the smoke user
+  (credentials via a curl config on a file descriptor, never argv or output): `/` without
+  auth 401; `index.html` of this build; a deep link answered by `index.html`; a hashed
+  asset; **`/internal/v1/context` as JSON, not the index.html fallback, with `operator` =
+  `smoke`** (Caddy sets the header); a `/tmf-api` list as JSON with `X-Total-Count`;
+  `POST` as smoke -> 403; `/healthz` open. In the rehearsal, removing the `/internal`
+  route, the header or the smoke 403 each failed it. A failure there leaves the app
+  deployed and healthy; fix the Caddy side and re-run `make deploy`.
+- **`make web-e2e`**: Playwright (official image, pinned by digest, same version as
+  `@playwright/test`) against the **built** UI served by `vite preview` (`web-preview`
+  service, proxying to the local app) and the seeded stack (`make seed` first). Read-only
+  and data-tolerant (it picks any offering priced today: the local catalog is also edited
+  in manual reviews); fails on any console error, page error or 5xx. Part of `make verify`
+  - the gate for API changes that break the UI.
 
 ## Open questions
 

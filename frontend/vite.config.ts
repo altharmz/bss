@@ -21,7 +21,10 @@ export default defineConfig({
       '/internal': { target: api },
     },
   },
-  preview: { host: '0.0.0.0', port: 4173, strictPort: true },
+  // make web-e2e reaches the preview as http://web-preview:4173 from the Playwright
+  // container; Vite refuses unknown Host headers (DNS-rebinding protection), so allow
+  // exactly that name.
+  preview: { host: '0.0.0.0', port: 4173, strictPort: true, allowedHosts: ['web-preview'] },
   build: { outDir: 'dist', assetsDir: 'assets' },
   test: {
     environment: 'jsdom',
