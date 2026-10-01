@@ -16,3 +16,8 @@ build
 Makefile
 scripts
 compose*.yaml
+# Stage 5: the admin UI is built and shipped separately (served by the shared Caddy),
+# and the design handoff is a reference only. Neither belongs in the backend image or
+# its build context (node_modules alone would dwarf it).
+frontend/
+design-ref/

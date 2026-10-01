@@ -143,10 +143,13 @@ app/clock.py               Clock protocol, SystemClock, FixedClock; the only wal
 app/repository/            data access: plain functions on a psycopg.Connection, never commit
 app/billing/               billing core (model.py dataclasses, core.py pure functions) and
                            adapter.py (bill_account: load -> compute -> write). See "Billing"
+app/internal/              internal API for the admin UI (/internal/v1): context, first-charge
+                           preview, open products, charges, transactions. See "Internal API"
 app/api/                   TMF Open API surface: one module per API (router, request models,
                            row -> body mapping) + shared conventions (errors, tmfjson, common,
                            listing, deps). See "TMF API conventions"
-spec/                      vendored TMF OpenAPI files (README.md: source, SHA, license)
+spec/                      vendored TMF OpenAPI files (README.md: source, SHA, license);
+                           spec/internal/bss-internal.oas.yaml is ours (the internal API)
 alembic/                  migrations; alembic.ini reads DATABASE_URL from the env
 compose.yaml              base definition: only what both modes share (the app image)
 compose.override.yaml     local dev only (own postgres on `lab`, bind mount, --reload, ports;
@@ -320,7 +323,7 @@ implemented; order processing lives in `app/ordering/`.
 | Resource | DB column <-> TMF attribute | Filters |
 |---|---|---|
 | productSpecification | `name`, `description`, `lifecycle_status` <-> `lifecycleStatus`, `updated_at` <-> `lastUpdate` | `name`, `lifecycleStatus` |
-| productOffering | `name`, `description`, `lifecycle_status`, `is_sellable` <-> `isSellable`, `valid_for` <-> `validFor`, `product_specification_id` <-> `productSpecification` (ref, mandatory - ours), attached prices <-> `productOfferingPrice[]` (refs) | `name`, `lifecycleStatus`, `isSellable`, `productSpecification.id` |
+| productOffering | `name`, `description`, `lifecycle_status`, `is_sellable` <-> `isSellable`, `valid_for` <-> `validFor`, `product_specification_id` <-> `productSpecification` (ref, mandatory - ours), attached prices <-> `productOfferingPrice[]` (refs), `code` <-> `externalIdentifier[]` (0003; see below) | `name`, `lifecycleStatus`, `isSellable`, `productSpecification.id`, `externalIdentifier.id` |
 | productOfferingPrice | `name`, `lifecycle_status`, `price_type` <-> `priceType` (`recurring`/`oneTime`), `recurring_period` <-> `recurringChargePeriodType` (`monthly`), `recurring_period_length` <-> `recurringChargePeriodLength` (1), `amount` + `currency` <-> `price`, `valid_for` <-> `validFor` | `name`, `priceType`, `lifecycleStatus` |
 
 - **Prices attach through the offering**, as in the spec: a price is created on its own
@@ -343,6 +346,12 @@ implemented; order processing lives in `app/ordering/`.
   moved to a value >= now (the injected clock), and only while the current end, if any,
   is not in the past (409 otherwise): a retroactive end, or reopening a price that has
   already ended, would change prices already used for billed periods.
+- **Offering code (migration 0003):** the spec's `externalIdentifier[]` with exactly one
+  entry `{id: <code>, externalIdentifierType: "offeringCode", owner: "bss", @type:
+  ExternalIdentifier}`. `owner` may be omitted on POST (any other value is a 422). The
+  code matches `^[A-Z0-9][A-Z0-9_-]{0,31}$` (upper case, so uniqueness never depends on
+  case), is unique (409 "offering code X is already in use"), optional, set on POST only
+  and read-only after (400). Offerings without one carry no `externalIdentifier`.
 - **Deviation: only references in `productOfferingPrice[]`.** The spec's
   `ProductOfferingPriceRefOrValue` also allows an inline price; we accept references only
   (an entry without `id` is a 422). Create the price first, then reference it.
@@ -358,7 +367,7 @@ implemented; order processing lives in `app/ordering/`.
 | individual | `party` with `party_type = 'Individual'`: `given_name` <-> `givenName`, `family_name` <-> `familyName` (both mandatory, as in the spec's create schema) | `givenName`, `familyName` |
 | organization | `party` with `party_type = 'Organization'`: `organization_name` <-> `name` | `name` |
 | customer | `name`, `status` (`Created`/`Active`/`Inactive`, ours), `party_id` <-> `engagedParty` (`PartyRef`, `@referredType` = the party type; fixed at creation) | `name`, `status`, `engagedParty.id` |
-| billingAccount | `name`, `state` (`Active`/`Suspended`/`Closed`, ours), `customer_id` <-> `relatedParty[0]` (role `customer`, `PartyRoleRef` to the Customer; exactly one, fixed at creation), `bill_cycle_day` <-> `billCycleDay`, `currency` <-> `currency`, computed <-> `accountBalance[]` | `name`, `state`, `relatedParty.id` |
+| billingAccount | `name`, `state` (`Active`/`Suspended`/`Closed`, ours), `customer_id` <-> `relatedParty[0]` (role `customer`, `PartyRoleRef` to the Customer; exactly one, fixed at creation), `bill_cycle_day` <-> `billCycleDay`, `currency` <-> `currency`, computed <-> `accountBalance[]`, `credit_limit` <-> `creditLimit` (0003; see below) | `name`, `state`, `relatedParty.id` |
 
 An individual is not reachable under `/organization` and vice versa (404).
 
@@ -372,6 +381,10 @@ An individual is not reachable under `/organization` and vice versa (404).
   from the period start, not the day the period starts - hence the extension. PATCH
   accepts `@type` `BssBillingAccount` or `BillingAccount`. Every full billingAccount body
   in the tests is validated against both TMF666 and the served extension schema.
+- **`creditLimit` (migration 0003)** is TMF666's own Money attribute, always in the
+  account's currency (another `unit` is a 422), never negative (422), optional; PATCH
+  `null` removes it. **Informational only:** nothing - ordering included - is ever
+  refused because of it; the admin UI shows it and warns.
 - **Balance** is the spec's `accountBalance[]` with exactly one read-only entry:
   `{"balanceType": "currentBalance", "amount": Money, "@type": "AccountBalance"}`,
   computed on every read as payments (`done`) minus all ABRs. **Positive = the customer
@@ -546,6 +559,104 @@ termination always visible, no account lock, no running-run guard).
   only (it puts every catch-up ABR on the bill after as_of);
 - call `bill_account` per account and record a failing account without stopping the run.
 
+## Internal API (stage 5)
+
+`app/internal/`, mounted at `/internal/v1`, serves what the admin UI cannot get from the
+TMF APIs without re-implementing billing rules. Ours, not TMF; same conventions as
+`app/api` (TMF `Error` bodies, Decimal-exact Money `{unit, value}`, one transaction per
+request, the injected clock, offset/limit paging with `X-Total-Count`/`X-Result-Count`,
+unknown query parameters are a 400), except that **dates are plain business dates**
+(`YYYY-MM-DD` in BILLING_TZ). The contract is `spec/internal/bss-internal.oas.yaml`:
+strict schemas (`additionalProperties: false`), validated for every response in the
+suite by `tests/apiclient.py`, and the source of the UI's TypeScript types (never
+FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` next to
+`allOf` does not admit null), so nullable variants are spelled out (`NullableMoney`, ...).
+
+| Endpoint | What |
+|---|---|
+| `GET /context` | businessDate (injected clock), now, timeZone, utcOffset (at now), environment (`APP_ENV`), operator, currency (`UI_CURRENCY`, default RUB), billingRunAt (`BILLING_RUN_AT`, default 00:30) |
+| `GET /billingAccount/{id}/firstCharge?productOffering.id=&startDate=` | dry run of an add order: the stage 3 core's `compute()` on the hypothetical product. period, cyclePeriod, billableDays of periodDays, price, amount, chargeRunDate = max(startDate, businessDate + 1), billDate = first cycle day >= chargeRunDate, next full period, balance, balanceAfter (= balance - this charge only), creditLimit, exceedsCreditLimit. startDate in the past or no price in the account currency -> 422 |
+| `GET /billingAccount/{id}/products` | not-ended products (created, pendingActive, active, pendingTerminate, suspended) with offering name/code, specification name, price valid today (or on the start date), nextChargeDate (start date if not started, else the next cycle day after today; null if the product ends by then) |
+| `GET /billingAccount/{id}/charges` | ABRs newest run first, with runDate, billableDays of periodDays (the proration), offering, bill |
+| `GET /billingAccount/{id}/transactions` | charges, refunds and payments as one ledger with balanceAfter. Positive = credit (as accountBalance); ordered by day (ABR: run date; payment: its date in BILLING_TZ), ABRs before payments on the same day (the run of D happens at its start), then timestamp, id. The newest balanceAfter equals the account balance (tested) |
+
+- **operator** comes from the `X-Remote-User` header, which the shared Caddy must *set*
+  (overwrite) from the basic-auth user, so a client-sent header never passes through.
+  Anything not matching `^[A-Za-z0-9._@-]{1,64}$` is reported as null.
+- **Trust in `X-Remote-User`.** The app believes the header only because, from outside the
+  VPS, it is reachable solely through Caddy. It is not proof of identity: any other
+  container on the `shared` network can reach `bss:8080` directly and forge it, and so can
+  anyone with a shell or an SSH tunnel on the VPS (the app is also published on the host's
+  `127.0.0.1:18081`, which `make tunnel` uses). Acceptable for this demo because the value
+  is display-only - nothing is authorised by it. Anything that needs a real operator
+  identity must not rely on this header.
+- Every rule above was broken once to see a test fail (extra attribute vs the strict
+  contract, charge run date without the end-of-day rule, ledger sign, creditLimit
+  currency, duplicate code).
+- Stage 4 adds the billing run endpoints (shape agreed in stage 5 checkpoint 1):
+  `GET /billingRun?limit=14`, `GET /billingRun/{id}`, `POST /billingRun/catchUp {upTo}`
+  (queues every missing date in order; 202), `POST /billingRun/{id}/retry` (latest run,
+  failed only; 409 otherwise).
+
+## Frontend (stage 5) decisions
+
+- **A subscriber row is a billing account** (it has the balance, cycle day and products).
+  Name from the customer; the status pill and filter are the account's real `state`
+  (Active / Suspended / Closed), which is also what ordering checks (`accountNotActive`).
+  **A customer with two accounts shows as two rows.**
+- The subscribers list makes no per-row requests: one billingAccount list (balance
+  included) and one product list (`status=active`), grouped client-side, page by page.
+- "Registered" is replaced by "Cycle day" (no creation date in TMF629/666, and
+  `created_at` is the database's `now()`, not the injected clock).
+- Credit limit: shown, and the over-limit warning in Add product, informational only.
+- Offering code: `externalIdentifier` (above). Subscriber no. and `BA-xxxxxxxx` are
+  display ids: the first 8 hex digits of the UUID, upper case.
+- Weekly recurrence is not offered (monthly only). One currency in the UI (`UI_CURRENCY`);
+  the backend stays multi-currency.
+- Pills for statuses the design lacks (`created`, `pendingTerminate`, `suspended`,
+  `cancelled`, Suspended/Closed accounts) reuse existing token colours only.
+- Retiring an offering does not end its prices; its products keep billing.
+- Billing runs screen: hidden until stage 4. The run time is `BILLING_RUN_AT` (00:30).
+- Charge timing copy follows the end-of-day rule: an order completed today is charged by
+  the run of max(start, tomorrow) and billed on the next cycle day from there - nothing is
+  "charged on confirmation".
+- Smoke on the VPS: a separate basic-auth user `smoke` (own hash), GET-only in Caddy
+  (any other method 403); its plaintext lives only in `.env.prod`, never printed.
+- Pre-commit runs `make web-lint` and `make web-test` only when staged files touch
+  `frontend/` or `spec/`. **A change in `app/api` or `app/internal` can still break the
+  UI** without touching either; `make verify` (which runs `web-e2e`) is the gate that
+  catches it.
+
+## vps-infra change request (stage 5, checkpoint 7)
+
+To be applied in the vps-infra project, not here. The `bss` site block on :8445 changes
+from "everything to the app" to:
+
+1. **`/tmf-api/*` and `/internal/*` -> `reverse_proxy bss:8080`**, both behind the same
+   basic auth. `/internal/*` must be routed explicitly: otherwise it falls through to the
+   file server's `try_files ... /index.html` and silently answers HTML with 200.
+2. On both of those routes, **`header_up X-Remote-User {http.auth.user.id}`** - a SET
+   that overwrites whatever the client sent, never an append or a pass-through.
+3. `/healthz` -> `bss:8080` without auth, as today.
+4. Everything else: **`root * /srv/bss-web`, `try_files {path} /index.html`,
+   `file_server`**; `/assets/*` with `Cache-Control: public, max-age=31536000, immutable`,
+   `index.html` with `Cache-Control: no-cache`.
+5. **Static mount:** the Caddy container mounts `~/bss/web` read-only at `/srv/bss-web`.
+   `deploy.sh` creates the directory before the first mount (otherwise Docker creates it
+   root-owned) and only ever rsyncs *into* it - assets first, `index.html` next, then a
+   `--delete` pass. The directory itself is never replaced or renamed: the bind mount
+   holds its inode, and Caddy would keep serving the old one.
+6. **Smoke user:** a second basic-auth user `smoke` with its own bcrypt hash; for that
+   user any method other than GET/HEAD is answered 403 by Caddy before reaching the app.
+   The plaintext lives only in `.env.prod` here, never printed.
+
+The web smoke test (deploy.sh, checkpoint 7) proves it through Caddy:
+`GET /` -> 401 without auth; as `smoke`: `GET /` -> 200 HTML carrying this build's
+`bss-build` marker, **`GET /internal/v1/context` -> 200 `application/json`** with a JSON
+body (not the index.html fallback) whose `operator` is `smoke` (proves the header is set),
+`GET /tmf-api/.../billingAccount?limit=1` -> 200 JSON, and `POST` to a TMF path as `smoke`
+-> 403.
+
 ## Open questions
 
 - **Changing `billCycleDay`.** PATCH is a 409 today. Not settled in stage 3: a change has
@@ -695,7 +806,11 @@ Both of these only showed up against the real VPS, never locally:
 
 ## Frontend conventions
 
-If this service grows a UI, static assets belong in `app/static/`, served by FastAPI via
-`StaticFiles` — plain HTML/CSS/JS. No bundlers, no npm, no build step, no external CDN
-dependencies. If a task seems to need a framework, say so and stop rather than adding a
-Node toolchain to the image.
+The admin UI (stage 5) lives in `frontend/`: Vite + React + TypeScript, built to static
+files and served by the shared Caddy on :8445 (same origin as the API, same basic auth -
+no CORS). It never enters the backend image (`.dockerignore`), and Node runs only in a
+container, never on the host. `design-ref/` is the design handoff: a pristine reference,
+never edited. Types come from `spec/` (TMF and `spec/internal/`), never from
+`/openapi.json`. Fonts are self-hosted (no Google Fonts or other CDN at runtime). Every
+dependency needs a stated reason. Tooling, Makefile targets and the dev loop are added in
+stage 5 checkpoint 3.
