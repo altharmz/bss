@@ -1,7 +1,7 @@
 # Stage 4 - the billing worker: design note (checkpoint 1, no code)
 
-Status: reviewed. The owner's decisions are recorded in **"Decided"** at the end; what is
-still open is listed under **"Still open"** with a recommendation each. Every rule from
+Status: reviewed twice. The owner's decisions are recorded in the two **"Decided"**
+sections at the end; **"Still open"** lists what implementing D-W18 turned up. Every rule from
 stage 3 stays as it is (CLAUDE.md "Billing (stage 3)"); this note decides who calls
 `bill_account`, when, and what happens when it does not go to plan.
 
@@ -193,12 +193,23 @@ approval when implemented**):
 - **Resources**: billing one account is a few queries; a demo-sized run takes seconds.
   256 MB / 0.25 CPU keep the VPN's share untouched; the app keeps its 384 MB / 0.5.
 - **Deploy** (`scripts/deploy.sh`, protected): migrations (0004) first, then `up -d` of
-  both services. A deploy that restarts the worker mid-run is covered by the takeover;
-  optionally deploy.sh waits for an idle worker first (D-W11).
+  both services. **A deploy never interrupts an account mid-transaction** (decided):
+  - the worker handles SIGTERM (what `docker compose up`/`stop` send) by finishing the
+    account it is billing - its transaction commits or rolls back as a whole - then
+    releasing the advisory lock and exiting; it takes no new account after the signal;
+  - the service gets `stop_grace_period: 60s`, far more than one account takes, so
+    Docker's SIGKILL never lands inside an account;
+  - the rest of the run is taken over by the new worker (section 2), and accounts already
+    `ok` are not touched again.
+  Even a SIGKILL (OOM, power) cannot leave half an account written - one transaction per
+  account - but the graceful stop makes the normal deploy path clean as well. Waiting
+  for an idle worker in deploy.sh is not needed.
 - **Smoke**: `GET /billing-status` answers with a known status, and the worker container
   is healthy.
-- **Local**: a `worker` service in `compose.override.yaml` behind `profiles: [worker]`,
-  plus `make worker-once` (one wake-up, then exit) for the seeded stack (D-W14).
+- **Local** (decided: one-shot via a make target): `make worker-once` runs one wake-up of
+  the worker against the local stack - due dates, the queue, the flips - and exits; no
+  long-running local worker. It is a `docker compose run --rm app python -m app.worker
+  --once` (Makefile, protected).
 
 ## 10. Migration 0004 (sketch)
 
@@ -245,18 +256,41 @@ approval when implemented**):
   age** - no amounts or names. (Was D-W7.)
 - "Run any date" is replaced by **"catch up to date X"** (agreed in stage 5). (Was D-W10.)
 
-## Still open
+## Decided (owner, second review)
 
-| # | Question | Recommendation |
+- **D-W18 - gaps are prevented at the catalog** (implemented, commit `fd0c0a7`): ending
+  or moving the end of a recurring price is a 409 if any product of that offering, in
+  that currency, is not terminated by the first day the price no longer covers, unless a
+  successor price starts exactly at the new end. **No operator waiver**: after this rule
+  a missing price is a **data bug**, handled case by case with a reviewed one-off script
+  and an audit note, not a UI feature. **Never backdated prices** (unchanged). So a
+  `MissingPrice` failure in a run means the data is wrong; the account stays blocked
+  until the script has fixed it, then catches up in order.
+- **D-W16 - a `blocked` account makes the run `failed`** (its charges for that date are
+  missing).
+- **D-W17 - the worker retries failed accounts itself, once per scheduled run** (00:30),
+  before the new date; the operator's retry is for immediacy.
+- **D-W5** - status flips also for blocked accounts (statuses follow dates).
+- **D-W8** - worker limits 256 MB, 0.25 CPU, read-only, no ports.
+- **D-W11** - **a deploy never interrupts an account mid-transaction**: graceful SIGTERM
+  (finish the current account, release the lock, exit) and `stop_grace_period: 60s`;
+  the rest of the run is taken over (section 9). No wait-for-idle in deploy.sh.
+- **D-W12** - **alerting goes through the existing external monitor via
+  `/billing-status`**; no mail/chat integration.
+- **D-W13** - the worker refuses to start unless 00:00 < `BILLING_RUN_AT` < 02:00.
+- **D-W14** - **the local worker runs one-shot via a make target** (`make worker-once`),
+  no long-running local service.
+- **D-W15** - first start with no runs: `due = [today]`; earlier periods are caught up by
+  the core on that date.
+- **D-W19** - freshness grace 2 h after `BILLING_RUN_AT`; a run `running` longer than
+  that reports 503 `running`.
+
+## Still open (found while implementing D-W18)
+
+The rule closes the gap on the price side. Two things it does not cover, both outside
+stage 4 proper:
+
+| # | Finding | Proposal |
 |---|---|---|
-| **D-W18** | **A failed account may never become fixable.** The usual account failure is a missing price for a date (`MissingPrice`). A price can never start in the past (TMF620 rule), so a gap on a past date cannot be repaired by adding a price, and under "not billed until fixed" the account would stay blocked for good. | **Prevent gaps at the catalog**: refuse (409) ending a price's validity when an open-ended product of that offering in that currency would be left without a following price. Plus an audited **operator waiver** for a (product, period) as the escape hatch - recorded, writes no charge, unblocks the account. Never backdated prices. |
-| D-W16 | Does a `blocked` account make the run `failed` too? | **Yes**: its charges for that date are missing, which is what the red banner says. |
-| D-W17 | Who retries a failed account? | **The worker, once per scheduled run** (00:30), before the new date; plus the operator's retry for immediacy. A fixed cause then heals without manual action. |
-| D-W5 | Status flips for a blocked account | **Flip anyway** (statuses follow dates, not billing). |
-| D-W8 | Worker limits | **256 MB, 0.25 CPU**, read-only, no ports. |
-| D-W11 | Deploy during a run | Rely on the takeover; optionally deploy.sh waits for idle (protected script). |
-| D-W12 | Alerting beyond the HTTP monitor (mail, chat) | Out of scope for now. |
-| D-W13 | Guard on `BILLING_RUN_AT` | Refuse to start unless 00:00 < t < 02:00. |
-| D-W14 | Local worker | Compose profile `worker` + `make worker-once` (protected files). |
-| D-W15 | First start with no runs | `due = [today]` only; earlier periods are caught up by the core on that date. |
-| D-W19 | Freshness grace and what a long `running` reports | Grace **2 h** after `BILLING_RUN_AT`; `running` longer than that -> 503 `running`. |
+| **D-W20** | **Ordering can still create a gap.** Ordering checks the price only at midnight of the start date. If that price already has an end and no successor starts exactly there, the new product (always open-ended) has no price after the end - the same `MissingPrice` the rule prevents, created from the other side. Shown in `tests/test_api_price_gap.py`, where the gap scenario is set up exactly this way. So "a missing price is impossible to create through the API" does not hold yet. | A business rejection (ours, like `noRecurringPrice`): an add item is rejected with `priceEnds` when the recurring price at its start date has an end and no price of the same offering and currency starts exactly at that end. |
+| **D-W21** | **An offering's price cannot be changed while a product is live.** The successor cannot be attached first (it overlaps the still open-ended price: the EXCLUDE constraint, 409), and ending the old price first is now refused (the product would be left without a price). Before D-W18 the two-step change "end, then attach" worked, briefly leaving a gap. | One atomic operation: `POST /internal/v1/productOfferingPrice/{id}/successor` with the new price and its start (>= next midnight): in one transaction it creates the successor, ends the old price exactly at that start and attaches the successor - never a gap, never an overlap. The catalog UI gets a "Change price" action. (TMF620 has no such operation; it would be ours, in `spec/internal/`.) |

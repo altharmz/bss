@@ -58,10 +58,11 @@ instructed.
 
 ## Pending my approval
 
-- **Stage 4**: decided after review and recorded in `docs/stage4-design.md` ("Decided");
-  still open: D-W18 (a missing-price failure on a past date cannot be fixed by a new
-  price - prevent gaps + operator waiver proposed), D-W16, D-W17, D-W5, D-W8, D-W11..15,
-  D-W19. No stage 4 code was written.
+- **Stage 4**: every D-W item up to D-W19 is decided and recorded in
+  `docs/stage4-design.md`; D-W18's catalog rule is implemented (`fd0c0a7`). Still open,
+  found while implementing it: **D-W20** (ordering can still create a price gap) and
+  **D-W21** (an offering's price cannot be changed while a product is live) - proposals in
+  the note. No stage 4 code was written.
 - When stage 4 is implemented it needs protected files: `compose.prod.yaml` and
   `compose.override.yaml` (worker service), `scripts/deploy.sh` (start the worker,
   smoke `/billing-status`, optional wait for idle), `Makefile` (`worker-once`). None was
