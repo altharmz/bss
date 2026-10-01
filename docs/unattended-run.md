@@ -12,6 +12,9 @@ test`, `make web-lint` and `make web-test` pass, through the pre-commit hook.
 | `ab76a12` | make seed: deterministic demo data through the public TMF API |
 | `4b652cf` | UI: subscribers list, subscriber card, Add product with backend preview, Deactivate via TMF622 |
 | `0419c17` | CLAUDE.md: make seed |
+| `7e6ea69` | docs: unattended-run handoff log |
+| `f6e6679` | UI: product catalog, New offering, lifecycle steps (In Design -> Active -> Retired) |
+| (next) | tests: the UI's write requests replayed against the real API |
 
 ## Decisions taken unattended
 
