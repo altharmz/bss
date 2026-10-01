@@ -53,7 +53,7 @@ It exits non-zero and prints remote logs when anything fails.
 
 ## Pre-commit hook
 
-`scripts/pre-commit.sh` runs `make lint` then `make test` (~16s) and blocks the commit on
+`scripts/pre-commit.sh` runs `make lint` then `make test` (~95s) and blocks the commit on
 failure.
 
 - Not installed by default — `.git/hooks/` is never tracked by git, so every clone (this
@@ -141,6 +141,8 @@ app/config.py              settings from environment variables (pydantic-setting
 app/db.py                  psycopg 3 connection + the liveness probe /healthz calls
 app/clock.py               Clock protocol, SystemClock, FixedClock; the only wall-clock reader
 app/repository/            data access: plain functions on a psycopg.Connection, never commit
+app/billing/               billing core (model.py dataclasses, core.py pure functions) and
+                           adapter.py (bill_account: load -> compute -> write). See "Billing"
 app/api/                   TMF Open API surface: one module per API (router, request models,
                            row -> body mapping) + shared conventions (errors, tmfjson, common,
                            listing, deps). See "TMF API conventions"
@@ -156,7 +158,8 @@ scripts/smoke.sh          HTTP smoke test against a base URL
 scripts/pre-commit.sh     make lint + make test; installed via `make hooks`
 tests/                    pytest suite (conftest.py spins up throwaway databases;
                           apiclient.py + contract.py validate every API response against
-                          spec/);
+                          spec/; billing_sim.py: in-memory ledger for the billing core;
+                          test_billing_properties.py: hypothesis);
                           test_health.py and test_migrations.py check the infrastructure
                           this template provides and must keep passing on an otherwise
                           empty service
@@ -217,16 +220,17 @@ would attach the prod container to both `lab` and `shared`).
 - **Out of scope for now:** taxes, `modify` items and cancelProductOrder. A `modify` item
   is still storable - order processing rejects it with a reason instead of the schema
   raising an IntegrityError.
-- **Stage order:** 1. schema + repository (done) -> 2. TMF Open API backend -> 3. billing
-  core as pure functions -> 4. worker with the daily run -> 5. frontend. Stage 2 contains
-  no billing logic: it never writes an ABR; bill and ABR endpoints are read-only and
-  return empty lists until stage 3.
-- **Rounding (decided for stage 3, not implemented yet):** banker's rounding
-  (`ROUND_HALF_EVEN`) to 2 decimals, applied once per ABR, never on intermediate values.
-- **Billable days (decided for stage 3):** the activation day is billed, the termination
-  day is not. This is the existing half-open `[start_date, termination_date)`: a product
-  terminated "today" has `termination_date = today`, so today is not charged. A product
-  activated and terminated on the same day is charged 0 days.
+- **Stage order:** 1. schema + repository (done) -> 2. TMF Open API backend (done) -> 3.
+  billing core (done, not wired: see "Billing") -> 4. worker with the daily run -> 5.
+  frontend. Bill and ABR endpoints are read-only; in production they stay empty until the
+  stage 4 worker calls `bill_account`. Stage 3 changes nothing user-visible, so it needs
+  no deploy.
+- **Rounding:** banker's rounding (`ROUND_HALF_EVEN`) to 2 decimals, applied once per ABR,
+  never on intermediate values.
+- **Billable days:** the activation day is billed, the termination day is not. This is the
+  existing half-open `[start_date, termination_date)`: a product terminated "today" has
+  `termination_date = today`, so today is not charged. A product activated and terminated
+  on the same day is charged 0 days.
 - **`frontend/`** is planned (stage 5): a separate directory built to static files and
   served by the shared Caddy.
 - Stage 1 runs the migration as a NOSUPERUSER database owner in a test, like vps-infra's
@@ -379,7 +383,8 @@ Payments are never changed or deleted (405).
 | appliedCustomerBillingRate | `charge_type` <-> `appliedBillingRateType` (`recurring` -> `appliedBillingCharge`, `refund` -> `appliedBillingCredit`), `amount` + `currency` <-> `taxExcludedAmount` (refunds negative), `period` <-> `periodCoverage`, `customer_bill_id` <-> `bill` and `isBilled`, `product_id` <-> `product`, `billing_account_id` <-> `billingAccount`, `created_at` <-> `date` | `billingAccount.id`, `product.id`, `isBilled` |
 
 - Products are only written by orders; POST/PATCH/DELETE on `/product` are 405.
-- Bills and ABRs are only written by the billing run; both lists are empty until stage 3.
+- Bills and ABRs are only written by the billing run (`app/billing/adapter.py`); in
+  production both lists stay empty until the stage 4 worker runs it.
 - **Known:** a product ordered with a future start date stays `created` until the stage 4
   worker activates it. Billing is driven by dates, not status, so money is unaffected.
 - **Likewise `pendingTerminate`:** a delete of a started product with a termination date
@@ -433,11 +438,110 @@ Payments are never changed or deleted (405).
   cancels it: status `cancelled`, `termination_date = start_date` (0 billable days); a
   requested date after its start date is rejected (`productNotStarted`).
 
+## Billing (stage 3)
+
+`app/billing/core.py` is pure: no database, no clock, no I/O. `compute(state, as_of, tz)`
+takes one account's `BillingState` (frozen dataclasses from `model.py`) and returns the
+ABRs and bills to write. `app/billing/adapter.py` loads the state through the repository
+(`app/repository/billing.py` maps rows <-> dataclasses; the core never sees a dict) and
+writes the result: `bill_account(conn, account_id, run)`, one transaction per account
+(a savepoint inside the caller's). The stage 4 worker calls it once per account per run.
+
+**Periods.** Calendar-aligned to `bill_cycle_day` D: `[D of month M, D of month M+1)`,
+28-31 days. The cycle day is assumed fixed (see Open questions).
+
+**When a period is charged: in advance, once its first billable day is <= as_of.** The
+first billable day is `max(period start, start_date)`. Charging waits for the product's
+start, not just for the period's: the price is looked up at that day's midnight, which
+must be in the past when the charge is written (a future midnight's price can still
+change). Consequence: **a product cancelled before its start is never charged**.
+
+**Price.** The offering's monthly recurring price in the account's currency, valid at
+midnight (BILLING_TZ) of the period's first billable day. A price change mid-period
+applies from the next period. None found -> `MissingPrice` naming product, day and
+currency (never skipped); more than one -> `InconsistentState`. Prices need no visibility
+filter (unlike orders, below): a price change only takes effect at or after the moment it
+was made (prices never start in the past and are never ended retroactively), and the core
+only looks prices up at midnights <= as_of, so a replayed earlier date can never see a
+later change.
+
+**Expected-vs-actual diff, per product and period:**
+
+- `expected = round_half_even(price x billable_days / period_days, 0.01)`, rounded once.
+  `billable_days` counts `start_date <= d < termination_date` inside the period; zero for
+  `cancelled`/`aborted`. Every other status is billed by dates alone (`created`,
+  `suspended`, `pendingTerminate`, ...).
+- Nothing stored -> a `recurring` charge for the billable range, even if it rounds to 0.00.
+- A charge stored -> first re-check it still equals `round(price x its days /
+  period_days)` (else `InconsistentState`), then `diff = expected - (charge + refunds)`:
+  0 -> nothing; < 0 -> a refund of `diff` (negative) for the unbilled tail
+  `[termination_date, charge end)`, or the whole charge when nothing is billable any more,
+  `refunds_rate_id` -> the charge; > 0 -> `InconsistentState` (impossible by the rules).
+- The refund is never priced on its own days: `charge + refund` must equal one correct
+  rounding of the used days, or cent drift accumulates (`round(p x 29/30) - round(p x
+  22/30)` != `round(p x 7/30)` for p = 0.02; locked by
+  `test_refund_keeps_the_period_net_exact`).
+- **One refund per charge** (`refunds_rate_id UNIQUE`, and refunds may not overlap).
+  Enough because termination dates are immutable: a product is deleted once (a second
+  delete is rejected `productAlreadyEnded`), so the expected net of a period drops at most
+  once. A second reduction would raise `InconsistentState`.
+- If the termination is already known when the period is charged, there is one reduced
+  charge and no refund. Daily runs and one catch-up run can therefore store different rows
+  (charge + refund vs one reduced charge) with the same net per period.
+
+**Bills.** A bill on cycle day D covers `[D, next D)` and collects every unbilled ABR of
+the account whose **run date** (`billing_run.run_date` of the run that wrote it) is <= D.
+A run issues the bills for every cycle day after the account's last bill up to as_of;
+one that would collect nothing is skipped (a 0.00 bill of 0.00 charges is still issued).
+`amount_due` is the sum and may be negative. ABRs written in the run of D join the bill
+of D; a product starting mid-cycle, or a late ABR, goes onto the next bill. Run date, not
+`created_at`: `created_at` is the database's `now()`, outside the injected clock, and a run
+for D that crosses midnight or is retried the next day would date its ABRs D+1.
+
+**What a run sees: order-driven facts completed before 00:00 of its run date** in
+BILLING_TZ (end-of-day processing of D-1). The adapter filters products by the
+`completion_date` of the order that created them, and terminations/cancellations by the
+order that set them (an invisible termination is passed with the status the product had
+before it). An order placed on D is first seen by the run of D+1, whatever time the run
+of D executes. This makes a replayed date see exactly what the daily run saw.
+
+**Concurrency and guards.** `bill_account` locks the billing account row (`FOR UPDATE`)
+before reading: a concurrent second call waits, then sees the first one's ABRs and writes
+nothing (without the lock it collides on `abr_no_overlap`; proven with two connections
+in `tests/test_billing_db.py`). It only writes into a run that is `running` (re-read
+`FOR SHARE`). Any `BillingError` rolls the whole account back.
+
+**Tests.** `tests/test_billing_core.py`: the hand-checked examples (half-even 1.62 vs
+1.63, 300 x 17/31, 27/28 vs 27/29 days, refund -116.13, ...). `tests/test_billing_properties.py`
+(hypothesis, pinned exactly): idempotence, net per period = one rounding, lifetime without
+drift, refund shape, no overlap, precision/currency, bills collect every ABR exactly once,
+replay identical, daily vs one catch-up run equal in non-zero net per period. The oracle
+counts billable days one by one, independently of `app/billing`. `tests/test_billing_db.py`:
+the same through the adapter and the real schema, plus the TMF678 view, visibility on
+the day boundary and replay across an outage. Every rule above was broken once to see a
+test fail (half-up rounding, refund priced separately, overlapping charges, visibility `<=`,
+termination always visible, no account lock, no running-run guard).
+
+**Stage 4 must:**
+
+- run the date D only at or after 00:00 of D (BILLING_TZ). A run for D started earlier
+  would miss orders completed between its start and midnight, which a replay would see;
+- after an outage, replay every missed date in order, each with its own `billing_run`, so
+  run dates and bills match daily runs. A single multi-month `as_of` call is for tests
+  only (it puts every catch-up ABR on the bill after as_of);
+- call `bill_account` per account and record a failing account without stopping the run.
+
 ## Open questions
 
-- **Changing `billCycleDay` (stage 3).** PATCH is a 409 today. Stage 3 decides how a cycle
-  change treats the current period (close it early, stretch it, or only apply from the
-  next period) and then allows the change.
+- **Changing `billCycleDay`.** PATCH is a 409 today. Not settled in stage 3: a change has
+  to decide how the current period is treated (close it early, stretch it, or only apply
+  from the next period). The billing core assumes a fixed cycle day; with a changed one,
+  stored ABRs no longer sit inside one cycle period and `compute` raises
+  `InconsistentState`.
+- **Suspension semantics.** Billing is date-driven: `Suspended`/`Closed` billing accounts
+  and `suspended` products are billed like any other. Whether a suspension should stop or
+  reduce charges (and how a resume re-enters billing) is open; ordering already refuses
+  new orders on a non-Active account.
 
 - **Stale billing runs (stage 4).** A run killed mid-way (e.g. by the nightly 03:00
   reboot) stays `running`, and `UNIQUE (run_date)` blocks a new one. `start_run` must be
@@ -446,11 +550,6 @@ Payments are never changed or deleted (405).
 - **`start_run` semantics (stage 4).** A completed run for the date should be a no-op
   (`AlreadyCompleted`), not an error; only a concurrently running run is a conflict.
   Today both raise `BillingRunConflict`. The stale-running takeover above is still open.
-- **Billing core inputs (stage 3).** The core takes frozen dataclasses, not repository
-  dicts; mapping happens at the repository boundary.
-- **`attach_abrs_to_bill(conn, bill_id, account_id, period)` (stage 3/4).** Bills are
-  created after the charges and collect the account's unbilled ABRs of the period. Not
-  written yet; today `customer_bill_id` can only be set on `insert_abr`.
 - **Port the format fix to vps-lab-template** (fixed here, not there). In the template,
   `make fmt` and `.claude/hooks/format.sh` both fail silently:
   - `compose.override.yaml` mounts `app/` and `tests/` read-only on `app`, so
