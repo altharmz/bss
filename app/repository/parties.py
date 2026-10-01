@@ -1,11 +1,12 @@
 """Parties (TMF632), customers (TMF629) and billing accounts (TMF666)."""
 
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
 import psycopg
 
-from app.repository._sql import Row, fetch_one, returning, select_page, update_by_id
+from app.repository._sql import Row, fetch_one, money, returning, select_page, update_by_id
 
 
 def create_individual(
@@ -58,14 +59,23 @@ def create_billing_account(
     currency: str,
     bill_cycle_day: int,
     state: str = "Active",
+    credit_limit: Decimal | None = None,
 ) -> Row:
     return returning(
         conn,
         """
-        INSERT INTO billing_account (customer_id, name, state, currency, bill_cycle_day)
-        VALUES (%s, %s, %s, %s, %s) RETURNING *
+        INSERT INTO billing_account
+            (customer_id, name, state, currency, bill_cycle_day, credit_limit)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
         """,
-        (customer_id, name, state, currency, bill_cycle_day),
+        (
+            customer_id,
+            name,
+            state,
+            currency,
+            bill_cycle_day,
+            None if credit_limit is None else money(credit_limit),
+        ),
     )
 
 

@@ -98,7 +98,14 @@ def payment(api, acc: dict[str, Any], value=1500, **over) -> dict[str, Any]:
     return _post(api, PAYMENT, payment_body(acc, value, **over))
 
 
-def sellable_offering(api, value=600, unit="RUB", name="Fiber 100") -> dict[str, Any]:
+def code_identifier(code: str) -> list[dict[str, Any]]:
+    """An offering code as TMF620 externalIdentifier."""
+    return [{"id": code, "externalIdentifierType": "offeringCode", "@type": "ExternalIdentifier"}]
+
+
+def sellable_offering(
+    api, value=600, unit="RUB", name="Fiber 100", code: str | None = None
+) -> dict[str, Any]:
     """A specification, a monthly recurring price and an Active offering carrying it."""
     spec = _post(
         api,
@@ -128,6 +135,7 @@ def sellable_offering(api, value=600, unit="RUB", name="Fiber 100") -> dict[str,
             "validFor": {"startDateTime": START},
             "productSpecification": {"id": spec["id"], "@type": "ProductSpecificationRef"},
             "productOfferingPrice": [{"id": price["id"], "@type": "ProductOfferingPriceRef"}],
+            **({} if code is None else {"externalIdentifier": code_identifier(code)}),
         },
     )
 

@@ -6,6 +6,10 @@ in the spec. A price belongs to at most one offering and is never detached or re
 billing needs the historical price, so changing a price means ending its validFor - not
 retroactively - and attaching a new one. Nor does a price ever start in the past: one
 created or attached with validFor.startDateTime < now is a 409.
+
+An offering may carry a code, as the spec's externalIdentifier with exactly one entry
+{id: <code>, externalIdentifierType: "offeringCode", owner: "bss"}. The code is unique
+(409), upper case (^[A-Z0-9][A-Z0-9_-]{0,31}$), set on POST only and read-only after.
 """
 
 from datetime import datetime
@@ -55,8 +59,11 @@ OFFERING_ATTRIBUTES = (
     "validFor",
     "productSpecification",
     "productOfferingPrice",
+    "externalIdentifier",
     "lastUpdate",
 )
+CODE_TYPE = "offeringCode"
+CODE_OWNER = "bss"
 PRICE_ATTRIBUTES = (
     "name",
     "lifecycleStatus",
@@ -300,6 +307,14 @@ def patch_price(price_id: str, body: MergePatchBody, tx: Tx, clock: ClockDep) ->
 # --- productOffering ---
 
 
+class OfferingCode(TmfModel):
+    """One externalIdentifier entry: the offering code."""
+
+    id: str = Field(pattern=r"^[A-Z0-9][A-Z0-9_-]{0,31}$")
+    external_identifier_type: Literal["offeringCode"]
+    owner: Literal["bss"] = CODE_OWNER
+
+
 class OfferingCreate(TmfModel):
     name: str = Field(min_length=1)
     lifecycle_status: LifecycleStatus
@@ -308,6 +323,7 @@ class OfferingCreate(TmfModel):
     description: str | None = None
     is_sellable: bool = True
     product_offering_price: list[Ref] = []
+    external_identifier: list[OfferingCode] = Field(default=[], max_length=1)
     last_update: Any = None
 
 
@@ -347,6 +363,16 @@ def offering_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                     price["name"],
                 )
                 for price in prices
+            ],
+            "externalIdentifier": None
+            if row["code"] is None
+            else [
+                {
+                    "id": row["code"],
+                    "externalIdentifierType": CODE_TYPE,
+                    "owner": CODE_OWNER,
+                    "@type": "ExternalIdentifier",
+                }
             ],
             "lastUpdate": utc(row["updated_at"]),
             "@type": "ProductOffering",
@@ -401,6 +427,7 @@ def list_offerings(request: Request, tx: Tx) -> TmfJSONResponse:
             "lifecycleStatus": ("lifecycle_status", listing.as_str),
             "isSellable": ("is_sellable", listing.as_bool),
             "productSpecification.id": ("product_specification_id", listing.as_uuid),
+            "externalIdentifier.id": ("code", listing.as_str),
         },
         attributes=OFFERING_ATTRIBUTES,
     )
@@ -432,15 +459,21 @@ def create_offering(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
             raise unprocessable(
                 f"productSpecification {data.product_specification.id} does not exist"
             )
-        row = catalog.create_product_offering(
-            conn,
-            product_specification_id=data.product_specification.id,
-            name=data.name,
-            lifecycle_status=data.lifecycle_status,
-            valid_for=valid_for,
-            is_sellable=data.is_sellable,
-            description=data.description,
-        )
+        code = data.external_identifier[0].id if data.external_identifier else None
+        try:
+            with conn.transaction():
+                row = catalog.create_product_offering(
+                    conn,
+                    product_specification_id=data.product_specification.id,
+                    name=data.name,
+                    lifecycle_status=data.lifecycle_status,
+                    valid_for=valid_for,
+                    is_sellable=data.is_sellable,
+                    description=data.description,
+                    code=code,
+                )
+        except pg_errors.UniqueViolation:
+            raise conflict(f"offering code {code} is already in use") from None
         _attach_prices(conn, row["id"], data.product_offering_price, clock.now())
         new = offering_body(conn, row)
     return created(new)
@@ -451,7 +484,11 @@ def patch_offering(
     offering_id: str, body: MergePatchBody, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     check_type(body, "ProductOffering")
-    data = parse(OfferingPatch, body, read_only=("lastUpdate", "productSpecification"))
+    data = parse(
+        OfferingPatch,
+        body,
+        read_only=("lastUpdate", "productSpecification", "externalIdentifier"),
+    )
     not_null(data, "name", "lifecycle_status", "valid_for", "is_sellable", "product_offering_price")
     changes = columns(data, exclude=frozenset({"valid_for", "product_offering_price"}))
     if data.valid_for is not None:

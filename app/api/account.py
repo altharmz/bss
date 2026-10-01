@@ -14,6 +14,9 @@ current billing period is an open question for stage 3.
 
 The balance is the spec's own `accountBalance[]`: one read-only `currentBalance` entry,
 computed on every read. Positive = the customer is in credit (payments exceed charges).
+
+`creditLimit` is the spec's own Money attribute, always in the account's currency.
+Informational only: nothing (ordering included) is ever refused because of it.
 """
 
 from typing import Any, Literal
@@ -25,6 +28,7 @@ from pydantic import Field
 from app.api import listing
 from app.api.common import (
     CENT,
+    Money,
     Ref,
     TmfModel,
     check_type,
@@ -84,6 +88,7 @@ ATTRIBUTES = (
     "state",
     "relatedParty",
     "accountBalance",
+    "creditLimit",
     "billCycleDay",
     "currency",
     "lastUpdate",
@@ -104,12 +109,27 @@ class AccountCreate(TmfModel):
     bill_cycle_day: int = Field(ge=1, le=28, strict=True)
     currency: str = Field(pattern=r"^[A-Z]{3}$")
     state: AccountState = "Active"
+    credit_limit: Money | None = None
     last_update: Any = None
 
 
 class AccountPatch(TmfModel):
     name: str | None = Field(default=None, min_length=1)
     state: AccountState | None = None
+    credit_limit: Money | None = None
+
+
+def _credit_limit(limit: Money | None, currency: str) -> Any:
+    """The column value for a creditLimit: in the account's currency, never negative."""
+    if limit is None:
+        return None
+    if limit.unit != currency:
+        raise unprocessable(
+            f"creditLimit.unit must be the account's currency {currency}, not {limit.unit}"
+        )
+    if limit.value < 0:
+        raise unprocessable("creditLimit.value must not be negative")
+    return limit.value
 
 
 def account_href(account_id: Any) -> str:
@@ -150,6 +170,11 @@ def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                 "@type": "AccountBalance",
             }
         ],
+        **(
+            {}
+            if row["credit_limit"] is None
+            else {"creditLimit": money(row["credit_limit"], row["currency"])}
+        ),
         "billCycleDay": row["bill_cycle_day"],
         "currency": row["currency"],
         "lastUpdate": utc(row["updated_at"]),
@@ -208,6 +233,7 @@ def create_account(body: JsonBody, tx: Tx) -> TmfJSONResponse:
             currency=data.currency,
             bill_cycle_day=data.bill_cycle_day,
             state=data.state,
+            credit_limit=_credit_limit(data.credit_limit, data.currency),
         )
         new = account_body(conn, row)
     return created(new)
@@ -230,8 +256,12 @@ def patch_account(account_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONRespo
     not_null(data, "name", "state")
     with tx() as conn:
         uid = parse_id("billingAccount", account_id)
-        if parties.get_billing_account(conn, uid) is None:
+        current = parties.get_billing_account(conn, uid)
+        if current is None:
             raise not_found("billingAccount", account_id)
-        row = parties.update_billing_account(conn, uid, columns(data))
+        changes = columns(data, exclude=frozenset({"credit_limit"}))
+        if "credit_limit" in data.model_fields_set:  # null removes it
+            changes["credit_limit"] = _credit_limit(data.credit_limit, current["currency"])
+        row = parties.update_billing_account(conn, uid, changes)
         patched = account_body(conn, row)
     return TmfJSONResponse(patched)

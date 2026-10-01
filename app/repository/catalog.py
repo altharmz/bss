@@ -49,16 +49,26 @@ def create_product_offering(
     valid_for: Range,
     is_sellable: bool = True,
     description: str | None = None,
+    code: str | None = None,
 ) -> Row:
+    """`code` is unique: a duplicate raises psycopg.errors.UniqueViolation."""
     return returning(
         conn,
         """
         INSERT INTO product_offering
             (product_specification_id, name, description, lifecycle_status,
-             is_sellable, valid_for)
-        VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
+             is_sellable, valid_for, code)
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *
         """,
-        (product_specification_id, name, description, lifecycle_status, is_sellable, valid_for),
+        (
+            product_specification_id,
+            name,
+            description,
+            lifecycle_status,
+            is_sellable,
+            valid_for,
+            code,
+        ),
     )
 
 

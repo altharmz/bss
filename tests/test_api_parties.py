@@ -182,7 +182,7 @@ def test_balance_is_payments_minus_charges_positive_means_credit(api):
         ({"state": "Open"}, 422),
         ({"relatedParty": []}, 422),
         ({"accountBalance": []}, 400),
-        ({"creditLimit": {"unit": "RUB", "value": 1}}, 400),
+        ({"paymentStatus": "due"}, 400),  # a TMF666 attribute we do not support
     ],
 )
 def test_billing_account_validation(api, override, status):
