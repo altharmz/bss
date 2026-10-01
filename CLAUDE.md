@@ -372,11 +372,11 @@ implemented; order processing lives in `app/ordering/`.
   date whose midnight the price no longer covers (E's date if E is midnight, else the
   next day). A gap could never be filled later: prices never start in the past. A
   missing price is therefore a data bug, fixed case by case with a reviewed one-off script
-  and an audit note - there is no waiver feature. **Known holes, still open:** ordering
-  does not check the future (an open-ended product ordered while its price has an end
-  and no exact successor creates the gap), and an offering's price cannot be changed while
-  a product is live (the successor overlaps the open price until it ends; ending first is
-  now refused) - see `docs/stage4-design.md`, D-W18.
+  and an audit note - there is no waiver feature. Ordering keeps the other side closed
+  (`priceEnds`, D-W20): together they give the invariant **"a live product has a price
+  for every future day"**. Still open: an offering's price cannot be changed while a
+  product is live (the successor overlaps the open price until it ends; ending first is
+  refused) - see `docs/stage4-design.md`, D-W21.
 - **Offering code (migration 0003):** the spec's `externalIdentifier[]` with exactly one
   entry `{id: <code>, externalIdentifierType: "offeringCode", owner: "bss", @type:
   ExternalIdentifier}`. `owner` may be omitted on POST (any other value is a 422). The
@@ -472,8 +472,10 @@ Payments are never changed or deleted (405).
   (modify, noChange), `billingAccountMismatch` (item account differs from the order's),
   `offeringNotSellable` (not `isSellable` or not `Active`), `offeringNotValid` (validFor
   does not cover midnight of the start date), `noRecurringPrice` (none in the account's
-  currency at that midnight), `productOfOtherAccount`, `productAlreadyEnded`,
-  `openDeleteItem`, `productNotStarted`.
+  currency at that midnight), `priceEnds` (from the start date, the offering's recurring
+  prices in the account currency do not form a gapless chain ending open-ended - the
+  whole chain is walked, not just the price at the start; D-W20), `productOfOtherAccount`,
+  `productAlreadyEnded`, `openDeleteItem`, `productNotStarted`.
 - **All or nothing.** One reason anywhere rejects the order: failing items are
   `rejected`, the rest `cancelled`, nothing is executed. A rejected order is decided
   before its rows are inserted, so its items are stored directly in their final states -

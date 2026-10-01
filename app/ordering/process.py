@@ -190,7 +190,42 @@ def _add_problems(
         problems.append(
             ("noRecurringPrice", f"no recurring price in {account['currency']} on {start}")
         )
+    elif (gap := _price_gap(conn, price)) is not None:
+        local = gap.astimezone(ZoneInfo(settings.billing_tz))
+        problems.append(
+            (
+                "priceEnds",
+                f"the recurring price in {account['currency']} ends at"
+                f" {local:%Y-%m-%d %H:%M} and no price follows it",
+            )
+        )
     return problems
+
+
+def _price_gap(conn: psycopg.Connection, price: Row) -> datetime | None:
+    """Where the chain of recurring prices that starts with `price` (the one valid at the
+    product's start) runs out, or None if it is gapless and ends open-ended.
+
+    A product is open-ended when it is created, so it needs a price for every future day:
+    each price that ends needs a successor of the same offering, type and currency that
+    starts exactly at that end. Gaps before the start date do not matter. With the
+    catalog rule that ending a price never leaves a product without one (D-W18), this
+    keeps the invariant "a live product has a price for every future day". The EXCLUDE
+    constraint makes the starts strictly increasing, so the walk ends."""
+    current = price
+    while current["valid_for"].upper is not None:
+        successor = catalog.successor_price(
+            conn,
+            offering_id=current["product_offering_id"],
+            price_type=current["price_type"],
+            currency=current["currency"],
+            starts_at=current["valid_for"].upper,
+            exclude_id=current["id"],
+        )
+        if successor is None:
+            return current["valid_for"].upper
+        current = successor
+    return None
 
 
 def _delete_problems(

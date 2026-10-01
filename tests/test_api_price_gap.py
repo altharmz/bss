@@ -92,22 +92,23 @@ def test_a_cancelled_product_needs_no_price(api, live):
 
 
 def test_a_gap_before_a_later_successor_is_refused_an_exact_successor_is_not(api):
-    """The old price ends Nov 1, the next one starts Dec 1 (set up before any product).
-    With a live product, moving the old end inside the gap is refused; moving it to
-    exactly where the successor starts closes the gap and is allowed."""
+    """The old price ends Dec 1, the next one starts Dec 15 (set up before any product).
+    A product starting Dec 20 is accepted (ordering only needs a gapless chain from its
+    start, D-W20). Moving the old end to Dec 10 still leaves a gap and is refused; moving
+    it to exactly where the successor starts closes the gap and is allowed."""
     offering = apidata.sellable_offering(api, value=300)
     old_href = offering["productOfferingPrice"][0]["href"]
-    assert end_price(api, old_href, midnight(date(2026, 11, 1))).status_code == 200
+    assert end_price(api, old_href, midnight(date(2026, 12, 1))).status_code == 200
     successor = api.post(
         PRICES,
         {
             "@type": "ProductOfferingPrice",
-            "name": "Monthly from December",
+            "name": "Monthly from mid-December",
             "lifecycleStatus": "Active",
             "priceType": "recurring",
             "recurringChargePeriodType": "monthly",
             "price": {"unit": "RUB", "value": 330},
-            "validFor": {"startDateTime": iso(midnight(date(2026, 12, 1)))},
+            "validFor": {"startDateTime": iso(midnight(date(2026, 12, 15)))},
         },
     ).json()
     refs = [
@@ -118,12 +119,12 @@ def test_a_gap_before_a_later_successor_is_refused_an_exact_successor_is_not(api
 
     account = apidata.account(api)
     api.clock.set(midnight(date(2026, 10, 2)) + timedelta(hours=10))
-    order_product(api, account, offering, date(2026, 10, 2))
+    order_product(api, account, offering, date(2026, 12, 20))
 
-    inside_gap = end_price(api, old_href, midnight(date(2026, 11, 15)))
-    assert inside_gap.status_code == 409
-    assert "without a price from 2026-11-15" in inside_gap.json()["message"]
-    closed = end_price(api, old_href, midnight(date(2026, 12, 1)))  # exactly the successor
+    still_a_gap = end_price(api, old_href, midnight(date(2026, 12, 10)))
+    assert still_a_gap.status_code == 409
+    assert "without a price from 2026-12-10" in still_a_gap.json()["message"]
+    closed = end_price(api, old_href, midnight(date(2026, 12, 15)))  # exactly the successor
     assert closed.status_code == 200, closed.text
 
 
