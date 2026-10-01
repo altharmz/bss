@@ -1,7 +1,7 @@
 # Stage 4 - the billing worker: design note (checkpoint 1, no code)
 
-Status: reviewed twice. The owner's decisions are recorded in the two **"Decided"**
-sections at the end; **"Still open"** lists what implementing D-W18 turned up. Every rule from
+Status: reviewed three times; every decision is recorded in the **"Decided"** sections
+at the end, and nothing is open. Every rule from
 stage 3 stays as it is (CLAUDE.md "Billing (stage 3)"); this note decides who calls
 `bill_account`, when, and what happens when it does not go to plan.
 
@@ -285,12 +285,21 @@ approval when implemented**):
 - **D-W19** - freshness grace 2 h after `BILLING_RUN_AT`; a run `running` longer than
   that reports 503 `running`.
 
-## Still open (found while implementing D-W18)
+## Decided and implemented (third review: the two findings of D-W18)
 
-The rule closes the gap on the price side. Two things it does not cover, both outside
-stage 4 proper:
+- **D-W20 - ordering rejects a price gap** (`60f2a58`): an add item is rejected with
+  `priceEnds` unless, from the product's start date, the offering's recurring prices in
+  the account currency form a gapless chain ending in an open-ended price; the whole
+  chain is walked. Together with D-W18 this is the invariant **"a live product has a
+  price for every future day"** - so a `MissingPrice` in a run can only come from data
+  changed outside the API (a data bug: reviewed one-off script + audit note).
+- **D-W21 - the atomic price change** (`845498b`, UI `aa231d4`):
+  `POST /internal/v1/productOffering/{id}/priceChange {amount, currency, validFrom}`
+  ends the open-ended price at midnight (BILLING_TZ) of `validFrom` (>= tomorrow) and
+  creates the attached successor, in one transaction; documented in CLAUDE.md as our
+  deviation from TMF620 (no cross-request transaction, and the no-overlap constraint).
+  The catalog dialog has a "Change price" action whose copy states that existing
+  products pick up the new price from their next billing period starting on or after the
+  date, new orders from the date.
 
-| # | Finding | Proposal |
-|---|---|---|
-| **D-W20** | **Ordering can still create a gap.** Ordering checks the price only at midnight of the start date. If that price already has an end and no successor starts exactly there, the new product (always open-ended) has no price after the end - the same `MissingPrice` the rule prevents, created from the other side. Shown in `tests/test_api_price_gap.py`, where the gap scenario is set up exactly this way. So "a missing price is impossible to create through the API" does not hold yet. | A business rejection (ours, like `noRecurringPrice`): an add item is rejected with `priceEnds` when the recurring price at its start date has an end and no price of the same offering and currency starts exactly at that end. |
-| **D-W21** | **An offering's price cannot be changed while a product is live.** The successor cannot be attached first (it overlaps the still open-ended price: the EXCLUDE constraint, 409), and ending the old price first is now refused (the product would be left without a price). Before D-W18 the two-step change "end, then attach" worked, briefly leaving a gap. | One atomic operation: `POST /internal/v1/productOfferingPrice/{id}/successor` with the new price and its start (>= next midnight): in one transaction it creates the successor, ends the old price exactly at that start and attaches the successor - never a gap, never an overlap. The catalog UI gets a "Change price" action. (TMF620 has no such operation; it would be ours, in `spec/internal/`.) |
+Nothing from the reviews is open any more; stage 4 can be implemented from this note.
