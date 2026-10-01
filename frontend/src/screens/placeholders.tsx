@@ -1,6 +1,5 @@
 import { useSetCrumbs } from '../app/context';
 import { hrefOf, Link } from '../app/router';
-import { accountLabel } from '../format/ids';
 import { EmptyBlock } from '../ui/states';
 import { PageTitle, Panel } from '../ui/kit';
 
@@ -19,22 +18,6 @@ function Pending({ title, checkpoint }: { title: string; checkpoint: number }) {
       </Panel>
     </>
   );
-}
-
-export function SubscribersScreen() {
-  useSetCrumbs([{ label: 'Subscribers' }], 'subscribers');
-  return <Pending title="Subscribers" checkpoint={5} />;
-}
-
-export function SubscriberScreen({ accountId }: { accountId: string }) {
-  useSetCrumbs(
-    [
-      { label: 'Subscribers', href: hrefOf({ name: 'subscribers' }) },
-      { label: accountLabel(accountId) },
-    ],
-    `subscriber:${accountId}`,
-  );
-  return <Pending title={accountLabel(accountId)} checkpoint={5} />;
 }
 
 export function CatalogScreen() {

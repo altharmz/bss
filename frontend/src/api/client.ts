@@ -7,15 +7,24 @@ export class ApiError extends Error {
   readonly path: string;
   readonly status: number; // 0 = no response (network)
   readonly reason: string;
+  readonly detail: string; // the TMF Error's `message`: what exactly was wrong ('' if none)
 
-  constructor(method: string, path: string, status: number, reason: string) {
+  constructor(method: string, path: string, status: number, reason: string, detail = '') {
     super(`${method} ${path} → ${status === 0 ? '' : `${status} `}${reason}`.trim());
     this.name = 'ApiError';
     this.method = method;
     this.path = path;
     this.status = status;
     this.reason = reason;
+    this.detail = detail;
   }
+}
+
+/** What to tell an operator about a failed action: the server's own words if it gave
+ * any (a 422's message), else the call and its status. */
+export function explain(error: unknown): string {
+  if (error instanceof ApiError) return error.detail || error.message;
+  return error instanceof Error ? error.message : String(error);
 }
 
 // HTTP/2 (Caddy) carries no reason phrase, so Response.statusText is often empty; our
@@ -35,16 +44,20 @@ const PHRASES: Record<number, string> = {
   504: 'Gateway Timeout',
 };
 
-async function reasonOf(response: Response): Promise<string> {
+async function failure(method: string, path: string, response: Response): Promise<ApiError> {
+  let reason = '';
+  let detail = '';
   try {
     const body: unknown = await response.clone().json();
-    if (body && typeof body === 'object' && 'reason' in body && typeof body.reason === 'string') {
-      return body.reason;
+    if (body && typeof body === 'object') {
+      if ('reason' in body && typeof body.reason === 'string') reason = body.reason;
+      if ('message' in body && typeof body.message === 'string') detail = body.message;
     }
   } catch {
     // not JSON (a proxy's HTML page, an empty body): fall through
   }
-  return response.statusText || PHRASES[response.status] || 'Error';
+  reason ||= response.statusText || PHRASES[response.status] || 'Error';
+  return new ApiError(method, path, response.status, reason, detail === reason ? '' : detail);
 }
 
 export async function request(
@@ -54,13 +67,27 @@ export async function request(
 ): Promise<Response> {
   let response: Response;
   try {
-    response = await fetch(path, { ...init, method, headers: { Accept: 'application/json' } });
+    response = await fetch(path, {
+      ...init,
+      method,
+      headers: { Accept: 'application/json', ...(init.headers as Record<string, string>) },
+    });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
     throw new ApiError(method, path, 0, 'Network error');
   }
-  if (!response.ok) throw new ApiError(method, path, response.status, await reasonOf(response));
+  if (!response.ok) throw await failure(method, path, response);
   return response;
+}
+
+/** POST a JSON body. The caller passes the JSON text when it must control number tokens
+ * (amounts); otherwise an object is serialised here. */
+export async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await request('POST', path, {
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return (await response.json()) as T;
 }
 
 export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {

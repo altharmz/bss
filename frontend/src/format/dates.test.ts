@@ -1,5 +1,35 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, businessDate, clockTime, isIsoDate, utcLabel } from './dates';
+import {
+  addDays,
+  businessDate,
+  clockTime,
+  isIsoDate,
+  lastDay,
+  nextCycleDate,
+  utcLabel,
+} from './dates';
+
+describe('nextCycleDate', () => {
+  it.each([
+    ['2026-10-01', 1, '2026-11-01'], // today is the cycle day: the next one
+    ['2026-10-01', 5, '2026-10-05'],
+    ['2026-10-15', 5, '2026-11-05'],
+    ['2026-12-20', 15, '2027-01-15'],
+    ['2028-02-29', 28, '2028-03-28'],
+    ['2026-01-31', 28, '2026-02-28'],
+  ])('after %s, day %s -> %s', (today, day, next) => {
+    expect(nextCycleDate(today, day)).toBe(next);
+  });
+
+  it('refuses days outside 1..28', () => {
+    expect(() => nextCycleDate('2026-10-01', 29)).toThrow(RangeError);
+    expect(() => nextCycleDate('2026-10-01', 0)).toThrow(RangeError);
+  });
+
+  it('shows the last included day of a half-open range', () => {
+    expect(lastDay('2027-01-01')).toBe('2026-12-31');
+  });
+});
 
 describe('utcLabel', () => {
   it.each([

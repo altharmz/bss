@@ -1,0 +1,488 @@
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+import { App } from '../app/App';
+import { CONTEXT, json, stubFetch, tmfError, type Handler } from '../test/fetch';
+import { accountBody } from './Subscribers.test';
+
+const A = 'aaaa1111-0000-4000-8000-0000000000a1';
+const C = 'cccc2222-0000-4000-8000-0000000000c2';
+const O1 = 'o0000001-0000-4000-8000-000000000001';
+const O2 = 'o0000002-0000-4000-8000-000000000002';
+const P1 = 'p0000001-0000-4000-8000-000000000001';
+const P2 = 'p0000002-0000-4000-8000-000000000002';
+const P3 = 'p0000003-0000-4000-8000-000000000003';
+const ORDERS = '/tmf-api/productOrderingManagement/v5/productOrder';
+const INTERNAL = `/internal/v1/billingAccount/${A}`;
+const rub = (value: number) => ({ unit: 'RUB', value });
+
+const ACCOUNT = accountBody(
+  A,
+  { id: C, name: 'Olga Kuznetsova' },
+  {
+    accountBalance: [
+      { balanceType: 'currentBalance', amount: rub(-5784.19), '@type': 'AccountBalance' },
+    ],
+    creditLimit: rub(500),
+    billCycleDay: 28,
+  },
+);
+
+function product(id: string, over: Record<string, unknown>) {
+  return {
+    id,
+    href: `/tmf-api/productInventory/v5/product/${id}`,
+    status: 'active',
+    startDate: '2026-06-03',
+    terminationDate: null,
+    productOffering: { id: O1, name: 'Mobile L', code: 'MOB-L' },
+    productSpecification: { id: 's1', name: 'Mobile Voice & Data' },
+    price: rub(1290),
+    nextChargeDate: '2026-10-28',
+    ...over,
+  };
+}
+
+const PRODUCTS = [
+  product(P1, {}),
+  product(P2, {
+    status: 'pendingTerminate',
+    terminationDate: '2026-10-13',
+    nextChargeDate: null,
+    productOffering: { id: O2, name: 'Fiber 100', code: null },
+    productSpecification: { id: 's2', name: 'Home Internet' },
+    price: rub(650),
+  }),
+  product(P3, { status: 'created', startDate: '2026-10-06', nextChargeDate: '2026-10-06' }),
+];
+
+const CHARGES = [
+  {
+    id: 'c2',
+    href: '/x/c2',
+    kind: 'refund',
+    runDate: '2026-12-20',
+    period: { start: '2026-12-20', end: '2027-01-01' },
+    billableDays: 12,
+    periodDays: 31,
+    prorated: true,
+    amount: rub(-116.13),
+    product: { id: P1, href: '/p' },
+    productOffering: { id: O1, name: 'Mobile L' },
+    bill: null,
+  },
+  {
+    id: 'c1',
+    href: '/x/c1',
+    kind: 'charge',
+    runDate: '2026-12-01',
+    period: { start: '2026-12-01', end: '2027-01-01' },
+    billableDays: 31,
+    periodDays: 31,
+    prorated: false,
+    amount: rub(300),
+    product: { id: P1, href: '/p' },
+    productOffering: { id: O1, name: 'Mobile L' },
+    bill: { id: 'b1', href: '/b1' },
+  },
+];
+
+const TRANSACTIONS = [
+  {
+    id: 't3',
+    href: '/t3',
+    type: 'refund',
+    date: '2026-12-20',
+    note: 'Mobile L',
+    period: null,
+    amount: rub(116.13),
+    balanceAfter: rub(-83.87),
+  },
+  {
+    id: 't2',
+    href: '/t2',
+    type: 'payment',
+    date: '2026-12-05',
+    note: 'Bank card',
+    period: null,
+    amount: rub(100),
+    balanceAfter: rub(-200),
+  },
+  {
+    id: 't1',
+    href: '/t1',
+    type: 'charge',
+    date: '2026-12-01',
+    note: 'Mobile L',
+    period: null,
+    amount: rub(-300),
+    balanceAfter: rub(-300),
+  },
+];
+
+const FIRST_CHARGE = {
+  billingAccount: { id: A },
+  productOffering: { id: O2, name: 'Fiber 100' },
+  startDate: '2026-10-01',
+  period: { start: '2026-10-01', end: '2026-10-28' },
+  cyclePeriod: { start: '2026-09-28', end: '2026-10-28' },
+  billableDays: 27,
+  periodDays: 30,
+  prorated: true,
+  price: rub(650),
+  amount: rub(585),
+  chargeRunDate: '2026-10-02',
+  billDate: '2026-10-28',
+  next: { start: '2026-10-28', amount: rub(650) },
+  balance: rub(-5784.19),
+  balanceAfter: rub(-6369.19),
+  creditLimit: rub(500),
+  exceedsCreditLimit: true,
+};
+
+function backend(routes: Record<string, Handler> = {}, account = ACCOUNT) {
+  return stubFetch({
+    'GET /internal/v1/context': () => json(CONTEXT),
+    'GET /tmf-api/accountManagement/v5/billingAccount?limit=1&fields=id': () =>
+      json([], { total: 7 }),
+    'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
+      json([], { total: 4 }),
+    [`GET /tmf-api/accountManagement/v5/billingAccount/${A}`]: () => json(account),
+    [`GET /tmf-api/customerManagement/v5/customer/${C}`]: () =>
+      json({ id: C, name: 'Olga Kuznetsova', status: 'Active', '@type': 'Customer' }),
+    [`GET ${INTERNAL}/products`]: () => json(PRODUCTS, { total: PRODUCTS.length }),
+    [`GET ${INTERNAL}/charges?limit=20`]: () => json(CHARGES, { total: 2 }),
+    [`GET ${INTERNAL}/transactions?limit=20`]: () => json(TRANSACTIONS, { total: 3 }),
+    ...routes,
+  });
+}
+
+async function open() {
+  window.history.replaceState(null, '', `/subscribers/${A}`);
+  render(<App />);
+  await screen.findByRole('heading', { name: /Olga Kuznetsova/ });
+}
+
+const panel = (title: string) =>
+  screen
+    .getByText(title, { selector: '.bss-panel-header .title' })
+    .closest('section') as HTMLElement;
+
+function productRow(name: string): HTMLElement {
+  const row = within(panel('Active products'))
+    .getAllByRole('row')
+    .find((r) => within(r).queryByText(name));
+  if (!row) throw new Error(`no product row ${name} yet`); // lets waitFor retry
+  return row;
+}
+
+describe('subscriber card', () => {
+  it('shows the account: state, ids, customer status and the KPIs', async () => {
+    backend();
+    await open();
+    const heading = screen.getByRole('heading', { name: /Olga Kuznetsova/ });
+    expect(within(heading).getByText('Active').className).toContain('bss-pill');
+    expect(screen.getByText('CCCC2222')).toBeTruthy(); // subscriber no.
+    expect(screen.getAllByText('BA-AAAA1111').length).toBeGreaterThan(0);
+    expect(await screen.findByText('Active', { selector: '.bss-meta .value' })).toBeTruthy();
+
+    const kpis = panel('Billing account');
+    const balance = within(kpis).getByText('−5,784.19');
+    expect(balance.className).toContain('negative');
+    expect(within(kpis).getByText('In arrears')).toBeTruthy();
+    expect(within(kpis).getByText('RUB')).toBeTruthy();
+    expect(within(kpis).getByText('Day 28')).toBeTruthy();
+    expect(within(kpis).getByText('next cycle 2026-10-28')).toBeTruthy();
+    expect(within(kpis).getByText('500.00')).toBeTruthy();
+    // available incl. credit = -5,784.19 + 500.00
+    expect(within(kpis).getByText('−5,284.19').className).toContain('negative');
+    // breadcrumbs end in the customer's name
+    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumbs' });
+    expect(await within(crumbs).findByText('Olga Kuznetsova')).toBeTruthy();
+  });
+
+  it('cannot add products to a suspended account', async () => {
+    backend({}, { ...ACCOUNT, state: 'Suspended' });
+    await open();
+    const add = screen.getByRole('button', { name: '+ Add product' }) as HTMLButtonElement;
+    expect(add.disabled).toBe(true);
+    expect(screen.getByText('Unavailable for suspended accounts')).toBeTruthy();
+  });
+
+  it('lists products with code, specification, next charge, price and their status', async () => {
+    backend();
+    await open();
+    const active = await waitFor(() => productRow('Mobile L'));
+    expect(within(active).getByText('MOB-L · Mobile Voice & Data')).toBeTruthy();
+    expect(within(active).getByText('2026-10-28')).toBeTruthy();
+    expect(within(active).getByText('1,290.00')).toBeTruthy();
+    expect(within(active).getByText('/ mo')).toBeTruthy();
+    expect(within(active).getByRole('button', { name: 'Deactivate' })).toBeTruthy();
+
+    const ending = productRow('Fiber 100');
+    expect(within(ending).getByText('ends 2026-10-13')).toBeTruthy();
+    expect(within(ending).getByText('Home Internet')).toBeTruthy(); // no code: spec only
+    expect(within(ending).queryByRole('button', { name: 'Deactivate' })).toBeNull();
+    expect(within(ending).getByText('—')).toBeTruthy(); // no next charge
+
+    expect(screen.getByText('starts 2026-10-06')).toBeTruthy();
+  });
+
+  it('deactivates through a TMF622 delete order, confirming first', async () => {
+    let completed = 0;
+    const { fetchMock } = backend({
+      [`POST ${ORDERS}`]: () => {
+        completed++;
+        return json({ id: 'o1', state: 'completed', '@type': 'ProductOrder' }, { status: 201 });
+      },
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
+    expect(within(row).getByText('Deactivate?')).toBeTruthy();
+    fireEvent.click(within(row).getByRole('button', { name: 'No' }));
+    expect(completed).toBe(0);
+    fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
+    fireEvent.click(within(row).getByRole('button', { name: 'Yes' }));
+
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Mobile L deactivated as of 2026-10-01',
+    );
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+      '@type': 'ProductOrder',
+      billingAccount: { id: A, '@type': 'BillingAccountRef' },
+      productOrderItem: [
+        {
+          '@type': 'ProductOrderItem',
+          id: '1',
+          action: 'delete',
+          product: { id: P1, '@type': 'ProductRef' },
+        },
+      ],
+    });
+    // the card reloads: products asked for a second time
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter(([url]) => url === `${INTERNAL}/products`)).toHaveLength(
+        2,
+      ),
+    );
+  });
+
+  it('shows the reasons of a rejected order in the row', async () => {
+    backend({
+      [`POST ${ORDERS}`]: () =>
+        json(
+          {
+            id: 'o1',
+            state: 'rejected',
+            productOrderErrorMessage: [
+              { code: 'accountNotActive', reason: 'the billing account is Suspended' },
+            ],
+            '@type': 'ProductOrder',
+          },
+          { status: 201 },
+        ),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
+    fireEvent.click(within(row).getByRole('button', { name: 'Yes' }));
+    expect(await within(row).findByText('Rejected: the billing account is Suspended')).toBeTruthy();
+    expect(screen.queryByRole('status')).toBeNull(); // no success toast
+  });
+
+  it('shows the charge history with periods, proration and signs', async () => {
+    backend();
+    await open();
+    const charges = panel('Charge history');
+    expect(await within(charges).findByText('2026-12-20 – 2026-12-31')).toBeTruthy(); // inclusive
+    const days = within(charges).getByText('12 of 31');
+    expect(days.className).toBe('bss-prorated');
+    expect(within(charges).getByText('−116.13')).toBeTruthy();
+    expect(within(charges).getAllByText('—').length).toBe(1); // the full-period charge
+  });
+
+  it('shows transactions signed, with the balance after each', async () => {
+    backend();
+    await open();
+    const tx = panel('Transaction history');
+    expect(await within(tx).findByText('+116.13')).toBeTruthy();
+    expect(within(tx).getByText('+116.13').parentElement?.className).toContain('positive');
+    expect(within(tx).getAllByText('−300.00')).toHaveLength(2); // amount and balance after
+    expect(within(tx).getByText('−83.87')).toBeTruthy();
+    expect(within(tx).getByText('Refund')).toBeTruthy();
+    expect(within(tx).getByText('Bank card')).toBeTruthy();
+  });
+
+  it('shows a failing panel without taking the card down', async () => {
+    backend({ [`GET ${INTERNAL}/charges?limit=20`]: () => tmfError(500, 'Internal Server Error') });
+    await open();
+    expect(await within(panel('Charge history')).findByText('Failed to load charges')).toBeTruthy();
+    expect(await within(panel('Transaction history')).findByText('+116.13')).toBeTruthy();
+  });
+});
+
+describe('add product', () => {
+  const OFFERINGS = [
+    {
+      id: O1,
+      name: 'Mobile L',
+      externalIdentifier: [{ id: 'MOB-L' }],
+      productSpecification: { name: 'Mobile Voice & Data' },
+      productOfferingPrice: [{ id: 'pr1' }],
+    },
+    {
+      id: O2,
+      name: 'Fiber 100',
+      externalIdentifier: [{ id: 'NET-100' }],
+      productSpecification: { name: 'Home Internet' },
+      productOfferingPrice: [{ id: 'pr2' }],
+    },
+  ];
+  const PRICES = [
+    { id: 'pr1', price: rub(1290), validFor: { startDateTime: '2026-06-01T21:00:00Z' } },
+    { id: 'pr2', price: rub(650), validFor: { startDateTime: '2026-06-01T21:00:00Z' } },
+  ];
+  const catalog = {
+    'GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true&offset=0&limit=100':
+      () => json(OFFERINGS, { total: 2 }),
+    'GET /tmf-api/productCatalogManagement/v5/productOfferingPrice?priceType=recurring&offset=0&limit=100':
+      () => json(PRICES, { total: 2 }),
+  };
+  const preview = (start: string) =>
+    `GET ${INTERNAL}/firstCharge?productOffering.id=${O2}&startDate=${start}`;
+
+  async function openModal() {
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: '+ Add product' }));
+    return screen.getByRole('dialog', { name: 'Add product' });
+  }
+
+  it('lists sellable offerings, marks those already active, and previews from the backend', async () => {
+    backend({ ...catalog, [preview('2026-10-01')]: () => json(FIRST_CHARGE) });
+    const dialog = await openModal();
+    expect(within(dialog).getByText('Olga Kuznetsova · BA-AAAA1111 · billing day 28')).toBeTruthy();
+    expect(within(dialog).getByText('Select an offering to see the calculation')).toBeTruthy();
+    const options = await within(dialog).findAllByRole('radio');
+    expect(options).toHaveLength(2);
+    expect(within(options[0] as HTMLElement).getByText('already active')).toBeTruthy();
+    expect(within(options[1] as HTMLElement).getByText('650.00 / mo')).toBeTruthy();
+    expect(
+      (within(dialog).getByRole('button', { name: 'Activate' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    fireEvent.click(options[1] as HTMLElement);
+    expect(await within(dialog).findByTestId('first-charge')).toHaveProperty(
+      'textContent',
+      '585.00 RUB',
+    );
+    expect(within(dialog).getByText('2026-10-01 – 2026-10-27')).toBeTruthy();
+    expect(within(dialog).getByText('27 of 30 (prorated)')).toBeTruthy();
+    expect(within(dialog).getByText('650.00 × 27 / 30')).toBeTruthy();
+    expect(
+      within(dialog).getByText('in the run of 2026-10-02 · on the bill of 2026-10-28'),
+    ).toBeTruthy();
+    expect(within(dialog).getByText('Then from 2026-10-28')).toBeTruthy();
+    expect(within(dialog).getByRole('note').textContent).toContain(
+      'Balance will exceed the credit limit of 500.00 RUB',
+    );
+    expect(
+      within(dialog).getByText(/today · the charge is written by the billing run of 2026-10-02/),
+    ).toBeTruthy();
+  });
+
+  it('orders the offering with the start date and closes', async () => {
+    const { fetchMock } = backend({
+      ...catalog,
+      [preview('2026-10-06')]: () =>
+        json({ ...FIRST_CHARGE, startDate: '2026-10-06', chargeRunDate: '2026-10-06' }),
+      [`POST ${ORDERS}`]: () =>
+        json({ id: 'o', state: 'completed', '@type': 'ProductOrder' }, { status: 201 }),
+    });
+    const dialog = await openModal();
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
+    fireEvent.change(within(dialog).getByLabelText('Start date'), {
+      target: { value: '2026-10-06' },
+    });
+    const activate = await within(dialog).findByRole('button', {
+      name: 'Activate from 2026-10-06',
+    });
+    await waitFor(() => expect((activate as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(activate);
+
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Fiber 100 ordered · first charge 585.00 RUB in the run of 2026-10-06',
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+      '@type': 'ProductOrder',
+      billingAccount: { id: A, '@type': 'BillingAccountRef' },
+      requestedStartDate: '2026-10-06T12:00:00+03:00', // noon in BILLING_TZ: the right date
+      productOrderItem: [
+        {
+          '@type': 'ProductOrderItem',
+          id: '1',
+          action: 'add',
+          productOffering: { id: O2, '@type': 'ProductOfferingRef' },
+        },
+      ],
+    });
+  });
+
+  it('keeps the dialog open with the reasons when the order is rejected', async () => {
+    backend({
+      ...catalog,
+      [preview('2026-10-01')]: () => json(FIRST_CHARGE),
+      [`POST ${ORDERS}`]: () =>
+        json(
+          {
+            id: 'o',
+            state: 'rejected',
+            productOrderErrorMessage: [
+              { code: 'offeringNotSellable', reason: 'productOffering Fiber 100 is not for sale' },
+            ],
+            '@type': 'ProductOrder',
+          },
+          { status: 201 },
+        ),
+    });
+    const dialog = await openModal();
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
+    await within(dialog).findByTestId('first-charge');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Activate' }));
+    expect(
+      await within(dialog).findByText('productOffering Fiber 100 is not for sale'),
+    ).toBeTruthy();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+
+  it('shows why there is no preview (the server message of a 422)', async () => {
+    backend({
+      ...catalog,
+      [preview('2026-10-01')]: () =>
+        json(
+          {
+            '@type': 'Error',
+            code: '422',
+            reason: 'Unprocessable Entity',
+            message: 'productOffering Fiber 100 has no recurring price in RUB valid on 2026-10-01',
+            status: '422',
+          },
+          { status: 422 },
+        ),
+    });
+    const dialog = await openModal();
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
+    expect(
+      await within(dialog).findByText(
+        'productOffering Fiber 100 has no recurring price in RUB valid on 2026-10-01',
+      ),
+    ).toBeTruthy();
+    expect(
+      (within(dialog).getByRole('button', { name: 'Activate' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+});

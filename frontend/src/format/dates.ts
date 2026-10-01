@@ -55,6 +55,23 @@ export function utcLabel(offset: string): string {
   return `UTC${sign === '-' ? '−' : '+'}${hours}${mm === '00' ? '' : `:${mm}`}`;
 }
 
+/** The next cycle day strictly after `today`: the start of the account's next billing
+ * period (cycle days are 1..28, so the day exists in every month). Date only - every
+ * amount comes from the backend. */
+export function nextCycleDate(today: string, cycleDay: number): string {
+  if (!isIsoDate(today) || !Number.isInteger(cycleDay) || cycleDay < 1 || cycleDay > 28) {
+    throw new RangeError(`bad input: ${today}, day ${cycleDay}`);
+  }
+  const [y, m, d] = today.split('-').map(Number) as [number, number, number];
+  const month = d < cycleDay ? m - 1 : m; // 0-based: this month if the day is still ahead
+  return new Date(Date.UTC(y, month, cycleDay)).toISOString().slice(0, 10);
+}
+
+/** Our ranges are half-open [start, end); the design shows the last included day. */
+export function lastDay(endExclusive: string): string {
+  return addDays(endExclusive, -1);
+}
+
 /** Calendar arithmetic on YYYY-MM-DD, independent of any time zone. */
 export function addDays(day: string, days: number): string {
   if (!isIsoDate(day)) throw new RangeError(`not a date: ${day}`);

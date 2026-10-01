@@ -1,11 +1,8 @@
 import { getJson } from '../api/client';
 import { useResource } from '../api/useResource';
-import {
-  CatalogScreen,
-  NotFoundScreen,
-  SubscriberScreen,
-  SubscribersScreen,
-} from '../screens/placeholders';
+import { CatalogScreen, NotFoundScreen } from '../screens/placeholders';
+import { SubscriberCardScreen } from '../screens/SubscriberCard';
+import { SubscribersScreen } from '../screens/Subscribers';
 import { ErrorBlock } from '../ui/states';
 import { Panel, ToastProvider } from '../ui/kit';
 import '../ui/ui.css';
@@ -21,7 +18,7 @@ function Screen() {
     case 'subscribers':
       return <SubscribersScreen />;
     case 'subscriber':
-      return <SubscriberScreen accountId={route.accountId} />;
+      return <SubscriberCardScreen accountId={route.accountId} />;
     case 'catalog':
       return <CatalogScreen />;
     case 'notFound':

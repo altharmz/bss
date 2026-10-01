@@ -17,6 +17,7 @@ const OUT_DIR = new URL('../src/api/generated/', import.meta.url);
 const SPECS = {
   tmf620: 'TMF620-Product_Catalog_Management-v5.0.0.oas.yaml',
   tmf622: 'TMF622-ProductOrdering-v5.0.0.oas.yaml',
+  tmf629: 'TMF629-Customer_Management-v5.0.1.oas.yaml',
   tmf637: 'TMF637-ProductInventory-v5.0.0.oas.yaml',
   tmf666: 'TMF666-Account_Management-v5.0.0.oas.yaml',
   internal: 'internal/bss-internal.oas.yaml',
