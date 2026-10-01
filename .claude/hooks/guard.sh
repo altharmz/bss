@@ -62,4 +62,30 @@ harness_write() {
 harness_write && \
   block "shell writes to .claude/, compose*.yaml, Makefile or scripts/ are not allowed. Use the Edit tool - it asks the human first."
 
+# --- the design handoff is a pristine reference: never written ---
+prot="(\./|${proj}/)?design-ref(/[^[:space:]\"'|;&]*)?"
+harness_write && \
+  block "design-ref/ is a read-only reference (the design handoff). Never write to it."
+
+# --- Node runs only in the web containers, never on the host ---
+# A command segment (split at ; && || | & and newlines) that starts with a Node tool -
+# directly, after VAR=value assignments, or as `sh -c` / `bash -c` - is blocked unless the
+# segment itself runs in the `web` or `web-offline` compose service. Use make web-*.
+node_on_host() {
+  python3 - "$cmd" <<'PY'
+import re, sys
+cmd = sys.argv[1]
+tool = r"(npm|npx|node|pnpm|yarn|corepack)(\s|$)"
+starts = re.compile(r"^\s*(\w+=\S*\s+)*" + tool)
+shell_c = re.compile(r"\b(sh|bash)\s+-c\s+['\"]?\s*" + tool)
+inside = re.compile(r"\bdocker\s+compose\b.*\b(run|exec|up)\b.*\sweb(-offline)?(\s|$)")
+for segment in re.split(r"\|\||&&|[;|&\n]", cmd):
+    if (starts.search(segment) or shell_c.search(segment)) and not inside.search(segment):
+        sys.exit(0)
+sys.exit(1)
+PY
+}
+node_on_host && \
+  block "npm/npx/node run only inside the web container, never on the host. Use make web-install / web-build / web-lint / web-test / web-dev."
+
 exit 0

@@ -16,3 +16,12 @@ fail() {
 # clients, editors) as well as a plain terminal commit.
 make lint </dev/null || fail "make lint"
 make test </dev/null || fail "make test"
+
+# The admin UI, only when the commit touches it or the specs its types come from. These
+# targets run offline and never install: if node_modules is out of date they fail with
+# "run make web-install". A change in app/api or app/internal alone can still break the
+# UI; make verify (web-e2e) is the gate for that.
+if git diff --cached --name-only | grep -qE '^(frontend|spec)/'; then
+  make web-lint </dev/null || fail "make web-lint"
+  make web-test </dev/null || fail "make web-test"
+fi

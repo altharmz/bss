@@ -18,12 +18,26 @@ payload="$(cat)"
 file="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tool_input",{}).get("file_path",""))')" \
   || fail "could not parse the hook payload"
 
-[[ "$file" == *.py ]] || exit 0
 project="${CLAUDE_PROJECT_DIR:?}"
 abs="$(realpath -m -- "$file")"
 [[ "$abs" == "$project"/* ]] || exit 0
 [[ -f "$abs" ]] || exit 0
 rel="${abs#"$project"/}"
+
+# The admin UI: prettier in the offline web container (the same version make web-lint
+# checks with). .prettierignore skips generated code and the lockfile. node_modules out of
+# date is a failure ("run make web-install"), never an install.
+if [[ "$rel" == frontend/* && "$rel" =~ \.(ts|tsx|js|mjs|css|json|html)$ ]]; then
+  cd "$project" || fail "cannot cd to $project"
+  out="$(docker compose run --rm -T --no-deps -e f="${rel#frontend/}" web-offline \
+    sh -c 'sh scripts/check-deps.sh && npx prettier --write --log-level warn "$f"' 2>&1)"
+  rc=$?
+  out="$(grep -v '^ *Container ' <<<"$out")"
+  [[ $rc -eq 0 ]] && exit 0
+  fail "prettier on $rel: $(tail -n 20 <<<"$out")"
+fi
+
+[[ "$file" == *.py ]] || exit 0
 
 # The tools service mounts only these directories (see compose.override.yaml). Anything
 # else would not exist in the container - say so instead of passing silently.

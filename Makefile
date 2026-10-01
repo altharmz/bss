@@ -12,7 +12,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote hooks spec-verify-upstream
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote hooks spec-verify-upstream web-install web-dev web-build web-lint web-test web-types web-fmt
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -47,6 +47,35 @@ lint: ## Lint and format check
 
 fmt: ## Auto-format the code (writable `tools` service; `app` mounts sources read-only)
 	docker compose run --rm tools sh -c 'ruff format . && ruff check --fix .'
+
+# --- admin UI (frontend/): Node runs only in the `web` container, never on the host ---
+# Only web-install downloads (npm ci, `web` service). Every other target runs in the
+# offline `web-offline` service and first only CHECKS that node_modules matches
+# package-lock.json (frontend/scripts/check-deps.sh), failing with "run make web-install"
+# - never an implicit install. Lint, test and build regenerate the types from spec/.
+WEB := docker compose run --rm --no-deps web-offline
+WEB_DEPS := sh scripts/check-deps.sh
+
+web-install: ## Install the UI's npm dependencies exactly as locked (npm ci; the only step with network)
+	docker compose run --rm --no-deps web sh scripts/install-deps.sh
+
+web-dev: ## UI dev server on http://localhost:5173 (starts the local stack; proxies /tmf-api and /internal to it)
+	docker compose run --rm --service-ports web sh -c '$(WEB_DEPS) && npm run dev'
+
+web-build: ## Build the UI to frontend/dist
+	$(WEB) sh -c '$(WEB_DEPS) && npm run build'
+
+web-lint: ## UI type check, eslint and prettier --check
+	$(WEB) sh -c '$(WEB_DEPS) && npm run lint'
+
+web-test: ## UI unit and component tests (vitest)
+	$(WEB) sh -c '$(WEB_DEPS) && npm test'
+
+web-types: ## Regenerate the UI's TypeScript types from spec/
+	$(WEB) sh -c '$(WEB_DEPS) && npm run types'
+
+web-fmt: ## Format the UI sources (prettier --write)
+	$(WEB) sh -c '$(WEB_DEPS) && npm run format'
 
 spec-verify-upstream: ## Re-fetch the spec blob SHAs from GitHub and compare with spec/README.md (network; not in make test)
 	python3 scripts/spec-verify-upstream.py

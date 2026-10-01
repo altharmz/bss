@@ -18,7 +18,10 @@
       "Read(./app/**)",
       "Read(./tests/**)",
       "Edit(./app/**)",
-      "Edit(./tests/**)"
+      "Edit(./tests/**)",
+      "Read(./frontend/**)",
+      "Edit(./frontend/**)",
+      "Read(./design-ref/**)"
     ],
     "ask": [
       "Edit(./.claude/**)",
@@ -40,7 +43,14 @@
       "Bash(docker network prune:*)",
       "Bash(docker builder prune:*)",
       "Bash(sudo:*)",
-      "Bash(ssh vps-test sudo:*)"
+      "Bash(ssh vps-test sudo:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(node:*)",
+      "Bash(pnpm:*)",
+      "Bash(yarn:*)",
+      "Bash(corepack:*)",
+      "Edit(./design-ref/**)"
     ]
   },
   "hooks": {
