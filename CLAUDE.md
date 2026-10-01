@@ -46,6 +46,13 @@ make tunnel    # forward the remote app to localhost:18081
 make remote CMD="..."  # run a one-off command against the deployed image on the VPS
 make hooks     # install the local pre-commit hook (make lint + make test)
 make spec-verify-upstream  # re-fetch spec blob SHAs from GitHub, compare with spec/README.md (network)
+make web-install   # UI: npm ci into the node_modules volume - the ONLY step that downloads
+make web-dev       # UI: Vite dev server on http://localhost:5173 (proxies /tmf-api, /internal)
+make web-build     # UI: build frontend/dist (offline)
+make web-lint      # UI: tsc, eslint, prettier --check (offline)
+make web-test      # UI: vitest (offline)
+make web-types     # UI: regenerate TypeScript types from spec/ (offline)
+make web-fmt       # UI: prettier --write (offline)
 ```
 
 `make verify` is the single source of truth for "does it actually work on the server".
@@ -64,6 +71,10 @@ failure.
   or any other non-interactive caller.
 - To skip it deliberately (e.g. a WIP commit): `git commit --no-verify`. The hook's own
   failure output reminds you of this.
+- When the staged files touch `frontend/` or `spec/`, it also runs `make web-lint` and
+  `make web-test` (offline, ~+30 s: lint 20 s, test 9 s). They never install: an out-of-date node_modules fails
+  with "run make web-install". A change in `app/api` or `app/internal` alone does not
+  trigger them, though it can break the UI; `make verify` (`web-e2e`) is the gate for that.
 - It tests the **working tree, not the index**. With a partial commit (some changes left
   unstaged or untracked) the hook passes or fails on content the commit does not contain.
   To verify one commit in isolation, check it out on its own: stop the local stack
@@ -159,6 +170,8 @@ scripts/init.sh           one-time: fills in placeholders, creates .env/.env.pro
 scripts/deploy.sh         build -> save -> ssh load -> migrate -> up -> healthcheck -> smoke
 scripts/smoke.sh          HTTP smoke test against a base URL
 scripts/pre-commit.sh     make lint + make test; installed via `make hooks`
+frontend/                 admin UI (stage 5): Vite + React + TypeScript; see "Frontend conventions"
+design-ref/               design handoff for the UI - read-only reference, never edited
 tests/                    pytest suite (conftest.py spins up throwaway databases;
                           apiclient.py + contract.py validate every API response against
                           spec/; billing_sim.py: in-memory ledger for the billing core;
@@ -757,6 +770,14 @@ Nothing below has been run; remove an item only when it has passed.
 - After changing runtime behaviour, run `make test`; before saying "it works on the
   server", run `make verify`.
 - When a container misbehaves, read `make logs` before changing code.
+- **Files are edited only with the Edit/Write tools** - never through shell heredocs,
+  `sed -i`, `python -c`/scripts that rewrite files, or redirects (`>`, `>>`, `tee`).
+  Temporary negative-proof mutations included: make them with Edit and revert with Edit.
+- **If the guard (or any permission rule) blocks a shell command, stop and report it.**
+  Do not reach the same result another way (another tool, a script file, a different
+  path spelling) - that is exactly what the block exists to prevent, even when the block
+  looks like a false positive. Say what was blocked and why it seemed needed; the human
+  decides.
 
 ## Shared infrastructure (vps-infra)
 
@@ -808,9 +829,40 @@ Both of these only showed up against the real VPS, never locally:
 
 The admin UI (stage 5) lives in `frontend/`: Vite + React + TypeScript, built to static
 files and served by the shared Caddy on :8445 (same origin as the API, same basic auth -
-no CORS). It never enters the backend image (`.dockerignore`), and Node runs only in a
-container, never on the host. `design-ref/` is the design handoff: a pristine reference,
-never edited. Types come from `spec/` (TMF and `spec/internal/`), never from
-`/openapi.json`. Fonts are self-hosted (no Google Fonts or other CDN at runtime). Every
-dependency needs a stated reason. Tooling, Makefile targets and the dev loop are added in
-stage 5 checkpoint 3.
+no CORS). It never enters the backend image (`.dockerignore`). `design-ref/` is the design
+handoff: a pristine reference, never edited (settings.json deny + guard.sh). Types come
+from `spec/` (TMF and `spec/internal/`), never from `/openapi.json`. Fonts are
+self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated reason:
+`package.json` carries them under `"//"`.
+
+- **Node runs only in a container, never on the host.** Two compose services (local
+  only, `profiles: [web]`), same image (`node:22-alpine` pinned by digest), same mounts
+  (`./frontend` at /web, `./spec` read-only, `node_modules` and the npm cache as named
+  volumes - the host's `frontend/node_modules` is only the empty mount point):
+  - `web` has network: `make web-dev` (Vite on 0.0.0.0 inside, published on
+    127.0.0.1:5173, proxying `/tmf-api` and `/internal` to `app`) and `make web-install`;
+  - `web-offline` has `network_mode: none`: build, lint, test, types, fmt.
+- **Installs are explicit.** Only `make web-install` downloads (`npm ci`, exactly the
+  lockfile) and stores the lockfile's hash in the volume. Every other target first runs
+  `frontend/scripts/check-deps.sh`, which only compares that hash and fails with "run make
+  web-install" - never an implicit install, in particular not from the pre-commit hook.
+  Proven: `make web-build` succeeds offline (and the container cannot reach the
+  registry); a changed lockfile makes `make web-test` fail with the hint.
+- **npm hardening** (`frontend/.npmrc`): `ignore-scripts=true` (no dependency runs code
+  at install time; nothing in the tree needs it), `save-exact=true`, no audit/fund calls.
+  TypeScript is 5.x on purpose: `openapi-typescript` requires `^5` and `typescript-eslint`
+  `<6.1`, and npm enforces peer ranges.
+- **Generated types** (`frontend/scripts/gen-types.mjs`, openapi-typescript) for TMF620,
+  622, 637, 666 and the internal API go to `src/api/generated/`, which is git-ignored
+  (~1 MB) and regenerated by every build, lint and test run - it cannot go stale.
+- **Money in the UI:** amounts become integer cents at the edge (`src/format/money.ts`);
+  the UI never does arithmetic on binary floats, and typed amounts are sent as the
+  validated decimal string. Negatives use U+2212. Dates are business dates in BILLING_TZ
+  (from `/internal/v1/context`) via `Intl`, never the browser's zone.
+- **Harness:** `settings.json` denies `npm`, `npx`, `node`, `pnpm`, `yarn`, `corepack` on
+  the host and edits under `design-ref/`; `guard.sh` blocks a command segment that starts
+  with a Node tool (also via `sh -c`) unless that segment runs in the `web`/`web-offline`
+  service, and shell writes into `design-ref/`. It splits at `&&`, `;` and `|` without
+  understanding quotes or heredocs, so a chained `sh -c` inside `docker compose run`, or
+  documentation text containing such a chain, is blocked too - use the make targets. The
+  format hook runs prettier (in `web-offline`) on edited UI files.
