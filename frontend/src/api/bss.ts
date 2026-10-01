@@ -4,7 +4,8 @@
 // silently blank cell.
 
 import { toCents } from '../format/money';
-import { getAll, getJson, postJson } from './client';
+import { addDays } from '../format/dates';
+import { AMOUNT, getAll, getJson, jsonWithAmount, patchJson, postJson } from './client';
 import type { components as Internal } from './generated/internal';
 import type { components as T620 } from './generated/tmf620';
 import type { components as T622 } from './generated/tmf622';
@@ -195,6 +196,165 @@ export async function loadSellableOfferings(
     specification: offering.productSpecification?.name ?? '',
     priceCents: displayPrice(offering, byId, now, currency),
   }));
+}
+
+// --- the catalog (TMF620) ---
+
+export type Lifecycle = 'In Design' | 'Active' | 'Retired';
+type SpecBody = T620['schemas']['ProductSpecification'];
+
+export interface CatalogPrice {
+  id: string;
+  cents: number;
+  currency: string;
+  from: string; // instant
+  to: string | null; // instant, exclusive; null = open-ended
+}
+
+export interface CatalogOffering {
+  id: string;
+  name: string;
+  code: string | null;
+  status: Lifecycle;
+  specification: string;
+  validFrom: string; // instant
+  validTo: string | null; // instant, exclusive
+  prices: CatalogPrice[]; // recurring, attached to this offering
+}
+
+export interface Specification {
+  id: string;
+  name: string;
+}
+
+export interface Catalog {
+  offerings: CatalogOffering[];
+  specifications: Specification[];
+}
+
+export async function loadCatalog(signal: AbortSignal): Promise<Catalog> {
+  const [offerings, specs, prices] = await Promise.all([
+    getAll<OfferingBody>(PATHS.offerings, signal),
+    getAll<SpecBody>('/tmf-api/productCatalogManagement/v5/productSpecification', signal),
+    getAll<PriceBody>(`${PATHS.prices}?priceType=recurring`, signal),
+  ]);
+  const priceById = new Map(prices.map((price) => [need(price.id, 'price id'), price]));
+  return {
+    specifications: specs.map((spec) => ({
+      id: need(spec.id, 'spec id'),
+      name: need(spec.name, 'spec name'),
+    })),
+    offerings: offerings.map((offering) => ({
+      id: need(offering.id, 'offering id'),
+      name: need(offering.name, 'offering name'),
+      code: offering.externalIdentifier?.[0]?.id ?? null,
+      status: need(offering.lifecycleStatus, 'lifecycleStatus') as Lifecycle,
+      specification: offering.productSpecification?.name ?? '',
+      validFrom: need(offering.validFor?.startDateTime, 'validFor.startDateTime'),
+      validTo: offering.validFor?.endDateTime ?? null,
+      prices: (offering.productOfferingPrice ?? []).flatMap((ref) => {
+        const price = ref.id === undefined ? undefined : priceById.get(ref.id);
+        if (price === undefined) return []; // not recurring (or not visible): not listed
+        return [
+          {
+            id: need(price.id, 'price id'),
+            cents: toCents(need(price.price?.value, 'price value')),
+            currency: need(price.price?.unit, 'price unit'),
+            from: need(price.validFor?.startDateTime, 'price validFor.startDateTime'),
+            to: price.validFor?.endDateTime ?? null,
+          },
+        ];
+      }),
+    })),
+  };
+}
+
+/** The price the catalog shows: the one valid at `now` in `currency`, else the next one
+ * that starts later (shown with its start). Display only. */
+export function shownPrice(
+  prices: CatalogPrice[],
+  now: string,
+  currency: string,
+): { cents: number; from: string | null } | null {
+  const at = Date.parse(now);
+  const mine = prices.filter((p) => p.currency === currency);
+  const current = mine.find(
+    (p) => Date.parse(p.from) <= at && (p.to === null || at < Date.parse(p.to)),
+  );
+  if (current) return { cents: current.cents, from: null };
+  const next = mine
+    .filter((p) => Date.parse(p.from) > at)
+    .sort((a, b) => Date.parse(a.from) - Date.parse(b.from))[0];
+  return next ? { cents: next.cents, from: next.from } : null;
+}
+
+export interface NewOffering {
+  code: string; // upper case, validated
+  name: string;
+  specificationId: string;
+  amount: string; // canonical decimal string, e.g. "1290.50"
+  currency: string;
+  validFrom: string; // business date: the price and the offering start at its midnight
+  validTo: string | null; // business date, inclusive (last valid day); null = open-ended
+}
+
+/** Midnight of a business date in BILLING_TZ, as a TMF date-time. */
+export function midnightOf(day: string, utcOffset: string): string {
+  return `${day}T00:00:00${utcOffset}`;
+}
+
+/**
+ * The design's single "create" is two TMF620 calls, as the spec models it: the price
+ * first, then the offering that references it (prices attach through the offering). If
+ * the second call fails, the price stays unattached - it can never price anything - and
+ * the error is shown; nothing is rolled back behind the operator's back.
+ */
+export async function createOffering(form: NewOffering, utcOffset: string): Promise<string> {
+  const validFor = {
+    startDateTime: midnightOf(form.validFrom, utcOffset),
+    // the UI's "Valid to" is the last valid day; TMF validFor ends exclusively
+    ...(form.validTo === null
+      ? {}
+      : { endDateTime: midnightOf(addDays(form.validTo, 1), utcOffset) }),
+  };
+  const price = await postJson<PriceBody>(
+    PATHS.prices,
+    jsonWithAmount(
+      {
+        '@type': 'ProductOfferingPrice',
+        name: `${form.name} monthly`,
+        lifecycleStatus: 'Active',
+        priceType: 'recurring',
+        recurringChargePeriodType: 'monthly',
+        price: { unit: form.currency, value: AMOUNT },
+        validFor,
+      },
+      form.amount,
+    ),
+  );
+  const offering = await postJson<OfferingBody>(PATHS.offerings, {
+    '@type': 'ProductOffering',
+    name: form.name,
+    lifecycleStatus: 'In Design', // every new offering starts in In Design
+    validFor,
+    productSpecification: { id: form.specificationId, '@type': 'ProductSpecificationRef' },
+    productOfferingPrice: [{ id: need(price.id, 'price id'), '@type': 'ProductOfferingPriceRef' }],
+    externalIdentifier: [
+      { id: form.code, externalIdentifierType: 'offeringCode', '@type': 'ExternalIdentifier' },
+    ],
+  });
+  return need(offering.id, 'offering id');
+}
+
+/** The only lifecycle steps the UI offers: In Design -> Active -> Retired. */
+export const NEXT_LIFECYCLE: Record<Lifecycle, Lifecycle | null> = {
+  'In Design': 'Active',
+  Active: 'Retired',
+  Retired: null,
+};
+
+export async function setLifecycle(offeringId: string, status: Lifecycle): Promise<void> {
+  await patchJson(`${PATHS.offerings}/${offeringId}`, { lifecycleStatus: status });
 }
 
 // --- orders (TMF622): the only way to add or end a product ---

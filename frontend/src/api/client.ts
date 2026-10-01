@@ -90,6 +90,32 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await response.json()) as T;
 }
 
+/** PATCH as JSON Merge Patch - the only PATCH our TMF APIs accept (415 otherwise). */
+export async function patchJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await request('PATCH', path, {
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/merge-patch+json' },
+  });
+  return (await response.json()) as T;
+}
+
+/**
+ * JSON text in which `amount` - a canonical decimal string from parseAmount, e.g.
+ * "1290.50" - is written as a JSON number token verbatim. JSON.stringify could only write
+ * a binary float (1290.5); the backend takes the token as an exact Decimal. Put AMOUNT
+ * where the number goes.
+ */
+export const AMOUNT = '\u0000amount\u0000';
+// how AMOUNT appears in JSON.stringify's output (it escapes the NULs)
+const AMOUNT_TOKEN = JSON.stringify(AMOUNT);
+export function jsonWithAmount(body: unknown, amount: string): string {
+  if (!/^\d{1,10}\.\d{2}$/.test(amount)) throw new RangeError(`not a canonical amount: ${amount}`);
+  const text = JSON.stringify(body);
+  if (text.split(AMOUNT_TOKEN).length !== 2)
+    throw new Error('the body must hold AMOUNT exactly once');
+  return text.replace(AMOUNT_TOKEN, amount);
+}
+
 export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await request('GET', path, signal ? { signal } : {});
   return (await response.json()) as T;

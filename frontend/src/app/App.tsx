@@ -1,6 +1,7 @@
 import { getJson } from '../api/client';
 import { useResource } from '../api/useResource';
-import { CatalogScreen, NotFoundScreen } from '../screens/placeholders';
+import { CatalogScreen } from '../screens/Catalog';
+import { NotFoundScreen } from '../screens/placeholders';
 import { SubscriberCardScreen } from '../screens/SubscriberCard';
 import { SubscribersScreen } from '../screens/Subscribers';
 import { ErrorBlock } from '../ui/states';

@@ -15,7 +15,34 @@ test`, `make web-lint` and `make web-test` pass, through the pre-commit hook.
 
 ## Decisions taken unattended
 
-(none yet)
+- **Catalog lifecycle action lives in an offering detail dialog (row click), not a table
+  column.** The design's 7 fixed columns leave the name ~110px at 1280px; an Actions column
+  would overflow. The dialog reuses the design's inline-confirm pattern (Deactivate).
+- **Only forward lifecycle steps in the UI: In Design -> Active -> Retired; Retired is
+  final.** As the brief says. The backend still allows any PATCH of lifecycleStatus; I did
+  not add a backend rule (not asked, and the UI never sends other steps). Worth deciding.
+- **Retire confirm copy says existing products keep billing** (D12: retiring never ends
+  prices).
+- **New offering = two TMF620 calls** (price, then the offering referencing it), as the
+  spec models it. If the second fails, the unattached price stays (it can price nothing);
+  the error is shown, nothing is rolled back silently.
+- **The new price is created with lifecycleStatus "Active", the offering "In Design".**
+  The offering's status is what gates ordering; the price's lifecycle is not checked
+  anywhere. Matches the seed.
+- **"Valid from" defaults to tomorrow and cannot be earlier**; "Valid to" is inclusive in
+  the UI and sent as the exclusive midnight of the next day. Both are sent as midnight
+  with the context's UTC offset (exact for Europe/Moscow, which has no DST; a DST zone
+  would need the offset of that date).
+- **Code rule shown before submit**: `^[A-Z0-9][A-Z0-9_-]{0,31}$`, upper-cased as typed
+  (migration 0003's rule; the backend still answers 409/422 itself).
+- **Catalog price column**: the price valid now in the UI currency; if none, the next
+  future price with "from DATE"; otherwise "—". Display only.
+- **Recurrence select shows "month" only, disabled** (weekly dropped, decision 5).
+- **Footer copy**: "Prices exclude taxes · taxes are not applied" (taxes out of scope).
+- **UI write requests are also pinned on the backend** (`tests/test_ui_requests.py`):
+  the exact bodies the UI sends, replayed through the contract-checking client on a
+  throwaway database - instead of creating test offerings in the seeded demo database,
+  which the API cannot delete.
 
 ## Pending my approval
 
@@ -38,6 +65,16 @@ test`, `make web-lint` and `make web-test` pass, through the pre-commit hook.
    history ("No charges") - her orders are from today.
 5. **Sergey Volkov's card**: "+ Add product" disabled with its caption.
 6. **Ivan Petrov's card**: a refund in the charge history and a mix of transactions.
+8. **Catalog list**: codes, "Price, RUB", "month", status pills, validity
+   ("2026-06-04 – open-ended" style), TV Basic in In Design; search "net", the status
+   filter, a search that matches nothing.
+9. **Catalog -> + New offering**: the validation messages (type an existing code such as
+   mob-l, a price of 0, a "Valid to" before "Valid from"); Create stays disabled until
+   complete; after creating, the new row is highlighted and the toast reads "Offering X
+   created in In Design".
+10. **Catalog row -> details**: TV Basic (In Design) -> Activate (confirm) -> Active; an
+    Active offering -> Retire (warning copy) -> Retired; a Retired one offers nothing.
+    Note: these change the seeded demo data (the API cannot delete).
 7. **Error states**: with web-dev running, `docker compose stop app`, reload (context
    error with the call and Retry), `docker compose start app`, Retry. Loading skeletons:
    throttle the network in devtools.

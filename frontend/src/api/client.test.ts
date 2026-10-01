@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { json, stubFetch, tmfError } from '../test/fetch';
-import { ApiError, getAll, getJson, getPage } from './client';
+import { AMOUNT, ApiError, getAll, getJson, getPage, jsonWithAmount } from './client';
 
 const PATH = '/tmf-api/accountManagement/v5/billingAccount';
 
@@ -24,6 +24,22 @@ describe('errors', () => {
       },
     });
     await expect(getJson(PATH)).rejects.toThrow(`GET ${PATH} → Network error`);
+  });
+});
+
+describe('jsonWithAmount', () => {
+  it('writes the amount as an exact number token', () => {
+    const text = jsonWithAmount({ price: { unit: 'RUB', value: AMOUNT } }, '1290.50');
+    expect(text).toBe('{"price":{"unit":"RUB","value":1290.50}}');
+    // JSON.stringify of the float would have lost the trailing zero (and, in general, exactness)
+    expect(JSON.stringify({ value: 1290.5 })).toBe('{"value":1290.5}');
+  });
+
+  it('refuses anything but a canonical amount, and a body without exactly one slot', () => {
+    expect(() => jsonWithAmount({ v: AMOUNT }, '1290.5')).toThrow(RangeError);
+    expect(() => jsonWithAmount({ v: AMOUNT }, '-1.00')).toThrow(RangeError);
+    expect(() => jsonWithAmount({ v: 1 }, '1.00')).toThrow('exactly once');
+    expect(() => jsonWithAmount({ a: AMOUNT, b: AMOUNT }, '1.00')).toThrow('exactly once');
   });
 });
 
