@@ -1,0 +1,284 @@
+"""The billing core against hand-checked examples (numbered as in the stage 3 brief)."""
+
+from datetime import UTC, date, datetime
+from decimal import Decimal
+
+import pytest
+
+from app.billing.core import cycle_period, prorate
+from app.billing.model import DateRange, InconsistentState, MissingPrice
+from tests.billing_sim import Ledger, account, price, product, rng
+
+D = Decimal
+P300 = price("300.00")
+
+
+def ledger(*prices, cycle_day: int = 1) -> Ledger:
+    return Ledger(account(cycle_day), prices or (P300,))
+
+
+def amounts(result) -> list[tuple[str, Decimal, DateRange]]:
+    return [(a.kind, a.amount, a.period) for a in result.abrs]
+
+
+# --- the eleven worked examples ---
+
+
+def test_1_full_period_charged_in_advance():
+    result = ledger().run([product(date(2026, 10, 1))], date(2026, 10, 1))
+    assert amounts(result) == [
+        ("recurring", D("300.00"), rng(date(2026, 10, 1), date(2026, 11, 1)))
+    ]
+
+
+def test_2_mid_period_start_is_prorated():
+    result = ledger().run([product(date(2026, 10, 15))], date(2026, 10, 15))
+    # 300 x 17/31 = 164.516...
+    assert amounts(result) == [
+        ("recurring", D("164.52"), rng(date(2026, 10, 15), date(2026, 11, 1)))
+    ]
+
+
+def test_3_half_even_rounding():
+    result = ledger(price("3.25")).run([product(date(2026, 11, 16))], date(2026, 11, 16))
+    # 3.25 x 15/30 = 1.625 exactly: half-even gives 1.62, half-up would give 1.63
+    assert amounts(result) == [("recurring", D("1.62"), rng(date(2026, 11, 16), date(2026, 12, 1)))]
+
+
+def test_4_termination_known_later_is_refunded():
+    book = ledger()
+    book.run([product(date(2026, 10, 1))], date(2026, 10, 1))
+    [charge] = book.charges()
+    result = book.run([product(date(2026, 10, 1), date(2026, 10, 20))], date(2026, 10, 20))
+    # expected 300 x 19/31 = 183.87; refund = 183.87 - 300.00
+    assert amounts(result) == [("refund", D("-116.13"), rng(date(2026, 10, 20), date(2026, 11, 1)))]
+    assert result.abrs[0].refunds_id == charge.id
+    assert charge.amount + result.abrs[0].amount == D("183.87")
+
+
+def test_5_same_day_start_and_termination_is_never_charged():
+    result = ledger().run([product(date(2026, 10, 15), date(2026, 10, 15))], date(2026, 10, 15))
+    assert result.is_empty
+
+
+def test_6_termination_on_the_period_boundary():
+    book = ledger()
+    october = book.run([product(date(2026, 10, 1), date(2026, 11, 1))], date(2026, 10, 1))
+    assert amounts(october) == [
+        ("recurring", D("300.00"), rng(date(2026, 10, 1), date(2026, 11, 1)))
+    ]
+    november = book.run([product(date(2026, 10, 1), date(2026, 11, 1))], date(2026, 11, 1))
+    assert november.abrs == ()
+
+
+def test_7_termination_known_before_charging_gives_one_reduced_charge():
+    result = ledger().run([product(date(2026, 10, 1), date(2026, 10, 25))], date(2026, 10, 1))
+    # 300 x 24/31 = 232.258...
+    assert amounts(result) == [
+        ("recurring", D("232.26"), rng(date(2026, 10, 1), date(2026, 10, 25)))
+    ]
+
+
+def test_8_catch_up_charges_every_missed_period():
+    result = ledger().run([product(date(2026, 10, 1))], date(2026, 12, 3))
+    assert amounts(result) == [
+        ("recurring", D("300.00"), rng(date(2026, 10, 1), date(2026, 11, 1))),
+        ("recurring", D("300.00"), rng(date(2026, 11, 1), date(2026, 12, 1))),
+        ("recurring", D("300.00"), rng(date(2026, 12, 1), date(2027, 1, 1))),
+    ]
+    # run date Dec 3 is after every cycle day <= as_of: these wait for the Jan 1 bill
+    assert result.bills == ()
+
+
+def test_9_price_change_applies_from_the_next_period():
+    a = price("300.00", date(2026, 1, 1), date(2026, 11, 1))
+    b = price("330.00", date(2026, 11, 1))
+    result = ledger(a, b).run([product(date(2026, 10, 1))], date(2026, 11, 1))
+    assert [x.amount for x in result.abrs] == [D("300.00"), D("330.00")]
+
+
+def test_9_price_boundary_is_midnight_in_billing_tz():
+    # Nov 1 00:00 UTC is Nov 1 03:00 in Moscow: at Moscow midnight A is still valid
+    utc_midnight = datetime(2026, 11, 1, tzinfo=UTC)
+    a = price("300.00", date(2026, 1, 1), utc_midnight)
+    b = price("330.00", utc_midnight)
+    result = ledger(a, b).run([product(date(2026, 10, 1))], date(2026, 11, 1))
+    assert [x.amount for x in result.abrs] == [D("300.00"), D("300.00")]
+
+
+@pytest.mark.parametrize(("year", "days", "amount"), [(2027, 28, "289.29"), (2028, 29, "279.31")])
+def test_10_period_length_is_the_denominator(year, days, amount):
+    result = ledger(cycle_day=28).run([product(date(year, 3, 1))], date(year, 3, 1))
+    [abr] = result.abrs
+    assert cycle_period(date(year, 3, 1), 28).days == days
+    # 300 x 27/28 = 289.2857..., 300 x 27/29 = 279.3103...
+    assert (abr.amount, abr.period) == (D(amount), rng(date(year, 3, 1), date(year, 3, 28)))
+
+
+def test_11_running_twice_emits_nothing():
+    book = ledger()
+    book.run([product(date(2026, 10, 1))], date(2026, 10, 1))
+    terminated = [product(date(2026, 10, 1), date(2026, 10, 20))]
+    assert book.run(terminated, date(2026, 10, 20)).abrs
+    assert book.run(terminated, date(2026, 10, 20)).is_empty
+
+
+# --- charge trigger, statuses ---
+
+
+def test_future_start_is_not_charged_before_its_first_billable_day():
+    book = ledger()
+    assert book.run([product(date(2026, 11, 5))], date(2026, 11, 1)).is_empty
+    assert amounts(book.run([product(date(2026, 11, 5))], date(2026, 11, 5))) == [
+        ("recurring", D("260.00"), rng(date(2026, 11, 5), date(2026, 12, 1)))
+    ]
+
+
+def test_product_cancelled_before_its_start_is_never_charged():
+    cancelled = product(date(2026, 11, 5), date(2026, 11, 5), status="cancelled")
+    assert ledger().run([cancelled], date(2026, 12, 3)).is_empty
+
+
+@pytest.mark.parametrize("status", ["cancelled", "aborted"])
+def test_cancelled_or_aborted_status_is_never_billable(status):
+    assert ledger().run([product(date(2026, 10, 1), status=status)], date(2026, 10, 1)).is_empty
+
+
+@pytest.mark.parametrize("status", ["created", "suspended", "pendingTerminate", "terminated"])
+def test_other_statuses_are_billed_by_dates(status):
+    result = ledger().run([product(date(2026, 10, 1), status=status)], date(2026, 10, 1))
+    assert [a.amount for a in result.abrs] == [D("300.00")]
+
+
+def test_charge_that_rounds_to_zero_is_still_written():
+    result = ledger(price("0.01")).run([product(date(2026, 10, 31))], date(2026, 10, 31))
+    assert amounts(result) == [("recurring", D("0.00"), rng(date(2026, 10, 31), date(2026, 11, 1)))]
+
+
+def test_refund_that_rounds_to_zero_is_not_written():
+    book = ledger(price("0.03"))
+    book.run([product(date(2026, 10, 1))], date(2026, 10, 1))
+    # 0.03 x 30/31 = 0.029 -> 0.03: nothing to refund
+    assert book.run([product(date(2026, 10, 1), date(2026, 10, 31))], date(2026, 10, 2)).is_empty
+
+
+def test_cancellation_after_a_charge_refunds_it_whole():
+    book = ledger()
+    book.run([product(date(2026, 10, 15))], date(2026, 10, 15))
+    status_only = product(date(2026, 10, 15), date(2026, 10, 15), status="cancelled")
+    result = book.run([status_only], date(2026, 10, 16))
+    assert amounts(result) == [("refund", D("-164.52"), rng(date(2026, 10, 15), date(2026, 11, 1)))]
+
+
+# --- prices ---
+
+
+def test_missing_price_names_product_and_date():
+    p = product(date(2026, 10, 1))
+    with pytest.raises(MissingPrice) as err:
+        ledger(price("300.00", date(2026, 10, 2))).run([p], date(2026, 10, 1))
+    assert (err.value.product_id, err.value.day) == (p.id, date(2026, 10, 1))
+    assert str(p.id) in str(err.value) and "2026-10-01" in str(err.value)
+
+
+def test_price_in_another_currency_is_a_missing_price():
+    with pytest.raises(MissingPrice, match="EUR"):
+        ledger(price("300.00", currency="USD")).run([product(date(2026, 10, 1))], date(2026, 10, 1))
+
+
+def test_price_in_the_account_currency_is_chosen():
+    book = ledger(price("9.00", currency="USD"), price("300.00"))
+    assert [a.amount for a in book.run([product(date(2026, 10, 1))], date(2026, 10, 1)).abrs] == [
+        D("300.00")
+    ]
+
+
+def test_prorate_refuses_float():
+    with pytest.raises(TypeError):
+        prorate(300.0, 1, rng(date(2026, 10, 1), date(2026, 11, 1)))  # type: ignore[arg-type]
+
+
+# --- bills ---
+
+
+def test_bill_on_the_cycle_day_collects_the_charge_of_that_run():
+    book = ledger()
+    result = book.run([product(date(2026, 10, 1))], date(2026, 10, 1))
+    [bill] = result.bills
+    assert (bill.bill_date, bill.period, bill.amount_due) == (
+        date(2026, 10, 1),
+        rng(date(2026, 10, 1), date(2026, 11, 1)),
+        D("300.00"),
+    )
+    assert book.abrs[0].bill_id == book.bills[0].id
+
+
+def test_mid_cycle_start_goes_onto_the_next_bill():
+    book = ledger()
+    assert book.run([product(date(2026, 10, 15))], date(2026, 10, 15)).bills == ()
+    [bill] = book.run([product(date(2026, 10, 15))], date(2026, 11, 1)).bills
+    assert (bill.bill_date, bill.amount_due) == (date(2026, 11, 1), D("464.52"))  # 164.52 + 300
+
+
+def test_bill_may_be_negative():
+    book = ledger()
+    book.run([product(date(2026, 10, 1))], date(2026, 10, 1))
+    terminated = [product(date(2026, 10, 1), date(2026, 10, 20))]
+    book.run(terminated, date(2026, 10, 20))
+    [bill] = book.run(terminated, date(2026, 11, 1)).bills
+    assert bill.amount_due == D("-116.13")
+
+
+def test_empty_bills_are_skipped_and_zero_bills_are_not():
+    book = ledger(price("0.01"))
+    assert book.run([], date(2026, 10, 1)).is_empty
+    book.run([product(date(2026, 10, 31))], date(2026, 10, 31))
+    [bill] = book.run([product(date(2026, 10, 31), date(2026, 11, 1))], date(2026, 11, 1)).bills
+    assert bill.amount_due == D("0.00")
+
+
+def test_missed_cycle_day_is_billed_with_what_was_known_by_then():
+    book = ledger()
+    book.run([product(date(2026, 10, 15))], date(2026, 10, 15))
+    # Nov 1 and Dec 1 missed; at Dec 3 the Nov 1 bill takes the Oct 15 charge, the two
+    # charges written at Dec 3 wait for Jan 1
+    result = book.run([product(date(2026, 10, 15))], date(2026, 12, 3))
+    [bill] = result.bills
+    assert (bill.bill_date, bill.amount_due, len(result.abrs)) == (
+        date(2026, 11, 1),
+        D("164.52"),
+        2,
+    )
+
+
+# --- inconsistent state is an error, never guessed around ---
+
+
+def test_as_of_before_a_stored_run_raises():
+    book = ledger()
+    book.run([product(date(2026, 10, 1))], date(2026, 10, 2))
+    with pytest.raises(InconsistentState):
+        book.compute([product(date(2026, 10, 1))], date(2026, 10, 1))
+
+
+def test_stored_charge_that_no_longer_matches_its_price_raises():
+    book = ledger()
+    book.run([product(date(2026, 10, 1))], date(2026, 10, 1))
+    book.prices = (price("299.00"),)
+    with pytest.raises(InconsistentState, match="does not match"):
+        book.compute([product(date(2026, 10, 1))], date(2026, 10, 2))
+
+
+def test_a_second_reduction_raises():
+    book = ledger()
+    book.run([product(date(2026, 10, 1))], date(2026, 10, 1))
+    book.run([product(date(2026, 10, 1), date(2026, 10, 20))], date(2026, 10, 2))
+    with pytest.raises(InconsistentState, match="already refunded"):
+        book.compute([product(date(2026, 10, 1), date(2026, 10, 10))], date(2026, 10, 3))
+
+
+def test_expected_above_charged_raises():
+    book = ledger()
+    book.run([product(date(2026, 10, 1), date(2026, 10, 20))], date(2026, 10, 1))
+    with pytest.raises(InconsistentState, match="expected"):
+        book.compute([product(date(2026, 10, 1))], date(2026, 10, 2))
