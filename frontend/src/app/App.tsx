@@ -1,33 +1,65 @@
-import { useEffect, useState } from 'react';
-import type { components } from '../api/generated/internal';
+import { getJson } from '../api/client';
+import { useResource } from '../api/useResource';
+import {
+  CatalogScreen,
+  NotFoundScreen,
+  SubscriberScreen,
+  SubscribersScreen,
+} from '../screens/placeholders';
+import { ErrorBlock } from '../ui/states';
+import { Panel, ToastProvider } from '../ui/kit';
+import '../ui/ui.css';
+import { CrumbsProvider, SystemContextProvider, type SystemContext } from './context';
+import { RouterProvider, useRouter } from './router';
+import { Shell } from './Shell';
 
-type Context = components['schemas']['Context'];
+const CONTEXT = '/internal/v1/context';
 
-// Scaffold only (stage 5 checkpoint 3): proves the dev proxy, the generated types and the
-// fonts. The real shell - sidebar, top bar, router - is checkpoint 4.
-export function App() {
-  const [context, setContext] = useState<Context | null>(null);
-  const [error, setError] = useState<string | null>(null);
+function Screen() {
+  const { route } = useRouter();
+  switch (route.name) {
+    case 'subscribers':
+      return <SubscribersScreen />;
+    case 'subscriber':
+      return <SubscriberScreen accountId={route.accountId} />;
+    case 'catalog':
+      return <CatalogScreen />;
+    case 'notFound':
+      return <NotFoundScreen path={route.path} />;
+  }
+}
 
-  useEffect(() => {
-    fetch('/internal/v1/context')
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`GET /internal/v1/context → ${response.status}`);
-        setContext((await response.json()) as Context);
-      })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  }, []);
-
+/** The business date and time zone come first: no screen can show a date without them. */
+function Root() {
+  const context = useResource(CONTEXT, (signal) => getJson<SystemContext>(CONTEXT, signal));
   return (
-    <main style={{ padding: 'var(--pad-page)' }}>
-      <h1 style={{ fontSize: 'var(--fs-18)', fontWeight: 600 }}>BSS Console</h1>
-      {error && <p className="neg">{error}</p>}
-      {context && (
-        <p>
-          Business date <span className="num">{context.businessDate}</span> · Time zone{' '}
-          <span className="num">UTC{context.utcOffset}</span>
-        </p>
+    <Shell context={context.status === 'ok' ? context.data : null}>
+      {context.status === 'error' && (
+        <Panel>
+          <ErrorBlock
+            title="Failed to load the business date"
+            error={context.error}
+            onRetry={context.retry}
+          />
+        </Panel>
       )}
-    </main>
+      {context.status === 'ok' && (
+        <SystemContextProvider value={context.data}>
+          <Screen />
+        </SystemContextProvider>
+      )}
+    </Shell>
+  );
+}
+
+export function App() {
+  return (
+    <RouterProvider>
+      <CrumbsProvider>
+        <ToastProvider>
+          <Root />
+        </ToastProvider>
+      </CrumbsProvider>
+    </RouterProvider>
   );
 }

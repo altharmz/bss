@@ -44,6 +44,17 @@ export function clockTime(instant: string, timeZone: string): string {
   return `${p.hour}:${p.minute}:${p.second}`;
 }
 
+/** The top bar's zone label from /internal/v1/context's utcOffset: "+03:00" -> "UTC+3",
+ * "+05:30" -> "UTC+5:30", "-04:00" -> "UTC−4" (U+2212), "+00:00" -> "UTC". */
+export function utcLabel(offset: string): string {
+  const match = /^([+-])(\d{2}):(\d{2})$/.exec(offset);
+  if (!match) throw new RangeError(`not a UTC offset: ${offset}`);
+  const [, sign, hh, mm] = match as unknown as [string, string, string, string];
+  const hours = Number(hh);
+  if (hours === 0 && mm === '00') return 'UTC';
+  return `UTC${sign === '-' ? '−' : '+'}${hours}${mm === '00' ? '' : `:${mm}`}`;
+}
+
 /** Calendar arithmetic on YYYY-MM-DD, independent of any time zone. */
 export function addDays(day: string, days: number): string {
   if (!isIsoDate(day)) throw new RangeError(`not a date: ${day}`);

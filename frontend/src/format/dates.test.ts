@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, businessDate, clockTime, isIsoDate } from './dates';
+import { addDays, businessDate, clockTime, isIsoDate, utcLabel } from './dates';
+
+describe('utcLabel', () => {
+  it.each([
+    ['+03:00', 'UTC+3'],
+    ['+05:30', 'UTC+5:30'],
+    ['-04:00', 'UTC−4'],
+    ['+00:00', 'UTC'],
+    ['-00:00', 'UTC'],
+    ['+10:00', 'UTC+10'],
+  ])('%s -> %s', (offset, label) => {
+    expect(utcLabel(offset)).toBe(label);
+  });
+
+  it('rejects garbage', () => {
+    expect(() => utcLabel('+3')).toThrow(RangeError);
+  });
+});
 
 const MSK = 'Europe/Moscow';
 
