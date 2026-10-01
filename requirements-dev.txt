@@ -8,3 +8,5 @@ openapi-schema-validator==0.9.0
 # Exact pin: property tests in tests/test_billing_properties.py; a new version can change
 # the generated examples (and the database of saved failures).
 hypothesis==6.168.3
+# make test runs the suite with -n auto; every test has its own cloned database.
+pytest-xdist==3.8.0

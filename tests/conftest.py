@@ -2,6 +2,7 @@ import os
 import uuid
 from collections.abc import Iterator
 
+import hypothesis
 import psycopg
 import pytest
 from alembic.config import Config
@@ -9,6 +10,19 @@ from psycopg import sql
 
 from alembic import command
 from app.config import settings
+
+# Hypothesis profiles, picked by HYPOTHESIS_PROFILE (the Makefile sets it): `dev` for make
+# test and the pre-commit hook, `ci` for make verify. No example database: /app is not
+# writable in the container, and a failure prints its example anyway.
+for _name, _examples in (("dev", 50), ("ci", 200)):
+    hypothesis.settings.register_profile(
+        _name,
+        max_examples=_examples,
+        deadline=None,
+        database=None,
+        suppress_health_check=[hypothesis.HealthCheck.too_slow],
+    )
+hypothesis.settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "dev"))
 
 # Captured at import: the `api` fixture points settings.database_url at the test database,
 # and creating or dropping databases must not connect to the one being dropped.

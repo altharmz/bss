@@ -2,27 +2,20 @@
 termination becomes known at some point, and sequences of runs with gaps and repeats.
 
 The expected amounts come from an oracle written independently of app/billing: it counts
-billable days one by one instead of intersecting ranges."""
+billable days one by one instead of intersecting ranges.
+
+The number of examples comes from the hypothesis profile (tests/conftest.py)."""
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal
 
-from hypothesis import HealthCheck, event, given, settings
+from hypothesis import event, given
 from hypothesis import strategies as st
 
 from app.billing.model import Price, Product
 from tests.billing_sim import Ledger, account, midnight, price, product
-
-settings.register_profile(
-    "billing",
-    max_examples=200,
-    deadline=None,
-    database=None,  # /app is not writable in the container; failures print their example
-    suppress_health_check=[HealthCheck.too_slow],
-)
-PROFILE = settings.get_profile("billing")
 
 BASE = date(2027, 11, 1)  # the horizon covers Feb 2028 (leap year)
 HORIZON = 300
@@ -197,7 +190,6 @@ def run_daily(sc: Scenario) -> Ledger:
 # --- properties ---
 
 
-@settings(PROFILE)
 @given(scenarios())
 def test_a_second_run_at_the_same_date_emits_nothing(sc):
     book = sc.ledger()
@@ -207,7 +199,6 @@ def test_a_second_run_at_the_same_date_emits_nothing(sc):
         assert again.is_empty, f"second run at {d} emitted {again}"
 
 
-@settings(PROFILE)
 @given(scenarios())
 def test_net_per_period_matches_one_rounding_and_lifetime_has_no_drift(sc):
     book = run_daily(sc)
@@ -253,7 +244,6 @@ def refund_scenarios(draw) -> Scenario:
     return Scenario(cycle_day, prices, (spec,), (start, known))
 
 
-@settings(PROFILE)
 @given(refund_scenarios())
 def test_refund_keeps_the_period_net_exact(sc):
     book = run_daily(sc)
@@ -264,7 +254,6 @@ def test_refund_keeps_the_period_net_exact(sc):
     assert all(r.refunds_id == charge.id for r in refunds)
 
 
-@settings(PROFILE)
 @given(scenarios())
 def test_refunds_overlap_precision_currency(sc):
     book = run_daily(sc)
@@ -285,7 +274,6 @@ def test_refunds_overlap_precision_currency(sc):
         assert abr.kind != "recurring" or abr.amount >= 0
 
 
-@settings(PROFILE)
 @given(scenarios())
 def test_bills_collect_every_abr_exactly_once(sc):
     book = run_daily(sc)
@@ -308,7 +296,6 @@ def test_bills_collect_every_abr_exactly_once(sc):
     assert len(dates) == len(set(dates))  # one bill per cycle day: periods never overlap
 
 
-@settings(PROFILE)
 @given(scenarios())
 def test_replay_of_the_same_dates_is_identical(sc):
     first, replay = run_daily(sc), run_daily(sc)
@@ -317,7 +304,6 @@ def test_replay_of_the_same_dates_is_identical(sc):
     assert first.collected == replay.collected and first.amount_due == replay.amount_due
 
 
-@settings(PROFILE)
 @given(scenarios())
 def test_daily_runs_and_one_catch_up_run_give_the_same_net_per_period(sc):
     daily = run_daily(sc)

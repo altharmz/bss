@@ -70,7 +70,9 @@ def spec(api: str) -> dict[str, Any]:
     path = SPEC_DIR / SPEC_FILES[api]
     assert path.is_file(), f"spec file missing: {path} (is ./spec mounted?)"
     text = path.read_text()
-    return json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
+    # libyaml's loader: same documents, ~6x faster than safe_load's pure-Python one, and
+    # every xdist worker parses all the specs once
+    return json.loads(text) if path.suffix == ".json" else yaml.load(text, Loader=yaml.CSafeLoader)
 
 
 def _schemas_pointer(api: str) -> str:

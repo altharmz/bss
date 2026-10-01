@@ -53,7 +53,7 @@ It exits non-zero and prints remote logs when anything fails.
 
 ## Pre-commit hook
 
-`scripts/pre-commit.sh` runs `make lint` then `make test` (~95s) and blocks the commit on
+`scripts/pre-commit.sh` runs `make lint` then `make test` (~65s) and blocks the commit on
 failure.
 
 - Not installed by default — `.git/hooks/` is never tracked by git, so every clone (this
@@ -182,6 +182,14 @@ would attach the prod container to both `lab` and `shared`).
 - `/healthz` must stay cheap and must verify the DB connection — Docker's HEALTHCHECK
   and the deploy script both depend on it.
 - Python 3.12, `ruff` for lint and format, `pytest` for tests.
+- `make test` runs the suite in parallel (`pytest -n auto`, pytest-xdist). Tests share
+  nothing: each worker migrates its own template database and every test gets its own
+  clone, dropped afterwards (a run leaves no `vpslab_%` database behind). Hypothesis
+  examples per property come from a profile selected by `HYPOTHESIS_PROFILE`: `dev` (50)
+  for `make test` and the pre-commit hook, `ci` (200) for `make verify` (a target-specific
+  variable in the Makefile). Plain `pytest` without the variable uses `dev`.
+- Spec YAML is parsed with libyaml (`yaml.CSafeLoader`), not `yaml.safe_load`: same
+  documents, ~6x faster, and every xdist worker parses all of `spec/` once.
 - Dependencies: add to `requirements.txt` (runtime) or `requirements-dev.txt` (tooling),
   then rebuild. Do not `pip install` inside a running container.
 - Before every commit: `make lint && make test`. Small, focused commits.

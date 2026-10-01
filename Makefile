@@ -9,6 +9,8 @@ REMOTE ?= vps-test
 REMOTE_DIR ?= bss
 IMAGE_NAME ?= bss-app
 TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
+# Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
+HYPOTHESIS_PROFILE ?= dev
 
 .PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote hooks spec-verify-upstream
 
@@ -33,8 +35,8 @@ ps: ## Container status, including health
 shell: ## Shell inside the running app container
 	docker compose exec app /bin/bash
 
-test: ## Run the test suite in the container
-	docker compose run --rm app pytest
+test: ## Run the test suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci)
+	docker compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) app pytest -n auto
 
 migrate: ## Apply Alembic migrations against the local stack
 	docker compose run --rm app alembic upgrade head
@@ -55,6 +57,8 @@ smoke: ## Smoke-test the local instance
 deploy: ## Build locally and ship to the VPS
 	./scripts/deploy.sh
 
+# Target-specific: also applies to verify's `test` prerequisite.
+verify: HYPOTHESIS_PROFILE = ci
 verify: lint test deploy ## Full gate: lint, tests, then a real deployment that must go healthy
 	@echo "verified: local checks passed and the remote instance is healthy"
 
