@@ -369,3 +369,109 @@ describe('lifecycle', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 });
+
+describe('change price', () => {
+  const CHANGE = `POST /internal/v1/productOffering/${ids(1)}/priceChange`;
+
+  async function openChange() {
+    await open();
+    await waitFor(() => row('Mobile L'));
+    fireEvent.click(row('Mobile L'));
+    const dialog = screen.getByRole('dialog', { name: 'Mobile L' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change price' }));
+    return within(dialog).getByRole('region', { name: 'Change price' });
+  }
+  const priceField = (form: HTMLElement) => within(form).getByLabelText(/New price, RUB/);
+  const submit = (form: HTMLElement) =>
+    within(form).getByRole('button', { name: 'Change price' }) as HTMLButtonElement;
+
+  it('is offered only where there is an open-ended price to replace', async () => {
+    backend();
+    await open();
+    await waitFor(() => row('Old Mobile'));
+    fireEvent.click(row('Old Mobile')); // no price at all
+    const dialog = screen.getByRole('dialog', { name: 'Old Mobile' });
+    expect(within(dialog).queryByRole('button', { name: 'Change price' })).toBeNull();
+  });
+
+  it('says when existing products and new orders pick up the new price', async () => {
+    backend();
+    const form = await openChange();
+    expect((within(form).getByLabelText('From') as HTMLInputElement).value).toBe('2026-10-02');
+    expect(form.textContent).toContain(
+      'Existing products pick up the new price from their next billing period starting on' +
+        ' or after 2026-10-02; new orders from 2026-10-02.',
+    );
+    fireEvent.change(within(form).getByLabelText('From'), { target: { value: '2026-11-01' } });
+    expect(form.textContent).toContain(
+      'starting on or after 2026-11-01; new orders from 2026-11-01',
+    );
+  });
+
+  it('validates the price and the date', async () => {
+    backend();
+    const form = await openChange();
+    expect(submit(form).disabled).toBe(true);
+    fireEvent.change(priceField(form), { target: { value: '0' } });
+    expect(within(form).getByRole('alert').textContent).toBe('Price must be a positive number');
+    fireEvent.change(priceField(form), { target: { value: '1,390' } });
+    fireEvent.change(within(form).getByLabelText('From'), { target: { value: '2026-10-01' } });
+    expect(within(form).getByRole('alert').textContent).toBe(
+      'The new price can start on 2026-10-02 at the earliest',
+    );
+    expect(submit(form).disabled).toBe(true);
+  });
+
+  it('sends one atomic change with the exact amount and closes', async () => {
+    const { fetchMock } = backend({
+      [CHANGE]: () =>
+        json(
+          {
+            productOffering: { id: ids(1), href: '/o' },
+            endedPrice: { id: 'pr1', href: '/p1', endsOn: '2026-11-01' },
+            newPrice: { id: 'pr9', href: '/p9', price: rub(1390), validFrom: '2026-11-01' },
+          },
+          { status: 201 },
+        ),
+    });
+    const form = await openChange();
+    fireEvent.change(priceField(form), { target: { value: '1,390' } });
+    fireEvent.change(within(form).getByLabelText('From'), { target: { value: '2026-11-01' } });
+    fireEvent.click(submit(form));
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Price of MOB-L changes to 1,390.00 RUB from 2026-11-01',
+    );
+    const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/priceChange'));
+    expect(String(call?.[1]?.body)).toBe(
+      '{"amount":1390.00,"currency":"RUB","validFrom":"2026-11-01"}',
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('shows a refusal from the backend and keeps the form', async () => {
+    backend({
+      [CHANGE]: () =>
+        json(
+          {
+            '@type': 'Error',
+            code: '409',
+            reason: 'Conflict',
+            message: 'a recurring price in RUB already starts on or after 2026-11-01',
+            status: '409',
+          },
+          { status: 409 },
+        ),
+    });
+    const form = await openChange();
+    fireEvent.change(priceField(form), { target: { value: '1390' } });
+    fireEvent.change(within(form).getByLabelText('From'), { target: { value: '2026-11-01' } });
+    fireEvent.click(submit(form));
+    expect(
+      await within(form).findByText(
+        'a recurring price in RUB already starts on or after 2026-11-01',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+});

@@ -217,6 +217,22 @@
   gap: 14px;
 }
 
+.bss-price-change {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--divider);
+  align-items: flex-start;
+}
+.bss-price-change .bss-form {
+  width: 100%;
+}
+.bss-price-change-note {
+  margin: 0;
+}
+
 /* --- add product modal --- */
 .bss-modal-body {
   display: flex;

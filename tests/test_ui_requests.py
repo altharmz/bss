@@ -133,3 +133,17 @@ def test_add_and_delete_orders_as_the_ui_sends_them(api):
     assert deleted.status_code == 201 and deleted.json()["state"] == "completed", deleted.text
     assert api.get(product["href"]).json()["status"] == "cancelled"
     assert TZ.key == "Europe/Moscow"  # the offsets above assume it
+
+
+def test_price_change_as_the_ui_sends_it(api):
+    """changePrice(): the amount as a raw number token, the date as a business date."""
+    offering = apidata.sellable_offering(api)
+    account = apidata.account(api)
+    api.clock.set(api.clock.now().replace(day=2))
+    assert apidata.order(api, account, apidata.add_item(offering))["state"] == "completed"
+    response = api.post_raw(
+        f"/internal/v1/productOffering/{offering['id']}/priceChange",
+        '{"amount":1390.00,"currency":"RUB","validFrom":"2026-11-01"}',
+    )
+    assert response.status_code == 201, response.text
+    assert decimals(response)["newPrice"]["price"] == {"unit": "RUB", "value": Decimal("1390.00")}

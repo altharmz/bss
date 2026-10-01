@@ -930,6 +930,10 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   room for an action column at 1280px. New offering = TMF620 price, then the In Design
   offering referencing it; the amount goes out as an exact JSON number token
   (`jsonWithAmount`), "Valid to" is inclusive in the UI and sent as the next midnight.
+  **Change price** (offering dialog, only when there is an open-ended price in the UI
+  currency) calls the atomic `priceChange` (D-W21); its copy states that existing products
+  pick up the new price from their next billing period starting on or after the date,
+  and new orders from the date.
 - **The UI's write requests are pinned on both sides**: component tests assert the exact
   bodies, and `tests/test_ui_requests.py` replays the same bodies against the real API.
   Change both together.

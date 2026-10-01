@@ -97,6 +97,10 @@ Nothing stuck; no command was refused during the run, and no protected file was 
 10. **Catalog row -> details**: TV Basic (In Design) -> Activate (confirm) -> Active; an
     Active offering -> Retire (warning copy) -> Retired; a Retired one offers nothing.
     Note: these change the seeded demo data (the API cannot delete).
+11. **Catalog row -> details -> Change price** (Mobile L): the copy about existing
+    products and new orders, a date today (refused), then a real change from a later
+    date; the dialog closes and the toast names the new price and date. Ordering that
+    offering afterwards still works (the price chain stays gapless).
 7. **Error states**: with web-dev running, `docker compose stop app`, reload (context
    error with the call and Retry), `docker compose start app`, Retry. Loading skeletons:
    throttle the network in devtools.

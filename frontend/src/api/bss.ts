@@ -346,6 +346,29 @@ export async function createOffering(form: NewOffering, timeZone: string): Promi
   return need(offering.id, 'offering id');
 }
 
+/**
+ * Change an offering's recurring price from `validFrom` (a business date, from tomorrow):
+ * one internal operation that ends the open price at that midnight and attaches the new
+ * one - atomic, because TMF620's two steps cannot work while a product is live (D-W21).
+ */
+export async function changePrice(
+  offeringId: string,
+  amount: string,
+  currency: string,
+  validFrom: string,
+): Promise<void> {
+  await postJson(
+    `/internal/v1/productOffering/${offeringId}/priceChange`,
+    jsonWithAmount({ amount: AMOUNT, currency, validFrom }, amount),
+  );
+}
+
+/** Whether the offering has an open-ended recurring price in `currency` - what a price
+ * change replaces. */
+export function hasOpenPrice(offering: CatalogOffering, currency: string): boolean {
+  return offering.prices.some((p) => p.currency === currency && p.to === null);
+}
+
 /** The only lifecycle steps the UI offers: In Design -> Active -> Retired. */
 export const NEXT_LIFECYCLE: Record<Lifecycle, Lifecycle | null> = {
   'In Design': 'Active',

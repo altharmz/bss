@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import {
+  changePrice,
   createOffering,
+  hasOpenPrice,
   loadCatalog,
   NEXT_LIFECYCLE,
   setLifecycle,
@@ -13,7 +15,7 @@ import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { addDays, businessDate } from '../format/dates';
-import { formatCents, formatInt } from '../format/money';
+import { formatCents, formatInt, parseAmount } from '../format/money';
 import { Button, Modal, PageTitle, Panel, Pill, Segmented, TextInput, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
@@ -315,8 +317,108 @@ export function OfferingModal({
             )}
           </dd>
         </dl>
+        {hasOpenPrice(offering, context.currency) && (
+          <PriceChangeSection offering={offering} label={label} onChanged={onChanged} />
+        )}
       </div>
     </Modal>
+  );
+}
+
+// --- change price (D-W21): one atomic internal operation ---
+
+function PriceChangeSection({
+  offering,
+  label,
+  onChanged,
+}: {
+  offering: CatalogOffering;
+  label: string;
+  onChanged: (message: string) => void;
+}) {
+  const context = useSystemContext();
+  const tomorrow = addDays(context.businessDate, 1);
+  const [open, setOpen] = useState(false);
+  const [price, setPrice] = useState('');
+  const [from, setFrom] = useState(tomorrow);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const parsed = price.trim() ? parseAmount(price) : null;
+  const amount = parsed !== null && parsed !== '0.00' ? parsed : null;
+  let error: string | null = null;
+  if (price.trim() && amount === null) error = 'Price must be a positive number';
+  else if (from && from < tomorrow)
+    error = `The new price can start on ${tomorrow} at the earliest`;
+  const ready = error === null && amount !== null && from !== '';
+
+  async function submit() {
+    if (!ready || amount === null) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await changePrice(offering.id, amount, context.currency, from);
+      onChanged(
+        `Price of ${label} changes to ${formatCents(Number(amount.replace('.', '')))}` +
+          ` ${context.currency} from ${from}`,
+      );
+    } catch (failure) {
+      setProblem(explain(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="bss-price-change">
+        <Button onClick={() => setOpen(true)}>Change price</Button>
+      </div>
+    );
+  }
+  const message = problem ?? error;
+  return (
+    <section className="bss-price-change" aria-label="Change price">
+      <div className="bss-step-head">Change price</div>
+      <div className="bss-form">
+        <label>
+          New price, {context.currency} / month
+          <TextInput
+            mono
+            inputMode="decimal"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+          />
+        </label>
+        <label>
+          From
+          <TextInput
+            mono
+            type="date"
+            min={tomorrow}
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+        </label>
+      </div>
+      <p className="bss-hint bss-price-change-note">
+        Existing products pick up the new price from their next billing period starting on or after{' '}
+        {from || '…'}; new orders from {from || '…'}.
+      </p>
+      {message !== null && (
+        <div className="bss-inline-error" role="alert">
+          {message}
+        </div>
+      )}
+      <div className="bss-confirm">
+        <Button variant="primary" disabled={!ready || busy} onClick={() => void submit()}>
+          Change price
+        </Button>
+        <Button onClick={() => setOpen(false)} disabled={busy}>
+          Cancel
+        </Button>
+      </div>
+    </section>
   );
 }
 
