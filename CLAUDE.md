@@ -888,6 +888,14 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   local `db`. Idempotent: if its catalog exists it does nothing; a partial seed is
   reported (reset with `make clean && make up`), never patched. Needs migrations at head
   (`make migrate`). `tests/test_seed.py` runs it on a throwaway database.
+- **Catalog:** lifecycle steps (In Design -> Active -> Retired, Retired final) are made
+  from an offering detail dialog (row click), with an inline confirm; the table has no
+  room for an action column at 1280px. New offering = TMF620 price, then the In Design
+  offering referencing it; the amount goes out as an exact JSON number token
+  (`jsonWithAmount`), "Valid to" is inclusive in the UI and sent as the next midnight.
+- **The UI's write requests are pinned on both sides**: component tests assert the exact
+  bodies, and `tests/test_ui_requests.py` replays the same bodies against the real API.
+  Change both together.
 - **Routes:** `/subscribers`, `/subscribers/{accountId}`, `/catalog`; `/` redirects to
   `/subscribers`; anything else is a not-found page. No Billing runs route or nav item
   until stage 4 (D6).
