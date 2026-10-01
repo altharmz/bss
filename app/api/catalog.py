@@ -12,7 +12,7 @@ An offering may carry a code, as the spec's externalIdentifier with exactly one 
 (409), upper case (^[A-Z0-9][A-Z0-9_-]{0,31}$), set on POST only and read-only after.
 """
 
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from typing import Any, Literal
 from uuid import UUID
 
@@ -27,6 +27,7 @@ from app.api.common import (
     Ref,
     TimePeriod,
     TmfModel,
+    billing_tz,
     check_type,
     columns,
     created,
@@ -268,6 +269,43 @@ def create_price(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     return created(price_body(row))
 
 
+def _first_uncovered_day(end: datetime) -> date:
+    """A price valid until `end` (exclusive) prices every midnight before it: the first
+    business date whose midnight it no longer covers."""
+    local = end.astimezone(billing_tz())
+    return local.date() if local.time() == time.min else local.date() + timedelta(days=1)
+
+
+def _no_gap(conn: psycopg.Connection, price: Row, new_end: datetime) -> None:
+    """Ending (or moving the end of) a recurring price must not leave a product of its
+    offering without a price: billing prices every period at its first billable day's
+    midnight, and a price can never be created in the past to fill a gap later
+    (stage 4 design, D-W18). Allowed if a successor of the same type and currency starts
+    exactly at the new end, or if every such product is terminated by then."""
+    offering_id = price["product_offering_id"]
+    if offering_id is None or price["price_type"] != "recurring":
+        return  # an unattached price prices nothing; one-time prices are not billed
+    if catalog.successor_price(
+        conn,
+        offering_id=offering_id,
+        price_type=price["price_type"],
+        currency=price["currency"],
+        starts_at=new_end,
+        exclude_id=price["id"],
+    ):
+        return
+    day = _first_uncovered_day(new_end)
+    uncovered = catalog.products_billable_from(
+        conn, offering_id=offering_id, currency=price["currency"], day=day
+    )
+    if uncovered:
+        raise conflict(
+            f"validFor.endDateTime would leave {len(uncovered)} product(s) of this offering"
+            f" in {price['currency']} without a price from {day}: terminate them by then,"
+            " or attach a price that starts exactly at the new end"
+        )
+
+
 @router.patch("/productOfferingPrice/{price_id}")
 def patch_price(price_id: str, body: MergePatchBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     check_type(body, "ProductOfferingPrice")
@@ -294,6 +332,8 @@ def patch_price(price_id: str, body: MergePatchBody, tx: Tx, clock: ClockDep) ->
                     "validFor.endDateTime can only be set or moved to the present or the"
                     " future, and only while the price has not ended yet"
                 )
+            if new_end is not None and new_end != old_end:
+                _no_gap(conn, current, new_end)
             changes["valid_for"] = new_range
         try:
             row = catalog.update_product_offering_price(conn, uid, changes)

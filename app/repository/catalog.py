@@ -140,6 +140,47 @@ def price_at(
     )
 
 
+def successor_price(
+    conn: psycopg.Connection,
+    *,
+    offering_id: UUID,
+    price_type: str,
+    currency: str,
+    starts_at: datetime,
+    exclude_id: UUID,
+) -> Row | None:
+    """A price of the offering, same type and currency, starting exactly at `starts_at`."""
+    return fetch_one(
+        conn,
+        """
+        SELECT * FROM product_offering_price
+        WHERE product_offering_id = %s AND price_type = %s AND currency = %s
+          AND lower(valid_for) = %s AND id <> %s
+        """,
+        (offering_id, price_type, currency, starts_at, exclude_id),
+    )
+
+
+def products_billable_from(
+    conn: psycopg.Connection, *, offering_id: UUID, currency: str, day: Any
+) -> list[Row]:
+    """Products of the offering, on accounts in `currency`, that are still billable on or
+    after `day`: not cancelled/aborted and not terminated by then (termination_date is
+    exclusive, so termination_date <= day means nothing from `day` on is billed)."""
+    return fetch_all(
+        conn,
+        """
+        SELECT p.id FROM product p
+        JOIN billing_account a ON a.id = p.billing_account_id
+        WHERE p.product_offering_id = %s AND a.currency = %s
+          AND p.status NOT IN ('cancelled', 'aborted')
+          AND (p.termination_date IS NULL OR p.termination_date > %s)
+        ORDER BY p.id
+        """,
+        (offering_id, currency, day),
+    )
+
+
 def prices_of_offering(conn: psycopg.Connection, offering_id: UUID) -> list[Row]:
     return fetch_all(
         conn,

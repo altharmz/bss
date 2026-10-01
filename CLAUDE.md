@@ -365,6 +365,18 @@ implemented; order processing lives in `app/ordering/`.
   moved to a value >= now (the injected clock), and only while the current end, if any,
   is not in the past (409 otherwise): a retroactive end, or reopening a price that has
   already ended, would change prices already used for billed periods.
+- **Ending a price never leaves a product without one (D-W18).** Setting or moving the
+  end E of a recurring price attached to an offering is a 409 unless a price of the same
+  offering, type and currency starts exactly at E, or every product of the offering on an
+  account in that currency (not cancelled/aborted) is terminated by the first business
+  date whose midnight the price no longer covers (E's date if E is midnight, else the
+  next day). A gap could never be filled later: prices never start in the past. A
+  missing price is therefore a data bug, fixed case by case with a reviewed one-off script
+  and an audit note - there is no waiver feature. **Known holes, still open:** ordering
+  does not check the future (an open-ended product ordered while its price has an end
+  and no exact successor creates the gap), and an offering's price cannot be changed while
+  a product is live (the successor overlaps the open price until it ends; ending first is
+  now refused) - see `docs/stage4-design.md`, D-W18.
 - **Offering code (migration 0003):** the spec's `externalIdentifier[]` with exactly one
   entry `{id: <code>, externalIdentifierType: "offeringCode", owner: "bss", @type:
   ExternalIdentifier}`. `owner` may be omitted on POST (any other value is a 422). The
