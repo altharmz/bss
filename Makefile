@@ -65,8 +65,12 @@ web-install: ## Install the UI's npm dependencies exactly as locked (npm ci; the
 web-dev: ## UI dev server on http://localhost:5173 (starts the local stack; proxies /tmf-api and /internal to it)
 	docker compose run --rm --service-ports web sh -c '$(WEB_DEPS) && npm run dev'
 
-web-build: ## Build the UI to frontend/dist
-	$(WEB) sh -c '$(WEB_DEPS) && npm run build'
+# The bss-build marker in index.html: deploy.sh passes the commit (WEB_BUILD=<tag>), the web
+# smoke test reads it back through Caddy.
+WEB_BUILD ?= dev
+
+web-build: ## Build the UI to frontend/dist (WEB_BUILD=<tag> sets its bss-build marker)
+	docker compose run --rm --no-deps -e VITE_BSS_BUILD=$(WEB_BUILD) web-offline sh -c '$(WEB_DEPS) && npm run build'
 
 web-lint: ## UI type check, eslint and prettier --check
 	$(WEB) sh -c '$(WEB_DEPS) && npm run lint'

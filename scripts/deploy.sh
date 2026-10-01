@@ -79,6 +79,20 @@ dirty="$(git status --porcelain)" || fail "not a git work tree - cannot tell wha
 Commit or stash first:
 ${dirty}"
 
+# The web smoke test goes through the shared Caddy as the GET-only `smoke` user. Read only
+# that one variable; it is handed to the smoke script in its environment, never printed.
+WEB_URL="${WEB_URL:-https://vpn2811.duckdns.org:8445}"
+SMOKE_BASIC_AUTH="$(sed -n 's/^SMOKE_BASIC_AUTH=//p' .env.prod | tail -n 1)"
+[[ "${SMOKE_BASIC_AUTH}" == smoke:?* ]] \
+  || fail "SMOKE_BASIC_AUTH=smoke:<password> is missing in .env.prod (see .env.example and docs/vps-infra-change-request.md)"
+
+# The admin UI is built locally too, before anything touches the network, with the commit
+# as its bss-build marker - the web smoke test reads it back through Caddy.
+log "Building the admin UI (frontend/dist, build ${TAG})"
+make web-build WEB_BUILD="${TAG}" </dev/null || fail "the UI build failed (run make web-install if node_modules is out of date)"
+grep -q "<meta name=\"bss-build\" content=\"${TAG}\"" frontend/dist/index.html \
+  || fail "frontend/dist/index.html does not carry build ${TAG}"
+
 log "Opening one SSH connection to ${REMOTE} for the whole deploy"
 open_master
 
@@ -173,9 +187,25 @@ rssh "curl -fsS --max-time 5 http://127.0.0.1:18081/healthz" \
   || { rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2; fail "smoke test failed"; }
 printf '\n'
 
+# The UI goes live only after the app that serves its API is up. The shared Caddy
+# bind-mounts ~/bss/web (vps-infra), and a bind mount holds the directory's inode: the
+# directory is created once and only ever synced INTO, never replaced or renamed, or
+# Caddy would keep serving the old one. Hashed assets first, then index.html (so the live
+# index.html never names an asset that is not there yet), then a pass that deletes stale
+# assets.
+log "Shipping the admin UI into ~/${REMOTE_DIR}/web (synced into the directory, never replaced)"
+rssh "mkdir -p ${REMOTE_DIR}/web"
+"${RSYNC[@]}" --exclude index.html frontend/dist/ "${REMOTE}:${REMOTE_DIR}/web/"
+"${RSYNC[@]}" frontend/dist/index.html "${REMOTE}:${REMOTE_DIR}/web/index.html"
+"${RSYNC[@]}" --delete frontend/dist/ "${REMOTE}:${REMOTE_DIR}/web/"
+
+log "Web smoke test through Caddy (${WEB_URL})"
+SMOKE_BASIC_AUTH="${SMOKE_BASIC_AUTH}" ./scripts/web-smoke.sh "${WEB_URL}" "${TAG}" \
+  || fail "web smoke test failed (see above). The app itself is deployed and healthy; check the vps-infra Caddy routes and the files in ~/${REMOTE_DIR}/web"
+
 log "Pruning old ${IMAGE_NAME} images on ${REMOTE} (keeping ${KEEP_IMAGES}, nothing else is touched)"
 rssh "docker images '${IMAGE_NAME}' --format '{{.ID}} {{.CreatedAt}}' \
   | sort -k2 -r | tail -n +$((KEEP_IMAGES + 1)) | awk '{print \$1}' \
   | xargs -r docker rmi" || true
 
-log "Deployed ${IMAGE_NAME}:${TAG} — reachable at 127.0.0.1:18081 on ${REMOTE}"
+log "Deployed ${IMAGE_NAME}:${TAG} — app at 127.0.0.1:18081 on ${REMOTE}, UI at ${WEB_URL}"
