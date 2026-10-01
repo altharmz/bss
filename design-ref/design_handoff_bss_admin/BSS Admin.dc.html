@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#f5f6f8}
+*{box-sizing:border-box}
+a{color:#2356c7;text-decoration:none}
+a:hover{color:#1a3f94;text-decoration:underline}
+input,select,button{font-family:inherit}
+button:disabled{cursor:not-allowed !important;opacity:.45}
+</style>
+</helmet>
+<div style="display:flex;min-height:100vh;min-width:1280px;background:#f5f6f8;color:#1c2127;font-family:'Golos Text',system-ui,sans-serif;font-size:13px;line-height:1.4">
+
+  <aside style="width:212px;flex:none;background:#fff;border-right:1px solid #e2e5e9;display:flex;flex-direction:column;position:sticky;top:0;height:100vh">
+    <div style="height:52px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid #e2e5e9">
+      <div style="width:22px;height:22px;border-radius:4px;background:#1c2127;color:#fff;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600">B</div>
+      <div style="font-weight:600;font-size:14px">BSS Console</div>
+      <div style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10px;padding:1px 5px;border:1px solid #d0d5dc;border-radius:3px;color:#667085">PROD</div>
+    </div>
+    <nav style="padding:12px 8px;display:flex;flex-direction:column;gap:2px">
+      <div style="padding:4px 10px 6px;font-size:11px;color:#8a93a0;text-transform:uppercase;letter-spacing:.05em">Operations</div>
+      <sc-for list="{{ nav }}" as="n" hint-placeholder-count="3">
+        <div onClick="{{ n.go }}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:4px;cursor:pointer;font-weight:{{ n.fw }};color:{{ n.fg }};background:{{ n.bg }}" style-hover="background:#eef1f5">
+          <span>{{ n.label }}</span>
+          <sc-if value="{{ n.hasBadge }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size:10.5px;font-weight:600;color:#fff;background:#d92d20;border-radius:3px;padding:1px 6px">failed</span>
+          </sc-if>
+          <sc-if value="{{ n.hasCount }}" hint-placeholder-val="{{ true }}">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8a93a0">{{ n.count }}</span>
+          </sc-if>
+        </div>
+      </sc-for>
+    </nav>
+    <div style="margin-top:auto;padding:12px 16px;border-top:1px solid #e2e5e9;display:flex;flex-direction:column;gap:2px">
+      <div style="font-weight:500">Irina Petrova</div>
+      <div style="font-size:12px;color:#667085">Billing operator · <span style="font-family:'JetBrains Mono',monospace">i.petrova</span></div>
+    </div>
+  </aside>
+
+  <main style="flex:1;min-width:0;display:flex;flex-direction:column">
+    <header style="height:52px;flex:none;background:#fff;border-bottom:1px solid #e2e5e9;display:flex;align-items:center;padding:0 24px;gap:8px;position:sticky;top:0;z-index:5">
+      <sc-for list="{{ crumbs }}" as="c" hint-placeholder-count="1">
+        <span onClick="{{ c.go }}" style="color:{{ c.fg }};cursor:{{ c.cursor }};font-weight:{{ c.fw }}">{{ c.label }}</span>
+        <sc-if value="{{ c.sep }}" hint-placeholder-val="{{ false }}"><span style="color:#c0c6ce">/</span></sc-if>
+      </sc-for>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:16px;font-size:12px;color:#667085">
+        <span>Business date <span style="font-family:'JetBrains Mono',monospace;color:#1c2127">2026-09-27</span></span>
+        <span>Time zone <span style="font-family:'JetBrains Mono',monospace;color:#1c2127">UTC+3</span></span>
+      </div>
+    </header>
+
+    <div style="padding:20px 24px 48px;display:flex;flex-direction:column;gap:16px">
+
+      <!-- ============ SUBSCRIBERS ============ -->
+      <sc-if value="{{ isSubs }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:baseline;gap:10px">
+            <h1 style="margin:0;font-size:18px;font-weight:600">Subscribers</h1>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#667085">{{ subsTotal }}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input value="{{ q }}" onChange="{{ onQ }}" placeholder="Search by name or subscriber number" style="width:340px;height:32px;padding:0 10px;border:1px solid #d0d5dc;border-radius:4px;font-size:13px;background:#fff;outline:none;color:#1c2127" style-focus="border-color:#2356c7;box-shadow:0 0 0 3px rgba(35,86,199,.15)">
+            <div style="display:flex;border:1px solid #d0d5dc;border-radius:4px;overflow:hidden;background:#fff">
+              <sc-for list="{{ subFilters }}" as="f" hint-placeholder-count="3">
+                <button onClick="{{ f.pick }}" style="height:30px;padding:0 12px;border:none;border-right:1px solid #e2e5e9;background:{{ f.bg }};color:{{ f.fg }};font-size:12.5px;font-weight:500;cursor:pointer;display:flex;gap:6px;align-items:center">{{ f.label }}<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8a93a0">{{ f.count }}</span></button>
+              </sc-for>
+            </div>
+            <div style="margin-left:auto;font-size:12px;color:#667085">Negative balance: <span style="font-family:'JetBrains Mono',monospace;color:#b42318;font-weight:600">{{ negCount }}</span></div>
+          </div>
+
+          <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:150px minmax(0,1fr) 120px 190px 160px 150px;background:#f8f9fa;border-bottom:1px solid #e2e5e9;font-size:11px;font-weight:500;color:#667085;text-transform:uppercase;letter-spacing:.04em">
+              <div style="padding:8px 12px">Subscriber no.</div>
+              <div style="padding:8px 12px">Name</div>
+              <div style="padding:8px 12px">Status</div>
+              <div style="padding:8px 12px;text-align:right">Balance</div>
+              <div style="padding:8px 12px;text-align:right">Active products</div>
+              <div style="padding:8px 12px;text-align:right">Registered</div>
+            </div>
+            <sc-if value="{{ st.loading }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ skel }}" as="k" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:150px minmax(0,1fr) 120px 190px 160px 150px;border-bottom:1px solid #eef0f2;align-items:center;height:37px">
+                  <div style="padding:0 12px"><div style="height:10px;width:90px;background:#eceef1;border-radius:2px"></div></div>
+                  <div style="padding:0 12px"><div style="height:10px;width:{{ k.w }};background:#eceef1;border-radius:2px"></div></div>
+                  <div style="padding:0 12px"><div style="height:14px;width:58px;background:#f1f2f4;border-radius:3px"></div></div>
+                  <div style="padding:0 12px;display:flex;justify-content:flex-end"><div style="height:10px;width:96px;background:#eceef1;border-radius:2px"></div></div>
+                  <div style="padding:0 12px;display:flex;justify-content:flex-end"><div style="height:10px;width:20px;background:#eceef1;border-radius:2px"></div></div>
+                  <div style="padding:0 12px;display:flex;justify-content:flex-end"><div style="height:10px;width:76px;background:#eceef1;border-radius:2px"></div></div>
+                </div>
+              </sc-for>
+            </sc-if>
+            <sc-if value="{{ st.error }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">
+                <div style="width:28px;height:28px;border-radius:50%;background:#fdecea;color:#b42318;display:flex;align-items:center;justify-content:center;font-weight:700">!</div>
+                <div style="font-size:14px;font-weight:600">Failed to load subscribers</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#667085">GET /tmf-api/customerManagement/v4/customer → 503 Service Unavailable</div>
+                <button onClick="{{ retry }}" style="margin-top:6px;height:30px;padding:0 14px;border:1px solid #d0d5dc;background:#fff;border-radius:4px;font-size:12.5px;font-weight:500;cursor:pointer;color:#1c2127" style-hover="background:#f3f4f6">Retry</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ subsEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
+                <div style="font-size:14px;font-weight:600">No subscribers yet</div>
+                <div style="color:#667085">Subscribers appear after registration via CRM or import.</div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ subsNoResults }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
+                <div style="font-size:14px;font-weight:600">No matches</div>
+                <div style="color:#667085">No subscribers match the search and status filter.</div>
+                <button onClick="{{ resetSubs }}" style="margin-top:6px;height:30px;padding:0 14px;border:1px solid #d0d5dc;background:#fff;border-radius:4px;font-size:12.5px;font-weight:500;cursor:pointer;color:#1c2127" style-hover="background:#f3f4f6">Reset filters</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ subsShow }}" hint-placeholder-val="{{ true }}">
+              <sc-for list="{{ subRows }}" as="r" hint-placeholder-count="10">
+                <div onClick="{{ r.open }}" style="display:grid;grid-template-columns:150px minmax(0,1fr) 120px 190px 160px 150px;border-bottom:1px solid #eef0f2;cursor:pointer;align-items:center;min-height:37px" style-hover="background:#f4f7fd">
+                  <div style="padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#2356c7">{{ r.id }}</div>
+                  <div style="padding:8px 12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">{{ r.name }}</div>
+                  <div style="padding:8px 12px"><span style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:3px;font-size:11.5px;font-weight:500;line-height:16px;color:{{ r.st.fg }};background:{{ r.st.bg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ r.st.dot }}"></span>{{ r.status }}</span></div>
+                  <div style="padding:8px 12px;display:flex;justify-content:flex-end;align-items:baseline;gap:6px;font-family:'JetBrains Mono',monospace;font-size:12.5px;font-variant-numeric:tabular-nums"><span style="color:{{ r.balFg }};background:{{ r.balBg }};font-weight:{{ r.balFw }};padding:1px 5px;border-radius:3px">{{ r.bal }}</span><span style="color:#8a93a0;font-size:11px">{{ r.cur }}</span></div>
+                  <div style="padding:8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:{{ r.prodFg }}">{{ r.prods }}</div>
+                  <div style="padding:8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#475467">{{ r.reg }}</div>
+                </div>
+              </sc-for>
+            </sc-if>
+            <div style="display:flex;justify-content:space-between;padding:8px 12px;font-size:12px;color:#667085;background:#fbfbfc">
+              <span>Showing <span style="font-family:'JetBrains Mono',monospace;color:#1c2127">{{ subsShown }}</span> of <span style="font-family:'JetBrains Mono',monospace;color:#1c2127">{{ subsTotal }}</span></span>
+              <span>Amounts in billing account currency</span>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ SUBSCRIBER CARD ============ -->
+      <sc-if value="{{ isCard }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div><span onClick="{{ goSubs }}" style="color:#2356c7;cursor:pointer;font-size:12.5px">← Back to subscribers</span></div>
+
+          <sc-if value="{{ st.loading }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;padding:18px 20px;display:flex;flex-direction:column;gap:12px">
+              <div style="height:16px;width:280px;background:#eceef1;border-radius:3px"></div>
+              <div style="height:10px;width:420px;background:#f1f2f4;border-radius:2px"></div>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;padding:18px 20px;display:grid;grid-template-columns:repeat(5,1fr);gap:20px">
+              <sc-for list="{{ skel5 }}" as="k" hint-placeholder-count="5">
+                <div style="display:flex;flex-direction:column;gap:8px"><div style="height:8px;width:70px;background:#f1f2f4;border-radius:2px"></div><div style="height:16px;width:110px;background:#eceef1;border-radius:3px"></div></div>
+              </sc-for>
+            </div>
+            <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;overflow:hidden">
+              <sc-for list="{{ skel4 }}" as="k" hint-placeholder-count="4">
+                <div style="display:flex;gap:24px;padding:13px 16px;border-bottom:1px solid #eef0f2"><div style="height:10px;width:{{ k.w }};background:#eceef1;border-radius:2px"></div><div style="height:10px;width:80px;background:#f1f2f4;border-radius:2px;margin-left:auto"></div></div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ st.error }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;padding:48px 24px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">
+              <div style="width:28px;height:28px;border-radius:50%;background:#fdecea;color:#b42318;display:flex;align-items:center;justify-content:center;font-weight:700">!</div>
+              <div style="font-size:14px;font-weight:600">Failed to load subscriber</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#667085">GET /tmf-api/accountManagement/v4/billingAccount/{{ card.acc }} → 504 Gateway Timeout</div>
+              <button onClick="{{ retry }}" style="margin-top:6px;height:30px;padding:0 14px;border:1px solid #d0d5dc;background:#fff;border-radius:4px;font-size:12.5px;font-weight:500;cursor:pointer;color:#1c2127" style-hover="background:#f3f4f6">Retry</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ st.ok }}" hint-placeholder-val="{{ true }}">
+            <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;padding:16px 20px;display:flex;align-items:center;gap:16px">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <h1 style="margin:0;font-size:20px;font-weight:600">{{ card.name }}</h1>
+                  <span style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:3px;font-size:11.5px;font-weight:500;line-height:16px;color:{{ card.st.fg }};background:{{ card.st.bg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ card.st.dot }}"></span>{{ card.status }}</span>
+                </div>
+                <div style="display:flex;gap:20px;font-size:12px;color:#667085">
+                  <span>Subscriber no. <span style="font-family:'JetBrains Mono',monospace;color:#1c2127">{{ card.id }}</span></span>
+                  <span>Billing account <span style="font-family:'JetBrains Mono',monospace;color:#1c2127">{{ card.acc }}</span></span>
+                  <span>Registered <span style="font-family:'JetBrains Mono',monospace;color:#1c2127">{{ card.reg }}</span></span>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                <button onClick="{{ openConnect }}" disabled="{{ card.inactive }}" style="height:32px;padding:0 14px;border:1px solid #1f4fb8;background:#2356c7;color:#fff;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer" style-hover="background:#1d49ad">+ Add product</button>
+                <sc-if value="{{ card.inactive }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px;color:#667085">Unavailable for inactive subscribers</span></sc-if>
+              </div>
+            </div>
+
+            <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px">
+              <div style="padding:10px 20px;border-bottom:1px solid #eef0f2;display:flex;justify-content:space-between;align-items:baseline">
+                <span style="font-weight:600">Billing account</span>
+                <span style="font-size:12px;color:#667085">BillingAccount <span style="font-family:'JetBrains Mono',monospace;color:#1c2127">{{ card.acc }}</span></span>
+              </div>
+              <div style="display:grid;grid-template-columns:1.3fr 0.7fr 1fr 1fr 1fr">
+                <div style="padding:14px 20px;border-right:1px solid #eef0f2;display:flex;flex-direction:column;gap:4px">
+                  <span style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.04em">Balance</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;color:{{ card.balFg }}">{{ card.bal }}</span>
+                  <sc-if value="{{ card.neg }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px;color:#b42318">In arrears</span></sc-if>
+                </div>
+                <div style="padding:14px 20px;border-right:1px solid #eef0f2;display:flex;flex-direction:column;gap:4px">
+                  <span style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.04em">Currency</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500">{{ card.cur }}</span>
+                </div>
+                <div style="padding:14px 20px;border-right:1px solid #eef0f2;display:flex;flex-direction:column;gap:4px">
+                  <span style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.04em">Billing cycle day</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500">{{ card.day }}</span>
+                  <span style="font-size:11.5px;color:#667085">next cycle <span style="font-family:'JetBrains Mono',monospace">{{ card.nextCycle }}</span></span>
+                </div>
+                <div style="padding:14px 20px;border-right:1px solid #eef0f2;display:flex;flex-direction:column;gap:4px">
+                  <span style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.04em">Credit limit</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500;font-variant-numeric:tabular-nums">{{ card.credit }}</span>
+                </div>
+                <div style="padding:14px 20px;display:flex;flex-direction:column;gap:4px">
+                  <span style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.04em">Available incl. credit</span>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500;font-variant-numeric:tabular-nums;color:{{ card.availFg }}">{{ card.avail }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;overflow:hidden">
+              <div style="padding:10px 16px;border-bottom:1px solid #e2e5e9;display:flex;align-items:baseline;gap:8px">
+                <span style="font-weight:600">Active products</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#667085">{{ card.prodCount }}</span>
+              </div>
+              <sc-if value="{{ card.hasProducts }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid;grid-template-columns:minmax(0,1fr) 140px 170px 170px 170px;background:#f8f9fa;border-bottom:1px solid #e2e5e9;font-size:11px;font-weight:500;color:#667085;text-transform:uppercase;letter-spacing:.04em">
+                  <div style="padding:8px 16px">Offering</div>
+                  <div style="padding:8px 12px">Activated</div>
+                  <div style="padding:8px 12px">Next charge</div>
+                  <div style="padding:8px 12px;text-align:right">Price</div>
+                  <div style="padding:8px 16px"></div>
+                </div>
+                <sc-for list="{{ card.products }}" as="p" hint-placeholder-count="3">
+                  <div style="display:grid;grid-template-columns:minmax(0,1fr) 140px 170px 170px 170px;border-bottom:1px solid #eef0f2;align-items:center;min-height:44px">
+                    <div style="padding:6px 16px;display:flex;flex-direction:column;min-width:0">
+                      <span style="font-weight:500">{{ p.name }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8a93a0">{{ p.code }} · {{ p.spec }}</span>
+                    </div>
+                    <div style="padding:6px 12px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#475467">{{ p.start }}</div>
+                    <div style="padding:6px 12px;font-family:'JetBrains Mono',monospace;font-size:12.5px">{{ p.next }}</div>
+                    <div style="padding:6px 12px;display:flex;justify-content:flex-end;align-items:baseline;gap:4px;font-family:'JetBrains Mono',monospace;font-size:12.5px;font-variant-numeric:tabular-nums"><span>{{ p.price }}</span><span style="color:#8a93a0;font-size:11px">{{ p.per }}</span></div>
+                    <div style="padding:6px 16px;display:flex;justify-content:flex-end;gap:6px;align-items:center">
+                      <sc-if value="{{ p.confirming }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-size:12px;color:#b42318">Deactivate?</span>
+                        <button onClick="{{ p.doOff }}" style="height:26px;padding:0 10px;border:1px solid #b42318;background:#b42318;color:#fff;border-radius:4px;font-size:12px;font-weight:500;cursor:pointer">Yes</button>
+                        <button onClick="{{ p.cancelOff }}" style="height:26px;padding:0 10px;border:1px solid #d0d5dc;background:#fff;color:#1c2127;border-radius:4px;font-size:12px;cursor:pointer">No</button>
+                      </sc-if>
+                      <sc-if value="{{ p.idle }}" hint-placeholder-val="{{ true }}">
+                        <button onClick="{{ p.askOff }}" style="height:26px;padding:0 10px;border:1px solid #d0d5dc;background:#fff;color:#b42318;border-radius:4px;font-size:12px;font-weight:500;cursor:pointer" style-hover="background:#fdf3f2;border-color:#e8b4ae">Deactivate</button>
+                      </sc-if>
+                    </div>
+                  </div>
+                </sc-for>
+              </sc-if>
+              <sc-if value="{{ card.noProducts }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:28px 24px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
+                  <div style="font-weight:600">No active products</div>
+                  <div style="color:#667085;font-size:12.5px">Add an offering from the catalog to start charging.</div>
+                  <sc-if value="{{ card.active }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ openConnect }}" style="margin-top:6px;height:30px;padding:0 14px;border:1px solid #d0d5dc;background:#fff;border-radius:4px;font-size:12.5px;font-weight:500;cursor:pointer;color:#2356c7" style-hover="background:#f3f4f6">+ Add product</button>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </div>
+
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start">
+              <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;overflow:hidden">
+                <div style="padding:10px 16px;border-bottom:1px solid #e2e5e9;display:flex;align-items:baseline;gap:8px">
+                  <span style="font-weight:600">Charge history</span>
+                  <span style="font-size:12px;color:#667085">AppliedCustomerBillingRate</span>
+                </div>
+                <sc-if value="{{ card.hasCharges }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:grid;grid-template-columns:92px minmax(0,1fr) 84px 110px;background:#f8f9fa;border-bottom:1px solid #e2e5e9;font-size:11px;font-weight:500;color:#667085;text-transform:uppercase;letter-spacing:.04em">
+                    <div style="padding:8px 12px 8px 16px">Date</div>
+                    <div style="padding:8px 12px">Period</div>
+                    <div style="padding:8px 12px;text-align:right">Days</div>
+                    <div style="padding:8px 16px 8px 12px;text-align:right">Amount</div>
+                  </div>
+                  <sc-for list="{{ card.charges }}" as="c" hint-placeholder-count="6">
+                    <div style="display:grid;grid-template-columns:92px minmax(0,1fr) 84px 110px;border-bottom:1px solid #eef0f2;align-items:center">
+                      <div style="padding:6px 12px 6px 16px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#475467">{{ c.date }}</div>
+                      <div style="padding:6px 12px;display:flex;flex-direction:column;min-width:0">
+                        <span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ c.period }}</span>
+                        <span style="font-size:11.5px;color:#8a93a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.offer }}</span>
+                      </div>
+                      <div style="padding:6px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;color:{{ c.daysFg }}">{{ c.days }}</div>
+                      <div style="padding:6px 16px 6px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12.5px;font-variant-numeric:tabular-nums">{{ c.amount }}</div>
+                    </div>
+                  </sc-for>
+                </sc-if>
+                <sc-if value="{{ card.noCharges }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:28px 24px;text-align:center;display:flex;flex-direction:column;gap:4px">
+                    <div style="font-weight:600">No charges</div>
+                    <div style="color:#667085;font-size:12.5px">Charges appear after the first billing run.</div>
+                  </div>
+                </sc-if>
+              </div>
+
+              <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;overflow:hidden">
+                <div style="padding:10px 16px;border-bottom:1px solid #e2e5e9;display:flex;align-items:baseline;gap:8px">
+                  <span style="font-weight:600">Transaction history</span>
+                  <span style="font-size:12px;color:#667085">{{ card.cur }}</span>
+                </div>
+                <sc-if value="{{ card.hasTx }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:grid;grid-template-columns:92px minmax(0,1fr) 116px 116px;background:#f8f9fa;border-bottom:1px solid #e2e5e9;font-size:11px;font-weight:500;color:#667085;text-transform:uppercase;letter-spacing:.04em">
+                    <div style="padding:8px 12px 8px 16px">Date</div>
+                    <div style="padding:8px 12px">Type</div>
+                    <div style="padding:8px 12px;text-align:right">Amount</div>
+                    <div style="padding:8px 16px 8px 12px;text-align:right">Balance after</div>
+                  </div>
+                  <sc-for list="{{ card.tx }}" as="t" hint-placeholder-count="6">
+                    <div style="display:grid;grid-template-columns:92px minmax(0,1fr) 116px 116px;border-bottom:1px solid #eef0f2;align-items:center">
+                      <div style="padding:6px 12px 6px 16px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#475467">{{ t.date }}</div>
+                      <div style="padding:6px 12px;display:flex;flex-direction:column;min-width:0">
+                        <span>{{ t.type }}</span>
+                        <span style="font-size:11.5px;color:#8a93a0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.note }}</span>
+                      </div>
+                      <div style="padding:6px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12.5px;font-variant-numeric:tabular-nums;color:{{ t.amtFg }};font-weight:500">{{ t.amount }}</div>
+                      <div style="padding:6px 16px 6px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12.5px;font-variant-numeric:tabular-nums;color:{{ t.afterFg }}">{{ t.after }}</div>
+                    </div>
+                  </sc-for>
+                </sc-if>
+                <sc-if value="{{ card.noTx }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:28px 24px;text-align:center;display:flex;flex-direction:column;gap:4px">
+                    <div style="font-weight:600">No transactions</div>
+                    <div style="color:#667085;font-size:12.5px">No payments or charges on this account.</div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- ============ CATALOG ============ -->
+      <sc-if value="{{ isCatalog }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <h1 style="margin:0;font-size:18px;font-weight:600">Product catalog</h1>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#667085">{{ catTotal }}</span>
+            <button onClick="{{ openCreate }}" style="margin-left:auto;height:32px;padding:0 14px;border:1px solid #1f4fb8;background:#2356c7;color:#fff;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer" style-hover="background:#1d49ad">+ New offering</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input value="{{ catQ }}" onChange="{{ onCatQ }}" placeholder="Search by code or name" style="width:300px;height:32px;padding:0 10px;border:1px solid #d0d5dc;border-radius:4px;font-size:13px;background:#fff;outline:none;color:#1c2127" style-focus="border-color:#2356c7;box-shadow:0 0 0 3px rgba(35,86,199,.15)">
+            <div style="display:flex;border:1px solid #d0d5dc;border-radius:4px;overflow:hidden;background:#fff">
+              <sc-for list="{{ catFilters }}" as="f" hint-placeholder-count="4">
+                <button onClick="{{ f.pick }}" style="height:30px;padding:0 12px;border:none;border-right:1px solid #e2e5e9;background:{{ f.bg }};color:{{ f.fg }};font-size:12.5px;font-weight:500;cursor:pointer;display:flex;gap:6px;align-items:center">{{ f.label }}<span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8a93a0">{{ f.count }}</span></button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;overflow:hidden">
+            <div style="display:grid;grid-template-columns:128px minmax(0,1fr) 160px 104px 76px 100px 176px;background:#f8f9fa;border-bottom:1px solid #e2e5e9;font-size:11px;font-weight:500;color:#667085;text-transform:uppercase;letter-spacing:.04em">
+              <div style="padding:8px 12px">Code</div>
+              <div style="padding:8px 12px">Name</div>
+              <div style="padding:8px 12px">Specification</div>
+              <div style="padding:8px 12px;text-align:right">Price, RUB</div>
+              <div style="padding:8px 12px">Period</div>
+              <div style="padding:8px 12px">Status</div>
+              <div style="padding:8px 12px">Validity</div>
+            </div>
+            <sc-if value="{{ st.loading }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ skel }}" as="k" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:128px minmax(0,1fr) 160px 104px 76px 100px 176px;border-bottom:1px solid #eef0f2;align-items:center;height:37px">
+                  <div style="padding:0 12px"><div style="height:10px;width:96px;background:#eceef1;border-radius:2px"></div></div>
+                  <div style="padding:0 12px"><div style="height:10px;width:{{ k.w }};background:#eceef1;border-radius:2px"></div></div>
+                  <div style="padding:0 12px"><div style="height:10px;width:120px;background:#f1f2f4;border-radius:2px"></div></div>
+                  <div style="padding:0 12px;display:flex;justify-content:flex-end"><div style="height:10px;width:60px;background:#eceef1;border-radius:2px"></div></div>
+                  <div style="padding:0 12px"><div style="height:10px;width:50px;background:#f1f2f4;border-radius:2px"></div></div>
+                  <div style="padding:0 12px"><div style="height:14px;width:64px;background:#f1f2f4;border-radius:3px"></div></div>
+                  <div style="padding:0 12px"><div style="height:10px;width:150px;background:#eceef1;border-radius:2px"></div></div>
+                </div>
+              </sc-for>
+            </sc-if>
+            <sc-if value="{{ st.error }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">
+                <div style="width:28px;height:28px;border-radius:50%;background:#fdecea;color:#b42318;display:flex;align-items:center;justify-content:center;font-weight:700">!</div>
+                <div style="font-size:14px;font-weight:600">Failed to load catalog</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#667085">GET /tmf-api/productCatalogManagement/v4/productOffering → 503 Service Unavailable</div>
+                <button onClick="{{ retry }}" style="margin-top:6px;height:30px;padding:0 14px;border:1px solid #d0d5dc;background:#fff;border-radius:4px;font-size:12.5px;font-weight:500;cursor:pointer;color:#1c2127" style-hover="background:#f3f4f6">Retry</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ catEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
+                <div style="font-size:14px;font-weight:600">Catalog is empty</div>
+                <div style="color:#667085">Create the first product offering. It starts in In Design.</div>
+                <button onClick="{{ openCreate }}" style="margin-top:6px;height:30px;padding:0 14px;border:1px solid #d0d5dc;background:#fff;border-radius:4px;font-size:12.5px;font-weight:500;cursor:pointer;color:#2356c7" style-hover="background:#f3f4f6">+ New offering</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ catNoResults }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
+                <div style="font-size:14px;font-weight:600">No matches</div>
+                <div style="color:#667085">No offerings match the search and status.</div>
+                <button onClick="{{ resetCat }}" style="margin-top:6px;height:30px;padding:0 14px;border:1px solid #d0d5dc;background:#fff;border-radius:4px;font-size:12.5px;font-weight:500;cursor:pointer;color:#1c2127" style-hover="background:#f3f4f6">Reset filters</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ catShow }}" hint-placeholder-val="{{ true }}">
+              <sc-for list="{{ catRows }}" as="o" hint-placeholder-count="10">
+                <div style="display:grid;grid-template-columns:128px minmax(0,1fr) 160px 104px 76px 100px 176px;border-bottom:1px solid #eef0f2;align-items:center;min-height:37px;background:{{ o.rowBg }}" style-hover="background:#f7f9fc">
+                  <div style="padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:12.5px">{{ o.code }}</div>
+                  <div style="padding:8px 12px;font-weight:500;color:{{ o.nameFg }}">{{ o.name }}</div>
+                  <div style="padding:8px 12px;color:#475467;font-size:12.5px">{{ o.spec }}</div>
+                  <div style="padding:8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12.5px;font-variant-numeric:tabular-nums">{{ o.price }}</div>
+                  <div style="padding:8px 12px;color:#475467">{{ o.per }}</div>
+                  <div style="padding:8px 12px"><span style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:3px;font-size:11.5px;font-weight:500;line-height:16px;white-space:nowrap;color:{{ o.st.fg }};background:{{ o.st.bg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ o.st.dot }}"></span>{{ o.status }}</span></div>
+                  <div style="padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#475467">{{ o.valid }}</div>
+                </div>
+              </sc-for>
+            </sc-if>
+            <div style="display:flex;justify-content:space-between;padding:8px 12px;font-size:12px;color:#667085;background:#fbfbfc">
+              <span>Showing <span style="font-family:'JetBrains Mono',monospace;color:#1c2127">{{ catShown }}</span> of <span style="font-family:'JetBrains Mono',monospace;color:#1c2127">{{ catTotal }}</span></span>
+              <span>Prices include VAT</span>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ============ BILLING RUNS ============ -->
+      <sc-if value="{{ isBilling }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <h1 style="margin:0;font-size:18px;font-weight:600">Billing runs</h1>
+            <span style="font-size:12px;color:#667085">Scheduled daily at 02:00 UTC+3</span>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+              <span style="font-size:12px;color:#667085">Cycle date</span>
+              <input type="date" value="{{ runDate }}" max="2026-09-27" onChange="{{ onRunDate }}" style="height:32px;padding:0 8px;border:1px solid #d0d5dc;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:12.5px;background:#fff;color:#1c2127">
+              <button onClick="{{ runManual }}" disabled="{{ runBusy }}" style="height:32px;padding:0 14px;border:1px solid #1f4fb8;background:#2356c7;color:#fff;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer" style-hover="background:#1d49ad">Run manually</button>
+            </div>
+          </div>
+
+          <sc-if value="{{ st.loading }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;padding:18px 20px;display:grid;grid-template-columns:repeat(5,1fr);gap:20px">
+              <sc-for list="{{ skel5 }}" as="k" hint-placeholder-count="5">
+                <div style="display:flex;flex-direction:column;gap:8px"><div style="height:8px;width:70px;background:#f1f2f4;border-radius:2px"></div><div style="height:16px;width:110px;background:#eceef1;border-radius:3px"></div></div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ bill.hasLatest }}" hint-placeholder-val="{{ true }}">
+            <sc-if value="{{ bill.latestFailed }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:6px;background:#d92d20;color:#fff">
+                <span style="width:20px;height:20px;border-radius:50%;background:#fff;color:#d92d20;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none">!</span>
+                <span style="font-weight:600">Latest run for {{ bill.latest.date }} failed.</span>
+                <span style="opacity:.9">Some accounts were not processed; charges are incomplete.</span>
+                <button onClick="{{ bill.latest.retry }}" style="margin-left:auto;height:28px;padding:0 12px;border:1px solid #fff;background:#fff;color:#b42318;border-radius:4px;font-size:12.5px;font-weight:600;cursor:pointer">Re-run for {{ bill.latest.date }}</button>
+              </div>
+            </sc-if>
+            <div style="background:{{ bill.latest.cardBg }};border:1px solid {{ bill.latest.cardBorder }};border-radius:6px">
+              <div style="padding:10px 20px;border-bottom:1px solid {{ bill.latest.cardBorder }};display:flex;align-items:center;gap:10px">
+                <span style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.04em;font-weight:500">Latest run</span>
+                <span style="font-family:'JetBrains Mono',monospace;font-weight:600">{{ bill.latest.date }}</span>
+                <span style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:3px;font-size:11.5px;font-weight:500;line-height:16px;color:{{ bill.latest.st.fg }};background:{{ bill.latest.st.bg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ bill.latest.st.dot }}"></span>{{ bill.latest.status }}</span>
+                <sc-if value="{{ bill.latest.manual }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px;color:#667085;border:1px solid #d0d5dc;border-radius:3px;padding:0 6px">manual</span></sc-if>
+                <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#8a93a0">{{ bill.latest.runId }}</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(5,1fr)">
+                <div style="padding:12px 20px;display:flex;flex-direction:column;gap:3px"><span style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.04em">Start</span><span style="font-family:'JetBrains Mono',monospace;font-size:16px">{{ bill.latest.start }}</span></div>
+                <div style="padding:12px 20px;display:flex;flex-direction:column;gap:3px"><span style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.04em">End</span><span style="font-family:'JetBrains Mono',monospace;font-size:16px">{{ bill.latest.end }}</span></div>
+                <div style="padding:12px 20px;display:flex;flex-direction:column;gap:3px"><span style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.04em">Duration</span><span style="font-family:'JetBrains Mono',monospace;font-size:16px">{{ bill.latest.dur }}</span></div>
+                <div style="padding:12px 20px;display:flex;flex-direction:column;gap:3px"><span style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.04em">Charges</span><span style="font-family:'JetBrains Mono',monospace;font-size:16px;font-variant-numeric:tabular-nums">{{ bill.latest.count }}</span></div>
+                <div style="padding:12px 20px;display:flex;flex-direction:column;gap:3px"><span style="font-size:11px;color:#667085;text-transform:uppercase;letter-spacing:.04em">Amount, RUB</span><span style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums">{{ bill.latest.total }}</span></div>
+              </div>
+              <sc-if value="{{ bill.latest.hasProgress }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:0 20px 14px;display:flex;align-items:center;gap:12px">
+                  <div style="flex:1;height:6px;background:#e3e9f6;border-radius:3px;overflow:hidden"><div style="height:100%;width:{{ bill.latest.pct }};background:#2356c7"></div></div>
+                  <span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#475467">{{ bill.latest.progress }}</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ bill.latestFailed }}" hint-placeholder-val="{{ false }}">
+                <div style="margin:0 20px 14px;padding:8px 12px;background:#fff;border:1px solid #f2c4bf;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#b42318">{{ bill.latest.err }}</div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <div style="background:#fff;border:1px solid #e2e5e9;border-radius:6px;overflow:hidden">
+            <div style="padding:10px 16px;border-bottom:1px solid #e2e5e9;display:flex;align-items:baseline;gap:8px">
+              <span style="font-weight:600">Run history</span>
+              <span style="font-size:12px;color:#667085">last 14 days</span>
+            </div>
+            <div style="display:grid;grid-template-columns:112px 86px 100px 104px 112px minmax(0,1fr) 100px 140px;background:#f8f9fa;border-bottom:1px solid #e2e5e9;font-size:11px;font-weight:500;color:#667085;text-transform:uppercase;letter-spacing:.04em">
+              <div style="padding:8px 16px">Cycle date</div>
+              <div style="padding:8px 12px">Start</div>
+              <div style="padding:8px 12px">End</div>
+              <div style="padding:8px 12px">Duration</div>
+              <div style="padding:8px 12px">Status</div>
+              <div style="padding:8px 12px">Note</div>
+              <div style="padding:8px 12px;text-align:right">Charges</div>
+              <div style="padding:8px 16px 8px 12px;text-align:right">Amount, RUB</div>
+            </div>
+            <sc-if value="{{ st.loading }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ skel }}" as="k" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:112px 86px 100px 104px 112px minmax(0,1fr) 100px 140px;border-bottom:1px solid #eef0f2;align-items:center;height:37px">
+                  <div style="padding:0 16px"><div style="height:10px;width:76px;background:#eceef1;border-radius:2px"></div></div>
+                  <div style="padding:0 12px"><div style="height:10px;width:56px;background:#f1f2f4;border-radius:2px"></div></div>
+                  <div style="padding:0 12px"><div style="height:10px;width:56px;background:#f1f2f4;border-radius:2px"></div></div>
+                  <div style="padding:0 12px"><div style="height:10px;width:70px;background:#f1f2f4;border-radius:2px"></div></div>
+                  <div style="padding:0 12px"><div style="height:14px;width:76px;background:#f1f2f4;border-radius:3px"></div></div>
+                  <div style="padding:0 12px"></div>
+                  <div style="padding:0 12px;display:flex;justify-content:flex-end"><div style="height:10px;width:44px;background:#eceef1;border-radius:2px"></div></div>
+                  <div style="padding:0 16px 0 12px;display:flex;justify-content:flex-end"><div style="height:10px;width:100px;background:#eceef1;border-radius:2px"></div></div>
+                </div>
+              </sc-for>
+            </sc-if>
+            <sc-if value="{{ st.error }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center">
+                <div style="width:28px;height:28px;border-radius:50%;background:#fdecea;color:#b42318;display:flex;align-items:center;justify-content:center;font-weight:700">!</div>
+                <div style="font-size:14px;font-weight:600">Failed to load run history</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#667085">GET /billing/v1/billRun?from=2026-09-13 → 500 Internal Server Error</div>
+                <button onClick="{{ retry }}" style="margin-top:6px;height:30px;padding:0 14px;border:1px solid #d0d5dc;background:#fff;border-radius:4px;font-size:12.5px;font-weight:500;cursor:pointer;color:#1c2127" style-hover="background:#f3f4f6">Retry</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ bill.empty }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:40px 24px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
+                <div style="font-size:14px;font-weight:600">No runs yet</div>
+                <div style="color:#667085">The first scheduled run starts at 02:00. You can also run a cycle manually for a selected date.</div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ bill.show }}" hint-placeholder-val="{{ true }}">
+              <sc-for list="{{ bill.rows }}" as="r" hint-placeholder-count="10">
+                <div style="display:grid;grid-template-columns:112px 86px 100px 104px 112px minmax(0,1fr) 100px 140px;border-bottom:1px solid #eef0f2;align-items:center;min-height:37px;background:{{ r.bg }}">
+                  <div style="padding:8px 16px;font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:{{ r.fw }}">{{ r.date }}</div>
+                  <div style="padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#475467">{{ r.start }}</div>
+                  <div style="padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#475467">{{ r.end }}</div>
+                  <div style="padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#475467">{{ r.dur }}</div>
+                  <div style="padding:8px 12px"><span style="display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:3px;font-size:11.5px;font-weight:500;line-height:16px;color:{{ r.st.fg }};background:{{ r.st.bg }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ r.st.dot }}"></span>{{ r.status }}</span></div>
+                  <div style="padding:8px 12px;display:flex;align-items:center;gap:8px;min-width:0">
+                    <sc-if value="{{ r.isLatest }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;font-weight:600;color:#2350b0;background:#e8effc;border-radius:3px;padding:1px 6px;white-space:nowrap">latest</span></sc-if>
+                    <sc-if value="{{ r.manual }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;color:#667085;border:1px solid #d0d5dc;border-radius:3px;padding:0 6px;white-space:nowrap">manual</span></sc-if>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11.5px;color:#b42318;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.err }}</span>
+                    <sc-if value="{{ r.failed }}" hint-placeholder-val="{{ false }}"><span onClick="{{ r.retry }}" style="font-size:12px;color:#2356c7;cursor:pointer;white-space:nowrap;margin-left:auto">Re-run</span></sc-if>
+                  </div>
+                  <div style="padding:8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12.5px;font-variant-numeric:tabular-nums">{{ r.count }}</div>
+                  <div style="padding:8px 16px 8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12.5px;font-variant-numeric:tabular-nums;color:{{ r.totalFg }}">{{ r.total }}</div>
+                </div>
+              </sc-for>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </main>
+
+  <!-- ============ CONNECT MODAL ============ -->
+  <sc-if value="{{ modalConnect }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;background:rgba(20,24,31,.42);display:flex;align-items:flex-start;justify-content:center;padding-top:56px;z-index:50">
+      <div onClick="{{ stop }}" style="width:720px;background:#fff;border-radius:8px;box-shadow:0 20px 50px rgba(16,24,40,.25);display:flex;flex-direction:column;max-height:calc(100vh - 96px)">
+        <div style="padding:14px 20px;border-bottom:1px solid #e2e5e9;display:flex;align-items:flex-start;gap:12px">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:15px;font-weight:600">Add product</span>
+            <span style="font-size:12px;color:#667085">{{ card.name }} · <span style="font-family:'JetBrains Mono',monospace">{{ card.acc }}</span> · billing day <span style="font-family:'JetBrains Mono',monospace">{{ card.day }}</span></span>
+          </div>
+          <span onClick="{{ closeModal }}" style="margin-left:auto;cursor:pointer;color:#667085;font-size:18px;line-height:1">×</span>
+        </div>
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;overflow:auto">
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-size:12px;font-weight:600">1. Offering</span>
+              <span style="font-size:12px;color:#667085">Active offerings only</span>
+              <input value="{{ mq }}" onChange="{{ onMq }}" placeholder="Filter by name or code" style="margin-left:auto;width:230px;height:28px;padding:0 8px;border:1px solid #d0d5dc;border-radius:4px;font-size:12.5px;outline:none;color:#1c2127" style-focus="border-color:#2356c7">
+            </div>
+            <div style="border:1px solid #e2e5e9;border-radius:6px;max-height:236px;overflow:auto">
+              <sc-for list="{{ m.offers }}" as="o" hint-placeholder-count="6">
+                <div onClick="{{ o.pick }}" style="display:grid;grid-template-columns:28px minmax(0,1fr) 170px 150px;align-items:center;padding:7px 12px;border-bottom:1px solid #eef0f2;cursor:pointer;background:{{ o.bg }}" style-hover="background:#f4f7fd">
+                  <span style="width:14px;height:14px;border-radius:50%;border:1.5px solid {{ o.rb }};display:flex;align-items:center;justify-content:center"><span style="width:6px;height:6px;border-radius:50%;background:{{ o.rd }}"></span></span>
+                  <span style="display:flex;flex-direction:column;min-width:0">
+                    <span style="font-weight:500;display:flex;gap:8px;align-items:center">{{ o.name }}<sc-if value="{{ o.connected }}" hint-placeholder-val="{{ false }}"><span style="font-size:10.5px;font-weight:500;color:#667085;background:#eef0f3;border-radius:3px;padding:0 5px">already active</span></sc-if></span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8a93a0">{{ o.code }}</span>
+                  </span>
+                  <span style="font-size:12px;color:#475467">{{ o.spec }}</span>
+                  <span style="display:flex;justify-content:flex-end;align-items:baseline;gap:4px;font-family:'JetBrains Mono',monospace;font-size:12.5px"><span>{{ o.price }}</span><span style="color:#8a93a0;font-size:11px">{{ o.per }}</span></span>
+                </div>
+              </sc-for>
+              <sc-if value="{{ m.noOffers }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:20px;text-align:center;color:#667085">No active offerings match the filter</div>
+              </sc-if>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:12px;font-weight:600">2. Start date</span>
+            <input type="date" value="{{ mStart }}" min="2026-09-27" onChange="{{ onMStart }}" style="height:30px;padding:0 8px;border:1px solid #d0d5dc;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#1c2127">
+            <span style="font-size:12px;color:#667085">{{ m.startHint }}</span>
+          </div>
+          <div style="border:1px solid #e2e5e9;border-radius:6px;background:#fafbfc">
+            <div style="padding:8px 14px;border-bottom:1px solid #e2e5e9;font-size:12px;font-weight:600">3. First charge preview</div>
+            <sc-if value="{{ m.noSel }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:22px 14px;text-align:center;color:#667085;font-size:12.5px">Select an offering to see the calculation</div>
+            </sc-if>
+            <sc-if value="{{ m.hasSel }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+                <div style="padding:10px 14px;display:flex;flex-direction:column;gap:7px;border-right:1px solid #e2e5e9">
+                  <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:#667085">Period</span><span style="font-family:'JetBrains Mono',monospace;font-size:12.5px">{{ m.pv.period }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:#667085">Billable days</span><span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:600">{{ m.pv.days }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:#667085">Offering price</span><span style="font-family:'JetBrains Mono',monospace;font-size:12.5px">{{ m.pv.price }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:#667085">Formula</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#475467">{{ m.pv.calc }}</span></div>
+                </div>
+                <div style="padding:10px 14px;display:flex;flex-direction:column;gap:7px">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span style="color:#667085">First charge <span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ m.pv.when }}</span></span><span style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:600">{{ m.pv.amount }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:#667085">Then from <span style="font-family:'JetBrains Mono',monospace;font-size:12px">{{ m.pv.next }}</span></span><span style="font-family:'JetBrains Mono',monospace;font-size:12.5px">{{ m.pv.nextAmt }}</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:8px"><span style="color:#667085">Balance after charge</span><span style="font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:600;color:{{ m.pv.afterFg }}">{{ m.pv.after }}</span></div>
+                  <sc-if value="{{ m.pv.over }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:6px 8px;background:#fdecea;color:#b42318;border-radius:4px;font-size:12px">Balance will exceed the credit limit of {{ m.pv.limit }}. Activation is allowed; services may be suspended.</div>
+                  </sc-if>
+                </div>
+              </div>
+              <div style="padding:7px 14px;border-top:1px solid #e2e5e9;font-size:11.5px;color:#667085">{{ m.pv.note }}</div>
+            </sc-if>
+          </div>
+        </div>
+        <div style="padding:12px 20px;border-top:1px solid #e2e5e9;display:flex;justify-content:flex-end;gap:8px">
+          <button onClick="{{ closeModal }}" style="height:32px;padding:0 14px;border:1px solid #d0d5dc;background:#fff;color:#1c2127;border-radius:4px;font-size:13px;cursor:pointer" style-hover="background:#f3f4f6">Cancel</button>
+          <button onClick="{{ doConnect }}" disabled="{{ m.noSel }}" style="height:32px;padding:0 14px;border:1px solid #1f4fb8;background:#2356c7;color:#fff;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer" style-hover="background:#1d49ad">{{ m.confirmLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ CREATE OFFERING MODAL ============ -->
+  <sc-if value="{{ modalCreate }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;background:rgba(20,24,31,.42);display:flex;align-items:flex-start;justify-content:center;padding-top:72px;z-index:50">
+      <div onClick="{{ stop }}" style="width:600px;background:#fff;border-radius:8px;box-shadow:0 20px 50px rgba(16,24,40,.25);display:flex;flex-direction:column">
+        <div style="padding:14px 20px;border-bottom:1px solid #e2e5e9;display:flex;align-items:flex-start">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:15px;font-weight:600">New product offering</span>
+            <span style="font-size:12px;color:#667085">ProductOffering is created in In Design</span>
+          </div>
+          <span onClick="{{ closeModal }}" style="margin-left:auto;cursor:pointer;color:#667085;font-size:18px;line-height:1">×</span>
+        </div>
+        <div style="padding:16px 20px;display:grid;grid-template-columns:1fr 1fr;gap:12px 14px">
+          <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:#475467">Code</span><input value="{{ nf.code }}" onChange="{{ nfSet.code }}" placeholder="PO-XXX" style="height:32px;padding:0 8px;border:1px solid #d0d5dc;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:12.5px;outline:none;color:#1c2127;text-transform:uppercase" style-focus="border-color:#2356c7"></label>
+          <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:#475467">Name</span><input value="{{ nf.name }}" onChange="{{ nfSet.name }}" placeholder="e.g. Mobile M+" style="height:32px;padding:0 8px;border:1px solid #d0d5dc;border-radius:4px;font-size:13px;outline:none;color:#1c2127" style-focus="border-color:#2356c7"></label>
+          <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:#475467">Specification</span>
+            <select value="{{ nf.spec }}" onChange="{{ nfSet.spec }}" style="height:32px;padding:0 6px;border:1px solid #d0d5dc;border-radius:4px;font-size:13px;background:#fff;color:#1c2127">
+              <option value="Mobile Voice &amp; Data">Mobile Voice &amp; Data</option>
+              <option value="Mobile Data Add-on">Mobile Data Add-on</option>
+              <option value="Roaming Package">Roaming Package</option>
+              <option value="Fixed Broadband FTTH">Fixed Broadband FTTH</option>
+              <option value="IPTV Service">IPTV Service</option>
+              <option value="Network Add-on">Network Add-on</option>
+              <option value="Voice Add-on">Voice Add-on</option>
+            </select>
+          </label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:#475467">Price, RUB</span><input value="{{ nf.price }}" onChange="{{ nfSet.price }}" placeholder="0.00" inputmode="decimal" style="height:32px;padding:0 8px;border:1px solid #d0d5dc;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:12.5px;text-align:right;outline:none;color:#1c2127" style-focus="border-color:#2356c7"></label>
+            <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:#475467">Recurrence</span>
+              <select value="{{ nf.period }}" onChange="{{ nfSet.period }}" style="height:32px;padding:0 6px;border:1px solid #d0d5dc;border-radius:4px;font-size:13px;background:#fff;color:#1c2127">
+                <option value="month">month</option>
+                <option value="week">week</option>
+              </select>
+            </label>
+          </div>
+          <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:#475467">Valid from</span><input type="date" value="{{ nf.from }}" onChange="{{ nfSet.from }}" style="height:32px;padding:0 8px;border:1px solid #d0d5dc;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#1c2127"></label>
+          <label style="display:flex;flex-direction:column;gap:4px"><span style="font-size:12px;color:#475467">Valid to <span style="color:#8a93a0">(empty = open-ended)</span></span><input type="date" value="{{ nf.to }}" onChange="{{ nfSet.to }}" style="height:32px;padding:0 8px;border:1px solid #d0d5dc;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:#1c2127"></label>
+          <sc-if value="{{ nfErr }}" hint-placeholder-val="{{ false }}">
+            <div style="grid-column:1 / -1;font-size:12px;color:#b42318">{{ nfErr }}</div>
+          </sc-if>
+        </div>
+        <div style="padding:12px 20px;border-top:1px solid #e2e5e9;display:flex;justify-content:flex-end;gap:8px">
+          <button onClick="{{ closeModal }}" style="height:32px;padding:0 14px;border:1px solid #d0d5dc;background:#fff;color:#1c2127;border-radius:4px;font-size:13px;cursor:pointer" style-hover="background:#f3f4f6">Cancel</button>
+          <button onClick="{{ doCreate }}" disabled="{{ nfInvalid }}" style="height:32px;padding:0 14px;border:1px solid #1f4fb8;background:#2356c7;color:#fff;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer" style-hover="background:#1d49ad">Create in In Design</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;right:24px;bottom:24px;background:#1c2127;color:#fff;padding:10px 14px;border-radius:6px;font-size:13px;box-shadow:0 8px 24px rgba(16,24,40,.25);z-index:60">{{ toast }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;dataState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;live&quot;,&quot;loading&quot;,&quot;empty&quot;,&quot;error&quot;],&quot;default&quot;:&quot;live&quot;,&quot;tsType&quot;:&quot;'live'|'loading'|'empty'|'error'&quot;,&quot;section&quot;:&quot;States&quot;},&quot;latestRun&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;completed&quot;,&quot;failed&quot;,&quot;running&quot;],&quot;default&quot;:&quot;failed&quot;,&quot;tsType&quot;:&quot;'completed'|'failed'|'running'&quot;,&quot;section&quot;:&quot;States&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;subs&quot;,&quot;card&quot;,&quot;catalog&quot;,&quot;billing&quot;,&quot;connect&quot;],&quot;default&quot;:&quot;subs&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Navigation&quot;}}">
+const TODAY = new Date(2026, 8, 27);
+const pad = n => String(n).padStart(2, '0');
+const fd = d => d ? d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) : '—';
+const fds = d => pad(d.getDate()) + '.' + pad(d.getMonth() + 1);
+const iso = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const parse = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addD = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const diff = (a, b) => Math.round((b - a) / 864e5);
+const bdate = (y, m, day) => new Date(y, m, Math.min(day, new Date(y, m + 1, 0).getDate()));
+const nextBill = (s, day) => { let c = bdate(s.getFullYear(), s.getMonth(), day); if (c <= s) c = bdate(s.getFullYear(), s.getMonth() + 1, day); return c; };
+const prevOf = (n, day) => bdate(n.getFullYear(), n.getMonth() - 1, day);
+const r2 = v => Math.round(v * 100) / 100;
+const NB = ',';
+const grp = s => s.replace(/\B(?=(\d{3})+(?!\d))/g, NB);
+const money = v => { const [i, f] = Math.abs(v).toFixed(2).split('.'); return (v < 0 ? '−' : '') + grp(i) + '.' + f; };
+const signed = v => (v > 0 ? '+' : '') + money(v);
+const int = v => grp(String(v));
+const hms = s => pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s / 60) % 60) + ':' + pad(s % 60);
+const secs = t => { const [h, m, s] = t.split(':').map(Number); return h * 3600 + m * 60 + s; };
+const dur = (a, b) => { if (!b) return 'running…'; const d = secs(b) - secs(a); return Math.floor(d / 60) + ' min ' + pad(d % 60) + ' s'; };
+const RED = '#b42318', GREEN = '#1f7a4d', INK = '#1c2127';
+const ST = {
+  'Active': { fg: '#1f6f46', bg: '#e7f4ec', dot: '#2f9e63' },
+  'Inactive': { fg: '#5b6472', bg: '#eef0f3', dot: '#9aa3af' },
+  'In Design': { fg: '#2350b0', bg: '#e8effc', dot: '#4a7be0' },
+  'Retired': { fg: '#6b6f76', bg: '#f0f0f1', dot: '#b3b7bd' },
+  'running': { fg: '#2350b0', bg: '#e8effc', dot: '#4a7be0' },
+  'completed': { fg: '#1f6f46', bg: '#e7f4ec', dot: '#2f9e63' },
+  'failed': { fg: '#ffffff', bg: '#d92d20', dot: '#ffffff' },
+};
+const PER = { month: 'month', week: 'week' };
+const PERS = { month: '/ mo', week: '/ wk' };
+
+const SUBS = [
+  ['7000142817', 'Andrei Kovalev', 'Active', 1250.40, 3, '2021-03-14', 'BA-00318842', 1, 2000],
+  ['7000142903', 'Olga Melnikova', 'Active', -386.15, 2, '2022-07-02', 'BA-00319107', 5, 500],
+  ['7000143118', 'Northern Port LLC', 'Active', 48210.00, 12, '2019-11-20', 'BA-00201554', 1, 50000],
+  ['7000143240', 'Dmitry Timofeev', 'Inactive', -1740.00, 0, '2020-02-11', 'BA-00244019', 15, 0],
+  ['7000143377', 'Dinara Alieva', 'Active', 3125.00, 2, '2023-05-18', 'BA-00355871', 10, 1000],
+  ['7000143452', 'Pavel Sorokin', 'Active', 0.00, 1, '2024-01-09', 'BA-00371236', 9, 300],
+  ['7000143590', 'Natalia Grigorieva', 'Active', 2310.75, 4, '2018-09-30', 'BA-00188420', 28, 1000],
+  ['7000143611', 'Belyaev K. N. (Sole Trader)', 'Active', -12450.90, 5, '2021-12-01', 'BA-00330915', 1, 15000],
+  ['7000143784', 'Ilya Zakharov', 'Inactive', 15.20, 0, '2017-04-22', 'BA-00150377', 22, 0],
+  ['7000143805', 'Ekaterina Noskova', 'Active', 640.00, 2, '2025-08-14', 'BA-00402268', 14, 500],
+  ['7000143926', 'Arman Yermekov', 'Active', -3200.00, 1, '2024-10-03', 'BA-00389540', 3, 2000],
+  ['7000144017', 'Maria Vlasova', 'Active', 98.50, 3, '2026-09-12', 'BA-00431702', 12, 500],
+  ['7000144152', 'South Heat Networks JSC', 'Active', 156780.30, 9, '2016-06-06', 'BA-00120033', 1, 200000],
+  ['7000144233', 'Roman Kuznetsov', 'Inactive', 0.00, 0, '2023-03-03', 'BA-00348816', 3, 0],
+].map(([id, name, status, bal, prods, reg, acc, day, credit]) => ({ id, name, status, bal, prods, reg, acc, day, credit, cur: 'RUB' }));
+
+const OFFERS = [
+  ['PO-MOB-S', 'Mobile S', 'Mobile Voice & Data', 450, 'month', 'Active', '2024-01-01', null],
+  ['PO-MOB-M', 'Mobile M', 'Mobile Voice & Data', 790, 'month', 'Active', '2024-01-01', null],
+  ['PO-MOB-L', 'Mobile L', 'Mobile Voice & Data', 1290, 'month', 'Active', '2024-01-01', null],
+  ['PO-MOB-XL', 'Mobile XL', 'Mobile Voice & Data', 1990, 'month', 'In Design', '2026-11-01', null],
+  ['PO-DATA-20W', 'Data 20 GB weekly', 'Mobile Data Add-on', 199, 'week', 'Active', '2025-03-01', null],
+  ['PO-ROAM-EU-W', 'Roaming Europe, 7 days', 'Roaming Package', 690, 'week', 'Active', '2025-05-15', '2026-12-31'],
+  ['PO-FTTH-500', 'Home Internet 500 Mbps', 'Fixed Broadband FTTH', 650, 'month', 'Active', '2023-06-01', null],
+  ['PO-IPTV-BASE', 'TV Basic', 'IPTV Service', 290, 'month', 'Active', '2023-06-01', null],
+  ['PO-STATIC-IP', 'Static IP address', 'Network Add-on', 150, 'month', 'Active', '2022-01-01', null],
+  ['PO-VOICE-INTL', 'International calls', 'Voice Add-on', 350, 'month', 'In Design', '2026-10-15', null],
+  ['PO-SMS-100', '100 SMS pack', 'Messaging Add-on', 99, 'month', 'Retired', '2020-02-01', '2025-12-31'],
+  ['PO-MOB-CLS19', 'Mobile Classic 2019', 'Mobile Voice & Data', 550, 'month', 'Retired', '2019-01-01', '2024-06-30'],
+].map(([code, name, spec, price, period, status, from, to], i) => ({ id: 'o' + (i + 1), code, name, spec, price, period, status, from, to }));
+
+const prorate = (o, s, day) => {
+  if (o.period === 'week') return { from: s, to: addD(s, 6), days: 7, of: 7, amount: o.price, next: addD(s, 7), prorated: false };
+  const n = nextBill(s, day), p = prevOf(n, day), of = diff(p, n), days = diff(s, n);
+  return { from: s, to: addD(n, -1), days, of, amount: r2(o.price * days / of), next: n, prorated: days < of };
+};
+
+const HIST = (() => {
+  const out = [];
+  for (let i = 1; i <= 13; i++) {
+    const d = addD(TODAY, -i), sd = (i * 37) % 100, st = 7200 + (sd % 9) + 1;
+    if (i === 5) {
+      out.push({ id: 'BR-' + iso(d).replace(/-/g, '') + '-M1', date: d, start: '09:14:22', end: '09:23:05', status: 'completed', count: 2673, total: 2241987.40, manual: true, note: 'Re-run after failure' });
+      out.push({ id: 'BR-' + iso(d).replace(/-/g, ''), date: d, start: hms(st), end: hms(st + 41 * 60 + 14), status: 'failed', count: 1204, total: 1018344.60, err: 'Rating engine timeout (600 s) · 1,204 of 3,877 accounts processed' });
+      continue;
+    }
+    const count = 3100 + (sd * 13) % 700;
+    out.push({ id: 'BR-' + iso(d).replace(/-/g, ''), date: d, start: hms(st), end: hms(st + 9 * 60 + (sd * 7) % 420), status: 'completed', count, total: r2(count * (812 + (sd % 40)) + sd * 1.37) });
+  }
+  return out;
+})();
+
+const LATEST = {
+  completed: { start: '02:00:02', end: '02:13:26', status: 'completed', count: 3528, total: 2961874.20 },
+  failed: { start: '02:00:02', end: '02:07:51', status: 'failed', count: 842, total: 706318.90, err: 'Balance service connection error (ECONNRESET) · 842 of 3,530 accounts processed' },
+  running: { start: '02:00:02', end: null, status: 'running', count: 1918, total: 1607433.10, of: 3530 },
+};
+
+class Component extends DCLogic {
+  state = this.init();
+  init() {
+    const s = this.props.startScreen ?? 'subs';
+    return {
+      screen: s === 'connect' ? 'card' : s, subId: SUBS[0].id, loading: true,
+      q: '', statusF: 'All', catQ: '', catF: 'All',
+      subs: SUBS.map(x => ({ ...x })), offers: OFFERS.map(x => ({ ...x })), manualRuns: [],
+      modal: s === 'connect' ? 'connect' : null, mq: '', mOffer: s === 'connect' ? 'o3' : null, mStart: iso(TODAY),
+      confirmOff: null, runDate: iso(addD(TODAY, -1)), toast: null,
+      nf: { code: '', name: '', spec: 'Mobile Voice & Data', price: '', period: 'month', from: '2026-10-01', to: '' }, v: 0,
+    };
+  }
+  componentDidMount() { this.load(); }
+  componentWillUnmount() { clearTimeout(this.lt); clearTimeout(this.tt); }
+  load() { clearTimeout(this.lt); this.setState({ loading: true }); this.lt = setTimeout(() => this.setState({ loading: false }), 450); }
+  go(screen, extra = {}) { this.setState({ screen, confirmOff: null, modal: null, ...extra }); this.load(); }
+  offer(id) { return this.state.offers.find(o => o.id === id); }
+  flash(msg) { clearTimeout(this.tt); this.setState({ toast: msg }); this.tt = setTimeout(() => this.setState({ toast: null }), 3200); }
+  detail(sub) {
+    this.details = this.details || {};
+    if (!this.details[sub.id]) this.details[sub.id] = this.makeDetail(sub);
+    return this.details[sub.id];
+  }
+  makeDetail(s) {
+    const seed = Number(s.id.slice(-3)), act = OFFERS.filter(o => o.status === 'Active'), reg = parse(s.reg);
+    const products = [];
+    for (let i = 0; i < s.prods; i++) {
+      const o = act[(seed + i * 3) % act.length];
+      let start = addD(TODAY, -(20 + ((seed * 7 + i * 53) % 420)));
+      if (start < reg) start = addD(reg, i);
+      products.push({ uid: s.id + '-' + i, offerId: o.id, start });
+    }
+    const charges = [];
+    products.forEach(p => {
+      const o = OFFERS.find(x => x.id === p.offerId);
+      if (o.period === 'week') {
+        for (let k = 0; ; k++) { const d = addD(p.start, 7 * k); if (d > TODAY) break; if (diff(d, TODAY) <= 30) charges.push({ date: d, from: d, to: addD(d, 6), amount: o.price, days: null, of: 7, offer: o.name }); }
+      } else {
+        const n0 = nextBill(p.start, s.day), of0 = diff(prevOf(n0, s.day), n0), d0 = diff(p.start, n0);
+        if (diff(p.start, TODAY) <= 95) charges.push({ date: p.start, from: p.start, to: addD(n0, -1), amount: r2(o.price * d0 / of0), days: d0 < of0 ? d0 : null, of: of0, offer: o.name });
+        let b = n0;
+        while (b <= TODAY) { const nb = bdate(b.getFullYear(), b.getMonth() + 1, s.day); if (diff(b, TODAY) <= 95) charges.push({ date: b, from: b, to: addD(nb, -1), amount: o.price, days: null, of: diff(b, nb), offer: o.name }); b = nb; }
+      }
+    });
+    charges.sort((a, b) => b.date - a.date);
+    const ch = charges.slice(0, 12);
+    const tx = ch.map(c => ({ date: c.date, type: 'Charge', note: c.offer, amount: -c.amount }));
+    if (products.length) {
+      const monthly = products.reduce((a, p) => a + OFFERS.find(x => x.id === p.offerId).price, 0);
+      for (let m = 0; m < 3; m++) {
+        const d = addD(bdate(TODAY.getFullYear(), TODAY.getMonth() - m, s.day), -2);
+        if (d <= TODAY && d >= reg) tx.push({ date: d, type: 'Payment', note: m % 2 ? 'Bank card' : 'Faster Payments', amount: Math.ceil(monthly * (1 + (seed % 3) * 0.1) / 100) * 100 });
+      }
+      if (seed % 3 === 0) tx.push({ date: addD(TODAY, -17), type: 'Adjustment', note: 'Goodwill credit, INC-58213', amount: 150 });
+    }
+    tx.sort((a, b) => b.date - a.date);
+    const t = tx.slice(0, 12); let run = s.bal;
+    t.forEach(r => { r.after = r2(run); run = r2(run - r.amount); });
+    return { products, charges: ch, tx: t };
+  }
+  preview() {
+    const S = this.state, sub = S.subs.find(x => x.id === S.subId), o = S.mOffer && this.offer(S.mOffer);
+    if (!o || !S.mStart) return null;
+    const start = parse(S.mStart), pr = prorate(o, start, sub.day);
+    return { sub, o, start, pr, now: diff(TODAY, start) <= 0 };
+  }
+  doConnect() {
+    const x = this.preview(); if (!x) return;
+    const { sub, o, start, pr, now } = x, d = this.detail(sub);
+    d.products = [{ uid: sub.id + '-n' + Date.now(), offerId: o.id, start }, ...d.products];
+    let bal = sub.bal;
+    if (now) {
+      bal = r2(bal - pr.amount);
+      d.charges.unshift({ date: start, from: pr.from, to: pr.to, amount: pr.amount, days: pr.prorated ? pr.days : null, of: pr.of, offer: o.name });
+      d.tx.unshift({ date: start, type: 'Charge', note: o.name, amount: -pr.amount, after: bal });
+    }
+    this.setState(s => ({ modal: null, mOffer: null, mq: '', subs: s.subs.map(u => u.id === sub.id ? { ...u, bal, prods: u.prods + 1 } : u) }));
+    this.flash(o.name + ' activated' + (now ? ', charged ' + money(pr.amount) + ' RUB' : ', first charge on ' + fd(start)));
+  }
+  disconnect(uid) {
+    const sub = this.state.subs.find(x => x.id === this.state.subId), d = this.detail(sub);
+    const p = d.products.find(x => x.uid === uid);
+    d.products = d.products.filter(x => x.uid !== uid);
+    this.setState(s => ({ confirmOff: null, subs: s.subs.map(u => u.id === sub.id ? { ...u, prods: u.prods - 1 } : u) }));
+    this.flash(this.offer(p.offerId).name + ' deactivated as of ' + fd(TODAY));
+  }
+  runFor(dateIso) {
+    const id = 'BR-' + dateIso.replace(/-/g, '') + '-M' + (this.state.manualRuns.length + 2);
+    const now = new Date(), start = hms(now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds());
+    this.setState(s => ({ manualRuns: [{ id, date: parse(dateIso), start, end: null, status: 'running', count: 0, total: 0, manual: true, of: 3500 }, ...s.manualRuns] }));
+    this.flash('Run for ' + fd(parse(dateIso)) + ' started');
+    setTimeout(() => {
+      const e = new Date(), count = 3400 + (Number(dateIso.slice(-2)) * 17) % 300;
+      this.setState(s => ({ manualRuns: s.manualRuns.map(r => r.id === id ? { ...r, status: 'completed', end: hms(e.getHours() * 3600 + e.getMinutes() * 60 + e.getSeconds()), count, total: r2(count * 838.45) } : r) }));
+    }, 3000);
+  }
+  doCreate() {
+    const f = this.state.nf, price = parseFloat(String(f.price).replace(/[,\s]/g, ''));
+    const o = { id: 'o' + Date.now(), code: f.code.toUpperCase(), name: f.name, spec: f.spec, price, period: f.period, status: 'In Design', from: f.from, to: f.to || null, fresh: true };
+    this.setState(s => ({ offers: [o, ...s.offers], modal: null, catF: 'All', catQ: '', nf: { ...s.nf, code: '', name: '', price: '' } }));
+    this.flash('Offering ' + o.code + ' created in In Design');
+  }
+  renderVals() {
+    const S = this.state, ds = this.props.dataState ?? 'live';
+    const loading = S.loading || ds === 'loading', error = !loading && ds === 'error', empty = ds === 'empty';
+    const ok = !loading && !error;
+    const skel = ['62%', '48%', '70%', '40%', '55%', '66%', '44%', '58%'].map(w => ({ w }));
+
+    // runs
+    const latestBase = { id: 'BR-' + iso(TODAY).replace(/-/g, ''), date: TODAY, ...LATEST[this.props.latestRun ?? 'failed'] };
+    const runs = empty ? [] : [...S.manualRuns, latestBase, ...HIST];
+    const L = runs[0];
+    const latestFailed = !!L && L.status === 'failed';
+    const retryFor = d => () => this.runFor(iso(d));
+
+    const nav = [
+      { key: 'subs', label: 'Subscribers', count: empty ? 0 : S.subs.length },
+      { key: 'catalog', label: 'Product catalog', count: empty ? 0 : S.offers.length },
+      { key: 'billing', label: 'Billing runs', count: runs.length, badge: latestFailed },
+    ].map(n => {
+      const on = S.screen === n.key || (n.key === 'subs' && S.screen === 'card');
+      return { ...n, go: () => this.go(n.key), bg: on ? '#eaf0fb' : 'transparent', fg: on ? '#1a3f94' : INK, fw: on ? 600 : 400, hasBadge: !!n.badge, hasCount: !n.badge };
+    });
+
+    const sub = S.subs.find(x => x.id === S.subId);
+    const crumbs = S.screen === 'card'
+      ? [{ label: 'Subscribers', go: () => this.go('subs'), fg: '#2356c7', cursor: 'pointer', fw: 400, sep: true }, { label: sub.name, fg: INK, cursor: 'default', fw: 500, sep: false }]
+      : [{ label: { subs: 'Subscribers', catalog: 'Product catalog', billing: 'Billing runs' }[S.screen], fg: INK, cursor: 'default', fw: 500, sep: false }];
+
+    // subscribers
+    const all = empty ? [] : S.subs;
+    const q = S.q.trim().toLowerCase(), qd = q.replace(/\s/g, '');
+    const filtered = all.filter(s => (S.statusF === 'All' || s.status === S.statusF) && (!q || s.name.toLowerCase().includes(q) || (qd && s.id.includes(qd))));
+    const subRows = filtered.map(s => ({
+      ...s, st: ST[s.status], bal: money(s.bal), reg: fd(parse(s.reg)),
+      balFg: s.bal < 0 ? RED : INK, balBg: s.bal < 0 ? '#fdecea' : 'transparent', balFw: s.bal < 0 ? 600 : 400,
+      prodFg: s.prods ? INK : '#a0a7b1',
+      open: () => this.go('card', { subId: s.id }),
+    }));
+    const fBtn = (key, label, count, cur, set) => ({ label, count, pick: () => this.setState({ [set]: key }), bg: cur === key ? '#eaf0fb' : '#fff', fg: cur === key ? '#1a3f94' : '#475467' });
+    const subFilters = [['All', 'All'], ['Active', 'Active'], ['Inactive', 'Inactive']].map(([k, l]) => fBtn(k, l, k === 'All' ? all.length : all.filter(s => s.status === k).length, S.statusF, 'statusF'));
+
+    // card
+    let card = {};
+    if (sub) {
+      const d = empty ? { products: [], charges: [], tx: [] } : this.detail(sub);
+      const avail = sub.bal + sub.credit;
+      card = {
+        ...sub, st: ST[sub.status], bal: money(sub.bal) + ' ', balFg: sub.bal < 0 ? RED : INK, neg: sub.bal < 0,
+        reg: fd(parse(sub.reg)), day: 'Day ' + sub.day, nextCycle: fd(nextBill(TODAY, sub.day)),
+        credit: money(sub.credit), avail: money(avail), availFg: avail < 0 ? RED : INK,
+        inactive: sub.status === 'Inactive', active: sub.status === 'Active',
+        prodCount: d.products.length, hasProducts: d.products.length > 0, noProducts: d.products.length === 0,
+        products: d.products.map(p => {
+          const o = this.offer(p.offerId) || OFFERS.find(x => x.id === p.offerId);
+          let next;
+          if (p.start > TODAY) next = p.start;
+          else if (o.period === 'week') { const k = Math.floor(diff(p.start, TODAY) / 7) + 1; next = addD(p.start, 7 * k); }
+          else next = nextBill(TODAY, sub.day);
+          const confirming = S.confirmOff === p.uid;
+          return {
+            name: o.name, code: o.code, spec: o.spec, start: fd(p.start), next: fd(next), price: money(o.price), per: PERS[o.period],
+            confirming, idle: !confirming,
+            askOff: () => this.setState({ confirmOff: p.uid }), cancelOff: () => this.setState({ confirmOff: null }), doOff: () => this.disconnect(p.uid),
+          };
+        }),
+        hasCharges: d.charges.length > 0, noCharges: d.charges.length === 0,
+        charges: d.charges.map(c => ({ date: fd(c.date), period: fd(c.from) + ' – ' + fd(c.to), offer: c.offer, amount: money(c.amount), days: c.days ? c.days + ' of ' + c.of : '—', daysFg: c.days ? '#a15c00' : '#a0a7b1' })),
+        hasTx: d.tx.length > 0, noTx: d.tx.length === 0,
+        tx: d.tx.map(t => ({ date: fd(t.date), type: t.type, note: t.note, amount: signed(t.amount), amtFg: t.amount < 0 ? RED : GREEN, after: money(t.after), afterFg: t.after < 0 ? RED : INK })),
+      };
+    }
+
+    // catalog
+    const cAll = empty ? [] : S.offers;
+    const cq = S.catQ.trim().toLowerCase();
+    const cFiltered = cAll.filter(o => (S.catF === 'All' || o.status === S.catF) && (!cq || o.name.toLowerCase().includes(cq) || o.code.toLowerCase().includes(cq)));
+    const catRows = cFiltered.map(o => ({
+      ...o, st: ST[o.status], price: money(o.price), per: PER[o.period],
+      valid: fd(parse(o.from)) + ' – ' + (o.to ? fd(parse(o.to)) : 'open-ended'),
+      nameFg: o.status === 'Retired' ? '#8a93a0' : INK, rowBg: o.fresh ? '#f4f7fd' : '#fff',
+    }));
+    const catFilters = [['All', 'All'], ['In Design', 'In Design'], ['Active', 'Active'], ['Retired', 'Retired']].map(([k, l]) => fBtn(k, l, k === 'All' ? cAll.length : cAll.filter(o => o.status === k).length, S.catF, 'catF'));
+
+    // billing
+    const runRow = (r, i) => {
+      const failed = r.status === 'failed', latest = i === 0;
+      return {
+        runId: r.id, date: fd(r.date), start: r.start, end: r.end || '—', dur: dur(r.start, r.end), status: r.status, st: ST[r.status],
+        count: r.status === 'running' && !r.count ? '—' : int(r.count), total: r.status === 'running' && !r.total ? '—' : money(r.total),
+        totalFg: failed ? '#8a93a0' : INK, err: failed ? r.err : (r.note || ''), failed, manual: !!r.manual, isLatest: latest,
+        bg: latest ? (failed ? '#fef3f2' : '#f4f7fd') : (failed ? '#fffafa' : '#fff'), fw: latest ? 600 : 400,
+        retry: retryFor(r.date),
+        cardBg: failed ? '#fef6f5' : '#fff', cardBorder: failed ? '#f2c4bf' : '#c9d6f2',
+        hasProgress: r.status === 'running', pct: r.of ? Math.round(r.count / r.of * 100) + '%' : '0%',
+        progress: r.of ? int(r.count) + ' of ' + int(r.of) + ' accounts' : '',
+      };
+    };
+    const bill = {
+      hasLatest: ok && !!L, latestFailed: ok && latestFailed, latest: L ? runRow(L, 0) : {},
+      empty: ok && runs.length === 0, show: ok && runs.length > 0, rows: runs.map(runRow),
+    };
+
+    // connect modal
+    const connectedIds = sub && !empty ? this.detail(sub).products.map(p => p.offerId) : [];
+    const mq = S.mq.trim().toLowerCase();
+    const mOffers = S.offers.filter(o => o.status === 'Active' && (!mq || o.name.toLowerCase().includes(mq) || o.code.toLowerCase().includes(mq))).map(o => {
+      const sel = S.mOffer === o.id;
+      return { ...o, price: money(o.price), per: PERS[o.period], connected: connectedIds.includes(o.id), bg: sel ? '#eef3fc' : '#fff', rb: sel ? '#2356c7' : '#b8bfc9', rd: sel ? '#2356c7' : 'transparent', pick: () => this.setState({ mOffer: o.id }) };
+    });
+    const x = this.preview();
+    let pv = {}, confirmLabel = 'Activate';
+    if (x) {
+      const { o, pr, sub: s, now } = x, after = r2(s.bal - pr.amount);
+      pv = {
+        period: fd(pr.from) + ' – ' + fd(pr.to),
+        days: pr.days + ' of ' + pr.of + (pr.prorated ? ' (prorated)' : ''),
+        price: money(o.price) + ' RUB ' + PERS[o.period],
+        calc: pr.prorated ? money(o.price) + ' × ' + pr.days + ' / ' + pr.of : 'full period',
+        when: fd(pr.from), amount: money(pr.amount) + ' RUB', next: fd(pr.next), nextAmt: money(o.price) + ' RUB',
+        after: money(after) + ' RUB', afterFg: after < 0 ? RED : INK, over: after < -s.credit, limit: money(s.credit) + ' RUB',
+        note: o.period === 'week'
+          ? 'Weekly offerings are charged for a full 7 days from the start date, independent of the billing day.'
+          : "Prorated by days until the account's next billing day (day " + s.day + '). Full price is charged every cycle after that.',
+      };
+      confirmLabel = now ? 'Activate and charge ' + money(pr.amount) + ' RUB' : 'Activate from ' + fd(pr.from);
+    }
+    const m = {
+      offers: mOffers, noOffers: mOffers.length === 0, hasSel: !!x, noSel: !x, pv, confirmLabel,
+      startHint: S.mStart === iso(TODAY) ? 'today, charged on confirmation' : 'charged on the start date',
+    };
+
+    // create form
+    const f = S.nf, price = parseFloat(String(f.price).replace(/[,\s]/g, ''));
+    let nfErr = '';
+    if (f.code && S.offers.some(o => o.code === f.code.toUpperCase())) nfErr = 'Code ' + f.code.toUpperCase() + ' is already in use';
+    else if (f.price && !(price > 0)) nfErr = 'Price must be a positive number';
+    else if (f.to && f.from && f.to < f.from) nfErr = 'End date is before start date';
+    const nfSet = {};
+    ['code', 'name', 'spec', 'price', 'period', 'from', 'to'].forEach(k => { nfSet[k] = e => { const v = e.target.value; this.setState(s => ({ nf: { ...s.nf, [k]: v } })); }; });
+
+    return {
+      nav, crumbs, skel, skel5: skel.slice(0, 5), skel4: skel.slice(0, 4),
+      isSubs: S.screen === 'subs', isCard: S.screen === 'card', isCatalog: S.screen === 'catalog', isBilling: S.screen === 'billing',
+      st: { loading, error, ok },
+      q: S.q, onQ: e => this.setState({ q: e.target.value }), subFilters, subRows,
+      subsTotal: all.length, subsShown: ok ? filtered.length : 0, negCount: all.filter(s => s.bal < 0).length,
+      subsEmpty: ok && all.length === 0, subsNoResults: ok && all.length > 0 && filtered.length === 0, subsShow: ok && filtered.length > 0,
+      resetSubs: () => this.setState({ q: '', statusF: 'All' }),
+      retry: () => this.load(), goSubs: () => this.go('subs'),
+      card, openConnect: () => this.setState({ modal: 'connect', mOffer: null, mq: '', mStart: iso(TODAY) }),
+      catQ: S.catQ, onCatQ: e => this.setState({ catQ: e.target.value }), catFilters, catRows,
+      catTotal: cAll.length, catShown: ok ? cFiltered.length : 0,
+      catEmpty: ok && cAll.length === 0, catNoResults: ok && cAll.length > 0 && cFiltered.length === 0, catShow: ok && cFiltered.length > 0,
+      resetCat: () => this.setState({ catQ: '', catF: 'All' }),
+      openCreate: () => this.setState({ modal: 'create' }),
+      bill, runDate: S.runDate, onRunDate: e => this.setState({ runDate: e.target.value }),
+      runManual: () => this.runFor(S.runDate), runBusy: !S.runDate || S.manualRuns.some(r => r.status === 'running'),
+      modalConnect: S.modal === 'connect' && !!sub, modalCreate: S.modal === 'create',
+      closeModal: () => this.setState({ modal: null }), stop: e => e.stopPropagation(),
+      m, mq: S.mq, onMq: e => this.setState({ mq: e.target.value }), mStart: S.mStart, onMStart: e => this.setState({ mStart: e.target.value }),
+      doConnect: () => this.doConnect(),
+      nf: f, nfSet, nfErr, nfInvalid: !!nfErr || !f.code.trim() || !f.name.trim() || !(price > 0) || !f.from,
+      doCreate: () => this.doCreate(),
+      hasToast: !!S.toast, toast: S.toast,
+    };
+  }
+}
+</script>
+</body>
+</html>
