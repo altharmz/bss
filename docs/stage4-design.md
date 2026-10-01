@@ -1,9 +1,9 @@
 # Stage 4 - the billing worker: design note (checkpoint 1, no code)
 
-Status: proposal, written unattended. Every rule from stage 3 stays as it is (CLAUDE.md
-"Billing (stage 3)"); this note decides who calls `bill_account`, when, and what happens
-when it does not go to plan. Decisions that need the owner are marked **(D-Wn)** and
-collected at the end with a recommendation each.
+Status: reviewed. The owner's decisions are recorded in **"Decided"** at the end; what is
+still open is listed under **"Still open"** with a recommendation each. Every rule from
+stage 3 stays as it is (CLAUDE.md "Billing (stage 3)"); this note decides who calls
+`bill_account`, when, and what happens when it does not go to plan.
 
 ## 1. What the worker is
 
@@ -14,11 +14,12 @@ server, no ports. It owns everything time-driven:
    and shown by `/internal/v1/context`);
 2. replay of missed dates, in order;
 3. the product status flips (`created -> active`, `pendingTerminate -> terminated`);
-4. manual requests from the UI (catch up to a date, retry the latest failed run).
+4. requests from the UI, taken from a queue table (catch up to a date, retry a run).
 
 The worker reads time only through the injected clock (`app/clock.py`); in tests it runs
 on a `FixedClock`, and every decision below is a pure function of (clock, database
-state) so it can be tested without sleeping.
+state) so it can be tested without sleeping. **There is never billing inside an API
+request.**
 
 ## 2. Run lifecycle
 
@@ -30,141 +31,152 @@ The `billing_run` row per date exists since stage 1 (`run_date` UNIQUE, status
 | Row for D | `start_run(D)` | Why |
 |---|---|---|
 | none | insert `running`, proceed | normal |
-| `completed` | **`AlreadyCompleted` - a no-op**, not an error | replays, a second worker start, a manual catch-up overlapping the schedule |
-| `failed` | reuse the row: back to `running`, `attempt + 1`, proceed | retry |
+| `completed` | **`AlreadyCompleted` - a no-op**, not an error | replays, a second worker start, a catch-up overlapping the schedule |
+| `failed` | back to `running`, `attempt + 1`, proceed with **only its failed accounts** | retry |
 | `running`, **its owner is gone** | **take over**: same row, `attempt + 1`, proceed | the 03:00 reboot (or an OOM kill, or a deploy) killed it mid-way |
-| `running`, owner alive | `RunInProgress` - the caller backs off | two workers (should not happen; see below) |
+| `running`, owner alive | `RunInProgress` - the caller backs off | two workers (should not happen) |
 
-**Who owns a run - (D-W4).** The worker holds a Postgres **session advisory lock**
-(`pg_try_advisory_lock(<constant for bss billing>)`) for as long as it runs anything. A
-lock dies with its connection, so after a reboot or a kill the lock is free the moment
-the old process is gone - no timeout to tune, no clock skew, no false takeover of a slow
-but alive run. "Owner alive" = the lock is held by another session. A
-`heartbeat_at` column is still written (every account, at most every few seconds) - not
-to decide takeovers, but so the UI and the freshness signal can show "running, last
-progress 14:02:31".
+**Owner liveness = a Postgres session advisory lock** (decided). The worker holds
+`pg_try_advisory_lock(<constant for bss billing>)` while it runs anything. The lock dies
+with its connection, so after a reboot or a kill it is free the moment the old process
+is gone - no timeout to tune, no false takeover of a slow but alive run. A
+`heartbeat_at` column is still written (per account, at most every few seconds), only so
+the UI can show "running, last progress 14:02:31".
 
-**Takeover is safe because `bill_account` is idempotent**: an account the killed run had
-already billed for D answers with an empty result (proved in stage 3, example 11); an
-account it was in the middle of was rolled back (one transaction per account). Nothing
-is skipped, nothing is written twice; the EXCLUDE constraints are the backstop.
+**Takeover is safe because `bill_account` is idempotent**: an account the killed run
+had already billed for D answers with an empty result (stage 3, example 11); an account
+it was in the middle of was rolled back (one transaction per account). The EXCLUDE
+constraints are the backstop.
+
+## 3. Progress per (run, account) - failure isolation
+
+Isolation is **per account** (decided). Every account's outcome for every run is a row:
+
+    billing_run_account (run_id, account_id, status, error, attempts, finished_at)
+      status: ok | failed | blocked        PRIMARY KEY (run_id, account_id)
+
+- **`ok`** - `bill_account` succeeded for this date.
+- **`failed`** - `bill_account` raised a `BillingError` (a missing price, an inconsistent
+  state); the error text is stored. Nothing was written for the account (its
+  transaction rolled back).
+- **`blocked`** - the account has an unresolved failure on an **earlier** date, so it is
+  **not billed for this date** (decided: a failed account is not billed for later dates
+  until fixed). The row says which date it waits for.
+
+**Why blocked accounts are not billed later**: billing an account at D+1 while D failed
+would let the core's catch-up charge D's periods with D+1's run date (correct net, but
+different rows and bills than if D had worked) and would make D impossible to retry
+later (an `as_of` earlier than the account's existing data raises). Keeping the account
+at D means that, once fixed, it is billed for D, D+1, ... **in order, each with its own
+run date**, so it ends with exactly the rows and bills it would have had without the
+failure - the same replay equivalence as stage 3's outage test, per account. (Run D
+sees order-driven facts completed before 00:00 of D, whenever it is processed.)
+
+**After a fix** (a retry - by the operator or automatically, see D-W17): the worker
+re-runs the account's earliest failed date; if that succeeds it continues with the
+account's `blocked` dates in order, updating each `(run, account)` row to `ok`. If it
+fails again, the account stays where it is. Other accounts are never held up: they
+proceed normally on every date (decided).
+
+**Run status** (decided: any failed account -> run `failed`, with per-account details):
+
+- `completed` - every account of the run is `ok`;
+- `failed` - at least one account is `failed` (and, proposed, also when one is
+  `blocked` - see D-W16); `error` = "N of M accounts failed", the details in
+  `billing_run_account`;
+- after a successful retry/catch-up the run's status is recomputed - a run whose
+  accounts all became `ok` turns `completed`.
+
+**Retry** (decided): retrying a failed run reprocesses **only its failed accounts**; the
+accounts that were `ok` are not touched (they would be no-ops anyway), and its `blocked`
+accounts follow automatically once their earlier date succeeds. Any failed run may be
+retried; retrying a later run does nothing for accounts blocked behind an earlier date.
+
+**Whole-run failure** (decided: does not advance): anything that is not an account's
+`BillingError` - the database gone, a bug outside `bill_account`, the lock lost - marks
+the run `failed` with the error, and the worker **does not move past that date**; it
+retries the same date with backoff (5 min, 15 min, then hourly) until it succeeds.
 
 Run-level bookkeeping added to `billing_run` (migration 0004): `trigger`
 (`scheduled | catchUp | retry`), `attempt`, `heartbeat_at`, `accounts_total`,
-`accounts_done`, `accounts_failed`. Per-account outcomes in a new table
-`billing_run_account (run_id, account_id, status ok|failed, error, finished_at)`, primary
-key `(run_id, account_id)`.
+`accounts_ok`, `accounts_failed`, `accounts_blocked`.
 
-## 3. Replay of missed dates, in order
+## 4. Replay of missed dates, in order
 
-On every wake-up (the schedule, a boot, a manual request) the worker computes
+On every wake-up the worker computes
 
-    due = [ (last completed run date + 1) ... today ]   (today = clock.today())
+    due = [ (latest run date that exists) + 1 .. today ]
 
-- empty -> nothing to do;
-- otherwise it runs each date **in order, each with its own `billing_run`**, exactly as
-  decided in stage 3: run D sees order-driven facts completed before 00:00 of D, so a
-  replay after an outage writes the same rows and bills as the daily runs would have
-  (proved in stage 3 by `test_replay_after_an_outage_...`).
-- A date is never run before 00:00 of that date (it is not "due" before then), so the
-  end-of-day rule holds whatever time the worker wakes.
-- First start ever (no run at all): `due = [today]` - there is nothing to replay before
-  the worker existed. Products started earlier are caught up by the core's catch-up on
-  that first date (charges for every missed period, with today's run date).
+and runs each date in order with its own `billing_run`; within a date, every account
+that is not blocked is billed. (A blocked account's own dates are caught up separately,
+in order, after its fix - section 3.) A date is never due before 00:00 of that date (the end-of-day rule).
+First start ever (no run at all): `due = [today]` (D-W15); periods before are caught up
+by the core on that date.
 
-**If a date fails, do later dates still run? - (D-W1, D-W3).** Two kinds of failure:
+## 5. Status flips (cosmetic for money, visible in TMF637 and the UI)
 
-- **Account-level** (`BillingError` for one account: a missing price, an inconsistent
-  state): recorded in `billing_run_account`, the run **continues with the other
-  accounts**, and the worker **moves on to the next date**. The failing account is
-  caught up automatically by the next successful run after the cause is fixed (the
-  core's catch-up), with that later run date - correct net, later bill.
-- **Run-level** (anything else: the database gone, a bug outside `bill_account`): the run
-  is marked `failed` with the error and the worker **does not advance** past D; it
-  retries D with backoff (5 min, 15 min, then hourly) until it succeeds or the owner
-  intervenes. Advancing past a date that never ran would bill every account later than
-  necessary for no benefit.
-
-**Run status after a partial failure - (D-W2).** `failed` as soon as one account failed
-(`accounts_failed > 0`), with `error` = "N of M accounts failed". It matches the
-design's red banner ("Some accounts were not processed; charges are incomplete") and
-keeps the enum (`running | completed | failed`) unchanged. Alternative: a fourth status
-`partial`.
-
-## 4. Status flips (cosmetic for money, visible in TMF637 and the UI)
-
-Billing is driven by dates; statuses only show what the dates already say. At the start
-of run D, before billing, in one transaction:
+At the start of run D, before billing, in one transaction:
 
 - `created | pendingActive -> active` where `start_date <= D`;
 - `pendingTerminate -> terminated` where `termination_date <= D`;
 
-**only for products whose order is visible to run D** - the same rule as billing
-(creating/terminating order completed before 00:00 of D). So a product ordered today to
-start today becomes `active` in tomorrow's run, which is also when it is first charged,
-and a replay sets the same statuses as the daily runs did. The flips are idempotent
-`UPDATE ... WHERE status = ...` statements and write no order (orders create and end
-products; a flip only records that a date has passed). `cancelled` products are never
-touched.
+**only for products whose order is visible to run D** (completed before 00:00 of D) -
+billing's own rule, so a replay sets the same statuses the daily runs did. Idempotent
+`UPDATE ... WHERE status = ...`; no order is written (orders create and end products; a
+flip only records that a date passed); `cancelled` is never touched. A blocked account's
+products are still flipped (statuses follow dates, not billing) - see D-W5.
 
-## 5. Schedule
+## 6. Schedule
 
-- **00:30 BILLING_TZ** (`BILLING_RUN_AT`, decided D7 in stage 5): after 00:00 (the
-  end-of-day rule), well before the 02:15 backup and the 03:00 reboot.
-- The worker wakes at least every 60 s and re-reads the clock, rather than sleeping
-  until 00:30 in one go - robust against suspended VMs and clock jumps, and it also
-  serves manual requests within a minute.
-- On boot (`restart: unless-stopped`, so after every 03:00 reboot) it computes `due` at
-  once: a run killed by the reboot is taken over at ~03:01, not the next night.
+- **00:30 BILLING_TZ** (`BILLING_RUN_AT`): after 00:00 (end-of-day rule), well before
+  the 02:15 backup and the 03:00 reboot.
+- The worker wakes at least every 60 s and re-reads the clock (robust against suspended
+  VMs and clock jumps; serves the queue within a minute).
+- On boot (`restart: unless-stopped`, so after every 03:00 reboot) it acts at once: a run
+  killed by the reboot is taken over at ~03:01.
 - A long catch-up may overlap the 02:15 backup: harmless (`pg_dump` takes a consistent
   snapshot), only slower on 1 vCPU.
-- Startup check: `BILLING_RUN_AT` must be after 00:00 and before 02:00 - **(D-W13)** - so a
-  later edit cannot silently put the run into the backup or the reboot.
 
-## 6. Internal API for the Billing runs screen (deferred UI)
+## 7. Internal API for the Billing runs screen (deferred UI)
 
-Same conventions as `/internal/v1` (strict OAS in `spec/internal/`, contract tests, TMF
-Error bodies). "Run manually for any date" from the design becomes **"catch up to date
-X"**: runs exist per date and are replayed in order, and an `as_of` earlier than existing
-data raises in the core - so the only meaningful manual action is "do now what is due up
-to X" (X <= business date).
+Same conventions as `/internal/v1` (strict OAS in `spec/internal/`, contract tests). The
+design's "Run manually for any date" becomes **"catch up to date X"** (X <= business
+date). **The API never bills**: it writes a `worker_request` row (`kind catchUp|retry`,
+`up_to`, `run_id`, `requested_at`, `requested_by` = the operator from `X-Remote-User`,
+`picked_at`, `done_at`) and the worker takes it within a minute (decided).
 
 | Endpoint | Behaviour |
 |---|---|
-| `GET /billingRun?limit=14` | newest first: `{id, runDate, status, trigger, attempt, startedAt, finishedAt, heartbeatAt, accounts {total, done, failed}, charges {count, amounts: Money[] (one per currency)}, error, isLatest}` |
-| `GET /billingRun/{id}` | the same, one run |
-| `GET /billingRun/{id}/accounts?status=failed` | per-account failures with the error, for the red error box |
-| `POST /billingRun/catchUp {upTo}` | `upTo` <= business date (422 otherwise); 409 while a run is running; queues a request the worker picks up within a minute; **202** with the dates that will run (`[]` and 200 if nothing is due) |
-| `POST /billingRun/{id}/retry` | only the **latest** run and only if `failed` (409 otherwise: an older date's charges were already caught up by later runs); re-runs that date - the accounts that succeeded are no-ops, the failed ones are tried again; 202 |
+| `GET /billingRun?limit=14` | newest first: `{id, runDate, status, trigger, attempt, startedAt, finishedAt, heartbeatAt, accounts {total, ok, failed, blocked}, charges {count, amounts: Money[] (per currency)}, error, isLatest}` |
+| `GET /billingRun/{id}` | one run |
+| `GET /billingRun/{id}/accounts?status=failed|blocked` | per-account outcomes with the error / the date it waits for |
+| `POST /billingRun/catchUp {upTo}` | `upTo` <= business date (422 otherwise); queues the request; **202** with the dates that will run, or 200 `[]` if nothing is due |
+| `POST /billingRun/{id}/retry` | the run must be `failed` (409 otherwise); queues a retry of its failed accounts; 202 |
 
-**The API never runs billing in the request (D-W6).** It inserts a row into a small
-`worker_request` table (`kind catchUp|retry`, `up_to`, `run_id`, `requested_at`,
-`requested_by` = the operator from `X-Remote-User`, `picked_at`, `done_at`); the worker
-polls it every wake-up (<= 60 s). Long work stays out of the API process (384 MB,
-0.5 CPU, request timeouts) and there is exactly one place that runs billing.
+The UI polls `GET /billingRun?limit=14` every few seconds while a run is `running` or a
+request is pending.
 
-The UI (later) polls `GET /billingRun?limit=14` every few seconds while a run is
-`running` (progress = `accounts.done / accounts.total`).
+## 8. Freshness signal for the external monitor
 
-## 7. Freshness signal for the external monitor
+**`GET /billing-status`** (decided: unauthenticated, exposing only the date, the status
+and the age - no amounts, no names, no counts):
 
-**`GET /billing-status`**, modelled on vps-infra's `/backup-status` - **(D-W7)**:
+    200 {"date": "2026-10-01", "status": "ok", "ageSeconds": 3600}
+    503 {"date": "2026-09-30", "status": "stale" | "failed" | "running", "ageSeconds": 97200}
 
-- cheap (one indexed query, like `/healthz`), unauthenticated through a Caddy carve-out
-  like `/healthz` (a vps-infra change), and it returns nothing beyond status;
-- **expected date** = today if the local time is past `BILLING_RUN_AT` + 2 h grace, else
-  yesterday;
-- **200** `{"status": "ok", "lastCompletedRunDate": "...", "expected": "..."}` when the
-  run for the expected date is `completed`;
-- **503** `{"status": "stale"|"failed"|"running-too-long", ...}` otherwise - an external
-  uptime checker alerts on the status code alone.
-- Deliberately **not** part of `/healthz`: a late billing run must not mark the app
-  unhealthy (the deploy gate and Docker's healthcheck depend on `/healthz`).
+- `date` - the latest run date; `status` - `ok` if that run is `completed` and it is the
+  expected date, otherwise why not; `ageSeconds` - since that run finished (or started,
+  if it has not).
+- **expected date** = today once the local time is past `BILLING_RUN_AT` + a grace
+  period, else yesterday (D-W19).
+- One indexed query, like `/healthz`; served without auth through a Caddy carve-out like
+  `/healthz` (a vps-infra change). Deliberately **not** part of `/healthz`: a late run
+  must not mark the app unhealthy (the deploy gate and Docker's healthcheck use it).
 
-## 8. Compose service and deployment
+## 9. Compose service and deployment
 
-`compose.prod.yaml` gets a second service from the same image (**needs approval when
-implemented: compose files and scripts are protected**):
+`compose.prod.yaml` gets a second service from the same image (**protected file - needs
+approval when implemented**):
 
     worker:
       image: same as app (IMAGE_NAME:TAG)
@@ -178,62 +190,73 @@ implemented: compose files and scripts are protected**):
       healthcheck: a liveness file in /tmp touched every wake-up; unhealthy if older
                    than 3 minutes (the worker serves no HTTP)
 
-- **Resources**: billing one account is a few queries; the whole run for a demo-sized
-  base takes seconds. 256 MB / 0.25 CPU keep the VPN's share untouched; the app keeps
-  its 384 MB / 0.5.
+- **Resources**: billing one account is a few queries; a demo-sized run takes seconds.
+  256 MB / 0.25 CPU keep the VPN's share untouched; the app keeps its 384 MB / 0.5.
 - **Deploy** (`scripts/deploy.sh`, protected): migrations (0004) first, then `up -d` of
   both services. A deploy that restarts the worker mid-run is covered by the takeover;
-  optionally deploy.sh waits up to N minutes for an idle worker first **(D-W11)**.
-- **Smoke** after deploy: `GET /billing-status` answers (200 or a 503 with a known
-  status), and the worker container reports healthy.
-- **Local**: a `worker` service in `compose.override.yaml` behind `profiles: [worker]`
-  (not started by `make up`), plus `make worker-once` (one wake-up now, then exit) for
-  manual testing against the seeded stack **(D-W14)**.
+  optionally deploy.sh waits for an idle worker first (D-W11).
+- **Smoke**: `GET /billing-status` answers with a known status, and the worker container
+  is healthy.
+- **Local**: a `worker` service in `compose.override.yaml` behind `profiles: [worker]`,
+  plus `make worker-once` (one wake-up, then exit) for the seeded stack (D-W14).
 
-## 9. Migration 0004 (sketch)
+## 10. Migration 0004 (sketch)
 
 - `billing_run`: `trigger` (enum, ours), `attempt int NOT NULL DEFAULT 1`,
-  `heartbeat_at timestamptz`, `accounts_total|done|failed int NOT NULL DEFAULT 0`.
-  Defaults are fine here: existing rows (local seeds; none in production, which has no
-  worker yet) are complete runs.
-- `billing_run_account` and `worker_request` as above.
+  `heartbeat_at timestamptz`, `accounts_total|ok|failed|blocked int NOT NULL DEFAULT 0`.
+  Defaults are safe: the existing rows (local seeds only; production has no runs) are
+  complete runs.
+- `billing_run_account` (section 3) and `worker_request` (section 7).
 - No change to ABRs, bills or products.
 
-## 10. Tests and negative proofs (plan)
+## 11. Tests and negative proofs (plan)
 
-- pure: `due(clock, last completed)`, the expected date of the freshness signal, the
-  wake-up decision - on FixedClock values around 00:00, 00:30, 02:30, DST-free and a DST
-  zone;
-- `start_run`: every row of the table in section 2; takeover proven with two
-  connections - one holds the advisory lock (alive: `RunInProgress`), then closes
-  (gone: takeover, no duplicate ABR);
-- isolation: one account with no price -> run `failed`, `accounts_failed = 1`, every
-  other account billed; after adding the price, the next run catches it up;
-- run-level failure: the database connection dropped mid-run -> `failed`, no advance,
-  retried;
+- pure: the due dates, the expected date of the freshness signal, the wake-up decision -
+  on FixedClock values around 00:00, 00:30 and the grace end;
+- `start_run`: every row of the table in section 2; takeover with two connections (lock
+  held: `RunInProgress`; holder closed: takeover, no duplicate ABR);
+- isolation: one account with an inconsistent state -> its `(run, account)` `failed`, the
+  run `failed`, every other account billed; the next dates: the account `blocked`,
+  others billed; after the fix and a retry: the account billed for each date in order,
+  and its rows equal those of a run where nothing failed; the runs recomputed to
+  `completed`;
+- whole-run failure: connection dropped mid-run -> `failed`, no advance, retried;
 - replay: the stage 3 outage test driven through the worker;
 - flips: statuses after run D for orders completed before and after 00:00 of D;
-- API and freshness endpoint: contract tests, each status code;
-- negative proofs: takeover without the lock check (two workers -> duplicate attempts),
-  advancing past a run-level failure, flipping by status instead of dates, a freshness
-  check that ignores `failed`.
+- API, queue and `/billing-status`: contract tests, each status code, and that
+  `/billing-status` carries no amount or name;
+- negative proofs: takeover ignoring the lock, billing a blocked account for a later
+  date, advancing past a whole-run failure, a retry that reprocesses ok accounts,
+  flipping by status instead of dates, a freshness check ignoring `failed`.
 
-## Decisions needed from the owner
+## Decided (owner, after the first review)
+
+- **Isolation per account**, tracked per (run, account) with status and error. A failed
+  account is **not billed for later dates** until fixed; then it **catches up its dates
+  in order**. **Retrying a failed run reprocesses only its failed accounts.** Other
+  accounts proceed normally. (Was D-W1, D-W9.)
+- **Any failed account -> the run is `failed`**, with per-account details. (Was D-W2.)
+- **A whole-run failure (DB down) does not advance past that date**; retried with
+  backoff. (Was D-W3.)
+- **The advisory lock decides owner liveness.** (Was D-W4.)
+- **The UI goes through a queue table; never billing inside an API request.** (Was
+  D-W6.)
+- **`/billing-status` is unauthenticated and exposes only the date, the status and the
+  age** - no amounts or names. (Was D-W7.)
+- "Run any date" is replaced by **"catch up to date X"** (agreed in stage 5). (Was D-W10.)
+
+## Still open
 
 | # | Question | Recommendation |
 |---|---|---|
-| D-W1 | After an account fails, continue with other accounts and later dates? | **Yes**: isolate per account; the core catches the account up once fixed |
-| D-W2 | Run status when some accounts failed | **`failed`** (matches the design banner; enum unchanged), not a new `partial` |
-| D-W3 | Run-level failure (DB down, bug) | **Do not advance**; retry the same date with backoff 5 / 15 / 60 min |
-| D-W4 | How to detect a dead run | **Postgres advisory lock** held by the worker; heartbeat only for display |
-| D-W5 | Status flips | **In the worker, at run D, before billing, with billing's visibility rule** |
-| D-W6 | How the UI triggers work | **`worker_request` table polled by the worker**; the API never bills in-request |
-| D-W7 | Freshness signal | **`GET /billing-status`**, unauthenticated (Caddy carve-out like /healthz), 200 / 503, 2 h grace after 00:30 |
-| D-W8 | Worker limits | **256 MB, 0.25 CPU**, read-only, no ports |
-| D-W9 | Retry scope | **Latest failed run only**; re-runs the date, succeeded accounts are no-ops |
-| D-W10 | Manual "run any date" | **Replaced by "catch up to date X"** (X <= business date), already agreed in stage 5 |
-| D-W11 | Deploy during a run | Rely on takeover; optionally deploy.sh waits for idle (protected script) |
-| D-W12 | Alerting beyond the HTTP monitor (mail, chat) | Out of scope for now |
-| D-W13 | Guard on `BILLING_RUN_AT` | Refuse to start unless 00:00 < t < 02:00 |
-| D-W14 | Local worker | Compose profile `worker` + `make worker-once` (protected files) |
-| D-W15 | First start with no runs | `due = [today]` only; earlier periods are caught up by the core on that date |
+| **D-W18** | **A failed account may never become fixable.** The usual account failure is a missing price for a date (`MissingPrice`). A price can never start in the past (TMF620 rule), so a gap on a past date cannot be repaired by adding a price, and under "not billed until fixed" the account would stay blocked for good. | **Prevent gaps at the catalog**: refuse (409) ending a price's validity when an open-ended product of that offering in that currency would be left without a following price. Plus an audited **operator waiver** for a (product, period) as the escape hatch - recorded, writes no charge, unblocks the account. Never backdated prices. |
+| D-W16 | Does a `blocked` account make the run `failed` too? | **Yes**: its charges for that date are missing, which is what the red banner says. |
+| D-W17 | Who retries a failed account? | **The worker, once per scheduled run** (00:30), before the new date; plus the operator's retry for immediacy. A fixed cause then heals without manual action. |
+| D-W5 | Status flips for a blocked account | **Flip anyway** (statuses follow dates, not billing). |
+| D-W8 | Worker limits | **256 MB, 0.25 CPU**, read-only, no ports. |
+| D-W11 | Deploy during a run | Rely on the takeover; optionally deploy.sh waits for idle (protected script). |
+| D-W12 | Alerting beyond the HTTP monitor (mail, chat) | Out of scope for now. |
+| D-W13 | Guard on `BILLING_RUN_AT` | Refuse to start unless 00:00 < t < 02:00. |
+| D-W14 | Local worker | Compose profile `worker` + `make worker-once` (protected files). |
+| D-W15 | First start with no runs | `due = [today]` only; earlier periods are caught up by the core on that date. |
+| D-W19 | Freshness grace and what a long `running` reports | Grace **2 h** after `BILLING_RUN_AT`; `running` longer than that -> 503 `running`. |
