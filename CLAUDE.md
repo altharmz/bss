@@ -865,6 +865,13 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   the UI never does arithmetic on binary floats, and typed amounts are sent as the
   validated decimal string. Negatives use U+2212. Dates are business dates in BILLING_TZ
   (from `/internal/v1/context`) via `Intl`, never the browser's zone.
+- **Dates the UI sends** (requestedStartDate at noon, validFor at midnight) carry
+  BILLING_TZ's offset **for that date** (`zonedDateTime`: `Intl.DateTimeFormat` with
+  `timeZone`, so a DST zone gets the right offset either side of a change) - never the
+  browser's offset, and not `/internal/v1/context`'s `utcOffset`, which is the offset at
+  *now* (top bar only). `npm test` runs the suite twice, in UTC and with
+  `TZ=America/New_York`, so every request body is proven independent of the browser's
+  zone; a local-`Date`-constructor bug passes the UTC run and fails the second one.
 - **Harness:** `settings.json` denies `npm`, `npx`, `node`, `pnpm`, `yarn`, `corepack` on
   the host and edits under `design-ref/`; `guard.sh` blocks a command segment that starts
   with a Node tool (also via `sh -c`) unless that segment runs in the `web`/`web-offline`

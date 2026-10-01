@@ -44,6 +44,43 @@ export function clockTime(instant: string, timeZone: string): string {
   return `${p.hour}:${p.minute}:${p.second}`;
 }
 
+/** The UTC offset of `timeZone` at an instant, in minutes east of UTC. From Intl, so it
+ * never depends on the browser's own zone. */
+function offsetMinutes(instant: number, timeZone: string): number {
+  const name = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
+    .formatToParts(new Date(instant))
+    .find((part) => part.type === 'timeZoneName')?.value;
+  if (name === 'GMT') return 0;
+  const match = name ? /^GMT([+-])(\d{2}):(\d{2})$/.exec(name) : null;
+  if (!match) throw new RangeError(`no UTC offset for ${timeZone}: ${String(name)}`);
+  const [, sign, hh, mm] = match as unknown as [string, string, string, string];
+  return (sign === '-' ? -1 : 1) * (Number(hh) * 60 + Number(mm));
+}
+
+function formatOffset(minutes: number): string {
+  const abs = Math.abs(minutes);
+  const hh = String(Math.floor(abs / 60)).padStart(2, '0');
+  const mm = String(abs % 60).padStart(2, '0');
+  return `${minutes < 0 ? '-' : '+'}${hh}:${mm}`;
+}
+
+/**
+ * The wall-clock time `hhmm` ("00:00", "12:00") of business date `day` in `timeZone`
+ * (BILLING_TZ from /internal/v1/context), as an ISO date-time with that zone's offset ON
+ * THAT DATE - a DST zone has two offsets a year. Never the browser's zone.
+ * "2026-07-01", "00:00", "America/New_York" -> "2026-07-01T00:00:00-04:00".
+ */
+export function zonedDateTime(day: string, hhmm: string, timeZone: string): string {
+  if (!isIsoDate(day) || !/^\d{2}:\d{2}$/.test(hhmm)) throw new RangeError(`${day} ${hhmm}`);
+  const [y, m, d] = day.split('-').map(Number) as [number, number, number];
+  const [hh, mm] = hhmm.split(':').map(Number) as [number, number];
+  const asIfUtc = Date.UTC(y, m - 1, d, hh, mm);
+  // the offset at the guessed instant, then at the instant it implies (DST edges)
+  const guess = offsetMinutes(asIfUtc, timeZone);
+  const offset = offsetMinutes(asIfUtc - guess * 60_000, timeZone);
+  return `${day}T${hhmm}:00${formatOffset(offset)}`;
+}
+
 /** The top bar's zone label from /internal/v1/context's utcOffset: "+03:00" -> "UTC+3",
  * "+05:30" -> "UTC+5:30", "-04:00" -> "UTC−4" (U+2212), "+00:00" -> "UTC". */
 export function utcLabel(offset: string): string {

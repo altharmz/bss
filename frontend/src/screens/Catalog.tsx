@@ -363,7 +363,7 @@ export function NewOfferingModal({
           validFrom: form.validFrom,
           validTo: form.validTo || null,
         },
-        context.utcOffset,
+        context.timeZone,
       );
       onCreated(id, checked.code);
     } catch (error) {

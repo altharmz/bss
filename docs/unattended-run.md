@@ -41,9 +41,10 @@ instructed.
   The offering's status is what gates ordering; the price's lifecycle is not checked
   anywhere. Matches the seed.
 - **"Valid from" defaults to tomorrow and cannot be earlier**; "Valid to" is inclusive in
-  the UI and sent as the exclusive midnight of the next day. Both are sent as midnight
-  with the context's UTC offset (exact for Europe/Moscow, which has no DST; a DST zone
-  would need the offset of that date).
+  the UI and sent as the exclusive midnight of the next day. *Superseded after review:*
+  dates are now sent with BILLING_TZ's offset for that specific date (`zonedDateTime`,
+  Intl with `timeZone`), never the browser's; the suite also runs with
+  TZ=America/New_York to prove it.
 - **Code rule shown before submit**: `^[A-Z0-9][A-Z0-9_-]{0,31}$`, upper-cased as typed
   (migration 0003's rule; the backend still answers 409/422 itself).
 - **Catalog price column**: the price valid now in the UI currency; if none, the next

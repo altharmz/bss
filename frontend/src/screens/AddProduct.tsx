@@ -79,7 +79,7 @@ export function AddProductModal({
     setBusy(true);
     setProblem([]);
     try {
-      const result = await orderAdd(account.id, offeringId, start, context.utcOffset);
+      const result = await orderAdd(account.id, offeringId, start, context.timeZone);
       if (result.state === 'completed') {
         onOrdered(
           `${chosen.name} ordered · first charge ${formatAmount(first.amount.value)}` +

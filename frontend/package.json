@@ -21,7 +21,7 @@
     "types": "node scripts/gen-types.mjs",
     "lint": "npm run types && tsc --noEmit && eslint . --max-warnings 0 && prettier --check .",
     "format": "prettier --write .",
-    "test": "npm run types && vitest run"
+    "test": "npm run types && vitest run && TZ=America/New_York vitest run"
   },
   "dependencies": {
     "@fontsource/golos-text": "5.3.0",

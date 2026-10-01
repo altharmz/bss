@@ -4,7 +4,7 @@
 // silently blank cell.
 
 import { toCents } from '../format/money';
-import { addDays } from '../format/dates';
+import { addDays, zonedDateTime } from '../format/dates';
 import { AMOUNT, getAll, getJson, jsonWithAmount, patchJson, postJson } from './client';
 import type { components as Internal } from './generated/internal';
 import type { components as T620 } from './generated/tmf620';
@@ -299,8 +299,8 @@ export interface NewOffering {
 }
 
 /** Midnight of a business date in BILLING_TZ, as a TMF date-time. */
-export function midnightOf(day: string, utcOffset: string): string {
-  return `${day}T00:00:00${utcOffset}`;
+export function midnightOf(day: string, timeZone: string): string {
+  return zonedDateTime(day, '00:00', timeZone);
 }
 
 /**
@@ -309,13 +309,13 @@ export function midnightOf(day: string, utcOffset: string): string {
  * the second call fails, the price stays unattached - it can never price anything - and
  * the error is shown; nothing is rolled back behind the operator's back.
  */
-export async function createOffering(form: NewOffering, utcOffset: string): Promise<string> {
+export async function createOffering(form: NewOffering, timeZone: string): Promise<string> {
   const validFor = {
-    startDateTime: midnightOf(form.validFrom, utcOffset),
+    startDateTime: midnightOf(form.validFrom, timeZone),
     // the UI's "Valid to" is the last valid day; TMF validFor ends exclusively
     ...(form.validTo === null
       ? {}
-      : { endDateTime: midnightOf(addDays(form.validTo, 1), utcOffset) }),
+      : { endDateTime: midnightOf(addDays(form.validTo, 1), timeZone) }),
   };
   const price = await postJson<PriceBody>(
     PATHS.prices,
@@ -373,22 +373,22 @@ function outcome(order: OrderBody): OrderOutcome {
   };
 }
 
-/** The requested date as noon of that day in BILLING_TZ: the backend takes the calendar
- * date in BILLING_TZ, and noon keeps it on the right day whatever the offset is. */
-export function requestedDate(day: string, utcOffset: string): string {
-  return `${day}T12:00:00${utcOffset}`;
+/** The requested date as noon of that day in BILLING_TZ, with BILLING_TZ's offset on that
+ * date: the backend takes the calendar date in BILLING_TZ. Never the browser's zone. */
+export function requestedDate(day: string, timeZone: string): string {
+  return zonedDateTime(day, '12:00', timeZone);
 }
 
 export async function orderAdd(
   accountId: string,
   offeringId: string,
   startDate: string,
-  utcOffset: string,
+  timeZone: string,
 ): Promise<OrderOutcome> {
   const order = await postJson<OrderBody>(PATHS.orders, {
     '@type': 'ProductOrder',
     billingAccount: { id: accountId, '@type': 'BillingAccountRef' },
-    requestedStartDate: requestedDate(startDate, utcOffset),
+    requestedStartDate: requestedDate(startDate, timeZone),
     productOrderItem: [
       {
         '@type': 'ProductOrderItem',

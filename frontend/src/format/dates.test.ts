@@ -7,7 +7,33 @@ import {
   lastDay,
   nextCycleDate,
   utcLabel,
+  zonedDateTime,
 } from './dates';
+
+describe('zonedDateTime', () => {
+  it.each([
+    ['2026-10-06', '12:00', 'Europe/Moscow', '2026-10-06T12:00:00+03:00'],
+    ['2026-10-02', '00:00', 'Europe/Moscow', '2026-10-02T00:00:00+03:00'],
+    // a DST zone: the offset of that date, not of today
+    ['2026-07-01', '00:00', 'America/New_York', '2026-07-01T00:00:00-04:00'],
+    ['2026-12-01', '00:00', 'America/New_York', '2026-12-01T00:00:00-05:00'],
+    // the change days: midnight is before the switch, noon after it
+    ['2026-03-08', '00:00', 'America/New_York', '2026-03-08T00:00:00-05:00'],
+    ['2026-03-08', '12:00', 'America/New_York', '2026-03-08T12:00:00-04:00'],
+    ['2026-11-01', '00:00', 'America/New_York', '2026-11-01T00:00:00-04:00'],
+    ['2026-11-01', '12:00', 'America/New_York', '2026-11-01T12:00:00-05:00'],
+    ['2026-10-06', '00:00', 'UTC', '2026-10-06T00:00:00+00:00'],
+    ['2026-10-06', '00:00', 'Asia/Kolkata', '2026-10-06T00:00:00+05:30'],
+  ])('%s %s in %s -> %s', (day, time, zone, expected) => {
+    expect(zonedDateTime(day, time, zone)).toBe(expected);
+  });
+
+  it('means that very local time in the zone', () => {
+    const text = zonedDateTime('2026-03-08', '12:00', 'America/New_York');
+    expect(clockTime(text, 'America/New_York')).toBe('12:00:00');
+    expect(businessDate(text, 'America/New_York')).toBe('2026-03-08');
+  });
+});
 
 describe('nextCycleDate', () => {
   it.each([
