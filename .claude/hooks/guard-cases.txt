@@ -1,0 +1,131 @@
+# Regression cases for guard.sh, run by .claude/hooks/test-guard.sh (and by the
+# pre-commit hook whenever .claude/ changes). One case per line:
+#   allow <command>      expected exit 0
+#   block <command>      expected exit 2
+#   allow-ml / block-ml  the same, with every literal \n in the command turned into a newline
+# Paths are relative to the project root; absolute ones use /home/petrg/projects/bss.
+
+# --- the VPN on the VPS (raw text, quotes included) ---
+block ssh vps-test 'vpncmd /server localhost'
+block docker exec vpnserver ls
+block echo softether
+block ssh vps-test 'ss -tlnp | grep 443'
+block docker run -p 443:443 nginx
+
+# --- destructive docker ---
+block docker system prune -af
+block docker volume rm pgdata
+block docker volume prune -f
+block docker network prune
+block docker builder prune -f
+block sh -c 'docker system prune -f'
+block ssh vps-test 'docker volume prune -f'
+block docker stop $(docker ps -q)
+block docker rm -f $(docker ps -aq)
+
+# --- privileged / host-changing ssh ---
+block ssh vps-test 'sudo reboot'
+block ssh vps-test apt-get update
+block ssh vps-test 'systemctl restart docker'
+block ssh vps-test 'rm -rf /tmp/x'
+block ssh vps-test 'docker build .'
+block ssh vps-test 'cat >> ~/.ssh/authorized_keys'
+block ssh vps-test 'ufw allow 22'
+block ssh vps-test shutdown -h now
+
+# --- cron (new: was not blocked before the quote-aware guard) ---
+block crontab -e
+block crontab -l
+block ssh vps-test 'crontab -l'
+
+# --- secrets ---
+block cat .env
+block cat .env.prod
+block head -5 .env
+block grep PASS .env.prod
+block less .env
+block tail .env
+block strings .env.prod
+block cd /tmp && cat /home/petrg/projects/bss/.env
+block sh -c 'cat .env'
+block echo "$(cat .env.prod)"
+
+# --- git ---
+block git push
+block git push origin master
+block git -C . push
+block git reset --hard HEAD~1
+block git clean -fd
+block echo x; git push
+
+# --- Node on the host ---
+block npm ci
+block npx vite
+block node x.js
+block pnpm i
+block yarn
+block corepack enable
+block NODE_ENV=production node scripts/x.mjs
+block bash -c 'npm test'
+block ls | node -e 1
+block cd frontend && npx vite build
+block sudo npm i -g x
+block echo $(npm ci)
+block echo "$(npm ci)"
+block echo `npm ci`
+block xargs npm < list.txt
+block find . -name '*.js' -exec node {} ;
+block eval 'npm ci'
+block docker compose run --rm app npm ci
+block docker compose run --rm web-offline sh -c 'npm ci; git push'
+
+# --- writes to protected paths ---
+block echo x > Makefile
+block echo x >> .claude/settings.json
+block tee scripts/a.sh < x
+block rm scripts/deploy.sh
+block rm -rf .claude
+block mv compose.yaml /tmp/
+block sed -i s/a/b/ Makefile
+block sed --in-place s/a/b/ compose.prod.yaml
+block cp /tmp/x Makefile
+block cp x /home/petrg/projects/bss/scripts/y
+block echo x > design-ref/a
+block rm -rf design-ref
+block sed -i s/a/b/ design-ref/design_handoff_bss_admin/README.md
+block cd frontend && rm ../Makefile
+block rm -rf *
+block sh -c 'echo x > Makefile'
+
+# --- fail-closed: what cannot be tokenised falls back to the raw-text checks ---
+block echo 'unbalanced && npm ci
+block-ml python3 - <<'EOF'\nprint('x && npm ci')\nEOF
+
+# --- the three false positives of the raw-text guard: must pass now ---
+allow make web-e2e | grep -vE "^ Container|^$|npm notice|dist/assets" | tail -20
+allow git commit -m "docs: a chained sh -c '... && npm ...' inside docker compose run is split at &&"
+allow docker compose run --rm --no-deps web-offline sh -c 'sh scripts/check-deps.sh && npm run build'
+
+# --- ordinary commands that must keep working ---
+allow make web-test
+allow docker compose run --rm --no-deps web npm ci
+allow docker compose run --rm --no-deps -e VITE_BSS_BUILD=abc web-offline npx prettier --check .
+allow docker compose run --rm e2e
+# Node inside any container is allowed (the rule is "never on the host")
+allow docker run --rm node:22-alpine npm ci
+allow grep -rn node frontend/src
+allow docker compose logs app | grep npm
+allow cat design-ref/design_handoff_bss_admin/README.md
+allow cp design-ref/design_handoff_bss_admin/README.md /tmp/x
+allow cat Makefile
+allow ls scripts/
+allow git status
+allow git log --oneline -5
+allow git commit -m "fix: never git push from here"
+allow echo "docker system prune is forbidden"
+allow cd frontend && rm scripts/ensure-deps.sh
+allow rm frontend/scripts/x.sh
+allow cp Makefile /tmp/Makefile.bak
+allow cat .env.example
+allow docker compose run --rm app pytest -n auto
+allow-ml cat <<'EOF'\nhello\nEOF

@@ -139,6 +139,17 @@ boundary:
   commands; `docker compose config --quiet` validates without printing.
 - **`guard.sh` is a pattern matcher over the command text.** It cannot see through
   variables, scripts, encodings or a command it has no pattern for.
+- **It is quote-aware** (`.claude/hooks/guard.py`): the command is tokenised with `shlex`
+  (POSIX quoting, shell punctuation as separate tokens), so text inside quotes - a grep
+  pattern, a commit message - is never treated as a command. What a shell does execute is
+  still checked: `sh -c`/`bash -c` scripts, `eval`, ssh remote commands, the command after
+  `docker compose run <service>`, `xargs`, `find -exec`, and `$(...)`/backtick
+  substitutions (even inside quotes). `cd` is tracked for path rules. The VPN, port and
+  mass-stop rules still scan the raw text. **Fail-closed:** a command that cannot be
+  tokenised (unbalanced quotes, a heredoc or here-string) goes through the old raw-text
+  checks, exactly as strict as before. Regression cases: `.claude/hooks/guard-cases.txt`
+  (allow/block per command), run by `.claude/hooks/test-guard.sh` and by the pre-commit
+  hook whenever `.claude/` changes.
 
 - **Harness files need the human's OK.** `.claude/**`, `compose*.yaml`, `Makefile` and
   `scripts/**` are under `"ask"` for the Edit tool, and `guard.sh` blocks the shell writes
@@ -906,12 +917,13 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   `TZ=America/New_York`, so every request body is proven independent of the browser's
   zone; a local-`Date`-constructor bug passes the UTC run and fails the second one.
 - **Harness:** `settings.json` denies `npm`, `npx`, `node`, `pnpm`, `yarn`, `corepack` on
-  the host and edits under `design-ref/`; `guard.sh` blocks a command segment that starts
-  with a Node tool (also via `sh -c`) unless that segment runs in the `web`/`web-offline`
-  service, and shell writes into `design-ref/`. It splits at `&&`, `;` and `|` without
-  understanding quotes or heredocs, so a chained `sh -c` inside `docker compose run`, or
-  documentation text containing such a chain, is blocked too - use the make targets. The
-  format hook runs prettier (in `web-offline`) on edited UI files.
+  the host and edits under `design-ref/`; `guard.sh` blocks a command that runs a Node
+  tool on the host (also via `sh -c`, `xargs`, substitutions) unless it runs in one of the
+  compose services `web`, `web-offline`, `web-preview`, `e2e` (or another container), and
+  shell writes into `design-ref/`. It is quote-aware, so `docker compose run web-offline
+  sh -c '... && npm ...'` and text mentioning npm in quotes pass; a heredoc still goes
+  through the old raw-text checks. The format hook runs prettier (in `web-offline`) on
+  edited UI files.
 - **Structure** (`frontend/src/`): `api/` (fetch client: every failure is an `ApiError`
   whose message is the call, "GET /path → 503 Service Unavailable"; `getPage` requires
   `X-Total-Count`; `getAll` pages by 100; `useResource` = loading/error/ok + retry, never

@@ -14,6 +14,17 @@ cmd="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.load(sys
 
 block() { printf 'BLOCKED by guard.sh: %s\n' "$1" >&2; exit 2; }
 
+# --- quote-aware checks first (guard.py: shlex tokens, so quoted text is never a command) ---
+# 0 = allow, 2 = blocked (reason already on stderr), 3 = cannot tokenise (unbalanced
+# quotes, a heredoc): fall through to the raw-text checks below, as strict as before.
+# Anything else (python missing, a crash) also falls through: fail-closed.
+python3 "$(dirname "$0")/guard.py" "$cmd"
+rc=$?
+(( rc == 0 )) && exit 0
+(( rc == 2 )) && exit 2
+
+# --- raw-text fallback (the guard before it was quote-aware) ---
+
 # --- the VPN on the VPS is production; it is not ours to touch ---
 grep -Eqi 'softether|vpnserver|vpncmd' <<<"$cmd" && \
   block "the VPS runs a production SoftEther VPN server. Do not interact with it."

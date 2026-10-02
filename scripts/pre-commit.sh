@@ -33,6 +33,12 @@ fi
 make lint </dev/null || fail "make lint"
 make test </dev/null || fail "make test"
 
+# The agent guard, only when the commit touches .claude/: every regression case in
+# .claude/hooks/guard-cases.txt must still be allowed or blocked as recorded.
+if git diff --cached --name-only | grep -q '^\.claude/'; then
+  .claude/hooks/test-guard.sh </dev/null || fail "guard regression cases (.claude/hooks/test-guard.sh)"
+fi
+
 # The admin UI, only when the commit touches it or the specs its types come from. These
 # targets run offline and never install: if node_modules is out of date they fail with
 # "run make web-install". A change in app/api or app/internal alone can still break the
