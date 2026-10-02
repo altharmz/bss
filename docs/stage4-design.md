@@ -293,7 +293,7 @@ approval when implemented**):
   chain is walked. Together with D-W18 this is the invariant **"a live product has a
   price for every future day"** - so a `MissingPrice` in a run can only come from data
   changed outside the API (a data bug: reviewed one-off script + audit note).
-- **D-W21 - the atomic price change** (`845498b`, UI `aa231d4`):
+- **D-W21 - the atomic price change** (`1a02efa`, UI `3562fd4`):
   `POST /internal/v1/productOffering/{id}/priceChange {amount, currency, validFrom}`
   ends the open-ended price at midnight (BILLING_TZ) of `validFrom` (>= tomorrow) and
   creates the attached successor, in one transaction; documented in CLAUDE.md as our

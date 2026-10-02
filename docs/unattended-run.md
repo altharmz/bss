@@ -60,7 +60,7 @@ instructed.
 
 - **Stage 4**: every D-W item is decided and recorded in `docs/stage4-design.md`;
   nothing is open. The price invariant it relies on is implemented: D-W18 (`fd0c0a7`),
-  D-W20 (`60f2a58`), D-W21 (`845498b`, UI `aa231d4`). No worker code was written.
+  D-W20 (`60f2a58`), D-W21 (`1a02efa`, UI `3562fd4`). No worker code was written.
 - When stage 4 is implemented it needs protected files: `compose.prod.yaml` and
   `compose.override.yaml` (worker service), `scripts/deploy.sh` (start the worker,
   smoke `/billing-status`, optional wait for idle), `Makefile` (`worker-once`). None was
