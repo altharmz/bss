@@ -34,8 +34,10 @@
     "deny": [
       "Read(./.env)",
       "Read(./.env.prod)",
+      "Read(./.env.smoke)",
       "Edit(./.env)",
       "Edit(./.env.prod)",
+      "Edit(./.env.smoke)",
       "Bash(git push:*)",
       "Bash(docker system prune:*)",
       "Bash(docker volume rm:*)",

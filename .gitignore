@@ -1,5 +1,6 @@
 .env
 .env.prod
+.env.smoke
 __pycache__/
 *.pyc
 .pytest_cache/

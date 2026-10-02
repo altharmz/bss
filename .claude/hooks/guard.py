@@ -324,7 +324,7 @@ def check_segment(seg: list[str], cwd, inside: bool, depth: int):
                 check_segment(words[i + 1 : end], cwd, inside, depth + 1)
 
     if cmd in SECRET_READERS:
-        if any(re.search(r"(^|/)\.env(\.prod)?$", w) for w in words[1:]):
+        if any(re.search(r"(^|/)\.env(\.prod|\.smoke)?$", w) for w in words[1:]):
             block("do not read .env files. See .env.example for the variable names.")
 
     if cmd in ("rm", "rmdir", "unlink", "mv", "tee", "truncate", "shred"):

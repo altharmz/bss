@@ -81,10 +81,37 @@ ${dirty}"
 
 # The web smoke test goes through the shared Caddy as the GET-only `smoke` user. Read only
 # that one variable; it is handed to the smoke script in its environment, never printed.
+#
+# The credential lives in .env.smoke - local only: gitignored, never rsynced (the
+# workstation-only counterpart of .env.prod, which IS shipped to the VPS as ~/bss/.env).
+# SMOKE_ENV points elsewhere only for a rehearsal with a dummy file.
 WEB_URL="${WEB_URL:-https://vpn2811.duckdns.org:8445}"
-SMOKE_BASIC_AUTH="$(sed -n 's/^SMOKE_BASIC_AUTH=//p' .env.prod | tail -n 1)"
+SMOKE_ENV="${SMOKE_ENV:-.env.smoke}"
+[[ -f "${SMOKE_ENV}" ]] \
+  || fail "${SMOKE_ENV} is missing: create .env.smoke with SMOKE_BASIC_AUTH=smoke:<password> (see .env.example and docs/vps-infra-change-request.md)"
+SMOKE_BASIC_AUTH="$(sed -n 's/^SMOKE_BASIC_AUTH=//p' "${SMOKE_ENV}" | tail -n 1)"
 [[ "${SMOKE_BASIC_AUTH}" == smoke:?* ]] \
-  || fail "SMOKE_BASIC_AUTH=smoke:<password> is missing in .env.prod (see .env.example and docs/vps-infra-change-request.md)"
+  || fail "SMOKE_BASIC_AUTH=smoke:<password> is missing in ${SMOKE_ENV}"
+! grep -q '^SMOKE_BASIC_AUTH=' .env.prod \
+  || fail ".env.prod contains SMOKE_BASIC_AUTH: remove it - .env.prod is shipped to the VPS, the smoke credential belongs in .env.smoke only"
+
+# What ships, in one place: the real deploy calls these with the VPS as destination,
+# DRY_RUN=1 with --dry-run against a local scratch directory - the same calls.
+ship_config() { # <destination> [rsync options]
+  local dest="$1"
+  shift
+  "${RSYNC[@]}" "$@" compose.yaml compose.prod.yaml "${dest}/"
+  # compose auto-loads a file named .env from its project directory, so EVERY remote
+  # compose call sees the secrets - not just the one that starts the stack
+  "${RSYNC[@]}" "$@" .env.prod "${dest}/.env"
+}
+ship_web() { # <destination> [rsync options]
+  local dest="$1"
+  shift
+  "${RSYNC[@]}" "$@" --exclude index.html frontend/dist/ "${dest}/web/"
+  "${RSYNC[@]}" "$@" frontend/dist/index.html "${dest}/web/index.html"
+  "${RSYNC[@]}" "$@" --delete frontend/dist/ "${dest}/web/"
+}
 
 # The admin UI is built locally too, before anything touches the network, with the commit
 # as its bss-build marker - the web smoke test reads it back through Caddy.
@@ -92,6 +119,23 @@ log "Building the admin UI (frontend/dist, build ${TAG})"
 make web-build WEB_BUILD="${TAG}" </dev/null || fail "the UI build failed (run make web-install if node_modules is out of date)"
 grep -q "<meta name=\"bss-build\" content=\"${TAG}\"" frontend/dist/index.html \
   || fail "frontend/dist/index.html does not carry build ${TAG}"
+
+# DRY_RUN=1: every local check above has passed; list exactly what the rsync calls of a
+# real deploy would ship (the same functions, --dry-run into a local scratch directory),
+# prove the smoke credential is not among it, and stop before any network step.
+if [[ "${DRY_RUN:-}" == 1 ]]; then
+  stage="$(mktemp -d)"
+  shipped="$( { ship_config "${stage}" --dry-run --out-format='%n'
+                ship_web "${stage}" --dry-run --out-format='web/%n'; } | sort -u)"
+  rm -rf "${stage}"
+  log "Dry run: a deploy of ${TAG} would ship $(wc -l <<<"${shipped}") paths:"
+  grep -v '^web/assets/' <<<"${shipped}" | sed 's/^/    /'
+  printf '    ... and %s files under web/assets/\n' "$(grep -c '^web/assets/.' <<<"${shipped}")"
+  ! grep -q 'env\.smoke' <<<"${shipped}" || fail ".env.smoke would be shipped"
+  ! grep -q '^SMOKE_BASIC_AUTH=' .env.prod || fail ".env.prod has a SMOKE_BASIC_AUTH line"
+  log "Dry run OK: .env.smoke is not shipped, .env.prod has no SMOKE_BASIC_AUTH line; nothing touched the network"
+  exit 0
+fi
 
 log "Opening one SSH connection to ${REMOTE} for the whole deploy"
 open_master
@@ -124,10 +168,7 @@ fi
 
 log "Syncing compose files"
 rssh "mkdir -p ${REMOTE_DIR}"
-"${RSYNC[@]}" compose.yaml compose.prod.yaml "${REMOTE}:${REMOTE_DIR}/"
-# compose auto-loads a file named .env from its project directory, so EVERY remote
-# compose call sees the secrets - not just the one that starts the stack
-"${RSYNC[@]}" .env.prod "${REMOTE}:${REMOTE_DIR}/.env"
+ship_config "${REMOTE}:${REMOTE_DIR}"
 
 # No --quiet-pull on any compose call below: the image only exists locally on the VPS
 # (docker load, no registry), and with that flag compose hangs trying to check a
@@ -195,9 +236,7 @@ printf '\n'
 # assets.
 log "Shipping the admin UI into ~/${REMOTE_DIR}/web (synced into the directory, never replaced)"
 rssh "mkdir -p ${REMOTE_DIR}/web"
-"${RSYNC[@]}" --exclude index.html frontend/dist/ "${REMOTE}:${REMOTE_DIR}/web/"
-"${RSYNC[@]}" frontend/dist/index.html "${REMOTE}:${REMOTE_DIR}/web/index.html"
-"${RSYNC[@]}" --delete frontend/dist/ "${REMOTE}:${REMOTE_DIR}/web/"
+ship_web "${REMOTE}:${REMOTE_DIR}"
 
 log "Web smoke test through Caddy (${WEB_URL})"
 SMOKE_BASIC_AUTH="${SMOKE_BASIC_AUTH}" ./scripts/web-smoke.sh "${WEB_URL}" "${TAG}" \

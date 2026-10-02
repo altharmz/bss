@@ -47,7 +47,7 @@ if grep -Eq '(^|[|;&[:space:]])ssh[[:space:]]' <<<"$cmd"; then
 fi
 
 # --- secrets stay out of the transcript ---
-grep -Eq '(cat|less|head|tail|grep|strings)[[:space:]]+[^|]*\.env(\.prod)?([[:space:]]|$)' <<<"$cmd" && \
+grep -Eq '(cat|less|head|tail|grep|strings)[[:space:]]+[^|]*\.env(\.prod|\.smoke)?([[:space:]]|$)' <<<"$cmd" && \
   block "do not read .env files. See .env.example for the variable names."
 
 # --- history rewriting / force pushes ---

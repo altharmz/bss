@@ -46,6 +46,8 @@ block grep PASS .env.prod
 block less .env
 block tail .env
 block strings .env.prod
+block cat .env.smoke
+block grep SMOKE .env.smoke
 block cd /tmp && cat /home/petrg/projects/bss/.env
 block sh -c 'cat .env'
 block echo "$(cat .env.prod)"

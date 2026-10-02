@@ -97,9 +97,12 @@ Notes:
   `caddy hash-password` (run it in the Caddy container; the plaintext never goes into the
   Caddyfile or the vps-infra repo).
 - GET/HEAD only (the `@smoke_write` 403 above).
-- The plaintext goes into bss's **`.env.prod`** on the workstation, as
-  `SMOKE_BASIC_AUTH=smoke:<password>` (see bss's `.env.example`). bss's deploy refuses to
-  start without it and never prints it.
+- The plaintext goes into bss's **`.env.smoke`** on the workstation - a local-only file,
+  gitignored and never shipped (unlike `.env.prod`, which deploy.sh copies to the VPS as
+  `~/bss/.env`) - as `SMOKE_BASIC_AUTH=smoke:<password>` (see bss's `.env.example`). The
+  password is therefore never on the VPS except as Caddy's hash. bss's deploy refuses to
+  start without `.env.smoke`, refuses if `.env.prod` has a `SMOKE_BASIC_AUTH` line, and
+  never prints the value.
 
 ## 4. Order of deploys
 
@@ -110,7 +113,9 @@ Notes:
    the read-only mount; replace the bss site block; reload/recreate Caddy. Check:
    `curl -s -o /dev/null -w '%{http_code}' https://vpn2811.duckdns.org:8445/healthz` -> 200,
    and `/` with credentials -> 404 (empty `web/`, expected until step 3).
-3. **bss**: `SMOKE_BASIC_AUTH` in `.env.prod`, then `make verify` from the workstation:
+3. **bss**: `SMOKE_BASIC_AUTH` in `.env.smoke` (not `.env.prod`), optionally
+   `DRY_RUN=1 ./scripts/deploy.sh` (local checks, the exact list of shipped files, no
+   network), then `make verify` from the workstation:
    backend and UI checks, the e2e smoke, then `deploy.sh` - image, migration 0003, app,
    healthcheck, the UI rsynced into `~/bss/web`, and the web smoke through Caddy (all the
    checks in section 2's notes, plus `POST` as smoke -> 403).

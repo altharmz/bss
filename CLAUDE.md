@@ -107,7 +107,8 @@ failure.
   same one — each deploy overwrites `compose*.yaml` and `.env` there.
 - Remote commands go through `scripts/deploy.sh` only. Do not open ad-hoc `ssh vps-test '...'`
   sessions that mutate state.
-- Never read, print or commit `.env` / `.env.prod`. Use `.env.example` as the reference.
+- Never read, print or commit `.env` / `.env.prod` / `.env.smoke`. Use `.env.example` as
+  the reference.
 - Never export `.env.prod` variables into a shell that also runs the local stack (e.g.
   `set -a && . ./.env.prod`) — exported variables take precedence over `.env`, so local
   containers silently pick up production values. For a one-off check against prod
@@ -684,7 +685,8 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
   the run of max(start, tomorrow) and billed on the next cycle day from there - nothing is
   "charged on confirmation".
 - Smoke on the VPS: a separate basic-auth user `smoke` (own hash), GET-only in Caddy
-  (any other method 403); its plaintext lives only in `.env.prod`, never printed.
+  (any other method 403); its plaintext lives only in the local `.env.smoke`, never
+  shipped and never printed.
 - Pre-commit runs `make web-lint` and `make web-test` only when staged files touch
   `frontend/` or `spec/`. **A change in `app/api` or `app/internal` can still break the
   UI** without touching either; `make verify` (which runs `web-e2e`) is the gate that
@@ -700,7 +702,15 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 - **`deploy.sh`** builds the UI locally before any network step (`make web-build
   WEB_BUILD=<tag>` stamps `index.html`'s `bss-build` marker) and refuses to start without
-  `SMOKE_BASIC_AUTH=smoke:<password>` in `.env.prod`. After the app is healthy it rsyncs
+  `SMOKE_BASIC_AUTH=smoke:<password>` in **`.env.smoke`** - a local-only file, gitignored
+  and never shipped. `.env.prod` is copied to the VPS as `~/bss/.env` (compose reads it
+  only to fill `${...}`; the container gets just the variables listed under
+  `environment:`, there is no `env_file`), so deploy.sh also refuses if `.env.prod` has a
+  `SMOKE_BASIC_AUTH` line. `.env.smoke` is denied to reads like `.env`/`.env.prod`
+  (settings.json, guard). **`DRY_RUN=1 ./scripts/deploy.sh`** runs every local check and
+  lists exactly what the rsync calls would ship (the same `ship_config`/`ship_web`
+  functions, `--dry-run` into a scratch directory), proves `.env.smoke` is not among it,
+  and stops before any network step. After the app is healthy it rsyncs
   `frontend/dist/` **into** `~/bss/web` - hashed assets, then `index.html`, then a
   `--delete` pass. The directory is never replaced or renamed (the bind mount holds its
   inode); rehearsed locally: same inode across two deploys, stale assets removed. The UI
