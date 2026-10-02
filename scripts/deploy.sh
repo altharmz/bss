@@ -97,20 +97,22 @@ SMOKE_BASIC_AUTH="$(sed -n 's/^SMOKE_BASIC_AUTH=//p' "${SMOKE_ENV}" | tail -n 1)
 
 # What ships, in one place: the real deploy calls these with the VPS as destination,
 # DRY_RUN=1 with --dry-run against a local scratch directory - the same calls.
+# Chained with && so a failed rsync fails the function wherever it is called - set -e does
+# not reach into a command substitution, which is where DRY_RUN calls them.
 ship_config() { # <destination> [rsync options]
   local dest="$1"
   shift
-  "${RSYNC[@]}" "$@" compose.yaml compose.prod.yaml "${dest}/"
-  # compose auto-loads a file named .env from its project directory, so EVERY remote
-  # compose call sees the secrets - not just the one that starts the stack
-  "${RSYNC[@]}" "$@" .env.prod "${dest}/.env"
+  "${RSYNC[@]}" "$@" compose.yaml compose.prod.yaml "${dest}/" &&
+    # compose auto-loads a file named .env from its project directory, so EVERY remote
+    # compose call sees the secrets - not just the one that starts the stack
+    "${RSYNC[@]}" "$@" .env.prod "${dest}/.env"
 }
 ship_web() { # <destination> [rsync options]
   local dest="$1"
   shift
-  "${RSYNC[@]}" "$@" --exclude index.html frontend/dist/ "${dest}/web/"
-  "${RSYNC[@]}" "$@" frontend/dist/index.html "${dest}/web/index.html"
-  "${RSYNC[@]}" "$@" --delete frontend/dist/ "${dest}/web/"
+  "${RSYNC[@]}" "$@" --exclude index.html frontend/dist/ "${dest}/web/" &&
+    "${RSYNC[@]}" "$@" frontend/dist/index.html "${dest}/web/index.html" &&
+    "${RSYNC[@]}" "$@" --delete frontend/dist/ "${dest}/web/"
 }
 
 # The admin UI is built locally too, before anything touches the network, with the commit
@@ -125,10 +127,16 @@ grep -q "<meta name=\"bss-build\" content=\"${TAG}\"" frontend/dist/index.html \
 # prove the smoke credential is not among it, and stop before any network step.
 if [[ "${DRY_RUN:-}" == 1 ]]; then
   stage="$(mktemp -d)"
-  shipped="$( { ship_config "${stage}" --dry-run --out-format='%n'
-                ship_web "${stage}" --dry-run --out-format='web/%n'; } | sort -u)"
-  rm -rf "${stage}"
-  log "Dry run: a deploy of ${TAG} would ship $(wc -l <<<"${shipped}") paths:"
+  mkdir -p "${stage}/web" # --dry-run creates nothing; the real web/ exists before ship_web
+  listing="$(mktemp)"
+  if ! { ship_config "${stage}" --dry-run --out-format='%n' &&
+         ship_web "${stage}" --dry-run --out-format='web/%n'; } >"${listing}"; then
+    rm -rf "${stage}" "${listing}"
+    fail "dry run: an rsync call failed (see above)"
+  fi
+  shipped="$(sort -u "${listing}")"
+  rm -rf "${stage}" "${listing}"
+  log "Dry run: a deploy of ${TAG} would ship $(wc -l <<<"${shipped}") paths (.env.prod lands as ~/bss/.env):"
   grep -v '^web/assets/' <<<"${shipped}" | sed 's/^/    /'
   printf '    ... and %s files under web/assets/\n' "$(grep -c '^web/assets/.' <<<"${shipped}")"
   ! grep -q 'env\.smoke' <<<"${shipped}" || fail ".env.smoke would be shipped"
