@@ -858,13 +858,28 @@ the order of deploys (backup, vps-infra, then `make verify`).
   Connection counts were not sampled in these two runs. A run where the retry fires shows
   2 connection attempts by design: the failed one plus the successful one.
 
+## Next session
+
+In this order (as of 2026-10-03, after `d0170ed`):
+
+1. **Stage 4 slice b (worker core)**, from `docs/stage4-design.md`. Slice a (migration
+   0004) is done (`a66faef`); the planning decisions Q1-Q14 are recorded (failure_kind,
+   reopen one date at a time, any failed run retryable, automatic catch-up for today and
+   yesterday only, due at `BILLING_RUN_AT`, membership by `opened_at`, flips lock in id
+   order, the seed drives the worker's per-date function, env clock override guarded,
+   worker connection W1). Slice order: b -> c -> h -> d -> e -> f -> g.
+2. **Docs task** (tbls + API registry + architecture.md) - planned, not started.
+3. **deploy.sh records the deployed commit** (Open check below).
+4. **Backport vps-lab's guard to bss** (ports 8444 and 2053, ask on commit/deploy, push
+   policy) - parked.
+5. **Remaining Phase 2** (APP_PORT, localhost:8080 refs, make down profiles) - deferred.
+
 ## Open checks
 
 Nothing below is done; remove an item only when it has passed (or, for work items,
 shipped).
 
-- **Stage 4 (the worker) is next**, built from `docs/stage4-design.md` (every decision
-  there is recorded).
+- **Stage 4 (the worker)** is in progress - see "Next session" above.
 - **Demo data in prod: decision pending.** `make seed` refuses prod on purpose. If prod
   gets demo data, it can only be current state: history cannot be backdated through the
   API (prices and orders in the past are refused), and the seed builds its history with a
