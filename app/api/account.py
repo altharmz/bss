@@ -42,7 +42,7 @@ from app.api.common import (
     utc,
 )
 from app.api.customer import customer_href
-from app.api.deps import JsonBody, MergePatchBody, Tx
+from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.repository import billing, parties
@@ -220,7 +220,7 @@ def get_account(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/billingAccount")
-def create_account(body: JsonBody, tx: Tx) -> TmfJSONResponse:
+def create_account(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     data = parse(AccountCreate, body, read_only=("accountBalance",))
     customer_id = data.related_party[0].party_or_party_role.id
     with tx() as conn:
@@ -234,6 +234,7 @@ def create_account(body: JsonBody, tx: Tx) -> TmfJSONResponse:
             bill_cycle_day=data.bill_cycle_day,
             state=data.state,
             credit_limit=_credit_limit(data.credit_limit, data.currency),
+            opened_at=clock.now(),
         )
         new = account_body(conn, row)
     return created(new)

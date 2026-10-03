@@ -249,6 +249,12 @@ def test_start_run(db_conn):
     assert run["status"] == "running"
     assert run["started_at"] == NOW
     assert run["finished_at"] is None
+    assert (run["trigger"], run["attempt"], run["failure_kind"]) == ("scheduled", 1, None)
+
+
+def test_start_run_records_its_trigger(db_conn):
+    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW, trigger="catchUp")
+    assert run["trigger"] == "catchUp"
 
 
 def test_start_run_retry_reuses_the_failed_row(db_conn):
@@ -257,6 +263,7 @@ def test_start_run_retry_reuses_the_failed_row(db_conn):
     retry = billing.start_run(db_conn, date(2026, 2, 1), now=NOW + timedelta(hours=1))
     assert retry["id"] == first["id"]
     assert (retry["status"], retry["error"], retry["finished_at"]) == ("running", None, None)
+    assert retry["failure_kind"] is None  # the CHECK of 0004: only a failed run has one
     assert retry["started_at"] == NOW + timedelta(hours=1)
 
 
@@ -281,8 +288,22 @@ def test_fail_run(db_conn):
     run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
     failed = billing.fail_run(db_conn, run["id"], now=NOW, error="db down")
     assert (failed["status"], failed["error"]) == ("failed", "db down")
+    assert failed["failure_kind"] == "run"  # the default: the worker must not move past it
     with pytest.raises(LookupError):
         billing.finish_run(db_conn, run["id"], now=NOW)  # only a running run can end
+
+
+def test_fail_run_because_of_accounts(db_conn):
+    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+    failed = billing.fail_run(
+        db_conn, run["id"], now=NOW, error="1 of 3 accounts failed", failure_kind="accounts"
+    )
+    assert failed["failure_kind"] == "accounts"
+
+
+def test_finish_run_has_no_failure_kind(db_conn):
+    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+    assert billing.finish_run(db_conn, run["id"], now=NOW)["failure_kind"] is None
 
 
 def test_get_run(db_conn):

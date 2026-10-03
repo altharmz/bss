@@ -40,7 +40,12 @@ def account(conn: psycopg.Connection, currency: str = "RUB", name: str = "Ivanov
     party = parties.create_individual(conn, given_name="Ivan", family_name=name)
     customer = parties.create_customer(conn, party_id=party["id"], name=name)
     return parties.create_billing_account(
-        conn, customer_id=customer["id"], name=f"{name} main", currency=currency, bill_cycle_day=1
+        conn,
+        customer_id=customer["id"],
+        name=f"{name} main",
+        currency=currency,
+        bill_cycle_day=1,
+        opened_at=T0,
     )
 
 

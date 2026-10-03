@@ -691,8 +691,10 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
   currency, duplicate code).
 - Stage 4 adds the billing run endpoints (shape agreed in stage 5 checkpoint 1):
   `GET /billingRun?limit=14`, `GET /billingRun/{id}`, `POST /billingRun/catchUp {upTo}`
-  (queues every missing date in order; 202), `POST /billingRun/{id}/retry` (latest run,
-  failed only; 409 otherwise).
+  (queues every missing date in order; 202), `POST /billingRun/{id}/retry` (**any failed
+  run**, 409 otherwise - decided in stage 4, superseding "latest run only"; the worker
+  still keeps each account's dates in order: retrying D+1 retries only the accounts that
+  failed in D+1, and accounts blocked on D stay blocked until D is fixed).
 
 ## Frontend (stage 5) decisions
 
@@ -879,6 +881,20 @@ Makefile's `smoke` and health wait, which say `localhost:8080` literally); `make
   direct connect raises `psycopg.errors.ConnectionTimeout: connection timeout expired`.
   Only a connect that starts more than 3 s before the db recovers fails; connections
   without a timeout (the test fixtures') just wait.
+  **Decided (stage 4 planning):** the API keeps a connection per request with
+  `connect_timeout` raised to 10 s (not done yet); a pool only after measuring on the VPS.
+  The worker holds one dedicated long-lived connection (advisory lock and work on the
+  same connection, TCP keepalives, `connect_timeout` 10 s). Budget measured 2026-10-03
+  (read-only, `make remote`): `max_connections` 40, 3 reserved for superusers -> 37; no
+  idle client sessions at the time. Expected peak ~10 (a few API requests, the worker, a
+  migration, `pg_dump`). **Not bounded:** sync endpoints run in FastAPI's threadpool (40
+  threads), each in-flight request opening its own connection, so a burst could make bss
+  alone ask for more than 37 - the concrete argument for a pool (max N) later.
+- **Record the deployed commit on the VPS.** Finding which image runs took an ad-hoc
+  read-only `ssh vps-test 'docker ps ...'` (2026-10-03: `bss-app:9424b9b`, in the current
+  history; CLAUDE.md's `921603f` predates a squash). `deploy.sh` should write the deployed
+  commit next to the compose files (e.g. `~/bss/DEPLOYED`), and the smoke test should
+  print it. Touches `scripts/`: needs the human's OK.
 - **The pytest container shows `(unhealthy)` during `make test`**: the image's
   HEALTHCHECK probes `/healthz`, which nothing serves while pytest runs in the `app`
   service. Harmless for `run --rm`, but noise in `docker ps`. Fix later in compose

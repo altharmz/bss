@@ -34,7 +34,9 @@ class BillingRunConflict(Exception):
         self.run = run
 
 
-def start_run(conn: psycopg.Connection, run_date: date, *, now: datetime) -> Row:
+def start_run(
+    conn: psycopg.Connection, run_date: date, *, now: datetime, trigger: str = "scheduled"
+) -> Row:
     """Start the run for `run_date`, or restart it if the previous attempt failed.
 
     A retry reuses the same row (run_date is UNIQUE). Raises BillingRunConflict if the
@@ -44,15 +46,15 @@ def start_run(conn: psycopg.Connection, run_date: date, *, now: datetime) -> Row
     run = fetch_one(
         conn,
         """
-        INSERT INTO billing_run (run_date, status, started_at)
-        VALUES (%s, 'running', %s)
+        INSERT INTO billing_run (run_date, status, started_at, trigger)
+        VALUES (%s, 'running', %s, %s)
         ON CONFLICT (run_date) DO UPDATE
             SET status = 'running', started_at = EXCLUDED.started_at,
-                finished_at = NULL, error = NULL
+                finished_at = NULL, error = NULL, failure_kind = NULL
             WHERE billing_run.status = 'failed'
         RETURNING *
         """,
-        (run_date, now),
+        (run_date, now, trigger),
     )
     if run is None:
         existing = fetch_one(conn, "SELECT * FROM billing_run WHERE run_date = %s", (run_date,))
@@ -62,15 +64,20 @@ def start_run(conn: psycopg.Connection, run_date: date, *, now: datetime) -> Row
 
 
 def _end_run(
-    conn: psycopg.Connection, run_id: UUID, status: str, now: datetime, error: str | None
+    conn: psycopg.Connection,
+    run_id: UUID,
+    status: str,
+    now: datetime,
+    error: str | None,
+    failure_kind: str | None,
 ) -> Row:
     run = fetch_one(
         conn,
         """
-        UPDATE billing_run SET status = %s, finished_at = %s, error = %s
+        UPDATE billing_run SET status = %s, finished_at = %s, error = %s, failure_kind = %s
         WHERE id = %s AND status = 'running' RETURNING *
         """,
-        (status, now, error, run_id),
+        (status, now, error, failure_kind, run_id),
     )
     if run is None:
         raise LookupError(f"no running billing run {run_id}")
@@ -78,11 +85,20 @@ def _end_run(
 
 
 def finish_run(conn: psycopg.Connection, run_id: UUID, *, now: datetime) -> Row:
-    return _end_run(conn, run_id, "completed", now, None)
+    return _end_run(conn, run_id, "completed", now, None, None)
 
 
-def fail_run(conn: psycopg.Connection, run_id: UUID, *, now: datetime, error: str) -> Row:
-    return _end_run(conn, run_id, "failed", now, error)
+def fail_run(
+    conn: psycopg.Connection,
+    run_id: UUID,
+    *,
+    now: datetime,
+    error: str,
+    failure_kind: str = "run",
+) -> Row:
+    """'run': the run itself failed, the worker does not move past its date; 'accounts':
+    some account failed or is blocked, later dates go ahead (migration 0004)."""
+    return _end_run(conn, run_id, "failed", now, error, failure_kind)
 
 
 def get_run(conn: psycopg.Connection, run_date: date) -> Row | None:

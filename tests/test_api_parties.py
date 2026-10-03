@@ -196,6 +196,20 @@ def test_billing_account_validation(api, override, status):
     assert api.get(ACCOUNT).json() == []
 
 
+def test_billing_account_opened_at_comes_from_the_injected_clock(api, db_conn):
+    """A billing run for D covers the accounts opened before 00:00 of D (stage 4), so the
+    time must be the injected clock's, not the database's now() - and it stays internal."""
+    opened = datetime(2026, 3, 14, 20, 59, 59, tzinfo=UTC)  # 23:59:59 in Moscow
+    api.clock.set(opened)
+    body = apidata.account(api)
+    row = db_conn.execute(
+        "SELECT opened_at, created_at FROM billing_account WHERE id = %s", (body["id"],)
+    ).fetchone()
+    assert row[0] == opened
+    assert row[1] != opened  # created_at is the real now(), months away from the clock
+    assert "openedAt" not in body and "opened_at" not in body
+
+
 def test_billing_account_needs_one_existing_customer(api):
     cust = apidata.customer(api)
     body = apidata.account_body(cust)

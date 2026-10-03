@@ -232,11 +232,21 @@ def test_second_open_delete_for_the_same_product_is_rejected(db_conn):
 def test_bill_cycle_day_29_is_rejected(db_conn):
     acc = account(db_conn)
     parties.create_billing_account(
-        db_conn, customer_id=acc["customer_id"], name="ok", currency="RUB", bill_cycle_day=28
+        db_conn,
+        customer_id=acc["customer_id"],
+        name="ok",
+        currency="RUB",
+        bill_cycle_day=28,
+        opened_at=acc["opened_at"],
     )
     with rejected(db_conn, errors.CheckViolation):
         parties.create_billing_account(
-            db_conn, customer_id=acc["customer_id"], name="x", currency="RUB", bill_cycle_day=29
+            db_conn,
+            customer_id=acc["customer_id"],
+            name="x",
+            currency="RUB",
+            bill_cycle_day=29,
+            opened_at=acc["opened_at"],
         )
 
 

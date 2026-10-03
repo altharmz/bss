@@ -1,5 +1,6 @@
 """Parties (TMF632), customers (TMF629) and billing accounts (TMF666)."""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -58,15 +59,18 @@ def create_billing_account(
     name: str,
     currency: str,
     bill_cycle_day: int,
+    opened_at: datetime,
     state: str = "Active",
     credit_limit: Decimal | None = None,
 ) -> Row:
+    """`opened_at` comes from the injected clock (not the database's now()): a billing run
+    for D covers the accounts opened before 00:00 of D."""
     return returning(
         conn,
         """
         INSERT INTO billing_account
-            (customer_id, name, state, currency, bill_cycle_day, credit_limit)
-        VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
+            (customer_id, name, state, currency, bill_cycle_day, credit_limit, opened_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *
         """,
         (
             customer_id,
@@ -75,6 +79,7 @@ def create_billing_account(
             currency,
             bill_cycle_day,
             None if credit_limit is None else money(credit_limit),
+            opened_at,
         ),
     )
 
