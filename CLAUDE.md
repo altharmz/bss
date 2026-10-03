@@ -877,23 +877,27 @@ shipped).
   something on host port 8080; a busy `APP_PORT` makes the health wait fail non-zero; no
   bss container after `make down`. Then `make verify` up to (not including) deploy.
   Touches Makefile, compose files, maybe scripts/: diff first.
-- **App opens a new DB connection per request with `connect_timeout=3`** - evaluate the
-  impact on prod (1 vCPU, shared with VPN/Xray) and decide on pooling/timeout before
-  stage 4. Reproduced locally (2026-10-03): `docker pause bss-db-1` for 6 s during `make
+- **App opens a new DB connection per request (`connect_timeout` was 3 s, now 10 s)** -
+  open: how to bound the API's connections on prod (1 vCPU, shared with VPN/Xray).
+  Reproduced locally (2026-10-03, with 3 s): `docker pause bss-db-1` for 6 s during `make
   test` gave 6 failed + 2 errors, each `assert response.status_code == 201` on a 500
   "internal error"; a request during the freeze answered 500 after exactly 3.01 s, and a
   direct connect raises `psycopg.errors.ConnectionTimeout: connection timeout expired`.
   Only a connect that starts more than 3 s before the db recovers fails; connections
   without a timeout (the test fixtures') just wait.
   **Decided (stage 4 planning):** the API keeps a connection per request with
-  `connect_timeout` raised to 10 s (not done yet); a pool only after measuring on the VPS.
+  `connect_timeout` raised to 10 s (done: `app/config.py`); a pool only after measuring
+  on the VPS.
   The worker holds one dedicated long-lived connection (advisory lock and work on the
   same connection, TCP keepalives, `connect_timeout` 10 s). Budget measured 2026-10-03
   (read-only, `make remote`): `max_connections` 40, 3 reserved for superusers -> 37; no
   idle client sessions at the time. Expected peak ~10 (a few API requests, the worker, a
   migration, `pg_dump`). **Not bounded:** sync endpoints run in FastAPI's threadpool (40
   threads), each in-flight request opening its own connection, so a burst could make bss
-  alone ask for more than 37 - the concrete argument for a pool (max N) later.
+  alone ask for more than 37 - the concrete argument for a pool (max N) later. A cheaper
+  alternative to a pool: **cap concurrent DB connections from the API** - a semaphore
+  around connect, or a smaller threadpool limit (e.g. 10) - which bounds the worst case
+  without a pool's lifecycle issues (`--reload`, per-test databases). Decision deferred.
 - **Record the deployed commit on the VPS.** Finding which image runs took an ad-hoc
   read-only `ssh vps-test 'docker ps ...'` (2026-10-03: `bss-app:9424b9b`, in the current
   history; CLAUDE.md's `921603f` predates a squash). `deploy.sh` should write the deployed

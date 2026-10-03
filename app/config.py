@@ -10,7 +10,9 @@ class Settings(BaseSettings):
     app_env: str = "dev"
     log_level: str = "info"
     database_url: str = "postgresql://app:app@db:5432/app"
-    db_connect_timeout: int = 3
+    # Seconds per connection attempt. The API opens one connection per request; 3 s turned
+    # a short database stall into 500s (CLAUDE.md Open checks), so 10 s.
+    db_connect_timeout: int = 10
     # "Today" for billing is the calendar date in this zone (see app/clock.py).
     billing_tz: str = "Europe/Moscow"
     # Local time (BILLING_TZ, HH:MM) of the daily billing run. It must come after 00:00
