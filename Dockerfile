@@ -16,15 +16,17 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential \
  && rm -rf /var/lib/apt/lists/*
 RUN python -m venv /opt/venv
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+# Everything pinned: pip itself, the direct dependencies (==) and every transitive package
+# (constraints.txt). A rebuild installs exactly what production runs - see CLAUDE.md.
+COPY requirements.txt constraints.txt ./
+RUN pip install pip==26.2.1 && pip install -r requirements.txt -c constraints.txt
 
 # ---------- dev ----------
 # Used only by compose.override.yaml. Adds test/lint tooling; source is bind-mounted.
 FROM base AS dev
 COPY --from=builder /opt/venv /opt/venv
-COPY requirements-dev.txt .
-RUN pip install -r requirements-dev.txt
+COPY requirements-dev.txt constraints-dev.txt ./
+RUN pip install -r requirements-dev.txt -c constraints-dev.txt
 # uid/gid 1000 matches the default WSL user, so bind-mounted files stay writable
 RUN useradd --uid 1000 --create-home appuser && chown appuser:appuser /app
 USER appuser

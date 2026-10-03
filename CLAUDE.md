@@ -268,8 +268,18 @@ would attach the prod container to both `lab` and `shared`).
   (drops the local volume) and `make up`.
 - Spec YAML is parsed with libyaml (`yaml.CSafeLoader`), not `yaml.safe_load`: same
   documents, ~6x faster, and every xdist worker parses all of `spec/` once.
-- Dependencies: add to `requirements.txt` (runtime) or `requirements-dev.txt` (tooling),
-  then rebuild. Do not `pip install` inside a running container.
+- **Dependencies are pinned, never floating** (since 2026-10-03). Direct dependencies are
+  `==` in `requirements.txt` (runtime) / `requirements-dev.txt` (tooling); every package,
+  transitive ones included, is frozen in `constraints.txt` / `constraints-dev.txt`, and
+  the Dockerfile installs with `-c` and pins pip itself (`pip==26.2.1`). Proven: the
+  rebuilt dev image's `pip freeze` equals the one that passed lint and tests, and a
+  runtime build's equals production's `9424b9b` (28 packages). **The next deploy ships a
+  new image** even without code changes: the builder layer was rebuilt (same packages,
+  new layer digests), so the deploy fingerprint differs. **To change a version:** edit
+  the `==` pin (or add the dependency), install it in a throwaway container, regenerate
+  the constraints file from that container's `pip freeze` deliberately, review the diff
+  of the constraints file, rebuild, `make lint && make test` - one commit. Never loosen a
+  pin to `>=`. Do not `pip install` inside a running container.
 - Before every commit: `make lint && make test`. Small, focused commits.
 
 ## Domain model & decisions

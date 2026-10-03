@@ -1,6 +1,8 @@
-# Runtime dependencies. Lock exact versions with `pip-compile` once the stack settles.
-fastapi>=0.115
-uvicorn[standard]>=0.30
-psycopg[binary,pool]>=3.2
-pydantic-settings>=2.4
-alembic>=1.13
+# Runtime dependencies, pinned exactly; every transitive package is frozen in
+# constraints.txt (the Dockerfile installs with -c). Change versions deliberately - see
+# CLAUDE.md, "Dependencies" - never let them float.
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+psycopg[binary,pool]==3.3.6
+pydantic-settings==2.15.0
+alembic==1.20.0
