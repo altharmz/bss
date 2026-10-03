@@ -54,6 +54,8 @@ make deploy    # build locally, ship image to VPS, restart there
 make verify    # lint, test, web-lint, web-test, web-e2e, then deploy (+ health, smoke, UI, web smoke)
 make ssh       # open a shell on the VPS
 make migrate   # apply Alembic migrations against the local stack
+make psql      # interactive psql in the local db via compose exec (needs a TTY; the db port
+               # is not published - non-interactive: docker compose exec -T db sh -c 'psql ...')
 make fmt       # auto-format (ruff format + check --fix)
 make clean     # stop the local stack AND drop the local database volume
 make tunnel    # forward the remote app to localhost:18081
@@ -109,7 +111,7 @@ failure. `make test` takes 50-70 s wall-clock (pytest itself 46-60 s, warm or co
   disk.) Proven: an untracked file under `frontend/`, and a partially staged change, are
   each refused before any check runs; the fully staged change commits normally.
 - To check an *older* commit on its own, use a worktree: stop the local stack (`make
-  down`; port 5432/8080 conflict), `git worktree add ../bss-check <commit>`, then in that
+  down`; port 8080 conflict), `git worktree add ../bss-check <commit>`, then in that
   directory `COMPOSE_PROJECT_NAME=bss-check IMAGE_NAME=bss-check-app
   POSTGRES_PASSWORD=throwaway make lint test` (compose.yaml pins `name: bss`, so without
   the override the worktree would share this project's containers and database volume),
@@ -857,22 +859,24 @@ shipped).
   gets demo data, it can only be current state: history cannot be backdated through the
   API (prices and orders in the past are refused), and the seed builds its history with a
   FixedClock in-process, which is not an option against prod.
-- **Two stacks side by side with vps-lab** (both on this workstation): stop publishing
-  the local db's 5432 on the host (nothing here needs it - tests and the app reach `db`
-  on `lab`); `APP_PORT=8081` for bss (the publish in `compose.override.yaml`, and the
-Makefile's `smoke` and health wait, which say `localhost:8080` literally); `make down` must also stop the profiled services
+- **Two stacks side by side with vps-lab** (both on this workstation). **Done: the local
+  db no longer publishes 5432** (2026-10-03; tests and the app reach `db` on `lab`, `make
+  psql` goes through compose exec). Proven: after `make up` nothing listens on host 5432;
+  with another process holding `127.0.0.1:5432`, `make test` created and started `db`
+  and passed (before the change it failed with "Bind for 127.0.0.1:5432 failed: port is
+  already allocated" while vps-lab's db was up). Still open: `APP_PORT=8081` for bss (the
+  publish in `compose.override.yaml`, and the Makefile's `smoke` and health wait, which
+  say `localhost:8080` literally); `make down` must also stop the profiled services
   (`web`, `web-offline`, `tools`, ...), which a plain `docker compose down` leaves running.
-  Until then, stop bss completely before starting vps-lab.
-- **Phase 2: two-stack fix (db port, APP_PORT=8081, localhost:8080 refs, make down
-  profiles) - specified, deferred.** The spec (2026-10-03): stop publishing the db port
-  (`make psql` must still work through compose); app host port from `APP_PORT`, default
-  8081; every hardcoded `localhost:8080` in the repo (Makefile, scripts/, frontend/,
-  playwright config, docs) driven by it; `make down` also stops profiled services.
-  Negative proofs: the stack starts and `make smoke` passes with something on host port
-  8080; a busy `APP_PORT` makes the health wait fail non-zero; no bss container after
-  `make down`; nothing listens on the host for Postgres after `make up`. Then `make
-  verify` up to (not including) deploy. Touches Makefile, compose files, maybe scripts/:
-  diff first.
+  Until then, do not run bss's app and vps-lab's app at the same time (both use 8080).
+- **Phase 2, rest of the two-stack fix (APP_PORT=8081, localhost:8080 refs, make down
+  profiles) - specified, deferred.** The spec (2026-10-03): app host port from
+  `APP_PORT`, default 8081; every hardcoded `localhost:8080` in the repo (Makefile,
+  scripts/, frontend/, playwright config, docs) driven by it; `make down` also stops
+  profiled services. Negative proofs: the stack starts and `make smoke` passes with
+  something on host port 8080; a busy `APP_PORT` makes the health wait fail non-zero; no
+  bss container after `make down`. Then `make verify` up to (not including) deploy.
+  Touches Makefile, compose files, maybe scripts/: diff first.
 - **App opens a new DB connection per request with `connect_timeout=3`** - evaluate the
   impact on prod (1 vCPU, shared with VPN/Xray) and decide on pooling/timeout before
   stage 4. Reproduced locally (2026-10-03): `docker pause bss-db-1` for 6 s during `make

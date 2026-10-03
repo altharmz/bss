@@ -141,8 +141,8 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
-    ports:
-      - "127.0.0.1:5432:5432"
+    # No host port: nothing on the host needs one (tests and the app reach `db` on `lab`,
+    # `make psql` goes through compose exec), and vps-lab's local stack publishes 5432.
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks: [lab]

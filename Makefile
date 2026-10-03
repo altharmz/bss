@@ -35,6 +35,9 @@ ps: ## Container status, including health
 shell: ## Shell inside the running app container
 	docker compose exec app /bin/bash
 
+psql: ## psql in the local database, through compose exec (the db port is not published)
+	docker compose exec db sh -c 'exec psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+
 test: ## Run the test suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci)
 	docker compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) app pytest -n auto
 
