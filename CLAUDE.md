@@ -76,8 +76,9 @@ It exits non-zero and prints remote logs when anything fails.
 
 ## Pre-commit hook
 
-`scripts/pre-commit.sh` runs `make lint` then `make test` (~40s) and blocks the commit on
-failure.
+`scripts/pre-commit.sh` runs `make lint` then `make test` and blocks the commit on
+failure. `make test` takes 50-70 s wall-clock (pytest itself 46-60 s, warm or cold db),
+~105 s with every core busy (measured 2026-10-03).
 
 - Not installed by default — `.git/hooks/` is never tracked by git, so every clone (this
   one included) needs one `make hooks` run. It installs a symlink, not a copy, so edits to
@@ -106,6 +107,16 @@ failure.
   POSTGRES_PASSWORD=throwaway make lint test` (compose.yaml pins `name: bss`, so without
   the override the worktree would share this project's containers and database volume),
   then `docker compose down -v` with the same variables and `git worktree remove`.
+- **One unexplained failure, investigation closed.** 2026-10-03 05:20Z the hook's `make
+  test` failed once on a CLAUDE.md-only commit; what failed is lost (the commit output was
+  run through `grep ... | tail -1`). Unreproduced in 30 runs (20 warm, 5 cold after `make
+  down`, 5 with all 12 cores busy; 418/418 each). The `connect_timeout=3` hypothesis
+  (see Open checks) is consistent but unconfirmed: freezing the db for 6 s with `docker
+  pause` gives 500s in API tests, but a 3 s stall was never seen under real load. The
+  two thread tests (`test_order_concurrency.py`, `test_billing_db.py`: `join(timeout=10)`)
+  are the other real-time dependency; the hypothesis deadline is off. Diagnostics
+  improved since: the 500 handler logs the exception with its traceback, and app loggers
+  are no longer silenced in tests (Alembic's `fileConfig` used to disable them).
 
 ## Hard constraints
 
@@ -843,16 +854,28 @@ shipped).
 Makefile's `smoke` and health wait, which say `localhost:8080` literally); `make down` must also stop the profiled services
   (`web`, `web-offline`, `tools`, ...), which a plain `docker compose down` leaves running.
   Until then, stop bss completely before starting vps-lab.
-- **Intermittent `make test` failure (not reproduced).** 2026-10-03 ~08:20 MSK the
-  pre-commit hook's `make test` failed once ("pre-commit hook failed: make test") on a
-  CLAUDE.md-only commit. **Test name unknown**: only the tail of the output was kept.
-  Checked: not near midnight in BILLING_TZ or UTC, so not the day-boundary hypothesis;
-  an immediate manual rerun, the hook's retry and 5 consecutive `make test` runs all
-  passed 418/418. Hypotheses: a timing-sensitive test under xdist load (the concurrency
-  tests in `test_order_concurrency.py` / `test_billing_db.py`, a hypothesis deadline),
-  or not a test at all - the hook reports any non-zero exit of `make test`, compose
-  startup included. Reproduce, keeping every log:
-  `for i in $(seq 20); do make test </dev/null >"/tmp/bss-test-$i.log" 2>&1 || grep -E '^(FAILED|ERROR)|Error' "/tmp/bss-test-$i.log"; done`
+- **Phase 2: two-stack fix (db port, APP_PORT=8081, localhost:8080 refs, make down
+  profiles) - specified, deferred.** The spec (2026-10-03): stop publishing the db port
+  (`make psql` must still work through compose); app host port from `APP_PORT`, default
+  8081; every hardcoded `localhost:8080` in the repo (Makefile, scripts/, frontend/,
+  playwright config, docs) driven by it; `make down` also stops profiled services.
+  Negative proofs: the stack starts and `make smoke` passes with something on host port
+  8080; a busy `APP_PORT` makes the health wait fail non-zero; no bss container after
+  `make down`; nothing listens on the host for Postgres after `make up`. Then `make
+  verify` up to (not including) deploy. Touches Makefile, compose files, maybe scripts/:
+  diff first.
+- **App opens a new DB connection per request with `connect_timeout=3`** - evaluate the
+  impact on prod (1 vCPU, shared with VPN/Xray) and decide on pooling/timeout before
+  stage 4. Reproduced locally (2026-10-03): `docker pause bss-db-1` for 6 s during `make
+  test` gave 6 failed + 2 errors, each `assert response.status_code == 201` on a 500
+  "internal error"; a request during the freeze answered 500 after exactly 3.01 s, and a
+  direct connect raises `psycopg.errors.ConnectionTimeout: connection timeout expired`.
+  Only a connect that starts more than 3 s before the db recovers fails; connections
+  without a timeout (the test fixtures') just wait.
+- **The pytest container shows `(unhealthy)` during `make test`**: the image's
+  HEALTHCHECK probes `/healthz`, which nothing serves while pytest runs in the `app`
+  service. Harmless for `run --rm`, but noise in `docker ps`. Fix later in compose
+  (e.g. disable the healthcheck for one-off runs); compose change, needs the human's OK.
 - **Pre-commit should keep its full log** (e.g. `.git/pre-commit-last.log`, overwritten
   each run) so a failure like the one above can be read afterwards. Touches
   `scripts/pre-commit.sh`: needs the human's OK.
@@ -883,6 +906,11 @@ Makefile's `smoke` and health wait, which say `localhost:8080` literally); `make
   path spelling) - that is exactly what the block exists to prevent, even when the block
   looks like a false positive. Say what was blocked and why it seemed needed; the human
   decides.
+- **Never filter or truncate the output of `git commit`, `make test`, `make verify` or
+  the pre-commit hook** - no `grep`, `tail`, `head` (or `| ... | tail -1`) on them. If the
+  output is too long, redirect all of it to a file outside the repo (the scratchpad,
+  `/tmp`) and read that file. The one unexplained hook failure (see "Pre-commit hook")
+  is undiagnosable because its commit was run through `grep ... | tail -1`.
 
 ## Shared infrastructure (vps-infra)
 
