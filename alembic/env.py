@@ -8,7 +8,9 @@ from alembic import context
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Keep loggers that exist already: the test suite migrates in-process, and the default
+    # (True) silenced every app.* logger for the rest of the session.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = None
 

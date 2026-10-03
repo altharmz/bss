@@ -94,5 +94,7 @@ def install(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     def _unhandled(request: Request, exc: Exception) -> TmfJSONResponse:
-        log.exception("unhandled error on %s %s", request.method, request.url.path)
+        # exc_info explicitly: Starlette calls a sync handler in a threadpool thread, where
+        # sys.exc_info() is empty and log.exception() alone logs "NoneType: None"
+        log.error("unhandled error on %s %s", request.method, request.url.path, exc_info=exc)
         return error_response(500, "internal error")

@@ -1,6 +1,7 @@
 """TMF630 conventions shared by every API, exercised through the catalog (TMF620):
 Money, TimePeriod, lists, merge patch and error bodies."""
 
+import logging
 from datetime import timedelta
 from decimal import Decimal
 
@@ -344,6 +345,24 @@ def test_unhandled_exception_is_a_tmf_500_without_details(api, monkeypatch):
     assert response.status_code == 500
     assert response.json()["message"] == "internal error"
     assert "secret" not in response.text
+
+
+def test_unhandled_exception_is_logged_with_its_traceback(api, monkeypatch, caplog):
+    """The 500 handler runs in a threadpool thread (Starlette, for a sync handler), where
+    sys.exc_info() is empty: log.exception() alone logged `NoneType: None`."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("secret internal detail")
+
+    monkeypatch.setattr(catalog, "list_product_specifications", boom)
+    with caplog.at_level(logging.ERROR, logger="app.api"):
+        assert api.get(SPEC).status_code == 500
+    (record,) = [r for r in caplog.records if r.name == "app.api"]
+    assert record.getMessage() == f"unhandled error on GET {SPEC}"
+    assert record.exc_info is not None and record.exc_info[0] is RuntimeError
+    trace = caplog.text
+    assert "Traceback (most recent call last)" in trace
+    assert "in boom" in trace and "RuntimeError: secret internal detail" in trace
 
 
 def test_a_failed_request_leaves_nothing_behind(api, db_conn, monkeypatch):
