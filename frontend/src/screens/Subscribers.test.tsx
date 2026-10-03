@@ -2,40 +2,10 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import { CONTEXT, json, stubFetch, tmfError, type Handler } from '../test/fetch';
+import { accountBody } from '../test/fixtures';
 
 const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount';
 const PRODUCTS = '/tmf-api/productInventory/v5/product';
-
-export function accountBody(
-  id: string,
-  customer: { id: string; name: string },
-  over: Record<string, unknown> = {},
-) {
-  return {
-    id,
-    href: `${ACCOUNTS}/${id}`,
-    name: `${customer.name} main`,
-    state: 'Active',
-    relatedParty: [
-      {
-        role: 'customer',
-        partyOrPartyRole: { id: customer.id, name: customer.name, '@type': 'PartyRoleRef' },
-        '@type': 'RelatedPartyRefOrPartyRoleRef',
-      },
-    ],
-    accountBalance: [
-      {
-        balanceType: 'currentBalance',
-        amount: { unit: 'RUB', value: 0 },
-        '@type': 'AccountBalance',
-      },
-    ],
-    billCycleDay: 1,
-    currency: 'RUB',
-    '@type': 'BssBillingAccount',
-    ...over,
-  };
-}
 
 const balance = (value: number) => [
   { balanceType: 'currentBalance', amount: { unit: 'RUB', value }, '@type': 'AccountBalance' },

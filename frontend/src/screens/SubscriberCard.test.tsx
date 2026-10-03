@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import { CONTEXT, json, stubFetch, tmfError, type Handler } from '../test/fetch';
-import { accountBody } from './Subscribers.test';
+import { accountBody } from '../test/fixtures';
 
 const A = 'aaaa1111-0000-4000-8000-0000000000a1';
 const C = 'cccc2222-0000-4000-8000-0000000000c2';
