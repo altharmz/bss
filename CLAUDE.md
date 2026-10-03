@@ -700,6 +700,9 @@ restarted, else Docker creates it root-owned), the site block (validated with Ca
 in a local rehearsal), the GET-only `smoke` user, `/billing-status` unauthenticated, and
 the order of deploys (backup, vps-infra, then `make verify`).
 
+**First web deploy: done** - `9424b9b`, 2026-10-02, `make verify` end to end (migration
+0003 ran, web smoke 8/8 through Caddy).
+
 - **`deploy.sh`** builds the UI locally before any network step (`make web-build
   WEB_BUILD=<tag>` stamps `index.html`'s `bss-build` marker) and refuses to start without
   `SMOKE_BASIC_AUTH=smoke:<password>` in **`.env.smoke`** - a local-only file, gitignored
@@ -818,8 +821,10 @@ Nothing below has been run; remove an item only when it has passed.
   `pg_restore --list` on the server (no databases created and no `pg_restore` into a
   database there), copy it here, restore into a local `postgres:16-alpine` as a
   NOSUPERUSER role `bss` with `pg_restore --no-owner --role=bss`, compare tables, enum
-  types and `alembic_version` with prod (14 tables incl. `alembic_version`, 14 enums,
-  `0001`), report every warning, clean up locally.
+  types and `alembic_version` with prod (since the first web deploy, `9424b9b` on
+  2026-10-02: 15 tables incl. `alembic_version`, 14 enums, `0003` - counted on a local
+  database at head), report every warning, clean up locally. Take the dump after that
+  deploy, or expect the pre-0003 shape.
 - **`"ask"` rules.** Verify in a fresh session, in the normal mode, that an Edit to
   `Makefile` prompts; if it doesn't, switch these paths from `"ask"` to `"deny"`.
 
