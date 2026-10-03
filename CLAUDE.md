@@ -27,6 +27,20 @@ The runtime image is about 74 MB compressed (content size) and 317 MB on disk on
 app + alembic ~120 kB. Nothing beyond the venv and app code is in it; inside the venv, pip
 (13 MB) is not needed at runtime and sqlalchemy (28 MB) is there only for Alembic.
 
+### Base image
+
+`python:3.12-slim` is **pinned by digest** in the Dockerfile (the multi-arch index digest,
+like `node:22-alpine` in compose.override.yaml). The floating tag moved once under us and
+turned a cached build into an 11-minute rebuild (apt 414 s, pip 221 s). Pinned at
+`dddfd7e07f9d` on 2026-10-03: the base `9424b9b` was deployed with (its 4 base layers
+match the deployed image's first 4). Bump it on purpose, as its own commit, for a
+security fix or a new 3.12 patch release:
+
+1. `docker buildx imagetools inspect python:3.12-slim` - the top `Digest:` is the index.
+2. Replace the digest in the `FROM` line (keep the `3.12-slim` tag in front of it for
+   readers); `make test` (expect the full ~11 min rebuild once).
+3. `make verify` - the image fingerprint changes, so the deploy ships a new image.
+
 ## Commands — use these, do not invent your own
 
 ```

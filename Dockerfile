@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1.7
 
 # ---------- base ----------
-FROM python:3.12-slim AS base
+# Pinned by digest (the multi-arch index): a moved tag must never rebuild the image by
+# surprise. Bump deliberately - see CLAUDE.md, "Base image".
+FROM python:3.12-slim@sha256:dddfd7e07f9d15aeeca61529320492139d21cac7f0070c00609243e51e4e0016 AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
