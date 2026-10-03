@@ -28,9 +28,15 @@ rc=$?
 # --- the VPN on the VPS is production; it is not ours to touch ---
 grep -Eqi 'softether|vpnserver|vpncmd' <<<"$cmd" && \
   block "the VPS runs a production SoftEther VPN server. Do not interact with it."
-grep -Eq '(^|[^0-9])(443|992|1194|500|4500|5555)(:|/|[^0-9]|$)' <<<"$cmd" && \
+# Fail-closed: the old broad rule, plus the network contexts guard.py added (a firewall or
+# socket tool, a port keyword, host:port, or the VPS by name), so this path is never
+# looser than guard.py.
+if grep -Eq '(^|[^0-9])(443|992|1194|500|4500|5555)(:|/|[^0-9]|$)' <<<"$cmd"; then
   grep -Eq 'ssh|docker|-p ' <<<"$cmd" && \
-  block "ports 443/992/1194/500/4500/5555 belong to the VPN server on the VPS."
+    block "ports 443/992/1194/500/4500/5555 belong to the VPN server on the VPS."
+  grep -Eq '(^|[^[:alnum:]_.-])(ufw|iptables|ip6tables|nft|firewall-cmd|ss|netstat|lsof|fuser|nc|ncat|netcat|socat|nmap|telnet|tcpdump|port|ports|dport|sport|listen|vps-test|vpn2811\.duckdns\.org)([^[:alnum:]_.-]|$)|[[:alnum:]_.-]:(443|992|1194|500|4500|5555)([^0-9]|$)' <<<"$cmd" && \
+    block "ports 443/992/1194/500/4500/5555 belong to the VPN server on the VPS."
+fi
 
 # --- destructive docker operations affect containers we do not own ---
 grep -Eq 'docker[[:space:]]+(system[[:space:]]+prune|volume[[:space:]]+rm|volume[[:space:]]+prune|network[[:space:]]+prune|builder[[:space:]]+prune)' <<<"$cmd" && \

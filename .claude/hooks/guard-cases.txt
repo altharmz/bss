@@ -12,6 +12,28 @@ block echo softether
 block ssh vps-test 'ss -tlnp | grep 443'
 block docker run -p 443:443 nginx
 
+# --- VPN ports: blocked in a port/network context, not as bare numbers elsewhere ---
+allow docker compose run --rm app pytest -p no:xdist tests/test_api_conventions.py >/tmp/x/neg-500-unfixed.log 2>&1
+allow docker compose run --rm app pytest -k "status_code == 500"
+allow curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/healthz
+allow docker compose exec app curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/boom | grep -qx 500
+allow docker logs bss-app-1 | grep ' 500 '
+allow docker compose run --rm app pytest tests/test_x.py::test_retry_after_4500_ms
+block ufw allow 500
+block docker run -p 4500:4500 nginx
+block ssh vps-test 'ss -ltnp | grep 1194'
+block nc -z vpn2811.duckdns.org 992
+block ss -ltnp | grep 1194
+block docker run --publish=127.0.0.1:5555:5555 nginx
+block sh -c 'docker run -p 443:443 nginx'
+block curl -sk https://vpn2811.duckdns.org:443/
+block sudo iptables -A INPUT -p udp --dport 500 -j ACCEPT
+block ssh -N -L 992:127.0.0.1:992 vps-test
+block docker compose run --rm app python -m http.server --port 443
+block-ml cat <<'EOF'\nufw allow 500\nEOF
+block-ml cat <<'EOF'\ncurl -sk https://vpn2811.duckdns.org:443/\nEOF
+block-ml cat <<'EOF'\ndocker run -p 4500:4500 nginx\nEOF
+
 # --- destructive docker ---
 block docker system prune -af
 block docker volume rm pgdata

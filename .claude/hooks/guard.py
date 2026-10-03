@@ -62,15 +62,36 @@ RAW_RULES = [
     (re.compile(r"docker\s+(stop|rm|kill)\s+(-\S+\s+)*\$\(docker\s+ps"),
      "mass container stop/remove is not allowed."),
 ]
-PORTS = re.compile(r"(^|[^0-9])(443|992|1194|500|4500|5555)(:|/|[^0-9]|$)")
-PORTS_CONTEXT = re.compile(r"ssh|docker|-p ")
+# A VPN port number counts only in a port/network context, so a bare 500 in a log file
+# name, a test id or an HTTP status assertion passes. Raw text, quotes included.
+PORT = r"(?<![0-9])(?:443|992|1194|500|4500|5555)(?![0-9])"
+_W = r"(?<![\w.-])"  # word start, where '.' and '-' count as part of the word
+_E = r"(?![\w.-])"  # word end, likewise
+NET_TOOLS = (r"ufw|iptables|ip6tables|nft|firewall-cmd|ss|netstat|lsof|fuser|nc|ncat|netcat"
+             r"|socat|nmap|telnet|tcpdump")
+PORT_CONTEXTS = [
+    # published or forwarded: -p 443:443, -p443, --publish=127.0.0.1:500:500, ssh -L 992:h:992
+    re.compile(rf"(?:^|[\s'\"])(?:-p|--publish|--expose|-L|-R|-D)(?:\s+|=)?['\"]?"
+               rf"(?:[\w.\[\]:-]*:)?{PORT}"),
+    # host:port - localhost:443, 0.0.0.0:500, [::]:443, vpn2811.duckdns.org:992
+    re.compile(rf"[\w\].-]:{PORT}"),
+    # port=443, --port 443, --dport 500, listen 443, 443/tcp
+    re.compile(rf"\b(?:port|ports|dport|sport|listen)\b['\"]?\s*[=:\s]\s*['\"]?{PORT}", re.I),
+    re.compile(rf"{PORT}/(?:tcp|udp)\b", re.I),
+    # a network or firewall tool with the number later in its pipeline: ss -ltnp | grep 1194
+    re.compile(rf"{_W}(?:{NET_TOOLS}){_E}[^;&\n]*{PORT}"),
+]
+# anything over ssh or naming the VPS that mentions the number at all (as before for ssh)
+REMOTE = re.compile(rf"{_W}(?:ssh|vps-test|vpn2811\.duckdns\.org){_E}")
 
 
 def raw_checks(text: str) -> None:
     for pattern, reason in RAW_RULES:
         if pattern.search(text):
             block(reason)
-    if PORTS.search(text) and PORTS_CONTEXT.search(text):
+    if re.search(PORT, text) and (
+        REMOTE.search(text) or any(p.search(text) for p in PORT_CONTEXTS)
+    ):
         block("ports 443/992/1194/500/4500/5555 belong to the VPN server on the VPS.")
 
 
