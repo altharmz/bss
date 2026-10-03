@@ -33,6 +33,9 @@ block docker compose run --rm app python -m http.server --port 443
 block-ml cat <<'EOF'\nufw allow 500\nEOF
 block-ml cat <<'EOF'\ncurl -sk https://vpn2811.duckdns.org:443/\nEOF
 block-ml cat <<'EOF'\ndocker run -p 4500:4500 nginx\nEOF
+# fail-closed on purpose: a heredoc is untokenisable, so the broad raw-text rule applies
+# even to a commit message (CLAUDE.md: commit messages go through -F <file>)
+block-ml git commit -F - <<'EOF'\nguard: ports 443 and 500 next to ssh and docker\nEOF
 
 # --- destructive docker ---
 block docker system prune -af

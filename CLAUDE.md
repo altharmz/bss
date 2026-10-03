@@ -83,6 +83,13 @@ failure. `make test` takes 50-70 s wall-clock (pytest itself 46-60 s, warm or co
 - Not installed by default — `.git/hooks/` is never tracked by git, so every clone (this
   one included) needs one `make hooks` run. It installs a symlink, not a copy, so edits to
   `scripts/pre-commit.sh` take effect immediately without reinstalling.
+- **Keeps its full log**: every run writes everything it prints (a header with time,
+  HEAD and the staged files, then each check's output) to
+  `.git/pre-commit-logs/pre-commit-<UTC time>-<pid>.log` - inside the git directory, so
+  never tracked; a worktree uses its own git dir. The last 10 are kept. On failure the
+  hook prints `Full log: <path>`. Each check runs through `tee`; the exit code is the
+  check's own (`PIPESTATUS[0]`). Proven: a deliberately failing test was refused (commit
+  exit 1, HEAD unchanged) and the log held the complete pytest failure and traceback.
 - Runs non-interactively: both `make` calls are given `</dev/null` so the hook never
   blocks waiting on stdin, whether it fires from a terminal, an editor's git integration,
   or any other non-interactive caller.
@@ -876,9 +883,6 @@ Makefile's `smoke` and health wait, which say `localhost:8080` literally); `make
   HEALTHCHECK probes `/healthz`, which nothing serves while pytest runs in the `app`
   service. Harmless for `run --rm`, but noise in `docker ps`. Fix later in compose
   (e.g. disable the healthcheck for one-off runs); compose change, needs the human's OK.
-- **Pre-commit should keep its full log** (e.g. `.git/pre-commit-last.log`, overwritten
-  each run) so a failure like the one above can be read afterwards. Touches
-  `scripts/pre-commit.sh`: needs the human's OK.
 - **Restore drill** from a cron-made dump. On 2026-09-30 `~/infra/backups` on the VPS was empty and no backup
   cron was installed; this is being fixed in vps-infra. Use the first cron-made `bss` dump:
   `pg_restore --list` on the server (no databases created and no `pg_restore` into a
@@ -911,6 +915,10 @@ Makefile's `smoke` and health wait, which say `localhost:8080` literally); `make
   output is too long, redirect all of it to a file outside the repo (the scratchpad,
   `/tmp`) and read that file. The one unexplained hook failure (see "Pre-commit hook")
   is undiagnosable because its commit was run through `grep ... | tail -1`.
+- **Commit messages go through a file** (Write it to the scratchpad, then `git commit -F
+  <file>`), not a heredoc (`git commit -F - <<'EOF'`). `guard.py` cannot tokenise a
+  heredoc, and the raw-text fallback is deliberately broad: a message that mentions VPN
+  ports next to ssh/docker is blocked (a regression case locks this in).
 
 ## Shared infrastructure (vps-infra)
 
