@@ -16,6 +16,7 @@ Refuses to run with APP_ENV=prod or against any database but the local compose `
 Also used as the e2e fixture (stage 5 checkpoint 7): seed(client, conn, today).
 """
 
+import logging
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -349,6 +350,13 @@ def main() -> int:
     from app.api.deps import get_clock
     from app.main import app
     from tests.apiclient import TmfClient
+
+    # app.main configured logging at LOG_LEVEL (debug locally) on import. The seed is a
+    # command: INFO, and no per-request lines from the in-process client (one per call,
+    # over 120 days) or asyncio's event-loop chatter.
+    logging.getLogger().setLevel(logging.INFO)
+    for name in ("asyncio", "httpx"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
     try:
         refuse_unless_local()
