@@ -828,9 +828,35 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 ## Open checks
 
-Nothing below has been run; remove an item only when it has passed.
+Nothing below is done; remove an item only when it has passed (or, for work items,
+shipped).
 
-- **Restore drill.** On 2026-09-30 `~/infra/backups` on the VPS was empty and no backup
+- **Stage 4 (the worker) is next**, built from `docs/stage4-design.md` (every decision
+  there is recorded).
+- **Demo data in prod: decision pending.** `make seed` refuses prod on purpose. If prod
+  gets demo data, it can only be current state: history cannot be backdated through the
+  API (prices and orders in the past are refused), and the seed builds its history with a
+  FixedClock in-process, which is not an option against prod.
+- **Two stacks side by side with vps-lab** (both on this workstation): stop publishing
+  the local db's 5432 on the host (nothing here needs it - tests and the app reach `db`
+  on `lab`); `APP_PORT=8081` for bss (the publish in `compose.override.yaml`, and the
+Makefile's `smoke` and health wait, which say `localhost:8080` literally); `make down` must also stop the profiled services
+  (`web`, `web-offline`, `tools`, ...), which a plain `docker compose down` leaves running.
+  Until then, stop bss completely before starting vps-lab.
+- **Intermittent `make test` failure (not reproduced).** 2026-10-03 ~08:20 MSK the
+  pre-commit hook's `make test` failed once ("pre-commit hook failed: make test") on a
+  CLAUDE.md-only commit. **Test name unknown**: only the tail of the output was kept.
+  Checked: not near midnight in BILLING_TZ or UTC, so not the day-boundary hypothesis;
+  an immediate manual rerun, the hook's retry and 5 consecutive `make test` runs all
+  passed 418/418. Hypotheses: a timing-sensitive test under xdist load (the concurrency
+  tests in `test_order_concurrency.py` / `test_billing_db.py`, a hypothesis deadline),
+  or not a test at all - the hook reports any non-zero exit of `make test`, compose
+  startup included. Reproduce, keeping every log:
+  `for i in $(seq 20); do make test </dev/null >"/tmp/bss-test-$i.log" 2>&1 || grep -E '^(FAILED|ERROR)|Error' "/tmp/bss-test-$i.log"; done`
+- **Pre-commit should keep its full log** (e.g. `.git/pre-commit-last.log`, overwritten
+  each run) so a failure like the one above can be read afterwards. Touches
+  `scripts/pre-commit.sh`: needs the human's OK.
+- **Restore drill** from a cron-made dump. On 2026-09-30 `~/infra/backups` on the VPS was empty and no backup
   cron was installed; this is being fixed in vps-infra. Use the first cron-made `bss` dump:
   `pg_restore --list` on the server (no databases created and no `pg_restore` into a
   database there), copy it here, restore into a local `postgres:16-alpine` as a
