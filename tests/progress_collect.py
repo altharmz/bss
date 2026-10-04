@@ -8,7 +8,11 @@ Prints one JSON object to stdout:
 - openapi: every operation of app.openapi() - FastAPI's public interface, not its router
            internals - as {method, path};
 - tables:  the public tables of a throwaway database migrated to head (alembic_version
-           excluded), dropped again afterwards.
+           excluded), dropped again afterwards;
+- capabilities: the tests marked @pytest.mark.capability("<id>") are run here (pytest in
+           process, its output on stderr): which ids appear on tests (seen), and which
+           had a test pass (passed) or fail (failed). A worker item is proven when it
+           passed and did not fail.
 
 Lives in tests/ (like tests/seed.py) because the app container mounts it; it is a tool,
 not a test. Everything but the JSON goes to stderr.
@@ -21,6 +25,7 @@ import sys
 import uuid
 
 import psycopg
+import pytest
 import yaml
 from alembic.config import Config
 from psycopg import sql
@@ -65,11 +70,52 @@ def tables_at_head() -> list[str]:
             conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(ident))
 
 
+class CapabilityRecorder:
+    """pytest plugin: the capability ids on each test, and how those tests ended."""
+
+    def __init__(self) -> None:
+        self.ids: dict[str, set[str]] = {}
+        self.seen: set[str] = set()
+        self.passed: set[str] = set()
+        self.failed: set[str] = set()
+
+    def pytest_collection_modifyitems(self, items) -> None:
+        for item in items:
+            ids = {arg for mark in item.iter_markers("capability") for arg in mark.args}
+            if ids:
+                self.ids[item.nodeid] = ids
+                self.seen |= ids
+
+    def pytest_runtest_logreport(self, report) -> None:
+        ids = self.ids.get(report.nodeid, set())
+        if report.failed:  # in setup, call or teardown
+            self.failed |= ids
+        elif report.when == "call" and report.passed:
+            self.passed |= ids
+
+
+def capabilities() -> dict[str, list[str]]:
+    recorder = CapabilityRecorder()
+    code = pytest.main(["-m", "capability", "tests"], plugins=[recorder])
+    if code not in (
+        pytest.ExitCode.OK,
+        pytest.ExitCode.TESTS_FAILED,
+        pytest.ExitCode.NO_TESTS_COLLECTED,
+    ):
+        raise SystemExit(f"progress: the capability tests could not run (pytest exit {code})")
+    return {
+        "seen": sorted(recorder.seen),
+        "passed": sorted(recorder.passed),
+        "failed": sorted(recorder.failed),
+    }
+
+
 def main() -> int:
     scope = yaml.safe_load(sys.stdin)
     # anything a library prints while importing the app or migrating must not reach the JSON
     with contextlib.redirect_stdout(sys.stderr):
         result = {"scope": scope, "openapi": openapi_operations(), "tables": tables_at_head()}
+        result["capabilities"] = capabilities()  # last: pytest imports the whole suite
     json.dump(result, sys.stdout, indent=2, sort_keys=True)
     sys.stdout.write("\n")
     return 0

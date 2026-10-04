@@ -8,6 +8,8 @@
 #                 template exactly as FastAPI reports it, parameter names included)
 #            ui:  the id itself is the marker - implemented when a literal data-ui="<id>"
 #                 (or <Modal ui="<id>">) exists in frontend/src
+#            worker: the id itself is the capability - implemented and tested when a test
+#                 marked @pytest.mark.capability("<id>") passes and none fails
 # excluded:  things that exist (or could appear) in the code but are deliberately not
 #            tracked, with the reason; the unscoped check ignores them.
 # Status (implemented / tested / deployed) is never written here - it is derived.
@@ -119,6 +121,20 @@ items:
   - {id: ui.billingRuns.list, area: ui, stage: 4, title: "Billing runs: latest run, history, failed badge in the nav"}
   - {id: ui.billingRuns.catchUp, area: ui, stage: 4, title: "Catch up to a date"}
   - {id: ui.billingRuns.retry, area: ui, stage: 4, title: "Retry a failed run"}
+
+  # ---------------- worker: behaviour (stage 4) ----------------
+  # Proven, not detected: an item is implemented and tested when at least one test marked
+  # @pytest.mark.capability("<id>") passes and none fails (make progress runs them).
+  - {id: worker.runLifecycle, area: worker, stage: 4, title: "start_run answers every case: new, completed (no-op), failed (reopen), running"}
+  - {id: worker.takeover, area: worker, stage: 4, title: "Takeover of a running run whose owner died; ok accounts untouched"}
+  - {id: worker.doubleStart, area: worker, stage: 4, title: "A second worker while the lock is held backs off and writes nothing"}
+  - {id: worker.failureIsolation, area: worker, stage: 4, title: "A failed account blocks only itself; after a fix it catches up its dates in order"}
+  - {id: worker.wholeRunFailure, area: worker, stage: 4, title: "A whole-run failure does not advance past its date; retried with backoff"}
+  - {id: worker.completedAllOk, area: worker, stage: 4, title: "A run is completed only when every member account is ok"}
+  - {id: worker.requestQueue, area: worker, stage: 4, title: "Catch-up and retry requests from the UI queue are processed"}
+  - {id: worker.statusFlips, area: worker, stage: 4, title: "Status flips (created -> active, pendingTerminate -> terminated) by run date"}
+  - {id: worker.scheduler, area: worker, stage: 4, title: "Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday"}
+  - {id: worker.signals, area: worker, stage: 4, title: "SIGTERM finishes the current account; SIGKILL leaves nothing half-written"}
 
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}

@@ -17,6 +17,12 @@
       "implemented": 10,
       "items": 13,
       "tested": null
+    },
+    "worker": {
+      "deployed": null,
+      "implemented": 0,
+      "items": 10,
+      "tested": 0
     }
   },
   "excluded": [
@@ -778,6 +784,96 @@
       "stage": 4,
       "tested": null,
       "title": "Retry a failed run"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.runLifecycle",
+      "implemented": false,
+      "stage": 4,
+      "tested": false,
+      "title": "start_run answers every case: new, completed (no-op), failed (reopen), running"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.takeover",
+      "implemented": false,
+      "stage": 4,
+      "tested": false,
+      "title": "Takeover of a running run whose owner died; ok accounts untouched"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.doubleStart",
+      "implemented": false,
+      "stage": 4,
+      "tested": false,
+      "title": "A second worker while the lock is held backs off and writes nothing"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.failureIsolation",
+      "implemented": false,
+      "stage": 4,
+      "tested": false,
+      "title": "A failed account blocks only itself; after a fix it catches up its dates in order"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.wholeRunFailure",
+      "implemented": false,
+      "stage": 4,
+      "tested": false,
+      "title": "A whole-run failure does not advance past its date; retried with backoff"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.completedAllOk",
+      "implemented": false,
+      "stage": 4,
+      "tested": false,
+      "title": "A run is completed only when every member account is ok"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.requestQueue",
+      "implemented": false,
+      "stage": 4,
+      "tested": false,
+      "title": "Catch-up and retry requests from the UI queue are processed"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.statusFlips",
+      "implemented": false,
+      "stage": 4,
+      "tested": false,
+      "title": "Status flips (created -> active, pendingTerminate -> terminated) by run date"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.scheduler",
+      "implemented": false,
+      "stage": 4,
+      "tested": false,
+      "title": "Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.signals",
+      "implemented": false,
+      "stage": 4,
+      "tested": false,
+      "title": "SIGTERM finishes the current account; SIGKILL leaves nothing half-written"
     }
   ],
   "unscoped": []

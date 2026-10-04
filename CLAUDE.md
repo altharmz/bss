@@ -131,9 +131,9 @@ failure. `make test` takes 50-70 s wall-clock (pytest itself 46-60 s, warm or co
 ## Progress tracker
 
 `make progress` writes `docs/PROGRESS.md` (committed, plain Markdown) and
-`docs/progress/status.json` (the same data, machine-readable): per area (db, api, ui;
-worker is added in stage 4 slice b) the share of items implemented, tested and deployed,
-then the item table, the unscoped and the excluded items.
+`docs/progress/status.json` (the same data, machine-readable): per area (db, api, ui,
+worker) the share of items implemented, tested and deployed, then the item table, the
+unscoped and the excluded items.
 
 - **Scope:** `docs/progress/scope.yaml`, hand-maintained, **every change needs the human's
   approval** (`"ask"` rule in settings.json). Each item has id, area, stage, title and the
@@ -146,8 +146,15 @@ then the item table, the unscoped and the excluded items.
   ui="<id>">`) exists in `frontend/src`, found with the TypeScript AST. Screens carry the
   marker on a `.bss-screen` wrapper (`display: contents`, so the layout is unchanged),
   dialogs via `Modal`'s `ui` prop, actions on their button.
-- **Tested:** not measured yet ("n/a"); **deployed:** "unknown" until `deploy.sh` writes
-  `docs/progress/deployed.txt` (approved, not built). Both come after slice b.
+- **Worker** items are behaviour, proven rather than detected: implemented and tested
+  together when at least one test marked `@pytest.mark.capability("<id>")` passes and
+  none fails. The collector runs those tests (`pytest -m capability`, in process, output
+  on stderr); a test marked with an id that is not a worker item in `scope.yaml` is an
+  error (exit 1). Proven: a passing marked test turns its item green, one failing test
+  next to a passing one keeps it red, an unknown id fails the run.
+- **Tested** (db, api, ui): not measured yet ("n/a"); **deployed:** "unknown" until
+  `deploy.sh` writes `docs/progress/deployed.txt` (approved, not built). Both come after
+  slice b.
 - **Unscoped:** a table, operation or marker in the code that is neither an item nor
   excluded makes `make progress` exit 1 (after writing the files).
 - **How it runs:** `tests/progress_collect.py` in the app container (scope.yaml arrives
@@ -907,7 +914,9 @@ In this order (as of 2026-10-03, after `d0170ed`):
 3. **Docs task** (tbls + API registry + architecture.md) - planned, not started.
 4. **deploy.sh records the deployed commit** (Open check below).
 5. **Backport vps-lab's guard to bss** (ports 8444 and 2053, ask on commit/deploy, push
-   policy) - parked.
+   policy) - parked. Also: protect `docs/progress/scope.yaml` from shell writes (`>`,
+   `tee`, `sed -i`, `mv`, `cp`, `rm`) like the other harness files - today only the Edit
+   tool's `"ask"` rule guards it - with regression cases both ways.
 6. **Remaining Phase 2** (APP_PORT, localhost:8080 refs, make down profiles) - deferred.
 
 ## Open checks

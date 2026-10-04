@@ -26,4 +26,7 @@ extend-immutable-calls = [
 testpaths = ["tests"]
 addopts = "-q"
 pythonpath = ["."]
+markers = [
+    "capability(id): proves a worker capability of docs/progress/scope.yaml (make progress runs these tests)",
+]
 cache_dir = "/tmp/pytest_cache"
