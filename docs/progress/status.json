@@ -2,7 +2,7 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 53,
+      "implemented": 54,
       "items": 54,
       "tested": null
     },
@@ -663,7 +663,7 @@
       "area": "api",
       "deployed": null,
       "id": "api.service.billingStatus",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
       "tested": null,
       "title": "Freshness signal for the external monitor"

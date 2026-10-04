@@ -706,7 +706,7 @@ termination always visible, no account lock, no running-run guard).
 ## Billing worker (stage 4, in progress)
 
 `app/worker/`, from `docs/stage4-design.md` and the stage 4 planning decisions (Q1-Q14,
-"Next session"). What exists so far (slice b: b1, b2, b3; slices c, h, d):
+"Next session"). What exists so far (slice b: b1, b2, b3; slices c, h, d, e):
 
 - **Ownership** (`db.py`): one connection per worker (W1: autocommit, `connect_timeout`
   10, keepalives 30/10/3, `lock_timeout` 30s); the session advisory lock on it says who
@@ -786,6 +786,18 @@ termination always visible, no account lock, no running-run guard).
   **Found by the SIGKILL test:** the first planner only looked at dates after the latest
   run, so a run left `running` was never resumed - fixed by resuming the earliest
   unfinished run first.
+- **`GET /billing-status`** (slice e, `app/status.py`): the external monitor's freshness
+  signal, unauthenticated (a Caddy carve-out like `/healthz`), so the body is exactly
+  `{date, status, ageSeconds}` of the latest run - no amounts, names or counts (a strict
+  schema with `additionalProperties: false` checks every response in the tests). The
+  expected date is today once the local time (BILLING_TZ) is past `BILLING_RUN_AT` + 2 h
+  grace, else yesterday (D-W19). Latest run: failed -> 503 `failed`; running -> 200
+  `running` for under 2 h, 503 after; completed on or after the expected date -> 200 `ok`,
+  earlier -> 503 `stale`; no run at all -> 503 `{"date": null, "status": "none",
+  "ageSeconds": null}` (Q6). `ageSeconds` counts from `finished_at`, else `started_at`.
+  **Not part of `/healthz`**: a late run never marks the app unhealthy (tested). Not in
+  any spec; an unknown query parameter is a 400. Negative proofs: failed read as
+  completed, running never overdue, grace removed, an extra body field.
 - **Test pitfalls found here**: `pg_locks` is cluster-wide - count advisory locks of the
   current database only (parallel tests hold their own); `pg_terminate_backend(pid)`
   returns before the backend exits - use `pg_terminate_backend(pid, 5000)`.
@@ -995,15 +1007,16 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 ## Next session
 
-In this order (as of 2026-10-03, after `d0170ed`):
+In this order (as of 2026-10-04, after slice e):
 
-1. **Stage 4: slice e next** - `GET /billing-status` (unauthenticated; date, status, age
-   only; 200 ok / 503 stale|failed|running|none; expected date = today once past
-   `BILLING_RUN_AT` + 2 h grace, else yesterday - D-W19; Q6: no run at all -> 503
-   `{"date": null, "status": "none", "ageSeconds": null}`). Done: slice a (`a66faef`), b1
-   (`850e192`), b2 (`5e9dbe3`), b3 (`3464e54`), c (`7ad4923`), h (`840e092`), d (scheduler
-   and the process). Worker 10/10, API 53/54 in `docs/PROGRESS.md`. The planning decisions
-   Q1-Q14 are recorded (see "Billing worker"). Slice order: e -> f -> g.
+1. **Stage 4: slice f next** - the worker compose service, Makefile targets and
+   `deploy.sh` (ask-rule paths: show the diff first). To settle there: `APP_ENV` for the
+   VPS, the worker healthcheck on the liveness file (Q13), `stop_grace_period` 60s,
+   limits, a `make worker-once`, and the restore-drill counts (17 tables, `0004`). Then
+   slice g (the Billing runs UI screen). Done: slice a (`a66faef`), b1 (`850e192`), b2
+   (`5e9dbe3`), b3 (`3464e54`), c (`7ad4923`), h (`840e092`), d (`1dbe739`), e
+   (`/billing-status`). Worker 10/10, API 54/54 in `docs/PROGRESS.md`. The planning
+   decisions Q1-Q14 are recorded (see "Billing worker").
 2. **Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests
    recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables`
    of each test database before it is dropped; UI: `expectUi(id)` in vitest/Playwright),

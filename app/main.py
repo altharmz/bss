@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-from app import api, db, internal
+from app import api, db, internal, status
 from app.config import settings
 
 logging.basicConfig(level=settings.log_level.upper())
@@ -12,6 +12,7 @@ log = logging.getLogger("app")
 app = FastAPI(title="bss", version="0.1.0")
 api.install(app)
 internal.install(app)
+app.include_router(status.router)
 
 
 @app.get("/")

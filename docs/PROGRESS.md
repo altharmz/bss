@@ -10,7 +10,7 @@ the deployed commit.
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
 | Database | 16 | 16/16 (100%) | n/a | unknown |
-| API | 54 | 53/54 (98%) | n/a | unknown |
+| API | 54 | 54/54 (100%) | n/a | unknown |
 | UI | 13 | 10/13 (76%) | n/a | unknown |
 | Worker | 10 | 10/10 (100%) | 10/10 (100%) | unknown |
 
@@ -92,7 +92,7 @@ the deployed commit.
 | `api.internal.billingRun.catchUp` | 4 | Queue a catch-up to a date | yes | n/a | unknown |
 | `api.internal.billingRun.retry` | 4 | Queue a retry of a failed run | yes | n/a | unknown |
 | `api.service.healthz` | template | Liveness with a database check | yes | n/a | unknown |
-| `api.service.billingStatus` | 4 | Freshness signal for the external monitor | no | n/a | unknown |
+| `api.service.billingStatus` | 4 | Freshness signal for the external monitor | yes | n/a | unknown |
 
 ## UI
 
