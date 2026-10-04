@@ -167,7 +167,9 @@ unscoped and the excluded items.
 ## Hard constraints
 
 - The VPS also runs a **SoftEther VPN server**, which is its primary purpose.
-  Ports **443, 992, 1194, 500, 4500, 5555** are off limits. Do not touch, inspect
+  Ports **443, 992, 1194, 500, 4500, 5555** are off limits, and so is **8444** (also a
+  VPN port, per the human; no other app may use it - not yet in the guard, see "Next
+  session"). Do not touch, inspect
   or reconfigure anything VPN-related.
 - Never run `docker system prune`, `docker volume rm`, `docker network prune`,
   or stop/remove containers you did not start. Other people's containers may be there.
@@ -1015,7 +1017,9 @@ In this order (as of 2026-10-04, after slice e):
    limits, a `make worker-once`, and the restore-drill counts (17 tables, `0004`). Then
    slice g (the Billing runs UI screen). Done: slice a (`a66faef`), b1 (`850e192`), b2
    (`5e9dbe3`), b3 (`3464e54`), c (`7ad4923`), h (`840e092`), d (`1dbe739`), e
-   (`/billing-status`). Worker 10/10, API 54/54 in `docs/PROGRESS.md`. The planning
+   (`e06a22b`, `/billing-status`). Per slice: plan, tests, negative proofs, `make lint`,
+   `make test` x3, `make progress`, CLAUDE.md, then show the diff and commit only after
+   the human's OK. Worker 10/10, API 54/54 in `docs/PROGRESS.md`. The planning
    decisions Q1-Q14 are recorded (see "Billing worker").
 2. **Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests
    recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables`
