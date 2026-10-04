@@ -706,7 +706,7 @@ termination always visible, no account lock, no running-run guard).
 ## Billing worker (stage 4, in progress)
 
 `app/worker/`, from `docs/stage4-design.md` and the stage 4 planning decisions (Q1-Q14,
-"Next session"). What exists so far (slice b: b1, b2, b3):
+"Next session"). What exists so far (slice b: b1, b2, b3; slice c):
 
 - **Ownership** (`db.py`): one connection per worker (W1: autocommit, `connect_timeout`
   10, keepalives 30/10/3, `lock_timeout` 30s); the session advisory lock on it says who
@@ -743,6 +743,18 @@ termination always visible, no account lock, no running-run guard).
 - **Takeover**: after a death between accounts or a dropped connection the successor's
   `start_run` takes the run over (attempt + 1) and bills only the accounts without an ok
   row; while the owner is alive a rival gets `RunInProgress`.
+- **Status flips** (slice c, `products.flip_statuses`, run by `bill_date` at the start of
+  each run, in its own transaction, before billing, inside the whole-run failure
+  handling): `created`/`pendingActive` -> `active` once `start_date` <= run date,
+  `pendingTerminate` -> `terminated` once `termination_date` <= run date, only for
+  products whose order (creating, resp. terminating) completed before 00:00 of the run
+  date; blocked accounts included (statuses follow dates, D-W5); every other status
+  untouched; idempotent. The due products are locked `ORDER BY id FOR UPDATE` first,
+  like `lock_products` in ordering, so a delete order and the flips only wait for each
+  other (Q8) - with mismatched orders the test gets a real `DeadlockDetected`. The
+  visibility cut-off cannot decide anything for API-made data (a product due by D whose
+  order completed on D starts on D and is active at once), so it is tested with orders
+  completed at 23:59:59 and 00:00:00.
 - **Test pitfalls found here**: `pg_locks` is cluster-wide - count advisory locks of the
   current database only (parallel tests hold their own); `pg_terminate_backend(pid)`
   returns before the backend exits - use `pg_terminate_backend(pid, 5000)`.
@@ -950,14 +962,15 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 In this order (as of 2026-10-03, after `d0170ed`):
 
-1. **Stage 4: slice c next** (status flips: `created -> active`, `pendingTerminate ->
-   terminated` by run date, only for orders visible to the run, locking products in id
-   order - Q8 - with the two-connection deadlock test). Done: slice a (migration 0004,
-   `a66faef`) and slice b - b1 (ownership, `start_run`, `850e192`), b2 (per-account loop,
-   the "completed" rule, in-order catch-up, seed through the worker, `5e9dbe3`), b3
-   (whole-run failure, backoff, takeover). Worker 6/10 in `docs/PROGRESS.md`. The planning
-   decisions Q1-Q14 are recorded (see "Billing worker"). Slice order: c -> h -> d -> e ->
-   f -> g.
+1. **Stage 4: slice h next** - the request queue and the internal billingRun API
+   (`GET /billingRun`, `GET /billingRun/{run_id}`, `GET /billingRun/{run_id}/accounts`,
+   `POST /billingRun/catchUp` (202; `upTo` before `BILLING_RUN_AT` today -> 422, Q5),
+   `POST /billingRun/{run_id}/retry` (any failed run, Q3); the API only writes
+   `worker_request`, the worker processes it - `worker.requestQueue`; the scope paths use
+   `{run_id}`). Done: slice a (migration 0004, `a66faef`), slice b - b1 (`850e192`), b2
+   (`5e9dbe3`), b3 (`3464e54`) - and slice c (status flips). Worker 7/10 in
+   `docs/PROGRESS.md`. The planning decisions Q1-Q14 are recorded (see "Billing worker").
+   Slice order: h -> d -> e -> f -> g.
 2. **Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests
    recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables`
    of each test database before it is dropped; UI: `expectUi(id)` in vitest/Playwright),

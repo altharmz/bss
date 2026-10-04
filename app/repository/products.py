@@ -1,7 +1,7 @@
 """Product inventory (TMF637). Products are only ever created or terminated by an order
 item - hence the mandatory `created_by_item_id` / `terminated_by_item_id`."""
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -97,6 +97,60 @@ def lock_products(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[UUI
         (sorted(set(product_ids)),),
     )
     return {row["id"]: row for row in rows}
+
+
+def flip_statuses(
+    conn: psycopg.Connection, run_date: date, *, visible_before: datetime
+) -> dict[str, int]:
+    """The status flips of the billing run of `run_date` (docs/stage4-design.md section
+    5): created / pendingActive -> active once start_date <= run_date, pendingTerminate ->
+    terminated once termination_date <= run_date - only for products whose order (the one
+    that created them, resp. the one that terminates them) completed before
+    `visible_before` (00:00 of the run date): what the run sees, so a replay flips the same
+    products the daily run did. Statuses follow dates, not billing: an account blocked by
+    a failure is flipped too. cancelled / aborted are never touched.
+
+    The due products are locked in id order first, like lock_products (an order deleting
+    several products locks them the same way), so the flips and an order cannot deadlock
+    (Q8). Idempotent: a second call flips nothing. Returns the count per new status."""
+    params = {"day": run_date, "before": visible_before}
+    due = fetch_all(
+        conn,
+        """
+        SELECT id FROM product WHERE id IN (
+            SELECT p.id FROM product p
+              JOIN product_order_item ci ON ci.id = p.created_by_item_id
+              JOIN product_order c ON c.id = ci.product_order_id
+             WHERE p.status IN ('created', 'pendingActive') AND p.start_date <= %(day)s
+               AND c.completion_date < %(before)s
+            UNION
+            SELECT p.id FROM product p
+              JOIN product_order_item ti ON ti.id = p.terminated_by_item_id
+              JOIN product_order t ON t.id = ti.product_order_id
+             WHERE p.status = 'pendingTerminate' AND p.termination_date <= %(day)s
+               AND t.completion_date < %(before)s)
+         ORDER BY id FOR UPDATE
+        """,
+        params,
+    )
+    if not due:
+        return {}
+    rows = fetch_all(
+        conn,
+        """
+        UPDATE product SET status = CASE WHEN status = 'pendingTerminate'
+                                         THEN 'terminated' ELSE 'active' END::product_status_type
+         WHERE id = ANY(%(ids)s)
+           AND ((status IN ('created', 'pendingActive') AND start_date <= %(day)s)
+                OR (status = 'pendingTerminate' AND termination_date <= %(day)s))
+        RETURNING status
+        """,
+        {**params, "ids": [row["id"] for row in due]},
+    )
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+    return counts
 
 
 # Products that are still to be billed or are being billed: not ended. What the admin

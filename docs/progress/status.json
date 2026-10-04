@@ -20,9 +20,9 @@
     },
     "worker": {
       "deployed": null,
-      "implemented": 6,
+      "implemented": 7,
       "items": 10,
-      "tested": 6
+      "tested": 7
     }
   },
   "excluded": [
@@ -852,9 +852,9 @@
       "area": "worker",
       "deployed": null,
       "id": "worker.statusFlips",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
-      "tested": false,
+      "tested": true,
       "title": "Status flips (created -> active, pendingTerminate -> terminated) by run date"
     },
     {
