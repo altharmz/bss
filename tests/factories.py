@@ -71,7 +71,7 @@ def product(conn: psycopg.Connection, account_id, offering_id, start: date) -> R
 
 
 def run(conn: psycopg.Connection, run_date: date = date(2026, 2, 1)) -> Row:
-    return billing.start_run(conn, run_date, now=NOW)
+    return billing.insert_run(conn, run_date, now=NOW, trigger="scheduled")
 
 
 @dataclass

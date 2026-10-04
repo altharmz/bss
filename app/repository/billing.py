@@ -25,41 +25,59 @@ from app.billing.model import (
 )
 from app.repository._sql import Row, fetch_all, fetch_one, money, returning, select_page
 
-
-class BillingRunConflict(Exception):
-    """A run for this date is already running or has already completed."""
-
-    def __init__(self, run: Row) -> None:
-        super().__init__(f"billing run for {run['run_date']} is {run['status']}")
-        self.run = run
+# --- billing runs: the rows only. Whether a run is started, reopened, taken over or left
+# alone is decided by the worker (app/worker/runs.py), which holds the ownership lock. ---
 
 
-def start_run(
-    conn: psycopg.Connection, run_date: date, *, now: datetime, trigger: str = "scheduled"
-) -> Row:
-    """Start the run for `run_date`, or restart it if the previous attempt failed.
-
-    A retry reuses the same row (run_date is UNIQUE). Raises BillingRunConflict if the
-    run is 'running' or 'completed'. A stale 'running' row left by a killed process is not
-    taken over yet - see CLAUDE.md, open questions.
-    """
-    run = fetch_one(
+def insert_run(conn: psycopg.Connection, run_date: date, *, now: datetime, trigger: str) -> Row:
+    """A new running run for `run_date` (UNIQUE: UniqueViolation if one exists)."""
+    return returning(
         conn,
         """
         INSERT INTO billing_run (run_date, status, started_at, trigger)
-        VALUES (%s, 'running', %s, %s)
-        ON CONFLICT (run_date) DO UPDATE
-            SET status = 'running', started_at = EXCLUDED.started_at,
-                finished_at = NULL, error = NULL, failure_kind = NULL
-            WHERE billing_run.status = 'failed'
-        RETURNING *
+        VALUES (%s, 'running', %s, %s) RETURNING *
         """,
         (run_date, now, trigger),
     )
+
+
+def lock_run(conn: psycopg.Connection, run_date: date) -> Row | None:
+    """The run of `run_date`, locked until the transaction ends, or None."""
+    return fetch_one(conn, "SELECT * FROM billing_run WHERE run_date = %s FOR UPDATE", (run_date,))
+
+
+def reopen_run(conn: psycopg.Connection, run_id: UUID, *, now: datetime, trigger: str) -> Row:
+    """A failed run running again: attempt + 1, the failure cleared."""
+    run = fetch_one(
+        conn,
+        """
+        UPDATE billing_run
+           SET status = 'running', attempt = attempt + 1, trigger = %s, started_at = %s,
+               finished_at = NULL, error = NULL, failure_kind = NULL, updated_at = now()
+         WHERE id = %s AND status = 'failed'
+        RETURNING *
+        """,
+        (trigger, now, run_id),
+    )
     if run is None:
-        existing = fetch_one(conn, "SELECT * FROM billing_run WHERE run_date = %s", (run_date,))
-        assert existing is not None
-        raise BillingRunConflict(existing)
+        raise LookupError(f"no failed billing run {run_id}")
+    return run
+
+
+def take_over_run(conn: psycopg.Connection, run_id: UUID, *, now: datetime) -> Row:
+    """A running run whose owner is gone, continued by a new one: attempt + 1, its trigger
+    and start kept."""
+    run = fetch_one(
+        conn,
+        """
+        UPDATE billing_run SET attempt = attempt + 1, heartbeat_at = %s, updated_at = now()
+         WHERE id = %s AND status = 'running'
+        RETURNING *
+        """,
+        (now, run_id),
+    )
+    if run is None:
+        raise LookupError(f"no running billing run {run_id}")
     return run
 
 

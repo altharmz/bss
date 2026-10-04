@@ -301,12 +301,12 @@ def already_seeded(api: Api) -> bool:
 
 
 def run_billing(conn: psycopg.Connection, day: date, account_ids: list[UUID]) -> None:
-    try:
-        run = billing.start_run(conn, day, now=at(day, 0, 30))
-    except billing.BillingRunConflict as exc:
+    existing = billing.get_run(conn, day)
+    if existing is not None:
         raise SeedError(
-            f"a billing run for {day} already exists ({exc}); not seeding over it"
-        ) from None
+            f"a billing run for {day} already exists ({existing['status']}); not seeding over it"
+        )
+    run = billing.insert_run(conn, day, now=at(day, 0, 30), trigger="scheduled")
     for account_id in account_ids:
         bill_account(conn, account_id, run)
     billing.finish_run(conn, run["id"], now=at(day, 0, 45))

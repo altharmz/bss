@@ -72,7 +72,7 @@ def test_tstzrange_roundtrip(db_conn, upper):
 def test_daterange_roundtrip(db_conn):
     acc = account(db_conn)
     period = Range(date(2026, 1, 1), date(2026, 2, 1), "[)")
-    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+    run = billing.insert_run(db_conn, date(2026, 2, 1), now=NOW, trigger="scheduled")
     bill = billing.insert_bill(
         db_conn,
         billing_account_id=acc["id"],

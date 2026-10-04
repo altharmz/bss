@@ -35,7 +35,9 @@ def run_row(conn: psycopg.Connection, day: date) -> dict:
     are left `running`: finishing them is stage 4's job."""
     run = billing.get_run(conn, day)
     if run is None:
-        run = billing.start_run(conn, day, now=midnight(day) + timedelta(minutes=30))
+        run = billing.insert_run(
+            conn, day, now=midnight(day) + timedelta(minutes=30), trigger="scheduled"
+        )
     return run
 
 
@@ -222,7 +224,9 @@ def test_an_order_placed_on_d_is_invisible_to_run_d_and_visible_to_run_d_plus_1(
     account = apidata.account(api)
     product = add(api, account, offering, date(2026, 12, 5), on=at(date(2026, 12, 5)))
     # the run of Dec 5 executes late in the evening, after the order: still invisible
-    run = billing.start_run(db_conn, date(2026, 12, 5), now=at(date(2026, 12, 5), 23))
+    run = billing.insert_run(
+        db_conn, date(2026, 12, 5), now=at(date(2026, 12, 5), 23), trigger="scheduled"
+    )
     assert bill_account(db_conn, UUID(account["id"]), run).is_empty
     # Dec 6 charges from the start date: 300 x 27/31 = 261.29
     assert summary(bill(db_conn, account, date(2026, 12, 6))) == [

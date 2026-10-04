@@ -17,9 +17,13 @@ from tests.factories import NOW, account, rejected
 D = date(2026, 2, 1)
 
 
+def new_run(conn, day):
+    return billing.insert_run(conn, day, now=NOW, trigger="scheduled")
+
+
 @pytest.fixture
 def run(db_conn):
-    return billing.start_run(db_conn, D, now=NOW)
+    return new_run(db_conn, D)
 
 
 def outcome(conn, run_id, account_id, status, *, error=None, waits_for=None, attempts=1):
@@ -80,7 +84,7 @@ def test_attempt_is_positive(db_conn, run):
 
 
 def test_valid_outcomes(db_conn, run):
-    later = billing.start_run(db_conn, D + timedelta(days=1), now=NOW)
+    later = new_run(db_conn, D + timedelta(days=1))
     a, b, c = account(db_conn, name="A"), account(db_conn, name="B"), account(db_conn, name="C")
     outcome(db_conn, run["id"], a["id"], "ok")
     outcome(db_conn, run["id"], b["id"], "failed", error="MissingPrice", attempts=2)
@@ -102,7 +106,7 @@ def test_valid_outcomes(db_conn, run):
     ids=["failed-no-error", "ok-with-error", "blocked-no-wait", "ok-waits", "zero-attempts"],
 )
 def test_outcome_constraints(db_conn, run, status, error, waits, attempts):
-    other = billing.start_run(db_conn, D - timedelta(days=1), now=NOW)
+    other = new_run(db_conn, D - timedelta(days=1))
     acc = account(db_conn)
     with rejected(db_conn, errors.CheckViolation):
         outcome(

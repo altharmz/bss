@@ -828,13 +828,18 @@ the order of deploys (backup, vps-infra, then `make verify`).
   reduce charges (and how a resume re-enters billing) is open; ordering already refuses
   new orders on a non-Active account.
 
-- **Stale billing runs (stage 4).** A run killed mid-way (e.g. by the nightly 03:00
-  reboot) stays `running`, and `UNIQUE (run_date)` blocks a new one. `start_run` must be
-  able to take over a stale run. Not implemented yet; today it raises
-  `BillingRunConflict`.
-- **`start_run` semantics (stage 4).** A completed run for the date should be a no-op
-  (`AlreadyCompleted`), not an error; only a concurrently running run is a conflict.
-  Today both raise `BillingRunConflict`. The stale-running takeover above is still open.
+- **Stale billing runs and `start_run` semantics: resolved in stage 4 slice b1.**
+  `app/worker/runs.py` `start_run` takes ownership first (a session advisory lock on the
+  worker's own connection, `app/worker/db.py`; another live owner -> `RunInProgress`
+  before anything is read), then: no run -> new; completed -> `AlreadyCompleted` (a
+  no-op); failed -> reopened (attempt + 1); running -> taken over (its owner is gone:
+  the lock dies with the connection; attempt + 1, trigger kept). The repository only
+  writes rows (`insert_run`, `lock_run`, `reopen_run`, `take_over_run`);
+  `BillingRunConflict` is gone.
+- **`APP_ENV` unset means `prod`** (`app/config.py`, since slice b1): the worker's clock
+  override (`WORKER_FAKE_NOW`, Q14) needs an explicit `APP_ENV=test`. compose always sets
+  it (`dev` locally); **`compose.prod.yaml` sets `staging`, not `prod`** - decide in slice
+  f whether the VPS should report `prod` (`/internal/v1/context` shows it).
 - **Port the format fix to vps-lab-template** (fixed here, not there). In the template,
   `make fmt` and `.claude/hooks/format.sh` both fail silently:
   - `compose.override.yaml` mounts `app/` and `tests/` read-only on `app`, so

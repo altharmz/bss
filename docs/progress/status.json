@@ -20,9 +20,9 @@
     },
     "worker": {
       "deployed": null,
-      "implemented": 0,
+      "implemented": 2,
       "items": 10,
-      "tested": 0
+      "tested": 2
     }
   },
   "excluded": [
@@ -789,9 +789,9 @@
       "area": "worker",
       "deployed": null,
       "id": "worker.runLifecycle",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
-      "tested": false,
+      "tested": true,
       "title": "start_run answers every case: new, completed (no-op), failed (reopen), running"
     },
     {
@@ -807,9 +807,9 @@
       "area": "worker",
       "deployed": null,
       "id": "worker.doubleStart",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
-      "tested": false,
+      "tested": true,
       "title": "A second worker while the lock is held backs off and writes nothing"
     },
     {

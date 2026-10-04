@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
+from psycopg import errors
 from psycopg.types.range import Range
 
 from app.repository import billing, catalog, orders, parties, payments, products
@@ -17,6 +18,7 @@ from tests.factories import (
     days,
     offering,
     product,
+    rejected,
     world,
 )
 
@@ -244,40 +246,67 @@ def test_list_active_products(db_conn):
 # --- billing ---
 
 
-def test_start_run(db_conn):
-    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+def new_run(conn, day=date(2026, 2, 1), **over):
+    return billing.insert_run(conn, day, now=over.get("now", NOW), trigger="scheduled")
+
+
+def test_insert_run(db_conn):
+    run = billing.insert_run(db_conn, date(2026, 2, 1), now=NOW, trigger="catchUp")
     assert run["status"] == "running"
     assert run["started_at"] == NOW
     assert run["finished_at"] is None
-    assert (run["trigger"], run["attempt"], run["failure_kind"]) == ("scheduled", 1, None)
+    assert (run["trigger"], run["attempt"], run["failure_kind"]) == ("catchUp", 1, None)
 
 
-def test_start_run_records_its_trigger(db_conn):
-    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW, trigger="catchUp")
-    assert run["trigger"] == "catchUp"
+def test_insert_run_is_one_per_date(db_conn):
+    new_run(db_conn)
+    with rejected(db_conn, errors.UniqueViolation):
+        new_run(db_conn)
 
 
-def test_start_run_retry_reuses_the_failed_row(db_conn):
-    first = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+def test_lock_run(db_conn):
+    assert billing.lock_run(db_conn, date(2026, 2, 1)) is None
+    run = new_run(db_conn)
+    assert billing.lock_run(db_conn, date(2026, 2, 1)) == run
+
+
+def test_reopen_run_reuses_the_failed_row(db_conn):
+    first = new_run(db_conn)
     billing.fail_run(db_conn, first["id"], now=NOW, error="boom")
-    retry = billing.start_run(db_conn, date(2026, 2, 1), now=NOW + timedelta(hours=1))
+    retry = billing.reopen_run(db_conn, first["id"], now=NOW + timedelta(hours=1), trigger="retry")
     assert retry["id"] == first["id"]
     assert (retry["status"], retry["error"], retry["finished_at"]) == ("running", None, None)
     assert retry["failure_kind"] is None  # the CHECK of 0004: only a failed run has one
+    assert (retry["attempt"], retry["trigger"]) == (2, "retry")
     assert retry["started_at"] == NOW + timedelta(hours=1)
 
 
 @pytest.mark.parametrize("finish", [False, True], ids=["running", "completed"])
-def test_start_run_refuses_a_running_or_completed_run(db_conn, finish):
-    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+def test_reopen_run_only_reopens_a_failed_run(db_conn, finish):
+    run = new_run(db_conn)
     if finish:
         billing.finish_run(db_conn, run["id"], now=NOW)
-    with pytest.raises(billing.BillingRunConflict):
-        billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+    with pytest.raises(LookupError):
+        billing.reopen_run(db_conn, run["id"], now=NOW, trigger="retry")
+
+
+def test_take_over_run_keeps_trigger_and_start(db_conn):
+    run = billing.insert_run(db_conn, date(2026, 2, 1), now=NOW, trigger="catchUp")
+    later = NOW + timedelta(hours=3)
+    taken = billing.take_over_run(db_conn, run["id"], now=later)
+    assert (taken["attempt"], taken["trigger"], taken["status"]) == (2, "catchUp", "running")
+    assert (taken["started_at"], taken["heartbeat_at"]) == (NOW, later)
+
+
+def test_take_over_run_only_takes_over_a_running_run(db_conn):
+    run = new_run(db_conn)
+    billing.finish_run(db_conn, run["id"], now=NOW)
+    with pytest.raises(LookupError):
+        billing.take_over_run(db_conn, run["id"], now=NOW)
 
 
 def test_finish_run(db_conn):
-    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+    run = new_run(db_conn)
     done = billing.finish_run(db_conn, run["id"], now=NOW + timedelta(minutes=5))
     assert done["status"] == "completed"
     assert done["finished_at"] == NOW + timedelta(minutes=5)
@@ -285,7 +314,7 @@ def test_finish_run(db_conn):
 
 
 def test_fail_run(db_conn):
-    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+    run = new_run(db_conn)
     failed = billing.fail_run(db_conn, run["id"], now=NOW, error="db down")
     assert (failed["status"], failed["error"]) == ("failed", "db down")
     assert failed["failure_kind"] == "run"  # the default: the worker must not move past it
@@ -294,7 +323,7 @@ def test_fail_run(db_conn):
 
 
 def test_fail_run_because_of_accounts(db_conn):
-    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+    run = new_run(db_conn)
     failed = billing.fail_run(
         db_conn, run["id"], now=NOW, error="1 of 3 accounts failed", failure_kind="accounts"
     )
@@ -302,13 +331,13 @@ def test_fail_run_because_of_accounts(db_conn):
 
 
 def test_finish_run_has_no_failure_kind(db_conn):
-    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+    run = new_run(db_conn)
     assert billing.finish_run(db_conn, run["id"], now=NOW)["failure_kind"] is None
 
 
 def test_get_run(db_conn):
     assert billing.get_run(db_conn, date(2026, 2, 1)) is None
-    run = billing.start_run(db_conn, date(2026, 2, 1), now=NOW)
+    run = new_run(db_conn)
     assert billing.get_run(db_conn, date(2026, 2, 1)) == run
 
 

@@ -7,7 +7,9 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=None, extra="ignore")
 
-    app_env: str = "dev"
+    # Unset means prod: the safe reading (make seed refuses it, the worker's clock override
+    # needs an explicit "test"). compose sets it everywhere: dev locally, staging on the VPS.
+    app_env: str = "prod"
     log_level: str = "info"
     database_url: str = "postgresql://app:app@db:5432/app"
     # Seconds per connection attempt. The API opens one connection per request; 3 s turned
