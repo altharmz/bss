@@ -12,7 +12,7 @@ the deployed commit.
 | Database | 16 | 16/16 (100%) | n/a | unknown |
 | API | 54 | 48/54 (88%) | n/a | unknown |
 | UI | 13 | 10/13 (76%) | n/a | unknown |
-| Worker | 10 | 4/10 (40%) | 4/10 (40%) | unknown |
+| Worker | 10 | 6/10 (60%) | 6/10 (60%) | unknown |
 
 ## Database
 
@@ -117,10 +117,10 @@ the deployed commit.
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
 | `worker.runLifecycle` | 4 | start_run answers every case: new, completed (no-op), failed (reopen), running | yes | yes | unknown |
-| `worker.takeover` | 4 | Takeover of a running run whose owner died; ok accounts untouched | no | no | unknown |
+| `worker.takeover` | 4 | Takeover of a running run whose owner died; ok accounts untouched | yes | yes | unknown |
 | `worker.doubleStart` | 4 | A second worker while the lock is held backs off and writes nothing | yes | yes | unknown |
 | `worker.failureIsolation` | 4 | A failed account blocks only itself; after a fix it catches up its dates in order | yes | yes | unknown |
-| `worker.wholeRunFailure` | 4 | A whole-run failure does not advance past its date; retried with backoff | no | no | unknown |
+| `worker.wholeRunFailure` | 4 | A whole-run failure does not advance past its date; retried with backoff | yes | yes | unknown |
 | `worker.completedAllOk` | 4 | A run is completed only when every member account is ok | yes | yes | unknown |
 | `worker.requestQueue` | 4 | Catch-up and retry requests from the UI queue are processed | no | no | unknown |
 | `worker.statusFlips` | 4 | Status flips (created -> active, pendingTerminate -> terminated) by run date | no | no | unknown |

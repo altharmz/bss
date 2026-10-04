@@ -265,9 +265,11 @@ def test_only_a_failed_run_can_be_retried(api, worker):
 # --- per-account atomicity ---
 
 
+@pytest.mark.capability("worker.takeover")
 def test_charges_and_outcome_commit_together(api, worker, control, migrated_db_url, monkeypatch):
-    """A failure after x's charges are written but before its outcome row: neither stays;
-    the run is taken over and x ends exactly as in the control - billed once."""
+    """The worker dies (its backend is terminated) after x's charges are written but before
+    x's outcome row: neither stays, the run stays running with its lock gone, and a second
+    worker takes it over and bills x exactly once - as in the control."""
     seen = {}
     second = None
 
@@ -278,16 +280,24 @@ def test_charges_and_outcome_commit_together(api, worker, control, migrated_db_u
         def dies_before_the_row(c, run_id, account_id, status, **kw):
             if account_id == x:
                 seen["charges"] = ledger(c, x)[0]
-                raise RuntimeError("injected after the charges, before the outcome row")
-            return real(c, run_id, account_id, status, **kw)
+                with psycopg.connect(migrated_db_url, autocommit=True) as admin:
+                    # with a timeout: wait until the backend has really exited
+                    admin.execute("SELECT pg_terminate_backend(%s, 5000)", (c.info.backend_pid,))
+            return real(c, run_id, account_id, status, **kw)  # x: fails, the session is gone
 
         monkeypatch.setattr(billing, "record_outcome", dies_before_the_row)
         clock.set(at(DEC1, 0, 30))
-        with pytest.raises(RuntimeError, match="injected"):
+        with pytest.raises(process.RunAborted) as aborted:
             bill_date(conn, DEC1, clock=clock, tz=TZ, trigger="scheduled")
         monkeypatch.setattr(billing, "record_outcome", real)
-        seen["after"] = (ledger(conn, x), outcome(conn, DEC1, x))
-        conn.close()  # the worker dies; the run stays running
+        seen["marked"] = aborted.value.marked
+        with psycopg.connect(migrated_db_url, autocommit=True) as admin:
+            seen["after"] = (ledger(admin, x), outcome(admin, DEC1, x))
+            seen["status"] = billing.get_run(admin, DEC1)["status"]
+            seen["locks"] = admin.execute(  # this database only: pg_locks is cluster-wide
+                "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND database ="
+                " (SELECT oid FROM pg_database WHERE datname = current_database())"
+            ).fetchone()[0]
 
         second = worker_db.connect(migrated_db_url)
         clock.set(at(DEC1, 3, 1))
@@ -299,6 +309,8 @@ def test_charges_and_outcome_commit_together(api, worker, control, migrated_db_u
         x = s["ids"]["x"]
         assert len(seen["charges"]) == 1  # the charge existed inside the transaction
         assert seen["after"] == (([], []), None)  # ... and went with it: no charge, no row
+        # a dead worker cannot mark its run: it stays running, its lock died with it
+        assert (seen["marked"], seen["status"], seen["locks"]) == (False, "running", 0)
         assert (seen["takeover"]["status"], seen["takeover"]["attempt"]) == ("completed", 2)
         assert ledger(second, x) == control  # billed exactly once, as in the control
     finally:

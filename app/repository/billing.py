@@ -145,6 +145,16 @@ def get_run_by_id(conn: psycopg.Connection, run_id: UUID) -> Row | None:
     return fetch_one(conn, "SELECT * FROM billing_run WHERE id = %s", (run_id,))
 
 
+def held_back_by(conn: psycopg.Connection) -> Row | None:
+    """The earliest run that failed as a whole (failure_kind 'run'), or None. No later
+    date is billed until it succeeds."""
+    return fetch_one(
+        conn,
+        "SELECT * FROM billing_run WHERE status = 'failed' AND failure_kind = 'run'"
+        " ORDER BY run_date LIMIT 1",
+    )
+
+
 def touch_run(conn: psycopg.Connection, run_id: UUID, now: datetime) -> None:
     conn.execute("UPDATE billing_run SET heartbeat_at = %s WHERE id = %s", (now, run_id))
 

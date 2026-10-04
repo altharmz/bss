@@ -706,7 +706,7 @@ termination always visible, no account lock, no running-run guard).
 ## Billing worker (stage 4, in progress)
 
 `app/worker/`, from `docs/stage4-design.md` and the stage 4 planning decisions (Q1-Q14,
-"Next session"). What exists so far (slices b1, b2):
+"Next session"). What exists so far (slice b: b1, b2, b3):
 
 - **Ownership** (`db.py`): one connection per worker (W1: autocommit, `connect_timeout`
   10, keepalives 30/10/3, `lock_timeout` 30s); the session advisory lock on it says who
@@ -727,6 +727,25 @@ termination always visible, no account lock, no running-run guard).
   stops at the next failure (later blocked rows then wait for that run). Proven against
   a control database: the account ends with exactly the charges and bills of a run where
   nothing failed (a charge on Dec 1 and a refund on Dec 3, not one reduced charge).
+- **Whole-run failure** (slice b3): anything but an account's `BillingError` - the
+  database gone, `LockNotAvailable`, a bug - aborts the run (`RunAborted`). If the
+  connection still works the run is marked `failed`, `failure_kind=run`; a dead worker
+  cannot mark it, so it stays `running` and its lock dies with the connection (takeover).
+  **No later date is billed** while a run failed as a whole (`HeldBack`), and the
+  scheduled retry of that date waits **5 min, 15 min, then hourly** from `finished_at`
+  (`NotYet`, `plan.retry_time`); an operator's retry or catch-up is not held to the
+  backoff. Accounts already ok are never billed again.
+- **`LockNotAvailable` is necessarily run-level**: an account's outcome row has a foreign
+  key to its `billing_account` row, so recording any outcome for a locked account needs
+  the same lock - proven when a mutation that classified it as an account failure still
+  aborted the run. The negative proof that counts is "skip the locked account and go on",
+  which the test catches.
+- **Takeover**: after a death between accounts or a dropped connection the successor's
+  `start_run` takes the run over (attempt + 1) and bills only the accounts without an ok
+  row; while the owner is alive a rival gets `RunInProgress`.
+- **Test pitfalls found here**: `pg_locks` is cluster-wide - count advisory locks of the
+  current database only (parallel tests hold their own); `pg_terminate_backend(pid)`
+  returns before the backend exits - use `pg_terminate_backend(pid, 5000)`.
 - **The seed** bills each day through `bill_date` on a worker connection; every seeded run
   is completed with one ok row per member.
 
@@ -931,13 +950,14 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 In this order (as of 2026-10-03, after `d0170ed`):
 
-1. **Stage 4 slice b (worker core)**, from `docs/stage4-design.md`. Done: slice a
-   (migration 0004, `a66faef`), b1 (ownership and `start_run`, `850e192`), b2 (per-account
-   loop, the "completed" rule, retry with in-order catch-up, seed through the worker - the
-   planned b4 merged into b2). **Next: b3** - whole-run failure (`failure_kind=run`, no
-   advance, backoff 5 min / 15 min / hourly), takeover with ok accounts untouched,
-   `LockNotAvailable` as a whole-run failure with its test. The planning decisions Q1-Q14
-   are recorded (see "Billing worker"). Slice order: b -> c -> h -> d -> e -> f -> g.
+1. **Stage 4: slice c next** (status flips: `created -> active`, `pendingTerminate ->
+   terminated` by run date, only for orders visible to the run, locking products in id
+   order - Q8 - with the two-connection deadlock test). Done: slice a (migration 0004,
+   `a66faef`) and slice b - b1 (ownership, `start_run`, `850e192`), b2 (per-account loop,
+   the "completed" rule, in-order catch-up, seed through the worker, `5e9dbe3`), b3
+   (whole-run failure, backoff, takeover). Worker 6/10 in `docs/PROGRESS.md`. The planning
+   decisions Q1-Q14 are recorded (see "Billing worker"). Slice order: c -> h -> d -> e ->
+   f -> g.
 2. **Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests
    recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables`
    of each test database before it is dropped; UI: `expectUi(id)` in vitest/Playwright),

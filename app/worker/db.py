@@ -25,13 +25,20 @@ CONNECTION = {
     "keepalives_interval": 10,
     "keepalives_count": 3,
     "application_name": "bss-worker",
-    "options": "-c lock_timeout=30s",
 }
+LOCK_TIMEOUT = "30s"
 
 
-def connect(url: str | None = None) -> psycopg.Connection:
-    """The worker's connection: autocommit, so nothing stays idle in a transaction."""
-    return psycopg.connect(url or settings.database_url, autocommit=True, **CONNECTION)
+def connect(url: str | None = None, *, lock_timeout: str = LOCK_TIMEOUT) -> psycopg.Connection:
+    """The worker's connection: autocommit, so nothing stays idle in a transaction. A row
+    lock held longer than `lock_timeout` raises LockNotAvailable - a whole-run failure
+    (app/worker/process.py); tests pass a short one to reach it quickly."""
+    return psycopg.connect(
+        url or settings.database_url,
+        autocommit=True,
+        options=f"-c lock_timeout={lock_timeout}",
+        **CONNECTION,
+    )
 
 
 def acquire_ownership(conn: psycopg.Connection) -> bool:

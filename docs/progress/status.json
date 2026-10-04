@@ -20,9 +20,9 @@
     },
     "worker": {
       "deployed": null,
-      "implemented": 4,
+      "implemented": 6,
       "items": 10,
-      "tested": 4
+      "tested": 6
     }
   },
   "excluded": [
@@ -798,9 +798,9 @@
       "area": "worker",
       "deployed": null,
       "id": "worker.takeover",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
-      "tested": false,
+      "tested": true,
       "title": "Takeover of a running run whose owner died; ok accounts untouched"
     },
     {
@@ -825,9 +825,9 @@
       "area": "worker",
       "deployed": null,
       "id": "worker.wholeRunFailure",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
-      "tested": false,
+      "tested": true,
       "title": "A whole-run failure does not advance past its date; retried with backoff"
     },
     {

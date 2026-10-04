@@ -8,8 +8,13 @@ or not at all - bill_account's own transaction is a savepoint inside it):
     bill_account succeeds             -> ok
     bill_account raises BillingError  -> failed, with the error; nothing billed
 
-Anything else (the database gone, a bug) leaves the account without an outcome and ends
-the run - a whole-run failure (slice b3).
+Anything else - the database gone, LockNotAvailable (a row lock held past lock_timeout:
+transient contention, not the account's data), a bug - leaves the account without an
+outcome and ends the run: a whole-run failure. bill_date marks the run failed with
+failure_kind 'run' if the connection still works (a dead one cannot: the run stays
+running, its lock is gone with the connection, and the next owner takes it over). No
+later date is billed while a run failed as a whole (HeldBack), and the scheduled retry of
+that date waits for its backoff (NotYet, app/worker/plan.py).
 
 A run is completed only when every member account is ok (billing.finish_run checks it);
 otherwise it is failed with failure_kind 'accounts' and the worker moves on to later
@@ -19,7 +24,7 @@ time (Q2), so it ends with exactly the rows a run without the failure would have
 """
 
 from collections import deque
-from datetime import date
+from datetime import date, datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -30,7 +35,33 @@ from app.billing.model import BillingError
 from app.clock import Clock
 from app.repository import billing
 from app.repository._sql import Row
+from app.worker.plan import retry_time
 from app.worker.runs import AlreadyCompleted, Started, start_run
+
+
+class HeldBack(Exception):
+    """A later date while an earlier run failed as a whole: that run comes first."""
+
+    def __init__(self, run: Row) -> None:
+        super().__init__(f"billing run {run['run_date']} failed as a whole; it comes first")
+        self.run = run
+
+
+class NotYet(Exception):
+    """The scheduled retry of a run that failed as a whole, before its backoff."""
+
+    def __init__(self, run: Row, due: datetime) -> None:
+        super().__init__(f"billing run {run['run_date']} may be retried from {due.isoformat()}")
+        self.run, self.due = run, due
+
+
+class RunAborted(Exception):
+    """A whole-run failure. `marked`: the run was set failed ('run'); False when the
+    connection was gone (the run stays running for a takeover)."""
+
+    def __init__(self, run: Row, cause: BaseException, marked: bool) -> None:
+        super().__init__(f"billing run {run['run_date']} aborted: {type(cause).__name__}: {cause}")
+        self.run, self.cause, self.marked = run, cause, marked
 
 
 class DateRun:
@@ -112,13 +143,45 @@ def close_run(conn: psycopg.Connection, run: Row, *, clock: Clock, tz: ZoneInfo)
 def bill_date(
     conn: psycopg.Connection, run_date: date, *, clock: Clock, tz: ZoneInfo, trigger: str
 ) -> Row:
-    """The billing run of one date, start to end (a completed run is left alone)."""
+    """The billing run of one date, start to end (a completed run is left alone).
+
+    Refuses a date after a run that failed as a whole (HeldBack), and - for the scheduled
+    trigger - the retry of such a run before its backoff (NotYet); an operator's catch-up
+    or retry is not held to the backoff. A whole-run failure raises RunAborted."""
+    held = billing.held_back_by(conn)
+    if held is not None and held["run_date"] < run_date:
+        raise HeldBack(held)
+    if held is not None and held["run_date"] == run_date and trigger == "scheduled":
+        due = retry_time(held)
+        if clock.now() < due:
+            raise NotYet(held, due)
     started = start_run(conn, run_date, now=clock.now(), trigger=trigger)
     if isinstance(started, AlreadyCompleted):
         return started.run
     date_run = DateRun(conn, started.run, clock=clock, tz=tz)
-    date_run.run_all()
-    return date_run.close()
+    try:
+        date_run.run_all()
+        return date_run.close()
+    except Exception as error:
+        raise RunAborted(
+            started.run, error, _mark_failed(conn, started.run, error, clock)
+        ) from error
+
+
+def _mark_failed(conn: psycopg.Connection, run: Row, error: Exception, clock: Clock) -> bool:
+    """Set the run failed as a whole; False if the connection cannot do it any more."""
+    try:
+        with conn.transaction():
+            billing.fail_run(
+                conn,
+                run["id"],
+                now=clock.now(),
+                error=f"{type(error).__name__}: {error}",
+                failure_kind="run",
+            )
+    except psycopg.Error:
+        return False
+    return True
 
 
 def _redo(
