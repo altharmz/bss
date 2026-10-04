@@ -10,9 +10,9 @@ the deployed commit.
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
 | Database | 16 | 16/16 (100%) | n/a | unknown |
-| API | 54 | 48/54 (88%) | n/a | unknown |
+| API | 54 | 53/54 (98%) | n/a | unknown |
 | UI | 13 | 10/13 (76%) | n/a | unknown |
-| Worker | 10 | 7/10 (70%) | 7/10 (70%) | unknown |
+| Worker | 10 | 8/10 (80%) | 8/10 (80%) | unknown |
 
 ## Database
 
@@ -86,11 +86,11 @@ the deployed commit.
 | `api.internal.accountCharges.list` | 5 | An account's charges (ABRs with proration) | yes | n/a | unknown |
 | `api.internal.accountTransactions.list` | 5 | An account's ledger with balance after | yes | n/a | unknown |
 | `api.internal.priceChange.create` | 5 | Atomic price change of a live offering (D-W21) | yes | n/a | unknown |
-| `api.internal.billingRun.list` | 4 | List billing runs (newest first) | no | n/a | unknown |
-| `api.internal.billingRun.get` | 4 | Get a billing run | no | n/a | unknown |
-| `api.internal.billingRunAccounts.list` | 4 | A run's per-account outcomes | no | n/a | unknown |
-| `api.internal.billingRun.catchUp` | 4 | Queue a catch-up to a date | no | n/a | unknown |
-| `api.internal.billingRun.retry` | 4 | Queue a retry of a failed run | no | n/a | unknown |
+| `api.internal.billingRun.list` | 4 | List billing runs (newest first) | yes | n/a | unknown |
+| `api.internal.billingRun.get` | 4 | Get a billing run | yes | n/a | unknown |
+| `api.internal.billingRunAccounts.list` | 4 | A run's per-account outcomes | yes | n/a | unknown |
+| `api.internal.billingRun.catchUp` | 4 | Queue a catch-up to a date | yes | n/a | unknown |
+| `api.internal.billingRun.retry` | 4 | Queue a retry of a failed run | yes | n/a | unknown |
 | `api.service.healthz` | template | Liveness with a database check | yes | n/a | unknown |
 | `api.service.billingStatus` | 4 | Freshness signal for the external monitor | no | n/a | unknown |
 
@@ -122,7 +122,7 @@ the deployed commit.
 | `worker.failureIsolation` | 4 | A failed account blocks only itself; after a fix it catches up its dates in order | yes | yes | unknown |
 | `worker.wholeRunFailure` | 4 | A whole-run failure does not advance past its date; retried with backoff | yes | yes | unknown |
 | `worker.completedAllOk` | 4 | A run is completed only when every member account is ok | yes | yes | unknown |
-| `worker.requestQueue` | 4 | Catch-up and retry requests from the UI queue are processed | no | no | unknown |
+| `worker.requestQueue` | 4 | Catch-up and retry requests from the UI queue are processed | yes | yes | unknown |
 | `worker.statusFlips` | 4 | Status flips (created -> active, pendingTerminate -> terminated) by run date | yes | yes | unknown |
 | `worker.scheduler` | 4 | Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday | no | no | unknown |
 | `worker.signals` | 4 | SIGTERM finishes the current account; SIGKILL leaves nothing half-written | no | no | unknown |

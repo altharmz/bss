@@ -103,11 +103,12 @@ def parse_list_query(
     )
 
 
-def parse_page(request: Request) -> tuple[int, int]:
+def parse_page(request: Request, extra: Collection[str] = ()) -> tuple[int, int]:
     """offset and limit with the same rules as parse_list_query, for lists that take no
-    filters and no fields=; any other query parameter is a 400."""
+    fields=; any other query parameter is a 400, except the `extra` ones the caller reads
+    itself (a filter)."""
     for name in request.query_params:
-        if name not in ("offset", "limit"):
+        if name not in ("offset", "limit", *extra):
             raise bad_request(f"unknown query parameter {name}")
     limit = _int_param(request, "limit", DEFAULT_LIMIT, 1)
     if limit > MAX_LIMIT:

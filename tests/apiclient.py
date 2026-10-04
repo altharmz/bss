@@ -54,6 +54,11 @@ INTERNAL: dict[str, str] = {
     "/billingAccount/{id}/charges": "Charge",
     "/billingAccount/{id}/transactions": "Transaction",
     "/productOffering/{id}/priceChange": "PriceChange",
+    "/billingRun": "BillingRun",
+    "/billingRun/{id}": "BillingRun",
+    "/billingRun/{id}/accounts": "RunAccount",
+    "/billingRun/catchUp": "CatchUp",
+    "/billingRun/{id}/retry": "RetryQueued",
 }
 # Our own JSON Schemas for TMF extensions, served outside the TMF resource paths.
 SCHEMA_PREFIX = "/tmf-api/schema/"
@@ -136,6 +141,8 @@ class TmfClient:
             parts = path[len(INTERNAL_BASE) + 1 :].split("/")
             if len(parts) == 3:  # /<resource>/{id}/<view or action>
                 parts[1] = "{id}"
+            elif len(parts) == 2 and "/" + "/".join(parts) not in INTERNAL:
+                parts[1] = "{id}"  # /<resource>/{id}, unless a literal path (/billingRun/catchUp)
             spec_path = "/" + "/".join(parts)
             return "INTERNAL", parts[0], INTERNAL.get(spec_path), spec_path
         for base, (api, resources) in APIS.items():

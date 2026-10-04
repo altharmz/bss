@@ -2,7 +2,7 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 48,
+      "implemented": 53,
       "items": 54,
       "tested": null
     },
@@ -20,9 +20,9 @@
     },
     "worker": {
       "deployed": null,
-      "implemented": 7,
+      "implemented": 8,
       "items": 10,
-      "tested": 7
+      "tested": 8
     }
   },
   "excluded": [
@@ -609,7 +609,7 @@
       "area": "api",
       "deployed": null,
       "id": "api.internal.billingRun.list",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
       "tested": null,
       "title": "List billing runs (newest first)"
@@ -618,7 +618,7 @@
       "area": "api",
       "deployed": null,
       "id": "api.internal.billingRun.get",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
       "tested": null,
       "title": "Get a billing run"
@@ -627,7 +627,7 @@
       "area": "api",
       "deployed": null,
       "id": "api.internal.billingRunAccounts.list",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
       "tested": null,
       "title": "A run's per-account outcomes"
@@ -636,7 +636,7 @@
       "area": "api",
       "deployed": null,
       "id": "api.internal.billingRun.catchUp",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
       "tested": null,
       "title": "Queue a catch-up to a date"
@@ -645,7 +645,7 @@
       "area": "api",
       "deployed": null,
       "id": "api.internal.billingRun.retry",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
       "tested": null,
       "title": "Queue a retry of a failed run"
@@ -843,9 +843,9 @@
       "area": "worker",
       "deployed": null,
       "id": "worker.requestQueue",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
-      "tested": false,
+      "tested": true,
       "title": "Catch-up and retry requests from the UI queue are processed"
     },
     {

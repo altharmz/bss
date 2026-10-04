@@ -155,6 +155,96 @@ def held_back_by(conn: psycopg.Connection) -> Row | None:
     )
 
 
+def latest_run_date(conn: psycopg.Connection) -> date | None:
+    row = fetch_one(conn, "SELECT max(run_date) AS latest FROM billing_run")
+    return row["latest"] if row else None
+
+
+_RUN_VIEW = """
+    SELECT r.*, m.total, o.ok, o.failed, o.blocked, r.run_date = l.latest AS is_latest
+      FROM billing_run r
+     CROSS JOIN (SELECT max(run_date) AS latest FROM billing_run) l
+     CROSS JOIN LATERAL (
+            SELECT count(*) AS total FROM billing_account a
+             WHERE a.opened_at < (r.run_date::timestamp AT TIME ZONE %(tz)s)) m
+     CROSS JOIN LATERAL (
+            SELECT count(*) FILTER (WHERE status = 'ok') AS ok,
+                   count(*) FILTER (WHERE status = 'failed') AS failed,
+                   count(*) FILTER (WHERE status = 'blocked') AS blocked
+              FROM billing_run_account WHERE run_id = r.id) o
+"""
+
+
+def page_runs(
+    conn: psycopg.Connection, *, offset: int, limit: int, tz: str | None = None
+) -> tuple[list[Row], int]:
+    """Runs newest first, each with its member count (accounts opened before 00:00 of its
+    date), its outcome counts and whether it is the latest - derived, not stored."""
+    rows = fetch_all(
+        conn,
+        _RUN_VIEW + " ORDER BY r.run_date DESC OFFSET %(offset)s LIMIT %(limit)s",
+        {"tz": tz or settings.billing_tz, "offset": offset, "limit": limit},
+    )
+    total = fetch_one(conn, "SELECT count(*) AS n FROM billing_run")
+    assert total is not None
+    return rows, total["n"]
+
+
+def run_view(conn: psycopg.Connection, run_id: UUID, tz: str | None = None) -> Row | None:
+    return fetch_one(
+        conn, _RUN_VIEW + " WHERE r.id = %(id)s", {"tz": tz or settings.billing_tz, "id": run_id}
+    )
+
+
+def run_charges(conn: psycopg.Connection, run_ids: list[UUID]) -> dict[UUID, list[Row]]:
+    """The ABRs each run wrote: count and sum per currency (refunds are negative)."""
+    rows = fetch_all(
+        conn,
+        """
+        SELECT billing_run_id, currency, count(*) AS n, sum(amount) AS amount
+          FROM applied_customer_billing_rate WHERE billing_run_id = ANY(%s)
+         GROUP BY 1, 2 ORDER BY 1, 2
+        """,
+        (run_ids,),
+    )
+    result: dict[UUID, list[Row]] = {run_id: [] for run_id in run_ids}
+    for row in rows:
+        result[row["billing_run_id"]].append(row)
+    return result
+
+
+def page_run_outcomes(
+    conn: psycopg.Connection, run_id: UUID, *, status: str | None, offset: int, limit: int
+) -> tuple[list[Row], int]:
+    """A run's per-account outcomes (optionally of one status), with the account's name
+    and the date a blocked row waits for; in account id order."""
+    params = {"run": run_id, "status": status, "offset": offset, "limit": limit}
+    rows = fetch_all(
+        conn,
+        """
+        SELECT o.*, a.name AS account_name, w.run_date AS waits_for_date
+          FROM billing_run_account o
+          JOIN billing_account a ON a.id = o.billing_account_id
+          LEFT JOIN billing_run w ON w.id = o.waits_for_run_id
+         WHERE o.run_id = %(run)s
+           AND (%(status)s::text IS NULL OR o.status::text = %(status)s)
+         ORDER BY o.billing_account_id OFFSET %(offset)s LIMIT %(limit)s
+        """,
+        params,
+    )
+    total = fetch_one(
+        conn,
+        """
+        SELECT count(*) AS n FROM billing_run_account o
+         WHERE o.run_id = %(run)s
+           AND (%(status)s::text IS NULL OR o.status::text = %(status)s)
+        """,
+        params,
+    )
+    assert total is not None
+    return rows, total["n"]
+
+
 def touch_run(conn: psycopg.Connection, run_id: UUID, now: datetime) -> None:
     conn.execute("UPDATE billing_run SET heartbeat_at = %s WHERE id = %s", (now, run_id))
 

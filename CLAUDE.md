@@ -706,7 +706,7 @@ termination always visible, no account lock, no running-run guard).
 ## Billing worker (stage 4, in progress)
 
 `app/worker/`, from `docs/stage4-design.md` and the stage 4 planning decisions (Q1-Q14,
-"Next session"). What exists so far (slice b: b1, b2, b3; slice c):
+"Next session"). What exists so far (slice b: b1, b2, b3; slices c, h):
 
 - **Ownership** (`db.py`): one connection per worker (W1: autocommit, `connect_timeout`
   10, keepalives 30/10/3, `lock_timeout` 30s); the session advisory lock on it says who
@@ -755,6 +755,16 @@ termination always visible, no account lock, no running-run guard).
   visibility cut-off cannot decide anything for API-made data (a product due by D whose
   order completed on D starts on D and is active at once), so it is tested with orders
   completed at 23:59:59 and 00:00:00.
+- **The request queue** (slice h, `queue.process_requests`): the internal API only inserts
+  `worker_request` rows; the owner takes them oldest first (marks picked, carries out,
+  marks done). catchUp runs `plan.catch_up_dates` in order with the `catchUp` trigger
+  (stops at a whole-run failure); retry: `retry_run` for an accounts failure, the date
+  again (trigger `retry`, no backoff) for a whole-run failure, nothing if no longer
+  failed. A request that raises is still marked done (logged) so the queue cannot
+  block; a picked request of a dead worker is picked again. **Ties of `requested_at`
+  are broken by `created_at`** (insertion order): ordering by the random id carried out
+  two requests of the same instant in random order - 14 of 20 runs of the test failed
+  before the fix, 20 of 20 passed after.
 - **Test pitfalls found here**: `pg_locks` is cluster-wide - count advisory locks of the
   current database only (parallel tests hold their own); `pg_terminate_backend(pid)`
   returns before the backend exits - use `pg_terminate_backend(pid, 5000)`.
@@ -782,6 +792,10 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
 | `GET /billingAccount/{id}/charges` | ABRs newest run first, with runDate, billableDays of periodDays (the proration), offering, bill |
 | `POST /productOffering/{id}/priceChange` | the atomic price change of a live offering (see the TMF620 deviation above): ends the open price at midnight of `validFrom`, creates and attaches the successor; 201 `{productOffering, endedPrice {endsOn}, newPrice {price, validFrom}}` |
 | `GET /billingAccount/{id}/transactions` | charges, refunds and payments as one ledger with balanceAfter. Positive = credit (as accountBalance); ordered by day (ABR: run date; payment: its date in BILLING_TZ), ABRs before payments on the same day (the run of D happens at its start), then timestamp, id. The newest balanceAfter equals the account balance (tested) |
+| `GET /billingRun` | stage 4: runs newest first - status, failureKind, trigger, attempt, times, accounts {total, ok, failed, blocked} (derived: members = accounts opened before 00:00 of the date), charges {count, amounts per currency}, error, isLatest |
+| `GET /billingRun/{id}` / `.../accounts?status=` | one run; its per-account outcomes (account, status, error, waitsFor run, attempts) |
+| `POST /billingRun/catchUp {upTo}` | queues a catch-up; **the API never bills**. upTo after the business date, or today before `BILLING_RUN_AT` (Q5) -> 422. 202 `{request, dates}` (a run that failed as a whole first, then every date after the latest run); 200 `{dates: []}` and nothing queued when nothing is due |
+| `POST /billingRun/{id}/retry` | queues a retry of any failed run (Q3); 409 if not failed or a retry is already queued; 202 `{request}` |
 
 - **operator** comes from the `X-Remote-User` header, which the shared Caddy must *set*
   (overwrite) from the basic-auth user, so a client-sent header never passes through.
@@ -796,12 +810,12 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
 - Every rule above was broken once to see a test fail (extra attribute vs the strict
   contract, charge run date without the end-of-day rule, ledger sign, creditLimit
   currency, duplicate code).
-- Stage 4 adds the billing run endpoints (shape agreed in stage 5 checkpoint 1):
-  `GET /billingRun?limit=14`, `GET /billingRun/{id}`, `POST /billingRun/catchUp {upTo}`
-  (queues every missing date in order; 202), `POST /billingRun/{id}/retry` (**any failed
-  run**, 409 otherwise - decided in stage 4, superseding "latest run only"; the worker
-  still keeps each account's dates in order: retrying D+1 retries only the accounts that
-  failed in D+1, and accounts blocked on D stay blocked until D is fixed).
+- The billing run endpoints (stage 4 slice h; table above) follow the shape agreed in
+  stage 5 checkpoint 1, with retry of **any failed run** (decided in stage 4, superseding
+  "latest run only"; the worker still keeps each account's dates in order: retrying D+1
+  retries only the accounts that failed in D+1, accounts blocked on D stay blocked until
+  D is fixed). `tests/apiclient.py` maps `/billingRun/<uuid>` to `/billingRun/{id}`
+  unless the path is a declared literal (`/billingRun/catchUp`).
 
 ## Frontend (stage 5) decisions
 
@@ -962,15 +976,13 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 In this order (as of 2026-10-03, after `d0170ed`):
 
-1. **Stage 4: slice h next** - the request queue and the internal billingRun API
-   (`GET /billingRun`, `GET /billingRun/{run_id}`, `GET /billingRun/{run_id}/accounts`,
-   `POST /billingRun/catchUp` (202; `upTo` before `BILLING_RUN_AT` today -> 422, Q5),
-   `POST /billingRun/{run_id}/retry` (any failed run, Q3); the API only writes
-   `worker_request`, the worker processes it - `worker.requestQueue`; the scope paths use
-   `{run_id}`). Done: slice a (migration 0004, `a66faef`), slice b - b1 (`850e192`), b2
-   (`5e9dbe3`), b3 (`3464e54`) - and slice c (status flips). Worker 7/10 in
-   `docs/PROGRESS.md`. The planning decisions Q1-Q14 are recorded (see "Billing worker").
-   Slice order: h -> d -> e -> f -> g.
+1. **Stage 4: slice d next** - the scheduler loop and `--once` (dates due at
+   `BILLING_RUN_AT`, Q5; automatic catch-up of today and yesterday only, Q4; D-W17 retry
+   once per scheduled run; the queue each wake-up; liveness file; D-W13 start check) and
+   SIGTERM/SIGKILL (real-process tests with `WORKER_FAKE_NOW`, Q14). Done: slice a
+   (`a66faef`), b1 (`850e192`), b2 (`5e9dbe3`), b3 (`3464e54`), c (`7ad4923`), h (request
+   queue and billingRun API). Worker 8/10, API 53/54 in `docs/PROGRESS.md`. The planning
+   decisions Q1-Q14 are recorded (see "Billing worker"). Slice order: d -> e -> f -> g.
 2. **Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests
    recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables`
    of each test database before it is dropped; UI: `expectUi(id)` in vitest/Playwright),

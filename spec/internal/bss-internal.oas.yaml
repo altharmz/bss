@@ -132,6 +132,106 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
         '415': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
+  /billingRun:
+    get:
+      summary: Billing runs, newest run date first (stage 4).
+      description: >-
+        Every count is derived: total = the accounts opened before 00:00 of the run date
+        (its members), ok/failed/blocked = their outcomes so far; charges = the applied
+        billing rates the run wrote, per currency (refunds negative).
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/BillingRun'}
+        '400': {$ref: '#/components/responses/Error'}
+  /billingRun/{id}:
+    get:
+      summary: One billing run.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BillingRun'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /billingRun/{id}/accounts:
+    get:
+      summary: A run's per-account outcomes, in account id order.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - name: status
+          in: query
+          schema: {type: string, enum: [ok, failed, blocked]}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/RunAccount'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /billingRun/catchUp:
+    post:
+      summary: Queue a catch-up to a date; the worker runs the dates in order.
+      description: >-
+        The API never bills: it queues a request the worker carries out within a minute.
+        upTo must be the business date or earlier, and today only from BILLING_RUN_AT on
+        (the run of a date is due at that time, not at 00:00) - 422 otherwise. The dates:
+        a run that failed as a whole first (an operator's catch-up is not held to the
+        backoff), then every date after the latest run. 202 with the request and the
+        dates; 200 with no dates (nothing queued) when nothing is due.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CatchUpRequest'}
+      responses:
+        '200':
+          description: Nothing is due; nothing was queued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CatchUp'}
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CatchUp'}
+        '400': {$ref: '#/components/responses/Error'}
+        '415': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /billingRun/{id}/retry:
+    post:
+      summary: Queue a retry of a failed run.
+      description: >-
+        Any failed run. A run that failed because of accounts retries only its failed
+        accounts (each one then catches up its blocked later dates in order); a run that
+        failed as a whole runs its date again. 409 if the run is not failed or a retry of
+        it is already queued.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RetryQueued'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
 components:
   parameters:
     Id:
@@ -390,3 +490,115 @@ components:
           description: Positive = credit to the customer.
           allOf: [{$ref: '#/components/schemas/Money'}]
         balanceAfter: {$ref: '#/components/schemas/Money'}
+    NullableDateTime:
+      type: string
+      nullable: true
+      format: date-time
+    RunRef:
+      type: object
+      additionalProperties: false
+      required: [id, runDate]
+      properties:
+        id: {type: string, format: uuid}
+        runDate: {$ref: '#/components/schemas/BusinessDate'}
+    NullableRunRef:
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [id, runDate]
+      properties:
+        id: {type: string, format: uuid}
+        runDate: {$ref: '#/components/schemas/BusinessDate'}
+    BillingRun:
+      type: object
+      additionalProperties: false
+      required: [id, runDate, status, failureKind, trigger, attempt, startedAt, finishedAt,
+                 heartbeatAt, accounts, charges, error, isLatest]
+      properties:
+        id: {type: string, format: uuid}
+        runDate: {$ref: '#/components/schemas/BusinessDate'}
+        status: {type: string, enum: [running, completed, failed]}
+        failureKind:
+          description: >-
+            Set exactly when failed - accounts (some failed or are blocked; later dates go
+            ahead) or run (the run itself failed; no later date until it succeeds).
+          type: string
+          nullable: true
+          enum: [accounts, run, null]
+        trigger: {type: string, enum: [scheduled, catchUp, retry]}
+        attempt: {type: integer, minimum: 1}
+        startedAt: {type: string, format: date-time}
+        finishedAt: {$ref: '#/components/schemas/NullableDateTime'}
+        heartbeatAt: {$ref: '#/components/schemas/NullableDateTime'}
+        accounts:
+          type: object
+          additionalProperties: false
+          required: [total, ok, failed, blocked]
+          properties:
+            total: {type: integer, minimum: 0, description: Accounts opened before 00:00 of the run date}
+            ok: {type: integer, minimum: 0}
+            failed: {type: integer, minimum: 0}
+            blocked: {type: integer, minimum: 0}
+        charges:
+          type: object
+          additionalProperties: false
+          required: [count, amounts]
+          properties:
+            count: {type: integer, minimum: 0}
+            amounts:
+              description: The sum per currency (refunds negative).
+              type: array
+              items: {$ref: '#/components/schemas/Money'}
+        error: {type: string, nullable: true}
+        isLatest: {type: boolean}
+    RunAccount:
+      type: object
+      additionalProperties: false
+      required: [billingAccount, status, error, waitsFor, attempts, finishedAt]
+      properties:
+        billingAccount: {$ref: '#/components/schemas/Named'}
+        status: {type: string, enum: [ok, failed, blocked]}
+        error: {type: string, nullable: true, description: Set exactly when failed}
+        waitsFor:
+          description: The earlier failed run a blocked account waits for; null otherwise.
+          allOf: [{$ref: '#/components/schemas/NullableRunRef'}]
+        attempts: {type: integer, minimum: 1}
+        finishedAt: {type: string, format: date-time}
+    WorkerRequest:
+      type: object
+      additionalProperties: false
+      required: [id, kind, upTo, run, requestedAt, requestedBy, pickedAt, doneAt]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [catchUp, retry]}
+        upTo: {$ref: '#/components/schemas/NullableBusinessDate'}
+        run: {$ref: '#/components/schemas/NullableRunRef'}
+        requestedAt: {type: string, format: date-time}
+        requestedBy:
+          type: string
+          nullable: true
+          description: The operator (X-Remote-User); display-only.
+        pickedAt: {$ref: '#/components/schemas/NullableDateTime'}
+        doneAt: {$ref: '#/components/schemas/NullableDateTime'}
+    CatchUpRequest:
+      type: object
+      additionalProperties: false
+      required: [upTo]
+      properties:
+        upTo: {$ref: '#/components/schemas/BusinessDate'}
+    CatchUp:
+      type: object
+      additionalProperties: false
+      required: [dates]
+      properties:
+        request: {$ref: '#/components/schemas/WorkerRequest'}
+        dates:
+          description: The run dates the request will run, in order; empty when nothing is due.
+          type: array
+          items: {$ref: '#/components/schemas/BusinessDate'}
+    RetryQueued:
+      type: object
+      additionalProperties: false
+      required: [request]
+      properties:
+        request: {$ref: '#/components/schemas/WorkerRequest'}
