@@ -70,7 +70,7 @@ export function SubscriberCardScreen({ accountId }: { accountId: string }) {
   );
 
   return (
-    <>
+    <div className="bss-screen" data-ui="ui.subscriber.card">
       <Link className="bss-link bss-back" href={hrefOf({ name: 'subscribers' })}>
         ← Back to subscribers
       </Link>
@@ -92,7 +92,7 @@ export function SubscriberCardScreen({ accountId }: { accountId: string }) {
       {account.status === 'ok' && (
         <Card account={account.data} version={version} reload={() => setVersion((v) => v + 1)} />
       )}
-    </>
+    </div>
   );
 }
 
@@ -365,7 +365,12 @@ function ProductRow({
               </Button>
             </span>
           ) : (
-            <Button variant="danger-outline" small onClick={() => setConfirming(true)}>
+            <Button
+              variant="danger-outline"
+              small
+              data-ui="ui.subscriber.deactivate"
+              onClick={() => setConfirming(true)}
+            >
               Deactivate
             </Button>
           ),

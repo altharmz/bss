@@ -8,3 +8,5 @@ __pycache__/
 .venv/
 *.tar.gz
 backups/
+# make progress: the collectors' JSON (the generated docs/PROGRESS.md is committed)
+.progress/

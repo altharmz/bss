@@ -81,7 +81,7 @@ export function CatalogScreen() {
   );
 
   return (
-    <>
+    <div className="bss-screen" data-ui="ui.catalog.list">
       <div className="bss-title-row">
         <PageTitle
           title="Product catalog"
@@ -204,7 +204,7 @@ export function CatalogScreen() {
           }}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -256,6 +256,7 @@ export function OfferingModal({
       subtitle={[offering.code, offering.specification].filter(Boolean).join(' · ')}
       width={600}
       onClose={onClose}
+      ui="ui.catalog.offeringDetail"
       footer={
         <>
           {problem !== null && (
@@ -285,6 +286,7 @@ export function OfferingModal({
           ) : (
             <Button
               variant={next === 'Retired' ? 'danger-outline' : 'primary'}
+              data-ui="ui.catalog.lifecycle"
               onClick={() => setConfirming(true)}
             >
               {CONFIRM[next].button}
@@ -372,7 +374,9 @@ function PriceChangeSection({
   if (!open) {
     return (
       <div className="bss-price-change">
-        <Button onClick={() => setOpen(true)}>Change price</Button>
+        <Button data-ui="ui.catalog.changePrice" onClick={() => setOpen(true)}>
+          Change price
+        </Button>
       </div>
     );
   }
@@ -481,6 +485,7 @@ export function NewOfferingModal({
       title="New product offering"
       width={600}
       onClose={onClose}
+      ui="ui.catalog.newOffering"
       footer={
         <>
           {message !== null && (

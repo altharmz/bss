@@ -62,6 +62,7 @@ make tunnel    # forward the remote app to localhost:18081
 make remote CMD="..."  # run a one-off command against the deployed image on the VPS
 make hooks     # install the local pre-commit hook (make lint + make test)
 make spec-verify-upstream  # re-fetch spec blob SHAs from GitHub, compare with spec/README.md (network)
+make progress  # regenerate docs/PROGRESS.md + docs/progress/status.json (scope.yaml vs the code)
 make seed          # LOCAL demo data through the public TMF API (refuses APP_ENV=prod); re-run = no-op
 make web-install   # UI: npm ci into the node_modules volume - the ONLY step that downloads
 make web-dev       # UI: Vite dev server on http://localhost:5173 (proxies /tmf-api, /internal)
@@ -126,6 +127,35 @@ failure. `make test` takes 50-70 s wall-clock (pytest itself 46-60 s, warm or co
   are the other real-time dependency; the hypothesis deadline is off. Diagnostics
   improved since: the 500 handler logs the exception with its traceback, and app loggers
   are no longer silenced in tests (Alembic's `fileConfig` used to disable them).
+
+## Progress tracker
+
+`make progress` writes `docs/PROGRESS.md` (committed, plain Markdown) and
+`docs/progress/status.json` (the same data, machine-readable): per area (db, api, ui;
+worker is added in stage 4 slice b) the share of items implemented, tested and deployed,
+then the item table, the unscoped and the excluded items.
+
+- **Scope:** `docs/progress/scope.yaml`, hand-maintained, **every change needs the human's
+  approval** (`"ask"` rule in settings.json). Each item has id, area, stage, title and the
+  key the code is matched on: `table` (db), `method` + `path` exactly as `app.openapi()`
+  reports it, parameter names included (api), the id itself as the `data-ui` marker (ui).
+  `excluded` entries (id, area, reason) are ignored by the unscoped check.
+- **Implemented** (derived, never written by hand): db - the table exists in a throwaway
+  database migrated to head; api - `app.openapi()` (FastAPI's public interface, not its
+  router internals) has the operation; ui - a literal `data-ui="<id>"` (or `<Modal
+  ui="<id>">`) exists in `frontend/src`, found with the TypeScript AST. Screens carry the
+  marker on a `.bss-screen` wrapper (`display: contents`, so the layout is unchanged),
+  dialogs via `Modal`'s `ui` prop, actions on their button.
+- **Tested:** not measured yet ("n/a"); **deployed:** "unknown" until `deploy.sh` writes
+  `docs/progress/deployed.txt` (approved, not built). Both come after slice b.
+- **Unscoped:** a table, operation or marker in the code that is neither an item nor
+  excluded makes `make progress` exit 1 (after writing the files).
+- **How it runs:** `tests/progress_collect.py` in the app container (scope.yaml arrives
+  on stdin, parsed with the image's pinned PyYAML; tables via a throwaway
+  `vpslab_progress_*` database, dropped again), `frontend/scripts/ui-markers.mjs` in
+  `web-offline`, then `scripts/progress/generate.py` on the host (standard library only)
+  from the collectors' JSON in `.progress/` (gitignored). The output is deterministic (no
+  timestamps, no line numbers), ready for the drift check of step 4.
 
 ## Hard constraints
 
@@ -868,11 +898,17 @@ In this order (as of 2026-10-03, after `d0170ed`):
    yesterday only, due at `BILLING_RUN_AT`, membership by `opened_at`, flips lock in id
    order, the seed drives the worker's per-date function, env clock override guarded,
    worker connection W1). Slice order: b -> c -> h -> d -> e -> f -> g.
-2. **Docs task** (tbls + API registry + architecture.md) - planned, not started.
-3. **deploy.sh records the deployed commit** (Open check below).
-4. **Backport vps-lab's guard to bss** (ports 8444 and 2053, ask on commit/deploy, push
+2. **Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests
+   recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables`
+   of each test database before it is dropped; UI: `expectUi(id)` in vitest/Playwright),
+   the drift check in the pre-commit hook and `make verify` (with negative proofs), and
+   "deployed" from `docs/progress/deployed.txt`. Slice b also defines the `worker` area
+   (capabilities proven by `@pytest.mark.capability(...)` tests).
+3. **Docs task** (tbls + API registry + architecture.md) - planned, not started.
+4. **deploy.sh records the deployed commit** (Open check below).
+5. **Backport vps-lab's guard to bss** (ports 8444 and 2053, ask on commit/deploy, push
    policy) - parked.
-5. **Remaining Phase 2** (APP_PORT, localhost:8080 refs, make down profiles) - deferred.
+6. **Remaining Phase 2** (APP_PORT, localhost:8080 refs, make down profiles) - deferred.
 
 ## Open checks
 

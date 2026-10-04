@@ -162,6 +162,7 @@ export function Modal({
   width,
   onClose,
   footer,
+  ui,
   children,
 }: {
   title: string;
@@ -169,6 +170,8 @@ export function Modal({
   width: number;
   onClose: () => void;
   footer?: ReactNode;
+  /** The dialog's data-ui marker (docs/progress/scope.yaml). */
+  ui?: string;
   children: ReactNode;
 }) {
   useEffect(() => {
@@ -183,6 +186,7 @@ export function Modal({
     <div className="bss-overlay" onClick={onClose}>
       <div
         className="bss-modal"
+        data-ui={ui}
         role="dialog"
         aria-modal="true"
         aria-label={title}

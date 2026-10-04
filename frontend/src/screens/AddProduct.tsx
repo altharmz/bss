@@ -100,6 +100,7 @@ export function AddProductModal({
       title="Add product"
       width={720}
       onClose={onClose}
+      ui="ui.subscriber.addProduct"
       subtitle={`${account.customerName} · ${accountLabel(account.id)} · billing day ${account.cycleDay}`}
       footer={
         <>

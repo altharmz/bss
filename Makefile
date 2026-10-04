@@ -119,6 +119,12 @@ remote: ## Run a one-off command against the deployed image on the VPS: make rem
 	fi
 	ssh $(SSH_OPTS) $(REMOTE) "cd $(REMOTE_DIR) && IMAGE_NAME=$(IMAGE_NAME) TAG=$(TAG) $(COMPOSE_PROD) run --rm --no-deps app $(CMD)"
 
+progress: ## Regenerate docs/PROGRESS.md + docs/progress/status.json (scope.yaml vs the code)
+	@mkdir -p .progress
+	docker compose run --rm -T app python -m tests.progress_collect < docs/progress/scope.yaml > .progress/backend.json
+	docker compose run --rm --no-deps -T web-offline sh -c '$(WEB_DEPS) && node scripts/ui-markers.mjs' > .progress/ui.json
+	python3 scripts/progress/generate.py
+
 hooks: ## Install the pre-commit hook (make lint + make test before every commit)
 	@mkdir -p .git/hooks
 	@ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit

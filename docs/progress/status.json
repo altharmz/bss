@@ -1,0 +1,784 @@
+{
+  "areas": {
+    "api": {
+      "deployed": null,
+      "implemented": 48,
+      "items": 54,
+      "tested": null
+    },
+    "db": {
+      "deployed": null,
+      "implemented": 16,
+      "items": 16,
+      "tested": null
+    },
+    "ui": {
+      "deployed": null,
+      "implemented": 10,
+      "items": 13,
+      "tested": null
+    }
+  },
+  "excluded": [
+    {
+      "area": "api",
+      "id": "api.service.root",
+      "reason": "template status root, not a product feature"
+    },
+    {
+      "area": "ui",
+      "id": "ui.notFound",
+      "reason": "not-found page, not a product feature"
+    }
+  ],
+  "items": [
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.product_specification",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Product specifications (TMF620)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.product_offering",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Product offerings (TMF620)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.product_offering_price",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Offering prices (TMF620)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.party",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Parties: individuals and organizations (TMF632)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.customer",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Customers (TMF629)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.billing_account",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Billing accounts (TMF666)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.product_order",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Product orders (TMF622)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.product_order_item",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Product order items (TMF622)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.product_order_error_message",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Order rejection reasons (TMF622 productOrderErrorMessage)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.product",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Products (TMF637)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.applied_customer_billing_rate",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Charges and refunds - ABRs (TMF678)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.customer_bill",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Customer bills (TMF678)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.billing_run",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Billing runs, one per date"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.payment",
+      "implemented": true,
+      "stage": 1,
+      "tested": null,
+      "title": "Payments (TMF676)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.billing_run_account",
+      "implemented": true,
+      "stage": 4,
+      "tested": null,
+      "title": "Per-(run, account) outcomes: ok / failed / blocked"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.worker_request",
+      "implemented": true,
+      "stage": 4,
+      "tested": null,
+      "title": "UI request queue for the worker (catch-up, retry)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productSpecification.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List product specifications"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productSpecification.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get a product specification"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productSpecification.create",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Create a product specification"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productSpecification.patch",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Patch a product specification"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productOffering.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List product offerings"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productOffering.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get a product offering"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productOffering.create",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Create a product offering"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productOffering.patch",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Patch a product offering (lifecycle, prices)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productOfferingPrice.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List offering prices"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productOfferingPrice.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get an offering price"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productOfferingPrice.create",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Create an offering price"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productOfferingPrice.patch",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Patch an offering price (end it)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf632.individual.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List individuals"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf632.individual.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get an individual"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf632.individual.create",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Create an individual"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf632.individual.patch",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Patch an individual"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf632.organization.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List organizations"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf632.organization.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get an organization"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf632.organization.create",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Create an organization"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf632.organization.patch",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Patch an organization"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf629.customer.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List customers"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf629.customer.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get a customer"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf629.customer.create",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Create a customer"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf629.customer.patch",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Patch a customer"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billingAccount.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List billing accounts (with balance)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billingAccount.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get a billing account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billingAccount.create",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Create a billing account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billingAccount.patch",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Patch a billing account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.extensionSchema.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Serve the BssBillingAccount extension schema"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf676.payment.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List payments"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf676.payment.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get a payment"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf676.payment.create",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Record a payment"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf622.productOrder.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List product orders"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf622.productOrder.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get a product order"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf622.productOrder.create",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Place a product order (add / delete items)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf637.product.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List products"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf637.product.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get a product"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf678.customerBill.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List customer bills"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf678.customerBill.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get a customer bill"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf678.appliedCustomerBillingRate.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "List charges and refunds (ABRs)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf678.appliedCustomerBillingRate.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": null,
+      "title": "Get a charge or refund (ABR)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.context.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "System context: business date, zone, operator"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.firstCharge.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "First-charge preview of an add order"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.accountProducts.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "An account's not-ended products"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.accountCharges.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "An account's charges (ABRs with proration)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.accountTransactions.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "An account's ledger with balance after"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.priceChange.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Atomic price change of a live offering (D-W21)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.billingRun.list",
+      "implemented": false,
+      "stage": 4,
+      "tested": null,
+      "title": "List billing runs (newest first)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.billingRun.get",
+      "implemented": false,
+      "stage": 4,
+      "tested": null,
+      "title": "Get a billing run"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.billingRunAccounts.list",
+      "implemented": false,
+      "stage": 4,
+      "tested": null,
+      "title": "A run's per-account outcomes"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.billingRun.catchUp",
+      "implemented": false,
+      "stage": 4,
+      "tested": null,
+      "title": "Queue a catch-up to a date"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.billingRun.retry",
+      "implemented": false,
+      "stage": 4,
+      "tested": null,
+      "title": "Queue a retry of a failed run"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.service.healthz",
+      "implemented": true,
+      "stage": "template",
+      "tested": null,
+      "title": "Liveness with a database check"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.service.billingStatus",
+      "implemented": false,
+      "stage": 4,
+      "tested": null,
+      "title": "Freshness signal for the external monitor"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.shell",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Shell: sidebar, top bar with business date and zone"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscribers.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Subscribers list"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.card",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Subscriber card: account, products, charges, transactions"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.addProduct",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Add product, with first-charge preview"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.deactivate",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Deactivate a product"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.catalog.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Product catalog"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.catalog.offeringDetail",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Offering detail dialog"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.catalog.lifecycle",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Offering lifecycle step (Activate / Retire)"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.catalog.changePrice",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Change price of a live offering"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.catalog.newOffering",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "New offering"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.billingRuns.list",
+      "implemented": false,
+      "stage": 4,
+      "tested": null,
+      "title": "Billing runs: latest run, history, failed badge in the nav"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.billingRuns.catchUp",
+      "implemented": false,
+      "stage": 4,
+      "tested": null,
+      "title": "Catch up to a date"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.billingRuns.retry",
+      "implemented": false,
+      "stage": 4,
+      "tested": null,
+      "title": "Retry a failed run"
+    }
+  ],
+  "unscoped": []
+}

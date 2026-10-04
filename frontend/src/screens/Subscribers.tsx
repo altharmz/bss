@@ -55,7 +55,7 @@ export function SubscribersScreen() {
   };
 
   return (
-    <>
+    <div className="bss-screen" data-ui="ui.subscribers.list">
       <PageTitle
         title="Subscribers"
         count={subscribers.status === 'ok' ? formatInt(accounts.length) : undefined}
@@ -147,6 +147,6 @@ export function SubscribersScreen() {
           }}
         </ListState>
       </Panel>
-    </>
+    </div>
   );
 }

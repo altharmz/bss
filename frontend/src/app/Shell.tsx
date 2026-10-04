@@ -120,7 +120,7 @@ export function Shell({
   children: ReactNode;
 }) {
   return (
-    <div className="bss-root">
+    <div className="bss-root" data-ui="ui.shell">
       {context !== null ? <Sidebar context={context} /> : <aside className="bss-sidebar" />}
       <div className="bss-main">
         <TopBar context={context} />
