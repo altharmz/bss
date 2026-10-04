@@ -1,0 +1,125 @@
+# Implementation scope for the progress tracker (make progress -> docs/PROGRESS.md).
+# Hand-maintained; every change needs the human's approval (settings.json "ask" rule).
+#
+# items:     everything planned. id = <area>.<name>; stage = the project stage that plans it
+#            (template = came with vps-lab-template).
+#            db:  table   - implemented when the table exists after migrating to head
+#            api: method + path - implemented when app.openapi() has that operation (the path
+#                 template exactly as FastAPI reports it, parameter names included)
+#            ui:  the id itself is the marker - implemented when a literal data-ui="<id>"
+#                 (or <Modal ui="<id>">) exists in frontend/src
+# excluded:  things that exist (or could appear) in the code but are deliberately not
+#            tracked, with the reason; the unscoped check ignores them.
+# Status (implemented / tested / deployed) is never written here - it is derived.
+
+items:
+  # ---------------- db: tables ----------------
+  - {id: db.product_specification, area: db, stage: 1, table: product_specification, title: "Product specifications (TMF620)"}
+  - {id: db.product_offering, area: db, stage: 1, table: product_offering, title: "Product offerings (TMF620)"}
+  - {id: db.product_offering_price, area: db, stage: 1, table: product_offering_price, title: "Offering prices (TMF620)"}
+  - {id: db.party, area: db, stage: 1, table: party, title: "Parties: individuals and organizations (TMF632)"}
+  - {id: db.customer, area: db, stage: 1, table: customer, title: "Customers (TMF629)"}
+  - {id: db.billing_account, area: db, stage: 1, table: billing_account, title: "Billing accounts (TMF666)"}
+  - {id: db.product_order, area: db, stage: 1, table: product_order, title: "Product orders (TMF622)"}
+  - {id: db.product_order_item, area: db, stage: 1, table: product_order_item, title: "Product order items (TMF622)"}
+  - {id: db.product_order_error_message, area: db, stage: 2, table: product_order_error_message, title: "Order rejection reasons (TMF622 productOrderErrorMessage)"}
+  - {id: db.product, area: db, stage: 1, table: product, title: "Products (TMF637)"}
+  - {id: db.applied_customer_billing_rate, area: db, stage: 1, table: applied_customer_billing_rate, title: "Charges and refunds - ABRs (TMF678)"}
+  - {id: db.customer_bill, area: db, stage: 1, table: customer_bill, title: "Customer bills (TMF678)"}
+  - {id: db.billing_run, area: db, stage: 1, table: billing_run, title: "Billing runs, one per date"}
+  - {id: db.payment, area: db, stage: 1, table: payment, title: "Payments (TMF676)"}
+  - {id: db.billing_run_account, area: db, stage: 4, table: billing_run_account, title: "Per-(run, account) outcomes: ok / failed / blocked"}
+  - {id: db.worker_request, area: db, stage: 4, table: worker_request, title: "UI request queue for the worker (catch-up, retry)"}
+
+  # ---------------- api: TMF620 product catalog ----------------
+  - {id: api.tmf620.productSpecification.list, area: api, stage: 2, method: GET, path: /tmf-api/productCatalogManagement/v5/productSpecification, title: "List product specifications"}
+  - {id: api.tmf620.productSpecification.get, area: api, stage: 2, method: GET, path: "/tmf-api/productCatalogManagement/v5/productSpecification/{spec_id}", title: "Get a product specification"}
+  - {id: api.tmf620.productSpecification.create, area: api, stage: 2, method: POST, path: /tmf-api/productCatalogManagement/v5/productSpecification, title: "Create a product specification"}
+  - {id: api.tmf620.productSpecification.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/productCatalogManagement/v5/productSpecification/{spec_id}", title: "Patch a product specification"}
+  - {id: api.tmf620.productOffering.list, area: api, stage: 2, method: GET, path: /tmf-api/productCatalogManagement/v5/productOffering, title: "List product offerings"}
+  - {id: api.tmf620.productOffering.get, area: api, stage: 2, method: GET, path: "/tmf-api/productCatalogManagement/v5/productOffering/{offering_id}", title: "Get a product offering"}
+  - {id: api.tmf620.productOffering.create, area: api, stage: 2, method: POST, path: /tmf-api/productCatalogManagement/v5/productOffering, title: "Create a product offering"}
+  - {id: api.tmf620.productOffering.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/productCatalogManagement/v5/productOffering/{offering_id}", title: "Patch a product offering (lifecycle, prices)"}
+  - {id: api.tmf620.productOfferingPrice.list, area: api, stage: 2, method: GET, path: /tmf-api/productCatalogManagement/v5/productOfferingPrice, title: "List offering prices"}
+  - {id: api.tmf620.productOfferingPrice.get, area: api, stage: 2, method: GET, path: "/tmf-api/productCatalogManagement/v5/productOfferingPrice/{price_id}", title: "Get an offering price"}
+  - {id: api.tmf620.productOfferingPrice.create, area: api, stage: 2, method: POST, path: /tmf-api/productCatalogManagement/v5/productOfferingPrice, title: "Create an offering price"}
+  - {id: api.tmf620.productOfferingPrice.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/productCatalogManagement/v5/productOfferingPrice/{price_id}", title: "Patch an offering price (end it)"}
+
+  # ---------------- api: TMF632 party ----------------
+  - {id: api.tmf632.individual.list, area: api, stage: 2, method: GET, path: /tmf-api/partyManagement/v5/individual, title: "List individuals"}
+  - {id: api.tmf632.individual.get, area: api, stage: 2, method: GET, path: "/tmf-api/partyManagement/v5/individual/{party_id}", title: "Get an individual"}
+  - {id: api.tmf632.individual.create, area: api, stage: 2, method: POST, path: /tmf-api/partyManagement/v5/individual, title: "Create an individual"}
+  - {id: api.tmf632.individual.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/partyManagement/v5/individual/{party_id}", title: "Patch an individual"}
+  - {id: api.tmf632.organization.list, area: api, stage: 2, method: GET, path: /tmf-api/partyManagement/v5/organization, title: "List organizations"}
+  - {id: api.tmf632.organization.get, area: api, stage: 2, method: GET, path: "/tmf-api/partyManagement/v5/organization/{party_id}", title: "Get an organization"}
+  - {id: api.tmf632.organization.create, area: api, stage: 2, method: POST, path: /tmf-api/partyManagement/v5/organization, title: "Create an organization"}
+  - {id: api.tmf632.organization.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/partyManagement/v5/organization/{party_id}", title: "Patch an organization"}
+
+  # ---------------- api: TMF629 customer ----------------
+  - {id: api.tmf629.customer.list, area: api, stage: 2, method: GET, path: /tmf-api/customerManagement/v5/customer, title: "List customers"}
+  - {id: api.tmf629.customer.get, area: api, stage: 2, method: GET, path: "/tmf-api/customerManagement/v5/customer/{customer_id}", title: "Get a customer"}
+  - {id: api.tmf629.customer.create, area: api, stage: 2, method: POST, path: /tmf-api/customerManagement/v5/customer, title: "Create a customer"}
+  - {id: api.tmf629.customer.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/customerManagement/v5/customer/{customer_id}", title: "Patch a customer"}
+
+  # ---------------- api: TMF666 account ----------------
+  - {id: api.tmf666.billingAccount.list, area: api, stage: 2, method: GET, path: /tmf-api/accountManagement/v5/billingAccount, title: "List billing accounts (with balance)"}
+  - {id: api.tmf666.billingAccount.get, area: api, stage: 2, method: GET, path: "/tmf-api/accountManagement/v5/billingAccount/{account_id}", title: "Get a billing account"}
+  - {id: api.tmf666.billingAccount.create, area: api, stage: 2, method: POST, path: /tmf-api/accountManagement/v5/billingAccount, title: "Create a billing account"}
+  - {id: api.tmf666.billingAccount.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/accountManagement/v5/billingAccount/{account_id}", title: "Patch a billing account"}
+  - {id: api.tmf666.extensionSchema.get, area: api, stage: 2, method: GET, path: /tmf-api/schema/BssBillingAccount.schema.json, title: "Serve the BssBillingAccount extension schema"}
+
+  # ---------------- api: TMF676 payment (v4) ----------------
+  - {id: api.tmf676.payment.list, area: api, stage: 2, method: GET, path: /tmf-api/paymentManagement/v4/payment, title: "List payments"}
+  - {id: api.tmf676.payment.get, area: api, stage: 2, method: GET, path: "/tmf-api/paymentManagement/v4/payment/{payment_id}", title: "Get a payment"}
+  - {id: api.tmf676.payment.create, area: api, stage: 2, method: POST, path: /tmf-api/paymentManagement/v4/payment, title: "Record a payment"}
+
+  # ---------------- api: TMF622 ordering ----------------
+  - {id: api.tmf622.productOrder.list, area: api, stage: 2, method: GET, path: /tmf-api/productOrderingManagement/v5/productOrder, title: "List product orders"}
+  - {id: api.tmf622.productOrder.get, area: api, stage: 2, method: GET, path: "/tmf-api/productOrderingManagement/v5/productOrder/{order_id}", title: "Get a product order"}
+  - {id: api.tmf622.productOrder.create, area: api, stage: 2, method: POST, path: /tmf-api/productOrderingManagement/v5/productOrder, title: "Place a product order (add / delete items)"}
+
+  # ---------------- api: TMF637 inventory ----------------
+  - {id: api.tmf637.product.list, area: api, stage: 2, method: GET, path: /tmf-api/productInventory/v5/product, title: "List products"}
+  - {id: api.tmf637.product.get, area: api, stage: 2, method: GET, path: "/tmf-api/productInventory/v5/product/{product_id}", title: "Get a product"}
+
+  # ---------------- api: TMF678 bills and charges ----------------
+  - {id: api.tmf678.customerBill.list, area: api, stage: 2, method: GET, path: /tmf-api/customerBillManagement/v5/customerBill, title: "List customer bills"}
+  - {id: api.tmf678.customerBill.get, area: api, stage: 2, method: GET, path: "/tmf-api/customerBillManagement/v5/customerBill/{bill_id}", title: "Get a customer bill"}
+  - {id: api.tmf678.appliedCustomerBillingRate.list, area: api, stage: 2, method: GET, path: /tmf-api/customerBillManagement/v5/appliedCustomerBillingRate, title: "List charges and refunds (ABRs)"}
+  - {id: api.tmf678.appliedCustomerBillingRate.get, area: api, stage: 2, method: GET, path: "/tmf-api/customerBillManagement/v5/appliedCustomerBillingRate/{rate_id}", title: "Get a charge or refund (ABR)"}
+
+  # ---------------- api: internal (admin UI) ----------------
+  - {id: api.internal.context.get, area: api, stage: 5, method: GET, path: /internal/v1/context, title: "System context: business date, zone, operator"}
+  - {id: api.internal.firstCharge.get, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/firstCharge", title: "First-charge preview of an add order"}
+  - {id: api.internal.accountProducts.list, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/products", title: "An account's not-ended products"}
+  - {id: api.internal.accountCharges.list, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/charges", title: "An account's charges (ABRs with proration)"}
+  - {id: api.internal.accountTransactions.list, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/transactions", title: "An account's ledger with balance after"}
+  - {id: api.internal.priceChange.create, area: api, stage: 5, method: POST, path: "/internal/v1/productOffering/{offering_id}/priceChange", title: "Atomic price change of a live offering (D-W21)"}
+  - {id: api.internal.billingRun.list, area: api, stage: 4, method: GET, path: /internal/v1/billingRun, title: "List billing runs (newest first)"}
+  - {id: api.internal.billingRun.get, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}", title: "Get a billing run"}
+  - {id: api.internal.billingRunAccounts.list, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}/accounts", title: "A run's per-account outcomes"}
+  - {id: api.internal.billingRun.catchUp, area: api, stage: 4, method: POST, path: /internal/v1/billingRun/catchUp, title: "Queue a catch-up to a date"}
+  - {id: api.internal.billingRun.retry, area: api, stage: 4, method: POST, path: "/internal/v1/billingRun/{run_id}/retry", title: "Queue a retry of a failed run"}
+
+  # ---------------- api: service ----------------
+  - {id: api.service.healthz, area: api, stage: template, method: GET, path: /healthz, title: "Liveness with a database check"}
+  - {id: api.service.billingStatus, area: api, stage: 4, method: GET, path: /billing-status, title: "Freshness signal for the external monitor"}
+
+  # ---------------- ui: screens and major actions ----------------
+  - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
+  - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
+  - {id: ui.subscriber.card, area: ui, stage: 5, title: "Subscriber card: account, products, charges, transactions"}
+  - {id: ui.subscriber.addProduct, area: ui, stage: 5, title: "Add product, with first-charge preview"}
+  - {id: ui.subscriber.deactivate, area: ui, stage: 5, title: "Deactivate a product"}
+  - {id: ui.catalog.list, area: ui, stage: 5, title: "Product catalog"}
+  - {id: ui.catalog.offeringDetail, area: ui, stage: 5, title: "Offering detail dialog"}
+  - {id: ui.catalog.lifecycle, area: ui, stage: 5, title: "Offering lifecycle step (Activate / Retire)"}
+  - {id: ui.catalog.changePrice, area: ui, stage: 5, title: "Change price of a live offering"}
+  - {id: ui.catalog.newOffering, area: ui, stage: 5, title: "New offering"}
+  - {id: ui.billingRuns.list, area: ui, stage: 4, title: "Billing runs: latest run, history, failed badge in the nav"}
+  - {id: ui.billingRuns.catchUp, area: ui, stage: 4, title: "Catch up to a date"}
+  - {id: ui.billingRuns.retry, area: ui, stage: 4, title: "Retry a failed run"}
+
+excluded:
+  - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}
+  - {id: ui.notFound, area: ui, reason: "not-found page, not a product feature"}

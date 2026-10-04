@@ -29,7 +29,8 @@
       "Edit(./compose.yaml)",
       "Edit(./compose.prod.yaml)",
       "Edit(./Makefile)",
-      "Edit(./scripts/**)"
+      "Edit(./scripts/**)",
+      "Edit(./docs/progress/scope.yaml)"
     ],
     "deny": [
       "Read(./.env)",
