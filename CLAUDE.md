@@ -706,7 +706,7 @@ termination always visible, no account lock, no running-run guard).
 ## Billing worker (stage 4, in progress)
 
 `app/worker/`, from `docs/stage4-design.md` and the stage 4 planning decisions (Q1-Q14,
-"Next session"). What exists so far (slice b: b1, b2, b3; slices c, h):
+"Next session"). What exists so far (slice b: b1, b2, b3; slices c, h, d):
 
 - **Ownership** (`db.py`): one connection per worker (W1: autocommit, `connect_timeout`
   10, keepalives 30/10/3, `lock_timeout` 30s); the session advisory lock on it says who
@@ -765,6 +765,27 @@ termination always visible, no account lock, no running-run guard).
   are broken by `created_at`** (insertion order): ordering by the random id carried out
   two requests of the same instant in random order - 14 of 20 runs of the test failed
   before the fix, 20 of 20 passed after.
+- **The schedule** (slice d, `plan.scheduled`, `loop.tick`): a date is due at
+  `BILLING_RUN_AT` (00:30), not 00:00 (Q5); before that only up to yesterday. A wake-up
+  bills on its own: a run that failed as a whole (its date only, after the backoff); a
+  run left `running` (its worker was killed or stopped - the 03:00 reboot, a deploy) is
+  resumed first and taken over; then every date after the latest run up to the due date
+  **if they lie in the automatic window (the due date and the day before, Q4)** - an older
+  missing date is a gap: nothing is billed, a warning says "catch up from the admin UI"
+  (billing past it would leave it impossible to replay in order); first start ever: the
+  due date only (D-W15). Before a new scheduled date the runs that failed because of
+  accounts are retried once (D-W17); then the dates; then the queue.
+- **The process** (`python -m app.worker`, `--once` for one wake-up): refuses to start
+  (exit 2) unless `BILLING_RUN_AT` is strictly between 00:00 and 02:00 (D-W13) and unless
+  `WORKER_FAKE_NOW` is unset or `APP_ENV=test` (Q14). Wakes every 60 s; SIGTERM/SIGINT
+  finish the account in hand, leave the run `running` (not failed), close the connection
+  (the lock goes with it) and exit 0 (D-W11); SIGKILL leaves nothing half-written and the
+  next worker takes the run over. The liveness file (`WORKER_LIVENESS_FILE`, default
+  `/tmp/worker-alive`) is touched every wake-up and after every account, for slice f's
+  healthcheck. Proven on real processes on a pinned clock (`tests/test_worker_signals.py`).
+  **Found by the SIGKILL test:** the first planner only looked at dates after the latest
+  run, so a run left `running` was never resumed - fixed by resuming the earliest
+  unfinished run first.
 - **Test pitfalls found here**: `pg_locks` is cluster-wide - count advisory locks of the
   current database only (parallel tests hold their own); `pg_terminate_backend(pid)`
   returns before the backend exits - use `pg_terminate_backend(pid, 5000)`.
@@ -976,13 +997,13 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 In this order (as of 2026-10-03, after `d0170ed`):
 
-1. **Stage 4: slice d next** - the scheduler loop and `--once` (dates due at
-   `BILLING_RUN_AT`, Q5; automatic catch-up of today and yesterday only, Q4; D-W17 retry
-   once per scheduled run; the queue each wake-up; liveness file; D-W13 start check) and
-   SIGTERM/SIGKILL (real-process tests with `WORKER_FAKE_NOW`, Q14). Done: slice a
-   (`a66faef`), b1 (`850e192`), b2 (`5e9dbe3`), b3 (`3464e54`), c (`7ad4923`), h (request
-   queue and billingRun API). Worker 8/10, API 53/54 in `docs/PROGRESS.md`. The planning
-   decisions Q1-Q14 are recorded (see "Billing worker"). Slice order: d -> e -> f -> g.
+1. **Stage 4: slice e next** - `GET /billing-status` (unauthenticated; date, status, age
+   only; 200 ok / 503 stale|failed|running|none; expected date = today once past
+   `BILLING_RUN_AT` + 2 h grace, else yesterday - D-W19; Q6: no run at all -> 503
+   `{"date": null, "status": "none", "ageSeconds": null}`). Done: slice a (`a66faef`), b1
+   (`850e192`), b2 (`5e9dbe3`), b3 (`3464e54`), c (`7ad4923`), h (`840e092`), d (scheduler
+   and the process). Worker 10/10, API 53/54 in `docs/PROGRESS.md`. The planning decisions
+   Q1-Q14 are recorded (see "Billing worker"). Slice order: e -> f -> g.
 2. **Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests
    recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables`
    of each test database before it is dropped; UI: `expectUi(id)` in vitest/Playwright),

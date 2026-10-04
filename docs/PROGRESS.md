@@ -12,7 +12,7 @@ the deployed commit.
 | Database | 16 | 16/16 (100%) | n/a | unknown |
 | API | 54 | 53/54 (98%) | n/a | unknown |
 | UI | 13 | 10/13 (76%) | n/a | unknown |
-| Worker | 10 | 8/10 (80%) | 8/10 (80%) | unknown |
+| Worker | 10 | 10/10 (100%) | 10/10 (100%) | unknown |
 
 ## Database
 
@@ -124,8 +124,8 @@ the deployed commit.
 | `worker.completedAllOk` | 4 | A run is completed only when every member account is ok | yes | yes | unknown |
 | `worker.requestQueue` | 4 | Catch-up and retry requests from the UI queue are processed | yes | yes | unknown |
 | `worker.statusFlips` | 4 | Status flips (created -> active, pendingTerminate -> terminated) by run date | yes | yes | unknown |
-| `worker.scheduler` | 4 | Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday | no | no | unknown |
-| `worker.signals` | 4 | SIGTERM finishes the current account; SIGKILL leaves nothing half-written | no | no | unknown |
+| `worker.scheduler` | 4 | Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday | yes | yes | unknown |
+| `worker.signals` | 4 | SIGTERM finishes the current account; SIGKILL leaves nothing half-written | yes | yes | unknown |
 
 ## Unscoped
 

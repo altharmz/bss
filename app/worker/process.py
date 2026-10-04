@@ -24,6 +24,7 @@ time (Q2), so it ends with exactly the rows a run without the failure would have
 """
 
 from collections import deque
+from collections.abc import Callable
 from datetime import date, datetime
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -62,6 +63,21 @@ class RunAborted(Exception):
     def __init__(self, run: Row, cause: BaseException, marked: bool) -> None:
         super().__init__(f"billing run {run['run_date']} aborted: {type(cause).__name__}: {cause}")
         self.run, self.cause, self.marked = run, cause, marked
+
+
+class Stopped(Exception):
+    """The worker was told to stop (SIGTERM) and stopped between two accounts: the
+    account in hand was finished, the run is left running - not failed - for the next
+    worker to take over (D-W11)."""
+
+    def __init__(self, run: Row) -> None:
+        super().__init__(f"stopped during the billing run of {run['run_date']}")
+        self.run = run
+
+
+# Called after every account of a run; True means stop now. The worker's loop uses it to
+# honour SIGTERM between accounts (and to show it is alive).
+Checkpoint = Callable[[], bool]
 
 
 class DateRun:
@@ -141,13 +157,20 @@ def close_run(conn: psycopg.Connection, run: Row, *, clock: Clock, tz: ZoneInfo)
 
 
 def bill_date(
-    conn: psycopg.Connection, run_date: date, *, clock: Clock, tz: ZoneInfo, trigger: str
+    conn: psycopg.Connection,
+    run_date: date,
+    *,
+    clock: Clock,
+    tz: ZoneInfo,
+    trigger: str,
+    checkpoint: Checkpoint | None = None,
 ) -> Row:
     """The billing run of one date, start to end (a completed run is left alone).
 
     Refuses a date after a run that failed as a whole (HeldBack), and - for the scheduled
     trigger - the retry of such a run before its backoff (NotYet); an operator's catch-up
-    or retry is not held to the backoff. A whole-run failure raises RunAborted."""
+    or retry is not held to the backoff. A whole-run failure raises RunAborted; a
+    `checkpoint` that says stop after an account raises Stopped (the run stays running)."""
     held = billing.held_back_by(conn)
     if held is not None and held["run_date"] < run_date:
         raise HeldBack(held)
@@ -161,8 +184,12 @@ def bill_date(
     date_run = DateRun(conn, started.run, clock=clock, tz=tz)
     try:
         flip_statuses(conn, run_date, tz)
-        date_run.run_all()
+        while date_run.step():
+            if checkpoint is not None and checkpoint():
+                raise Stopped(started.run)
         return date_run.close()
+    except Stopped:
+        raise
     except Exception as error:
         raise RunAborted(
             started.run, error, _mark_failed(conn, started.run, error, clock)

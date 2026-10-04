@@ -155,6 +155,23 @@ def held_back_by(conn: psycopg.Connection) -> Row | None:
     )
 
 
+def unfinished_run(conn: psycopg.Connection) -> Row | None:
+    """The earliest run still running - left by a worker that was killed or stopped; its
+    new owner takes it over."""
+    return fetch_one(
+        conn, "SELECT * FROM billing_run WHERE status = 'running' ORDER BY run_date LIMIT 1"
+    )
+
+
+def failed_account_runs(conn: psycopg.Connection) -> list[Row]:
+    """Runs that failed because of accounts (failure_kind 'accounts'), oldest first."""
+    return fetch_all(
+        conn,
+        "SELECT * FROM billing_run WHERE status = 'failed' AND failure_kind = 'accounts'"
+        " ORDER BY run_date",
+    )
+
+
 def latest_run_date(conn: psycopg.Connection) -> date | None:
     row = fetch_one(conn, "SELECT max(run_date) AS latest FROM billing_run")
     return row["latest"] if row else None

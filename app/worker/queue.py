@@ -25,24 +25,44 @@ from app.clock import Clock
 from app.repository import billing, worker_requests
 from app.repository._sql import Row
 from app.worker.plan import catch_up_dates
-from app.worker.process import HeldBack, NotYet, RunAborted, bill_date, retry_run
+from app.worker.process import (
+    Checkpoint,
+    HeldBack,
+    NotYet,
+    RunAborted,
+    Stopped,
+    bill_date,
+    retry_run,
+)
 from app.worker.runs import ensure_ownership
 
 log = logging.getLogger("app.worker")
 
 
-def process_requests(conn: psycopg.Connection, *, clock: Clock, tz: ZoneInfo) -> list[UUID]:
-    """Carry out every pending request, oldest first; the ids done."""
+def process_requests(
+    conn: psycopg.Connection,
+    *,
+    clock: Clock,
+    tz: ZoneInfo,
+    checkpoint: Checkpoint | None = None,
+) -> list[UUID]:
+    """Carry out every pending request, oldest first; the ids done. A `checkpoint` that
+    says stop ends it before the next request, or inside a catch-up between two accounts
+    (Stopped): that request is not marked done, the next worker picks it again."""
     ensure_ownership(conn)
     done = []
     while True:
+        if checkpoint is not None and checkpoint():
+            return done
         with conn.transaction():
             request = worker_requests.next_pending(conn)
             if request is None:
                 return done
             worker_requests.mark_picked(conn, request["id"], clock.now())
         try:
-            carry_out(conn, request, clock=clock, tz=tz)
+            carry_out(conn, request, clock=clock, tz=tz, checkpoint=checkpoint)
+        except Stopped:
+            raise
         except Exception:
             log.exception("worker request %s (%s) failed", request["id"], request["kind"])
         with conn.transaction():
@@ -50,21 +70,35 @@ def process_requests(conn: psycopg.Connection, *, clock: Clock, tz: ZoneInfo) ->
         done.append(request["id"])
 
 
-def carry_out(conn: psycopg.Connection, request: Row, *, clock: Clock, tz: ZoneInfo) -> None:
+def carry_out(
+    conn: psycopg.Connection,
+    request: Row,
+    *,
+    clock: Clock,
+    tz: ZoneInfo,
+    checkpoint: Checkpoint | None = None,
+) -> None:
     if request["kind"] == "catchUp":
-        _catch_up(conn, request, clock=clock, tz=tz)
+        _catch_up(conn, request, clock=clock, tz=tz, checkpoint=checkpoint)
     else:
         _retry(conn, request["run_id"], clock=clock, tz=tz)
 
 
-def _catch_up(conn: psycopg.Connection, request: Row, *, clock: Clock, tz: ZoneInfo) -> None:
+def _catch_up(
+    conn: psycopg.Connection,
+    request: Row,
+    *,
+    clock: Clock,
+    tz: ZoneInfo,
+    checkpoint: Checkpoint | None = None,
+) -> None:
     held = billing.held_back_by(conn)
     dates = catch_up_dates(
         billing.latest_run_date(conn), held["run_date"] if held else None, request["up_to"]
     )
     for run_date in dates:
         try:
-            bill_date(conn, run_date, clock=clock, tz=tz, trigger="catchUp")
+            bill_date(conn, run_date, clock=clock, tz=tz, trigger="catchUp", checkpoint=checkpoint)
         except (RunAborted, HeldBack, NotYet) as stop:
             log.warning("catch-up to %s stopped at %s: %s", request["up_to"], run_date, stop)
             return

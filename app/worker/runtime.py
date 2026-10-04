@@ -8,7 +8,7 @@ environment would bill the wrong dates.
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, time
 
 from app.clock import Clock, FixedClock, SystemClock
 from app.config import Settings
@@ -35,6 +35,15 @@ def worker_clock(app_env: str, fake_now: str | None, tz: str | None = None) -> C
     if at.tzinfo is None:
         raise StartRefused(f"{FAKE_NOW}={fake_now!r} needs an offset (e.g. +03:00)")
     return FixedClock(at, tz)
+
+
+def check_run_at(value: str) -> time:
+    """BILLING_RUN_AT as a time - refused unless strictly between 00:00 and 02:00 (D-W13):
+    after midnight (the end-of-day rule), before the 02:15 backup and the 03:00 reboot."""
+    at = time.fromisoformat(value)
+    if not time(0, 0) < at < time(2, 0):
+        raise StartRefused(f"BILLING_RUN_AT={value} must lie strictly between 00:00 and 02:00")
+    return at
 
 
 def clock_from_environment() -> Clock:
