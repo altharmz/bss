@@ -28,11 +28,19 @@ def counts(db_conn) -> dict[str, int]:
 
 
 def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
-    assert seeding.seed(api, db_conn, api.clock, TODAY) is True
+    assert seeding.seed(api, api.clock, TODAY) is True
     before = counts(db_conn)
     assert before["product_offering"] == 4
     assert before["billing_account"] == 7
     assert before["billing_run"] == seeding.START_DAYS  # one per day up to today
+    # every run went through the worker: completed, one ok outcome per member account
+    # (all 7 accounts are opened on the seed's first day, before the first run)
+    statuses = db_conn.execute("SELECT DISTINCT status FROM billing_run").fetchall()
+    assert statuses == [("completed",)]
+    outcomes = db_conn.execute(
+        "SELECT status, count(*) FROM billing_run_account GROUP BY status"
+    ).fetchall()
+    assert outcomes == [("ok", seeding.START_DAYS * 7)]
     assert before["applied_customer_billing_rate"] > 0 and before["customer_bill"] > 0
     assert before["payment"] > 0
 
@@ -62,7 +70,7 @@ def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
     assert types == {"charge", "refund", "payment"}
 
     # a second run is a no-op
-    assert seeding.seed(api, db_conn, api.clock, TODAY) is False
+    assert seeding.seed(api, api.clock, TODAY) is False
     assert counts(db_conn) == before
 
 

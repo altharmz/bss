@@ -4,8 +4,9 @@ Everything is created through the public TMF API - the same routes, validation a
 processing as production - never through SQL. The API refuses prices that start in the
 past and orders with a past start date, so the API runs in-process (TestClient) with a
 FixedClock that starts START_DAYS before today and moves forward day by day; each day the
-billing run for that date runs first (00:30, the stage 3 adapter's bill_account for every
-account, as the stage 4 worker will), then the day's orders and payments (10:00). Dates
+billing run for that date runs first (00:30, through the stage 4 worker's bill_date on a
+worker connection, so every run has its per-account outcomes), then the day's orders and
+payments (10:00). Dates
 are relative to today, so future-dated and pendingTerminate products really are in the
 future. Same day -> same data.
 
@@ -13,7 +14,7 @@ Idempotent: if the seed's catalog is already there it does nothing; a partial se
 crash half-way) is reported, never duplicated or patched up.
 
 Refuses to run with APP_ENV=prod or against any database but the local compose `db`.
-Also used as the e2e fixture (stage 5 checkpoint 7): seed(client, conn, today).
+Also used as the e2e fixture (stage 5 checkpoint 7): seed(client, clock, today).
 """
 
 import logging
@@ -23,15 +24,15 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from urllib.parse import urlparse
-from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import psycopg
 
-from app.billing.adapter import bill_account
 from app.clock import FixedClock, SystemClock
 from app.config import settings
 from app.repository import billing
+from app.worker import db as worker_db
+from app.worker.process import bill_date
 from tests import apidata
 from tests.apidata import ACCOUNT, CATALOG, CUSTOMER
 
@@ -300,20 +301,20 @@ def already_seeded(api: Api) -> bool:
     return True
 
 
-def run_billing(conn: psycopg.Connection, day: date, account_ids: list[UUID]) -> None:
+def run_billing(conn: psycopg.Connection, day: date, clock: FixedClock) -> None:
+    """The billing run of `day` through the worker (`conn` is a worker connection). The
+    seed's data bills cleanly, so anything but a completed run is a seed bug."""
     existing = billing.get_run(conn, day)
     if existing is not None:
         raise SeedError(
             f"a billing run for {day} already exists ({existing['status']}); not seeding over it"
         )
-    run = billing.insert_run(conn, day, now=at(day, 0, 30), trigger="scheduled")
-    for account_id in account_ids:
-        bill_account(conn, account_id, run)
-    billing.finish_run(conn, run["id"], now=at(day, 0, 45))
-    conn.commit()
+    run = bill_date(conn, day, clock=clock, tz=TZ, trigger="scheduled")
+    if run["status"] != "completed":
+        raise SeedError(f"the billing run of {day} ended {run['status']}: {run['error']}")
 
 
-def seed(client: Any, conn: psycopg.Connection, clock: FixedClock, today: date) -> bool:
+def seed(client: Any, clock: FixedClock, today: date) -> bool:
     """Seed through `client` (a TmfClient over the app whose clock is `clock`). Returns
     False if the data was already there."""
     api = Api(client, clock)
@@ -323,16 +324,16 @@ def seed(client: Any, conn: psycopg.Connection, clock: FixedClock, today: date) 
         return False
     world = World(offerings=build_catalog(api, start + timedelta(days=1)), accounts={}, products={})
     world.accounts = build_accounts(api)
-    ids = [UUID(account["id"]) for account in world.accounts.values()]
     plan = events(today, start)
     day = start + timedelta(days=1)
-    while day <= today:
-        clock.set(at(day, 0, 30))
-        run_billing(conn, day, ids)
-        if day in plan:
-            clock.set(at(day, 10))
-            plan[day](api, world)
-        day += timedelta(days=1)
+    with worker_db.connect() as worker:  # owns billing while the seed runs
+        while day <= today:
+            clock.set(at(day, 0, 30))
+            run_billing(worker, day, clock)
+            if day in plan:
+                clock.set(at(day, 10))
+                plan[day](api, world)
+            day += timedelta(days=1)
     return True
 
 
@@ -364,8 +365,7 @@ def main() -> int:
         clock = FixedClock(at(today, 9))
         app.dependency_overrides[get_clock] = lambda: clock
         client = TmfClient(TestClient(app, raise_server_exceptions=True))
-        with psycopg.connect(settings.database_url) as conn:
-            created = seed(client, conn, clock, today)
+        created = seed(client, clock, today)
     except SeedError as exc:
         print(f"seed: {exc}", file=sys.stderr)
         return 1

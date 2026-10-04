@@ -703,6 +703,33 @@ termination always visible, no account lock, no running-run guard).
   only (it puts every catch-up ABR on the bill after as_of);
 - call `bill_account` per account and record a failing account without stopping the run.
 
+## Billing worker (stage 4, in progress)
+
+`app/worker/`, from `docs/stage4-design.md` and the stage 4 planning decisions (Q1-Q14,
+"Next session"). What exists so far (slices b1, b2):
+
+- **Ownership** (`db.py`): one connection per worker (W1: autocommit, `connect_timeout`
+  10, keepalives 30/10/3, `lock_timeout` 30s); the session advisory lock on it says who
+  owns billing - the lock and the work fail together.
+- **`start_run`** (`runs.py`): ownership first (`RunInProgress` otherwise); then new /
+  `AlreadyCompleted` / reopened (failed, attempt + 1) / taken over (running, owner gone).
+- **One date, account by account** (`process.py`, `DateRun.step()`): members = accounts
+  opened before 00:00 of the date (`opened_at`, injected clock), in id order. Per account
+  **one transaction** - its charges and its `billing_run_account` row commit together
+  (proven: a failure between them leaves neither, and a takeover bills it exactly once):
+  an unresolved earlier failure -> `blocked` (waits for that run); `BillingError` ->
+  `failed`; else `ok`. Accounts already ok in the run are never processed again.
+- **"Completed" means every member is ok**: `billing.finish_run` refuses (`RunNotComplete`)
+  while a member is failed, blocked or has no row; otherwise the run closes `failed` with
+  `failure_kind=accounts` ("N of M accounts not billed (...)") and later dates go ahead.
+- **Retry** (`retry_run`): only the run's failed accounts; an account that succeeds is
+  then billed for its blocked later dates in order, reopening one run at a time (Q2), and
+  stops at the next failure (later blocked rows then wait for that run). Proven against
+  a control database: the account ends with exactly the charges and bills of a run where
+  nothing failed (a charge on Dec 1 and a refund on Dec 3, not one reduced charge).
+- **The seed** bills each day through `bill_date` on a worker connection; every seeded run
+  is completed with one ok row per member.
+
 ## Internal API (stage 5)
 
 `app/internal/`, mounted at `/internal/v1`, serves what the admin UI cannot get from the
@@ -904,12 +931,13 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 In this order (as of 2026-10-03, after `d0170ed`):
 
-1. **Stage 4 slice b (worker core)**, from `docs/stage4-design.md`. Slice a (migration
-   0004) is done (`a66faef`); the planning decisions Q1-Q14 are recorded (failure_kind,
-   reopen one date at a time, any failed run retryable, automatic catch-up for today and
-   yesterday only, due at `BILLING_RUN_AT`, membership by `opened_at`, flips lock in id
-   order, the seed drives the worker's per-date function, env clock override guarded,
-   worker connection W1). Slice order: b -> c -> h -> d -> e -> f -> g.
+1. **Stage 4 slice b (worker core)**, from `docs/stage4-design.md`. Done: slice a
+   (migration 0004, `a66faef`), b1 (ownership and `start_run`, `850e192`), b2 (per-account
+   loop, the "completed" rule, retry with in-order catch-up, seed through the worker - the
+   planned b4 merged into b2). **Next: b3** - whole-run failure (`failure_kind=run`, no
+   advance, backoff 5 min / 15 min / hourly), takeover with ok accounts untouched,
+   `LockNotAvailable` as a whole-run failure with its test. The planning decisions Q1-Q14
+   are recorded (see "Billing worker"). Slice order: b -> c -> h -> d -> e -> f -> g.
 2. **Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests
    recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables`
    of each test database before it is dropped; UI: `expectUi(id)` in vitest/Playwright),

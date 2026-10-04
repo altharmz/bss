@@ -20,9 +20,9 @@
     },
     "worker": {
       "deployed": null,
-      "implemented": 2,
+      "implemented": 4,
       "items": 10,
-      "tested": 2
+      "tested": 4
     }
   },
   "excluded": [
@@ -816,9 +816,9 @@
       "area": "worker",
       "deployed": null,
       "id": "worker.failureIsolation",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
-      "tested": false,
+      "tested": true,
       "title": "A failed account blocks only itself; after a fix it catches up its dates in order"
     },
     {
@@ -834,9 +834,9 @@
       "area": "worker",
       "deployed": null,
       "id": "worker.completedAllOk",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
-      "tested": false,
+      "tested": true,
       "title": "A run is completed only when every member account is ok"
     },
     {

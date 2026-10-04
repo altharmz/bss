@@ -209,7 +209,7 @@ def test_a_run_that_is_not_running_writes_nothing(api, db_conn, offering):
     account = apidata.account(api)
     add(api, account, offering, date(2026, 12, 1), on=at(date(2026, 11, 20)))
     run = run_row(db_conn, date(2026, 12, 1))
-    billing.finish_run(db_conn, run["id"], now=at(date(2026, 12, 1), 1))
+    billing.fail_run(db_conn, run["id"], now=at(date(2026, 12, 1), 1), error="ended")
     with pytest.raises(LookupError, match="not running"):
         bill_account(db_conn, UUID(account["id"]), run)
     assert count(db_conn, "applied_customer_billing_rate") == 0

@@ -12,7 +12,7 @@ the deployed commit.
 | Database | 16 | 16/16 (100%) | n/a | unknown |
 | API | 54 | 48/54 (88%) | n/a | unknown |
 | UI | 13 | 10/13 (76%) | n/a | unknown |
-| Worker | 10 | 2/10 (20%) | 2/10 (20%) | unknown |
+| Worker | 10 | 4/10 (40%) | 4/10 (40%) | unknown |
 
 ## Database
 
@@ -119,9 +119,9 @@ the deployed commit.
 | `worker.runLifecycle` | 4 | start_run answers every case: new, completed (no-op), failed (reopen), running | yes | yes | unknown |
 | `worker.takeover` | 4 | Takeover of a running run whose owner died; ok accounts untouched | no | no | unknown |
 | `worker.doubleStart` | 4 | A second worker while the lock is held backs off and writes nothing | yes | yes | unknown |
-| `worker.failureIsolation` | 4 | A failed account blocks only itself; after a fix it catches up its dates in order | no | no | unknown |
+| `worker.failureIsolation` | 4 | A failed account blocks only itself; after a fix it catches up its dates in order | yes | yes | unknown |
 | `worker.wholeRunFailure` | 4 | A whole-run failure does not advance past its date; retried with backoff | no | no | unknown |
-| `worker.completedAllOk` | 4 | A run is completed only when every member account is ok | no | no | unknown |
+| `worker.completedAllOk` | 4 | A run is completed only when every member account is ok | yes | yes | unknown |
 | `worker.requestQueue` | 4 | Catch-up and retry requests from the UI queue are processed | no | no | unknown |
 | `worker.statusFlips` | 4 | Status flips (created -> active, pendingTerminate -> terminated) by run date | no | no | unknown |
 | `worker.scheduler` | 4 | Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday | no | no | unknown |
