@@ -5,7 +5,8 @@ Refuses to start (exit 2) when BILLING_RUN_AT is not strictly between 00:00 and 
 WAKE_SECONDS; SIGTERM (what `docker compose stop` / `up` send) and SIGINT finish the
 account in hand, leave the run running for the next worker, close the connection (which
 releases the ownership lock) and exit 0 (D-W11). The liveness file is touched on every
-wake-up and after every account, for the container healthcheck (slice f).
+wake-up and after every account of every path - retries included, through the heartbeat -
+for the container healthcheck (slice f: unhealthy when older than 3 minutes).
 """
 
 import argparse
@@ -64,7 +65,14 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 if conn is None or conn.closed:
                     conn = db.connect()
-                result = tick(conn, clock=clock, tz=tz, run_at=run_at, checkpoint=checkpoint)
+                result = tick(
+                    conn,
+                    clock=clock,
+                    tz=tz,
+                    run_at=run_at,
+                    checkpoint=checkpoint,
+                    heartbeat=liveness.touch,
+                )
                 liveness.touch()
                 log.info("wake-up: %s", result)
                 failed = False

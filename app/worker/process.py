@@ -79,11 +79,17 @@ class Stopped(Exception):
 # honour SIGTERM between accounts (and to show it is alive).
 Checkpoint = Callable[[], bool]
 
+# Called after every account of every path that bills one (scheduled, catch-up, retries),
+# next to the run's heartbeat_at; never stops anything. The worker touches its liveness
+# file with it, so a long run - a retry included - keeps the container healthy.
+Heartbeat = Callable[[], None]
+
 
 class DateRun:
     """One billing run, processed one account per step(): the caller (a test, the SIGTERM
     handling of slice d) may stop between accounts. `only` limits it to some accounts (a
-    retry); accounts already ok in this run are never processed again."""
+    retry); accounts already ok in this run are never processed again. `on_account` is
+    the heartbeat, called after each account."""
 
     def __init__(
         self,
@@ -93,8 +99,10 @@ class DateRun:
         clock: Clock,
         tz: ZoneInfo,
         only: list[UUID] | None = None,
+        on_account: Heartbeat | None = None,
     ) -> None:
         self.conn, self.run, self.clock, self.tz = conn, run, clock, tz
+        self.on_account = on_account
         self.run_date: date = run["run_date"]
         done = billing.outcomes(conn, run["id"])
         accounts = billing.run_members(conn, self.run_date, tz.key) if only is None else only
@@ -105,6 +113,8 @@ class DateRun:
         if not self.todo:
             return False
         self.process(self.todo.popleft())
+        if self.on_account is not None:
+            self.on_account()
         return True
 
     def run_all(self) -> None:
@@ -164,6 +174,7 @@ def bill_date(
     tz: ZoneInfo,
     trigger: str,
     checkpoint: Checkpoint | None = None,
+    heartbeat: Heartbeat | None = None,
 ) -> Row:
     """The billing run of one date, start to end (a completed run is left alone).
 
@@ -181,7 +192,7 @@ def bill_date(
     started = start_run(conn, run_date, now=clock.now(), trigger=trigger)
     if isinstance(started, AlreadyCompleted):
         return started.run
-    date_run = DateRun(conn, started.run, clock=clock, tz=tz)
+    date_run = DateRun(conn, started.run, clock=clock, tz=tz, on_account=heartbeat)
     try:
         flip_statuses(conn, run_date, tz)
         while date_run.step():
@@ -221,21 +232,34 @@ def _mark_failed(conn: psycopg.Connection, run: Row, error: Exception, clock: Cl
 
 
 def _redo(
-    conn: psycopg.Connection, run_date: date, accounts: list[UUID], *, clock: Clock, tz: ZoneInfo
+    conn: psycopg.Connection,
+    run_date: date,
+    accounts: list[UUID],
+    *,
+    clock: Clock,
+    tz: ZoneInfo,
+    heartbeat: Heartbeat | None = None,
 ) -> dict[UUID, str]:
     """Reopen the failed run of `run_date`, process `accounts` only, close it again; the
     accounts' outcomes."""
     started = start_run(conn, run_date, now=clock.now(), trigger="retry")
     if not isinstance(started, Started):
         raise LookupError(f"billing run {run_date} is not failed")
-    date_run = DateRun(conn, started.run, clock=clock, tz=tz, only=accounts)
+    date_run = DateRun(conn, started.run, clock=clock, tz=tz, only=accounts, on_account=heartbeat)
     date_run.run_all()
     date_run.close()
     done = billing.outcomes(conn, started.run["id"])
     return {a: done[a]["status"] for a in accounts}
 
 
-def retry_run(conn: psycopg.Connection, run_id: UUID, *, clock: Clock, tz: ZoneInfo) -> None:
+def retry_run(
+    conn: psycopg.Connection,
+    run_id: UUID,
+    *,
+    clock: Clock,
+    tz: ZoneInfo,
+    heartbeat: Heartbeat | None = None,
+) -> None:
     """Retry a failed run: only its failed accounts (accounts blocked on an earlier date
     stay blocked until that date is fixed). An account that succeeds is then billed for
     its blocked later dates, in order, one run at a time; it stops at the first date that
@@ -246,14 +270,14 @@ def retry_run(conn: psycopg.Connection, run_id: UUID, *, clock: Clock, tz: ZoneI
     accounts = billing.failed_accounts(conn, run_id)
     if not accounts:
         return  # failed because of blocked accounts only: their earlier dates come first
-    first = _redo(conn, run["run_date"], accounts, clock=clock, tz=tz)
+    first = _redo(conn, run["run_date"], accounts, clock=clock, tz=tz, heartbeat=heartbeat)
     active = {a for a, status in first.items() if status == "ok"}
     blocked = {a: billing.blocked_dates_after(conn, a, run["run_date"]) for a in active}
     for run_date in sorted({d for dates in blocked.values() for d in dates}):
         todo = sorted(a for a in active if run_date in blocked[a])
         if not todo:
             continue
-        results = _redo(conn, run_date, todo, clock=clock, tz=tz)
+        results = _redo(conn, run_date, todo, clock=clock, tz=tz, heartbeat=heartbeat)
         stopped = billing.get_run(conn, run_date)
         for account_id, status in results.items():
             if status != "ok":

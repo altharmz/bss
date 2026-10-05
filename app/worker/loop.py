@@ -13,7 +13,8 @@ was down (the 03:00 reboot, a deploy):
 5. the UI's queued requests.
 
 A `checkpoint` (SIGTERM, liveness) is honoured between accounts and between requests;
-Stopped leaves the run in hand running for the next worker.
+Stopped leaves the run in hand running for the next worker. The `heartbeat` (liveness
+only, never a stop) is called after every account of every path, retries included.
 """
 
 import logging
@@ -29,6 +30,7 @@ from app.repository import billing
 from app.worker.plan import scheduled
 from app.worker.process import (
     Checkpoint,
+    Heartbeat,
     HeldBack,
     NotYet,
     RunAborted,
@@ -61,6 +63,7 @@ def tick(
     tz: ZoneInfo,
     run_at: time,
     checkpoint: Checkpoint | None = None,
+    heartbeat: Heartbeat | None = None,
 ) -> Tick:
     result = Tick()
     try:
@@ -92,18 +95,26 @@ def tick(
                 current = billing.get_run_by_id(conn, run["id"])
                 if current is None or current["status"] != "failed":
                     continue
-                retry_run(conn, run["id"], clock=clock, tz=tz)
+                retry_run(conn, run["id"], clock=clock, tz=tz, heartbeat=heartbeat)
                 result.retried.append(run["run_date"])
         for run_date in plan.dates:
             try:
                 bill_date(
-                    conn, run_date, clock=clock, tz=tz, trigger="scheduled", checkpoint=checkpoint
+                    conn,
+                    run_date,
+                    clock=clock,
+                    tz=tz,
+                    trigger="scheduled",
+                    checkpoint=checkpoint,
+                    heartbeat=heartbeat,
                 )
             except (RunAborted, HeldBack, NotYet) as stop:
                 log.warning("billing %s: %s", run_date, stop)
                 break
             result.billed.append(run_date)
-        result.requests = process_requests(conn, clock=clock, tz=tz, checkpoint=checkpoint)
+        result.requests = process_requests(
+            conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
+        )
     except Stopped as stopped:
         log.info("%s", stopped)
         result.stopped = True
