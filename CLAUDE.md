@@ -289,6 +289,30 @@ would attach the prod container to both `lab` and `shared`).
 ## Conventions
 
 - App listens on **8080** inside the container. Do not hardcode host ports in code.
+- **Healthchecks** (1 vCPU on the VPS: no interpreter start per probe). **Informational
+  only here**: nothing restarts or replaces an `unhealthy` container (no autoheal;
+  `restart: unless-stopped` reacts to exits, not to health), and `deploy.sh` only reads
+  them while it waits after `up`. Real alerting is the external monitor on `/healthz`
+  and `/billing-status`.
+  - **app** (Dockerfile, `dev` and `runtime`): bash `/dev/tcp` to 127.0.0.1:8080, `GET
+    /healthz HTTP/1.0`, the status line must contain ` 200 `; exec form with `bash`
+    (`/bin/sh` is dash, no `/dev/tcp`); `read -t 2` inside the 3 s timeout.
+  - **worker** (`compose.prod.yaml`): `[[ -n $(find /tmp/worker-alive -mmin -3) ]]`
+    (`$$` in the file). GNU find 4.10 compares `-mmin` exactly, no rounding: 179 s
+    passes, 181 s fails, missing fails.
+  - Both: interval 60 s, timeout 3 s, retries 3, start period 30 s with `start_interval`
+    2 s (Engine 25+ / Compose 2.20.2+; the VPS and WSL run Engine 29.7.2, Compose
+    v5.5.0). A container is healthy ~2 s after start; a failure shows as `unhealthy`
+    after 3 probes, ~3 min.
+  - Proven locally (2026-10-05): the app server killed (port still listening) -> probe
+    exit 142 (read timeout), `unhealthy` after 3 probes, healthy 2.7 s after a restart;
+    `/healthz` returning 500 -> exit 1, `unhealthy`, healthy again at the next probe once
+    restored, no restart; `up --wait` healthy at +2.3 s. Worker check from the container
+    compose created out of `compose.prod.yaml` (the engine gets one `$`): ages 0-179 s
+    exit 0, 181/185/200 s and missing exit 1; healthy at +2 s, `unhealthy` after 3
+    probes with a 200 s old file, healthy at the next probe once fresh; with `-mmin -4`
+    the 181-200 s files passed. `docker compose config` prints `$$` re-escaped - not what
+    the engine receives.
 - Config comes from environment variables only (see `app/config.py`). No config files.
 - `/healthz` must stay cheap and must verify the DB connection — Docker's HEALTHCHECK
   and the deploy script both depend on it.
@@ -784,8 +808,12 @@ termination always visible, no account lock, no running-run guard).
   finish the account in hand, leave the run `running` (not failed), close the connection
   (the lock goes with it) and exit 0 (D-W11); SIGKILL leaves nothing half-written and the
   next worker takes the run over. The liveness file (`WORKER_LIVENESS_FILE`, default
-  `/tmp/worker-alive`) is touched every wake-up and after every account, for slice f's
-  healthcheck. Proven on real processes on a pinned clock (`tests/test_worker_signals.py`).
+  `/tmp/worker-alive`) is touched every wake-up and after every account of every path -
+  scheduled, catch-up, and the retries, which have no stop checkpoint - through the
+  heartbeat (`DateRun(on_account=...)`, called in `step()`; `0d463e0`), for slice f's
+  healthcheck. `tests/test_worker_heartbeat.py` proves it scaled in time (threshold 1 s,
+  0.3 s per account, every run longer than the threshold): one heartbeat per account and
+  no gap over the threshold in all four paths; without the call all four fail. Proven on real processes on a pinned clock (`tests/test_worker_signals.py`).
   **Found by the SIGKILL test:** the first planner only looked at dates after the latest
   run, so a run left `running` was never resumed - fixed by resuming the earliest
   unfinished run first.
@@ -811,10 +839,9 @@ termination always visible, no account lock, no running-run guard).
   256m / 0.25 CPU, read-only with `/tmp` tmpfs, no ports or alias, the app's environment
   (`APP_ENV`, `LOG_LEVEL`, `DATABASE_URL`; `BILLING_TZ`/`BILLING_RUN_AT` passed to neither,
   so both use the same defaults). **Healthcheck (Q13)** replaces the image's `/healthz`
-  probe: `/tmp/worker-alive` younger than 180 s (interval 30 s, start period 60 s); a
-  worker that cannot reach the database stops touching it and goes unhealthy. Proven in
-  the runtime image with the command read from the compose file: fresh file 0, 200 s old
-  1, missing 1; with the threshold loosened to 300 s the old file passed. `deploy.sh`
+  probe: `/tmp/worker-alive` younger than 180 s; a worker that cannot reach the database
+  stops touching it and goes unhealthy. It is `find -mmin -3` in bash, no Python (see
+  "Healthchecks" under Conventions). `deploy.sh`
   waits for **both** `app` and `worker` healthy (90 s) and checks `/billing-status` on
   the VPS: 200 must say `ok`, 503 one of `stale|failed|running|none`, anything else fails
   (body printed - date, status, age only); `make smoke` checks the same locally (proven:
@@ -1106,7 +1133,9 @@ shipped).
   print it. Touches `scripts/`: needs the human's OK.
 - **The pytest container shows `(unhealthy)` during `make test`**: the image's
   HEALTHCHECK probes `/healthz`, which nothing serves while pytest runs in the `app`
-  service. Harmless for `run --rm`, but noise in `docker ps`. Fix later in compose
+  service. Harmless for `run --rm`, but noise in `docker ps`. Since the 60 s interval
+  `unhealthy` needs 3 failed probes after the 30 s start period - longer than a `make
+  test` run (~70-90 s) - so it should show `health: starting` instead (not observed). Fix later in compose
   (e.g. disable the healthcheck for one-off runs); compose change, needs the human's OK.
 - **Restore drill** from a cron-made dump. On 2026-09-30 `~/infra/backups` on the VPS was empty and no backup
   cron was installed; this is being fixed in vps-infra. Use the first cron-made `bss` dump:

@@ -64,14 +64,17 @@ services:
       LOG_LEVEL: info
       DATABASE_URL: postgresql://bss:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/bss
     # Replaces the image's /healthz probe: the worker touches /tmp/worker-alive on every
-    # wake-up (60 s) and after every account. Older than 3 minutes (or missing) = unhealthy,
-    # which includes a database it cannot reach.
+    # wake-up (60 s) and after every account, retries included. Older than 3 minutes (or
+    # missing) = unhealthy, which includes a database it cannot reach. No interpreter:
+    # GNU find's -mmin -3 is an exact "< 180 s" (no rounding; proven at 179/181 s).
+    # $$ keeps compose from interpolating. Informational only (see CLAUDE.md).
     healthcheck:
-      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.stat('/tmp/worker-alive').st_mtime < 180 else 1)"]
-      interval: 30s
-      timeout: 5s
+      test: ["CMD", "bash", "-c", "[[ -n $$(find /tmp/worker-alive -mmin -3 2>/dev/null) ]]"]
+      interval: 60s
+      timeout: 3s
+      start_period: 30s
+      start_interval: 2s
       retries: 3
-      start_period: 60s
     networks: [shared]
     logging:
       driver: json-file

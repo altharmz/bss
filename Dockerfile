@@ -31,8 +31,9 @@ RUN pip install -r requirements-dev.txt -c constraints-dev.txt
 RUN useradd --uid 1000 --create-home appuser && chown appuser:appuser /app
 USER appuser
 EXPOSE 8080
-HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2).status==200 else 1)"
+# Same probe as runtime (see there).
+HEALTHCHECK --interval=60s --timeout=3s --start-period=30s --start-interval=2s --retries=3 \
+  CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && IFS= read -r -t 2 line <&3 && [[ $line == *' 200 '* ]]"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
 
 # ---------- runtime ----------
@@ -44,7 +45,11 @@ COPY --chown=appuser:appuser alembic ./alembic
 COPY --chown=appuser:appuser alembic.ini ./alembic.ini
 USER appuser
 EXPOSE 8080
-# No curl in the image on purpose - the healthcheck uses the interpreter we already have.
-HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2).status==200 else 1)"
+# No curl in the image on purpose, and no Python start per probe (1 vCPU on the VPS): bash's
+# /dev/tcp sends GET /healthz and the status line must contain " 200 ". Exec form with
+# bash - /bin/sh is dash, which has no /dev/tcp. read -t 2 ends a stalled answer before
+# the 3 s timeout. Every 2 s while starting (start_interval, Engine 25+), then every 60 s.
+# Informational only: nothing restarts an unhealthy container (see CLAUDE.md).
+HEALTHCHECK --interval=60s --timeout=3s --start-period=30s --start-interval=2s --retries=3 \
+  CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && IFS= read -r -t 2 line <&3 && [[ $line == *' 200 '* ]]"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
