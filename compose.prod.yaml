@@ -39,6 +39,46 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # The billing worker (stage 4): the same image, `python -m app.worker`. Serves no HTTP,
+  # publishes nothing, has no alias. Only here - locally it runs one-shot (make worker-once).
+  worker:
+    image: ${IMAGE_NAME:-bss-app}:${TAG:-dev}
+    command: ["python", "-m", "app.worker"]
+    # Back after the 03:00 reboot and after a crash; a run left running is taken over.
+    restart: unless-stopped
+    # SIGTERM (compose up/stop) finishes the account in hand, then exits; 60 s is far more
+    # than one account takes, so Docker's SIGKILL never lands inside one (D-W11).
+    stop_grace_period: 60s
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.25
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    # Same values as `app`. BILLING_TZ and BILLING_RUN_AT are passed to neither, so both
+    # use the defaults in app/config.py and cannot disagree.
+    environment:
+      APP_ENV: staging
+      LOG_LEVEL: info
+      DATABASE_URL: postgresql://bss:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/bss
+    # Replaces the image's /healthz probe: the worker touches /tmp/worker-alive on every
+    # wake-up (60 s) and after every account. Older than 3 minutes (or missing) = unhealthy,
+    # which includes a database it cannot reach.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.stat('/tmp/worker-alive').st_mtime < 180 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    networks: [shared]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 networks:
   shared:
     # Created and owned by vps-infra; must exist before this stack starts.

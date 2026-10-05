@@ -54,6 +54,7 @@ make deploy    # build locally, ship image to VPS, restart there
 make verify    # lint, test, web-lint, web-test, web-e2e, then deploy (+ health, smoke, UI, web smoke)
 make ssh       # open a shell on the VPS
 make migrate   # apply Alembic migrations against the local stack
+make worker-once  # one wake-up of the billing worker against the local stack, then exit
 make psql      # interactive psql in the local db via compose exec (needs a TTY; the db port
                # is not published - non-interactive: docker compose exec -T db sh -c 'psql ...')
 make fmt       # auto-format (ruff format + check --fix)
@@ -805,6 +806,21 @@ termination always visible, no account lock, no running-run guard).
   returns before the backend exits - use `pg_terminate_backend(pid, 5000)`.
 - **The seed** bills each day through `bill_date` on a worker connection; every seeded run
   is completed with one ok row per member.
+- **Deployment** (slice f): `worker` in `compose.prod.yaml` only - same image,
+  `python -m app.worker`, `restart: unless-stopped`, `stop_grace_period: 60s` (D-W11),
+  256m / 0.25 CPU, read-only with `/tmp` tmpfs, no ports or alias, the app's environment
+  (`APP_ENV`, `LOG_LEVEL`, `DATABASE_URL`; `BILLING_TZ`/`BILLING_RUN_AT` passed to neither,
+  so both use the same defaults). **Healthcheck (Q13)** replaces the image's `/healthz`
+  probe: `/tmp/worker-alive` younger than 180 s (interval 30 s, start period 60 s); a
+  worker that cannot reach the database stops touching it and goes unhealthy. Proven in
+  the runtime image with the command read from the compose file: fresh file 0, 200 s old
+  1, missing 1; with the threshold loosened to 300 s the old file passed. `deploy.sh`
+  waits for **both** `app` and `worker` healthy (90 s) and checks `/billing-status` on
+  the VPS: 200 must say `ok`, 503 one of `stale|failed|running|none`, anything else fails
+  (body printed - date, status, age only); `make smoke` checks the same locally (proven:
+  without `stale` in the set it failed on the local 503 stale). Locally there is no
+  long-running worker: **`make worker-once`** (D-W14). **The first deploy starts billing
+  on the VPS**: no runs yet -> the due date only (D-W15).
 
 ## Internal API (stage 5)
 
@@ -945,8 +961,8 @@ the order of deploys (backup, vps-infra, then `make verify`).
   `BillingRunConflict` is gone.
 - **`APP_ENV` unset means `prod`** (`app/config.py`, since slice b1): the worker's clock
   override (`WORKER_FAKE_NOW`, Q14) needs an explicit `APP_ENV=test`. compose always sets
-  it (`dev` locally); **`compose.prod.yaml` sets `staging`, not `prod`** - decide in slice
-  f whether the VPS should report `prod` (`/internal/v1/context` shows it).
+  it (`dev` locally); **`compose.prod.yaml` sets `staging`** for app and worker - decided
+  in slice f (2026-10-05): `vps-test` is a verification host, so it stays `staging`.
 - **Port the format fix to vps-lab-template** (fixed here, not there). In the template,
   `make fmt` and `.claude/hooks/format.sh` both fail silently:
   - `compose.override.yaml` mounts `app/` and `tests/` read-only on `app`, so
@@ -1009,15 +1025,16 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 ## Next session
 
-In this order (as of 2026-10-04, after slice e):
+In this order (as of 2026-10-05, after slice f):
 
-1. **Stage 4: slice f next** - the worker compose service, Makefile targets and
-   `deploy.sh` (ask-rule paths: show the diff first). To settle there: `APP_ENV` for the
-   VPS, the worker healthcheck on the liveness file (Q13), `stop_grace_period` 60s,
-   limits, a `make worker-once`, and the restore-drill counts (17 tables, `0004`). Then
-   slice g (the Billing runs UI screen). Done: slice a (`a66faef`), b1 (`850e192`), b2
-   (`5e9dbe3`), b3 (`3464e54`), c (`7ad4923`), h (`840e092`), d (`1dbe739`), e
-   (`e06a22b`, `/billing-status`). Per slice: plan, tests, negative proofs, `make lint`,
+1. **Stage 4: deploy slice f, then slice g** - slice f (worker service, `make
+   worker-once`, deploy.sh waits for both services and checks `/billing-status`) is
+   committed but **not deployed**: the deploy ships migration `0004` (fresh vps-infra dump
+   first) and starts billing on the VPS - `make verify` only with the human's OK, then
+   `DRY_RUN=1 ./scripts/deploy.sh` (needs a clean tree). Then slice g (the Billing runs
+   UI screen). Done: slice a (`a66faef`), b1 (`850e192`), b2 (`5e9dbe3`), b3
+   (`3464e54`), c (`7ad4923`), h (`840e092`), d (`1dbe739`), e (`e06a22b`,
+   `/billing-status`), f. Per slice: plan, tests, negative proofs, `make lint`,
    `make test` x3, `make progress`, CLAUDE.md, then show the diff and commit only after
    the human's OK. Worker 10/10, API 54/54 in `docs/PROGRESS.md`. The planning
    decisions Q1-Q14 are recorded (see "Billing worker").
@@ -1098,10 +1115,11 @@ shipped).
   `pg_restore --list` on the server (no databases created and no `pg_restore` into a
   database there), copy it here, restore into a local `postgres:16-alpine` as a
   NOSUPERUSER role `bss` with `pg_restore --no-owner --role=bss`, compare tables, enum
-  types and `alembic_version` with prod (since the first web deploy, `9424b9b` on
-  2026-10-02: 15 tables incl. `alembic_version`, 14 enums, `0003` - counted on a local
-  database at head), report every warning, clean up locally. Take the dump after that
-  deploy, or expect the pre-0003 shape.
+  types and `alembic_version` with prod (after the first stage 4 deploy: 17 tables incl.
+  `alembic_version`, 18 enums, `0004` - counted on the local database at head on
+  2026-10-05; before it, as deployed with `9424b9b` on 2026-10-02: 15 tables, 14 enums,
+  `0003`), report every warning, clean up locally. Expect the shape of the last deploy
+  before the dump.
 - **`"ask"` rules.** Verify in a fresh session, in the normal mode, that an Edit to
   `Makefile` prompts; if it doesn't, switch these paths from `"ask"` to `"deny"`.
 

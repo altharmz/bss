@@ -212,29 +212,47 @@ log "Starting the app"
 rssh "cd ${REMOTE_DIR} && \
   IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} up -d --remove-orphans"
 
-log "Waiting for the app container to become healthy"
+# Both services must go healthy: the app (/healthz) and the billing worker (its liveness
+# file, touched after its first wake-up). One unhealthy service ends the wait at once.
+log "Waiting for the app and worker containers to become healthy"
 deadline=$(( SECONDS + 90 ))
-status=""
+declare -A status=([app]="" [worker]="")
 while (( SECONDS < deadline )); do
-  cid="$(rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} ps -q app" || true)"
-  if [[ -n "${cid}" ]]; then
-    status="$(rssh "docker inspect -f '{{.State.Health.Status}}' ${cid}" 2>/dev/null || echo unknown)"
-    [[ "${status}" == "healthy" ]] && break
-    [[ "${status}" == "unhealthy" ]] && break
-  fi
+  for svc in app worker; do
+    [[ "${status[${svc}]}" == "healthy" ]] && continue
+    cid="$(rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} ps -q ${svc}" || true)"
+    if [[ -n "${cid}" ]]; then
+      status[${svc}]="$(rssh "docker inspect -f '{{.State.Health.Status}}' ${cid}" 2>/dev/null || echo unknown)"
+    fi
+  done
+  [[ "${status[app]}" == "healthy" && "${status[worker]}" == "healthy" ]] && break
+  [[ "${status[app]}" == "unhealthy" || "${status[worker]}" == "unhealthy" ]] && break
   sleep 3
 done
 
-if [[ "${status}" != "healthy" ]]; then
+if [[ "${status[app]}" != "healthy" || "${status[worker]}" != "healthy" ]]; then
   printf '\n--- remote logs (last 100 lines) ---\n' >&2
   rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2 || true
-  fail "container did not become healthy (last status: ${status:-none})"
+  fail "containers did not become healthy (last status: app ${status[app]:-none}, worker ${status[worker]:-none})"
 fi
 
 log "Remote smoke test"
 rssh "curl -fsS --max-time 5 http://127.0.0.1:18081/healthz" \
   || { rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2; fail "smoke test failed"; }
 printf '\n'
+
+# The billing freshness signal answers with a known status. 503 is valid (no run yet, a
+# stale or failed run) - the deploy only proves the endpoint and the worker's table work;
+# freshness is the external monitor's job. The body is date, status and age only.
+log "Remote smoke test: /billing-status"
+billing="$(rssh "curl -sS --max-time 5 -w ' %{http_code}' http://127.0.0.1:18081/billing-status")" \
+  || fail "cannot reach /billing-status on ${REMOTE}"
+printf '    %s\n' "${billing}"
+case "${billing##* }" in
+  200) grep -Eq '"status": *"ok"' <<<"${billing}" ;;
+  503) grep -Eq '"status": *"(stale|failed|running|none)"' <<<"${billing}" ;;
+  *) false ;;
+esac || fail "/billing-status answered with an unknown status: ${billing}"
 
 # The UI goes live only after the app that serves its API is up. The shared Caddy
 # bind-mounts ~/bss/web (vps-infra), and a bind mount holds the directory's inode: the

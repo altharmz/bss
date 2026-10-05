@@ -12,7 +12,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -43,6 +43,9 @@ test: ## Run the test suite in the container (parallel; HYPOTHESIS_PROFILE=dev|c
 
 seed: ## LOCAL demo data through the public TMF API (tests/seed.py); refuses APP_ENV=prod; a second run is a no-op
 	docker compose run --rm app python -m tests.seed
+
+worker-once: ## One wake-up of the billing worker against the local stack (due dates, queue, flips), then exit
+	docker compose run --rm app python -m app.worker --once
 
 migrate: ## Apply Alembic migrations against the local stack
 	docker compose run --rm app alembic upgrade head
