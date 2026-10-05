@@ -1027,14 +1027,12 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 In this order (as of 2026-10-05, after slice f):
 
-1. **Stage 4: deploy slice f, then slice g** - slice f (worker service, `make
-   worker-once`, deploy.sh waits for both services and checks `/billing-status`) is
-   committed but **not deployed**: the deploy ships migration `0004` (fresh vps-infra dump
-   first) and starts billing on the VPS - `make verify` only with the human's OK, then
-   `DRY_RUN=1 ./scripts/deploy.sh` (needs a clean tree). Then slice g (the Billing runs
-   UI screen). Done: slice a (`a66faef`), b1 (`850e192`), b2 (`5e9dbe3`), b3
-   (`3464e54`), c (`7ad4923`), h (`840e092`), d (`1dbe739`), e (`e06a22b`,
-   `/billing-status`), f. Per slice: plan, tests, negative proofs, `make lint`,
+1. **Stage 4: slice g next** (the Billing runs UI screen). Slice f (`dcbedeb`) is
+   **deployed**: `make verify` 2026-10-05 end to end - migration `0004` ran on the VPS,
+   app and worker healthy, the worker's first run billed 2026-10-05 (`/billing-status`
+   200 `ok`, age 12 s), web smoke OK through Caddy. Done: slice a (`a66faef`), b1 (`850e192`), b2
+   (`5e9dbe3`), b3 (`3464e54`), c (`7ad4923`), h (`840e092`), d (`1dbe739`), e
+   (`e06a22b`, `/billing-status`), f (`dcbedeb`). Per slice: plan, tests, negative proofs, `make lint`,
    `make test` x3, `make progress`, CLAUDE.md, then show the diff and commit only after
    the human's OK. Worker 10/10, API 54/54 in `docs/PROGRESS.md`. The planning
    decisions Q1-Q14 are recorded (see "Billing worker").
