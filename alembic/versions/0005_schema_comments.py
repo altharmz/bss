@@ -266,7 +266,10 @@ COLUMNS: dict[str, dict[str, str]] = {
         "status": (
             "running, completed (every member account ok) or failed (see failure_kind)."
         ),
-        "started_at": "When the current attempt started (injected clock).",
+        "started_at": (
+            "When the run started, or was last reopened after a failure (injected clock);"
+            " a takeover keeps it."
+        ),
         "finished_at": "When the run completed or failed; NULL while running.",
         "error": "Why the run failed, for operators.",
         "trigger": "Why the current attempt started: scheduled, catchUp or retry.",

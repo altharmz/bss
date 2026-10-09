@@ -1,7 +1,5 @@
 ## Behaviour and deviations
 
-In this table `::name` is a test in `tests/test_api_ordering.py`.
-
 Orders are the only way to create or terminate products. POST processes the order
 **synchronously, in the request's transaction** (`app/ordering/process.py`,
 `place_order`). There is no PATCH, DELETE or cancelProductOrder (405 / 404:
@@ -24,15 +22,15 @@ rejection: the order is stored with state `rejected` and its reasons in
 | `accountNotActive` | order | the billing account is not `Active` | `::test_account_must_be_active_and_start_not_in_the_past` |
 | `requestedStartDateInPast` | order | requested date before today (BILLING_TZ) | same |
 | `actionNotSupported` | item | `modify` or `noChange` | `::test_modify_and_no_change_are_stored_as_rejected` |
-| `billingAccountMismatch` | item | the item's `billingAccount` differs from the order's | `::test_delete_rules` (a delete item; `_item_problems` checks it before the action) |
+| `billingAccountMismatch` | item | the item's `billingAccount` differs from the order's | `tests/test_api_ordering.py::test_delete_rules` (a delete item; `_item_problems` checks it before the action) |
 | `offeringNotSellable` | item | offering not `isSellable` or not `Active` | `::test_offering_must_be_sellable_and_priced` |
 | `offeringNotValid` | item | offering `validFor` does not cover midnight of the start date | `::test_offering_and_price_must_be_valid_at_the_start_date` |
 | `noRecurringPrice` | item | no recurring price in the account currency at that midnight | `::test_offering_must_be_sellable_and_priced` |
 | `priceEnds` | item | from the start date, the recurring prices do not form a gapless chain ending open-ended (D-W20) | `tests/test_order_price_chain.py` |
-| `productOfOtherAccount`, `productAlreadyEnded`, `openDeleteItem`, `productNotStarted` | item | delete rules | `::test_delete_rules`, `::test_a_product_with_an_open_delete_elsewhere_is_rejected` |
+| `productOfOtherAccount`, `productAlreadyEnded`, `openDeleteItem`, `productNotStarted` | item | delete rules | `tests/test_api_ordering.py::test_delete_rules`, `::test_a_product_with_an_open_delete_elsewhere_is_rejected` |
 
 - **All or nothing:** one reason anywhere rejects the whole order; failing items are
-  `rejected`, the others `cancelled`, nothing is executed (`::test_one_bad_item_rejects_the_whole_order`).
+  `rejected`, the others `cancelled`, nothing is executed (`tests/test_api_ordering.py::test_one_bad_item_rejects_the_whole_order`).
   A rejected order's items are stored directly in their final states, so a rejected
   delete item never collides with the one-open-delete index.
 - **States** come from the pure state machine `app/ordering/states.py`: order
@@ -42,7 +40,7 @@ rejection: the order is stored with state `rejected` and its reasons in
   date of add items and the termination date of delete items, converted to the date in
   BILLING_TZ; it defaults to today and may not be in the past.
 - **add** creates the product: `active` if it starts today, `created` if later (the
-  worker flips it on its start date) - `::test_add_creates_an_active_product`.
+  worker flips it on its start date) - `tests/test_api_ordering.py::test_add_creates_an_active_product`.
 - **delete** of a started product sets the exclusive `terminationDate`: `terminated`
   for today, `pendingTerminate` for a future date (`::test_delete_terminates_a_started_product`,
   `::test_delete_with_a_future_date_is_pending_until_then`). **delete of a product not

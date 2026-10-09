@@ -15,7 +15,7 @@ One daily billing run per date (ours, not TMF). Only a billing run writes ABRs a
 | `updated_at` | `timestamp with time zone` | no | `now()` | Last change: the database's now(), maintained by the set_updated_at trigger. |
 | `run_date` | `date` | no |  | The business date the run bills (unique). It sees orders completed before 00:00 of this date (BILLING_TZ); ABRs it writes carry this run date. |
 | `status` | `billing_run_status` (enum, see [README](README.md#enums)) | no |  | running, completed (every member account ok) or failed (see failure_kind). |
-| `started_at` | `timestamp with time zone` | no |  | When the current attempt started (injected clock). |
+| `started_at` | `timestamp with time zone` | no |  | When the run started, or was last reopened after a failure (injected clock); a takeover keeps it. |
 | `finished_at` | `timestamp with time zone` | yes |  | When the run completed or failed; NULL while running. |
 | `error` | `text` | yes |  | Why the run failed, for operators. |
 | `trigger` | `billing_run_trigger` (enum, see [README](README.md#enums)) | no |  | Why the current attempt started: scheduled, catchUp or retry. |
