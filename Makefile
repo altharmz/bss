@@ -128,11 +128,13 @@ progress: ## Regenerate docs/PROGRESS.md + docs/progress/status.json (scope.yaml
 	docker compose run --rm --no-deps -T web-offline sh -c '$(WEB_DEPS) && node scripts/ui-markers.mjs' > .progress/ui.json
 	python3 scripts/progress/generate.py
 
-hooks: ## Install the pre-commit hook (make lint + make test before every commit)
+hooks: ## Install the pre-commit (lint + test) and pre-push (secrets) hooks
 	@mkdir -p .git/hooks
 	@ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit
-	@chmod +x scripts/pre-commit.sh
+	@ln -sf ../../scripts/pre-push.sh .git/hooks/pre-push
+	@chmod +x scripts/pre-commit.sh scripts/pre-push.sh
 	@echo "installed pre-commit hook -> scripts/pre-commit.sh (bypass with git commit --no-verify)"
+	@echo "installed pre-push hook -> scripts/pre-push.sh (never bypass it)"
 
 
 clean: ## Remove local containers AND the local database volume

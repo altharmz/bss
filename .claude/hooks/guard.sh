@@ -56,9 +56,12 @@ fi
 grep -Eq '(cat|less|head|tail|grep|strings)[[:space:]]+[^|]*\.env(\.prod|\.smoke)?([[:space:]]|$)' <<<"$cmd" && \
   block "do not read .env files. See .env.example for the variable names."
 
-# --- history rewriting / force pushes ---
-grep -Eq 'git[[:space:]]+(push|reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)' <<<"$cmd" && \
-  block "pushes and destructive git operations are the human's call."
+# --- history rewriting ---
+grep -Eq 'git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)' <<<"$cmd" && \
+  block "destructive git operations are the human's call."
+# Plain pushes are allowed; force, delete, mirror, prune, tag and +/: refspec pushes are not.
+grep -Eq '(^|[^[:alnum:]_.-])git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+|[[:space:]]+--?[[:alnum:]_-]+(=[^[:space:]]*)?)*[[:space:]]+push([[:space:]][^;&|]*)?[[:space:]](--force|--force-with-lease|--force-if-includes|--mirror|--delete|--prune|--tags|--follow-tags|-[[:alpha:]]*[fd][[:alpha:]]*|[+:][^[:space:]]*)([=[:space:];&|]|$)' <<<"$cmd" && \
+  block "force, delete, mirror, prune, tag and +/: refspec pushes are forbidden. Plain \`git push [-u] origin <branch>\` of approved commits only (CLAUDE.md)."
 
 # --- the harness is changed through the Edit tool, which asks the human first ---
 # Mirrors the "ask" rules in settings.json (.claude/, compose files, Makefile, scripts/):

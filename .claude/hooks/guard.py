@@ -12,6 +12,9 @@ that mentions `npm` or `git push` is not one. What a shell DOES execute is still
 `docker compose run <service>`, `xargs`, `find -exec`, and `$(...)` / backtick
 substitutions (wherever they appear, quotes included - conservative).
 
+A plain `git push` passes; force, delete, mirror, prune, tag and +/: refspec pushes are
+blocked (CLAUDE.md, "Hard constraints").
+
 The rules that protect production (the VPN, its ports, mass container stops) still scan
 the raw text, quotes included, as before.
 
@@ -40,6 +43,11 @@ MAX_DEPTH = 6
 HARNESS_MSG = ("shell writes to .claude/, compose*.yaml, Makefile or scripts/ are not allowed."
                " Use the Edit tool - it asks the human first.")
 DESIGN_MSG = "design-ref/ is a read-only reference (the design handoff). Never write to it."
+PUSH_MSG = ("force, delete, mirror, prune, tag and +/: refspec pushes are forbidden. Plain"
+            " `git push [-u] origin <branch>` of approved commits only (CLAUDE.md).")
+# git push options that rewrite or delete remote refs, or push every tag
+PUSH_FORBIDDEN = {"--force", "--force-with-lease", "--force-if-includes", "--mirror",
+                  "--delete", "--prune", "--tags", "--follow-tags"}
 
 
 class Blocked(Exception):
@@ -292,10 +300,16 @@ def check_segment(seg: list[str], cwd, inside: bool, depth: int):
         while rest and rest[0].startswith("-"):
             rest = rest[2:] if rest[0] in ("-C", "-c") else rest[1:]
         sub = rest[0] if rest else ""
-        if sub == "push" or (sub == "reset" and "--hard" in rest) or (
+        if (sub == "reset" and "--hard" in rest) or (
             sub == "clean" and any(re.fullmatch(r"-[a-zA-Z]*f[a-zA-Z]*", w) for w in rest)
         ):
-            block("pushes and destructive git operations are the human's call.")
+            block("destructive git operations are the human's call.")
+        if sub == "push":
+            for w in rest[1:]:
+                if (w.split("=", 1)[0] in PUSH_FORBIDDEN
+                        or re.fullmatch(r"-[a-zA-Z]*[fd][a-zA-Z]*", w)  # -f, -d, -uf
+                        or w.startswith(("+", ":"))):  # +main (force), :old (delete)
+                    block(PUSH_MSG)
 
     if cmd == "docker":
         rest = [w for w in words[1:] if not w.startswith("-")]

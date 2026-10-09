@@ -78,12 +78,61 @@ block sh -c 'cat .env'
 block echo "$(cat .env.prod)"
 
 # --- git ---
-block git push
-block git push origin master
-block git -C . push
 block git reset --hard HEAD~1
 block git clean -fd
-block echo x; git push
+
+# --- pushes: plain pushes of approved commits pass ---
+allow git push
+allow git push origin master
+allow git push -u origin cloud/slice-g
+allow git push --set-upstream origin cloud/slice-g
+allow git -C . push
+allow git -C /home/petrg/projects/bss push origin master
+allow echo x; git push
+allow git status && git push origin master
+allow git push origin HEAD
+allow git push origin master:master
+allow git push --dry-run origin master
+allow git push -u origin master 2>&1
+allow git stash push --keep-index
+allow git commit -m "never git push --force from here"
+allow grep -n 'git push -f' CLAUDE.md
+# --- pushes: force, delete, mirror, prune, tags and +/: refspecs are blocked ---
+block git push --force
+block git push -f
+block git push -f origin master
+block git push origin master -f
+block git push -uf origin master
+block git push -fu origin master
+block git push --force origin master
+block git push --force-with-lease
+block git push --force-with-lease=master:abc123 origin master
+block git push --force-if-includes origin master
+block git push --mirror
+block git push --mirror origin
+block git push --delete origin cloud/x
+block git push -d origin cloud/x
+block git push origin --delete cloud/x
+block git push origin +master
+block git push origin +HEAD:master
+block git push origin :cloud/x
+block git push --tags
+block git push origin --tags
+block git push --follow-tags origin master
+block git push --prune origin
+block git -C . push -f
+block git -C /home/petrg/projects/bss push --force origin master
+block git -c push.default=current push -f
+block echo x; git push --force
+block git status && git push -f origin master
+block git status || git push --mirror
+block sh -c 'git push --force origin master'
+block bash -c "git fetch && git push origin +master"
+block echo $(git push -f)
+block eval 'git push --delete origin x'
+block /usr/bin/git push -f
+block-ml git push -f origin master <<'EOF'\nx\nEOF
+block echo 'unbalanced && git push --force
 
 # --- Node on the host ---
 block npm ci
@@ -104,7 +153,7 @@ block xargs npm < list.txt
 block find . -name '*.js' -exec node {} ;
 block eval 'npm ci'
 block docker compose run --rm app npm ci
-block docker compose run --rm web-offline sh -c 'npm ci; git push'
+block docker compose run --rm web-offline sh -c 'npm ci; git push -f'
 
 # --- writes to protected paths ---
 block echo x > Makefile

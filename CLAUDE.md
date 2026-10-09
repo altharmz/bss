@@ -61,7 +61,7 @@ make fmt       # auto-format (ruff format + check --fix)
 make clean     # stop the local stack AND drop the local database volume
 make tunnel    # forward the remote app to localhost:18081
 make remote CMD="..."  # run a one-off command against the deployed image on the VPS
-make hooks     # install the local pre-commit hook (make lint + make test)
+make hooks     # install the local pre-commit (lint + test) and pre-push (secrets) hooks
 make spec-verify-upstream  # re-fetch spec blob SHAs from GitHub, compare with spec/README.md (network)
 make progress  # regenerate docs/PROGRESS.md + docs/progress/status.json (scope.yaml vs the code)
 make seed          # LOCAL demo data through the public TMF API (refuses APP_ENV=prod); re-run = no-op
@@ -129,6 +129,19 @@ failure. `make test` takes 50-70 s wall-clock (pytest itself 46-60 s, warm or co
   improved since: the 500 handler logs the exception with its traceback, and app loggers
   are no longer silenced in tests (Alembic's `fileConfig` used to disable them).
 
+## Pre-push hook
+
+`scripts/pre-push.sh` (also installed by `make hooks`, as a symlink) scans only the
+commits being pushed - those no remote has yet - and only their added lines. It refuses
+the push if a commit adds a bcrypt hash (`$2a$`/`$2b$`/`$2y$` + cost) on a line without the
+marker `pre-push: allow-dummy-hash`, adds or changes a path matching `(^|/)\.env` other
+than `.env.example`, deletes a remote branch, or is not a fast-forward. It names the
+commit and file, never the matching value. Never bypass it (`--no-verify`). Ported from
+vps-lab `a3ada0b`. Proven 2026-10-09 in a scratch repo against a local bare remote: a
+clean commit, `.env.example`, a marked dummy hash and a clean new branch pushed; a hash
+(on `main` and on a new branch), `.env.prod`, `sub/.env.smoke`, a branch deletion and a
+non-fast-forward were refused, and the remote held only the allowed commits.
+
 ## Progress tracker
 
 `make progress` writes `docs/PROGRESS.md` (committed, plain Markdown) and
@@ -187,7 +200,17 @@ unscoped and the excluded items.
   `set -a && . ./.env.prod`) — exported variables take precedence over `.env`, so local
   containers silently pick up production values. For a one-off check against prod
   variables, scope them to a single command instead: `env $(grep -v '^#' .env.prod | xargs) <command>`.
-- Do not `git push`. Commit locally; the human pushes.
+- **Commits need the human's OK; pushing an approved commit is allowed** (private repo;
+  the push is the off-site backup): `git push`, `git push origin <branch>`, `git push -u
+  origin <branch>`. **Force, delete, mirror, prune and tag pushes are forbidden**:
+  `--force`, `-f`, `--force-with-lease`, `--force-if-includes`, `--mirror`, `--delete`,
+  `-d`, `--prune`, `--tags`, `--follow-tags`, and refspecs starting with `+` or `:`. The
+  guard blocks them (compound commands, `git -C`, `sh -c` included); history on the
+  remote is never rewritten. **If CI ever deploys on push, pushing becomes a deploy and
+  goes back to needing approval** - change this rule with it.
+- **Cloud sessions push only to `cloud/*` branches, never to `master`** (`git push -u
+  origin cloud/<topic>`); the human reviews and merges. Only a local session pushes
+  `master`, and only commits the human approved.
 - **Do not add `db` or `caddy` services back to the production configuration**
   (`compose.prod.yaml`), and do not re-add a Caddyfile or backup scripts to this repo.
   On the VPS they live in the separate vps-infra project — see "Shared infrastructure".
@@ -265,6 +288,8 @@ scripts/init.sh           one-time: fills in placeholders, creates .env/.env.pro
 scripts/deploy.sh         build -> save -> ssh load -> migrate -> up -> healthcheck -> smoke
 scripts/smoke.sh          HTTP smoke test against a base URL
 scripts/pre-commit.sh     make lint + make test; installed via `make hooks`
+scripts/pre-push.sh       refuses pushes adding bcrypt hashes / .env* paths, deletions,
+                          non-fast-forwards; installed via `make hooks`
 frontend/                 admin UI (stage 5): Vite + React + TypeScript; see "Frontend conventions"
 design-ref/               design handoff for the UI - read-only reference, never edited
 tests/                    pytest suite (conftest.py spins up throwaway databases;
@@ -1071,11 +1096,22 @@ In this order (as of 2026-10-05, after slice f):
    (capabilities proven by `@pytest.mark.capability(...)` tests).
 3. **Docs task** (tbls + API registry + architecture.md) - planned, not started.
 4. **deploy.sh records the deployed commit** (Open check below).
-5. **Backport vps-lab's guard to bss** (ports 8444 and 2053, ask on commit/deploy, push
-   policy) - parked. Also: protect `docs/progress/scope.yaml` from shell writes (`>`,
-   `tee`, `sed -i`, `mv`, `cp`, `rm`) like the other harness files - today only the Edit
-   tool's `"ask"` rule guards it - with regression cases both ways.
+5. **Backport vps-lab's guard to bss** (ports 8444 and 2053, ask on commit/deploy) -
+   parked; the push policy is done (2026-10-09). Also: protect
+   `docs/progress/scope.yaml` from shell writes (`>`, `tee`, `sed -i`, `mv`, `cp`, `rm`)
+   like the other harness files - today only the Edit tool's `"ask"` rule guards it -
+   with regression cases both ways.
 6. **Remaining Phase 2** (APP_PORT, localhost:8080 refs, make down profiles) - deferred.
+7. **Guard follow-ups for cloud sessions** (recorded 2026-10-09, not started):
+   - `guard-cases.txt`: the cases that hard-code `/home/petrg/projects/bss` use
+     `$CLAUDE_PROJECT_DIR` instead (expanded by `test-guard.sh`), so they pass in the
+     cloud too;
+   - guard: with `BSS_CLOUD=1`, block any network access to `vpn2811.duckdns.org` /
+     `vps-test` (a cloud probe curled it; the proxy refused) and block `git push` to
+     `master` (the `cloud/*`-only rule in "Hard constraints"), with cases both ways.
+8. **FastAPI's `/docs`, `/redoc`, `/openapi.json` in prod**: decide whether they stay
+   exposed (behind basic auth) or get disabled; add the decision to `scope.yaml` either
+   way (needs the human's approval).
 
 ## Open checks
 
