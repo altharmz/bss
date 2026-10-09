@@ -1,0 +1,148 @@
+# Admin UI (stage 5)
+
+A desktop admin console for billing operators: `frontend/` (Vite + React + TypeScript),
+built to static files and served by the shared Caddy on the same origin as the API, behind
+the same basic auth ([overview.md](overview.md#authentication-and-operator-identity)).
+The design handoff it implements is `design-ref/design_handoff_bss_admin/` (a read-only
+HTML prototype and README); where the build differs from the design, the decision is
+recorded in CLAUDE.md, "Frontend (stage 5) decisions", and summarised below.
+
+Progress (from `data-ui` markers in `frontend/src`, [PROGRESS.md](PROGRESS.md)): **10 of
+13 items built; the Billing runs screen (3 items) is planned.**
+
+## Architecture
+
+| Part | Where | What |
+|---|---|---|
+| Routing | `frontend/src/app/router.tsx` | a minimal History-API router: `/subscribers`, `/subscribers/{accountId}`, `/catalog`; `/` redirects to `/subscribers`; anything else is the not-found page. Deep links work because Caddy answers unknown paths with `index.html` |
+| Shell | `frontend/src/app/Shell.tsx` | sidebar (brand, environment tag, navigation "Operations", operator), top bar (breadcrumbs, business date, time zone) |
+| System context | `frontend/src/app/context.tsx` | loads `GET /internal/v1/context` before any screen: no date can be shown without the business date and zone |
+| API client | `frontend/src/api/client.ts`, `bss.ts` | fetch wrapper; every failure is an `ApiError` whose message is the call ("GET /path -> 503 Service Unavailable"); `getAll` pages by 100; `useResource` = loading / error / ok + retry |
+| Types | `frontend/scripts/gen-types.mjs` -> `src/api/generated/` (git-ignored) | generated from `spec/` (TMF620, 622, 637, 666 and the internal API) on every build, lint and test - never from FastAPI's `/openapi.json` |
+| UI kit | `frontend/src/ui/` | tokens, buttons, pills, `Modal`, `Table` on CSS grid, the four list states |
+| Money | `frontend/src/format/money.ts` | amounts become integer cents at the edge; no float arithmetic; typed amounts are sent as the validated decimal string as an exact JSON number (`jsonWithAmount`); negatives use U+2212 |
+| Dates | `frontend/src/format/dates.ts` | business dates in BILLING_TZ via `Intl`, never the browser's zone; dates sent carry BILLING_TZ's offset *for that date* (`zonedDateTime`) |
+
+**Every list renders through `ListState`** (`frontend/src/ui/states.tsx`): skeleton rows
+while loading, an error block naming the failed call with Retry, an empty state, and "No
+matches" with Reset filters when filters hide everything (`frontend/src/ui/states.test.tsx`).
+
+## Screens and actions
+
+`data-ui` is the marker the progress tracker looks for; the API column lists every
+operation the screen calls (`frontend/src/api/bss.ts`).
+
+### Shell (`ui.shell`)
+
+Sidebar with the navigation (Subscribers, Catalog - **no Billing runs item yet**), the
+environment (`APP_ENV`) and the operator (from `X-Remote-User`); top bar with breadcrumbs,
+the business date and the UTC offset.
+API: `GET /internal/v1/context`.
+
+### Subscribers list (`ui.subscribers.list`) - `screens/Subscribers.tsx`
+
+One row per **billing account** (a customer with two accounts is two rows): subscriber
+number (first 8 hex digits of the account id, upper case), name, the account's state
+pill, balance (negative highlighted), active product count, cycle day. Search by name or
+number; segmented filter by account state (All / Active / Suspended / Closed); "Negative
+balance: N". A row opens the card. No per-row requests: one account list and one product
+list, grouped client-side.
+API: `GET /tmf-api/accountManagement/v5/billingAccount` (all pages),
+`GET /tmf-api/productInventory/v5/product?status=active&fields=billingAccount` (all pages).
+
+### Subscriber card (`ui.subscriber.card`) - `screens/SubscriberCard.tsx`
+
+Header with name, state, subscriber number, billing account (`BA-xxxxxxxx`), customer
+status, and **+ Add product** (disabled for a non-Active account, with the reason - the
+same rule ordering enforces). Billing account panel: balance, currency, cycle day (and the
+next cycle), credit limit, available incl. credit. Active products (offering, code,
+specification, activated, next charge, price, status note for `created` /
+`pendingTerminate`), charge history (period, "N of M" days when prorated, amount) and
+transaction history (signed amount, balance after).
+API: `GET .../billingAccount/{id}`, `GET /tmf-api/customerManagement/v5/customer/{id}`,
+`GET /internal/v1/billingAccount/{id}/products`, `.../charges?limit=20`,
+`.../transactions?limit=20`.
+
+### Deactivate a product (`ui.subscriber.deactivate`)
+
+A destructive button per product with an inline confirm. It places a **TMF622 order with
+one delete item, effective today** (no `requestedStartDate`): a started product ends today
+(not billed from today); one not started yet is cancelled. A rejected order shows its
+reasons.
+API: `POST /tmf-api/productOrderingManagement/v5/productOrder`.
+
+### Add product (`ui.subscriber.addProduct`) - `screens/AddProduct.tsx`
+
+Modal: 1. pick an Active, sellable offering (filterable list with code, specification and
+today's price); 2. start date (min = business date); 3. **first-charge preview computed by
+the backend** - period, billable days of period days, price, amount, when it is charged
+and billed, the following full period, balance after, and a credit-limit warning that
+never blocks. Confirm places a TMF622 add order; a rejection shows its reasons. The copy
+follows the end-of-day rule: nothing is "charged on confirmation" - an order completed
+today is charged by the run of max(start, tomorrow).
+API: `GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true`,
+`GET .../productOfferingPrice?priceType=recurring`,
+`GET /internal/v1/billingAccount/{id}/firstCharge?productOffering.id=&startDate=`,
+`POST .../productOrder` (`requestedStartDate` = noon of the date in BILLING_TZ).
+
+### Product catalog (`ui.catalog.list`) - `screens/Catalog.tsx`
+
+Table of offerings: code, name, specification, the price valid now in the UI currency
+(or the next one with its start), status, validity. Search by code or name; filter by
+lifecycle status. **+ New offering**. A row opens the offering detail.
+API: `GET .../productOffering`, `GET .../productSpecification`,
+`GET .../productOfferingPrice?priceType=recurring` (all pages).
+
+### Offering detail (`ui.catalog.offeringDetail`), lifecycle step (`ui.catalog.lifecycle`), change price (`ui.catalog.changePrice`)
+
+The detail dialog shows the offering and its recurring prices. The lifecycle button offers
+**only the next forward step** (In Design -> Active -> Retired) with an inline confirm
+(the rule itself is the backend's). **Change price** appears only when the offering has an
+open-ended price in the UI currency; it calls the atomic price change, and its copy says
+existing products pick up the new price from their next billing period starting on or
+after the date, new orders from the date.
+API: `PATCH .../productOffering/{id}` (`application/merge-patch+json`,
+`{lifecycleStatus}`), `POST /internal/v1/productOffering/{id}/priceChange`.
+
+### New offering (`ui.catalog.newOffering`)
+
+Modal: code (upper-cased), name, specification, monthly price, valid from, valid to
+(inclusive in the UI, sent as the next midnight). Creating is **two TMF620 calls**, as the
+spec models it: the price first, then the In Design offering referencing it; if the second
+fails the unattached price stays (it can never price anything) and the error is shown.
+API: `POST .../productOfferingPrice`, `POST .../productOffering`.
+
+**The write requests are pinned on both sides**: component tests assert the exact bodies
+(`frontend/src/screens/*.test.tsx`), and `tests/test_ui_requests.py` replays the same
+bodies against the real API.
+
+## Planned: Billing runs (stage 4, slice g)
+
+Not built (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`):
+latest run with its KPIs, run history, a failed badge in the navigation, catch up to a
+date, and retry of a failed run. There is no route or navigation item for it
+(`frontend/src/app/router.tsx`); `/billing` shows the not-found page. The backend it will
+use exists: `GET /internal/v1/billingRun[...]`, `POST .../catchUp`, `POST .../{id}/retry`
+([api/internal.md](api/internal.md)). The design's "Run manually" for an arbitrary date is
+replaced by catch-up/retry: the worker alone bills, dates in order.
+
+## Differences from the design handoff
+
+| Design | Built | Why |
+|---|---|---|
+| Subscriber = customer; status Active / Inactive | a billing account; the account's real state Active / Suspended / Closed | the account carries balance, cycle day and products, and ordering checks its state |
+| "Registered" column | "Cycle day" | TMF629/666 have no creation date; `created_at` is the database's clock |
+| Weekly recurrence | monthly only | billing supports monthly only |
+| "Charged on confirmation" | charged by the run of max(start, tomorrow) | end-of-day rule of the billing run |
+| Deactivate = PATCH product status | a TMF622 delete order | orders are the only way to end products |
+| Proration in the browser | the backend's dry run (`firstCharge`) | the UI never computes a charge |
+| Billing runs screen | not built | planned |
+| Statuses the design lacks (`created`, `pendingTerminate`, Suspended, Closed, ...) | pills reusing existing token colours | |
+
+## Tests
+
+`make web-test`: vitest, run twice - in UTC and with `TZ=America/New_York` - so every
+request body is proven independent of the browser's zone. `make web-lint`: tsc, eslint,
+prettier. `make web-e2e`: Playwright against the built UI and the seeded local stack,
+read-only, failing on any console error or 5xx (`frontend/e2e/smoke.spec.ts`). None of
+these run in a cloud session ([operations.md](operations.md#tests)).
