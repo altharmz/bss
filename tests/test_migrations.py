@@ -108,6 +108,32 @@ def test_0004_on_existing_runs_and_accounts(temp_db_url):
         assert conn.execute("SELECT count(*) FROM billing_run").fetchone() == (2,)
 
 
+def test_0005_comments_every_table_and_downgrade_removes_them(temp_db_url):
+    """0005 is documentation only: every domain table has a COMMENT (docs/db/ is generated
+    from them), and downgrading to 0004 removes every comment it wrote."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "head")
+    count_tables = """
+        SELECT count(*) FILTER (WHERE obj_description(c.oid, 'pg_class') IS NULL),
+               count(*) FILTER (WHERE obj_description(c.oid, 'pg_class') IS NOT NULL)
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname <> 'alembic_version'
+    """
+    count_columns = """
+        SELECT count(*) FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r' AND a.attnum > 0
+          AND col_description(c.oid, a.attnum) IS NOT NULL
+    """
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(count_tables).fetchone() == (0, 16)
+        assert conn.execute(count_columns).fetchone()[0] > 100
+    command.downgrade(cfg, "0004")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(count_tables).fetchone() == (16, 0)
+        assert conn.execute(count_columns).fetchone() == (0,)
+
+
 def test_cloned_test_databases_are_at_the_current_head(db_conn):
     """Most tests get their database from a template migrated once per session
     (conftest.template_db). It must be at the head of the migration scripts."""
