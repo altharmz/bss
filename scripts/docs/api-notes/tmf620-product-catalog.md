@@ -1,0 +1,25 @@
+## Behaviour and deviations
+
+| Rule | Code | Proven by |
+|---|---|---|
+| A price is created on its own (unattached) and attached through the offering's `productOfferingPrice[]` on POST or PATCH. **Deviation:** only references are accepted there, not inline prices (an entry without `id` is a 422) | `app/api/catalog.py` (`_attach_prices`, `OfferingCreate`) | `tests/test_api_catalog.py::test_prices_attach_on_create_and_on_patch` |
+| A price belongs to at most one offering (409) and never overlaps a price of the same offering, type and currency (409, exclusion constraint) | `_attach_prices`; `product_offering_price_no_overlap` | `::test_a_price_belongs_to_at_most_one_offering`, `::test_overlapping_prices_cannot_be_attached_to_one_offering` |
+| A price is never detached: a PATCH whose `productOfferingPrice[]` drops one is a 409 | `patch_offering` | `::test_a_price_is_never_detached` |
+| A price is never re-priced: `price`, `priceType`, `recurringChargePeriodType`, `recurringChargePeriodLength` are read-only (400); `validFor.startDateTime` cannot move (409) | `PRICE_IMMUTABLE`, `patch_price` | `::test_changing_a_price_means_ending_it_and_attaching_a_new_one` |
+| A price never starts in the past: created or attached with `validFor.startDateTime` < now is a 409 | `create_price`, `_not_in_the_past` | `::test_a_price_cannot_start_in_the_past` |
+| A price is never ended retroactively: the end can only be set or moved to >= now, and only while the current end is not in the past (409) | `patch_price` | `::test_a_price_cannot_be_ended_retroactively` |
+| Ending a recurring price never leaves a product without one (D-W18): 409 unless a price of the same offering, type and currency starts exactly at the new end, or every not-cancelled/aborted product of the offering in that currency is terminated by the first business date the price no longer covers | `_no_gap`, `_first_uncovered_day` | `tests/test_api_price_gap.py` (all five tests) |
+| An offering's `lifecycleStatus` only moves forward: In Design -> Active -> Retired; Retired is final; anything else is a 409 and nothing in that PATCH is applied; repeating the current status is fine. POST may create an offering in any status | `LIFECYCLE_STEPS`, `_check_lifecycle` | `tests/test_api_offering_lifecycle.py::test_every_transition`, `::test_a_refused_transition_changes_nothing_else_in_the_patch` |
+| Offering code: `externalIdentifier[]` with exactly one `{id, externalIdentifierType: "offeringCode", owner: "bss"}`; `^[A-Z0-9][A-Z0-9_-]{0,31}$`; unique (409); optional; set on POST only (read-only after, 400); an offering without one has no `externalIdentifier` | `OfferingCode`, `create_offering` | `tests/test_api_credit_limit_and_code.py::test_code_is_stored_as_external_identifier_and_unique`, `::test_invalid_codes`, `::test_the_code_is_read_only_after_creation`, `::test_an_offering_without_a_code_has_no_external_identifier` |
+| `productSpecification` is mandatory on an offering (ours) and read-only on PATCH | `OfferingCreate`, `patch_offering` | `tests/test_api_catalog.py::test_offering_needs_an_existing_specification` |
+| Prices are monthly only: `recurringChargePeriodType` `monthly` (required for recurring, not allowed for oneTime), `recurringChargePeriodLength` 1 | `PriceCreate` | `::test_price_validation` |
+| `lastUpdate` is accepted and ignored on POST (the spec's `_FVO` schemas make clients send it), read-only on PATCH | `last_update` fields | `tests/test_api_conventions.py::test_patch_rejects_read_only_attributes` |
+
+Changing the price of a live offering cannot be done with these operations (neither
+order of "end" and "attach" works while a product is live, proven by
+`tests/test_internal_price_change.py::test_tmf620_cannot_change_a_live_price_in_either_order`);
+it is the internal operation `POST /internal/v1/productOffering/{id}/priceChange`, see
+[internal.md](internal.md).
+
+`lifecycleStatus` of a specification and of a price can be set to any of the three values
+by PATCH: only the offering's lifecycle is guarded.

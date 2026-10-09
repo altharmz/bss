@@ -12,7 +12,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e docs docs-check
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -106,7 +106,7 @@ deploy: ## Build locally and ship to the VPS
 
 # Target-specific: also applies to verify's `test` prerequisite.
 verify: HYPOTHESIS_PROFILE = ci
-verify: lint test web-lint web-test web-e2e deploy ## Full gate: backend and UI checks, the e2e smoke, then a real deployment that must go healthy
+verify: lint test docs-check web-lint web-test web-e2e deploy ## Full gate: backend and UI checks, generated docs current, the e2e smoke, then a real deployment that must go healthy
 	@echo "verified: local checks passed and the remote instance is healthy"
 
 tunnel: ## Forward the remote app to localhost:18081 (Ctrl-C to stop)
@@ -127,6 +127,19 @@ progress: ## Regenerate docs/PROGRESS.md + docs/progress/status.json (scope.yaml
 	docker compose run --rm -T app python -m tests.progress_collect < docs/progress/scope.yaml > .progress/backend.json
 	docker compose run --rm --no-deps -T web-offline sh -c '$(WEB_DEPS) && node scripts/ui-markers.mjs' > .progress/ui.json
 	python3 scripts/progress/generate.py
+
+docs: ## Regenerate docs/api/ and docs/db/ (app.openapi() vs spec/, pg_catalog at migration head)
+	@mkdir -p .docs
+	docker compose run --rm -T app python -m tests.docs_collect > .docs/collected.json
+	python3 scripts/docs/generate.py
+
+docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fresh `make docs`
+	@if ! git diff --quiet -- docs/api docs/db || [ -n "$$(git ls-files --others --exclude-standard -- docs/api docs/db)" ]; then \
+		git status --short -- docs/api docs/db; \
+		echo "docs-check: docs/api or docs/db is out of date - commit the output of make docs" >&2; \
+		exit 1; \
+	fi
+	@echo "docs-check: docs/api and docs/db match the code"
 
 hooks: ## Install the pre-commit (lint + test) and pre-push (secrets) hooks
 	@mkdir -p .git/hooks
