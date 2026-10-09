@@ -3,7 +3,10 @@
 #   allow <command>      expected exit 0
 #   block <command>      expected exit 2
 #   allow-ml / block-ml  the same, with every literal \n in the command turned into a newline
-# Paths are relative to the project root; absolute ones use /home/petrg/projects/bss.
+#   <any of these>@cloud the case runs with BSS_CLOUD=1 (cloud mode); all others run with
+#                        BSS_CLOUD removed, wherever the suite runs
+# Paths are relative to the project root; absolute ones are written $CLAUDE_PROJECT_DIR
+# (test-guard.sh expands it), so the cases pass on the workstation and in the cloud.
 
 # --- the VPN on the VPS (raw text, quotes included) ---
 block ssh vps-test 'vpncmd /server localhost'
@@ -73,7 +76,7 @@ block tail .env
 block strings .env.prod
 block cat .env.smoke
 block grep SMOKE .env.smoke
-block cd /tmp && cat /home/petrg/projects/bss/.env
+block cd /tmp && cat $CLAUDE_PROJECT_DIR/.env
 block sh -c 'cat .env'
 block echo "$(cat .env.prod)"
 
@@ -87,7 +90,7 @@ allow git push origin master
 allow git push -u origin cloud/slice-g
 allow git push --set-upstream origin cloud/slice-g
 allow git -C . push
-allow git -C /home/petrg/projects/bss push origin master
+allow git -C $CLAUDE_PROJECT_DIR push origin master
 allow echo x; git push
 allow git status && git push origin master
 allow git push origin HEAD
@@ -121,7 +124,7 @@ block git push origin --tags
 block git push --follow-tags origin master
 block git push --prune origin
 block git -C . push -f
-block git -C /home/petrg/projects/bss push --force origin master
+block git -C $CLAUDE_PROJECT_DIR push --force origin master
 block git -c push.default=current push -f
 block echo x; git push --force
 block git status && git push -f origin master
@@ -165,7 +168,7 @@ block mv compose.yaml /tmp/
 block sed -i s/a/b/ Makefile
 block sed --in-place s/a/b/ compose.prod.yaml
 block cp /tmp/x Makefile
-block cp x /home/petrg/projects/bss/scripts/y
+block cp x $CLAUDE_PROJECT_DIR/scripts/y
 block echo x > design-ref/a
 block rm -rf design-ref
 block sed -i s/a/b/ design-ref/design_handoff_bss_admin/README.md
@@ -205,3 +208,89 @@ allow cp Makefile /tmp/Makefile.bak
 allow cat .env.example
 allow docker compose run --rm app pytest -n auto
 allow-ml cat <<'EOF'\nhello\nEOF
+
+# === cloud mode (BSS_CLOUD=1): each rule with its workstation counterpart ===
+
+# --- Node: npm/npx/node on the host in cloud mode only; pnpm/yarn/corepack never ---
+allow@cloud npm ci
+allow@cloud npx vite build
+allow@cloud node --version
+allow@cloud cd frontend && npm run lint
+allow@cloud cd frontend && sh scripts/check-deps.sh && npm test
+allow@cloud bash -c 'cd frontend && npm test'
+allow@cloud echo $(node --version)
+allow@cloud NODE_ENV=production node scripts/x.mjs
+block@cloud pnpm i
+block@cloud yarn
+block@cloud corepack enable
+block@cloud bash -c 'yarn install'
+# the same through the raw-text fallback (a heredoc is untokenisable)
+allow-ml@cloud npm ci <<'EOF'\nx\nEOF
+block-ml@cloud yarn install <<'EOF'\nx\nEOF
+block-ml npm ci <<'EOF'\nx\nEOF
+block node --version
+block cd frontend && npm run lint
+block cd frontend && sh scripts/check-deps.sh && npm test
+block bash -c 'cd frontend && npm test'
+# cloud mode keeps every other rule
+block@cloud cat .env
+block@cloud echo x > Makefile
+block@cloud git reset --hard HEAD~1
+block@cloud docker system prune -a
+block@cloud echo softether
+
+# --- the VPS: any mention of its names is blocked in cloud mode, quotes included ---
+block@cloud curl -sS https://vpn2811.duckdns.org:8445/healthz
+block@cloud curl -sSI https://VPN2811.duckdns.org/
+block@cloud nslookup vpn2811.duckdns.org
+block@cloud ssh vps-test true
+block@cloud ping -c1 vps-test
+block@cloud grep -n vps-test CLAUDE.md
+block@cloud sh -c 'curl https://vpn2811.duckdns.org/'
+block-ml@cloud cat <<'EOF'\ncurl https://vpn2811.duckdns.org/\nEOF
+allow@cloud curl -fsS http://localhost:8080/healthz
+allow@cloud grep -n duckdns docs/cloud.md
+allow grep -n vps-test CLAUDE.md
+allow grep -n vpn2811.duckdns.org docs/cloud.md
+
+# --- pushes in cloud mode: an explicit cloud/* destination, never master/main ---
+allow@cloud git push -u origin cloud/guard
+allow@cloud git push origin cloud/docs
+allow@cloud git push --set-upstream origin cloud/a/b
+allow@cloud git push origin HEAD:cloud/guard
+allow@cloud git push origin HEAD:refs/heads/cloud/guard
+allow@cloud git push -o ci.skip origin cloud/x
+allow@cloud git -C $CLAUDE_PROJECT_DIR push -u origin cloud/x
+allow@cloud git push origin cloud/x cloud/y
+allow@cloud git commit -m "a push to master is refused here"
+allow@cloud git stash push --keep-index
+block@cloud git push
+block@cloud git push origin
+block@cloud git push -u origin
+block@cloud git push origin master
+block@cloud git push origin main
+block@cloud git push -u origin master
+block@cloud git push origin HEAD
+block@cloud git push origin HEAD:master
+block@cloud git push origin cloud/x:refs/heads/main
+block@cloud git push origin refs/heads/master
+block@cloud git push origin cloud/x master
+block@cloud git push origin cloud/
+block@cloud git push origin feature/x
+block@cloud git push -o cloud/x origin master
+block@cloud git -C $CLAUDE_PROJECT_DIR push origin master
+block@cloud git push -f origin cloud/x
+block@cloud git push origin +cloud/x
+block@cloud git push --delete origin cloud/x
+block@cloud echo x; git push origin master
+block@cloud git status && git push
+block@cloud sh -c 'git push origin main'
+block@cloud echo $(git push origin master)
+# fail-closed: an untokenisable push cannot be checked for its destination
+block-ml@cloud git push origin cloud/x <<'EOF'\nx\nEOF
+block@cloud echo 'unbalanced && git push origin cloud/x
+# the same pushes on the workstation (plain pushes allowed, master included)
+allow git push origin main
+allow git push -u origin master
+allow git push origin HEAD:master
+allow git push origin feature/x

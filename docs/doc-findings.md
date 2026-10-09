@@ -6,8 +6,10 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
 
 ## Code and documentation disagree
 
-1. **`/billing-status` can answer 200 `running`, but the deploy and the local smoke
-   reject it.** `app/status.py` answers 200 `{"status": "running"}` for a run younger
+1. **Fixed 2026-10-09** (the commit that adds `make check`): both scripts call
+   `scripts/billing-status-check.sh`, which accepts 200 `ok|running`; its cases run in
+   `make test`. Original finding: **`/billing-status` can answer 200 `running`, but the
+   deploy and the local smoke reject it.** `app/status.py` answers 200 `{"status": "running"}` for a run younger
    than the 2 h grace (proven by `tests/test_billing_status.py::test_the_latest_run_decides`),
    while `scripts/deploy.sh` (lines 251-255) and `scripts/smoke.sh` accept a 200 only
    with `"status": "ok"`. CLAUDE.md ("Deployment (slice f)") states the same "200 must say
@@ -16,7 +18,9 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
    is then taken over - fails at the smoke step although the app is healthy. Fix would be
    one alternative in two `case` lines (`ok|running` for 200); not done here
    (`scripts/` needs the human's OK).
-2. **`docs/cloud.md` says `git push` is denied in a cloud session** ("`git push` is
+2. **Fixed 2026-10-09** (same commit): `docs/cloud.md` now says push works, only to
+   `cloud/*` branches named on the command line. Original finding: **`docs/cloud.md`
+   says `git push` is denied in a cloud session** ("`git push` is
    denied by settings.json and blocked by the guard"). Since `1c9f98e` it is not:
    `.claude/settings.json` allows `git push`, `git push origin:*` and `git push -u
    origin:*`, CLAUDE.md allows plain pushes, and this session pushed `cloud/docs` with
@@ -26,7 +30,9 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
    says the related party is "role `customer`"; the code (`app/api/account.py`,
    `RelatedParty.role: str | None`) accepts any role, or none, on POST and always answers
    `role: "customer"`. No test sends another role.
-4. **CLAUDE.md still describes stage 4 as future in several places** although slice f is
+4. **Fixed 2026-10-09** (same commit): "Stage order", the TMF678 note and the status-flip
+   notes in CLAUDE.md describe the running worker. Original finding: **CLAUDE.md still
+   describes stage 4 as future in several places** although slice f is
    deployed: "Stage order" says the billing core is "done, not wired" and that bill and
    ABR lists "stay empty until the stage 4 worker calls `bill_account`"; the TMF637
    section's "Known: a product ordered with a future start date stays `created` until the

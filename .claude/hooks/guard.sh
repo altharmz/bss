@@ -14,6 +14,13 @@ cmd="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.load(sys
 
 block() { printf 'BLOCKED by guard.sh: %s\n' "$1" >&2; exit 2; }
 
+# --- cloud mode (BSS_CLOUD=1, set only in the cloud environment's config) ---
+# A cloud session never reaches the VPS: any command naming it is blocked, quotes and
+# all - before guard.py, so the tokenised and the fallback path both get it.
+if [[ "${BSS_CLOUD:-}" == 1 ]] && grep -Eqi 'vpn2811\.duckdns\.org|vps-test' <<<"$cmd"; then
+  block "cloud sessions never reach the VPS (vps-test, vpn2811.duckdns.org) - not even to probe it (docs/cloud.md)."
+fi
+
 # --- quote-aware checks first (guard.py: shlex tokens, so quoted text is never a command) ---
 # 0 = allow, 2 = blocked (reason already on stderr), 3 = cannot tokenise (unbalanced
 # quotes, a heredoc): fall through to the raw-text checks below, as strict as before.
@@ -62,6 +69,10 @@ grep -Eq 'git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)' <<
 # Plain pushes are allowed; force, delete, mirror, prune, tag and +/: refspec pushes are not.
 grep -Eq '(^|[^[:alnum:]_.-])git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+|[[:space:]]+--?[[:alnum:]_-]+(=[^[:space:]]*)?)*[[:space:]]+push([[:space:]][^;&|]*)?[[:space:]](--force|--force-with-lease|--force-if-includes|--mirror|--delete|--prune|--tags|--follow-tags|-[[:alpha:]]*[fd][[:alpha:]]*|[+:][^[:space:]]*)([=[:space:];&|]|$)' <<<"$cmd" && \
   block "force, delete, mirror, prune, tag and +/: refspec pushes are forbidden. Plain \`git push [-u] origin <branch>\` of approved commits only (CLAUDE.md)."
+# Cloud mode, fail-closed: a push that cannot be tokenised cannot be checked for its
+# cloud/* destination, so it is blocked outright.
+[[ "${BSS_CLOUD:-}" == 1 ]] && grep -Eq '(^|[^[:alnum:]_.-])git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+|[[:space:]]+--?[[:alnum:]_-]+(=[^[:space:]]*)?)*[[:space:]]+push([^[:alnum:]_-]|$)' <<<"$cmd" && \
+  block "cloud sessions push only to cloud/* branches; this push could not be parsed - run it as a plain one-line command: git push -u origin cloud/<topic>."
 
 # --- the harness is changed through the Edit tool, which asks the human first ---
 # Mirrors the "ask" rules in settings.json (.claude/, compose files, Makefile, scripts/):
@@ -91,11 +102,14 @@ harness_write && \
 # A command segment (split at ; && || | & and newlines) that starts with a Node tool -
 # directly, after VAR=value assignments, or as `sh -c` / `bash -c` - is blocked unless the
 # segment itself runs in the `web` or `web-offline` compose service. Use make web-*.
+# In cloud mode the sandbox is the container: npm, npx and node may run on the host (pnpm,
+# yarn and corepack stay blocked).
 node_on_host() {
   python3 - "$cmd" <<'PY'
-import re, sys
+import os, re, sys
 cmd = sys.argv[1]
-tool = r"(npm|npx|node|pnpm|yarn|corepack)(\s|$)"
+tools = "pnpm|yarn|corepack" if os.environ.get("BSS_CLOUD") == "1" else "npm|npx|node|pnpm|yarn|corepack"
+tool = rf"({tools})(\s|$)"
 starts = re.compile(r"^\s*(\w+=\S*\s+)*" + tool)
 shell_c = re.compile(r"\b(sh|bash)\s+-c\s+['\"]?\s*" + tool)
 inside = re.compile(r"\bdocker\s+compose\b.*\b(run|exec|up)\b.*\sweb(-offline)?(\s|$)")

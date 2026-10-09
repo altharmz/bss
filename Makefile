@@ -12,7 +12,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e docs docs-check
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e docs docs-check
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -38,7 +38,8 @@ shell: ## Shell inside the running app container
 psql: ## psql in the local database, through compose exec (the db port is not published)
 	docker compose exec db sh -c 'exec psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
-test: ## Run the test suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci)
+test: ## Run the test suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the scripts' own cases
+	./scripts/test-billing-status-check.sh
 	docker compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) app pytest -n auto
 
 seed: ## LOCAL demo data through the public TMF API (tests/seed.py); refuses APP_ENV=prod; a second run is a no-op
@@ -104,9 +105,13 @@ smoke: ## Smoke-test the local instance
 deploy: ## Build locally and ship to the VPS
 	./scripts/deploy.sh
 
-# Target-specific: also applies to verify's `test` prerequisite.
+# Target-specific: also applies to the `test` prerequisite (through check, for verify).
+check: HYPOTHESIS_PROFILE = ci
+check: lint test docs-check web-lint web-test web-e2e ## Every local check of make verify, without the deploy
+	@echo "checked: lint, test, docs-check, web-lint, web-test and web-e2e passed"
+
 verify: HYPOTHESIS_PROFILE = ci
-verify: lint test docs-check web-lint web-test web-e2e deploy ## Full gate: backend and UI checks, generated docs current, the e2e smoke, then a real deployment that must go healthy
+verify: check deploy ## Full gate: make check, then a real deployment that must go healthy
 	@echo "verified: local checks passed and the remote instance is healthy"
 
 tunnel: ## Forward the remote app to localhost:18081 (Ctrl-C to stop)

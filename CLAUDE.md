@@ -51,7 +51,8 @@ make test      # pytest inside the container
 make lint      # ruff check + format check
 make smoke     # smoke-test the local instance
 make deploy    # build locally, ship image to VPS, restart there
-make verify    # lint, test, web-lint, web-test, web-e2e, then deploy (+ health, smoke, UI, web smoke)
+make check     # every local check of verify: lint, test, docs-check, web-lint, web-test, web-e2e
+make verify    # make check, then deploy (+ health, smoke, UI, web smoke)
 make ssh       # open a shell on the VPS
 make migrate   # apply Alembic migrations against the local stack
 make worker-once  # one wake-up of the billing worker against the local stack, then exit
@@ -248,6 +249,14 @@ boundary:
   checks, exactly as strict as before. Regression cases: `.claude/hooks/guard-cases.txt`
   (allow/block per command), run by `.claude/hooks/test-guard.sh` and by the pre-commit
   hook whenever `.claude/` changes.
+- **Cloud mode: `BSS_CLOUD=1`**, set only in the cloud environment's configuration, never
+  on the workstation (`docs/cloud.md`). The guard then allows `npm`/`npx`/`node` on the
+  host (the sandbox is the container; `pnpm`/`yarn`/`corepack` stay blocked), blocks any
+  command that mentions `vps-test` or `vpn2811.duckdns.org` (quotes included, checked
+  before guard.py), and lets a push through only with explicit `cloud/*` destinations
+  (a bare `git push`, `HEAD`, `master`, `main` are blocked; an untokenisable push is
+  blocked outright). Cases marked `@cloud` in `guard-cases.txt` run with `BSS_CLOUD=1`,
+  all others with it removed; absolute paths there are written `$CLAUDE_PROJECT_DIR`.
 
 - **Harness files need the human's OK.** `.claude/**`, `compose*.yaml`, `Makefile` and
   `scripts/**` are under `"ask"` for the Edit tool, and `guard.sh` blocks the shell writes
@@ -406,10 +415,10 @@ would attach the prod container to both `lab` and `shared`).
   is still storable - order processing rejects it with a reason instead of the schema
   raising an IntegrityError.
 - **Stage order:** 1. schema + repository (done) -> 2. TMF Open API backend (done) -> 3.
-  billing core (done, not wired: see "Billing") -> 4. worker with the daily run -> 5.
-  frontend. Bill and ABR endpoints are read-only; in production they stay empty until the
-  stage 4 worker calls `bill_account`. Stage 3 changes nothing user-visible, so it needs
-  no deploy.
+  billing core (done) -> 4. worker with the daily run (deployed with slice f, `dcbedeb`,
+  2026-10-05; slice g, the Billing runs screen, still open) -> 5. frontend. Bill and ABR
+  endpoints are read-only; the worker's daily run writes them through `bill_account`
+  (see "Billing worker").
 - **Rounding:** banker's rounding (`ROUND_HALF_EVEN`) to 2 decimals, applied once per ABR,
   never on intermediate values.
 - **Billable days:** the activation day is billed, the termination day is not. This is the
@@ -605,13 +614,15 @@ Payments are never changed or deleted (405).
 | appliedCustomerBillingRate | `charge_type` <-> `appliedBillingRateType` (`recurring` -> `appliedBillingCharge`, `refund` -> `appliedBillingCredit`), `amount` + `currency` <-> `taxExcludedAmount` (refunds negative), `period` <-> `periodCoverage`, `customer_bill_id` <-> `bill` and `isBilled`, `product_id` <-> `product`, `billing_account_id` <-> `billingAccount`, `created_at` <-> `date` | `billingAccount.id`, `product.id`, `isBilled` |
 
 - Products are only written by orders; POST/PATCH/DELETE on `/product` are 405.
-- Bills and ABRs are only written by the billing run (`app/billing/adapter.py`); in
-  production both lists stay empty until the stage 4 worker runs it.
-- **Known:** a product ordered with a future start date stays `created` until the stage 4
-  worker activates it. Billing is driven by dates, not status, so money is unaffected.
+- Bills and ABRs are only written by the billing run (`app/billing/adapter.py`), which
+  the worker's daily run calls per account.
+- **Status flips:** a product ordered with a future start date is `created` until the
+  worker's run of its start date flips it to `active` (`products.flip_statuses`, see
+  "Billing worker"); until that run, on the start date itself, it still reads `created`.
+  Billing is driven by dates, not status, so money is unaffected.
 - **Likewise `pendingTerminate`:** a delete of a started product with a termination date
-  in the future sets `pendingTerminate`; the stage 4 worker flips it to `terminated` on
-  that date. A termination date of today sets `terminated` directly. The product is
+  in the future sets `pendingTerminate`; the worker's run of that date flips it to
+  `terminated`. A termination date of today sets `terminated` directly. The product is
   billed up to the day before `termination_date` either way.
 
 ### TMF622 mapping and order processing
@@ -655,11 +666,12 @@ Payments are never changed or deleted (405).
   today and may not be in the past. **Our interpretation:** it is the start date of
   `add` items and the termination date of `delete` items (TMF has no per-item date).
 - **add** creates the product with `created_by_item_id`; status `active` if it starts
-  today, `created` if later (see the stage 4 note above). The item then references it.
+  today, `created` if later (the worker flips it; "Status flips" above). The item then
+  references it.
 - **delete** of a started product sets `termination_date` (exclusive),
   `terminated_by_item_id` and status `terminated` (termination today) or
-  `pendingTerminate` (termination in the future; see the stage 4 note above). **delete of a product that has not started**
-  cancels it: status `cancelled`, `termination_date = start_date` (0 billable days); a
+  `pendingTerminate` (termination in the future; flipped by the worker, as above).
+  **delete of a product that has not started** cancels it: status `cancelled`, `termination_date = start_date` (0 billable days); a
   requested date after its start date is rejected (`productNotStarted`).
 
 ## Billing (stage 3)
@@ -868,9 +880,14 @@ termination always visible, no account lock, no running-run guard).
   stops touching it and goes unhealthy. It is `find -mmin -3` in bash, no Python (see
   "Healthchecks" under Conventions). `deploy.sh`
   waits for **both** `app` and `worker` healthy (90 s) and checks `/billing-status` on
-  the VPS: 200 must say `ok`, 503 one of `stale|failed|running|none`, anything else fails
-  (body printed - date, status, age only); `make smoke` checks the same locally (proven:
-  without `stale` in the set it failed on the local 503 stale). Locally there is no
+  the VPS: 200 must say `ok` or `running` (a run younger than the 2 h grace - e.g. the
+  one the deploy's own worker restart left for its successor to take over), 503 one of
+  `stale|failed|running|none`, anything else fails (body printed - date, status, age
+  only); `make smoke` checks the same locally (proven: without `stale` in the set it
+  failed on the local 503 stale). Both call `scripts/billing-status-check.sh`; its cases
+  (`scripts/test-billing-status-check.sh`, run by `make test`) cover every answer of
+  `app/status.py` both ways - proven: with 200 = `ok` only (the earlier rule, doc finding
+  #1) both 200 `running` cases fail, with any status on a 200 five reject cases fail. Locally there is no
   long-running worker: **`make worker-once`** (D-W14). **The first deploy starts billing
   on the VPS**: no runs yet -> the due date only (D-W15).
 
@@ -1102,13 +1119,10 @@ In this order (as of 2026-10-05, after slice f):
    like the other harness files - today only the Edit tool's `"ask"` rule guards it -
    with regression cases both ways.
 6. **Remaining Phase 2** (APP_PORT, localhost:8080 refs, make down profiles) - deferred.
-7. **Guard follow-ups for cloud sessions** (recorded 2026-10-09, not started):
-   - `guard-cases.txt`: the cases that hard-code `/home/petrg/projects/bss` use
-     `$CLAUDE_PROJECT_DIR` instead (expanded by `test-guard.sh`), so they pass in the
-     cloud too;
-   - guard: with `BSS_CLOUD=1`, block any network access to `vpn2811.duckdns.org` /
-     `vps-test` (a cloud probe curled it; the proxy refused) and block `git push` to
-     `master` (the `cloud/*`-only rule in "Hard constraints"), with cases both ways.
+7. **Cloud mode, first real run**: guard cloud mode and portable cases are done
+   (2026-10-09, "Agent guardrails"). Still unproven in an actual cloud session:
+   `cloud-setup.sh`'s `npm ci` with `BSS_CLOUD=1`, and `npm run lint` / `npm test` on
+   the host there (`docs/cloud.md`).
 8. **FastAPI's `/docs`, `/redoc`, `/openapi.json` in prod**: decide whether they stay
    exposed (behind basic auth) or get disabled; add the decision to `scope.yaml` either
    way (needs the human's approval).
@@ -1298,8 +1312,9 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   *now* (top bar only). `npm test` runs the suite twice, in UTC and with
   `TZ=America/New_York`, so every request body is proven independent of the browser's
   zone; a local-`Date`-constructor bug passes the UTC run and fails the second one.
-- **Harness:** `settings.json` denies `npm`, `npx`, `node`, `pnpm`, `yarn`, `corepack` on
-  the host and edits under `design-ref/`; `guard.sh` blocks a command that runs a Node
+- **Harness:** `settings.json` denies `pnpm`, `yarn`, `corepack` on the host and edits
+  under `design-ref/` (`npm`, `npx`, `node` are not denied there: a deny rule cannot
+  depend on cloud mode, see "Agent guardrails"); `guard.sh` blocks a command that runs a Node
   tool on the host (also via `sh -c`, `xargs`, substitutions) unless it runs in one of the
   compose services `web`, `web-offline`, `web-preview`, `e2e` (or another container), and
   shell writes into `design-ref/`. It is quote-aware, so `docker compose run web-offline

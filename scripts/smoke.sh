@@ -16,13 +16,11 @@ code="$(curl -sS -o /tmp/smoke.out -w '%{http_code}' --max-time 5 "${BASE}/")" \
 grep -q '"status": *"ok"' /tmp/smoke.out || fail "/ did not report status ok: $(cat /tmp/smoke.out)"
 
 # The billing freshness signal: 503 is a valid answer (stale, failed, no run yet), so only
-# the shape is checked - 200 means ok, 503 one of the other known statuses.
+# the shape is checked - 200 ok or running, 503 one of the other known statuses
+# (scripts/billing-status-check.sh, shared with deploy.sh).
 code="$(curl -sS -o /tmp/smoke.out -w '%{http_code}' --max-time 5 "${BASE}/billing-status")" \
   || fail "cannot reach ${BASE}/billing-status"
-case "${code}" in
-  200) grep -Eq '"status": *"ok"' /tmp/smoke.out ;;
-  503) grep -Eq '"status": *"(stale|failed|running|none)"' /tmp/smoke.out ;;
-  *) false ;;
-esac || fail "/billing-status returned ${code}: $(cat /tmp/smoke.out)"
+"$(dirname "$0")/billing-status-check.sh" "${code}" </tmp/smoke.out \
+  || fail "/billing-status returned ${code}: $(cat /tmp/smoke.out)"
 
 printf '\033[1;32mSMOKE OK\033[0m %s\n' "${BASE}"

@@ -53,7 +53,7 @@ and Node is blocked on the host, so only the backend runs: `bash scripts/cloud-s
 `pytest -n auto -p no:cacheprovider` against the host database. The documentation
 generators run the same way (`python -m tests.docs_collect > .docs/collected.json`, then
 `python3 scripts/docs/generate.py`). **Cloud work is pushed to a branch and counts as
-unverified until a local `make verify` passes.**
+unverified until a local `make check` passes** (`docs/cloud.md`).
 
 ## Hooks
 
@@ -69,9 +69,10 @@ unverified until a local `make verify` passes.**
 ## Deploy
 
 `make deploy` runs `scripts/deploy.sh`, the **only** script allowed to change anything on
-the VPS. `make verify` is the gate: `lint`, `test` (hypothesis `ci`), `docs-check`,
-`web-lint`, `web-test`, `web-e2e`, then the deploy - it exits non-zero and prints remote
-logs when anything fails.
+the VPS. `make verify` is the gate: `make check` (`lint`, `test` with hypothesis `ci`,
+`docs-check`, `web-lint`, `web-test`, `web-e2e`), then the deploy - it exits non-zero and
+prints remote logs when anything fails. `make check` alone is the same gate without the
+deploy (e.g. to verify a cloud branch before merging it).
 
 What `deploy.sh` does, in order:
 
@@ -90,8 +91,9 @@ What `deploy.sh` does, in order:
 7. **Runs the migrations** with the new image before the app serves traffic (with a
    deadline).
 8. `up` - waits until **both `app` and `worker` are healthy** (90 s).
-9. Smoke on the VPS: `/healthz`, `/`, and `/billing-status` (200 must say `ok`; 503 one of
-   `stale|failed|running|none`).
+9. Smoke on the VPS: `/healthz`, `/`, and `/billing-status` (200 must say `ok` or
+   `running`; 503 one of `stale|failed|running|none`; `scripts/billing-status-check.sh`,
+   shared with `make smoke`).
 10. Rsyncs the built UI **into** `~/bss/web` (hashed assets, then `index.html`, then a
     `--delete` pass; the directory is never replaced, so Caddy's bind mount keeps it).
 11. **Web smoke** through Caddy as the GET-only `smoke` user (`scripts/web-smoke.sh`):

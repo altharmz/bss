@@ -248,11 +248,10 @@ log "Remote smoke test: /billing-status"
 billing="$(rssh "curl -sS --max-time 5 -w ' %{http_code}' http://127.0.0.1:18081/billing-status")" \
   || fail "cannot reach /billing-status on ${REMOTE}"
 printf '    %s\n' "${billing}"
-case "${billing##* }" in
-  200) grep -Eq '"status": *"ok"' <<<"${billing}" ;;
-  503) grep -Eq '"status": *"(stale|failed|running|none)"' <<<"${billing}" ;;
-  *) false ;;
-esac || fail "/billing-status answered with an unknown status: ${billing}"
+# 200 ok or running (a run in progress - e.g. the one this deploy's worker restart just
+# took over), 503 stale/failed/running/none; shared with smoke.sh.
+./scripts/billing-status-check.sh "${billing##* }" <<<"${billing% *}" \
+  || fail "/billing-status answered with an unknown status: ${billing}"
 
 # The UI goes live only after the app that serves its API is up. The shared Caddy
 # bind-mounts ~/bss/web (vps-infra), and a bind mount holds the directory's inode: the

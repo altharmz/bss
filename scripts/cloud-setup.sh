@@ -8,7 +8,12 @@
 #     service (fsync, full_page_writes, synchronous_commit off), with a superuser role
 #     `app` / password `throwaway` - a throwaway cluster, never a secret;
 #   - a Python 3.12 venv in /opt/bss-venv (outside the repo) installed exactly like the
-#     dev image: pip==26.2.1, requirements*.txt with constraints*.txt.
+#     dev image: pip==26.2.1, requirements*.txt with constraints*.txt; pip gives up on a
+#     stalled download after 30 s (one hung for 10+ minutes without a timeout);
+#   - with BSS_CLOUD=1 (cloud mode, the guard then allows npm/npx/node on the host): the
+#     UI's dependencies, `npm ci` in frontend/ with Node 22 (the version of the web
+#     image) through frontend/scripts/install-deps.sh - the same step as make web-install,
+#     so check-deps.sh and the lockfile hash work as in the container.
 #
 # Needs no secrets and never reads .env*. Idempotent: a second run only re-checks.
 # Usage: bash scripts/cloud-setup.sh   (then the commands it prints at the end)
@@ -47,12 +52,23 @@ fi
 if [[ ! -x "$VENV/bin/python" ]]; then
   python3.12 -m venv "$VENV"
 fi
-"$VENV/bin/pip" install -q pip==26.2.1
-"$VENV/bin/pip" install -q -r "$ROOT/requirements.txt" -c "$ROOT/constraints.txt"
-"$VENV/bin/pip" install -q -r "$ROOT/requirements-dev.txt" -c "$ROOT/constraints-dev.txt"
+"$VENV/bin/pip" install -q --timeout 30 pip==26.2.1
+"$VENV/bin/pip" install -q --timeout 30 -r "$ROOT/requirements.txt" -c "$ROOT/constraints.txt"
+"$VENV/bin/pip" install -q --timeout 30 -r "$ROOT/requirements-dev.txt" -c "$ROOT/constraints-dev.txt"
 if ! diff <(grep -Ev '^(#|$)' "$ROOT/constraints-dev.txt" | sort -f) <("$VENV/bin/pip" freeze | sort -f) >/dev/null; then
   echo "cloud-setup: the venv's pip freeze differs from constraints-dev.txt" >&2
   exit 1
+fi
+
+# --- UI dependencies, cloud mode only (the workstation installs them in the web container) ---
+if [[ "${BSS_CLOUD:-}" == 1 ]]; then
+  [[ -x /opt/node22/bin/node ]] && export PATH="/opt/node22/bin:$PATH"
+  node_major="$(node --version 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/')"
+  [[ "${node_major}" == 22 ]] || { echo "cloud-setup: Node 22 not found (got '${node_major:-none}')" >&2; exit 1; }
+  if ! (cd "$ROOT/frontend" && sh scripts/check-deps.sh >/dev/null 2>&1); then
+    (cd "$ROOT/frontend" && sh scripts/install-deps.sh)
+  fi
+  (cd "$ROOT/frontend" && sh scripts/check-deps.sh)
 fi
 
 cat <<'EOF'
@@ -62,3 +78,11 @@ Backend checks, from the repo root (see docs/cloud.md):
   ruff check app tests alembic && ruff format --check app tests alembic   # = make lint
   pytest -n auto -p no:cacheprovider                                       # = make test
 EOF
+if [[ "${BSS_CLOUD:-}" == 1 ]]; then
+  cat <<'EOF'
+UI checks (cloud mode, node_modules = package-lock.json):
+  export PATH=/opt/node22/bin:$PATH SPEC_DIR=../spec   # the container mounts spec/ at /spec
+  (cd frontend && sh scripts/check-deps.sh && npm run lint)   # = make web-lint
+  (cd frontend && sh scripts/check-deps.sh && npm test)       # = make web-test
+EOF
+fi

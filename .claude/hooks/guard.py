@@ -15,6 +15,11 @@ substitutions (wherever they appear, quotes included - conservative).
 A plain `git push` passes; force, delete, mirror, prune, tag and +/: refspec pushes are
 blocked (CLAUDE.md, "Hard constraints").
 
+Cloud mode (BSS_CLOUD=1, set only in the cloud environment's config, never locally): the
+sandbox is itself the container, so npm/npx/node may run on the host; every push must name
+its destination and every destination must be a cloud/* branch (never master/main). The
+VPS's names are blocked in cloud mode by guard.sh, before this script runs.
+
 The rules that protect production (the VPN, its ports, mass container stops) still scan
 the raw text, quotes included, as before.
 
@@ -48,6 +53,14 @@ PUSH_MSG = ("force, delete, mirror, prune, tag and +/: refspec pushes are forbid
 # git push options that rewrite or delete remote refs, or push every tag
 PUSH_FORBIDDEN = {"--force", "--force-with-lease", "--force-if-includes", "--mirror",
                   "--delete", "--prune", "--tags", "--follow-tags"}
+# git push options that take the next word as their value
+PUSH_OPTS_WITH_ARG = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
+
+CLOUD = os.environ.get("BSS_CLOUD") == "1"
+# Node tools allowed on the host in cloud mode (pnpm, yarn, corepack stay blocked)
+CLOUD_NODE_TOOLS = {"npm", "npx", "node"}
+CLOUD_PUSH_MSG = ("cloud sessions push only to cloud/* branches, never master/main. Name the"
+                  " branch: `git push -u origin cloud/<topic>` (CLAUDE.md, Hard constraints).")
 
 
 class Blocked(Exception):
@@ -256,6 +269,19 @@ def compose_target(words: list[str]):
     return words[i], words[i + 1 :]
 
 
+def push_refspecs(words: list[str]) -> list[str]:
+    """The refspecs of `git push <words>`: the positional words after the remote."""
+    positional, skip = [], False
+    for w in words:
+        if skip:
+            skip = False
+        elif w in PUSH_OPTS_WITH_ARG:
+            skip = True
+        elif not w.startswith("-"):
+            positional.append(w)
+    return positional[1:]
+
+
 def check(text: str, cwd, inside: bool, depth: int):
     """Check a command line; returns the cwd after it (cd tracking)."""
     if depth > MAX_DEPTH:
@@ -288,7 +314,7 @@ def check_segment(seg: list[str], cwd, inside: bool, depth: int):
             return None
         return resolve(cwd, target)
 
-    if cmd in NODE_TOOLS and not inside:
+    if cmd in NODE_TOOLS and not inside and not (CLOUD and cmd in CLOUD_NODE_TOOLS):
         block("npm/npx/node run only inside the web container, never on the host."
               " Use make web-install / web-build / web-lint / web-test / web-dev.")
 
@@ -310,6 +336,14 @@ def check_segment(seg: list[str], cwd, inside: bool, depth: int):
                         or re.fullmatch(r"-[a-zA-Z]*[fd][a-zA-Z]*", w)  # -f, -d, -uf
                         or w.startswith(("+", ":"))):  # +main (force), :old (delete)
                     block(PUSH_MSG)
+            if CLOUD:
+                refspecs = push_refspecs(rest[1:])
+                if not refspecs:  # a bare push goes wherever the branch tracks
+                    block(CLOUD_PUSH_MSG)
+                for spec in refspecs:
+                    dst = spec.split(":", 1)[-1].removeprefix("refs/heads/")
+                    if not dst.startswith("cloud/") or dst == "cloud/":
+                        block(CLOUD_PUSH_MSG)
 
     if cmd == "docker":
         rest = [w for w in words[1:] if not w.startswith("-")]
