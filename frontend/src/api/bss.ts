@@ -7,6 +7,7 @@ import { toCents } from '../format/money';
 import { addDays, zonedDateTime } from '../format/dates';
 import {
   AMOUNT,
+  explain,
   getAll,
   getJson,
   getPage,
@@ -118,6 +119,213 @@ export async function loadSubscribers(signal: AbortSignal): Promise<Subscribers>
     loadActiveProductCounts(signal),
   ]);
   return { accounts, activeProducts };
+}
+
+// --- subscribers: create and edit (TMF632 party, TMF629 customer, TMF666 account) ---
+// A subscriber is three resources. There is no delete (CLAUDE.md, "Frontend (stage 5)
+// decisions"): an account carries products, bills and payments; it can be Closed.
+
+const PARTIES = '/tmf-api/partyManagement/v5';
+
+export type PartyKind = 'Individual' | 'Organization';
+export type CustomerStatus = 'Created' | 'Active' | 'Inactive';
+
+export interface NewSubscriber {
+  kind: PartyKind;
+  givenName: string; // Individual
+  familyName: string; // Individual
+  organizationName: string; // Organization
+  accountName: string;
+  cycleDay: number; // 1..28
+  currency: string;
+  creditLimit: string | null; // canonical decimal string, or none
+}
+
+export function partyName(form: {
+  kind: PartyKind;
+  givenName: string;
+  familyName: string;
+  organizationName: string;
+}): string {
+  return form.kind === 'Individual'
+    ? `${form.givenName.trim()} ${form.familyName.trim()}`
+    : form.organizationName.trim();
+}
+
+/** Which of the three creates failed, and what already exists then. */
+export class SubscriberStepError extends Error {}
+
+function partyBody(form: NewSubscriber | SubscriberProfile): Record<string, string> {
+  return form.kind === 'Individual'
+    ? { givenName: form.givenName.trim(), familyName: form.familyName.trim() }
+    : { name: form.organizationName.trim() };
+}
+
+function partyPath(kind: PartyKind): string {
+  return `${PARTIES}/${kind === 'Individual' ? 'individual' : 'organization'}`;
+}
+
+/**
+ * Three TMF calls, in the order the references require: the party, the customer engaging
+ * it (Active: the operator registers a real customer), then its billing account. A failure
+ * stops there and says what was already created - nothing is deleted behind the
+ * operator's back (there is no DELETE), as with New offering. Returns the account id.
+ */
+export async function createSubscriber(form: NewSubscriber): Promise<string> {
+  const name = partyName(form);
+  const created: string[] = [];
+  async function step<T>(what: string, call: () => Promise<T>): Promise<T> {
+    try {
+      return await call();
+    } catch (error) {
+      const done = created.length ? ` Already created: ${created.join(', ')}.` : '';
+      throw new SubscriberStepError(`Creating the ${what} failed: ${explain(error)}.${done}`);
+    }
+  }
+  const party = await step('party', () =>
+    postJson<{ id?: string }>(partyPath(form.kind), { '@type': form.kind, ...partyBody(form) }),
+  );
+  const partyId = need(party.id, 'party id');
+  created.push(`${form.kind.toLowerCase()} ${name}`);
+  const customer = await step('customer', () =>
+    postJson<{ id?: string }>(PATHS.customers, {
+      '@type': 'Customer',
+      name,
+      status: 'Active',
+      engagedParty: { id: partyId, '@type': 'PartyRef', '@referredType': form.kind },
+    }),
+  );
+  const customerId = need(customer.id, 'customer id');
+  created.push(`customer ${name}`);
+  const body = {
+    '@type': 'BssBillingAccount',
+    name: form.accountName.trim(),
+    billCycleDay: form.cycleDay,
+    currency: form.currency,
+    relatedParty: [
+      {
+        '@type': 'RelatedPartyRefOrPartyRoleRef',
+        role: 'customer',
+        partyOrPartyRole: {
+          id: customerId,
+          name,
+          '@type': 'PartyRoleRef',
+          '@referredType': 'Customer',
+        },
+      },
+    ],
+    ...(form.creditLimit === null ? {} : { creditLimit: { unit: form.currency, value: AMOUNT } }),
+  };
+  const account = await step('billing account', () =>
+    postJson<{ id?: string }>(
+      PATHS.accounts,
+      form.creditLimit === null ? body : jsonWithAmount(body, form.creditLimit),
+    ),
+  );
+  return need(account.id, 'account id');
+}
+
+/** Everything the Edit dialog shows and may change. */
+export interface SubscriberProfile {
+  kind: PartyKind;
+  partyId: string;
+  givenName: string;
+  familyName: string;
+  organizationName: string;
+  customerId: string;
+  customerName: string;
+  customerStatus: CustomerStatus;
+  accountId: string;
+  accountName: string;
+  accountState: AccountState;
+  creditLimit: string | null; // canonical decimal string, or none
+}
+
+function canonical(cents: number | null): string | null {
+  if (cents === null) return null;
+  return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
+}
+
+export async function loadProfile(
+  account: Account,
+  signal: AbortSignal,
+): Promise<SubscriberProfile> {
+  const customer = await getJson<T629['schemas']['Customer']>(
+    `${PATHS.customers}/${account.customerId}`,
+    signal,
+  );
+  const engaged = need(customer.engagedParty, 'customer engagedParty');
+  const kind = need(engaged['@referredType'], 'engagedParty @referredType') as PartyKind;
+  const partyId = need(engaged.id, 'engagedParty id');
+  const party = await getJson<{ givenName?: string; familyName?: string; name?: string }>(
+    `${partyPath(kind)}/${partyId}`,
+    signal,
+  );
+  return {
+    kind,
+    partyId,
+    givenName: party.givenName ?? '',
+    familyName: party.familyName ?? '',
+    organizationName: kind === 'Organization' ? need(party.name, 'organization name') : '',
+    customerId: account.customerId,
+    customerName: need(customer.name, 'customer name'),
+    customerStatus: need(customer.status, 'customer status') as CustomerStatus,
+    accountId: account.id,
+    accountName: account.name,
+    accountState: account.state,
+    creditLimit: canonical(account.creditLimitCents),
+  };
+}
+
+/**
+ * Merge patches of only what changed, party then customer then account. Returns what was
+ * changed ("party", "customer", "account"); a failure says what was already saved.
+ */
+export async function updateSubscriber(
+  before: SubscriberProfile,
+  after: SubscriberProfile,
+  currency: string,
+): Promise<string[]> {
+  const saved: string[] = [];
+  async function step(what: string, call: () => Promise<unknown>): Promise<void> {
+    try {
+      await call();
+      saved.push(what);
+    } catch (error) {
+      const done = saved.length ? ` Already saved: ${saved.join(', ')}.` : '';
+      throw new SubscriberStepError(`Saving the ${what} failed: ${explain(error)}.${done}`);
+    }
+  }
+  const party = Object.fromEntries(
+    Object.entries(partyBody(after)).filter(([k, v]) => partyBody(before)[k] !== v),
+  );
+  if (Object.keys(party).length) {
+    await step('party', () => patchJson(`${partyPath(after.kind)}/${after.partyId}`, party));
+  }
+  const customer: Record<string, string> = {};
+  if (after.customerName.trim() !== before.customerName) customer.name = after.customerName.trim();
+  if (after.customerStatus !== before.customerStatus) customer.status = after.customerStatus;
+  if (Object.keys(customer).length) {
+    await step('customer', () => patchJson(`${PATHS.customers}/${after.customerId}`, customer));
+  }
+  const account: Record<string, unknown> = {};
+  if (after.accountName.trim() !== before.accountName) account.name = after.accountName.trim();
+  if (after.accountState !== before.accountState) account.state = after.accountState;
+  const limitChanged = after.creditLimit !== before.creditLimit;
+  if (limitChanged) {
+    account.creditLimit = after.creditLimit === null ? null : { unit: currency, value: AMOUNT };
+  }
+  if (Object.keys(account).length) {
+    await step('billing account', () =>
+      patchJson(
+        `${PATHS.accounts}/${after.accountId}`,
+        limitChanged && after.creditLimit !== null
+          ? jsonWithAmount(account, after.creditLimit)
+          : account,
+      ),
+    );
+  }
+  return saved;
 }
 
 // --- customer (its status is shown on the card, D1) ---

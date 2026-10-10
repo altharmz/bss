@@ -579,3 +579,19 @@
   align-items: center;
   gap: 8px;
 }
+
+/* --- subscriber forms: new subscriber, edit subscriber --- */
+.bss-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bss-field {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.bss-field .label {
+  color: var(--muted);
+}

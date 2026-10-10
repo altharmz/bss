@@ -54,6 +54,27 @@ list, grouped client-side.
 API: `GET /tmf-api/accountManagement/v5/billingAccount` (all pages),
 `GET /tmf-api/productInventory/v5/product?status=active&fields=billingAccount` (all pages).
 
+### New subscriber (`ui.subscribers.new`) and Edit subscriber (`ui.subscriber.edit`) - `screens/SubscriberForms.tsx`
+
+A subscriber is three TMF resources; **there is no delete** (an account carries products,
+bills and payments - it can be Closed). **+ New subscriber** (list header): a person
+(given + family name) or an organization (name), the account name (default "<name>
+main"), billing cycle day 1-28 (default 1) and an optional credit limit; the currency is
+the UI currency. Three calls in reference order: the party (TMF632), the customer engaging
+it with status **Active** (TMF629), the billing account (TMF666, `BssBillingAccount`, the
+credit limit as an exact number token). A failure stops there and names what was already
+created - nothing is undone behind the operator's back, as in New offering. On success the
+new card opens. **Edit** (card header) loads the party, customer and account and offers
+the names, the customer status (Created / Active / Inactive), the account name, the
+account state (Active / Suspended / Closed, with a note that a non-Active account takes no
+new orders while its products keep billing) and the credit limit (empty = none). Save
+sends merge patches of **only what changed**, party, then customer, then account
+(`creditLimit` as an exact token, or `null` to remove it); a failure names what was
+already saved. The cycle day and the currency cannot be changed (the backend refuses).
+API: `POST/PATCH /tmf-api/partyManagement/v5/{individual|organization}`,
+`POST/PATCH /tmf-api/customerManagement/v5/customer`,
+`POST/PATCH /tmf-api/accountManagement/v5/billingAccount`.
+
 ### Subscriber card (`ui.subscriber.card`) - `screens/SubscriberCard.tsx`
 
 Header with name, state, subscriber number, billing account (`BA-xxxxxxxx`), customer

@@ -494,3 +494,128 @@ describe('add product', () => {
     ).toBe(true);
   });
 });
+
+// Edit subscriber: only what changed is patched, party -> customer -> account. The bodies
+// are replayed against the real API by tests/test_ui_requests.py.
+const PARTY_ID = 'dddd4444-0000-4000-8000-000000000004';
+const PARTY_URL = `/tmf-api/partyManagement/v5/individual/${PARTY_ID}`;
+const CUSTOMER_URL = `/tmf-api/customerManagement/v5/customer/${C}`;
+const ACCOUNT_URL = `/tmf-api/accountManagement/v5/billingAccount/${A}`;
+
+function editBackend(routes: Record<string, Handler> = {}) {
+  return backend({
+    [`GET ${CUSTOMER_URL}`]: () =>
+      json({
+        id: C,
+        name: 'Olga Kuznetsova',
+        status: 'Active',
+        engagedParty: { id: PARTY_ID, '@type': 'PartyRef', '@referredType': 'Individual' },
+        '@type': 'Customer',
+      }),
+    [`GET ${PARTY_URL}`]: () =>
+      json({ id: PARTY_ID, givenName: 'Olga', familyName: 'Kuznetsova', '@type': 'Individual' }),
+    ...routes,
+  });
+}
+
+async function openEdit() {
+  await open();
+  fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Edit subscriber' });
+  await within(dialog).findByDisplayValue('Kuznetsova');
+  return dialog;
+}
+
+function patches(fetchMock: ReturnType<typeof stubFetch>['fetchMock']) {
+  return fetchMock.mock.calls
+    .filter(([, init]) => init?.method === 'PATCH')
+    .map(([url, init]) => [String(url), String(init?.body)]);
+}
+
+describe('edit subscriber', () => {
+  it('patches only what changed: the party and the account', async () => {
+    const { fetchMock } = editBackend({
+      [`PATCH ${PARTY_URL}`]: () => json({ id: PARTY_ID }),
+      [`PATCH ${ACCOUNT_URL}`]: () => json(ACCOUNT),
+    });
+    const dialog = await openEdit();
+    expectUi('ui.subscriber.edit');
+    const save = within(dialog).getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true); // nothing changed yet
+    expect(within(dialog).getByDisplayValue('500.00')).toBeTruthy(); // the credit limit
+
+    fireEvent.change(within(dialog).getByLabelText('Family name'), {
+      target: { value: 'Kuznetsova-Petrova' },
+    });
+    fireEvent.click(
+      within(within(dialog).getByRole('group', { name: 'Account state' })).getByRole('button', {
+        name: 'Suspended',
+      }),
+    );
+    expect(within(dialog).getByText(/takes no new orders/)).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText('Credit limit, RUB (empty = none)'), {
+      target: { value: '' },
+    });
+    fireEvent.click(save);
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Saved: party, billing account',
+    );
+    expect(patches(fetchMock)).toEqual([
+      [PARTY_URL, '{"familyName":"Kuznetsova-Petrova"}'],
+      [ACCOUNT_URL, '{"state":"Suspended","creditLimit":null}'],
+    ]);
+  });
+
+  it('sends a new credit limit as an exact token, and the customer status', async () => {
+    const { fetchMock } = editBackend({
+      [`PATCH ${CUSTOMER_URL}`]: () => json({ id: C }),
+      [`PATCH ${ACCOUNT_URL}`]: () => json(ACCOUNT),
+    });
+    const dialog = await openEdit();
+    fireEvent.click(
+      within(within(dialog).getByRole('group', { name: 'Customer status' })).getByRole('button', {
+        name: 'Inactive',
+      }),
+    );
+    fireEvent.change(within(dialog).getByLabelText('Credit limit, RUB (empty = none)'), {
+      target: { value: '2,000.1' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    expect(patches(fetchMock)).toEqual([
+      [CUSTOMER_URL, '{"status":"Inactive"}'],
+      [ACCOUNT_URL, '{"creditLimit":{"unit":"RUB","value":2000.10}}'],
+    ]);
+  });
+
+  it('says what was already saved when a later step fails', async () => {
+    editBackend({
+      [`PATCH ${PARTY_URL}`]: () => json({ id: PARTY_ID }),
+      [`PATCH ${ACCOUNT_URL}`]: () => tmfError(422, 'Unprocessable Entity'),
+    });
+    const dialog = await openEdit();
+    fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olya' } });
+    fireEvent.change(within(dialog).getByLabelText('Account name'), { target: { value: 'Main' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain('Saving the billing account failed');
+    expect(alert.textContent).toContain('Already saved: party.');
+  });
+
+  it('cannot save an empty name or a bad credit limit', async () => {
+    editBackend();
+    const dialog = await openEdit();
+    const save = within(dialog).getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    fireEvent.change(within(dialog).getByLabelText('Customer name'), { target: { value: ' ' } });
+    expect(save.disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText('Customer name'), {
+      target: { value: 'Olga K' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Credit limit, RUB (empty = none)'), {
+      target: { value: '1.234' },
+    });
+    expect(within(dialog).getByText('Enter a credit limit with at most 2 decimals.')).toBeTruthy();
+    expect(save.disabled).toBe(true);
+  });
+});

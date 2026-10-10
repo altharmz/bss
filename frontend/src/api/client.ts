@@ -90,10 +90,11 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await response.json()) as T;
 }
 
-/** PATCH as JSON Merge Patch - the only PATCH our TMF APIs accept (415 otherwise). */
+/** PATCH as JSON Merge Patch - the only PATCH our TMF APIs accept (415 otherwise). As
+ * with postJson, a string body is sent as is (exact amount tokens). */
 export async function patchJson<T>(path: string, body: unknown): Promise<T> {
   const response = await request('PATCH', path, {
-    body: JSON.stringify(body),
+    body: typeof body === 'string' ? body : JSON.stringify(body),
     headers: { 'Content-Type': 'application/merge-patch+json' },
   });
   return (await response.json()) as T;

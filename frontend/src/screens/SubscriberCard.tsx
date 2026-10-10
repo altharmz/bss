@@ -21,6 +21,7 @@ import { Button, Panel, Pill, useToast } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
+import { EditSubscriberModal } from './SubscriberForms';
 import './screens.css';
 
 // Screen 2. Everything about one billing account. Products change only through TMF622
@@ -108,6 +109,7 @@ function Card({
   const context = useSystemContext();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
   const customerStatus = useResource(`customer:${account.customerId}:${version}`, (signal) =>
     loadCustomerStatus(account.customerId, signal),
   );
@@ -148,7 +150,7 @@ function Card({
             </div>
           </div>
           <div className="bss-card-action">
-            {addButton}
+            <Button onClick={() => setEditing(true)}>Edit</Button> {addButton}
             {!canAdd && (
               <div className="caption">Unavailable for {account.state.toLowerCase()} accounts</div>
             )}
@@ -200,6 +202,17 @@ function Card({
         <History account={account} version={version} />
       </div>
 
+      {editing && (
+        <EditSubscriberModal
+          account={account}
+          onClose={() => setEditing(false)}
+          onSaved={(message) => {
+            setEditing(false);
+            toast(message);
+            reload();
+          }}
+        />
+      )}
       {adding && (
         <AddProductModal
           account={account}
