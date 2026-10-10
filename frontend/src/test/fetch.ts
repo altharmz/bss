@@ -1,7 +1,16 @@
 import { vi } from 'vitest';
 
 // A fetch stub for component tests: maps "METHOD path" (path with query) to a handler.
-// An unmatched request fails the test loudly instead of hanging.
+// An unmatched request fails the test loudly instead of hanging: the fetch rejects (the
+// UI shows a network error) and setup.ts fails the test after it ends, so a missing stub
+// can never decide a test by timing - whether its error rendered before an assertion.
+
+const unexpected: string[] = [];
+
+/** The unmatched requests since the last call, cleared (setup.ts, after every test). */
+export function takeUnexpectedRequests(): string[] {
+  return unexpected.splice(0);
+}
 
 export type Handler = () => Response | Promise<Response>;
 
@@ -15,6 +24,10 @@ export function json(body: unknown, init: ResponseInit & { total?: number } = {}
   }
   return new Response(JSON.stringify(body), { status: 200, ...rest, headers });
 }
+
+/** A request the test does not care about the answer to (e.g. the screen it navigates to
+ * loads data): it stays in flight, so it can neither render nor fail anything. */
+export const pending: Handler = () => new Promise<Response>(() => {});
 
 export function tmfError(status: number, reason: string): Response {
   return json(
@@ -30,7 +43,10 @@ export function stubFetch(routes: Record<string, Handler>) {
     const key = `${init?.method ?? 'GET'} ${url}`;
     calls.push(key);
     const handler = routes[key];
-    if (!handler) throw new Error(`unexpected request in test: ${key}`);
+    if (!handler) {
+      unexpected.push(key);
+      throw new Error(`unexpected request in test: ${key}`);
+    }
     return handler();
   });
   vi.stubGlobal('fetch', fetchMock);

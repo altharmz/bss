@@ -1,18 +1,34 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { CONTEXT, json, stubFetch, tmfError, type Handler } from '../test/fetch';
+import { CONTEXT, json, pending, stubFetch, tmfError, type Handler } from '../test/fetch';
 import { App } from './App';
 import { parseRoute } from './router';
 
 const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount?limit=1&fields=id';
 const OFFERINGS = '/tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id';
 const ID = '1f3a9c2b-0000-4000-8000-000000000001';
+const TMF = '/tmf-api';
+const empty = () => json([], { total: 0 });
 
+// Every request a screen of these tests makes is stubbed: an unstubbed one fails the test
+// (setup.ts). Before, the subscribers list's own load went unstubbed and its network
+// error raced the "no alert after Retry" assertion (failed 2 of 5 runs on master).
 function backend(context: Handler = () => json(CONTEXT)) {
   return stubFetch({
     'GET /internal/v1/context': context,
     [`GET ${ACCOUNTS}`]: () => json([{ id: ID }], { total: 1284 }),
     [`GET ${OFFERINGS}`]: () => json([], { total: 12 }),
+    // the subscribers list: no accounts
+    [`GET ${TMF}/accountManagement/v5/billingAccount?offset=0&limit=100`]: empty,
+    [`GET ${TMF}/productInventory/v5/product?status=active&fields=billingAccount&offset=0&limit=100`]:
+      empty,
+    // the catalog: empty
+    [`GET ${TMF}/productCatalogManagement/v5/productOffering?offset=0&limit=100`]: empty,
+    [`GET ${TMF}/productCatalogManagement/v5/productOfferingPrice?priceType=recurring&offset=0&limit=100`]:
+      empty,
+    [`GET ${TMF}/productCatalogManagement/v5/productSpecification?offset=0&limit=100`]: empty,
+    // a subscriber card: only its breadcrumbs matter here
+    [`GET ${TMF}/accountManagement/v5/billingAccount/${ID}`]: pending,
   });
 }
 
@@ -129,6 +145,8 @@ describe('shell', () => {
     fail = false;
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('2026-10-01')).toBeTruthy();
+    // the screen behind it loads and settles (its empty state): nothing failed
+    expect(await screen.findByText(/No subscribers/)).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 });

@@ -395,6 +395,7 @@ describe('add product', () => {
   it('orders the offering with the start date and closes', async () => {
     const { fetchMock } = backend({
       ...catalog,
+      [preview('2026-10-01')]: () => json(FIRST_CHARGE), // the default start, before the change
       [preview('2026-10-06')]: () =>
         json({ ...FIRST_CHARGE, startDate: '2026-10-06', chargeRunDate: '2026-10-06' }),
       [`POST ${ORDERS}`]: () =>
