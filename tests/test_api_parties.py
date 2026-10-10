@@ -102,6 +102,17 @@ def test_customer_validation(api):
     assert len(api.get(CUSTOMER).json()) == 1
 
 
+@pytest.mark.parametrize("status", ["Gold", "active", "Rejected", ""])
+def test_customer_status_outside_the_enum_is_refused_on_patch(api, status):
+    """TMF629 leaves Customer.status a free string; ours is Created, Active, Inactive, and a
+    PATCH with anything else is a 422 that changes nothing (not a 500 from the db enum)."""
+    href = apidata.customer(api)["href"]
+    response = api.patch(href, {"status": status, "name": "Changed"})
+    assert response.status_code == 422, response.text
+    assert api.get(href).json()["status"] == "Created"
+    assert api.get(href).json()["name"] == "Ivan Ivanov"
+
+
 def test_customer_filters(api):
     ivan, anna = apidata.individual(api), apidata.individual(api, "Anna", "Petrova")
     apidata.customer(api, ivan)
@@ -218,6 +229,31 @@ def test_billing_account_needs_one_existing_customer(api):
     two = apidata.account_body(cust)
     two["relatedParty"] *= 2
     assert api.post(ACCOUNT, two).status_code == 422
+
+
+@pytest.mark.parametrize("role", [None, "owner", "Customer", "customer ", ""])
+def test_billing_account_party_role_must_be_customer(api, role):
+    """doc-findings #3: the one related party must carry role "customer" - a missing or
+    other role is a 422 and nothing is stored, never answered back as "customer"."""
+    body = apidata.account_body(apidata.customer(api))
+    if role is None:
+        del body["relatedParty"][0]["role"]
+        sent = "no role"
+    else:
+        body["relatedParty"][0]["role"] = role
+        sent = f"role {role!r}"
+    response = api.post(ACCOUNT, body)
+    assert response.status_code == 422, response.text
+    assert response.json()["message"] == (
+        f'relatedParty: exactly one party with role "customer" is required, not {sent}'
+    )
+    assert api.get(ACCOUNT).json() == []
+
+
+def test_billing_account_answers_the_role_it_was_given(api):
+    acc = apidata.account(api)
+    assert [p["role"] for p in acc["relatedParty"]] == ["customer"]
+    assert [p["role"] for p in api.get(acc["href"]).json()["relatedParty"]] == ["customer"]
 
 
 def test_billing_account_patch(api):

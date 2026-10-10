@@ -96,6 +96,10 @@ ATTRIBUTES = (
     "@schemaLocation",
 )
 BALANCE_TYPE = "currentBalance"
+# The one related party of an account is its owning customer (`customer_id`). Its role is
+# required and must be exactly this, so the role the response states is the one stored -
+# never a rewrite of whatever the client sent.
+CUSTOMER_ROLE = "customer"
 
 
 class RelatedParty(TmfModel):
@@ -150,7 +154,7 @@ def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "state": row["state"],
         "relatedParty": [
             {
-                "role": "customer",
+                "role": CUSTOMER_ROLE,
                 "partyOrPartyRole": ref(
                     "Customer",
                     customer_href(customer["id"]),
@@ -222,7 +226,13 @@ def get_account(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 @router.post("/billingAccount")
 def create_account(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     data = parse(AccountCreate, body, read_only=("accountBalance",))
-    customer_id = data.related_party[0].party_or_party_role.id
+    (party,) = data.related_party
+    if party.role != CUSTOMER_ROLE:
+        sent = "no role" if party.role is None else f"role {party.role!r}"
+        raise unprocessable(
+            f'relatedParty: exactly one party with role "{CUSTOMER_ROLE}" is required, not {sent}'
+        )
+    customer_id = party.party_or_party_role.id
     with tx() as conn:
         if parties.get_customer(conn, customer_id) is None:
             raise unprocessable(f"relatedParty: customer {customer_id} does not exist")
