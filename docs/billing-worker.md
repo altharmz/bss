@@ -216,6 +216,17 @@ worker that keeps dying and being taken over would never let the grace run out; 
 `running` run of a date before the expected date is therefore 503 regardless, which
 bounds such a loop to about a day (`::test_a_run_taken_over_again_and_again_is_overdue_once_its_date_is_late`).
 
+**503 while an older date is caught up after downtime - by design.** After an outage
+the worker bills the missed dates in order, oldest first (the automatic window, or an
+operator's catch-up). While it works on a date before the expected date, the latest run
+is that date: `running` reads 503 `running` (its date is late, whatever its age), and
+between two dates the last completed one reads 503 `stale`. Only the run of the expected
+date turns it 200 again. So **the external monitor alerts during every catch-up**; that
+is the signal working, not a fault - billing *is* behind until the catch-up reaches the
+expected date. The deploy's remote check and `make smoke` accept 503 `running`/`stale`
+(they check the answer's shape only, `scripts/billing-status-check.sh`), so a deploy
+during a catch-up does not fail on it.
+
 `ageSeconds` counts from `finished_at`, else `started_at`. It is **not part of
 `/healthz`**: a late run never marks the app unhealthy. An unknown query parameter is a
 400. Proven by `tests/test_billing_status.py` (all ten tests, including a strict

@@ -18,8 +18,9 @@ blocked (CLAUDE.md, "Hard constraints").
 Cloud mode (CLAUDE_CODE_REMOTE=true: Claude Code sets it in every cloud session, never
 locally): the sandbox is itself the container, so npm/npx/node may run on the host; every
 push must name its destination and every destination must be a cloud/* branch (never
-master/main). The VPS's names are blocked in cloud mode by guard.sh, before this script
-runs.
+master/main). Redirections are not refspecs: `git push -u origin cloud/x >log 2>&1`
+passes, while `... cloud/x 2 >log` (a separate word 2) is a branch and is checked. The
+VPS's names are blocked in cloud mode by guard.sh, before this script runs.
 
 The rules that protect production (the VPN, its ports, mass container stops) still scan
 the raw text, quotes included, as before.
@@ -36,7 +37,9 @@ import sys
 
 ALLOW, BLOCK, UNTOKENISABLE = 0, 2, 3
 PUNCTUATION = ";&|()<>\n"
-REDIRECTS = {">", ">>", ">|", "&>", "&>>"}
+REDIRECTS = {">", ">>", ">|", "&>", "&>>", ">&", "<>"}  # can write their target
+# every redirection operator; its target is the next token (`2>&1` is `>&` `1`, see tokenise)
+REDIRECT_OPS = REDIRECTS | {"<", "<&"}
 NODE_TOOLS = {"npm", "npx", "node", "pnpm", "yarn", "corepack"}
 # compose services in which the Node toolchain is allowed (compose.override.yaml)
 NODE_SERVICES = {"web", "web-offline", "web-preview", "e2e"}
@@ -119,8 +122,42 @@ def raw_checks(text: str) -> None:
 
 # --- tokens, segments, substitutions ---
 
+def drop_fd_numbers(text: str) -> str:
+    """Remove the file-descriptor number of a redirection (`2>&1` -> `>&1`, `2>>log` ->
+    `>>log`): an unquoted run of digits that starts a word and is followed directly by
+    `<` or `>`. shlex would make it a word of its own, indistinguishable from an argument
+    (`git push origin cloud/x 2>&1` would push a branch `2`). With a space (`2 >log`) the
+    digits are an argument and stay."""
+    out, i, quote = [], 0, None
+    while i < len(text):
+        c = text[i]
+        if quote:
+            if c == "\\" and quote == '"' and i + 1 < len(text):
+                out.append(text[i : i + 2])
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c == "\\" and i + 1 < len(text):
+            out.append(text[i : i + 2])
+            i += 2
+            continue
+        elif c.isdigit() and (i == 0 or text[i - 1] in " \t\r\n;&|()"):
+            j = i
+            while j < len(text) and text[j].isdigit():
+                j += 1
+            if j < len(text) and text[j] in "<>":
+                i = j
+                continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def tokenise(text: str) -> list[str]:
-    lex = shlex.shlex(text, posix=True, punctuation_chars=PUNCTUATION)
+    lex = shlex.shlex(drop_fd_numbers(text), posix=True, punctuation_chars=PUNCTUATION)
     lex.whitespace = " \t\r"  # a newline separates commands: it is punctuation here
     lex.commenters = ""  # never let '#' hide the rest of a line
     lex.whitespace_split = True
@@ -323,7 +360,11 @@ def check_segment(seg: list[str], cwd, inside: bool, depth: int):
         block("cron changes are the human's job.")
 
     if cmd == "git":
-        rest = words[1:]
+        # what git itself receives: no redirection operators and no targets of them, so a
+        # `>/dev/null` is not read as a refspec
+        argv = strip_prefixes([t for i, t in enumerate(seg) if t not in REDIRECT_OPS
+                               and not (i and seg[i - 1] in REDIRECT_OPS)])
+        rest = argv[1:]
         while rest and rest[0].startswith("-"):
             rest = rest[2:] if rest[0] in ("-C", "-c") else rest[1:]
         sub = rest[0] if rest else ""

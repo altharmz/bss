@@ -383,6 +383,13 @@ would attach the prod container to both `lab` and `shared`).
   the constraints file from that container's `pip freeze` deliberately, review the diff
   of the constraints file, rebuild, `make lint && make test` - one commit. Never loosen a
   pin to `>=`. Do not `pip install` inside a running container.
+- **Migrations already on `master` are immutable.** A fix to one - schema, data or
+  comment text - goes into a new migration. Alembic records only the revision id, so a
+  database already at that revision never sees an edit: it silently differs from a fresh
+  one. One exception happened before this rule: `0005` (comments only) was edited once
+  on master before its first deploy (`cloud/catalog-integrity`, the
+  `billing_run.started_at` comment), so the local stack, migrated to `0005` before the
+  edit, still has the old comment text; production gets the edited one.
 - Before every commit: `make lint && make test`. Small, focused commits.
 
 ## Domain model & decisions
@@ -879,6 +886,11 @@ termination always visible, no account lock, no running-run guard).
   **Not part of `/healthz`**: a late run never marks the app unhealthy (tested). Not in
   any spec; an unknown query parameter is a 400. Negative proofs: failed read as
   completed, running never overdue, grace removed, an extra body field.
+  **By design, it is 503 while the worker catches up an older date after downtime**
+  (503 `running` on a late date, 503 `stale` between dates) until the run of the
+  expected date: the external monitor alerts during every catch-up - billing is behind.
+  The deploy's check and `make smoke` accept 503 `running`/`stale` (shape only), so they
+  do not fail on it (`docs/billing-worker.md`, "Billing status").
 - **Test pitfalls found here**: `pg_locks` is cluster-wide - count advisory locks of the
   current database only (parallel tests hold their own); `pg_terminate_backend(pid)`
   returns before the backend exits - use `pg_terminate_backend(pid, 5000)`.
@@ -1213,6 +1225,10 @@ shipped).
   before the dump.
 - **`"ask"` rules.** Verify in a fresh session, in the normal mode, that an Edit to
   `Makefile` prompts; if it doesn't, switch these paths from `"ask"` to `"deny"`.
+  **Seen not to prompt in a cloud session** (reported by the human, 2026-10-10): Edits
+  under `scripts/**` went through without a prompt there. Open: whether that is the
+  cloud session's permission mode or the rule itself, and what replaces it in the cloud
+  (a `"deny"` cannot depend on cloud mode; the guard sees only Bash, not the Edit tool).
 
 ## Working style
 

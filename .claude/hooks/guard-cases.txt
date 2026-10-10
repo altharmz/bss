@@ -287,6 +287,33 @@ block@cloud echo x; git push origin master
 block@cloud git status && git push
 block@cloud sh -c 'git push origin main'
 block@cloud echo $(git push origin master)
+# redirections are not refspecs: their operators, targets and fd numbers are skipped
+allow@cloud git push -u origin cloud/x 2>&1
+allow@cloud git push -u origin cloud/x >/dev/null 2>&1
+allow@cloud git push -u origin cloud/x > /tmp/push.log 2>&1
+allow@cloud git push -u origin cloud/x 2>/tmp/err.log
+allow@cloud git push -u origin cloud/x 2>>/tmp/err.log
+allow@cloud git push -u origin cloud/x &>/tmp/push.log
+allow@cloud git push -u origin cloud/x </dev/null
+allow@cloud git push -u origin cloud/x | tee /tmp/push.log
+allow@cloud git push -u origin cloud/x 2>&1 | tee /tmp/push.log
+allow@cloud git push origin cloud/x 2>&1; echo done
+block@cloud git push 2>&1
+block@cloud git push >/dev/null 2>&1
+block@cloud git push origin master 2>&1
+block@cloud git push -u origin master >/dev/null 2>&1
+block@cloud git push origin main | tee /tmp/push.log
+block@cloud git push origin cloud/x master 2>&1
+block@cloud git push origin cloud/x 2>&1 master
+block@cloud git push -f origin cloud/x 2>&1
+# a number with a space before the operator is an argument (a branch named 2), not an fd
+block@cloud git push origin cloud/x 2 >/dev/null
+# quoted, it is a word git receives, not a redirection
+block@cloud git push origin cloud/x '2>&1'
+# a redirection that writes a harness file is still caught
+block@cloud git push -u origin cloud/x >scripts/push.log 2>&1
+block@cloud git push -u origin cloud/x 2>&1 | tee .claude/push.log
+block git push origin master >&scripts/push.log
 # fail-closed: an untokenisable push cannot be checked for its destination
 block-ml@cloud git push origin cloud/x <<'EOF'\nx\nEOF
 block@cloud echo 'unbalanced && git push origin cloud/x

@@ -114,3 +114,22 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
     against host PostgreSQL 16, not through `docker compose run app`; the `docs` and
     `docs-check` targets themselves have not been run. The drift check's shell condition
     was proven both ways by hand (a changed file and an untracked file each reported).
+
+## Found later (open)
+
+Added 2026-10-10, after the merge of `cloud/catalog-integrity`.
+
+17. **`@referredType` in a request is rewritten silently.** Every incoming reference is
+    `app/api/common.py` `Ref`, which accepts any `@referredType` (or none) and never
+    checks it; only `id` is used. The response then states the real type (`ref()`,
+    `common.py`: `@referredType` = the resource type). So a POST naming a customer's
+    `engagedParty` with `@referredType: "Organization"` for an Individual, or an order's
+    `billingAccount` with any `@referredType`, is accepted and answered with a different
+    value than was sent - the same pattern as #3 (role), which was fixed by refusing the
+    mismatch (422). Not decided: refuse a wrong `@referredType`, or keep accepting it as
+    TMF's informational field. No test sends a wrong one.
+18. **A flaky test in `frontend/src/app/App.test.tsx`** was seen failing intermittently
+    (reported by the human, 2026-10-10). Which test, the error and the run (cloud or
+    workstation, UTC or the `TZ=America/New_York` pass) are not recorded here yet - add
+    them when it fails next. Not seen in the `make check` run before the merge of
+    `cloud/catalog-integrity` (2026-10-10: 184 passed in both time zones).
