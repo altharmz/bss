@@ -30,5 +30,9 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['src/test/setup.ts'],
+    // make progress: also list the data-ui ids passing tests saw (expectUi)
+    ...(process.env.UI_TESTED_OUT
+      ? { reporters: ['default', './scripts/ui-tested-reporter.mjs'] }
+      : {}),
   },
 });

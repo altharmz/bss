@@ -1,7 +1,17 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
-import { CONTEXT, json, pending, stubFetch, tmfError, type Handler } from '../test/fetch';
+import {
+  CONTEXT,
+  json,
+  NAV_RUNS,
+  noRuns,
+  pending,
+  stubFetch,
+  tmfError,
+  type Handler,
+} from '../test/fetch';
+import { expectUi } from '../test/expectUi';
 import { accountBody } from '../test/fixtures';
 
 const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount';
@@ -37,6 +47,7 @@ function backend(
 ) {
   return stubFetch({
     ...extra,
+    [NAV_RUNS]: noRuns,
     'GET /internal/v1/context': () => json(CONTEXT),
     [`GET ${ACCOUNTS}?limit=1&fields=id`]: () => json([], { total: ROWS.length }),
     'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
@@ -62,6 +73,7 @@ describe('subscribers list', () => {
     backend();
     await open();
     await screen.findByText('Ivan Petrov');
+    expectUi('ui.subscribers.list');
     expect(dataRows()).toHaveLength(4);
 
     const ivan = rowOf(/Ivan Petrov/) as HTMLElement;

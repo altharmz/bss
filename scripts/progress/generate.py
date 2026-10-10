@@ -6,18 +6,22 @@ Inputs (the collectors' JSON, written by `make progress` into .progress/):
                 tables at migration head, and the outcome of the tests marked
                 @pytest.mark.capability (run by the collector)
   ui.json       frontend/scripts/ui-markers.mjs: data-ui markers in frontend/src
+  ui-tested.json  frontend/scripts/ui-tested-reporter.mjs: the data-ui ids that passing
+                vitest tests saw on screen through expectUi (frontend/src/test/expectUi.ts)
 
 Status is derived, never written by hand:
   implemented   db: the table exists at head; api: app.openapi() has the operation;
                 ui: a data-ui marker with the item's id exists; worker: see tested
   tested        worker: at least one test marked with the capability passed and none
                 failed (implemented and tested together - a capability is proven, not
-                detected); db, api, ui: not measured yet (step 3) - shown as "n/a"
+                detected); ui: a passing component test saw the marker on screen
+                (expectUi); db, api: not measured yet (step 3) - shown as "n/a"
   deployed      "unknown" until deploy.sh records the deployed commit
                 (docs/progress/deployed.txt, step 5 of the tracker)
 
 Exits 1 (after writing the outputs) when the scope is invalid, a test is marked with a
-capability that scope.yaml does not list, or the code has unscoped items: tables,
+capability that scope.yaml does not list, a test calls expectUi with an id that is not
+a ui item (nor excluded), or the code has unscoped items: tables,
 operations or markers that are neither planned nor excluded. Standard
 library only: it runs on the host, like scripts/spec-verify-upstream.py. The output is
 deterministic (no timestamps, no line numbers) so a drift check can compare it.
@@ -79,7 +83,7 @@ def validate(scope: dict) -> list[str]:
     return errors
 
 
-def build(backend: dict, ui_markers: list[dict]) -> tuple[dict, list[str]]:
+def build(backend: dict, ui_markers: list[dict], ui_tested: list[str]) -> tuple[dict, list[str]]:
     scope = backend["scope"]
     errors = validate(scope)
     present = {("db", t) for t in backend["tables"]}
@@ -92,6 +96,9 @@ def build(backend: dict, ui_markers: list[dict]) -> tuple[dict, list[str]]:
     for capability in sorted(set(capabilities["seen"])):
         if ("worker", capability) not in known:
             errors.append(f"tests are marked with capability {capability!r}, which is not a worker item")
+    for marker in sorted(set(ui_tested)):
+        if ("ui", marker) not in known:
+            errors.append(f"tests call expectUi({marker!r}), which is not a ui item")
 
     items = []
     for item in scope.get("items") or []:
@@ -99,6 +106,12 @@ def build(backend: dict, ui_markers: list[dict]) -> tuple[dict, list[str]]:
             continue
         worker = item["area"] == "worker"
         done = item["id"] in proven if worker else key_of(item) in present
+        if worker:
+            tested = done
+        elif item["area"] == "ui":
+            tested = item["id"] in ui_tested
+        else:
+            tested = None  # not measured yet
         items.append(
             {
                 "id": item["id"],
@@ -106,7 +119,7 @@ def build(backend: dict, ui_markers: list[dict]) -> tuple[dict, list[str]]:
                 "stage": item["stage"],
                 "title": item["title"],
                 "implemented": done,
-                "tested": done if worker else None,  # None: not measured yet
+                "tested": tested,
                 "deployed": None,  # unknown
             }
         )
@@ -126,7 +139,7 @@ def build(backend: dict, ui_markers: list[dict]) -> tuple[dict, list[str]]:
         areas[area] = {
             "items": len(mine),
             "implemented": sum(i["implemented"] for i in mine),
-            "tested": sum(i["tested"] for i in mine) if area == "worker" else None,
+            "tested": sum(i["tested"] for i in mine) if area in ("worker", "ui") else None,
             "deployed": None,
         }
     excluded = [
@@ -150,8 +163,9 @@ def render(status: dict) -> str:
         "edit by hand. Implemented: the table exists at migration head (db), `app.openapi()`",
         'has the operation (api), a `data-ui` marker exists in `frontend/src` (ui). Worker:',
         "implemented and tested when a test marked with the capability passes and none fails.",
-        "Tested (db, api, ui): not measured yet. Deployed: unknown until `deploy.sh` records",
-        "the deployed commit.",
+        "Tested (ui): a passing component test saw the marker on screen (`expectUi`). Tested",
+        "(db, api): not measured yet. Deployed: unknown until `deploy.sh` records the deployed",
+        "commit.",
         "",
         "| Area | Items | Implemented | Tested | Deployed |",
         "|---|---|---|---|---|",
@@ -183,13 +197,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--backend", default=".progress/backend.json")
     parser.add_argument("--ui", default=".progress/ui.json")
+    parser.add_argument("--ui-tested", default=".progress/ui-tested.json")
     parser.add_argument("--md", default="docs/PROGRESS.md")
     parser.add_argument("--json", default="docs/progress/status.json")
     args = parser.parse_args()
 
     backend = json.loads(Path(args.backend).read_text())
     ui_markers = json.loads(Path(args.ui).read_text())
-    status, errors = build(backend, ui_markers)
+    ui_tested = json.loads(Path(args.ui_tested).read_text())
+    status, errors = build(backend, ui_markers, ui_tested)
     Path(args.md).write_text(render(status))
     Path(args.json).write_text(json.dumps(status, indent=2, sort_keys=True) + "\n")
 

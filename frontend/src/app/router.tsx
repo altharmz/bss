@@ -10,14 +10,16 @@ import {
   type ReactNode,
 } from 'react';
 
-// A minimal History-API router: four routes do not need a library. Deep links work in
+// A minimal History-API router: five routes do not need a library. Deep links work in
 // production because the shared Caddy answers unknown paths with index.html (try_files).
-// There is deliberately no Billing runs route until stage 4 (decision D6).
+// Billing runs lives at /billing-runs (stage 4, slice g): not /billing, so it can never be
+// mistaken for the app's /billing-status, which Caddy routes to the backend.
 
 export type Route =
   | { name: 'subscribers' }
   | { name: 'subscriber'; accountId: string }
   | { name: 'catalog' }
+  | { name: 'billingRuns' }
   | { name: 'notFound'; path: string };
 
 const SUBSCRIBER = /^\/subscribers\/([0-9a-fA-F-]{36})\/?$/;
@@ -27,6 +29,7 @@ export function parseRoute(path: string): Route {
   const card = SUBSCRIBER.exec(path);
   if (card?.[1]) return { name: 'subscriber', accountId: card[1].toLowerCase() };
   if (path === '/catalog' || path === '/catalog/') return { name: 'catalog' };
+  if (path === '/billing-runs' || path === '/billing-runs/') return { name: 'billingRuns' };
   return { name: 'notFound', path };
 }
 
@@ -38,6 +41,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return `/subscribers/${route.accountId}`;
     case 'catalog':
       return '/catalog';
+    case 'billingRuns':
+      return '/billing-runs';
   }
 }
 

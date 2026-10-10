@@ -6,14 +6,30 @@ means. If the UI changes a body, change it here too.
 Context: business date 2026-10-01 in Europe/Moscow (+03:00), the api fixture's clock.
 """
 
+from datetime import datetime
 from decimal import Decimal
 
+import pytest
+
+from app.worker import db as worker_db
+from app.worker.queue import process_requests
 from tests import apidata
 from tests.apiclient import decimals
 from tests.apidata import CATALOG, ORDER
+from tests.test_worker_process import DEC1, DEC3, at, scenario, set_currency
 from tests.timeline import TZ
 
 OFFSET = "+03:00"
+RUNS = "/internal/v1/billingRun"
+
+
+@pytest.fixture
+def worker(migrated_db_url):
+    conn = worker_db.connect(migrated_db_url)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def spec(api) -> dict:
@@ -147,3 +163,53 @@ def test_price_change_as_the_ui_sends_it(api):
     )
     assert response.status_code == 201, response.text
     assert decimals(response)["newPrice"]["price"] == {"unit": "RUB", "value": Decimal("1390.00")}
+
+
+def started_after(api, queued_at: str) -> list[dict]:
+    """The runs the Billing runs screen counts as carrying a queued request out: started at
+    or after its requestedAt (frontend/src/screens/BillingRuns.tsx, carriedOut)."""
+    since = datetime.fromisoformat(queued_at)
+    runs = api.get(f"{RUNS}?limit=14").json()
+    return [r for r in runs if datetime.fromisoformat(r["startedAt"]) >= since]
+
+
+def test_retry_as_the_ui_sends_it(api, worker):
+    """retryRun(): a POST without a body or content type. Once the worker has carried it
+    out, the retried run reads as started after the request - what the screen waits for."""
+    s = scenario(api, worker, broken=True)  # x failed on Dec 1, blocked on Dec 2 and 3
+    set_currency(worker, s["fragile"]["id"], "RUB")  # the fix
+    api.clock.set(at(DEC3, 12))
+    dec1 = s["runs"][DEC1]["id"]
+    response = api.request("POST", f"{RUNS}/{dec1}/retry")
+    assert response.status_code == 202, response.text
+    queued_at = response.json()["request"]["requestedAt"]
+    assert started_after(api, queued_at) == []  # not carried out yet: the screen polls
+
+    api.clock.set(at(DEC3, 12, 1))  # the worker takes it within a minute
+    process_requests(worker, clock=api.clock, tz=TZ)
+    runs = started_after(api, queued_at)
+    assert sorted(r["runDate"] for r in runs) == ["2026-12-01", "2026-12-02", "2026-12-03"]
+    assert {r["status"] for r in runs} == {"completed"}  # none running: the screen stops
+
+
+def test_catch_up_as_the_ui_sends_it(api, worker):
+    """catchUp(): {"upTo": "YYYY-MM-DD"}, a business date. The new runs read as started
+    after the request once the worker has carried it out."""
+    scenario(api, worker, broken=False)  # runs Dec 1, 2, 3
+    api.clock.set(at(DEC3.replace(day=5), 1))  # 01:00 on Dec 5: Dec 5 is due (00:30)
+    response = api.post_raw(f"{RUNS}/catchUp", '{"upTo":"2026-12-05"}')
+    assert response.status_code == 202, response.text
+    body = response.json()
+    assert body["dates"] == ["2026-12-04", "2026-12-05"]
+    assert started_after(api, body["request"]["requestedAt"]) == []
+
+    api.clock.set(at(DEC3.replace(day=5), 1, 1))
+    process_requests(worker, clock=api.clock, tz=TZ)
+    runs = started_after(api, body["request"]["requestedAt"])
+    assert [(r["runDate"], r["status"], r["trigger"]) for r in runs] == [
+        ("2026-12-05", "completed", "catchUp"),
+        ("2026-12-04", "completed", "catchUp"),
+    ]
+    # nothing is due any more: 200, no dates, nothing queued (the screen's "Nothing to catch up")
+    again = api.post_raw(f"{RUNS}/catchUp", '{"upTo":"2026-12-05"}')
+    assert again.status_code == 200 and again.json() == {"dates": []}

@@ -53,6 +53,11 @@ export function stubFetch(routes: Record<string, Handler>) {
   return { calls, fetchMock };
 }
 
+/** The sidebar's Billing runs item (count, failed badge) loads the latest run on every
+ * screen; tests that do not care stub it with no runs. */
+export const NAV_RUNS = 'GET /internal/v1/billingRun?limit=1';
+export const noRuns: Handler = () => json([], { total: 0 });
+
 export const CONTEXT = {
   businessDate: '2026-10-01',
   now: '2026-10-01T09:00:00Z',

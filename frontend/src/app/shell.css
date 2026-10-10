@@ -85,6 +85,16 @@
   font-weight: 400;
   color: var(--faint);
 }
+.bss-nav a .badge {
+  margin-left: auto;
+  padding: 0 5px;
+  border-radius: var(--r-tag);
+  background: var(--alert);
+  color: #fff;
+  font-size: var(--fs-105);
+  font-weight: 600;
+  line-height: 16px;
+}
 .bss-operator {
   padding: 12px 16px;
   border-top: 1px solid var(--border);

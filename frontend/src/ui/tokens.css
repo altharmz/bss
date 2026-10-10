@@ -43,6 +43,13 @@
   --alert: #d92d20;
   --pos: #1f7a4d;
   --prorate: #a15c00;
+  /* billing runs (README "Screen 4") */
+  --run-border: #c9d6f2; /* latest run panel */
+  --run-failed-bg: #fef6f5; /* latest run panel, failed */
+  --run-failed-border: #f2c4bf;
+  --run-failed-latest: #fef3f2; /* latest history row, failed */
+  --run-failed-row: #fffafa; /* other failed history rows */
+  --run-track: #e3e9f6; /* progress bar track */
   --skeleton-1: #eceef1;
   --skeleton-2: #f1f2f4;
 

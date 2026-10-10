@@ -1,5 +1,6 @@
 import { getJson } from '../api/client';
 import { useResource } from '../api/useResource';
+import { BillingRunsScreen } from '../screens/BillingRuns';
 import { CatalogScreen } from '../screens/Catalog';
 import { NotFoundScreen } from '../screens/placeholders';
 import { SubscriberCardScreen } from '../screens/SubscriberCard';
@@ -7,7 +8,12 @@ import { SubscribersScreen } from '../screens/Subscribers';
 import { ErrorBlock } from '../ui/states';
 import { Panel, ToastProvider } from '../ui/kit';
 import '../ui/ui.css';
-import { CrumbsProvider, SystemContextProvider, type SystemContext } from './context';
+import {
+  CrumbsProvider,
+  NavVersionProvider,
+  SystemContextProvider,
+  type SystemContext,
+} from './context';
 import { RouterProvider, useRouter } from './router';
 import { Shell } from './Shell';
 
@@ -22,6 +28,8 @@ function Screen() {
       return <SubscriberCardScreen accountId={route.accountId} />;
     case 'catalog':
       return <CatalogScreen />;
+    case 'billingRuns':
+      return <BillingRunsScreen />;
     case 'notFound':
       return <NotFoundScreen path={route.path} />;
   }
@@ -54,9 +62,11 @@ export function App() {
   return (
     <RouterProvider>
       <CrumbsProvider>
-        <ToastProvider>
-          <Root />
-        </ToastProvider>
+        <NavVersionProvider>
+          <ToastProvider>
+            <Root />
+          </ToastProvider>
+        </NavVersionProvider>
       </CrumbsProvider>
     </RouterProvider>
   );

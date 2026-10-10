@@ -1,15 +1,16 @@
 import { Fragment, type ReactNode } from 'react';
+import { loadRuns } from '../api/bss';
 import { getPage } from '../api/client';
 import { useResource } from '../api/useResource';
 import { formatInt } from '../format/money';
 import { utcLabel } from '../format/dates';
-import { useCrumbs, type SystemContext } from './context';
+import { useCrumbs, useNavVersion, type SystemContext } from './context';
 import { Link, useRouter, type Route } from './router';
 import './shell.css';
 
 // The frame around every screen: sidebar (brand, navigation, operator) and top bar
-// (breadcrumbs, business date, time zone). Billing runs is not in the navigation until
-// stage 4 (decision D6).
+// (breadcrumbs, business date, time zone). Billing runs shows the number of runs, or the
+// red "failed" badge instead when the latest run failed (README "Global Layout").
 
 const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount';
 const OFFERINGS = '/tmf-api/productCatalogManagement/v5/productOffering';
@@ -21,10 +22,23 @@ function useCount(path: string): string {
   return total.status === 'ok' ? formatInt(total.data) : '';
 }
 
+/** The number of runs and whether the latest failed: one run, newest first. Reloaded when
+ * the Billing runs screen sees its latest run change (useRefreshNav). */
+function useRunsNav(): { count: string; failed: boolean } {
+  const version = useNavVersion();
+  const runs = useResource(`nav:runs:${version}`, (signal) => loadRuns(signal, 1));
+  if (runs.status !== 'ok') return { count: '', failed: false };
+  return {
+    count: formatInt(runs.data.total),
+    failed: runs.data.items[0]?.status === 'failed',
+  };
+}
+
 interface NavItem {
   label: string;
   href: string;
   count: string;
+  failed?: boolean;
   active: (route: Route) => boolean;
 }
 
@@ -32,6 +46,7 @@ export function Sidebar({ context }: { context: SystemContext }) {
   const { route } = useRouter();
   const accounts = useCount(ACCOUNTS);
   const offerings = useCount(OFFERINGS);
+  const runs = useRunsNav();
   const items: NavItem[] = [
     {
       label: 'Subscribers',
@@ -44,6 +59,13 @@ export function Sidebar({ context }: { context: SystemContext }) {
       href: '/catalog',
       count: offerings,
       active: (r) => r.name === 'catalog',
+    },
+    {
+      label: 'Billing runs',
+      href: '/billing-runs',
+      count: runs.count,
+      failed: runs.failed,
+      active: (r) => r.name === 'billingRuns',
     },
   ];
   return (
@@ -62,7 +84,11 @@ export function Sidebar({ context }: { context: SystemContext }) {
             aria-current={item.active(route) ? 'page' : undefined}
           >
             {item.label}
-            <span className="count">{item.count}</span>
+            {item.failed ? (
+              <span className="badge">failed</span>
+            ) : (
+              <span className="count">{item.count}</span>
+            )}
           </Link>
         ))}
       </nav>

@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { components } from '../api/generated/internal';
 
 // What the whole UI needs from GET /internal/v1/context (business date, time zone,
@@ -53,4 +61,27 @@ export function useSetCrumbs(crumbs: Crumb[], key: string): void {
     // `key` stands for the crumbs' content; the array itself is new on every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, setCrumbs]);
+}
+
+// --- the sidebar's counts and the billing failed badge: a screen that changes what they
+// show (the Billing runs screen, when its latest run changes) asks for a reload ---
+
+const NavVersionValue = createContext<{ version: number; refresh: () => void }>({
+  version: 0,
+  refresh: () => {},
+});
+
+export function NavVersionProvider({ children }: { children: ReactNode }) {
+  const [version, setVersion] = useState(0);
+  const refresh = useCallback(() => setVersion((v) => v + 1), []);
+  const value = useMemo(() => ({ version, refresh }), [version, refresh]);
+  return <NavVersionValue.Provider value={value}>{children}</NavVersionValue.Provider>;
+}
+
+export function useNavVersion(): number {
+  return useContext(NavVersionValue).version;
+}
+
+export function useRefreshNav(): () => void {
+  return useContext(NavVersionValue).refresh;
 }

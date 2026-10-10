@@ -48,8 +48,10 @@ strict schemas (`additionalProperties: false`), validated for every response in 
 | `POST /billingRun/catchUp {upTo}` | **queues** a catch-up - the API never bills. `upTo` after the business date, or today before `BILLING_RUN_AT`: 422. 202 `{request, dates}`; 200 `{dates: []}` and nothing queued when nothing is due | `::test_catch_up_is_refused_before_the_run_is_due`, `::test_catch_up_queues_a_request_and_says_which_dates`, `::test_catch_up_when_nothing_is_due_queues_nothing` |
 | `POST /billingRun/{id}/retry` | queues a retry of a failed run; 409 if the run is not failed or a retry is already queued; 202 `{request}` | `::test_retry_queues_a_request_for_a_failed_run_once`, `::test_only_a_failed_run_can_be_retried` |
 
-The billing-run endpoints exist, but the admin UI has no Billing runs screen yet
-(planned, see [ui.md](../ui.md)).
+The admin UI's Billing runs screen uses all five billing-run endpoints (see
+[ui.md](../ui.md#billing-runs-uibillingrunslist-uibillingrunscatchup-uibillingrunsretry---screensbillingrunstsx));
+`tests/test_ui_requests.py` replays its catch-up and retry requests against the real
+API and worker.
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/internal.md`](../../scripts/docs/api-notes/internal.md).
 

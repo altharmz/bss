@@ -58,6 +58,24 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({
   await page.goto('/catalog');
   await expect(page.getByRole('heading', { name: 'Product catalog' })).toBeVisible();
 
+  // billing runs: the seed billed every day, so there is a latest run and a history.
+  // Read-only: nothing is caught up or retried here.
+  await page
+    .getByRole('navigation', { name: 'Operations' })
+    .getByRole('link', { name: /Billing runs/ })
+    .click();
+  await expect(page).toHaveURL(/\/billing-runs$/);
+  await expect(page.getByRole('heading', { name: 'Billing runs' })).toBeVisible();
+  const latest = page.getByRole('region', { name: 'Latest run' });
+  await expect(latest).toBeVisible();
+  await expect(latest.getByText(/^\d{4}-\d{2}-\d{2}$/)).toBeVisible();
+  await expect(page.getByText(/^Showing \d+ of \d+$/)).toBeVisible();
+  await page.getByRole('row').filter({ hasText: 'latest' }).click();
+  const run = page.getByRole('dialog', { name: /^Run for \d{4}-\d{2}-\d{2}$/ });
+  await expect(run.getByText(/^Showing \d+ of \d+$/)).toBeVisible();
+  await run.getByText('Close', { exact: true }).click(); // the footer button, not the ×
+  await expect(run).toBeHidden();
+
   expect(problems).toEqual([]);
 });
 
