@@ -511,7 +511,12 @@ implemented; order processing lives in `app/ordering/`.
   -> Active and Active -> Retired; Retired is final. Any other transition is a 409 with
   the reason, and nothing in that PATCH is applied. Repeating the current status is not
   a transition (200). POST may still create an offering in any status. The admin UI only
-  offers the forward step; the rule lives here.
+  offers the forward step; the rule lives here. **Specifications and prices follow the
+  same rule** (`_check_lifecycle`, `tests/test_api_catalog_lifecycle.py`).
+- **An offering's `validFor` is never rewritten in the past**: PATCH may not move
+  `startDateTime` to before now, nor set or move `endDateTime` to before now (409);
+  repeating the current value is fine. Billing never reads it (only ordering,
+  `offeringNotValid`), so ending an offering cannot leave a live product without a price.
 - **Prices attach through the offering**, as in the spec: a price is created on its own
   (`product_offering_id` NULL) and attached by `productOfferingPrice[]` on POST/PATCH of
   the offering; only references are accepted there, not inline prices. A price belongs to
@@ -575,7 +580,7 @@ implemented; order processing lives in `app/ordering/`.
 | individual | `party` with `party_type = 'Individual'`: `given_name` <-> `givenName`, `family_name` <-> `familyName` (both mandatory, as in the spec's create schema) | `givenName`, `familyName` |
 | organization | `party` with `party_type = 'Organization'`: `organization_name` <-> `name` | `name` |
 | customer | `name`, `status` (`Created`/`Active`/`Inactive`, ours), `party_id` <-> `engagedParty` (`PartyRef`, `@referredType` = the party type; fixed at creation) | `name`, `status`, `engagedParty.id` |
-| billingAccount | `name`, `state` (`Active`/`Suspended`/`Closed`, ours), `customer_id` <-> `relatedParty[0]` (role `customer`, `PartyRoleRef` to the Customer; exactly one, fixed at creation), `bill_cycle_day` <-> `billCycleDay`, `currency` <-> `currency`, computed <-> `accountBalance[]`, `credit_limit` <-> `creditLimit` (0003; see below) | `name`, `state`, `relatedParty.id` |
+| billingAccount | `name`, `state` (`Active`/`Suspended`/`Closed`, ours), `customer_id` <-> `relatedParty[0]` (role `customer`, required exactly on POST - 422 otherwise; `PartyRoleRef` to the Customer; exactly one, fixed at creation), `bill_cycle_day` <-> `billCycleDay`, `currency` <-> `currency`, computed <-> `accountBalance[]`, `credit_limit` <-> `creditLimit` (0003; see below) | `name`, `state`, `relatedParty.id` |
 
 An individual is not reachable under `/organization` and vice versa (404).
 
@@ -810,8 +815,9 @@ termination always visible, no account lock, no running-run guard).
   aborted the run. The negative proof that counts is "skip the locked account and go on",
   which the test catches.
 - **Takeover**: after a death between accounts or a dropped connection the successor's
-  `start_run` takes the run over (attempt + 1) and bills only the accounts without an ok
-  row; while the owner is alive a rival gets `RunInProgress`.
+  `start_run` takes the run over (attempt + 1, `started_at` = now: the attempt's start, as
+  on a reopen) and bills only the accounts without an ok row; while the owner is alive a
+  rival gets `RunInProgress`.
 - **Status flips** (slice c, `products.flip_statuses`, run by `bill_date` at the start of
   each run, in its own transaction, before billing, inside the whole-run failure
   handling): `created`/`pendingActive` -> `active` once `start_date` <= run date,
@@ -865,7 +871,9 @@ termination always visible, no account lock, no running-run guard).
   schema with `additionalProperties: false` checks every response in the tests). The
   expected date is today once the local time (BILLING_TZ) is past `BILLING_RUN_AT` + 2 h
   grace, else yesterday (D-W19). Latest run: failed -> 503 `failed`; running -> 200
-  `running` for under 2 h, 503 after; completed on or after the expected date -> 200 `ok`,
+  `running` for under 2 h since `started_at` (a takeover restarts it), 503 after or once
+  its date is before the expected date (a worker that keeps dying cannot hold 200);
+  completed on or after the expected date -> 200 `ok`,
   earlier -> 503 `stale`; no run at all -> 503 `{"date": null, "status": "none",
   "ageSeconds": null}` (Q6). `ageSeconds` counts from `finished_at`, else `started_at`.
   **Not part of `/healthz`**: a late run never marks the app unhealthy (tested). Not in

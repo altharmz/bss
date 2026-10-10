@@ -44,7 +44,8 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF620-P
 | A price never starts in the past: created or attached with `validFor.startDateTime` < now is a 409 | `create_price`, `_not_in_the_past` | `::test_a_price_cannot_start_in_the_past` |
 | A price is never ended retroactively: the end can only be set or moved to >= now, and only while the current end is not in the past (409) | `patch_price` | `::test_a_price_cannot_be_ended_retroactively` |
 | Ending a recurring price never leaves a product without one (D-W18): 409 unless a price of the same offering, type and currency starts exactly at the new end, or every not-cancelled/aborted product of the offering in that currency is terminated by the first business date the price no longer covers | `_no_gap`, `_first_uncovered_day` | `tests/test_api_price_gap.py` (all five tests) |
-| An offering's `lifecycleStatus` only moves forward: In Design -> Active -> Retired; Retired is final; anything else is a 409 and nothing in that PATCH is applied; repeating the current status is fine. POST may create an offering in any status | `LIFECYCLE_STEPS`, `_check_lifecycle` | `tests/test_api_offering_lifecycle.py::test_every_transition`, `::test_a_refused_transition_changes_nothing_else_in_the_patch` |
+| The `lifecycleStatus` of an offering, a specification and a price only moves forward: In Design -> Active -> Retired; Retired is final; anything else is a 409 and nothing in that PATCH is applied; repeating the current status is fine. POST may create any of them in any status | `LIFECYCLE_STEPS`, `_check_lifecycle` | `tests/test_api_offering_lifecycle.py::test_every_transition`, `::test_a_refused_transition_changes_nothing_else_in_the_patch`, `tests/test_api_catalog_lifecycle.py::test_every_transition` |
+| An offering's `validFor` is never rewritten in the past: PATCH may not move `startDateTime` to before now, nor set or move `endDateTime` to before now (409, nothing applied); repeating the current value is fine. Billing never reads it (only new orders do, `offeringNotValid`), so ending an offering leaves its live products priced | `_check_offering_period` | `tests/test_api_offering_validity.py` |
 | Offering code: `externalIdentifier[]` with exactly one `{id, externalIdentifierType: "offeringCode", owner: "bss"}`; `^[A-Z0-9][A-Z0-9_-]{0,31}$`; unique (409); optional; set on POST only (read-only after, 400); an offering without one has no `externalIdentifier` | `OfferingCode`, `create_offering` | `tests/test_api_credit_limit_and_code.py::test_code_is_stored_as_external_identifier_and_unique`, `::test_invalid_codes`, `::test_the_code_is_read_only_after_creation`, `::test_an_offering_without_a_code_has_no_external_identifier` |
 | `productSpecification` is mandatory on an offering (ours) and read-only on PATCH | `OfferingCreate`, `patch_offering` | `tests/test_api_catalog.py::test_offering_needs_an_existing_specification` |
 | Prices are monthly only: `recurringChargePeriodType` `monthly` (required for recurring, not allowed for oneTime), `recurringChargePeriodLength` 1 | `PriceCreate` | `::test_price_validation` |
@@ -55,9 +56,6 @@ order of "end" and "attach" works while a product is live, proven by
 `tests/test_internal_price_change.py::test_tmf620_cannot_change_a_live_price_in_either_order`);
 it is the internal operation `POST /internal/v1/productOffering/{id}/priceChange`, see
 [internal.md](internal.md).
-
-`lifecycleStatus` of a specification and of a price can be set to any of the three values
-by PATCH: only the offering's lifecycle is guarded.
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf620-product-catalog.md`](../../scripts/docs/api-notes/tmf620-product-catalog.md).
 
