@@ -133,3 +133,14 @@ Added 2026-10-10, after the merge of `cloud/catalog-integrity`.
     workstation, UTC or the `TZ=America/New_York` pass) are not recorded here yet - add
     them when it fails next. Not seen in the `make check` run before the merge of
     `cloud/catalog-integrity` (2026-10-10: 184 passed in both time zones).
+19. **A flaky test in `frontend/src/screens/Catalog.test.tsx`**: `catalog > lists
+    offerings with code, specification, price, period, status and validity` failed once
+    with `Error: no row Mobile L` (thrown by `row()` inside `await waitFor(() =>
+    row('Mobile L'))`; the test took 3.5 s, so the `waitFor` gave up before the rows
+    rendered). Seen 2026-10-10 on the workstation, in the single vitest pass that `make
+    progress` runs (`npx vitest run`, no `TZ`), during the merge of `cloud/subscriber-edit`;
+    1 failed, 225 passed. Neither merged branch touched the catalog screen or its test.
+    It passed on the immediate rerun and in every run after (the pre-commit hook and a
+    full `make check`, both time zones each). Not reproduced or fixed; a likely cause is
+    `waitFor`'s default 1 s timeout under load (15 jsdom environments, ~57 s of
+    environment setup per run).

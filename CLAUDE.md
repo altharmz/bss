@@ -954,8 +954,8 @@ Design and decisions: **`docs/bill-lifecycle-design.md`**, section 6 (decided
 bills, overdue is display only, a Record payment dialog). Four slices: 1. schema +
 settlement core (`cloud/bill-settlement-core`), 2. worker (`cloud/bill-settlement-worker`,
 stacked on 1), 3. API (`cloud/bill-settlement-api`, stacked on 2), 4. UI + seed
-(`cloud/bill-settlement-ui`, stacked on 3). **All four slices are built** (none merged or
-deployed yet). Slice 4: the subscriber card's Bills panel, bill dialog with hold/release,
+(`cloud/bill-settlement-ui`, stacked on 3). **All four slices are built and merged**
+(`1d7a242`, 2026-10-10; not deployed yet). Slice 4: the subscriber card's Bills panel, bill dialog with hold/release,
 Record payment with optional lettering, "Due on bills" / "Unused credit" KPIs
 (`screens/Bills.tsx`, details in `docs/ui.md`); TMF678 types are generated now
 (`gen-types.mjs`); several exact amounts in one body via `jsonWithAmounts`; the seed puts
@@ -1259,13 +1259,27 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 ## Next session
 
-In this order (as of 2026-10-05, after slice f):
+**Before the next deploy** (2026-10-10: bill lifecycle slices 1-4 merged as `1d7a242`,
+subscriber create/edit as `61d9399`; local `make check` passed on a clean database,
+nothing deployed):
 
-1. **Stage 4: slice g built** on `cloud/billing-runs-ui` (2026-10-10, cloud session):
-   the Billing runs screen, UI "tested" in the progress tracker, and the fix for the
-   flaky App.test. Next: the human's review and merge, a local `make check` (the e2e
-   ran in the cloud only against a host-run stack, see `docs/cloud.md`), then `make
-   verify` ships it. Slice f (`dcbedeb`) is
+- **`compose.prod.yaml`: pass `BILL_PAYMENT_TERM_DAYS`** to the services that need it
+  (the worker writes `paymentDueDate`; `/internal/v1/context` reports it). Compose
+  change: diff first, needs the human's OK.
+- **Visual review of the subscriber card** with the human before `make verify`: the
+  seven figures in one row, the bill dialog, Record payment, New subscriber, Edit.
+- **Guard false positive:** "1194" inside the headless browser's install path was read
+  as a VPN port (the raw-text port rule). Fix it so a port number inside a longer
+  path or word does not match, with regression cases both ways in
+  `.claude/hooks/guard-cases.txt` (that path allowed; a real use of port 1194 still
+  blocked).
+
+Then, in this order (as of 2026-10-05, after slice f):
+
+1. **Stage 4: slice g merged** (`cloud/billing-runs-ui` as `209955c`, 2026-10-10, after
+   a local `make check` incl. web-e2e): the Billing runs screen, UI "tested" in the
+   progress tracker, and the fix for the flaky App.test. Not deployed yet: `make verify`
+   ships it, together with the bill lifecycle (see "Before the next deploy"). Slice f (`dcbedeb`) is
    **deployed**: `make verify` 2026-10-05 end to end - migration `0004` ran on the VPS,
    app and worker healthy, the worker's first run billed 2026-10-05 (`/billing-status`
    200 `ok`, age 12 s), web smoke OK through Caddy. Done: slice a (`a66faef`), b1 (`850e192`), b2
