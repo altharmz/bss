@@ -251,7 +251,11 @@ boundary:
   still checked: `sh -c`/`bash -c` scripts, `eval`, ssh remote commands, the command after
   `docker compose run <service>`, `xargs`, `find -exec`, and `$(...)`/backtick
   substitutions (even inside quotes). `cd` is tracked for path rules. The VPN, port and
-  mass-stop rules still scan the raw text. **Fail-closed:** a command that cannot be
+  mass-stop rules still scan the raw text. **A VPN port number inside a filesystem path
+  is not a port** (`/`, `~/`, `./`, `../` paths are masked first, in guard.py and in the
+  fallback; found 2026-10-10 on the cloud's `/opt/pw-browsers/chromium_headless_shell-1194/`):
+  `-p 1194:1194`, `host:1194`, `nc host 1194`, `1194/udp` still block, and over ssh or
+  naming the VPS the number counts anywhere, paths included. **Fail-closed:** a command that cannot be
   tokenised (unbalanced quotes, a heredoc or here-string) goes through the old raw-text
   checks, exactly as strict as before. Regression cases: `.claude/hooks/guard-cases.txt`
   (allow/block per command), run by `.claude/hooks/test-guard.sh` and by the pre-commit
@@ -1268,11 +1272,6 @@ nothing deployed):
   change: diff first, needs the human's OK.
 - **Visual review of the subscriber card** with the human before `make verify`: the
   seven figures in one row, the bill dialog, Record payment, New subscriber, Edit.
-- **Guard false positive:** "1194" inside the headless browser's install path was read
-  as a VPN port (the raw-text port rule). Fix it so a port number inside a longer
-  path or word does not match, with regression cases both ways in
-  `.claude/hooks/guard-cases.txt` (that path allowed; a real use of port 1194 still
-  blocked).
 
 Then, in this order (as of 2026-10-05, after slice f):
 

@@ -38,10 +38,18 @@ grep -Eqi 'softether|vpnserver|vpncmd' <<<"$cmd" && \
 # Fail-closed: the old broad rule, plus the network contexts guard.py added (a firewall or
 # socket tool, a port keyword, host:port, or the VPS by name), so this path is never
 # looser than guard.py.
-if grep -Eq '(^|[^0-9])(443|992|1194|500|4500|5555)(:|/|[^0-9]|$)' <<<"$cmd"; then
-  grep -Eq 'ssh|docker|-p ' <<<"$cmd" && \
+# A filesystem path is not a port (same rule as guard.py's FS_PATH): the paths are
+# replaced before the local checks; over ssh or naming the VPS the number counts anywhere.
+vpn_port='(^|[^0-9])(443|992|1194|500|4500|5555)(:|/|[^0-9]|$)'
+unpathed="$(sed -E "s#(^|[[:space:]'\"=(,{])(~|\.{1,2})?/[^[:space:]'\"\`;|&:,)]*#\1_path_#g" <<<"$cmd")"
+if grep -Eq "$vpn_port" <<<"$cmd"; then
+  grep -Eq 'ssh|vps-test|vpn2811\.duckdns\.org' <<<"$cmd" && \
     block "ports 443/992/1194/500/4500/5555 belong to the VPN server on the VPS."
-  grep -Eq '(^|[^[:alnum:]_.-])(ufw|iptables|ip6tables|nft|firewall-cmd|ss|netstat|lsof|fuser|nc|ncat|netcat|socat|nmap|telnet|tcpdump|port|ports|dport|sport|listen|vps-test|vpn2811\.duckdns\.org)([^[:alnum:]_.-]|$)|[[:alnum:]_.-]:(443|992|1194|500|4500|5555)([^0-9]|$)' <<<"$cmd" && \
+fi
+if grep -Eq "$vpn_port" <<<"$unpathed"; then
+  grep -Eq 'docker|-p ' <<<"$unpathed" && \
+    block "ports 443/992/1194/500/4500/5555 belong to the VPN server on the VPS."
+  grep -Eq '(^|[^[:alnum:]_.-])(ufw|iptables|ip6tables|nft|firewall-cmd|ss|netstat|lsof|fuser|nc|ncat|netcat|socat|nmap|telnet|tcpdump|port|ports|dport|sport|listen)([^[:alnum:]_.-]|$)|[[:alnum:]_.-]:(443|992|1194|500|4500|5555)([^0-9]|$)' <<<"$unpathed" && \
     block "ports 443/992/1194/500/4500/5555 belong to the VPN server on the VPS."
 fi
 

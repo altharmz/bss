@@ -108,14 +108,21 @@ PORT_CONTEXTS = [
 ]
 # anything over ssh or naming the VPS that mentions the number at all (as before for ssh)
 REMOTE = re.compile(rf"{_W}(?:ssh|vps-test|vpn2811\.duckdns\.org){_E}")
+# A filesystem path is not a port: /opt/pw-browsers/chromium_headless_shell-1194/... (the
+# headless browser in a cloud session). Absolute, ~/, ./ or ../, starting a word (after a
+# space, quote, '=', '(', ',' or '{') and ending at a space, quote, ';', '|', '&', ':', ','
+# or ')'. A URL's path is not masked (its '//' follows a ':'), nor is 1194/udp.
+FS_PATH = re.compile(r"(^|[\s'\"=(,{])(?:~|\.{1,2})?/[^\s'\"`;|&:,)]*", re.M)
 
 
 def raw_checks(text: str) -> None:
     for pattern, reason in RAW_RULES:
         if pattern.search(text):
             block(reason)
-    if re.search(PORT, text) and (
-        REMOTE.search(text) or any(p.search(text) for p in PORT_CONTEXTS)
+    unpathed = FS_PATH.sub(r"\1_path_", text)
+    # over ssh or naming the VPS the number counts anywhere, paths included
+    if (re.search(PORT, text) and REMOTE.search(text)) or (
+        re.search(PORT, unpathed) and any(p.search(unpathed) for p in PORT_CONTEXTS)
     ):
         block("ports 443/992/1194/500/4500/5555 belong to the VPN server on the VPS.")
 

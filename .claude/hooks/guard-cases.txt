@@ -37,6 +37,38 @@ block docker compose run --rm app python -m http.server --port 443
 block-ml cat <<'EOF'\nufw allow 500\nEOF
 block-ml cat <<'EOF'\ncurl -sk https://vpn2811.duckdns.org:443/\nEOF
 block-ml cat <<'EOF'\ndocker run -p 4500:4500 nginx\nEOF
+# a port number inside a filesystem path is not a port (the cloud's headless browser lives in
+# /opt/pw-browsers/chromium_headless_shell-1194/); each case on the workstation and in cloud mode
+allow /opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell --headless --screenshot=/tmp/card.png http://localhost:4173/subscribers
+allow@cloud /opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell --headless --screenshot=/tmp/card.png http://localhost:4173/subscribers
+allow docker compose run --rm e2e ls ~/.cache/ms-playwright/chromium_headless_shell-1194/chrome-linux/
+allow@cloud docker compose run --rm e2e ls ~/.cache/ms-playwright/chromium_headless_shell-1194/chrome-linux/
+allow@cloud cd frontend && PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell npx playwright screenshot --browser chromium http://localhost:4173/subscribers /tmp/card.png
+allow-ml mkdir -p /tmp/shots && cat > /tmp/shots/pw.config.ts <<'EOF'\nexport default { use: { launchOptions: { executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' } } };\nEOF
+allow-ml@cloud mkdir -p /tmp/shots && cat > /tmp/shots/pw.config.ts <<'EOF'\nexport default { use: { launchOptions: { executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' } } };\nEOF
+allow-ml cat > /tmp/shots/run.sh <<'EOF'\ndocker compose ps\n/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell --screenshot=/tmp/a.png http://localhost:4173/\nEOF
+allow-ml@cloud cat > /tmp/shots/run.sh <<'EOF'\ndocker compose ps\n/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell --screenshot=/tmp/a.png http://localhost:4173/\nEOF
+# ... while the port itself is still blocked, next to such a path too, in both modes
+block nc host 1194
+block@cloud nc host 1194
+block docker run -p 1194:1194 nginx
+block@cloud docker run -p 1194:1194 nginx
+block curl host:1194
+block@cloud curl host:1194
+block docker run -v /opt/pw-browsers/chromium_headless_shell-1194:/b -p 1194:1194/udp nginx
+block@cloud docker run -v /opt/pw-browsers/chromium_headless_shell-1194:/b -p 1194:1194/udp nginx
+block-ml cat <<'EOF'\nnc host 1194\nEOF
+block-ml@cloud cat <<'EOF'\nnc host 1194\nEOF
+block-ml cat <<'EOF'\ndocker run -p 1194:1194 nginx\nEOF
+block-ml@cloud cat <<'EOF'\ndocker run -p 1194:1194 nginx\nEOF
+block-ml cat <<'EOF'\ncurl host:1194\nEOF
+block-ml@cloud cat <<'EOF'\ncurl host:1194\nEOF
+block-ml mkdir -p /tmp/shots && cat <<'EOF'\n/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell\nufw allow 1194/udp\nEOF
+block-ml@cloud mkdir -p /tmp/shots && cat <<'EOF'\n/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell\nufw allow 1194/udp\nEOF
+# over ssh the number counts anywhere, a path included (the VPS is not ours to probe)
+block ssh vps-test 'ls /opt/pw-browsers/chromium_headless_shell-1194'
+block-ml ssh vps-test <<'EOF'\nls /opt/pw-browsers/chromium_headless_shell-1194\nEOF
+
 # fail-closed on purpose: a heredoc is untokenisable, so the broad raw-text rule applies
 # even to a commit message (CLAUDE.md: commit messages go through -F <file>)
 block-ml git commit -F - <<'EOF'\nguard: ports 443 and 500 next to ssh and docker\nEOF
