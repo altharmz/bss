@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
-import { CONTEXT, json, stubFetch, tmfError, type Handler } from '../test/fetch';
+import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
+import { expectUi } from '../test/expectUi';
 import { accountBody } from '../test/fixtures';
 
 const A = 'aaaa1111-0000-4000-8000-0000000000a1';
@@ -142,6 +143,7 @@ const FIRST_CHARGE = {
 function backend(routes: Record<string, Handler> = {}, account = ACCOUNT) {
   return stubFetch({
     'GET /internal/v1/context': () => json(CONTEXT),
+    [NAV_RUNS]: noRuns,
     'GET /tmf-api/accountManagement/v5/billingAccount?limit=1&fields=id': () =>
       json([], { total: 7 }),
     'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
@@ -180,6 +182,7 @@ describe('subscriber card', () => {
     backend();
     await open();
     const heading = screen.getByRole('heading', { name: /Olga Kuznetsova/ });
+    expectUi('ui.subscriber.card');
     expect(within(heading).getByText('Active').className).toContain('bss-pill');
     expect(screen.getByText('CCCC2222')).toBeTruthy(); // subscriber no.
     expect(screen.getAllByText('BA-AAAA1111').length).toBeGreaterThan(0);
@@ -237,6 +240,9 @@ describe('subscriber card', () => {
     });
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
+    expect(within(row).getByRole('button', { name: 'Deactivate' })).toBe(
+      expectUi('ui.subscriber.deactivate'),
+    );
     fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
     expect(within(row).getByText('Deactivate?')).toBeTruthy();
     fireEvent.click(within(row).getByRole('button', { name: 'No' }));
@@ -395,12 +401,14 @@ describe('add product', () => {
   it('orders the offering with the start date and closes', async () => {
     const { fetchMock } = backend({
       ...catalog,
+      [preview('2026-10-01')]: () => json(FIRST_CHARGE), // the default start, before the change
       [preview('2026-10-06')]: () =>
         json({ ...FIRST_CHARGE, startDate: '2026-10-06', chargeRunDate: '2026-10-06' }),
       [`POST ${ORDERS}`]: () =>
         json({ id: 'o', state: 'completed', '@type': 'ProductOrder' }, { status: 201 }),
     });
     const dialog = await openModal();
+    expect(dialog).toBe(expectUi('ui.subscriber.addProduct'));
     fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
     fireEvent.change(within(dialog).getByLabelText('Start date'), {
       target: { value: '2026-10-06' },

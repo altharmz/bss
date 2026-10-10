@@ -92,6 +92,9 @@ const TONES: Record<string, Tone> = {
   terminated: 'retired',
   cancelled: 'retired',
   aborted: 'retired',
+  // a billing run's per-account outcome
+  ok: 'active',
+  blocked: 'inactive',
 };
 
 export function toneOf(status: string): Tone {

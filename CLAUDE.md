@@ -167,15 +167,22 @@ unscoped and the excluded items.
   on stderr); a test marked with an id that is not a worker item in `scope.yaml` is an
   error (exit 1). Proven: a passing marked test turns its item green, one failing test
   next to a passing one keeps it red, an unknown id fails the run.
-- **Tested** (db, api, ui): not measured yet ("n/a"); **deployed:** "unknown" until
-  `deploy.sh` writes `docs/progress/deployed.txt` (approved, not built). Both come after
-  slice b.
+- **Tested, ui** (since `cloud/billing-runs-ui`): a passing vitest test saw the marker on
+  screen - `expectUi(id)` (`frontend/src/test/expectUi.ts`) asserts it and records the id
+  on the test; `make progress` runs vitest with `frontend/scripts/ui-tested-reporter.mjs`
+  (only when `UI_TESTED_OUT` is set), which writes the ids of the **passed** tests to
+  `.progress/ui-tested.json`. An id that is not a ui item is an error (exit 1). Proven: a
+  test that calls expectUi and then fails does not count (with the passed-filter removed
+  it did), an unknown id fails the run. 13/13 today.
+- **Tested** (db, api): not measured yet ("n/a"); **deployed:** "unknown" until
+  `deploy.sh` writes `docs/progress/deployed.txt` (approved, not built).
 - **Unscoped:** a table, operation or marker in the code that is neither an item nor
   excluded makes `make progress` exit 1 (after writing the files).
 - **How it runs:** `tests/progress_collect.py` in the app container (scope.yaml arrives
   on stdin, parsed with the image's pinned PyYAML; tables via a throwaway
-  `vpslab_progress_*` database, dropped again), `frontend/scripts/ui-markers.mjs` in
-  `web-offline`, then `scripts/progress/generate.py` on the host (standard library only)
+  `vpslab_progress_*` database, dropped again), `frontend/scripts/ui-markers.mjs` and
+  vitest with the ui-tested reporter in `web-offline`, then `scripts/progress/generate.py`
+  on the host (standard library only)
   from the collectors' JSON in `.progress/` (gitignored). The output is deterministic (no
   timestamps, no line numbers), ready for the drift check of step 4.
 
@@ -428,7 +435,8 @@ would attach the prod container to both `lab` and `shared`).
   raising an IntegrityError.
 - **Stage order:** 1. schema + repository (done) -> 2. TMF Open API backend (done) -> 3.
   billing core (done) -> 4. worker with the daily run (deployed with slice f, `dcbedeb`,
-  2026-10-05; slice g, the Billing runs screen, still open) -> 5. frontend. Bill and ABR
+  2026-10-05; slice g, the Billing runs screen, built on `cloud/billing-runs-ui`, not yet
+  deployed) -> 5. frontend. Bill and ABR
   endpoints are read-only; the worker's daily run writes them through `bill_account`
   (see "Billing worker").
 - **Rounding:** banker's rounding (`ROUND_HALF_EVEN`) to 2 decimals, applied once per ABR,
@@ -980,7 +988,20 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
 - Pills for statuses the design lacks (`created`, `pendingTerminate`, `suspended`,
   `cancelled`, Suspended/Closed accounts) reuse existing token colours only.
 - Retiring an offering does not end its prices; its products keep billing.
-- Billing runs screen: hidden until stage 4. The run time is `BILLING_RUN_AT` (00:30).
+- **Billing runs screen** (stage 4 slice g, `/billing-runs`, `screens/BillingRuns.tsx`;
+  details in `docs/ui.md`). The stage 4 note wins over the handoff (Q11): "Run manually
+  for a cycle date" is **Catch up to** a date (default and max = the due date: today
+  from `BILLING_RUN_AT` on, else yesterday - Q5), "Re-run" is **Retry**, offered on
+  **every** failed run (Q3: banner, history row, run dialog). A gap the worker will not
+  bill on its own (latest run older than the day before the due date, Q4) gets a note.
+  The run time shown is `BILLING_RUN_AT` (00:30) from the context. A run opens a dialog
+  with its per-account outcomes (failed / blocked / ok). The list polls every 5 s while
+  a run is running or a request queued from the screen is not carried out yet -
+  carried out = a run started at or after the request's `requestedAt` (server clock,
+  never the browser's) has finished; proven against the real worker in
+  `tests/test_ui_requests.py`. It gives up after 3 minutes with a note. The sidebar's
+  Billing runs item shows the run count, or the red "failed" badge when the latest run
+  failed, and is reloaded when the screen sees the latest run change.
 - Charge timing copy follows the end-of-day rule: an order completed today is charged by
   the run of max(start, tomorrow) and billed on the next cycle day from there - nothing is
   "charged on confirmation".
@@ -1121,7 +1142,11 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 In this order (as of 2026-10-05, after slice f):
 
-1. **Stage 4: slice g next** (the Billing runs UI screen). Slice f (`dcbedeb`) is
+1. **Stage 4: slice g built** on `cloud/billing-runs-ui` (2026-10-10, cloud session):
+   the Billing runs screen, UI "tested" in the progress tracker, and the fix for the
+   flaky App.test. Next: the human's review and merge, a local `make check` (the e2e
+   ran in the cloud only against a host-run stack, see `docs/cloud.md`), then `make
+   verify` ships it. Slice f (`dcbedeb`) is
    **deployed**: `make verify` 2026-10-05 end to end - migration `0004` ran on the VPS,
    app and worker healthy, the worker's first run billed 2026-10-05 (`/billing-status`
    200 `ok`, age 12 s), web smoke OK through Caddy. Done: slice a (`a66faef`), b1 (`850e192`), b2
@@ -1132,7 +1157,8 @@ In this order (as of 2026-10-05, after slice f):
    decisions Q1-Q14 are recorded (see "Billing worker").
 2. **Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests
    recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables`
-   of each test database before it is dropped; UI: `expectUi(id)` in vitest/Playwright),
+   of each test database before it is dropped; UI: done for vitest - `expectUi(id)`,
+   see "Progress tracker"; Playwright could record the same way),
    the drift check in the pre-commit hook and `make verify` (with negative proofs), and
    "deployed" from `docs/progress/deployed.txt`. Slice b also defines the `worker` area
    (capabilities proven by `@pytest.mark.capability(...)` tests).
@@ -1384,6 +1410,15 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
 - **The UI's write requests are pinned on both sides**: component tests assert the exact
   bodies, and `tests/test_ui_requests.py` replays the same bodies against the real API.
   Change both together.
-- **Routes:** `/subscribers`, `/subscribers/{accountId}`, `/catalog`; `/` redirects to
-  `/subscribers`; anything else is a not-found page. No Billing runs route or nav item
-  until stage 4 (D6).
+- **Routes:** `/subscribers`, `/subscribers/{accountId}`, `/catalog`, `/billing-runs`
+  (not `/billing`: never confusable with the app's `/billing-status`, which Caddy routes
+  to the backend); `/` redirects to `/subscribers`; anything else is a not-found page.
+- **Component tests stub every request** (`src/test/fetch.ts`): an unmatched one fails
+  the test after it ends (`src/test/setup.ts`), not just renders a network error. The
+  old behaviour made App.test "recovers on Retry" flaky (2 of 5 on master, 7 of 10 in
+  the cloud): after Retry the subscribers list's unstubbed load raced the "no alert"
+  assertion. The strict stub found 9 more under-stubbed tests. `pending` stubs a load
+  the test does not care about; `NAV_RUNS`/`noRuns` the sidebar's run count.
+- **Polling tests** fake only `setTimeout`/`clearTimeout` and wait with an `until` helper
+  (`BillingRuns.test.tsx`): Testing Library's `findBy`/`waitFor` hang under a fake
+  `setTimeout`.

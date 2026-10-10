@@ -131,6 +131,7 @@ progress: ## Regenerate docs/PROGRESS.md + docs/progress/status.json (scope.yaml
 	@mkdir -p .progress
 	docker compose run --rm -T app python -m tests.progress_collect < docs/progress/scope.yaml > .progress/backend.json
 	docker compose run --rm --no-deps -T web-offline sh -c '$(WEB_DEPS) && node scripts/ui-markers.mjs' > .progress/ui.json
+	docker compose run --rm --no-deps -T web-offline sh -c '$(WEB_DEPS) && npm run types >&2 && UI_TESTED_OUT=/tmp/ui-tested.json npx vitest run >&2 && cat /tmp/ui-tested.json' > .progress/ui-tested.json
 	python3 scripts/progress/generate.py
 
 docs: ## Regenerate docs/api/ and docs/db/ (app.openapi() vs spec/, pg_catalog at migration head)

@@ -14,9 +14,9 @@
     },
     "ui": {
       "deployed": null,
-      "implemented": 10,
+      "implemented": 13,
       "items": 13,
-      "tested": null
+      "tested": 13
     },
     "worker": {
       "deployed": null,
@@ -674,7 +674,7 @@
       "id": "ui.shell",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Shell: sidebar, top bar with business date and zone"
     },
     {
@@ -683,7 +683,7 @@
       "id": "ui.subscribers.list",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Subscribers list"
     },
     {
@@ -692,7 +692,7 @@
       "id": "ui.subscriber.card",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Subscriber card: account, products, charges, transactions"
     },
     {
@@ -701,7 +701,7 @@
       "id": "ui.subscriber.addProduct",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Add product, with first-charge preview"
     },
     {
@@ -710,7 +710,7 @@
       "id": "ui.subscriber.deactivate",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Deactivate a product"
     },
     {
@@ -719,7 +719,7 @@
       "id": "ui.catalog.list",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Product catalog"
     },
     {
@@ -728,7 +728,7 @@
       "id": "ui.catalog.offeringDetail",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Offering detail dialog"
     },
     {
@@ -737,7 +737,7 @@
       "id": "ui.catalog.lifecycle",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Offering lifecycle step (Activate / Retire)"
     },
     {
@@ -746,7 +746,7 @@
       "id": "ui.catalog.changePrice",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Change price of a live offering"
     },
     {
@@ -755,34 +755,34 @@
       "id": "ui.catalog.newOffering",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "New offering"
     },
     {
       "area": "ui",
       "deployed": null,
       "id": "ui.billingRuns.list",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
-      "tested": null,
+      "tested": true,
       "title": "Billing runs: latest run, history, failed badge in the nav"
     },
     {
       "area": "ui",
       "deployed": null,
       "id": "ui.billingRuns.catchUp",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
-      "tested": null,
+      "tested": true,
       "title": "Catch up to a date"
     },
     {
       "area": "ui",
       "deployed": null,
       "id": "ui.billingRuns.retry",
-      "implemented": false,
+      "implemented": true,
       "stage": 4,
-      "tested": null,
+      "tested": true,
       "title": "Retry a failed run"
     },
     {

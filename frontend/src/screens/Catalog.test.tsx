@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
-import { CONTEXT, json, stubFetch, tmfError, type Handler } from '../test/fetch';
+import { expectUi } from '../test/expectUi';
+import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
 const CAT = '/tmf-api/productCatalogManagement/v5';
 const rub = (value: number) => ({ unit: 'RUB', value });
@@ -65,6 +66,7 @@ const SPECS = [
 function backend(routes: Record<string, Handler> = {}, offerings: unknown[] = OFFERINGS) {
   return stubFetch({
     'GET /internal/v1/context': () => json(CONTEXT),
+    [NAV_RUNS]: noRuns,
     'GET /tmf-api/accountManagement/v5/billingAccount?limit=1&fields=id': () =>
       json([], { total: 7 }),
     [`GET ${CAT}/productOffering?limit=1&fields=id`]: () => json([], { total: offerings.length }),
@@ -103,6 +105,7 @@ describe('catalog', () => {
     backend();
     await open();
     await waitFor(() => row('Mobile L'));
+    expectUi('ui.catalog.list');
     expect(screen.getByRole('columnheader', { name: 'Price, RUB' })).toBeTruthy();
     expect(cellsOf('Mobile L')).toEqual([
       'MOB-L',
@@ -215,6 +218,7 @@ describe('new offering', () => {
       },
     });
     const dialog = await openForm();
+    expect(dialog).toBe(expectUi('ui.catalog.newOffering'));
     fireEvent.change(field(dialog, /Code/), { target: { value: 'mob-xl' } });
     fireEvent.change(field(dialog, /^Name/), { target: { value: 'Mobile XL' } });
     fireEvent.change(field(dialog, /Specification/), { target: { value: 's1' } });
@@ -301,6 +305,9 @@ describe('lifecycle', () => {
     });
     const dialog = await details('TV Basic');
     expect(within(dialog).getByText('399.00 RUB / mo · 2026-10-05 – open-ended')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Activate' })).toBe(
+      expectUi('ui.catalog.lifecycle'),
+    );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Activate' }));
     expect(within(dialog).getByText('Activate? It becomes available to order.')).toBeTruthy();
     expect(patched).toBe(0);
@@ -378,7 +385,10 @@ describe('change price', () => {
     await waitFor(() => row('Mobile L'));
     fireEvent.click(row('Mobile L'));
     const dialog = screen.getByRole('dialog', { name: 'Mobile L' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Change price' }));
+    expect(dialog).toBe(expectUi('ui.catalog.offeringDetail'));
+    const change = within(dialog).getByRole('button', { name: 'Change price' });
+    expect(change).toBe(expectUi('ui.catalog.changePrice'));
+    fireEvent.click(change);
     return within(dialog).getByRole('region', { name: 'Change price' });
   }
   const priceField = (form: HTMLElement) => within(form).getByLabelText(/New price, RUB/);

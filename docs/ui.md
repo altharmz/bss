@@ -7,17 +7,18 @@ The design handoff it implements is `design-ref/design_handoff_bss_admin/` (a re
 HTML prototype and README); where the build differs from the design, the decision is
 recorded in CLAUDE.md, "Frontend (stage 5) decisions", and summarised below.
 
-Progress (from `data-ui` markers in `frontend/src`, [PROGRESS.md](PROGRESS.md)): **10 of
-13 items built; the Billing runs screen (3 items) is planned.**
+Progress (from `data-ui` markers in `frontend/src`, [PROGRESS.md](PROGRESS.md)): **13 of
+13 items built and tested** - tested meaning a passing component test saw the marker on
+screen (`expectUi`, see "Tests").
 
 ## Architecture
 
 | Part | Where | What |
 |---|---|---|
-| Routing | `frontend/src/app/router.tsx` | a minimal History-API router: `/subscribers`, `/subscribers/{accountId}`, `/catalog`; `/` redirects to `/subscribers`; anything else is the not-found page. Deep links work because Caddy answers unknown paths with `index.html` |
+| Routing | `frontend/src/app/router.tsx` | a minimal History-API router: `/subscribers`, `/subscribers/{accountId}`, `/catalog`, `/billing-runs` (not `/billing`, so it can never be confused with the app's `/billing-status`); `/` redirects to `/subscribers`; anything else is the not-found page. Deep links work because Caddy answers unknown paths with `index.html` |
 | Shell | `frontend/src/app/Shell.tsx` | sidebar (brand, environment tag, navigation "Operations", operator), top bar (breadcrumbs, business date, time zone) |
 | System context | `frontend/src/app/context.tsx` | loads `GET /internal/v1/context` before any screen: no date can be shown without the business date and zone |
-| API client | `frontend/src/api/client.ts`, `bss.ts` | fetch wrapper; every failure is an `ApiError` whose message is the call ("GET /path -> 503 Service Unavailable"); `getAll` pages by 100; `useResource` = loading / error / ok + retry |
+| API client | `frontend/src/api/client.ts`, `bss.ts` | fetch wrapper; every failure is an `ApiError` whose message is the call ("GET /path -> 503 Service Unavailable"); `getAll` pages by 100; `useResource` = loading / error / ok + retry; `usePolled` = the same, refreshed in the background every few seconds while a predicate on the data holds (a failed refresh keeps the data and stops) |
 | Types | `frontend/scripts/gen-types.mjs` -> `src/api/generated/` (git-ignored) | generated from `spec/` (TMF620, 622, 637, 666 and the internal API) on every build, lint and test - never from FastAPI's `/openapi.json` |
 | UI kit | `frontend/src/ui/` | tokens, buttons, pills, `Modal`, `Table` on CSS grid, the four list states |
 | Money | `frontend/src/format/money.ts` | amounts become integer cents at the edge; no float arithmetic; typed amounts are sent as the validated decimal string as an exact JSON number (`jsonWithAmount`); negatives use U+2212 |
@@ -34,10 +35,13 @@ operation the screen calls (`frontend/src/api/bss.ts`).
 
 ### Shell (`ui.shell`)
 
-Sidebar with the navigation (Subscribers, Catalog - **no Billing runs item yet**), the
+Sidebar with the navigation (Subscribers, Catalog, Billing runs - each with its count;
+Billing runs shows the red **failed** badge instead when the latest run failed), the
 environment (`APP_ENV`) and the operator (from `X-Remote-User`); top bar with breadcrumbs,
-the business date and the UTC offset.
-API: `GET /internal/v1/context`.
+the business date and the UTC offset. The Billing runs screen asks the sidebar to reload
+its run count and badge whenever the latest run it shows changes.
+API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the count is its
+`X-Total-Count`).
 
 ### Subscribers list (`ui.subscribers.list`) - `screens/Subscribers.tsx`
 
@@ -116,15 +120,43 @@ API: `POST .../productOfferingPrice`, `POST .../productOffering`.
 (`frontend/src/screens/*.test.tsx`), and `tests/test_ui_requests.py` replays the same
 bodies against the real API.
 
-## Planned: Billing runs (stage 4, slice g)
+### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
 
-Not built (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`):
-latest run with its KPIs, run history, a failed badge in the navigation, catch up to a
-date, and retry of a failed run. There is no route or navigation item for it
-(`frontend/src/app/router.tsx`); `/billing` shows the not-found page. The backend it will
-use exists: `GET /internal/v1/billingRun[...]`, `POST .../catchUp`, `POST .../{id}/retry`
-([api/internal.md](api/internal.md)). The design's "Run manually" for an arbitrary date is
-replaced by catch-up/retry: the worker alone bills, dates in order.
+Stage 4, slice g, from [stage4-design.md](stage4-design.md) section 7. **The worker alone
+bills; this screen reads runs and queues requests** for it.
+
+- **Title row**: "Scheduled daily at `BILLING_RUN_AT` UTC+3" (from the context), and
+  **Catch up to** a date (default and maximum: the due date - today from
+  `BILLING_RUN_AT` on, else yesterday, Q5) with the **Catch up** button. The toast names
+  the dates the worker will run, in order ("Catch-up queued: 3 dates, 2026-09-28 –
+  2026-09-30"), or says nothing was due.
+- **Gap warning** (Q4): when the latest run is older than the day before the due date, a
+  note says the worker will not bill the gap on its own and which dates a catch-up bills.
+- **Failure banner** (latest run failed): why - N of M accounts not billed, or the run
+  itself failed (no later date until it succeeds) - and **Retry run for DATE**.
+- **Latest run** panel: date, status, trigger (catch-up / retry) and attempt tags, short
+  run id, Start / End / Duration (times in BILLING_TZ) / Charges / Amount in the UI
+  currency; a progress bar ("N of M accounts") while running; the error when failed;
+  **Accounts** opens the run.
+- **Run history** (`GET /billingRun?limit=14`, newest first): run date, start, end,
+  duration, status, note (latest / trigger / attempt tags, the error, a **Retry** link on
+  **every** failed row - any failed run can be retried, Q3), charges, amount; footer
+  "Showing 14 of N". A row opens the run.
+- **One run** (dialog): started / finished / last progress, account counts, charges per
+  currency, the error, and its per-account outcomes filtered by Failed / Blocked / OK /
+  All (the first non-empty of failed, blocked), each account linking to its card, with
+  the error or the earlier run a blocked account waits for; Retry when failed.
+- **Polling**: every 5 s while a run is running, or while a request queued from this
+  screen has not been carried out - i.e. until a run started at or after the request's
+  `requestedAt` (server clock) has finished. After 3 minutes it stops waiting and says the
+  worker has not picked the request up (locally nothing runs the worker on its own: `make
+  worker-once`). A failed refresh keeps the data, stops polling and offers Retry. While
+  waiting, Catch up and Retry are disabled; a refusal (409 a retry already queued, 422 a
+  date not due yet) shows the server's message.
+
+API: `GET /internal/v1/billingRun?limit=14`, `GET .../billingRun/{id}`,
+`GET .../billingRun/{id}/accounts?status=&limit=100`, `POST .../billingRun/catchUp`
+(`{"upTo": "YYYY-MM-DD"}`), `POST .../billingRun/{id}/retry` (no body).
 
 ## Differences from the design handoff
 
@@ -136,7 +168,11 @@ replaced by catch-up/retry: the worker alone bills, dates in order.
 | "Charged on confirmation" | charged by the run of max(start, tomorrow) | end-of-day rule of the billing run |
 | Deactivate = PATCH product status | a TMF622 delete order | orders are the only way to end products |
 | Proration in the browser | the backend's dry run (`firstCharge`) | the UI never computes a charge |
-| Billing runs screen | not built | planned |
+| Billing runs: "Run manually" for a cycle date | **Catch up to** a date: the worker runs every missing date up to it, in order | the stage 4 note wins over the handoff (Q11): a date is never billed out of order |
+| Billing runs: "Re-run" (latest run) | **Retry**, on every failed run (banner, row, run dialog) | Q3: any failed run can be retried |
+| Billing runs: "Scheduled daily at 02:00", "Cycle date", "last 14 days" | `BILLING_RUN_AT` (00:30) from the context, "Run date", "last 14 runs" | the run time is configuration; the list is the 14 newest runs |
+| Billing runs: "manual" tag | "catch-up" / "retry" trigger tags and "attempt N" | the API reports the trigger and the attempt |
+| Billing runs: per-account detail | a run dialog with failed / blocked / ok accounts | stage 4: isolation is per account |
 | Statuses the design lacks (`created`, `pendingTerminate`, Suspended, Closed, ...) | pills reusing existing token colours | |
 
 ## Tests
@@ -144,5 +180,21 @@ replaced by catch-up/retry: the worker alone bills, dates in order.
 `make web-test`: vitest, run twice - in UTC and with `TZ=America/New_York` - so every
 request body is proven independent of the browser's zone. `make web-lint`: tsc, eslint,
 prettier. `make web-e2e`: Playwright against the built UI and the seeded local stack,
-read-only, failing on any console error or 5xx (`frontend/e2e/smoke.spec.ts`). None of
-these run in a cloud session ([operations.md](operations.md#tests)).
+read-only, failing on any console error or 5xx (`frontend/e2e/smoke.spec.ts`; it also
+opens Billing runs and one run).
+
+- **Every request a component test makes must be stubbed** (`src/test/fetch.ts`): an
+  unmatched one rejects (the UI shows a network error) *and* fails the test after it ends
+  (`src/test/setup.ts`). Before, a missing stub only rendered an error, and whether that
+  rendered before an assertion decided the test - the cause of the flaky App.test
+  "recovers on Retry" (2 of 5 runs on master). `pending` stubs a load whose answer the
+  test does not care about.
+- **`expectUi(id)`** (`src/test/expectUi.ts`) asserts the element with `data-ui="<id>"` is
+  on screen and records the id on the test; `make progress` runs vitest with
+  `scripts/ui-tested-reporter.mjs`, which lists the ids of the tests that **passed**, and a
+  ui item is "tested" when its id is among them. An id that is not a ui item in
+  `scope.yaml` fails `make progress`.
+- **Polling tests** fake only `setTimeout` (`vi.useFakeTimers({ toFake: ['setTimeout',
+  'clearTimeout'] })`) and wait with their own `until` helper: Testing Library's
+  `findBy`/`waitFor` hang under a fake `setTimeout` (their wrapper drains with a
+  `setTimeout(0)`).

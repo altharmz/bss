@@ -5,7 +5,17 @@
 
 import { toCents } from '../format/money';
 import { addDays, zonedDateTime } from '../format/dates';
-import { AMOUNT, getAll, getJson, jsonWithAmount, patchJson, postJson } from './client';
+import {
+  AMOUNT,
+  getAll,
+  getJson,
+  getPage,
+  jsonWithAmount,
+  patchJson,
+  postJson,
+  request,
+  type Page,
+} from './client';
 import type { components as Internal } from './generated/internal';
 import type { components as T620 } from './generated/tmf620';
 import type { components as T622 } from './generated/tmf622';
@@ -21,6 +31,7 @@ export const PATHS = {
   prices: '/tmf-api/productCatalogManagement/v5/productOfferingPrice',
   orders: '/tmf-api/productOrderingManagement/v5/productOrder',
   internal: '/internal/v1/billingAccount',
+  runs: '/internal/v1/billingRun',
 };
 
 export type AccountProduct = Internal['schemas']['AccountProduct'];
@@ -440,4 +451,54 @@ export async function orderDelete(accountId: string, productId: string): Promise
     ],
   });
   return outcome(order);
+}
+
+// --- billing runs (stage 4): the worker bills; the UI reads runs and queues requests ---
+
+export type BillingRun = Internal['schemas']['BillingRun'];
+export type RunAccount = Internal['schemas']['RunAccount'];
+export type RunOutcome = RunAccount['status'];
+
+/** How many runs the screen shows: the latest and its history (stage4-design section 7). */
+export const RUN_HISTORY = 14;
+
+/** The newest runs first; `total` is every run there is. */
+export function loadRuns(signal: AbortSignal, limit = RUN_HISTORY): Promise<Page<BillingRun>> {
+  return getPage<BillingRun>(`${PATHS.runs}?limit=${limit}`, signal);
+}
+
+export function loadRun(id: string, signal: AbortSignal): Promise<BillingRun> {
+  return getJson<BillingRun>(`${PATHS.runs}/${id}`, signal);
+}
+
+/** One page (100) of a run's per-account outcomes, optionally of one status. */
+export function loadRunAccounts(
+  id: string,
+  status: RunOutcome | null,
+  signal: AbortSignal,
+): Promise<Page<RunAccount>> {
+  const query = status === null ? 'limit=100' : `status=${status}&limit=100`;
+  return getPage<RunAccount>(`${PATHS.runs}/${id}/accounts?${query}`, signal);
+}
+
+export interface Queued {
+  dates: string[]; // what a catch-up will run, in order (empty for a retry)
+  requestedAt: string; // the server's clock: runs started from then on carry it out
+}
+
+/** Queue a catch-up to `upTo` (a business date). The API never bills: the worker runs
+ * the dates in order within a minute. null = nothing was due, nothing was queued. */
+export async function catchUp(upTo: string): Promise<Queued | null> {
+  const result = await postJson<Internal['schemas']['CatchUp']>(`${PATHS.runs}/catchUp`, {
+    upTo,
+  });
+  if (result.dates.length === 0) return null;
+  return { dates: result.dates, requestedAt: need(result.request, 'request').requestedAt };
+}
+
+/** Queue a retry of a failed run (any failed run, Q3). The endpoint takes no body. */
+export async function retryRun(id: string): Promise<Queued> {
+  const response = await request('POST', `${PATHS.runs}/${id}/retry`);
+  const result = (await response.json()) as Internal['schemas']['RetryQueued'];
+  return { dates: [], requestedAt: result.request.requestedAt };
 }
