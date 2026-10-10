@@ -75,6 +75,31 @@ one delete item, effective today** (no `requestedStartDate`): a started product 
 reasons.
 API: `POST /tmf-api/productOrderingManagement/v5/productOrder`.
 
+### Bills (`ui.subscriber.bills`), bill dialog (`ui.subscriber.billDetail`), hold/release (`ui.subscriber.billHold`), record payment (`ui.subscriber.recordPayment`) - `screens/Bills.tsx`
+
+The bill lifecycle (docs/bill-lifecycle-design.md section 6). The Billing account panel
+adds **Due on bills** (outstanding, with "N overdue · amount" in red and "N on hold") and
+**Unused credit**. The **Bills** panel lists the account's bills newest first: bill no.
+(`BL-xxxxxxxx`), bill date, due date ("overdue" when due before the business date with
+something remaining; "credit note" instead of a date for a negative bill), amount due,
+remaining, state pill (settled green, sent / partiallyPaid amber, onHold red, new /
+validated blue - existing token colours only). A row opens the **bill dialog**: state,
+period, due date, amounts, the charges on the bill, what paid it (payments and credit
+notes, automatic or explicit, with the time), its state history (cause and operator), and
+**Put on hold** / **Release** with an inline confirm - offered exactly as the server's
+`allowedStates` says (release sends the state the allocations imply). A change closes the
+dialog, toasts and reloads the card. **Record payment** (header button, any account
+state): amount, method (bankTransfer / card / cash / Other with a name), and optionally
+**Apply to specific bills** - the open bills (not on hold) with amounts prefilled oldest
+first up to the payment, editable; more than a bill's remaining amount, or more than the
+payment in total, is refused before anything is sent. Every amount goes out as an exact
+JSON number token (`jsonWithAmounts`). The toast says how many bills it paid now, or that
+it is kept as credit. The UI never allocates anything itself.
+API: `GET .../customerBill?billingAccount.id=` (TMF678, all pages),
+`GET /internal/v1/billingAccount/{id}/settlement`, `GET /internal/v1/customerBill/{id}`,
+`PATCH /tmf-api/customerBillManagement/v5/customerBill/{id}` (`{"state": ...}`, merge
+patch), `POST /tmf-api/paymentManagement/v4/payment` (`paymentItem[]` when lettered).
+
 ### Add product (`ui.subscriber.addProduct`) - `screens/AddProduct.tsx`
 
 Modal: 1. pick an Active, sellable offering (filterable list with code, specification and

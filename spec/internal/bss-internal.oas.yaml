@@ -65,6 +65,38 @@ paths:
                 items: {$ref: '#/components/schemas/AccountProduct'}
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
+  /billingAccount/{id}/settlement:
+    get:
+      summary: What the account owes on its bills, and the credit not used yet.
+      description: >-
+        outstanding = the remaining amounts of every bill, bills on hold included (counted
+        apart in onHold); overdue = bills due before the business date with something
+        remaining (display only); unallocatedCredit = payments and issued credit notes not
+        yet applied to a bill. Invariant: outstanding - unallocatedCredit = -(account
+        balance + charges not billed yet).
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccountSettlement'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /customerBill/{id}:
+    get:
+      summary: One bill for the bill dialog - charges, sources, state history, allowed states.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BillDetail'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
   /billingAccount/{id}/charges:
     get:
       summary: The account's applied billing rates (charges and refunds), newest first.
@@ -360,7 +392,8 @@ components:
     Context:
       type: object
       additionalProperties: false
-      required: [businessDate, now, timeZone, utcOffset, environment, operator, currency, billingRunAt]
+      required: [businessDate, now, timeZone, utcOffset, environment, operator, currency, billingRunAt,
+                 paymentTermDays]
       properties:
         businessDate: {$ref: '#/components/schemas/BusinessDate'}
         now: {type: string, format: date-time}
@@ -378,6 +411,108 @@ components:
           type: string
           pattern: '^\d{2}:\d{2}$'
           description: Local time (BILLING_TZ) of the daily billing run.
+        paymentTermDays:
+          type: integer
+          minimum: 1
+          maximum: 365
+          description: >-
+            BILL_PAYMENT_TERM_DAYS - days from a bill's date to its paymentDueDate for bills
+            written from now on.
+    CountAmount:
+      type: object
+      additionalProperties: false
+      required: [count, amount]
+      properties:
+        count: {type: integer, minimum: 0}
+        amount: {$ref: '#/components/schemas/Money'}
+    AccountSettlement:
+      type: object
+      additionalProperties: false
+      required: [outstanding, unallocatedCredit, overdue, onHold, paymentTermDays]
+      properties:
+        outstanding: {$ref: '#/components/schemas/Money'}
+        unallocatedCredit: {$ref: '#/components/schemas/Money'}
+        overdue: {$ref: '#/components/schemas/CountAmount'}
+        onHold: {$ref: '#/components/schemas/CountAmount'}
+        paymentTermDays: {type: integer, minimum: 1, maximum: 365}
+    BillState:
+      type: string
+      enum: [new, onHold, validated, sent, settled, partiallyPaid]
+    BillDetail:
+      type: object
+      additionalProperties: false
+      required: [id, href, billNo, billingAccount, billDate, period, paymentDueDate, amountDue,
+                 remainingAmount, state, category, overdue, allowedStates, charges, sources,
+                 history]
+      properties:
+        id: {type: string, format: uuid}
+        href: {type: string}
+        billNo: {type: string, pattern: '^BL-[0-9A-F]{8}$'}
+        billingAccount: {$ref: '#/components/schemas/Link'}
+        billDate: {$ref: '#/components/schemas/BusinessDate'}
+        period: {$ref: '#/components/schemas/DateRange'}
+        paymentDueDate: {$ref: '#/components/schemas/BusinessDate'}
+        amountDue:
+          description: May be negative (a credit note).
+          allOf: [{$ref: '#/components/schemas/Money'}]
+        remainingAmount: {$ref: '#/components/schemas/Money'}
+        state: {$ref: '#/components/schemas/BillState'}
+        category: {type: string, enum: [normal, creditNote]}
+        overdue:
+          type: boolean
+          description: Due before the business date with something remaining. Display only.
+        allowedStates:
+          description: >-
+            What PATCH /customerBill/{id} accepts now besides the current state: [onHold]
+            for sent or partiallyPaid, the state the allocations imply for onHold, else none.
+          type: array
+          items: {$ref: '#/components/schemas/BillState'}
+        charges:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, href, kind, period, amount, product, productOffering]
+            properties:
+              id: {type: string, format: uuid}
+              href: {type: string}
+              kind: {type: string, enum: [charge, refund]}
+              period: {$ref: '#/components/schemas/DateRange'}
+              amount: {$ref: '#/components/schemas/Money'}
+              product: {$ref: '#/components/schemas/Link'}
+              productOffering: {$ref: '#/components/schemas/Named'}
+        sources:
+          description: What paid the bill, in the order it was applied.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, id, href, label, amount, allocation, allocatedAt]
+            properties:
+              kind: {type: string, enum: [payment, creditNote]}
+              id: {type: string, format: uuid}
+              href: {type: string}
+              label:
+                type: string
+                description: The payment method of a payment, the bill number of a credit note.
+              amount: {$ref: '#/components/schemas/Money'}
+              allocation: {type: string, enum: [automatic, explicit]}
+              allocatedAt: {type: string, format: date-time}
+        history:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [fromState, toState, changedAt, cause, operator]
+            properties:
+              fromState:
+                type: string
+                nullable: true
+                enum: [new, onHold, validated, sent, settled, partiallyPaid, null]
+              toState: {$ref: '#/components/schemas/BillState'}
+              changedAt: {type: string, format: date-time}
+              cause: {type: string, enum: [run, payment, operator]}
+              operator: {type: string, nullable: true}
     FirstCharge:
       type: object
       additionalProperties: false

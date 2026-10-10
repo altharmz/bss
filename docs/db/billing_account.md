@@ -51,4 +51,4 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`payment`](payment.md), [`product`](product.md), [`product_order`](product_order.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`payment`](payment.md), [`product`](product.md), [`product_order`](product_order.md)

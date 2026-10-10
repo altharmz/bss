@@ -21,6 +21,7 @@ from app.api.tmfjson import TmfJSONResponse
 from app.billing.core import compute, cycle_period, price_at
 from app.billing.model import Account, BillingState, DateRange, MissingPrice, Product
 from app.config import settings
+from app.internal.context import no_query
 from app.repository import billing, catalog, parties, products
 from app.repository._sql import Row
 
@@ -232,6 +233,35 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
             }
         )
     return _page(items, len(items))
+
+
+@router.get("/{account_id}/settlement")
+def account_settlement(
+    account_id: str, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
+    """What the account owes on its bills and the credit nothing has used yet (design 6.5).
+    outstanding includes bills on hold, which are also counted apart; overdue = due before
+    the business date with something remaining - display only, nothing follows from it."""
+    no_query(request)
+    with tx() as conn:
+        row = _account(conn, account_id)
+        s = billing.settlement_summary(conn, row["id"], clock.today())
+    currency = row["currency"]
+    return TmfJSONResponse(
+        {
+            "outstanding": money(s["outstanding"], currency),
+            "unallocatedCredit": money(s["unallocated_credit"], currency),
+            "overdue": {
+                "count": s["overdue_count"],
+                "amount": money(s["overdue_amount"], currency),
+            },
+            "onHold": {
+                "count": s["on_hold_count"],
+                "amount": money(s["on_hold_amount"], currency),
+            },
+            "paymentTermDays": settings.bill_payment_term_days,
+        }
+    )
 
 
 @router.get("/{account_id}/charges")

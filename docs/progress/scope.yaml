@@ -32,6 +32,8 @@ items:
   - {id: db.payment, area: db, stage: 1, table: payment, title: "Payments (TMF676)"}
   - {id: db.billing_run_account, area: db, stage: 4, table: billing_run_account, title: "Per-(run, account) outcomes: ok / failed / blocked"}
   - {id: db.worker_request, area: db, stage: 4, table: worker_request, title: "UI request queue for the worker (catch-up, retry)"}
+  - {id: db.bill_allocation, area: db, stage: 5, table: bill_allocation, title: "What paid a bill: payments and credit notes (TMF678 appliedPayment)"}
+  - {id: db.customer_bill_state_change, area: db, stage: 5, table: customer_bill_state_change, title: "Bill state history"}
 
   # ---------------- api: TMF620 product catalog ----------------
   - {id: api.tmf620.productSpecification.list, area: api, stage: 2, method: GET, path: /tmf-api/productCatalogManagement/v5/productSpecification, title: "List product specifications"}
@@ -87,6 +89,7 @@ items:
   # ---------------- api: TMF678 bills and charges ----------------
   - {id: api.tmf678.customerBill.list, area: api, stage: 2, method: GET, path: /tmf-api/customerBillManagement/v5/customerBill, title: "List customer bills"}
   - {id: api.tmf678.customerBill.get, area: api, stage: 2, method: GET, path: "/tmf-api/customerBillManagement/v5/customerBill/{bill_id}", title: "Get a customer bill"}
+  - {id: api.tmf678.customerBill.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/customerBillManagement/v5/customerBill/{bill_id}", title: "Hold or release a customer bill"}
   - {id: api.tmf678.appliedCustomerBillingRate.list, area: api, stage: 2, method: GET, path: /tmf-api/customerBillManagement/v5/appliedCustomerBillingRate, title: "List charges and refunds (ABRs)"}
   - {id: api.tmf678.appliedCustomerBillingRate.get, area: api, stage: 2, method: GET, path: "/tmf-api/customerBillManagement/v5/appliedCustomerBillingRate/{rate_id}", title: "Get a charge or refund (ABR)"}
 
@@ -96,6 +99,8 @@ items:
   - {id: api.internal.accountProducts.list, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/products", title: "An account's not-ended products"}
   - {id: api.internal.accountCharges.list, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/charges", title: "An account's charges (ABRs with proration)"}
   - {id: api.internal.accountTransactions.list, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/transactions", title: "An account's ledger with balance after"}
+  - {id: api.internal.accountSettlement.get, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/settlement", title: "An account's bills owed, unused credit, overdue and on hold"}
+  - {id: api.internal.billDetail.get, area: api, stage: 5, method: GET, path: "/internal/v1/customerBill/{bill_id}", title: "A bill with charges, sources, history and allowed states"}
   - {id: api.internal.priceChange.create, area: api, stage: 5, method: POST, path: "/internal/v1/productOffering/{offering_id}/priceChange", title: "Atomic price change of a live offering (D-W21)"}
   - {id: api.internal.billingRun.list, area: api, stage: 4, method: GET, path: /internal/v1/billingRun, title: "List billing runs (newest first)"}
   - {id: api.internal.billingRun.get, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}", title: "Get a billing run"}
@@ -113,6 +118,10 @@ items:
   - {id: ui.subscriber.card, area: ui, stage: 5, title: "Subscriber card: account, products, charges, transactions"}
   - {id: ui.subscriber.addProduct, area: ui, stage: 5, title: "Add product, with first-charge preview"}
   - {id: ui.subscriber.deactivate, area: ui, stage: 5, title: "Deactivate a product"}
+  - {id: ui.subscriber.bills, area: ui, stage: 5, title: "Bills panel on the subscriber card"}
+  - {id: ui.subscriber.billDetail, area: ui, stage: 5, title: "Bill dialog: charges, payments, history"}
+  - {id: ui.subscriber.billHold, area: ui, stage: 5, title: "Put a bill on hold / release it"}
+  - {id: ui.subscriber.recordPayment, area: ui, stage: 5, title: "Record payment, optionally to chosen bills"}
   - {id: ui.catalog.list, area: ui, stage: 5, title: "Product catalog"}
   - {id: ui.catalog.offeringDetail, area: ui, stage: 5, title: "Offering detail dialog"}
   - {id: ui.catalog.lifecycle, area: ui, stage: 5, title: "Offering lifecycle step (Activate / Retire)"}
@@ -135,6 +144,8 @@ items:
   - {id: worker.statusFlips, area: worker, stage: 4, title: "Status flips (created -> active, pendingTerminate -> terminated) by run date"}
   - {id: worker.scheduler, area: worker, stage: 4, title: "Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday"}
   - {id: worker.signals, area: worker, stage: 4, title: "SIGTERM finishes the current account; SIGKILL leaves nothing half-written"}
+  - {id: worker.billIssue, area: worker, stage: 5, title: "The run validates and issues the bills it writes (new -> validated -> sent; credit notes and zero bills settled)"}
+  - {id: worker.billSettle, area: worker, stage: 5, title: "Every run applies unused credit to open bills, oldest first"}
 
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}

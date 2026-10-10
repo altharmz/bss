@@ -137,7 +137,14 @@ AREAS = {
     "catalog": ("product_specification", "product_offering", "product_offering_price"),
     "ordering": ("product_order", "product_order_item", "product_order_error_message"),
     "inventory": ("product",),
-    "billing": ("billing_run", "applied_customer_billing_rate", "customer_bill", "payment"),
+    "billing": (
+        "billing_run",
+        "applied_customer_billing_rate",
+        "customer_bill",
+        "payment",
+        "bill_allocation",
+        "customer_bill_state_change",
+    ),
     "worker": ("billing_run_account", "worker_request"),
 }
 AREA_TITLES = {

@@ -213,3 +213,65 @@ def test_catch_up_as_the_ui_sends_it(api, worker):
     # nothing is due any more: 200, no dates, nothing queued (the screen's "Nothing to catch up")
     again = api.post_raw(f"{RUNS}/catchUp", '{"upTo":"2026-12-05"}')
     assert again.status_code == 200 and again.json() == {"dates": []}
+
+
+# --- bills (frontend/src/screens/Bills.test.tsx pins the same bodies) ---
+
+PAYMENT = "/tmf-api/paymentManagement/v4/payment"
+BILL = "/tmf-api/customerBillManagement/v5/customerBill"
+
+
+def two_open_bills(api, db_conn) -> tuple[dict, list[dict]]:
+    """An account with the 300.00 bills of Dec 1 and Jan 1, both unpaid."""
+    from datetime import date
+
+    from tests.test_billing_db import add, bill
+    from tests.test_billing_db import at as at_day
+
+    offering = apidata.sellable_offering(api, value=300)
+    account = apidata.account(api)
+    add(api, account, offering, date(2026, 12, 1), on=at_day(date(2026, 11, 20)))
+    bill(db_conn, account, date(2026, 12, 1))
+    bill(db_conn, account, date(2027, 1, 1))
+    api.clock.set(at_day(date(2027, 1, 2)))
+    return account, decimals(api.get(f"{BILL}?billingAccount.id={account['id']}"))
+
+
+def test_payments_as_the_ui_sends_them(api, db_conn):
+    """recordPayment(): totalAmount and every item amount as exact number tokens, the
+    method as paymentMethod.name; without items the oldest bills are paid first."""
+    account, (dec, jan) = two_open_bills(api, db_conn)
+    a = account["id"]
+    plain = api.post_raw(
+        PAYMENT,
+        f'{{"@type":"Payment","account":{{"id":"{a}","@referredType":"BillingAccount"}},'
+        '"totalAmount":{"unit":"RUB","value":350.00},"paymentMethod":{"name":"bankTransfer"}}',
+    )
+    assert plain.status_code == 201, plain.text
+    assert [i["item"]["id"] for i in plain.json()["paymentItem"]] == [dec["id"], jan["id"]]
+
+    lettered = api.post_raw(
+        PAYMENT,
+        f'{{"@type":"Payment","account":{{"id":"{a}","@referredType":"BillingAccount"}},'
+        '"totalAmount":{"unit":"RUB","value":100.00},"paymentMethod":{"name":"cash"},'
+        f'"paymentItem":[{{"@type":"PaymentItem","item":{{"id":"{jan["id"]}",'
+        '"@referredType":"CustomerBill"},"amount":{"unit":"RUB","value":100.00}}]}',
+    )
+    assert lettered.status_code == 201, lettered.text
+    bills = decimals(api.get(f"{BILL}?billingAccount.id={a}"))
+    assert [(b["state"], b["remainingAmount"]["value"]) for b in bills] == [
+        ("settled", Decimal("0.00")),
+        ("partiallyPaid", Decimal("150.00")),
+    ]
+
+
+def test_hold_and_release_as_the_ui_sends_them(api, db_conn):
+    """setBillState(): a merge patch {"state": ...}; release sends the state the dialog got
+    in allowedStates."""
+    _, (dec, _) = two_open_bills(api, db_conn)
+    held = api.patch(f"{BILL}/{dec['id']}", {"state": "onHold"})
+    assert held.status_code == 200 and held.json()["state"] == "onHold"
+    allowed = api.get(f"/internal/v1/customerBill/{dec['id']}").json()["allowedStates"]
+    assert allowed == ["sent"]
+    released = api.patch(f"{BILL}/{dec['id']}", {"state": allowed[0]})
+    assert released.status_code == 200 and released.json()["state"] == "sent"

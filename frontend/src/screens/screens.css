@@ -579,3 +579,28 @@
   align-items: center;
   gap: 8px;
 }
+
+/* --- bills: the bill dialog and Record payment --- */
+.bss-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+  border-bottom: 1px solid var(--divider);
+}
+.bss-line:last-child {
+  border-bottom: 0;
+}
+.bss-bill-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.bss-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}

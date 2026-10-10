@@ -2,27 +2,27 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 54,
-      "items": 54,
+      "implemented": 57,
+      "items": 57,
       "tested": null
     },
     "db": {
       "deployed": null,
-      "implemented": 16,
-      "items": 16,
+      "implemented": 18,
+      "items": 18,
       "tested": null
     },
     "ui": {
       "deployed": null,
-      "implemented": 13,
-      "items": 13,
-      "tested": 13
+      "implemented": 17,
+      "items": 17,
+      "tested": 17
     },
     "worker": {
       "deployed": null,
-      "implemented": 10,
-      "items": 10,
-      "tested": 10
+      "implemented": 12,
+      "items": 12,
+      "tested": 12
     }
   },
   "excluded": [
@@ -181,6 +181,24 @@
       "stage": 4,
       "tested": null,
       "title": "UI request queue for the worker (catch-up, retry)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.bill_allocation",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "What paid a bill: payments and credit notes (TMF678 appliedPayment)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.customer_bill_state_change",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Bill state history"
     },
     {
       "area": "api",
@@ -536,6 +554,15 @@
     {
       "area": "api",
       "deployed": null,
+      "id": "api.tmf678.customerBill.patch",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Hold or release a customer bill"
+    },
+    {
+      "area": "api",
+      "deployed": null,
       "id": "api.tmf678.appliedCustomerBillingRate.list",
       "implemented": true,
       "stage": 2,
@@ -595,6 +622,24 @@
       "stage": 5,
       "tested": null,
       "title": "An account's ledger with balance after"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.accountSettlement.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "An account's bills owed, unused credit, overdue and on hold"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.billDetail.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "A bill with charges, sources, history and allowed states"
     },
     {
       "area": "api",
@@ -712,6 +757,42 @@
       "stage": 5,
       "tested": true,
       "title": "Deactivate a product"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.bills",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Bills panel on the subscriber card"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.billDetail",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Bill dialog: charges, payments, history"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.billHold",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Put a bill on hold / release it"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.recordPayment",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Record payment, optionally to chosen bills"
     },
     {
       "area": "ui",
@@ -874,6 +955,24 @@
       "stage": 4,
       "tested": true,
       "title": "SIGTERM finishes the current account; SIGKILL leaves nothing half-written"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.billIssue",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "The run validates and issues the bills it writes (new -> validated -> sent; credit notes and zero bills settled)"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.billSettle",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Every run applies unused credit to open bills, oldest first"
     }
   ],
   "unscoped": []

@@ -10,10 +10,10 @@ commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 16 | 16/16 (100%) | n/a | unknown |
-| API | 54 | 54/54 (100%) | n/a | unknown |
-| UI | 13 | 13/13 (100%) | 13/13 (100%) | unknown |
-| Worker | 10 | 10/10 (100%) | 10/10 (100%) | unknown |
+| Database | 18 | 18/18 (100%) | n/a | unknown |
+| API | 57 | 57/57 (100%) | n/a | unknown |
+| UI | 17 | 17/17 (100%) | 17/17 (100%) | unknown |
+| Worker | 12 | 12/12 (100%) | 12/12 (100%) | unknown |
 
 ## Database
 
@@ -35,6 +35,8 @@ commit.
 | `db.payment` | 1 | Payments (TMF676) | yes | n/a | unknown |
 | `db.billing_run_account` | 4 | Per-(run, account) outcomes: ok / failed / blocked | yes | n/a | unknown |
 | `db.worker_request` | 4 | UI request queue for the worker (catch-up, retry) | yes | n/a | unknown |
+| `db.bill_allocation` | 5 | What paid a bill: payments and credit notes (TMF678 appliedPayment) | yes | n/a | unknown |
+| `db.customer_bill_state_change` | 5 | Bill state history | yes | n/a | unknown |
 
 ## API
 
@@ -79,6 +81,7 @@ commit.
 | `api.tmf637.product.get` | 2 | Get a product | yes | n/a | unknown |
 | `api.tmf678.customerBill.list` | 2 | List customer bills | yes | n/a | unknown |
 | `api.tmf678.customerBill.get` | 2 | Get a customer bill | yes | n/a | unknown |
+| `api.tmf678.customerBill.patch` | 5 | Hold or release a customer bill | yes | n/a | unknown |
 | `api.tmf678.appliedCustomerBillingRate.list` | 2 | List charges and refunds (ABRs) | yes | n/a | unknown |
 | `api.tmf678.appliedCustomerBillingRate.get` | 2 | Get a charge or refund (ABR) | yes | n/a | unknown |
 | `api.internal.context.get` | 5 | System context: business date, zone, operator | yes | n/a | unknown |
@@ -86,6 +89,8 @@ commit.
 | `api.internal.accountProducts.list` | 5 | An account's not-ended products | yes | n/a | unknown |
 | `api.internal.accountCharges.list` | 5 | An account's charges (ABRs with proration) | yes | n/a | unknown |
 | `api.internal.accountTransactions.list` | 5 | An account's ledger with balance after | yes | n/a | unknown |
+| `api.internal.accountSettlement.get` | 5 | An account's bills owed, unused credit, overdue and on hold | yes | n/a | unknown |
+| `api.internal.billDetail.get` | 5 | A bill with charges, sources, history and allowed states | yes | n/a | unknown |
 | `api.internal.priceChange.create` | 5 | Atomic price change of a live offering (D-W21) | yes | n/a | unknown |
 | `api.internal.billingRun.list` | 4 | List billing runs (newest first) | yes | n/a | unknown |
 | `api.internal.billingRun.get` | 4 | Get a billing run | yes | n/a | unknown |
@@ -104,6 +109,10 @@ commit.
 | `ui.subscriber.card` | 5 | Subscriber card: account, products, charges, transactions | yes | yes | unknown |
 | `ui.subscriber.addProduct` | 5 | Add product, with first-charge preview | yes | yes | unknown |
 | `ui.subscriber.deactivate` | 5 | Deactivate a product | yes | yes | unknown |
+| `ui.subscriber.bills` | 5 | Bills panel on the subscriber card | yes | yes | unknown |
+| `ui.subscriber.billDetail` | 5 | Bill dialog: charges, payments, history | yes | yes | unknown |
+| `ui.subscriber.billHold` | 5 | Put a bill on hold / release it | yes | yes | unknown |
+| `ui.subscriber.recordPayment` | 5 | Record payment, optionally to chosen bills | yes | yes | unknown |
 | `ui.catalog.list` | 5 | Product catalog | yes | yes | unknown |
 | `ui.catalog.offeringDetail` | 5 | Offering detail dialog | yes | yes | unknown |
 | `ui.catalog.lifecycle` | 5 | Offering lifecycle step (Activate / Retire) | yes | yes | unknown |
@@ -127,6 +136,8 @@ commit.
 | `worker.statusFlips` | 4 | Status flips (created -> active, pendingTerminate -> terminated) by run date | yes | yes | unknown |
 | `worker.scheduler` | 4 | Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday | yes | yes | unknown |
 | `worker.signals` | 4 | SIGTERM finishes the current account; SIGKILL leaves nothing half-written | yes | yes | unknown |
+| `worker.billIssue` | 5 | The run validates and issues the bills it writes (new -> validated -> sent; credit notes and zero bills settled) | yes | yes | unknown |
+| `worker.billSettle` | 5 | Every run applies unused credit to open bills, oldest first | yes | yes | unknown |
 
 ## Unscoped
 

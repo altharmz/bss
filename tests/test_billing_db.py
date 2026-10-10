@@ -17,6 +17,7 @@ import pytest
 from app.billing.adapter import apply_result, bill_account, load_state
 from app.billing.core import compute
 from app.billing.model import BillingResult
+from app.config import settings
 from app.repository import billing
 from tests import apidata
 from tests.apiclient import decimals
@@ -77,6 +78,38 @@ def offering(api):
 
 
 # --- worked examples end to end ---
+
+
+def test_a_bill_is_due_after_the_term_in_force_and_its_issue_is_recorded(
+    api, db_conn, offering, monkeypatch
+):
+    """paymentDueDate = billDate + BILL_PAYMENT_TERM_DAYS as configured when the run writes
+    the bill; a later change of the term leaves it alone. The run issues the bill in the
+    same transaction: new -> validated -> sent, each step dated by the injected clock of
+    the run's attempt."""
+    account = apidata.account(api)
+    add(api, account, offering, date(2026, 12, 1), on=at(date(2026, 11, 20)))
+    monkeypatch.setattr(settings, "bill_payment_term_days", 10)
+    bill(db_conn, account, date(2026, 12, 1))
+    monkeypatch.setattr(settings, "bill_payment_term_days", 45)
+    bill(db_conn, account, date(2027, 1, 1))
+    rows = db_conn.execute(
+        "SELECT id, bill_date, payment_due_date, category, state FROM customer_bill"
+        " WHERE billing_account_id = %s ORDER BY bill_date",
+        (account["id"],),
+    ).fetchall()
+    assert [r[1:] for r in rows] == [
+        (date(2026, 12, 1), date(2026, 12, 11), "normal", "sent"),
+        (date(2027, 1, 1), date(2027, 2, 15), "normal", "sent"),
+    ]
+    history = billing.bill_state_history(db_conn, rows[0][0])
+    assert [(h["from_state"], h["to_state"], h["cause"]) for h in history] == [
+        (None, "new", "run"),
+        ("new", "validated", "run"),
+        ("validated", "sent", "run"),
+    ]
+    started = run_row(db_conn, date(2026, 12, 1))["started_at"]
+    assert {h["changed_at"] for h in history} == {started}
 
 
 def test_examples_1_4_11_and_the_tmf678_view(api, db_conn, offering):
@@ -158,10 +191,10 @@ def test_a_stale_result_applied_twice_hits_the_exclusion_constraint(api, db_conn
     state = load_state(db_conn, UUID(account["id"]), date(2026, 12, 1), TZ)
     result = compute(state, date(2026, 12, 1), TZ)
     with db_conn.transaction():
-        apply_result(db_conn, state.account, run["id"], result)
+        apply_result(db_conn, state.account, run["id"], result, issued_at=run["started_at"])
     # what two concurrent runs computing from the same state would do without the lock
     with pytest.raises(psycopg.errors.ExclusionViolation), db_conn.transaction():
-        apply_result(db_conn, state.account, run["id"], result)
+        apply_result(db_conn, state.account, run["id"], result, issued_at=run["started_at"])
     assert count(db_conn, "applied_customer_billing_rate") == 1
 
 
@@ -276,7 +309,8 @@ def abr_rows(conn: psycopg.Connection, account: dict, names: dict[str, str]) -> 
 
 def bill_rows(conn: psycopg.Connection, account: dict) -> list[tuple]:
     return conn.execute(
-        "SELECT bill_date, bill_period, amount_due FROM customer_bill"
+        "SELECT bill_date, bill_period, amount_due, payment_due_date, category, state"
+        " FROM customer_bill"
         " WHERE billing_account_id = %s ORDER BY bill_date",
         (account["id"],),
     ).fetchall()

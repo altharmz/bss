@@ -116,6 +116,26 @@ export function jsonWithAmount(body: unknown, amount: string): string {
   return text.replace(AMOUNT_TOKEN, amount);
 }
 
+/** The i-th amount slot for jsonWithAmounts (a body with several exact amounts). */
+export function amountSlot(i: number): string {
+  return `\u0000amount${i}\u0000`;
+}
+
+/** jsonWithAmount for several amounts: amounts[i] goes where amountSlot(i) is, each
+ * slot exactly once. */
+export function jsonWithAmounts(body: unknown, amounts: string[]): string {
+  let text = JSON.stringify(body);
+  amounts.forEach((amount, i) => {
+    if (!/^\d{1,10}\.\d{2}$/.test(amount))
+      throw new RangeError(`not a canonical amount: ${amount}`);
+    const token = JSON.stringify(amountSlot(i));
+    if (text.split(token).length !== 2)
+      throw new Error(`the body must hold slot ${i} exactly once`);
+    text = text.replace(token, amount);
+  });
+  return text;
+}
+
 export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await request('GET', path, signal ? { signal } : {});
   return (await response.json()) as T;

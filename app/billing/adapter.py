@@ -12,7 +12,8 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
-from app.billing.core import compute
+from app.billing import settlement
+from app.billing.core import add_month, compute
 from app.billing.model import Account, BillingResult, BillingState
 from app.config import settings
 from app.repository import billing
@@ -40,25 +41,66 @@ def load_state(
 
 
 def apply_result(
-    conn: psycopg.Connection, account: Account, run_id: UUID, result: BillingResult
+    conn: psycopg.Connection,
+    account: Account,
+    run_id: UUID,
+    result: BillingResult,
+    *,
+    issued_at: datetime,
 ) -> None:
+    """Write the ABRs and bills; each bill gets its issue row in the state history, dated
+    `issued_at` (the injected clock of the run's attempt)."""
     ids = {abr.key: billing.write_abr(conn, account, run_id, abr) for abr in result.abrs}
     for bill in result.bills:
-        bill_id = billing.write_bill(conn, account, run_id, bill)
+        bill_id = billing.write_bill(conn, account, run_id, bill, settings.bill_payment_term_days)
+        billing.record_bill_issue(conn, bill_id, now=issued_at)
         members = [*bill.abr_ids, *(ids[key] for key in bill.abr_keys)]
         billing.attach_abrs_to_bill(conn, bill_id, account.id, members)
+
+
+def issue_bills(conn: psycopg.Connection, account: Account, *, now: datetime) -> None:
+    """Issue every bill of the account still waiting (written by this run, or `new` from
+    before migration 0006): validate it, then new -> validated -> sent (-> settled when
+    nothing is due). A bill that fails validation raises InconsistentState, so the account
+    fails in the run and nothing of it is written."""
+    for candidate in billing.load_issue_candidates(conn, account.id):
+        settlement.validate(candidate, add_month(candidate.bill_date))
+        for change in settlement.issue(candidate):
+            billing.record_bill_state(conn, change, now=now, cause="run")
+
+
+def settle_account(
+    conn: psycopg.Connection,
+    account: Account,
+    *,
+    now: datetime,
+    cause: str,
+    explicit: tuple[settlement.ExplicitItem, ...] = (),
+    explicit_payment_id: UUID | None = None,
+) -> settlement.Settlement:
+    """Apply the account's unused credit to its open bills and write the result. The
+    caller holds the billing account's row lock (`billing.load_account`)."""
+    bills, payments = billing.load_settlement(conn, account.id)
+    result = settlement.settle(bills, payments, explicit, explicit_payment_id)
+    billing.write_settlement(conn, account, result, now=now, cause=cause)
+    return result
 
 
 def bill_account(
     conn: psycopg.Connection, account_id: UUID, run: dict, *, tz: ZoneInfo | None = None
 ) -> BillingResult:
     """Bill one account for `run` (a billing_run row that is still running): write the
-    ABRs and bills due up to its run date. Running it again for the same run writes
-    nothing. Raises BillingError (nothing written) if the account cannot be billed."""
+    ABRs and bills due up to its run date, issue the bills, and settle the account (its
+    unused credit pays its open bills). Running it again for the same run writes nothing.
+    Raises BillingError (nothing written) if the account cannot be billed."""
     tz = tz or ZoneInfo(settings.billing_tz)
     with conn.transaction():
-        run_date = billing.running_run_date(conn, run["id"])
+        current = billing.running_run(conn, run["id"])
+        run_date = current["run_date"]
         state = load_state(conn, account_id, run_date, tz)
         result = compute(state, run_date, tz)
-        apply_result(conn, state.account, run["id"], result)
+        now = current["started_at"]
+        apply_result(conn, state.account, run["id"], result, issued_at=now)
+        issue_bills(conn, state.account, now=now)
+        settle_account(conn, state.account, now=now, cause="run")
     return result

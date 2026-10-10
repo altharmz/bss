@@ -4,10 +4,12 @@ import {
   loadCharges,
   loadCustomerStatus,
   loadProducts,
+  loadSettlement,
   loadTransactions,
   orderDelete,
   type Account,
   type AccountProduct,
+  type AccountSettlement,
 } from '../api/bss';
 import { explain } from '../api/client';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
@@ -21,10 +23,12 @@ import { Button, Panel, Pill, useToast } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
+import { BillDialog, BillsPanel, RecordPaymentModal, useBills } from './Bills';
 import './screens.css';
 
 // Screen 2. Everything about one billing account. Products change only through TMF622
 // orders: Add product posts an add item, Deactivate a delete item; both reload the card.
+// Bills: Record payment (TMF676) and a bill's hold/release (TMF678 PATCH) reload it too.
 
 const PRODUCT_COLUMNS: Column[] = [
   { key: 'offering', label: 'Offering', width: '1fr' },
@@ -108,12 +112,18 @@ function Card({
   const context = useSystemContext();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [openBill, setOpenBill] = useState<string | null>(null);
   const customerStatus = useResource(`customer:${account.customerId}:${version}`, (signal) =>
     loadCustomerStatus(account.customerId, signal),
   );
   const products = useResource(`products:${account.id}:${version}`, (signal) =>
     loadProducts(account.id, signal),
   );
+  const settlement = useResource(`settlement:${account.id}:${version}`, (signal) =>
+    loadSettlement(account.id, signal),
+  );
+  const bills = useBills(account, version);
   const canAdd = account.state === 'Active';
   const activeOfferings = new Set(
     products.status === 'ok' ? products.data.map((p) => p.productOffering.id) : [],
@@ -148,6 +158,9 @@ function Card({
             </div>
           </div>
           <div className="bss-card-action">
+            <Button onClick={() => setPaying(true)} disabled={bills.status !== 'ok'}>
+              Record payment
+            </Button>{' '}
             {addButton}
             {!canAdd && (
               <div className="caption">Unavailable for {account.state.toLowerCase()} accounts</div>
@@ -156,7 +169,11 @@ function Card({
         </div>
       </Panel>
 
-      <BillingAccountPanel account={account} today={context.businessDate} />
+      <BillingAccountPanel
+        account={account}
+        today={context.businessDate}
+        settlement={settlement.status === 'ok' ? settlement.data : null}
+      />
 
       <Panel
         title="Active products"
@@ -196,9 +213,35 @@ function Card({
         </ListState>
       </Panel>
 
+      <BillsPanel bills={bills} onOpen={(bill) => setOpenBill(bill.id)} />
+
       <div className="bss-two-col">
         <History account={account} version={version} />
       </div>
+
+      {paying && bills.status === 'ok' && (
+        <RecordPaymentModal
+          account={account}
+          bills={bills.data}
+          onClose={() => setPaying(false)}
+          onRecorded={(message) => {
+            setPaying(false);
+            toast(message);
+            reload();
+          }}
+        />
+      )}
+      {openBill !== null && (
+        <BillDialog
+          billId={openBill}
+          onClose={() => setOpenBill(null)}
+          onChanged={(message) => {
+            setOpenBill(null); // the card reloads as a whole, as after any change
+            toast(message);
+            reload();
+          }}
+        />
+      )}
 
       {adding && (
         <AddProductModal
@@ -216,7 +259,15 @@ function Card({
   );
 }
 
-function BillingAccountPanel({ account, today }: { account: Account; today: string }) {
+function BillingAccountPanel({
+  account,
+  today,
+  settlement,
+}: {
+  account: Account;
+  today: string;
+  settlement: AccountSettlement | null;
+}) {
   const negative = account.balanceCents < 0;
   const available =
     account.creditLimitCents === null ? null : account.balanceCents + account.creditLimitCents;
@@ -256,6 +307,27 @@ function BillingAccountPanel({ account, today }: { account: Account; today: stri
           <div className="label">Available incl. credit</div>
           <div className={`value${available !== null && available < 0 ? ' negative' : ''}`}>
             {available === null ? '—' : formatCents(available)}
+          </div>
+        </div>
+        <div className="bss-kpi">
+          <div className="label">Due on bills</div>
+          <div className="value">
+            {settlement === null ? '…' : formatCents(toCents(settlement.outstanding.value))}
+          </div>
+          {settlement !== null && settlement.overdue.count > 0 && (
+            <div className="caption negative">
+              {settlement.overdue.count} overdue ·{' '}
+              {formatCents(toCents(settlement.overdue.amount.value))}
+            </div>
+          )}
+          {settlement !== null && settlement.onHold.count > 0 && (
+            <div className="caption">{settlement.onHold.count} on hold</div>
+          )}
+        </div>
+        <div className="bss-kpi">
+          <div className="label">Unused credit</div>
+          <div className="value">
+            {settlement === null ? '…' : formatCents(toCents(settlement.unallocatedCredit.value))}
           </div>
         </div>
       </div>

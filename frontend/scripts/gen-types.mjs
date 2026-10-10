@@ -12,14 +12,15 @@ import openapiTS, { astToString } from 'openapi-typescript';
 const SPEC_DIR = process.env.SPEC_DIR ?? '/spec';
 const OUT_DIR = new URL('../src/api/generated/', import.meta.url);
 
-// TMF676 (Swagger 2.0) is not used by the UI: payments reach it through the internal
-// transactions view.
+// TMF676 (Swagger 2.0, which openapi-typescript does not read) has no generated types:
+// the one payment body the UI sends is typed by hand in src/api/bss.ts.
 const SPECS = {
   tmf620: 'TMF620-Product_Catalog_Management-v5.0.0.oas.yaml',
   tmf622: 'TMF622-ProductOrdering-v5.0.0.oas.yaml',
   tmf629: 'TMF629-Customer_Management-v5.0.1.oas.yaml',
   tmf637: 'TMF637-ProductInventory-v5.0.0.oas.yaml',
   tmf666: 'TMF666-Account_Management-v5.0.0.oas.yaml',
+  tmf678: 'TMF678-CustomerBill-v5.0.0.oas.yaml',
   internal: 'internal/bss-internal.oas.yaml',
 };
 

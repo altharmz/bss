@@ -81,6 +81,7 @@ def test_daterange_roundtrip(db_conn):
         bill_date=date(2026, 2, 1),
         amount_due=Decimal("0.00"),
         billing_run_id=run["id"],
+        payment_due_date=date(2026, 3, 3),
     )
     stored = db_conn.execute(
         "SELECT bill_period FROM customer_bill WHERE id = %s", (bill["id"],)

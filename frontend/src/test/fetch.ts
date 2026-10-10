@@ -67,4 +67,5 @@ export const CONTEXT = {
   operator: 'i.petrova',
   currency: 'RUB',
   billingRunAt: '00:30',
+  paymentTermDays: 30,
 };

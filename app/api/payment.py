@@ -2,6 +2,12 @@
 
 POST records a payment that has been received (`status: done`); there is no payment
 processing here. Taxes are out of scope, so `amount` always equals `totalAmount`.
+
+The payment settles the account at once, under the billing account's row lock
+(docs/bill-lifecycle-design.md 6.4): first its `paymentItem[]` (explicit lettering to
+named bills), then whatever is left goes to the oldest open bills. `paymentItem` in a
+response is every allocation from the payment, summed per bill - it grows when the
+payment's unused credit later pays bills issued after it.
 """
 
 from decimal import Decimal
@@ -14,11 +20,14 @@ from pydantic import Field, model_validator
 
 from app.api import listing
 from app.api.account import account_href
+from app.api.bill import bill_href
 from app.api.common import Money, Ref, TmfModel, created, money, parse, parse_id, utc
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
-from app.repository import parties, payments
+from app.billing import settlement
+from app.billing.adapter import settle_account
+from app.repository import billing, parties, payments
 from app.repository._sql import Row
 
 BASE = "/tmf-api/paymentManagement/v4"
@@ -32,7 +41,29 @@ ATTRIBUTES = (
     "paymentMethod",
     "status",
     "statusDate",
+    "paymentItem",
 )
+
+
+class PaymentItem(TmfModel):
+    """Explicit lettering: this much of the payment pays that bill."""
+
+    item: Ref
+    amount: Money
+    total_amount: Money | None = None
+    tax_amount: Money | None = None
+
+    @model_validator(mode="after")
+    def _shape(self) -> "PaymentItem":
+        if self.item.at_referred_type not in (None, "CustomerBill"):
+            raise ValueError("paymentItem.item must refer to a CustomerBill")
+        if self.amount.value <= 0:
+            raise ValueError("paymentItem.amount.value must be positive")
+        if self.total_amount is not None and self.total_amount != self.amount:
+            raise ValueError("paymentItem.totalAmount must equal its amount (no taxes)")
+        if self.tax_amount is not None and self.tax_amount.value != Decimal(0):
+            raise ValueError("paymentItem.taxAmount must be zero (taxes are out of scope)")
+        return self
 
 
 class PaymentMethod(TmfModel):
@@ -53,6 +84,7 @@ class PaymentCreate(TmfModel):
     payment_method: PaymentMethod
     amount: Money | None = None
     tax_amount: Money | None = None
+    payment_item: list[PaymentItem] = []
 
     @model_validator(mode="after")
     def _no_taxes(self) -> "PaymentCreate":
@@ -84,8 +116,52 @@ def payment_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "amount": amount,
         "totalAmount": amount,
         "paymentMethod": {"name": row["payment_method"], "@type": row["payment_method"]},
+        **_items(conn, row),
         "@type": "Payment",
     }
+
+
+def _items(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    """paymentItem[]: what the payment has paid so far, per bill (absent while nothing)."""
+    items = [
+        {
+            "item": {
+                "id": str(i["customer_bill_id"]),
+                "href": bill_href(i["customer_bill_id"]),
+                "@referredType": "CustomerBill",
+            },
+            "amount": money(i["amount"], row["currency"]),
+            "totalAmount": money(i["amount"], row["currency"]),
+            "@type": "PaymentItem",
+        }
+        for i in billing.payment_items(conn, row["id"])
+    ]
+    return {"paymentItem": items} if items else {}
+
+
+def _settle(conn: psycopg.Connection, account_id: Any, row: Row, data: PaymentCreate, now) -> None:
+    """Apply the new payment: its explicit items, then the oldest open bills. A refused
+    item fails the whole POST - nothing is stored."""
+    for item in data.payment_item:
+        if item.amount.unit != row["currency"]:
+            raise unprocessable(
+                f"paymentItem amount for bill {item.item.id} is in {item.amount.unit}, not"
+                f" in the account's currency {row['currency']}"
+            )
+    explicit = tuple(settlement.ExplicitItem(i.item.id, i.amount.value) for i in data.payment_item)
+    try:
+        settle_account(
+            conn,
+            billing.load_account(conn, account_id),
+            now=now,
+            cause="payment",
+            explicit=explicit,
+            explicit_payment_id=row["id"] if explicit else None,
+        )
+    except (settlement.BillNotOpen, settlement.ExceedsRemaining) as exc:
+        raise conflict(str(exc)) from None
+    except settlement.SettlementError as exc:
+        raise unprocessable(str(exc)) from None
 
 
 @router.get("/payment")
@@ -129,18 +205,23 @@ def create_payment(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
                 f"totalAmount.unit {data.total_amount.unit} does not match the account's"
                 f" currency {account['currency']}"
             )
+        # the billing account's row lock first, as bill_account and PATCH customerBill
+        # take it: a payment and a run (or two payments) never allocate the same credit
+        billing.load_account(conn, account["id"])
+        now = clock.now()
         try:
             row = payments.insert_payment(
                 conn,
                 billing_account_id=account["id"],
                 amount=data.total_amount.value,
                 currency=data.total_amount.unit,
-                received_at=clock.now(),
+                received_at=now,
                 payment_method=data.payment_method.name or data.payment_method.at_type,
             )
         except pg_errors.ForeignKeyViolation:
             # Backstop for the check above: the composite FK (account, currency) is what
             # actually guarantees one currency per account.
             raise conflict("the payment's currency does not match the account's") from None
+        _settle(conn, account["id"], row, data, now)
         new = payment_body(conn, row)
     return created(new)

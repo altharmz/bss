@@ -21,6 +21,59 @@ export const RUN = {
   isLatest: true,
 };
 
+const rub = (value: number) => ({ unit: 'RUB', value });
+
+/** GET /internal/v1/billingAccount/{id}/settlement of an account with nothing on bills. */
+export const NO_SETTLEMENT = {
+  outstanding: rub(0),
+  unallocatedCredit: rub(0),
+  overdue: { count: 0, amount: rub(0) },
+  onHold: { count: 0, amount: rub(0) },
+  paymentTermDays: 30,
+};
+
+/** The bills list the card loads (TMF678, one page of 100). */
+export function billsUrl(accountId: string): string {
+  return `GET /tmf-api/customerBillManagement/v5/customerBill?billingAccount.id=${accountId}&offset=0&limit=100`;
+}
+
+/** A TMF678 CustomerBill as the API sends it; dates are midnights in Europe/Moscow. */
+export function billBody(
+  id: string,
+  billDate: string, // business date
+  amountDue: number,
+  remaining: number,
+  state: string,
+  over: Record<string, unknown> = {},
+) {
+  const midnight = (day: string) => {
+    const d = new Date(`${day}T00:00:00Z`);
+    d.setUTCHours(-3); // the previous day, 21:00Z = midnight MSK
+    return d.toISOString().replace('.000Z', 'Z');
+  };
+  const next = new Date(`${billDate}T00:00:00Z`);
+  next.setUTCMonth(next.getUTCMonth() + 1);
+  const due = new Date(`${billDate}T00:00:00Z`);
+  due.setUTCDate(due.getUTCDate() + 30);
+  const day = (d: Date) => d.toISOString().slice(0, 10);
+  return {
+    id,
+    href: `/tmf-api/customerBillManagement/v5/customerBill/${id}`,
+    billNo: `BL-${id.replace(/-/g, '').slice(0, 8).toUpperCase()}`,
+    billDate: midnight(billDate),
+    billingPeriod: { startDateTime: midnight(billDate), endDateTime: midnight(day(next)) },
+    paymentDueDate: midnight(day(due)),
+    amountDue: rub(amountDue),
+    remainingAmount: rub(remaining),
+    appliedPayment: [],
+    category: amountDue < 0 ? 'creditNote' : 'normal',
+    runType: 'onCycle',
+    state,
+    '@type': 'CustomerBill',
+    ...over,
+  };
+}
+
 export function accountBody(
   id: string,
   customer: { id: string; name: string },

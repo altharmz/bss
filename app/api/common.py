@@ -1,12 +1,14 @@
 """TMF630 building blocks shared by every API: request models, Money, TimePeriod,
 references, and the helpers that turn database rows into response bodies."""
 
+import re
 from datetime import UTC, date, datetime, time
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from fastapi import Request
 from psycopg.types.range import Range
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, field_validator
 from pydantic.alias_generators import to_camel
@@ -105,6 +107,17 @@ def not_null(data: BaseModel, *names: str) -> None:
     for name in names:
         if name in data.model_fields_set and getattr(data, name) is None:
             raise unprocessable(f"{to_camel(name)} cannot be null")
+
+
+# Set (overwritten) by the shared Caddy from the basic-auth user; absent locally. A value
+# outside this shape is reported as no operator rather than echoed.
+OPERATOR = re.compile(r"^[A-Za-z0-9._@-]{1,64}$")
+
+
+def operator_of(request: Request) -> str | None:
+    """The operator from X-Remote-User; display only (CLAUDE.md, "Trust in X-Remote-User")."""
+    value = request.headers.get("x-remote-user", "").strip()
+    return value if OPERATOR.match(value) else None
 
 
 def parse_id(resource: str, raw: str) -> UUID:

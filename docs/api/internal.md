@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 11
+- Operations exposed: 13
 
 
 ## Operations
@@ -14,6 +14,7 @@
 | GET | `/internal/v1/billingAccount/{account_id}/charges` | path: `account_id`; query: `offset`, `limit` | - | 200 `array of Charge` | [`app/internal/accounts.py`](../../app/internal/accounts.py) |
 | GET | `/internal/v1/billingAccount/{account_id}/firstCharge` | path: `account_id`; query: `productOffering.id` (required), `startDate` (required) | - | 200 `FirstCharge` | [`app/internal/accounts.py`](../../app/internal/accounts.py) |
 | GET | `/internal/v1/billingAccount/{account_id}/products` | path: `account_id` | - | 200 `array of AccountProduct` | [`app/internal/accounts.py`](../../app/internal/accounts.py) |
+| GET | `/internal/v1/billingAccount/{account_id}/settlement` | path: `account_id` | - | 200 `AccountSettlement` | [`app/internal/accounts.py`](../../app/internal/accounts.py) |
 | GET | `/internal/v1/billingAccount/{account_id}/transactions` | path: `account_id`; query: `offset`, `limit` | - | 200 `array of Transaction` | [`app/internal/accounts.py`](../../app/internal/accounts.py) |
 | GET | `/internal/v1/billingRun` | query: `offset`, `limit` | - | 200 `array of BillingRun` | [`app/internal/billing_runs.py`](../../app/internal/billing_runs.py) |
 | POST | `/internal/v1/billingRun/catchUp` | body: `application/json` | `CatchUpRequest` | 200 `CatchUp`, 202 `CatchUp` | [`app/internal/billing_runs.py`](../../app/internal/billing_runs.py) |
@@ -21,6 +22,7 @@
 | GET | `/internal/v1/billingRun/{run_id}/accounts` | path: `run_id`; query: `offset`, `limit`, `status` | - | 200 `array of RunAccount` | [`app/internal/billing_runs.py`](../../app/internal/billing_runs.py) |
 | POST | `/internal/v1/billingRun/{run_id}/retry` | path: `run_id`; body: `application/json` | - | 202 `RetryQueued` | [`app/internal/billing_runs.py`](../../app/internal/billing_runs.py) |
 | GET | `/internal/v1/context` | - | - | 200 `Context` | [`app/internal/context.py`](../../app/internal/context.py) |
+| GET | `/internal/v1/customerBill/{bill_id}` | path: `bill_id` | - | 200 `BillDetail` | [`app/main.py`](../../app/main.py) |
 | POST | `/internal/v1/productOffering/{offering_id}/priceChange` | path: `offering_id`; body: `application/json` | `PriceChangeRequest` | 201 `PriceChange` | [`app/internal/catalog.py`](../../app/internal/catalog.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).

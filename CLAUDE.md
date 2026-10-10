@@ -291,8 +291,10 @@ app/config.py              settings from environment variables (pydantic-setting
 app/db.py                  psycopg 3 connection + the liveness probe /healthz calls
 app/clock.py               Clock protocol, SystemClock, FixedClock; the only wall-clock reader
 app/repository/            data access: plain functions on a psycopg.Connection, never commit
-app/billing/               billing core (model.py dataclasses, core.py pure functions) and
-                           adapter.py (bill_account: load -> compute -> write). See "Billing"
+app/billing/               billing core (model.py dataclasses, core.py pure functions),
+                           adapter.py (bill_account: load -> compute -> write) and
+                           settlement.py (which credits pay which bills; pure). See "Billing"
+                           and "Bill lifecycle"
 app/internal/              internal API for the admin UI (/internal/v1): context, first-charge
                            preview, open products, charges, transactions. See "Internal API"
 app/api/                   TMF Open API surface: one module per API (router, request models,
@@ -630,17 +632,38 @@ POST records a received payment: `account`, `totalAmount` and `paymentMethod` (w
 account's currency (422); the composite FK behind it maps to 409 if it ever fires.
 Payments are never changed or deleted (405).
 
-### TMF637 and TMF678 mapping (read-only)
+**A payment settles at once** (bill lifecycle slice 3): POST takes the billing
+account's row lock (`FOR UPDATE`, as `bill_account` does) before inserting, then
+applies its `paymentItem[]` (explicit lettering: `{item: {id, @referredType:
+CustomerBill}, amount}`; `totalAmount` if sent equals `amount`, `taxAmount` zero) and
+then the oldest open bills - one transaction. 422: an item's bill unknown or another
+account's, the same bill twice, an amount <= 0 / > 2 decimals / in another currency,
+`@referredType` not CustomerBill, items above `totalAmount`; 409: an item above the
+bill's remaining amount, or a bill on hold or settled. A refused item stores nothing.
+Responses carry `paymentItem[]` = every allocation from the payment summed per bill
+(absent while none) - it **grows** when the payment's unused credit pays later bills.
+**The lock is needed for payment vs payment only**: the payment's foreign key already
+takes a key-share lock on the account row, which waits on a run's `FOR UPDATE` but not
+on another payment's key share (proven: without the explicit lock two overlapping POSTs
+both read the same open bill; `test_two_payments_settle_one_after_the_other` fails).
+
+### TMF637 and TMF678 mapping
 
 | Resource | DB column <-> TMF attribute | Filters |
 |---|---|---|
 | product | `status`, `start_date` <-> `startDate`, `termination_date` <-> `terminationDate` (exclusive: the first day not billed), `created_at` <-> `creationDate`, offering name <-> `name`, `billing_account_id` <-> `billingAccount`, `product_offering_id` <-> `productOffering`, `created_by_item_id` / `terminated_by_item_id` <-> `productOrderItem[]` (`RelatedOrderItem`, role `creation` / `termination`) | `billingAccount.id`, `status` |
-| customerBill | `bill_date` <-> `billDate`, `bill_period` <-> `billingPeriod`, `amount_due` + `currency` <-> `amountDue`, `state`, `billing_account_id` <-> `billingAccount` | `billingAccount.id`, `state` |
-| appliedCustomerBillingRate | `charge_type` <-> `appliedBillingRateType` (`recurring` -> `appliedBillingCharge`, `refund` -> `appliedBillingCredit`), `amount` + `currency` <-> `taxExcludedAmount` (refunds negative), `period` <-> `periodCoverage`, `customer_bill_id` <-> `bill` and `isBilled`, `product_id` <-> `product`, `billing_account_id` <-> `billingAccount`, `created_at` <-> `date` | `billingAccount.id`, `product.id`, `isBilled` |
+| customerBill | `bill_date` <-> `billDate`, `bill_period` <-> `billingPeriod`, `amount_due` + `currency` <-> `amountDue`, amount_due - allocations (0 for a credit note) <-> `remainingAmount`, `payment_due_date` <-> `paymentDueDate`, payment allocations <-> `appliedPayment[]` (`{appliedAmount, payment: PaymentRef}`; a credit note's credit is not a payment and not listed), `category` (`normal`/`creditNote`), `onCycle` <-> `runType`, `BL-` + 8 hex <-> `billNo`, `state`, `billing_account_id` <-> `billingAccount` | `billingAccount.id`, `state` |
+| appliedCustomerBillingRate | `charge_type` <-> `appliedBillingRateType` (`recurring` -> `appliedBillingCharge`, `refund` -> `appliedBillingCredit`), `amount` + `currency` <-> `taxExcludedAmount` (refunds negative), `period` <-> `periodCoverage`, `customer_bill_id` <-> `bill` and `isBilled`, `product_id` <-> `product`, `billing_account_id` <-> `billingAccount`, `created_at` <-> `date` | `billingAccount.id`, `product.id`, `bill.id`, `isBilled` |
 
 - Products are only written by orders; POST/PATCH/DELETE on `/product` are 405.
-- Bills and ABRs are only written by the billing run (`app/billing/adapter.py`), which
-  the worker's daily run calls per account.
+- Bills and ABRs are only **created** by the billing run (`app/billing/adapter.py`),
+  which the worker's daily run calls per account. ABRs are read-only; a bill's **state**
+  changes with settlement (the run, payments) and by **`PATCH /customerBill/{id}`**
+  (merge patch, `state` only - the spec's `CustomerBill_MVO`; any other attribute 400):
+  `onHold` from `sent`/`partiallyPaid`; from `onHold` only the state its allocations
+  imply (`sent` if nothing paid, else `partiallyPaid`; strict - anything else is a 409
+  naming it); repeating the current state is a 200 no-op; every other change a 409. The
+  operator (X-Remote-User) goes into the state history. A release settles the account.
 - **Status flips:** a product ordered with a future start date is `created` until the
   worker's run of its start date flips it to `active` (`products.flip_statuses`, see
   "Billing worker"); until that run, on the start date itself, it still reads `created`.
@@ -924,6 +947,89 @@ termination always visible, no account lock, no running-run guard).
   long-running worker: **`make worker-once`** (D-W14). **The first deploy starts billing
   on the VPS**: no runs yet -> the due date only (D-W15).
 
+## Bill lifecycle (option C, in progress)
+
+Design and decisions: **`docs/bill-lifecycle-design.md`**, section 6 (decided
+2026-10-10: option C, payment term 30 days configurable, credit notes pay older open
+bills, overdue is display only, a Record payment dialog). Four slices: 1. schema +
+settlement core (`cloud/bill-settlement-core`), 2. worker (`cloud/bill-settlement-worker`,
+stacked on 1), 3. API (`cloud/bill-settlement-api`, stacked on 2), 4. UI + seed
+(`cloud/bill-settlement-ui`, stacked on 3). **All four slices are built** (none merged or
+deployed yet). Slice 4: the subscriber card's Bills panel, bill dialog with hold/release,
+Record payment with optional lettering, "Due on bills" / "Unused credit" KPIs
+(`screens/Bills.tsx`, details in `docs/ui.md`); TMF678 types are generated now
+(`gen-types.mjs`); several exact amounts in one body via `jsonWithAmounts`; the seed puts
+Olga's oldest bill on hold and letters a Sergey payment to his newest bill
+(`test_seed.py` asserts every state and both allocation kinds); `test_ui_requests.py`
+replays the payment and PATCH bodies; the e2e opens the held bill (read-only). Negative
+proofs: payment amount as a float, prefill newest first. Slice 3: payments settle at once and take explicit
+`paymentItem`s (see "TMF676 (v4) mapping"), bills carry remainingAmount, paymentDueDate,
+appliedPayment, billNo, runType, category and are held/released by PATCH (see "TMF637
+and TMF678 mapping"), and two internal endpoints (settlement summary, bill detail; see
+"Internal API"). `tests/test_api_bill_settlement.py`; negative proofs: no settlement in
+POST /payment, no settlement on release, no explicit lock in POST /payment (fails only
+the payment-vs-payment test - the foreign key already serializes a payment with a run).
+
+- **The run issues and settles** (slice 2, `bill_account`, in the account's one
+  transaction after `apply_result`): `issue_bills` takes every bill of the account still
+  `new` or `validated` (its own, and any left `new` from before 0006 - the back-fill
+  needs no data migration), validates it (`settlement.validate`: amount_due = the sum of
+  its ABRs, at least one ABR, period = [bill_date, next cycle day); a failure is
+  `InconsistentState`, so the account fails in the run and nothing of it is written),
+  then new -> validated -> sent, and -> settled when amount_due <= 0 (zero bills and
+  credit notes). Then `settle_account` applies the unused credit (cause `run`, dated by
+  the attempt's `started_at`). Every run settles every member account, so a payment is
+  applied by the next run even if it issues no bill. `write_settlement` sets the bounds
+  trigger IMMEDIATE once it has written allocations, so a breach fails inside the
+  account's savepoint, not at the worker's commit. History rows of one run share
+  `changed_at`; `seq` (identity) orders them.
+- Proven (`tests/test_bill_lifecycle_db.py`): issue steps and idempotence; the stage 3
+  example 4 credit note (-116.13) settled at issue and paying the Dec bill down to 183.87;
+  a payment before the first bill settling it at issue, the rest carried to January, a
+  later payment applied by a run without a bill; a bill left `new` issued and settled by
+  the next run; tampered amount or period failing the account with nothing written; the
+  6.5 invariant after each step. The replay test now also compares state, due date and
+  category. Negative proofs: validation skipped, no settlement in the run, credit notes
+  not settled at issue, only this run's bills issued - each failed a test.
+
+- **Migration 0006**: `customer_bill.payment_due_date` (bill_date + the term in force when
+  the bill is written; existing bills + 30, a literal) and `category` (`normal` |
+  `creditNote`, creditNote iff amount_due < 0, a CHECK); `payment` UNIQUE (id,
+  billing_account_id); **`bill_allocation`** (what paid a bill: a payment or a credit
+  note, `automatic` | `explicit`, append-only, composite FKs keep everything in one
+  account and currency) with a **deferred constraint trigger** for the bounds that span
+  rows (per paid bill <= amount_due, per payment <= amount, per credit note <=
+  -amount_due; only a positive bill is paid, only a negative one gives credit) - checked
+  at commit, so `rejected(...)`'s savepoint cannot catch it: test with `conn.commit()`;
+  **`customer_bill_state_change`** (from, to, changed_at by the injected clock, cause
+  run | payment | operator, operator only for operator). Existing bills get their issue
+  row (NULL -> new) dated by their run's `started_at`; new bills get it from `apply_result`
+  (`issued_at` = the running attempt's `started_at`).
+- **`BILL_PAYMENT_TERM_DAYS`** (`app/config.py`, 1..365, default 30): read by the worker
+  when it writes a bill; an invalid value fails settings validation at startup. Passed to
+  neither service in `compose.prod.yaml` (like `BILLING_TZ`): changing it there is a
+  compose change.
+- **`app/billing/settlement.py`** (pure): `settle(bills, payments, explicit, payment_id)`
+  applies the explicit items of one payment, then the oldest unused credit (payments by
+  `received_at`, then issued credit notes by bill date) to the oldest open bill (`sent` /
+  `partiallyPaid`, positive). `onHold`, `new`, `validated` and `settled` bills are never
+  paid automatically; explicit items to them are refused (`BillNotOpen`, and
+  `UnknownBill`, `DuplicateBill`, `ExceedsRemaining`, `ExceedsPayment`).
+  `operator_change` / `operator_states`: hold from `sent`/`partiallyPaid`; release only to
+  the state the allocations imply (strict: anything else is `TransitionRefused` naming it).
+- **Repository**: `load_settlement` (bills with allocated / credit used, payments with
+  used; call it under `load_account`'s row lock), `write_settlement` (allocations, state
+  changes with history rows, touches every paid bill so `lastUpdate` moves),
+  `record_bill_state` (refuses if the bill left `from_state`), `bill_state_history`.
+- **Tests**: `tests/test_settlement.py` (examples, hold/release table, hypothesis: the
+  remaining per bill equals the cumulative rule of the design's 3.0 whether payments
+  settle at once or only in runs; no open bill and unused credit at once; holds skipped;
+  explicit items exact), `tests/test_settlement_db.py` (round trip, trigger bounds at
+  commit, FKs, CHECKs), `test_0006_on_existing_bills`. Negative proofs, each made once
+  and reverted: newest-first allocation, holds not skipped, credit notes ignored,
+  release to any open state, the trigger's bill bound doubled, the due date ignoring the
+  configured term - each failed at least one test.
+
 ## Internal API (stage 5)
 
 `app/internal/`, mounted at `/internal/v1`, serves what the admin UI cannot get from the
@@ -939,7 +1045,9 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
 
 | Endpoint | What |
 |---|---|
-| `GET /context` | businessDate (injected clock), now, timeZone, utcOffset (at now), environment (`APP_ENV`), operator, currency (`UI_CURRENCY`, default RUB), billingRunAt (`BILLING_RUN_AT`, default 00:30) |
+| `GET /context` | businessDate (injected clock), now, timeZone, utcOffset (at now), environment (`APP_ENV`), operator, currency (`UI_CURRENCY`, default RUB), billingRunAt (`BILLING_RUN_AT`, default 00:30), paymentTermDays (`BILL_PAYMENT_TERM_DAYS`) |
+| `GET /billingAccount/{id}/settlement` | outstanding (remaining of every bill, on hold included), unallocatedCredit (payments and issued credit notes not applied yet), overdue {count, amount} (due before the business date, something remaining - display only), onHold {count, amount}, paymentTermDays. Invariant (tested through the API): outstanding - unallocatedCredit = -(balance + unbilled ABRs) |
+| `GET /customerBill/{id}` | the bill dialog: billNo, dates, amountDue, remainingAmount, state, category, overdue, allowedStates (what PATCH accepts now, from `settlement.operator_states`), charges, sources (payments / credit notes, automatic / explicit, in order), history (from, to, changedAt, cause, operator) |
 | `GET /billingAccount/{id}/firstCharge?productOffering.id=&startDate=` | dry run of an add order: the stage 3 core's `compute()` on the hypothetical product. period, cyclePeriod, billableDays of periodDays, price, amount, chargeRunDate = max(startDate, businessDate + 1), billDate = first cycle day >= chargeRunDate, next full period, balance, balanceAfter (= balance - this charge only), creditLimit, exceedsCreditLimit. startDate in the past or no price in the account currency -> 422 |
 | `GET /billingAccount/{id}/products` | not-ended products (created, pendingActive, active, pendingTerminate, suspended) with offering name/code, specification name, price valid today (or on the start date), nextChargeDate (start date if not started, else the next cycle day after today; null if the product ends by then) |
 | `GET /billingAccount/{id}/charges` | ABRs newest run first, with runDate, billableDays of periodDays (the proration), offering, bill |
@@ -980,6 +1088,11 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
   included) and one product list (`status=active`), grouped client-side, page by page.
 - "Registered" is replaced by "Cycle day" (no creation date in TMF629/666, and
   `created_at` is the database's `now()`, not the injected clock).
+- **Subscriber create and modify** (requested 2026-10-10; to be built after bill
+  lifecycle slices 2-4): through the existing TMF POST/PATCH of individual |
+  organization, customer and billingAccount. **There is no delete subscriber operation**
+  (confirmed by the human, 2026-10-10): accounts carry products, bills and payments, and
+  nothing is ever deleted.
 - Credit limit: shown, and the over-limit warning in Add product, informational only.
 - Offering code: `externalIdentifier` (above). Subscriber no. and `BA-xxxxxxxx` are
   display ids: the first 8 hex digits of the UUID, upper case.

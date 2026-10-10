@@ -33,14 +33,20 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 | `payment_amount_check` | check | `CHECK ((amount > (0)::numeric))` |
 | `payment_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
 | `payment_pkey` | primary key | `PRIMARY KEY (id)` |
+| `payment_id_billing_account_id_key` | unique | `UNIQUE (id, billing_account_id)` |
 
 ## Indexes
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `payment_billing_account_id_idx` | `CREATE INDEX payment_billing_account_id_idx ON payment USING btree (billing_account_id)` | no |
+| `payment_id_billing_account_id_key` | `CREATE UNIQUE INDEX payment_id_billing_account_id_key ON payment USING btree (id, billing_account_id)` | yes |
 | `payment_pkey` | `CREATE UNIQUE INDEX payment_pkey ON payment USING btree (id)` | yes |
 
 ## Triggers
 
 - `payment_set_updated_at`: `CREATE TRIGGER payment_set_updated_at BEFORE UPDATE ON payment FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
+
+## Referenced by
+
+[`bill_allocation`](bill_allocation.md)

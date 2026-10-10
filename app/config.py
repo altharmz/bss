@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # (the run of D sees orders completed before 00:00 of D), before the 02:15 backup,
     # and well before the 03:00 reboot. Stage 4's worker reads it; the UI only shows it.
     billing_run_at: str = Field(default="00:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    # Days from a bill's date to its paymentDueDate. Read when a bill is written: a change
+    # never moves the due date of an existing bill (docs/bill-lifecycle-design.md, 6.6).
+    bill_payment_term_days: int = Field(default=30, ge=1, le=365)
     # The one currency the admin UI works in (the backend stays multi-currency).
     ui_currency: str = Field(default="RUB", pattern=r"^[A-Z]{3}$")
 
