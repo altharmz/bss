@@ -1,7 +1,8 @@
 # Bill lifecycle: design proposal
 
-Status: **proposal, for decision** (2026-10-10, branch `cloud/bill-lifecycle-design`).
-Nothing here is implemented. Written against `master` at `209955c`.
+Status: **decided: option C** (2026-10-10, branch `cloud/bill-lifecycle-design`). Section
+6 records the decisions and the refined design to build; sections 1-5 are the proposal
+as reviewed. Nothing here is implemented. Written against `master` at `209955c`.
 
 Problem: every `customerBill` stays in state `new` for ever, and payments never touch a
 bill. Payments only move the account balance. This document records what the code does
@@ -516,3 +517,315 @@ Proposed order for A:
 9. **Derived `paymentItem[]` in TMF676 responses:** yes or no (A and B)?
 10. **`scope.yaml`:** new api/ui items (the Bills panel, the Record payment dialog if
     chosen), which need your approval when the slice is built.
+
+---
+
+## 6. Decisions and the design to build (option C)
+
+### 6.1 Decisions (2026-10-10)
+
+Your answers were numbered by the short list in the chat reply, not by the ten questions
+above. Mapped to section 5:
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Option | **C** (overrides the recommendation of A). |
+| 2 | Payment term | **30 days, configurable**: `BILL_PAYMENT_TERM_DAYS`, default 30. |
+| 2b | Due date of a catch-up bill | *Not answered; my choice:* **`billDate + N`** (rule (i)). It is deterministic, so the replay test stays exact, and with N = 30 a bill is only overdue on arrival after a catch-up more than 30 days late. |
+| 3 | Drop the `state` column | n/a: option C stores the state. |
+| 4 | Negative bills credit older open bills | **Yes.** |
+| 5 | Overdue | **No consequence for now**: no worker pass and no dunning. `paymentDueDate` is exposed, and the UI marks a bill as overdue (display only). |
+| 6 | TMF676 `/refund` (paying credit out) | *Not answered; my choice:* **out of scope**. |
+| 7 | Record payment in the UI | **Yes.** |
+| 8 | Extra TMF678 fields | My preference (below): `billNo`, `runType`, `category`. No tax fields: taxes are out of scope, and a `taxIncludedAmount` would claim something we do not compute. |
+| 9 | Derived `paymentItem[]` in TMF676 responses | *Not answered; my choice:* **yes**. It is the payment-side view of the same allocations, and the request side carries the explicit lettering. |
+| 10 | `scope.yaml` | The items are listed in 6.8; each change still needs your approval when its slice is built. |
+
+**Also decided here: settlement is immediate.** I chose B, not B′: `POST /payment` settles
+in its own transaction, so the operator sees the effect at once. Replays of billing runs
+stay identical because the replay test records no payments, and the property test below
+proves per-bill totals do not depend on when settlement runs.
+
+### 6.2 States and transitions
+
+```mermaid
+stateDiagram-v2
+    [*] --> new: billing run writes the bill
+    new --> validated: same run, validation check passes
+    validated --> sent: same run ("made available"; no delivery channel)
+    sent --> settled: amountDue <= 0 (same run)
+    sent --> partiallyPaid: allocation < remaining
+    sent --> settled: allocation = remaining
+    partiallyPaid --> settled: allocation = remaining
+    sent --> onHold: PATCH state=onHold
+    partiallyPaid --> onHold: PATCH state=onHold
+    onHold --> sent: PATCH state=sent (nothing allocated)
+    onHold --> partiallyPaid: PATCH state=partiallyPaid (part allocated)
+    settled --> [*]
+```
+
+- **new → validated → sent happen inside the issuing transaction** (`bill_account`), so
+  no reader ever sees `new` or `validated` on a fresh bill. They are kept as real states
+  for two reasons: the state history (6.3) records each step, and the validation is a
+  real check. *Validated* means three things: `amount_due` equals the sum of the ABRs
+  attached to the bill; every ABR on it is the account's and in its currency; and the
+  period is `[billDate, next cycle day)`. A failure raises `InconsistentState`, so the
+  account fails in the run and nothing is written. That is the same handling as every
+  other billing inconsistency.
+- **Bills already `new` in a database** (production has had them since 2026-10-05) take
+  the same path. Every run applies the issue step to any bill of the account still in
+  `new`, so the first run after the deploy validates, sends and settles them. There is
+  no data migration for states.
+- **`settled` is final.** Allocations are append-only, like payments, so a bill never
+  goes back. A dispute of a paid bill is out of scope (409).
+- **onHold / release** come only from `PATCH /customerBill/{id}`. The PATCH sets exactly
+  the requested state, or answers 409 with the reason; a request is never silently
+  rewritten into another state. To release, the client sends the state that matches the
+  allocations: `sent` if nothing is allocated, `partiallyPaid` otherwise. Anything else
+  is a 409 naming the right one. Every other transition by PATCH is a 409, in the
+  pattern of `_check_lifecycle` (`app/api/catalog.py:62`). Repeating the current state
+  is a 200 no-op. After a release, settlement runs (credit may have been waiting).
+- **An `onHold` bill is skipped by automatic allocation.** Credit goes to newer open bills
+  or stays unallocated. An explicit allocation to an `onHold` bill is a 409.
+
+### 6.3 Data model (migration 0006)
+
+- `customer_bill`:
+  - **`payment_due_date date NOT NULL`**: back-filled `bill_date + 30` in the migration
+    (a literal, since migrations are immutable), then written at issue as
+    `bill_date + BILL_PAYMENT_TERM_DAYS` in force at that moment. A later config change
+    does not move existing due dates.
+  - **`category`**: an enum, ours: `normal` | `creditNote`. `creditNote` iff
+    `amount_due < 0`, enforced by a CHECK.
+  - The TMF fields `billNo` and `runType` are derived and need no columns. `billNo` is
+    `BL-` plus the first 8 hex digits of the id in upper case, like `BA-xxxxxxxx`.
+    `runType` is always `onCycle`.
+- **`bill_allocation`**, ours: one row per amount applied to a bill.
+  - Columns: `id`, `billing_account_id`, `currency`, `customer_bill_id` (the bill paid);
+    exactly one source, `payment_id` or `credit_bill_id` (a negative bill;
+    `num_nonnulls(...) = 1`); `amount numeric(12,2) > 0`; `kind` (`automatic` |
+    `explicit`); `allocated_at` (the injected clock).
+  - Composite FKs keep everything in one account and currency:
+    `(customer_bill_id, billing_account_id)` and `(credit_bill_id, billing_account_id)`
+    to `customer_bill`; `(payment_id, billing_account_id)` to `payment`, which needs a
+    new `UNIQUE (id, billing_account_id)`; `(billing_account_id, currency)` to
+    `billing_account`. Also `credit_bill_id <> customer_bill_id`.
+  - Append-only: no UPDATE or DELETE from the app.
+- **The amount bounds are a constraint trigger**, `DEFERRABLE INITIALLY DEFERRED`, so the
+  database enforces them:
+  - per paid bill: total allocated <= `amount_due`;
+  - per payment: total allocated <= `amount`;
+  - per credit bill: total allocated <= `-amount_due`;
+  - the paid bill is positive and the credit bill negative.
+
+  A CHECK cannot do this because it spans rows. Settlement code stays within the bounds
+  anyway; the trigger is the backstop, with a negative proof (an over-allocation written
+  by hand fails at commit).
+- **`customer_bill_state_change`**, ours: `customer_bill_id`, `from_state` (NULL on
+  issue), `to_state`, `changed_at` (the injected clock), `cause` (`run` | `payment` |
+  `operator`), and `operator` (the `X-Remote-User` value for a PATCH; display only, see
+  "Trust in X-Remote-User"). It is the state history in the bill dialog, and it gives
+  TMF's state-change semantics without implementing `/hub`.
+- `remainingAmount` is not stored: it is `amount_due - sum(allocations to the bill)`,
+  0 for `amount_due <= 0`. The stored `state` must agree with it. The property tests and
+  a DB test check this (`settled` ⇔ remaining 0; `sent` ⇔ nothing allocated; and so on).
+- `lastUpdate`: every allocation to a bill also touches its row, so `updated_at` (the
+  `set_updated_at` trigger) moves even when the state stays `partiallyPaid`.
+- Comments for every new table and column, as in `0005_schema_comments.py`.
+
+### 6.4 Settlement (one pure function, three callers)
+
+- **`app/billing/settlement.py`** is pure, like `core.py`. Its input is the account's
+  open bills (positive, not `onHold`, with remaining amounts, in `bill_date` order), its
+  unused credits (payments in `received_at` order, then negative bills in `bill_date`
+  order, each with its unused amount), and any explicit items. It returns the
+  allocations and the new state of each bill.
+- **Explicit items are placed first**, then **oldest credit to oldest open bill** until
+  one side runs out.
+- **Callers**, each holding the account lock (`billing_account ... FOR UPDATE`, the lock
+  `bill_account` already takes at `app/repository/billing.py:570`):
+  1. `POST /payment`: lock, insert the payment, settle (explicit items first).
+  2. `bill_account`: after `apply_result`, issue the new bills (6.2), then settle. This
+     runs in every run for every member account, so it also back-fills and repairs. It
+     is idempotent: with nothing to allocate, nothing is written.
+  3. `PATCH /customerBill/{id}` release: lock, change the state, settle.
+- **The core is unchanged.** `compute()` still returns ABRs and bills only.
+  `apply_result` writes `payment_due_date` and `category` with the bill.
+- **CLAUDE.md rule update:** "only the billing run writes ABRs and bills" becomes "only
+  the billing run *creates* bills; settlement (payments, the run, release) and the
+  operator's hold/release change their state and allocations".
+
+### 6.5 API
+
+TMF678 `customerBill`:
+
+- New in GET responses: `remainingAmount`, `paymentDueDate` (midnight in BILLING_TZ, like
+  `billDate`), `appliedPayment[]`, `billNo`, `runType: onCycle`, `category`.
+  - `appliedPayment[]` is `{appliedAmount, payment: PaymentRef}`, one entry per payment,
+    summing its allocations.
+  - A credit-bill source is not a payment, so it is **not** listed in `appliedPayment`.
+    It shows up as the difference `amountDue - remainingAmount - sum(appliedPayment)`.
+    The internal bill detail (below) lists both kinds of source.
+- `PATCH /customerBill/{id}`: `application/merge-patch+json`; `state` only; plus
+  `@type` as everywhere. Any other `CustomerBill_MVO` attribute (`billCycle`) is a 400,
+  as is any other attribute. The rules are in 6.2.
+- Filters: `state` stays (the stored column). A new filter, **`bill.id`**, on
+  `appliedCustomerBillingRate`, for the bill dialog.
+
+TMF676 `payment`:
+
+- POST accepts **`paymentItem[]`**: `{item: {id, @referredType: "CustomerBill"}, amount}`
+  (an optional `totalAmount` must equal `amount`; an optional `taxAmount` must be 0).
+- 422 (no reference to a stored resource conflicts): a bill that does not exist or
+  belongs to another account; a `@referredType` other than `CustomerBill`; a duplicate
+  bill; an amount <= 0, with more than 2 decimals, or not in the payment's currency;
+  items summing to more than `totalAmount`.
+- 409 (conflicts with stored state): an amount above the bill's remaining amount, or a
+  bill that is `onHold` or `settled`.
+- Whatever is not lettered is allocated oldest-first.
+- GET responses carry **`paymentItem[]`**: every allocation from this payment, explicit
+  and automatic, summed per bill. It **grows over time**: a payment's unused credit is
+  allocated when later bills are issued. This is documented in the spec deviation notes.
+- Unchanged: `status` is always `done`, PATCH/DELETE give 405, and `/refund` is not
+  exposed.
+
+Internal API (`spec/internal/bss-internal.oas.yaml`):
+
+- **`GET /billingAccount/{id}/settlement`**: `{outstanding, unallocatedCredit, overdue
+  {count, amount}, onHold {count, amount}, paymentTermDays}`. `outstanding` is the sum
+  of `remainingAmount` over bills that are not settled, `onHold` included. Overdue means
+  `paymentDueDate < businessDate` and remaining > 0. It powers the KPIs, since
+  `unallocatedCredit` cannot be computed from TMF lists without re-implementing
+  settlement.
+- **`GET /customerBill/{id}`** (internal detail): the bill with its ABRs, its sources
+  (payments and credit bills, with amounts and kinds), the state history, and
+  `allowedStates` (what PATCH accepts now), so the UI never re-implements 6.2.
+- `GET /context` adds `paymentTermDays`.
+
+Invariant tested through the API, per account:
+
+```
+sum(remainingAmount) - unallocatedCredit = -(accountBalance + unbilled ABRs)
+```
+
+It holds without holds and lettering. Holds and lettering change *which* bills are open,
+not the totals, so it holds always.
+
+Spec deviations to add to CLAUDE.md:
+
+- `paymentItem` is computed and grows over time.
+- A credit-bill source is not in `appliedPayment`.
+- The PATCH transition rules.
+- `validated`/`sent` are set automatically in the same run.
+
+### 6.6 Configuration
+
+- `BILL_PAYMENT_TERM_DAYS` in `app/config.py`: an integer, 1..365, default 30. An
+  invalid value fails at startup: the worker exits 2, like the existing `BILLING_RUN_AT`
+  check, and the app does not start.
+- Only the worker uses it to write due dates. The app reads it for `/context`.
+- Like `BILLING_TZ`/`BILLING_RUN_AT`, it is **passed to neither service** today, so both
+  use the default. Changing it on the VPS means adding it to the `environment:` of both
+  `app` and `worker` in `compose.prod.yaml`, a compose change that needs your OK.
+
+### 6.7 UI
+
+- **Subscriber card, Billing account panel:** new KPIs "Outstanding on bills" (with
+  "N overdue" in red, and "N on hold") and "Unallocated credit", from the settlement
+  endpoint.
+- **Bills panel** (between Products and Charge history): bill no., bill date, period,
+  amount due, remaining, due date, state pill (+ an "Overdue" caption), through
+  `ListState`. The pills reuse existing token colours only (decision under "Frontend").
+- **Bill dialog** (row click, `Modal ui="bill-detail"`): the ABRs on the bill, its
+  payments and credit notes, the state history, and **Put on hold** / **Release** with
+  an inline confirm, offered only when `allowedStates` permits.
+- **Record payment dialog** (a button on the card):
+  - Amount (sent as an exact JSON number token, like `jsonWithAmount`), and a method
+    from a short list (`Cash`, `bankTransfer`, `card`), sent as the `name`.
+  - Optionally **Apply to bills**: the open bills (not on hold) with amount fields,
+    prefilled oldest-first up to the payment amount and editable. Left untouched, it
+    sends no `paymentItem` and the server allocates oldest-first.
+  - After the POST, the card reloads.
+- Writes are pinned on both sides as usual: component tests assert the exact bodies of
+  the payment POST and the bill PATCH, and `tests/test_ui_requests.py` replays them
+  against the real API.
+- **Seed:** besides the existing payments (which will produce `settled` and
+  `partiallyPaid` bills automatically), one `onHold` bill and one lettered payment, so
+  every state and both allocation kinds show up locally. The e2e stays read-only and
+  data-tolerant.
+
+### 6.8 Progress tracker items (each needs your approval when its slice lands)
+
+- **api:**
+  - `PATCH /tmf-api/customerBillManagement/v5/customerBill/{id}`
+  - `GET /internal/v1/billingAccount/{id}/settlement`
+  - `GET /internal/v1/customerBill/{id}`
+- **ui:** `bills` (the panel), `bill-detail` (the dialog), `record-payment` (the
+  dialog), `bill-hold` (the hold/release action).
+- **db:** `bill_allocation`, `customer_bill_state_change`.
+- **worker:** `bill-issue` (new → validated → sent with the check) and `bill-settle`
+  (settlement in the run), proven by `@pytest.mark.capability` tests.
+
+### 6.9 Tests and negative proofs
+
+- **Pure settlement (hypothesis):**
+  - allocations stay within all bounds;
+  - oldest-first without lettering;
+  - `onHold` bills are never allocated automatically;
+  - explicit items are honoured exactly;
+  - states never regress except by PATCH;
+  - stored state agrees with remaining;
+  - **without holds or lettering, per-bill remaining equals the cumulative formula of
+    3.0** (the option A function, kept as the oracle);
+  - per-bill totals do not depend on the interleaving of payments and runs (daily vs
+    catch-up, settled at payment time vs only in runs).
+- **DB:**
+  - the constraint trigger (over-allocation by hand fails at commit);
+  - composite FKs (another account's payment or bill);
+  - **concurrency**, two connections in the style of `tests/test_billing_db.py:168`:
+    payment vs run, payment vs payment, release vs payment, all serialized on the
+    account lock with no credit allocated twice (negative proof: drop the lock in
+    `POST /payment` and the test fails);
+  - back-fill (bills inserted `new` are issued and settled by the next run);
+  - the replay test (`tests/test_billing_db.py:285`) still compares equal, due dates
+    included.
+- **API:**
+  - contract validation of every new field (`tests/apiclient.py`);
+  - every PATCH transition, allowed and forbidden;
+  - the 422/409 table of lettering;
+  - `paymentItem` growing after a later bill;
+  - the invariant of 6.5 after a scripted history.
+- **Worker:** the validation check (a bill whose ABR sum was changed by hand fails the
+  account, `failed`, nothing written); due date from the config; capability tests for
+  `bill-issue` and `bill-settle`.
+- **UI:** vitest with `expectUi` for the four markers; both time zones (the suite runs
+  in UTC and New York); the request bodies.
+- **Negative proofs, each made once with Edit and reverted:** newest-first allocation;
+  holds not skipped; validation skipped; a negative bill not used as credit; PATCH
+  accepting `sent` with allocations present; `paymentItem` above remaining accepted.
+
+### 6.10 Slices
+
+Each slice follows the usual routine: plan, tests, negative proofs, `make lint`,
+`make test` x3, `make progress`, CLAUDE.md, then the diff and a commit only after your OK.
+
+| Slice | Content | Size |
+|---|---|---|
+| **1. Schema + settlement core** | migration 0006 (6.3), `settlement.py` with properties, repository functions, `BILL_PAYMENT_TERM_DAYS` | M |
+| **2. Worker** | issue step with validation, settlement in `bill_account`, due date and category at write, back-fill, concurrency tests, capabilities | M |
+| **3. API** | TMF678 fields + PATCH + `bill.id` filter; TMF676 `paymentItem` (request and response) with the account lock; internal settlement + bill detail + context; spec file | M-L |
+| **4. UI + seed** | KPIs, Bills panel, bill dialog with hold/release, Record payment dialog, seed additions, `test_ui_requests.py`, e2e | M-L |
+
+Slices 1-2 change nothing visible except that bills leave `new` (`sent`, then
+`partiallyPaid`/`settled`) from the first run after deploy. That is the moment
+production's existing bills catch up. Slices 3-4 then expose it.
+
+### 6.11 Still open (small; defaults stated, change any)
+
+- **Release by PATCH must name the matching state** (`sent` or `partiallyPaid`), or it is
+  a 409. The alternative is to accept `sent` and store whatever the allocations imply.
+  Default: strict.
+- **Overdue bills count in "Outstanding"**, and so do bills on hold (shown separately as
+  "N on hold"). Default: yes.
+- **Payment methods offered in the UI:** `Cash`, `bankTransfer`, `card`. The seed uses
+  "Faster Payments" too. Default: those three plus a free-text "Other".
