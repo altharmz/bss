@@ -3,8 +3,9 @@
 #   allow <command>      expected exit 0
 #   block <command>      expected exit 2
 #   allow-ml / block-ml  the same, with every literal \n in the command turned into a newline
-#   <any of these>@cloud the case runs with BSS_CLOUD=1 (cloud mode); all others run with
-#                        BSS_CLOUD removed, wherever the suite runs
+#   <any of these>@cloud the case runs with CLAUDE_CODE_REMOTE=true (cloud mode); all
+#                        others run with it removed, wherever the suite runs
+#   <...>@remote-false   the case runs with CLAUDE_CODE_REMOTE=false (not cloud mode)
 # Paths are relative to the project root; absolute ones are written $CLAUDE_PROJECT_DIR
 # (test-guard.sh expands it), so the cases pass on the workstation and in the cloud.
 
@@ -209,7 +210,7 @@ allow cat .env.example
 allow docker compose run --rm app pytest -n auto
 allow-ml cat <<'EOF'\nhello\nEOF
 
-# === cloud mode (BSS_CLOUD=1): each rule with its workstation counterpart ===
+# === cloud mode (CLAUDE_CODE_REMOTE=true): each rule with its workstation counterpart ===
 
 # --- Node: npm/npx/node on the host in cloud mode only; pnpm/yarn/corepack never ---
 allow@cloud npm ci
@@ -289,6 +290,10 @@ block@cloud echo $(git push origin master)
 # fail-closed: an untokenisable push cannot be checked for its destination
 block-ml@cloud git push origin cloud/x <<'EOF'\nx\nEOF
 block@cloud echo 'unbalanced && git push origin cloud/x
+# only CLAUDE_CODE_REMOTE=true is cloud mode: with "false" the workstation rules apply
+block@remote-false npm ci
+allow@remote-false git push origin master
+allow@remote-false grep -n vps-test CLAUDE.md
 # the same pushes on the workstation (plain pushes allowed, master included)
 allow git push origin main
 allow git push -u origin master

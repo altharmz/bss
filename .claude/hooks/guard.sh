@@ -14,10 +14,10 @@ cmd="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.load(sys
 
 block() { printf 'BLOCKED by guard.sh: %s\n' "$1" >&2; exit 2; }
 
-# --- cloud mode (BSS_CLOUD=1, set only in the cloud environment's config) ---
+# --- cloud mode (CLAUDE_CODE_REMOTE=true: set by Claude Code in every cloud session) ---
 # A cloud session never reaches the VPS: any command naming it is blocked, quotes and
 # all - before guard.py, so the tokenised and the fallback path both get it.
-if [[ "${BSS_CLOUD:-}" == 1 ]] && grep -Eqi 'vpn2811\.duckdns\.org|vps-test' <<<"$cmd"; then
+if [[ "${CLAUDE_CODE_REMOTE:-}" == true ]] && grep -Eqi 'vpn2811\.duckdns\.org|vps-test' <<<"$cmd"; then
   block "cloud sessions never reach the VPS (vps-test, vpn2811.duckdns.org) - not even to probe it (docs/cloud.md)."
 fi
 
@@ -71,7 +71,7 @@ grep -Eq '(^|[^[:alnum:]_.-])git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+|[[:s
   block "force, delete, mirror, prune, tag and +/: refspec pushes are forbidden. Plain \`git push [-u] origin <branch>\` of approved commits only (CLAUDE.md)."
 # Cloud mode, fail-closed: a push that cannot be tokenised cannot be checked for its
 # cloud/* destination, so it is blocked outright.
-[[ "${BSS_CLOUD:-}" == 1 ]] && grep -Eq '(^|[^[:alnum:]_.-])git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+|[[:space:]]+--?[[:alnum:]_-]+(=[^[:space:]]*)?)*[[:space:]]+push([^[:alnum:]_-]|$)' <<<"$cmd" && \
+[[ "${CLAUDE_CODE_REMOTE:-}" == true ]] && grep -Eq '(^|[^[:alnum:]_.-])git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+|[[:space:]]+--?[[:alnum:]_-]+(=[^[:space:]]*)?)*[[:space:]]+push([^[:alnum:]_-]|$)' <<<"$cmd" && \
   block "cloud sessions push only to cloud/* branches; this push could not be parsed - run it as a plain one-line command: git push -u origin cloud/<topic>."
 
 # --- the harness is changed through the Edit tool, which asks the human first ---
@@ -108,7 +108,7 @@ node_on_host() {
   python3 - "$cmd" <<'PY'
 import os, re, sys
 cmd = sys.argv[1]
-tools = "pnpm|yarn|corepack" if os.environ.get("BSS_CLOUD") == "1" else "npm|npx|node|pnpm|yarn|corepack"
+tools = "pnpm|yarn|corepack" if os.environ.get("CLAUDE_CODE_REMOTE") == "true" else "npm|npx|node|pnpm|yarn|corepack"
 tool = rf"({tools})(\s|$)"
 starts = re.compile(r"^\s*(\w+=\S*\s+)*" + tool)
 shell_c = re.compile(r"\b(sh|bash)\s+-c\s+['\"]?\s*" + tool)

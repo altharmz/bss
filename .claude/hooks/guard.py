@@ -15,10 +15,11 @@ substitutions (wherever they appear, quotes included - conservative).
 A plain `git push` passes; force, delete, mirror, prune, tag and +/: refspec pushes are
 blocked (CLAUDE.md, "Hard constraints").
 
-Cloud mode (BSS_CLOUD=1, set only in the cloud environment's config, never locally): the
-sandbox is itself the container, so npm/npx/node may run on the host; every push must name
-its destination and every destination must be a cloud/* branch (never master/main). The
-VPS's names are blocked in cloud mode by guard.sh, before this script runs.
+Cloud mode (CLAUDE_CODE_REMOTE=true: Claude Code sets it in every cloud session, never
+locally): the sandbox is itself the container, so npm/npx/node may run on the host; every
+push must name its destination and every destination must be a cloud/* branch (never
+master/main). The VPS's names are blocked in cloud mode by guard.sh, before this script
+runs.
 
 The rules that protect production (the VPN, its ports, mass container stops) still scan
 the raw text, quotes included, as before.
@@ -56,7 +57,7 @@ PUSH_FORBIDDEN = {"--force", "--force-with-lease", "--force-if-includes", "--mir
 # git push options that take the next word as their value
 PUSH_OPTS_WITH_ARG = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
 
-CLOUD = os.environ.get("BSS_CLOUD") == "1"
+CLOUD = os.environ.get("CLAUDE_CODE_REMOTE") == "true"
 # Node tools allowed on the host in cloud mode (pnpm, yarn, corepack stay blocked)
 CLOUD_NODE_TOOLS = {"npm", "npx", "node"}
 CLOUD_PUSH_MSG = ("cloud sessions push only to cloud/* branches, never master/main. Name the"

@@ -15,12 +15,16 @@ while IFS= read -r line || [[ -n "${line}" ]]; do
   expected="${line%% *}"
   command="${line#* }"
   command="${command//\$CLAUDE_PROJECT_DIR/${CLAUDE_PROJECT_DIR}}"
-  # <expected>@cloud: the case runs in cloud mode (BSS_CLOUD=1); every other case runs
-  # with BSS_CLOUD removed, so the suite means the same on the workstation and in the cloud.
-  mode=(env -u BSS_CLOUD)
+  # <expected>@cloud: the case runs in cloud mode (CLAUDE_CODE_REMOTE=true); every other
+  # case runs with CLAUDE_CODE_REMOTE removed, so the suite means the same on the
+  # workstation and in a cloud session (where Claude Code sets it for the hook's caller).
+  mode=(env -u CLAUDE_CODE_REMOTE)
   if [[ "${expected}" == *@cloud ]]; then
-    mode=(env BSS_CLOUD=1)
+    mode=(env CLAUDE_CODE_REMOTE=true)
     expected="${expected%@cloud}"
+  elif [[ "${expected}" == *@remote-false ]]; then # only the exact value "true" counts
+    mode=(env CLAUDE_CODE_REMOTE=false)
+    expected="${expected%@remote-false}"
   fi
   case "${expected}" in
     allow-ml | block-ml)

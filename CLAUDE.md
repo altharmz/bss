@@ -249,14 +249,19 @@ boundary:
   checks, exactly as strict as before. Regression cases: `.claude/hooks/guard-cases.txt`
   (allow/block per command), run by `.claude/hooks/test-guard.sh` and by the pre-commit
   hook whenever `.claude/` changes.
-- **Cloud mode: `BSS_CLOUD=1`**, set only in the cloud environment's configuration, never
-  on the workstation (`docs/cloud.md`). The guard then allows `npm`/`npx`/`node` on the
+- **Cloud mode: `CLAUDE_CODE_REMOTE=true`**, which Claude Code sets in every cloud
+  session and never on the workstation; only the exact value `true` counts
+  (`docs/cloud.md`). The SessionStart hook (`startup|resume`) runs
+  `scripts/cloud-setup.sh`, which exits 0 at once unless cloud mode is on, then starts
+  PostgreSQL and installs the venv and `npm ci` only when missing, and always exits 0
+  (a failure is reported in the session's context, never fatal). The guard then allows `npm`/`npx`/`node` on the
   host (the sandbox is the container; `pnpm`/`yarn`/`corepack` stay blocked), blocks any
   command that mentions `vps-test` or `vpn2811.duckdns.org` (quotes included, checked
   before guard.py), and lets a push through only with explicit `cloud/*` destinations
   (a bare `git push`, `HEAD`, `master`, `main` are blocked; an untokenisable push is
-  blocked outright). Cases marked `@cloud` in `guard-cases.txt` run with `BSS_CLOUD=1`,
-  all others with it removed; absolute paths there are written `$CLAUDE_PROJECT_DIR`.
+  blocked outright). Cases marked `@cloud` in `guard-cases.txt` run with
+  `CLAUDE_CODE_REMOTE=true`, `@remote-false` with `false`, all others with it removed;
+  absolute paths there are written `$CLAUDE_PROJECT_DIR`.
 
 - **Harness files need the human's OK.** `.claude/**`, `compose*.yaml`, `Makefile` and
   `scripts/**` are under `"ask"` for the Edit tool, and `guard.sh` blocks the shell writes
@@ -1119,10 +1124,11 @@ In this order (as of 2026-10-05, after slice f):
    like the other harness files - today only the Edit tool's `"ask"` rule guards it -
    with regression cases both ways.
 6. **Remaining Phase 2** (APP_PORT, localhost:8080 refs, make down profiles) - deferred.
-7. **Cloud mode, first real run**: guard cloud mode and portable cases are done
-   (2026-10-09, "Agent guardrails"). Still unproven in an actual cloud session:
-   `cloud-setup.sh`'s `npm ci` with `BSS_CLOUD=1`, and `npm run lint` / `npm test` on
-   the host there (`docs/cloud.md`).
+7. **Cloud mode, first real run**: guard cloud mode, portable cases and the SessionStart
+   setup are done (2026-10-09, "Agent guardrails"; the setup rehearsed in an Ubuntu 24.04
+   container). Still unproven in an actual cloud session: the hook firing on startup and
+   resume, `CLAUDE_CODE_REMOTE` reaching the hooks, and the setup's `npm ci` /
+   `npm run lint` / `npm test` behind the egress proxy (`docs/cloud.md`).
 8. **FastAPI's `/docs`, `/redoc`, `/openapi.json` in prod**: decide whether they stay
    exposed (behind basic auth) or get disabled; add the decision to `scope.yaml` either
    way (needs the human's approval).
