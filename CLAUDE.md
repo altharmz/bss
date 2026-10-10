@@ -931,9 +931,31 @@ termination always visible, no account lock, no running-run guard).
 Design and decisions: **`docs/bill-lifecycle-design.md`**, section 6 (decided
 2026-10-10: option C, payment term 30 days configurable, credit notes pay older open
 bills, overdue is display only, a Record payment dialog). Four slices: 1. schema +
-settlement core, 2. worker, 3. API, 4. UI + seed. **Slice 1 is built** on
-`cloud/bill-settlement-core`; until slice 2 nothing calls the settlement, so every bill
-stays `new` (now with a due date, a category and its issue in the history).
+settlement core (`cloud/bill-settlement-core`), 2. worker (`cloud/bill-settlement-worker`,
+stacked on 1), 3. API, 4. UI + seed. **Slices 1-2 are built.** Until slice 3 a payment
+recorded through TMF676 is applied by the next billing run, not at once.
+
+- **The run issues and settles** (slice 2, `bill_account`, in the account's one
+  transaction after `apply_result`): `issue_bills` takes every bill of the account still
+  `new` or `validated` (its own, and any left `new` from before 0006 - the back-fill
+  needs no data migration), validates it (`settlement.validate`: amount_due = the sum of
+  its ABRs, at least one ABR, period = [bill_date, next cycle day); a failure is
+  `InconsistentState`, so the account fails in the run and nothing of it is written),
+  then new -> validated -> sent, and -> settled when amount_due <= 0 (zero bills and
+  credit notes). Then `settle_account` applies the unused credit (cause `run`, dated by
+  the attempt's `started_at`). Every run settles every member account, so a payment is
+  applied by the next run even if it issues no bill. `write_settlement` sets the bounds
+  trigger IMMEDIATE once it has written allocations, so a breach fails inside the
+  account's savepoint, not at the worker's commit. History rows of one run share
+  `changed_at`; `seq` (identity) orders them.
+- Proven (`tests/test_bill_lifecycle_db.py`): issue steps and idempotence; the stage 3
+  example 4 credit note (-116.13) settled at issue and paying the Dec bill down to 183.87;
+  a payment before the first bill settling it at issue, the rest carried to January, a
+  later payment applied by a run without a bill; a bill left `new` issued and settled by
+  the next run; tampered amount or period failing the account with nothing written; the
+  6.5 invariant after each step. The replay test now also compares state, due date and
+  category. Negative proofs: validation skipped, no settlement in the run, credit notes
+  not settled at issue, only this run's bills issued - each failed a test.
 
 - **Migration 0006**: `customer_bill.payment_due_date` (bill_date + the term in force when
   the bill is written; existing bills + 30, a literal) and `category` (`normal` |

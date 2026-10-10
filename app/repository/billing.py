@@ -827,6 +827,10 @@ def write_settlement(
         conn.execute(
             "UPDATE customer_bill SET updated_at = now() WHERE id = ANY(%s)", (list(touched),)
         )
+    if result.allocations:
+        # check the amount bounds here, inside the caller's savepoint, not at the far
+        # commit: a breach is a bug and should fail where it happens
+        conn.execute("SET CONSTRAINTS bill_allocation_bounds IMMEDIATE")
 
 
 def record_bill_state(
@@ -868,11 +872,42 @@ def record_bill_issue(conn: psycopg.Connection, bill_id: UUID, *, now: datetime)
     )
 
 
+def load_issue_candidates(
+    conn: psycopg.Connection, account_id: UUID
+) -> tuple[settlement.IssueCandidate, ...]:
+    """The account's bills not issued yet (`new`, or `validated` if a run ever stopped
+    between the two), oldest first, with the sum and number of the ABRs they collect."""
+    rows = fetch_all(
+        conn,
+        """
+        SELECT b.id, b.bill_date, b.bill_period, b.amount_due, b.state,
+               coalesce(sum(a.amount), 0) AS abr_total, count(a.id) AS abr_count
+        FROM customer_bill b
+        LEFT JOIN applied_customer_billing_rate a ON a.customer_bill_id = b.id
+        WHERE b.billing_account_id = %s AND b.state IN ('new', 'validated')
+        GROUP BY b.id ORDER BY b.bill_date
+        """,
+        (account_id,),
+    )
+    return tuple(
+        settlement.IssueCandidate(
+            id=r["id"],
+            bill_date=r["bill_date"],
+            period_start=r["bill_period"].lower,
+            period_end=r["bill_period"].upper,
+            amount_due=r["amount_due"],
+            state=r["state"],
+            abr_total=r["abr_total"],
+            abr_count=r["abr_count"],
+        )
+        for r in rows
+    )
+
+
 def bill_state_history(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
     return fetch_all(
         conn,
-        "SELECT * FROM customer_bill_state_change WHERE customer_bill_id = %s"
-        " ORDER BY changed_at, created_at, id",
+        "SELECT * FROM customer_bill_state_change WHERE customer_bill_id = %s ORDER BY seq",
         (bill_id,),
     )
 

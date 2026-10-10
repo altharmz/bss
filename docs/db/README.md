@@ -333,6 +333,7 @@ erDiagram
   customer_bill_state_change {
     uuid id PK
     timestamptz created_at
+    bigint seq
     uuid customer_bill_id FK
     customer_bill_state_type from_state
     customer_bill_state_type to_state

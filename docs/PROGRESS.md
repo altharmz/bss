@@ -13,7 +13,7 @@ commit.
 | Database | 18 | 18/18 (100%) | n/a | unknown |
 | API | 54 | 54/54 (100%) | n/a | unknown |
 | UI | 13 | 13/13 (100%) | 13/13 (100%) | unknown |
-| Worker | 10 | 10/10 (100%) | 10/10 (100%) | unknown |
+| Worker | 12 | 12/12 (100%) | 12/12 (100%) | unknown |
 
 ## Database
 
@@ -129,6 +129,8 @@ commit.
 | `worker.statusFlips` | 4 | Status flips (created -> active, pendingTerminate -> terminated) by run date | yes | yes | unknown |
 | `worker.scheduler` | 4 | Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday | yes | yes | unknown |
 | `worker.signals` | 4 | SIGTERM finishes the current account; SIGKILL leaves nothing half-written | yes | yes | unknown |
+| `worker.billIssue` | 5 | The run validates and issues the bills it writes (new -> validated -> sent; credit notes and zero bills settled) | yes | yes | unknown |
+| `worker.billSettle` | 5 | Every run applies unused credit to open bills, oldest first | yes | yes | unknown |
 
 ## Unscoped
 

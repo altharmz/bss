@@ -84,8 +84,9 @@ def test_a_bill_is_due_after_the_term_in_force_and_its_issue_is_recorded(
     api, db_conn, offering, monkeypatch
 ):
     """paymentDueDate = billDate + BILL_PAYMENT_TERM_DAYS as configured when the run writes
-    the bill; a later change of the term leaves it alone. The bill's first history row is
-    its issue as `new`, dated by the injected clock of the run's attempt."""
+    the bill; a later change of the term leaves it alone. The run issues the bill in the
+    same transaction: new -> validated -> sent, each step dated by the injected clock of
+    the run's attempt."""
     account = apidata.account(api)
     add(api, account, offering, date(2026, 12, 1), on=at(date(2026, 11, 20)))
     monkeypatch.setattr(settings, "bill_payment_term_days", 10)
@@ -98,12 +99,17 @@ def test_a_bill_is_due_after_the_term_in_force_and_its_issue_is_recorded(
         (account["id"],),
     ).fetchall()
     assert [r[1:] for r in rows] == [
-        (date(2026, 12, 1), date(2026, 12, 11), "normal", "new"),
-        (date(2027, 1, 1), date(2027, 2, 15), "normal", "new"),
+        (date(2026, 12, 1), date(2026, 12, 11), "normal", "sent"),
+        (date(2027, 1, 1), date(2027, 2, 15), "normal", "sent"),
     ]
-    [issue] = billing.bill_state_history(db_conn, rows[0][0])
-    assert (issue["from_state"], issue["to_state"], issue["cause"]) == (None, "new", "run")
-    assert issue["changed_at"] == run_row(db_conn, date(2026, 12, 1))["started_at"]
+    history = billing.bill_state_history(db_conn, rows[0][0])
+    assert [(h["from_state"], h["to_state"], h["cause"]) for h in history] == [
+        (None, "new", "run"),
+        ("new", "validated", "run"),
+        ("validated", "sent", "run"),
+    ]
+    started = run_row(db_conn, date(2026, 12, 1))["started_at"]
+    assert {h["changed_at"] for h in history} == {started}
 
 
 def test_examples_1_4_11_and_the_tmf678_view(api, db_conn, offering):
@@ -303,7 +309,8 @@ def abr_rows(conn: psycopg.Connection, account: dict, names: dict[str, str]) -> 
 
 def bill_rows(conn: psycopg.Connection, account: dict) -> list[tuple]:
     return conn.execute(
-        "SELECT bill_date, bill_period, amount_due FROM customer_bill"
+        "SELECT bill_date, bill_period, amount_due, payment_due_date, category, state"
+        " FROM customer_bill"
         " WHERE billing_account_id = %s ORDER BY bill_date",
         (account["id"],),
     ).fetchall()

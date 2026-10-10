@@ -20,9 +20,9 @@
     },
     "worker": {
       "deployed": null,
-      "implemented": 10,
-      "items": 10,
-      "tested": 10
+      "implemented": 12,
+      "items": 12,
+      "tested": 12
     }
   },
   "excluded": [
@@ -892,6 +892,24 @@
       "stage": 4,
       "tested": true,
       "title": "SIGTERM finishes the current account; SIGKILL leaves nothing half-written"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.billIssue",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "The run validates and issues the bills it writes (new -> validated -> sent; credit notes and zero bills settled)"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.billSettle",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Every run applies unused credit to open bills, oldest first"
     }
   ],
   "unscoped": []

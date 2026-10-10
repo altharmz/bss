@@ -88,6 +88,11 @@ COMMENTS: list[tuple[str, str, str]] = [
     ("COLUMN", "bill_allocation.allocated_at", "When it was applied (injected clock)."),
     ("COLUMN", "customer_bill_state_change.id", AUDIT_ID),
     ("COLUMN", "customer_bill_state_change.created_at", AUDIT_CREATED),
+    (
+        "COLUMN",
+        "customer_bill_state_change.seq",
+        "Insertion order: the steps of one run share changed_at (new -> validated -> sent).",
+    ),
     ("COLUMN", "customer_bill_state_change.customer_bill_id", "The bill whose state changed."),
     ("COLUMN", "customer_bill_state_change.from_state", "NULL on the bill's issue."),
     ("COLUMN", "customer_bill_state_change.to_state", "The state it changed to."),
@@ -249,6 +254,7 @@ def upgrade() -> None:
         CREATE TABLE customer_bill_state_change (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             created_at timestamptz NOT NULL DEFAULT now(),
+            seq bigint GENERATED ALWAYS AS IDENTITY UNIQUE,
             customer_bill_id uuid NOT NULL REFERENCES customer_bill (id),
             from_state customer_bill_state_type,
             to_state customer_bill_state_type NOT NULL,
@@ -262,7 +268,7 @@ def upgrade() -> None:
         )
         """
     )
-    op.execute("CREATE INDEX ON customer_bill_state_change (customer_bill_id, changed_at)")
+    op.execute("CREATE INDEX ON customer_bill_state_change (customer_bill_id, seq)")
     op.execute(
         """
         INSERT INTO customer_bill_state_change

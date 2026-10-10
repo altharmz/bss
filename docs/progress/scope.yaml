@@ -137,6 +137,8 @@ items:
   - {id: worker.statusFlips, area: worker, stage: 4, title: "Status flips (created -> active, pendingTerminate -> terminated) by run date"}
   - {id: worker.scheduler, area: worker, stage: 4, title: "Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday"}
   - {id: worker.signals, area: worker, stage: 4, title: "SIGTERM finishes the current account; SIGKILL leaves nothing half-written"}
+  - {id: worker.billIssue, area: worker, stage: 5, title: "The run validates and issues the bills it writes (new -> validated -> sent; credit notes and zero bills settled)"}
+  - {id: worker.billSettle, area: worker, stage: 5, title: "Every run applies unused credit to open bills, oldest first"}
 
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}

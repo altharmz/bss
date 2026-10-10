@@ -17,6 +17,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from app.billing.model import InconsistentState
 from app.billing.settlement import (
     Bill,
     BillNotOpen,
@@ -24,15 +25,18 @@ from app.billing.settlement import (
     ExceedsPayment,
     ExceedsRemaining,
     ExplicitItem,
+    IssueCandidate,
     Payment,
     SettlementError,
     StateChange,
     TransitionRefused,
     UnknownBill,
+    issue,
     operator_change,
     operator_states,
     paid_state,
     settle,
+    validate,
 )
 
 D = Decimal
@@ -241,6 +245,58 @@ def test_operator_change_follows_the_rules():
         operator_change(replace(sent, state="settled", allocated=D("100.00")), "onHold")
     with pytest.raises(TransitionRefused, match="cannot be changed"):
         operator_change(bill("-5.00"), "onHold")  # a credit note is settled at issue
+
+
+# --- issue: what the run does to a bill it wrote ---
+
+
+def candidate(amount: str = "300.00", state: str = "new", **over) -> IssueCandidate:
+    fields = {
+        "id": uid(),
+        "bill_date": date(2026, 12, 1),
+        "period_start": date(2026, 12, 1),
+        "period_end": date(2027, 1, 1),
+        "amount_due": D(amount),
+        "state": state,
+        "abr_total": D(amount),
+        "abr_count": 1,
+    }
+    return IssueCandidate(**{**fields, **over})
+
+
+@pytest.mark.parametrize(
+    ("amount", "state", "steps"),
+    [
+        ("300.00", "new", [("new", "validated"), ("validated", "sent")]),
+        ("300.00", "validated", [("validated", "sent")]),
+        ("0.00", "new", [("new", "validated"), ("validated", "sent"), ("sent", "settled")]),
+        ("-116.13", "new", [("new", "validated"), ("validated", "sent"), ("sent", "settled")]),
+    ],
+)
+def test_issue_steps(amount, state, steps):
+    c = candidate(amount, state)
+    assert [(s.from_state, s.to_state) for s in issue(c)] == steps
+    assert {s.bill_id for s in issue(c)} == {c.id}
+
+
+def test_only_a_bill_waiting_to_be_issued_is_issued():
+    with pytest.raises(ValueError, match="not waiting"):
+        issue(candidate(state="sent"))
+
+
+@pytest.mark.parametrize(
+    ("over", "match"),
+    [
+        ({"abr_count": 0, "abr_total": D("0")}, "no charge"),
+        ({"abr_total": D("299.99")}, "not the sum"),
+        ({"period_end": date(2026, 12, 31)}, "period"),
+        ({"period_start": date(2026, 11, 30)}, "period"),
+    ],
+)
+def test_validation(over, match):
+    validate(candidate(), date(2027, 1, 1))
+    with pytest.raises(InconsistentState, match=match):
+        validate(candidate(**over), date(2027, 1, 1))
 
 
 def test_paid_state():

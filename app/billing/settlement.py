@@ -24,6 +24,8 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
+from app.billing.model import InconsistentState
+
 BillState = Literal["new", "onHold", "validated", "sent", "settled", "partiallyPaid"]
 AllocationKind = Literal["automatic", "explicit"]
 
@@ -235,6 +237,58 @@ def _add(bill: Bill, amount: Decimal) -> Bill:
 
 def _use(payment: Payment, amount: Decimal) -> Payment:
     return replace(payment, used=payment.used + amount)
+
+
+# --- issue: what the billing run does to a bill it has written (6.2) ---
+
+ISSUE_STEPS: tuple[tuple[BillState, BillState], ...] = (("new", "validated"), ("validated", "sent"))
+
+
+@dataclass(frozen=True)
+class IssueCandidate:
+    """A bill not issued yet, with what the database says it collected."""
+
+    id: UUID
+    bill_date: date
+    period_start: date
+    period_end: date
+    amount_due: Decimal
+    state: BillState
+    abr_total: Decimal
+    abr_count: int
+
+
+def validate(bill: IssueCandidate, period_end: date) -> None:
+    """The validation of `validated`: the bill is exactly what the billing rules issue.
+    `period_end` is the next cycle day after the bill date. Raises InconsistentState."""
+    if bill.abr_count == 0:
+        raise InconsistentState(f"bill {bill.id} collects no charge")
+    if bill.amount_due != bill.abr_total:
+        raise InconsistentState(
+            f"bill {bill.id}: amount due {bill.amount_due} is not the sum {bill.abr_total}"
+            " of its charges"
+        )
+    if (bill.period_start, bill.period_end) != (bill.bill_date, period_end):
+        raise InconsistentState(
+            f"bill {bill.id}: period [{bill.period_start}, {bill.period_end}) is not"
+            f" [{bill.bill_date}, {period_end})"
+        )
+
+
+def issue(bill: IssueCandidate) -> tuple[StateChange, ...]:
+    """new -> validated -> sent, and -> settled when nothing is due (zero bill, credit
+    note). Starts from wherever the bill is, so a bill left `validated` finishes too."""
+    if bill.state not in ("new", "validated"):
+        raise ValueError(f"bill {bill.id} is {bill.state}, not waiting to be issued")
+    changes = []
+    state = bill.state
+    for from_state, to_state in ISSUE_STEPS:
+        if state == from_state:
+            changes.append(StateChange(bill.id, from_state, to_state))
+            state = to_state
+    if bill.amount_due <= 0:
+        changes.append(StateChange(bill.id, "sent", "settled"))
+    return tuple(changes)
 
 
 # --- the operator's hold and release (PATCH /customerBill/{id}) ---
