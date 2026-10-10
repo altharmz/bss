@@ -904,6 +904,126 @@ def load_issue_candidates(
     )
 
 
+def lock_bill(conn: psycopg.Connection, bill_id: UUID) -> Row | None:
+    """The bill, locked. Take the billing account's lock first (`load_account`), as every
+    writer of allocations does, so nobody waits in the other order."""
+    return fetch_one(conn, "SELECT * FROM customer_bill WHERE id = %s FOR UPDATE", (bill_id,))
+
+
+def bill_allocated(conn: psycopg.Connection, bill_id: UUID) -> Decimal:
+    row = fetch_one(
+        conn,
+        "SELECT coalesce(sum(amount), 0) AS total FROM bill_allocation WHERE customer_bill_id = %s",
+        (bill_id,),
+    )
+    assert row is not None
+    return row["total"]
+
+
+def remaining_amount(bill: Row, allocated: Decimal) -> Decimal:
+    """TMF678 remainingAmount: what is still owed on a bill; nothing on a credit note."""
+    return max(bill["amount_due"] - allocated, Decimal("0.00"))
+
+
+def applied_payments(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
+    """Per payment, what it paid on this bill (TMF678 appliedPayment), oldest first."""
+    return fetch_all(
+        conn,
+        """
+        SELECT payment_id, sum(amount) AS amount FROM bill_allocation
+        WHERE customer_bill_id = %s AND payment_id IS NOT NULL
+        GROUP BY payment_id ORDER BY min(allocated_at), payment_id
+        """,
+        (bill_id,),
+    )
+
+
+def payment_items(conn: psycopg.Connection, payment_id: UUID) -> list[Row]:
+    """Per bill, what this payment paid on it (TMF676 paymentItem), oldest bill first."""
+    return fetch_all(
+        conn,
+        """
+        SELECT a.customer_bill_id, sum(a.amount) AS amount
+        FROM bill_allocation a JOIN customer_bill b ON b.id = a.customer_bill_id
+        WHERE a.payment_id = %s
+        GROUP BY a.customer_bill_id, b.bill_date ORDER BY b.bill_date
+        """,
+        (payment_id,),
+    )
+
+
+def bill_sources(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
+    """Every allocation to this bill with its source (payment or credit note), in the
+    order they were made."""
+    return fetch_all(
+        conn,
+        """
+        SELECT a.amount, a.kind, a.allocated_at, a.payment_id, a.credit_bill_id,
+               p.payment_method, p.received_at, c.bill_date AS credit_bill_date
+        FROM bill_allocation a
+        LEFT JOIN payment p ON p.id = a.payment_id
+        LEFT JOIN customer_bill c ON c.id = a.credit_bill_id
+        WHERE a.customer_bill_id = %s
+        ORDER BY a.allocated_at, a.created_at, a.id
+        """,
+        (bill_id,),
+    )
+
+
+def bill_charges(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
+    """The ABRs a bill collected, with their offering, oldest period first."""
+    return fetch_all(
+        conn,
+        """
+        SELECT a.*, o.id AS offering_id, o.name AS offering_name
+        FROM applied_customer_billing_rate a
+        JOIN product p ON p.id = a.product_id
+        JOIN product_offering o ON o.id = p.product_offering_id
+        WHERE a.customer_bill_id = %s
+        ORDER BY lower(a.period), a.charge_type, a.id
+        """,
+        (bill_id,),
+    )
+
+
+def settlement_summary(conn: psycopg.Connection, account_id: UUID, today: date) -> Row:
+    """What the account owes on its bills and the credit it has not used yet. Overdue:
+    due before `today` with something remaining (on hold included - shown apart)."""
+    row = fetch_one(
+        conn,
+        """
+        WITH bills AS (
+            SELECT b.state, b.payment_due_date,
+                   CASE WHEN b.amount_due > 0 THEN b.amount_due - coalesce(
+                       (SELECT sum(amount) FROM bill_allocation
+                        WHERE customer_bill_id = b.id), 0) ELSE 0 END AS remaining,
+                   CASE WHEN b.amount_due < 0 AND b.state = 'settled' THEN -b.amount_due
+                       - coalesce((SELECT sum(amount) FROM bill_allocation
+                                   WHERE credit_bill_id = b.id), 0) ELSE 0 END AS credit_left
+            FROM customer_bill b WHERE b.billing_account_id = %(account)s
+        )
+        SELECT
+            coalesce(sum(remaining), 0) AS outstanding,
+            count(*) FILTER (WHERE remaining > 0 AND payment_due_date < %(today)s)
+                AS overdue_count,
+            coalesce(sum(remaining) FILTER (WHERE payment_due_date < %(today)s), 0)
+                AS overdue_amount,
+            count(*) FILTER (WHERE state = 'onHold') AS on_hold_count,
+            coalesce(sum(remaining) FILTER (WHERE state = 'onHold'), 0) AS on_hold_amount,
+            coalesce(sum(credit_left), 0)
+              + (SELECT coalesce(sum(p.amount - coalesce((SELECT sum(amount)
+                         FROM bill_allocation WHERE payment_id = p.id), 0)), 0)
+                 FROM payment p
+                 WHERE p.billing_account_id = %(account)s AND p.status = 'done')
+                AS unallocated_credit
+        FROM bills
+        """,
+        {"account": account_id, "today": today},
+    )
+    assert row is not None
+    return row
+
+
 def bill_state_history(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
     return fetch_all(
         conn,

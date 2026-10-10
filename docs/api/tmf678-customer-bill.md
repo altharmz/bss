@@ -4,24 +4,24 @@
 
 - Base path here: `/tmf-api/customerBillManagement/v5`
 - Contract: [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml) - CustomerBill version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 4
+- Operations exposed: 5
 
 
 ## Operations
 
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
-| GET | `/tmf-api/customerBillManagement/v5/appliedCustomerBillingRate` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `isBilled`, `product.id` | - | 200 `array of AppliedCustomerBillingRate` | [`app/api/bill.py`](../../app/api/bill.py) |
+| GET | `/tmf-api/customerBillManagement/v5/appliedCustomerBillingRate` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `bill.id`, `billingAccount.id`, `isBilled`, `product.id` | - | 200 `array of AppliedCustomerBillingRate` | [`app/api/bill.py`](../../app/api/bill.py) |
 | GET | `/tmf-api/customerBillManagement/v5/appliedCustomerBillingRate/{rate_id}` | path: `rate_id`; query: `fields` | - | 200 `AppliedCustomerBillingRate` | [`app/api/bill.py`](../../app/api/bill.py) |
 | GET | `/tmf-api/customerBillManagement/v5/customerBill` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `state` | - | 200 `array of CustomerBill` | [`app/api/bill.py`](../../app/api/bill.py) |
 | GET | `/tmf-api/customerBillManagement/v5/customerBill/{bill_id}` | path: `bill_id`; query: `fields` | - | 200 `CustomerBill` | [`app/api/bill.py`](../../app/api/bill.py) |
+| PATCH | `/tmf-api/customerBillManagement/v5/customerBill/{bill_id}` | path: `bill_id`; body: `application/merge-patch+json` | `CustomerBill_MVO` | 200 `CustomerBill` | [`app/api/bill.py`](../../app/api/bill.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `PATCH /customerBill/{id}`.
 - Resources of the spec that are **not implemented**: `/billCycle`, `/customerBillOnDemand`, `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
 
 

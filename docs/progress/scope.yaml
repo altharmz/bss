@@ -89,6 +89,7 @@ items:
   # ---------------- api: TMF678 bills and charges ----------------
   - {id: api.tmf678.customerBill.list, area: api, stage: 2, method: GET, path: /tmf-api/customerBillManagement/v5/customerBill, title: "List customer bills"}
   - {id: api.tmf678.customerBill.get, area: api, stage: 2, method: GET, path: "/tmf-api/customerBillManagement/v5/customerBill/{bill_id}", title: "Get a customer bill"}
+  - {id: api.tmf678.customerBill.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/customerBillManagement/v5/customerBill/{bill_id}", title: "Hold or release a customer bill"}
   - {id: api.tmf678.appliedCustomerBillingRate.list, area: api, stage: 2, method: GET, path: /tmf-api/customerBillManagement/v5/appliedCustomerBillingRate, title: "List charges and refunds (ABRs)"}
   - {id: api.tmf678.appliedCustomerBillingRate.get, area: api, stage: 2, method: GET, path: "/tmf-api/customerBillManagement/v5/appliedCustomerBillingRate/{rate_id}", title: "Get a charge or refund (ABR)"}
 
@@ -98,6 +99,8 @@ items:
   - {id: api.internal.accountProducts.list, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/products", title: "An account's not-ended products"}
   - {id: api.internal.accountCharges.list, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/charges", title: "An account's charges (ABRs with proration)"}
   - {id: api.internal.accountTransactions.list, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/transactions", title: "An account's ledger with balance after"}
+  - {id: api.internal.accountSettlement.get, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/settlement", title: "An account's bills owed, unused credit, overdue and on hold"}
+  - {id: api.internal.billDetail.get, area: api, stage: 5, method: GET, path: "/internal/v1/customerBill/{bill_id}", title: "A bill with charges, sources, history and allowed states"}
   - {id: api.internal.priceChange.create, area: api, stage: 5, method: POST, path: "/internal/v1/productOffering/{offering_id}/priceChange", title: "Atomic price change of a live offering (D-W21)"}
   - {id: api.internal.billingRun.list, area: api, stage: 4, method: GET, path: /internal/v1/billingRun, title: "List billing runs (newest first)"}
   - {id: api.internal.billingRun.get, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}", title: "Get a billing run"}

@@ -177,7 +177,12 @@ def test_balance_includes_charges(api, world, db_conn):
     assert balance["amount"] == {"unit": "RUB", "value": Decimal("-100.00")}  # customer owes
 
 
-@pytest.mark.parametrize(("method", "url"), [("POST", BILL), ("POST", RATE), ("PATCH", BILL)])
-def test_bills_and_rates_are_read_only(api, world, method, url):
-    target = f"{url}/{world.product['id']}" if method == "PATCH" else url
+@pytest.mark.parametrize(
+    ("method", "url"),
+    [("POST", BILL), ("POST", RATE), ("PATCH", RATE), ("DELETE", BILL)],
+)
+def test_bills_and_rates_are_created_only_by_the_run(api, world, method, url):
+    """Bills and ABRs are created by the billing run only; a bill's state alone may be
+    patched (tests/test_api_bill_settlement.py), an ABR not at all."""
+    target = url if method == "POST" else f"{url}/{world.product['id']}"
     assert api.request(method, target, json={}).status_code == 405

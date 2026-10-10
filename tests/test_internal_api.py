@@ -52,6 +52,7 @@ def test_context(api):
         "operator": None,
         "currency": "RUB",
         "billingRunAt": "00:30",
+        "paymentTermDays": 30,
     }
 
 

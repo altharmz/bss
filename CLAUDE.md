@@ -632,17 +632,38 @@ POST records a received payment: `account`, `totalAmount` and `paymentMethod` (w
 account's currency (422); the composite FK behind it maps to 409 if it ever fires.
 Payments are never changed or deleted (405).
 
-### TMF637 and TMF678 mapping (read-only)
+**A payment settles at once** (bill lifecycle slice 3): POST takes the billing
+account's row lock (`FOR UPDATE`, as `bill_account` does) before inserting, then
+applies its `paymentItem[]` (explicit lettering: `{item: {id, @referredType:
+CustomerBill}, amount}`; `totalAmount` if sent equals `amount`, `taxAmount` zero) and
+then the oldest open bills - one transaction. 422: an item's bill unknown or another
+account's, the same bill twice, an amount <= 0 / > 2 decimals / in another currency,
+`@referredType` not CustomerBill, items above `totalAmount`; 409: an item above the
+bill's remaining amount, or a bill on hold or settled. A refused item stores nothing.
+Responses carry `paymentItem[]` = every allocation from the payment summed per bill
+(absent while none) - it **grows** when the payment's unused credit pays later bills.
+**The lock is needed for payment vs payment only**: the payment's foreign key already
+takes a key-share lock on the account row, which waits on a run's `FOR UPDATE` but not
+on another payment's key share (proven: without the explicit lock two overlapping POSTs
+both read the same open bill; `test_two_payments_settle_one_after_the_other` fails).
+
+### TMF637 and TMF678 mapping
 
 | Resource | DB column <-> TMF attribute | Filters |
 |---|---|---|
 | product | `status`, `start_date` <-> `startDate`, `termination_date` <-> `terminationDate` (exclusive: the first day not billed), `created_at` <-> `creationDate`, offering name <-> `name`, `billing_account_id` <-> `billingAccount`, `product_offering_id` <-> `productOffering`, `created_by_item_id` / `terminated_by_item_id` <-> `productOrderItem[]` (`RelatedOrderItem`, role `creation` / `termination`) | `billingAccount.id`, `status` |
-| customerBill | `bill_date` <-> `billDate`, `bill_period` <-> `billingPeriod`, `amount_due` + `currency` <-> `amountDue`, `state`, `billing_account_id` <-> `billingAccount` | `billingAccount.id`, `state` |
-| appliedCustomerBillingRate | `charge_type` <-> `appliedBillingRateType` (`recurring` -> `appliedBillingCharge`, `refund` -> `appliedBillingCredit`), `amount` + `currency` <-> `taxExcludedAmount` (refunds negative), `period` <-> `periodCoverage`, `customer_bill_id` <-> `bill` and `isBilled`, `product_id` <-> `product`, `billing_account_id` <-> `billingAccount`, `created_at` <-> `date` | `billingAccount.id`, `product.id`, `isBilled` |
+| customerBill | `bill_date` <-> `billDate`, `bill_period` <-> `billingPeriod`, `amount_due` + `currency` <-> `amountDue`, amount_due - allocations (0 for a credit note) <-> `remainingAmount`, `payment_due_date` <-> `paymentDueDate`, payment allocations <-> `appliedPayment[]` (`{appliedAmount, payment: PaymentRef}`; a credit note's credit is not a payment and not listed), `category` (`normal`/`creditNote`), `onCycle` <-> `runType`, `BL-` + 8 hex <-> `billNo`, `state`, `billing_account_id` <-> `billingAccount` | `billingAccount.id`, `state` |
+| appliedCustomerBillingRate | `charge_type` <-> `appliedBillingRateType` (`recurring` -> `appliedBillingCharge`, `refund` -> `appliedBillingCredit`), `amount` + `currency` <-> `taxExcludedAmount` (refunds negative), `period` <-> `periodCoverage`, `customer_bill_id` <-> `bill` and `isBilled`, `product_id` <-> `product`, `billing_account_id` <-> `billingAccount`, `created_at` <-> `date` | `billingAccount.id`, `product.id`, `bill.id`, `isBilled` |
 
 - Products are only written by orders; POST/PATCH/DELETE on `/product` are 405.
-- Bills and ABRs are only written by the billing run (`app/billing/adapter.py`), which
-  the worker's daily run calls per account.
+- Bills and ABRs are only **created** by the billing run (`app/billing/adapter.py`),
+  which the worker's daily run calls per account. ABRs are read-only; a bill's **state**
+  changes with settlement (the run, payments) and by **`PATCH /customerBill/{id}`**
+  (merge patch, `state` only - the spec's `CustomerBill_MVO`; any other attribute 400):
+  `onHold` from `sent`/`partiallyPaid`; from `onHold` only the state its allocations
+  imply (`sent` if nothing paid, else `partiallyPaid`; strict - anything else is a 409
+  naming it); repeating the current state is a 200 no-op; every other change a 409. The
+  operator (X-Remote-User) goes into the state history. A release settles the account.
 - **Status flips:** a product ordered with a future start date is `created` until the
   worker's run of its start date flips it to `active` (`products.flip_statuses`, see
   "Billing worker"); until that run, on the start date itself, it still reads `created`.
@@ -932,8 +953,14 @@ Design and decisions: **`docs/bill-lifecycle-design.md`**, section 6 (decided
 2026-10-10: option C, payment term 30 days configurable, credit notes pay older open
 bills, overdue is display only, a Record payment dialog). Four slices: 1. schema +
 settlement core (`cloud/bill-settlement-core`), 2. worker (`cloud/bill-settlement-worker`,
-stacked on 1), 3. API, 4. UI + seed. **Slices 1-2 are built.** Until slice 3 a payment
-recorded through TMF676 is applied by the next billing run, not at once.
+stacked on 1), 3. API (`cloud/bill-settlement-api`, stacked on 2), 4. UI + seed.
+**Slices 1-3 are built.** Slice 3: payments settle at once and take explicit
+`paymentItem`s (see "TMF676 (v4) mapping"), bills carry remainingAmount, paymentDueDate,
+appliedPayment, billNo, runType, category and are held/released by PATCH (see "TMF637
+and TMF678 mapping"), and two internal endpoints (settlement summary, bill detail; see
+"Internal API"). `tests/test_api_bill_settlement.py`; negative proofs: no settlement in
+POST /payment, no settlement on release, no explicit lock in POST /payment (fails only
+the payment-vs-payment test - the foreign key already serializes a payment with a run).
 
 - **The run issues and settles** (slice 2, `bill_account`, in the account's one
   transaction after `apply_result`): `issue_bills` takes every bill of the account still
@@ -1010,7 +1037,9 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
 
 | Endpoint | What |
 |---|---|
-| `GET /context` | businessDate (injected clock), now, timeZone, utcOffset (at now), environment (`APP_ENV`), operator, currency (`UI_CURRENCY`, default RUB), billingRunAt (`BILLING_RUN_AT`, default 00:30) |
+| `GET /context` | businessDate (injected clock), now, timeZone, utcOffset (at now), environment (`APP_ENV`), operator, currency (`UI_CURRENCY`, default RUB), billingRunAt (`BILLING_RUN_AT`, default 00:30), paymentTermDays (`BILL_PAYMENT_TERM_DAYS`) |
+| `GET /billingAccount/{id}/settlement` | outstanding (remaining of every bill, on hold included), unallocatedCredit (payments and issued credit notes not applied yet), overdue {count, amount} (due before the business date, something remaining - display only), onHold {count, amount}, paymentTermDays. Invariant (tested through the API): outstanding - unallocatedCredit = -(balance + unbilled ABRs) |
+| `GET /customerBill/{id}` | the bill dialog: billNo, dates, amountDue, remainingAmount, state, category, overdue, allowedStates (what PATCH accepts now, from `settlement.operator_states`), charges, sources (payments / credit notes, automatic / explicit, in order), history (from, to, changedAt, cause, operator) |
 | `GET /billingAccount/{id}/firstCharge?productOffering.id=&startDate=` | dry run of an add order: the stage 3 core's `compute()` on the hypothetical product. period, cyclePeriod, billableDays of periodDays, price, amount, chargeRunDate = max(startDate, businessDate + 1), billDate = first cycle day >= chargeRunDate, next full period, balance, balanceAfter (= balance - this charge only), creditLimit, exceedsCreditLimit. startDate in the past or no price in the account currency -> 422 |
 | `GET /billingAccount/{id}/products` | not-ended products (created, pendingActive, active, pendingTerminate, suspended) with offering name/code, specification name, price valid today (or on the start date), nextChargeDate (start date if not started, else the next cycle day after today; null if the product ends by then) |
 | `GET /billingAccount/{id}/charges` | ABRs newest run first, with runDate, billableDays of periodDays (the proration), offering, bill |

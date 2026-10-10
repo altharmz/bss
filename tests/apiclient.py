@@ -52,6 +52,8 @@ INTERNAL: dict[str, str] = {
     "/billingAccount/{id}/firstCharge": "FirstCharge",
     "/billingAccount/{id}/products": "AccountProduct",
     "/billingAccount/{id}/charges": "Charge",
+    "/billingAccount/{id}/settlement": "AccountSettlement",
+    "/customerBill/{id}": "BillDetail",
     "/billingAccount/{id}/transactions": "Transaction",
     "/productOffering/{id}/priceChange": "PriceChange",
     "/billingRun": "BillingRun",

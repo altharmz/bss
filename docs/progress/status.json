@@ -2,8 +2,8 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 54,
-      "items": 54,
+      "implemented": 57,
+      "items": 57,
       "tested": null
     },
     "db": {
@@ -554,6 +554,15 @@
     {
       "area": "api",
       "deployed": null,
+      "id": "api.tmf678.customerBill.patch",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Hold or release a customer bill"
+    },
+    {
+      "area": "api",
+      "deployed": null,
       "id": "api.tmf678.appliedCustomerBillingRate.list",
       "implemented": true,
       "stage": 2,
@@ -613,6 +622,24 @@
       "stage": 5,
       "tested": null,
       "title": "An account's ledger with balance after"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.accountSettlement.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "An account's bills owed, unused credit, overdue and on hold"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.billDetail.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "A bill with charges, sources, history and allowed states"
     },
     {
       "area": "api",
