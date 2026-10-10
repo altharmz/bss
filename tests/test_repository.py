@@ -290,12 +290,12 @@ def test_reopen_run_only_reopens_a_failed_run(db_conn, finish):
         billing.reopen_run(db_conn, run["id"], now=NOW, trigger="retry")
 
 
-def test_take_over_run_keeps_trigger_and_start(db_conn):
+def test_take_over_run_keeps_the_trigger_and_restarts_the_attempt(db_conn):
     run = billing.insert_run(db_conn, date(2026, 2, 1), now=NOW, trigger="catchUp")
     later = NOW + timedelta(hours=3)
     taken = billing.take_over_run(db_conn, run["id"], now=later)
     assert (taken["attempt"], taken["trigger"], taken["status"]) == (2, "catchUp", "running")
-    assert (taken["started_at"], taken["heartbeat_at"]) == (NOW, later)
+    assert (taken["started_at"], taken["heartbeat_at"]) == (later, later)
 
 
 def test_take_over_run_only_takes_over_a_running_run(db_conn):

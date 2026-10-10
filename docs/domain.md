@@ -52,8 +52,8 @@ two rows; CLAUDE.md, "Frontend (stage 5) decisions").
 | Entity | States | Transitions (who) | Code | Proven by |
 |---|---|---|---|---|
 | ProductOffering | `In Design`, `Active`, `Retired` | forward only: In Design -> Active -> Retired; Retired is final (PATCH, 409 otherwise) | `app/api/catalog.py` (`LIFECYCLE_STEPS`) | `tests/test_api_offering_lifecycle.py::test_every_transition` |
-| ProductSpecification, ProductOfferingPrice | same values | any (PATCH); not guarded | `app/api/catalog.py` | - |
-| Customer | `Created`, `Active`, `Inactive` (ours) | any (PATCH) | `app/api/customer.py` | `tests/test_api_parties.py::test_customer_round_trip` |
+| ProductSpecification, ProductOfferingPrice | same values | the offering's rule: forward only, Retired final (PATCH, 409 otherwise) | `app/api/catalog.py` (`_check_lifecycle`) | `tests/test_api_catalog_lifecycle.py::test_every_transition` |
+| Customer | `Created`, `Active`, `Inactive` (ours: TMF629's `status` is a free string) | any of these (PATCH); any other value is a 422 | `app/api/customer.py` | `tests/test_api_parties.py::test_customer_round_trip`, `::test_customer_status_outside_the_enum_is_refused_on_patch` |
 | BillingAccount | `Active`, `Suspended`, `Closed` (ours) | any (PATCH); ordering requires `Active`; billing ignores it | `app/api/account.py`, `app/ordering/process.py` | `tests/test_api_ordering.py::test_account_must_be_active_and_start_not_in_the_past` |
 | ProductOrder | `acknowledged` -> `inProgress` -> `completed`, or `acknowledged` -> `rejected` | synchronous, in one transaction | `app/ordering/states.py` | `tests/test_order_states.py::test_the_allowed_transitions_are_exactly_these` |
 | ProductOrderItem | as the order, plus `acknowledged` -> `cancelled` | the fine items of a rejected order are `cancelled` | `app/ordering/states.py` | `tests/test_order_states.py` |
@@ -124,7 +124,8 @@ is not**; a product activated and terminated on the same day is charged 0 days
 
 | Invariant | Code | Proven by |
 |---|---|---|
-| Offering lifecycle only moves forward (above) | `app/api/catalog.py` | `tests/test_api_offering_lifecycle.py` |
+| Offering, specification and price lifecycles only move forward (above) | `app/api/catalog.py` (`_check_lifecycle`) | `tests/test_api_offering_lifecycle.py`, `tests/test_api_catalog_lifecycle.py` |
+| An offering's `validFor` is never rewritten in the past: PATCH may not move the start, or set or move the end, to before now (409); repeating the current value is fine. Billing never reads it, so ending an offering leaves its live products priced (the price rules below keep that) | `_check_offering_period` | `tests/test_api_offering_validity.py` |
 | Prices of one offering, type and currency never overlap (exclusion constraint) | `product_offering_price_no_overlap` | `tests/test_constraints.py::test_overlapping_price_is_rejected_adjacent_is_accepted`, `tests/test_api_catalog.py::test_overlapping_prices_cannot_be_attached_to_one_offering` |
 | A price is attached to at most one offering and never detached | `app/api/catalog.py` (`_attach_prices`, `patch_offering`) | `tests/test_api_catalog.py::test_a_price_belongs_to_at_most_one_offering`, `::test_a_price_is_never_detached` |
 | A price is never re-priced (amount, type, period read-only; start cannot move) | `PRICE_IMMUTABLE`, `patch_price` | `::test_changing_a_price_means_ending_it_and_attaching_a_new_one` |

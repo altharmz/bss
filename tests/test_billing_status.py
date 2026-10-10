@@ -142,5 +142,31 @@ def test_a_running_run_is_503_once_overdue(api, worker):
     assert billing.get_run(worker, DEC1)["status"] == "running"
 
 
+def test_the_grace_of_a_taken_over_run_counts_from_the_takeover(api, worker, migrated_db_url):
+    """doc-findings #7: a run whose worker died (a deploy, the 03:00 reboot) and was taken
+    over gets the full 2 h from the takeover, not from the dead worker's start."""
+    accounts_with_products(api)
+    first = worker_db.connect(migrated_db_url)
+    start_run(first, DEC1, now=msk(DEC1, 0, 30), trigger="scheduled")
+    first.close()  # the owner dies; its lock goes with the connection
+    taken = start_run(worker, DEC1, now=msk(DEC1, 2, 0), trigger="scheduled")
+    assert taken.how == "takenOver"
+    api.clock.set(msk(DEC1, 3, 59))  # 3 h 29 min after the first start
+    code, body = status_of(api)
+    assert (code, body["status"], body["ageSeconds"]) == (200, "running", 7140)
+    api.clock.set(msk(DEC1, 4, 0))
+    assert status_of(api)[:1] == (503,)
+    assert status_of(api)[1]["status"] == "running"
+
+
+def test_a_run_taken_over_again_and_again_is_overdue_once_its_date_is_late():
+    """The grace restarts on every takeover, so a worker that keeps dying would never let
+    it run out: a running run of a date before the expected one is 503 regardless."""
+    looping = run("running", DEC1, msk(DEC2, 2, 0))  # just taken over again
+    assert freshness(looping, msk(DEC2, 2, 29), TZ, RUN_AT)[0] == 200  # expected: Dec 1
+    code, body = freshness(looping, msk(DEC2, 2, 30), TZ, RUN_AT)  # expected: Dec 2
+    assert (code, body["status"], body["date"]) == (503, "running", "2026-12-01")
+
+
 def test_unknown_query_parameters_are_400(api):
     assert api.client.get("/billing-status?verbose=1").status_code == 400

@@ -267,8 +267,8 @@ COLUMNS: dict[str, dict[str, str]] = {
             "running, completed (every member account ok) or failed (see failure_kind)."
         ),
         "started_at": (
-            "When the run started, or was last reopened after a failure (injected clock);"
-            " a takeover keeps it."
+            "When the current attempt started (injected clock): the first start, or the"
+            " last reopen after a failure or takeover of a dead worker's run."
         ),
         "finished_at": "When the run completed or failed; NULL while running.",
         "error": "Why the run failed, for operators.",

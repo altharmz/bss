@@ -72,15 +72,17 @@ def reopen_run(conn: psycopg.Connection, run_id: UUID, *, now: datetime, trigger
 
 def take_over_run(conn: psycopg.Connection, run_id: UUID, *, now: datetime) -> Row:
     """A running run whose owner is gone, continued by a new one: attempt + 1, its trigger
-    and start kept."""
+    kept, started_at = now - the start of this attempt, as on a reopen, so /billing-status
+    counts the 2 h grace from the takeover (doc-findings #7)."""
     run = fetch_one(
         conn,
         """
-        UPDATE billing_run SET attempt = attempt + 1, heartbeat_at = %s, updated_at = now()
+        UPDATE billing_run SET attempt = attempt + 1, started_at = %s, heartbeat_at = %s,
+               updated_at = now()
          WHERE id = %s AND status = 'running'
         RETURNING *
         """,
-        (now, run_id),
+        (now, now, run_id),
     )
     if run is None:
         raise LookupError(f"no running billing run {run_id}")

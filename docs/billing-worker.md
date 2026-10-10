@@ -71,7 +71,7 @@ with `connect_timeout` 10 s, TCP keepalives 30/10/3 and `lock_timeout` 30 s (W1;
 | none | insert a `running` run (`new`) |
 | `completed` | nothing to do (`AlreadyCompleted`) |
 | `failed` | reopen it: attempt + 1, failure cleared |
-| `running` | its owner is gone (we hold the lock): **take it over**, attempt + 1, trigger kept |
+| `running` | its owner is gone (we hold the lock): **take it over**, attempt + 1, trigger kept, `started_at` = now (the attempt's start, as on a reopen) |
 
 Proven by `tests/test_worker_runs.py::test_no_run_yet_starts_one`,
 `::test_a_completed_run_is_a_noop_not_an_error`, `::test_a_failed_run_is_reopened`,
@@ -203,14 +203,22 @@ The **expected date** is today once the local time (BILLING_TZ) is past `BILLING
 |---|---|---|
 | none at all | 503 | `none` (`date` and `ageSeconds` null) |
 | `failed` | 503 | `failed` |
-| `running` for less than 2 h | 200 | `running` |
-| `running` for 2 h or more | 503 | `running` |
+| `running` for less than 2 h since `started_at` | 200 | `running` |
+| `running` for 2 h or more, or its date is before the expected date | 503 | `running` |
 | `completed`, on or after the expected date | 200 | `ok` |
 | `completed`, earlier | 503 | `stale` |
 
+**A takeover restarts the grace.** `started_at` is the start of the current attempt
+(first start, reopen or takeover), so a run whose worker died - a deploy, the 03:00
+reboot - gets the full 2 h from the takeover, not from the dead worker's start
+(`::test_the_grace_of_a_taken_over_run_counts_from_the_takeover`). Because of that, a
+worker that keeps dying and being taken over would never let the grace run out; a
+`running` run of a date before the expected date is therefore 503 regardless, which
+bounds such a loop to about a day (`::test_a_run_taken_over_again_and_again_is_overdue_once_its_date_is_late`).
+
 `ageSeconds` counts from `finished_at`, else `started_at`. It is **not part of
 `/healthz`**: a late run never marks the app unhealthy. An unknown query parameter is a
-400. Proven by `tests/test_billing_status.py` (all eight tests, including a strict
+400. Proven by `tests/test_billing_status.py` (all ten tests, including a strict
 schema with `additionalProperties: false` on every response).
 
 ## Heartbeat and liveness

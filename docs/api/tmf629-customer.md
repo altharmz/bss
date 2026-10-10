@@ -34,7 +34,8 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF629-C
 - `name` is mandatory on create (TMF629's create schema); stored in `customer.name`
   (migration 0002).
 - `status` is ours (a free string in TMF629): `Created` (the default), `Active`,
-  `Inactive`. PATCH may set any of them; no transition rule.
+  `Inactive`. PATCH may set any of them; no transition rule. Any other value is a 422
+  that changes nothing (`::test_customer_status_outside_the_enum_is_refused_on_patch`).
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf629-customer.md`](../../scripts/docs/api-notes/tmf629-customer.md).
 

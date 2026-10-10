@@ -51,6 +51,24 @@ router = APIRouter(prefix=BASE)
 
 LifecycleStatus = Literal["In Design", "Active", "Retired"]
 
+# Every catalog entity's lifecycle only moves forward: In Design -> Active -> Retired, and
+# Retired is final. Repeating the current status is not a transition (a merge patch may
+# repeat values). Ordering refuses an offering that is not Active, so reopening a Retired
+# one would silently make it sellable again; going back to In Design would hide a live
+# one. Specifications and prices follow the same steps, so the catalog has one lifecycle.
+LIFECYCLE_STEPS = {("In Design", "Active"), ("Active", "Retired")}
+
+
+def _check_lifecycle(entity: str, current: str, wanted: str) -> None:
+    if wanted == current or (current, wanted) in LIFECYCLE_STEPS:
+        return
+    if current == "Retired":
+        raise conflict(f"lifecycleStatus: Retired is final; the {entity} cannot change status")
+    raise conflict(
+        f"lifecycleStatus cannot go from {current} to {wanted}: only In Design -> Active -> Retired"
+    )
+
+
 SPEC_ATTRIBUTES = ("name", "description", "lifecycleStatus", "lastUpdate")
 OFFERING_ATTRIBUTES = (
     "name",
@@ -162,8 +180,11 @@ def patch_specification(spec_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONRe
     changes = columns(data)
     with tx() as conn:
         uid = parse_id("productSpecification", spec_id)
-        if catalog.get_product_specification(conn, uid) is None:
+        current = catalog.get_product_specification(conn, uid)
+        if current is None:
             raise not_found("productSpecification", spec_id)
+        if data.lifecycle_status is not None:
+            _check_lifecycle("specification", current["lifecycle_status"], data.lifecycle_status)
         row = catalog.update_product_specification(conn, uid, changes)
     return TmfJSONResponse(specification_body(row))
 
@@ -317,6 +338,8 @@ def patch_price(price_id: str, body: MergePatchBody, tx: Tx, clock: ClockDep) ->
         current = catalog.get_product_offering_price(conn, uid)
         if current is None:
             raise not_found("productOfferingPrice", price_id)
+        if data.lifecycle_status is not None:
+            _check_lifecycle("price", current["lifecycle_status"], data.lifecycle_status)
         if data.valid_for is not None:
             new_range = data.valid_for.to_range()
             if new_range.lower != current["valid_for"].lower:
@@ -353,23 +376,6 @@ class OfferingCode(TmfModel):
     id: str = Field(pattern=r"^[A-Z0-9][A-Z0-9_-]{0,31}$")
     external_identifier_type: Literal["offeringCode"]
     owner: Literal["bss"] = CODE_OWNER
-
-
-# An offering's lifecycle only moves forward: In Design -> Active -> Retired, and Retired
-# is final. Repeating the current status is not a transition (a merge patch may repeat
-# values). Ordering refuses anything not Active, so reopening a Retired offering would
-# silently make it sellable again; going back to In Design would hide a live offering.
-LIFECYCLE_STEPS = {("In Design", "Active"), ("Active", "Retired")}
-
-
-def _check_lifecycle(current: str, wanted: str) -> None:
-    if wanted == current or (current, wanted) in LIFECYCLE_STEPS:
-        return
-    if current == "Retired":
-        raise conflict("lifecycleStatus: Retired is final; the offering cannot change status")
-    raise conflict(
-        f"lifecycleStatus cannot go from {current} to {wanted}: only In Design -> Active -> Retired"
-    )
 
 
 class OfferingCreate(TmfModel):
@@ -435,6 +441,23 @@ def offering_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "@type": "ProductOffering",
         }
     )
+
+
+def _check_offering_period(old: Any, new: Any, now: datetime) -> None:
+    """An offering's validFor decides which start dates new orders may have
+    (offeringNotValid); changing it in the past would rewrite what was orderable then.
+    The start may not move into the past and the end may not be set or moved into the
+    past; repeating the current value is not a change. Billing never reads it, so no
+    change here can leave a product without a price (prices: D-W18, D-W20)."""
+    if new.lower != old.lower and new.lower < now:
+        raise conflict(
+            "validFor.startDateTime cannot be moved into the past; only to the present or"
+            " the future"
+        )
+    if new.upper != old.upper and new.upper is not None and new.upper < now:
+        raise conflict(
+            "validFor.endDateTime cannot be set into the past; only to the present or the future"
+        )
 
 
 def _not_in_the_past(price_id: UUID, start: datetime, now: datetime) -> None:
@@ -556,7 +579,9 @@ def patch_offering(
         if current is None:
             raise not_found("productOffering", offering_id)
         if data.lifecycle_status is not None:
-            _check_lifecycle(current["lifecycle_status"], data.lifecycle_status)
+            _check_lifecycle("offering", current["lifecycle_status"], data.lifecycle_status)
+        if "valid_for" in changes:
+            _check_offering_period(current["valid_for"], changes["valid_for"], clock.now())
         if data.product_offering_price is not None:
             # merge patch replaces the whole array, so a missing entry would be a detach
             wanted = {price_ref.id for price_ref in data.product_offering_price}

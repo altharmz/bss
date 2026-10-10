@@ -26,7 +26,11 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
    origin:*`, CLAUDE.md allows plain pushes, and this session pushed `cloud/docs` with
    `git push -u origin cloud/docs`. `docs/cloud.md` ("The harness in a cloud session")
    is stale.
-3. **`billingAccount.relatedParty[].role` is not checked.** CLAUDE.md's TMF666 mapping
+3. **Fixed 2026-10-10** (branch `cloud/catalog-integrity`): POST requires the one related
+   party to carry `role: "customer"` exactly (missing or other: 422, nothing stored), so
+   the role answered is the stored relation (`app/api/account.py`, `CUSTOMER_ROLE`;
+   `tests/test_api_parties.py::test_billing_account_party_role_must_be_customer`).
+   Original finding: **`billingAccount.relatedParty[].role` is not checked.** CLAUDE.md's TMF666 mapping
    says the related party is "role `customer`"; the code (`app/api/account.py`,
    `RelatedParty.role: str | None`) accepts any role, or none, on POST and always answers
    `role: "customer"`. No test sends another role.
@@ -48,12 +52,24 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
 
 ## Behaviour that is not tested (or not guarded)
 
-7. **Lifecycle of specifications, prices and customers is unguarded.** Only the
+7. **Fixed 2026-10-10** (branch `cloud/catalog-integrity`): specifications and prices
+   follow the offering's forward-only lifecycle (409 otherwise;
+   `tests/test_api_catalog_lifecycle.py`). Customer `status` stays ours
+   (`Created`/`Active`/`Inactive`: TMF629's is a free string with no enum to take values
+   from); a PATCH with any other value is a 422, now locked by
+   `tests/test_api_parties.py::test_customer_status_outside_the_enum_is_refused_on_patch`.
+   Customer transitions stay free. Original finding: **Lifecycle of specifications,
+   prices and customers is unguarded.** Only the
    offering's `lifecycleStatus` is restricted to forward steps; PATCH may set a
    specification's or a price's `lifecycleStatus`, and a customer's `status`, to any value
    (`app/api/catalog.py`, `app/api/customer.py`). Whether that is intended is not written
    down; no test covers it.
-8. **An offering's `validFor` can be changed freely by PATCH** (`app/api/catalog.py`,
+8. **Fixed 2026-10-10** (branch `cloud/catalog-integrity`): PATCH may not move the start
+   into the past, nor set or move the end into the past (409;
+   `tests/test_api_offering_validity.py`). Ending an offering needs no price-gap check:
+   billing never reads its `validFor`, so its live products stay priced
+   (`::test_ending_an_offering_leaves_its_live_products_priced`). Original finding:
+   **An offering's `validFor` can be changed freely by PATCH** (`app/api/catalog.py`,
    `patch_offering`): moved into the past, or ended before live products' dates. It only
    affects new orders (`offeringNotValid`), not billing, but no rule or test covers it.
 9. **`creationDate` (TMF637 product) and `date` (TMF678 ABR) come from the database's
@@ -67,7 +83,12 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
 
 ## Unclear areas and environment notes
 
-- **`billing_run.started_at` on a takeover** is kept (`app/repository/billing.py`,
+- **Fixed 2026-10-10** (branch `cloud/catalog-integrity`): a takeover sets `started_at`
+  to the takeover time, so the 2 h grace counts from it; a running run of a date before
+  the expected date is 503 regardless, so a worker that keeps dying cannot hold 200
+  forever (`tests/test_billing_status.py::test_the_grace_of_a_taken_over_run_counts_from_the_takeover`,
+  `::test_a_run_taken_over_again_and_again_is_overdue_once_its_date_is_late`). Original
+  note: **`billing_run.started_at` on a takeover** is kept (`app/repository/billing.py`,
   `take_over_run`), while a reopen after a failure resets it. So `/billing-status`
   measures a taken-over run's 2 h grace from the original start. Not stated in CLAUDE.md;
   the column comment of migration 0005 says it.
