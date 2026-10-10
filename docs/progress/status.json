@@ -14,9 +14,9 @@
     },
     "ui": {
       "deployed": null,
-      "implemented": 13,
-      "items": 13,
-      "tested": 13
+      "implemented": 17,
+      "items": 17,
+      "tested": 17
     },
     "worker": {
       "deployed": null,
@@ -757,6 +757,42 @@
       "stage": 5,
       "tested": true,
       "title": "Deactivate a product"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.bills",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Bills panel on the subscriber card"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.billDetail",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Bill dialog: charges, payments, history"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.billHold",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Put a bill on hold / release it"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.recordPayment",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Record payment, optionally to chosen bills"
     },
     {
       "area": "ui",

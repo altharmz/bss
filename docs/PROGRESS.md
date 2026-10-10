@@ -12,7 +12,7 @@ commit.
 |---|---|---|---|---|
 | Database | 18 | 18/18 (100%) | n/a | unknown |
 | API | 57 | 57/57 (100%) | n/a | unknown |
-| UI | 13 | 13/13 (100%) | 13/13 (100%) | unknown |
+| UI | 17 | 17/17 (100%) | 17/17 (100%) | unknown |
 | Worker | 12 | 12/12 (100%) | 12/12 (100%) | unknown |
 
 ## Database
@@ -109,6 +109,10 @@ commit.
 | `ui.subscriber.card` | 5 | Subscriber card: account, products, charges, transactions | yes | yes | unknown |
 | `ui.subscriber.addProduct` | 5 | Add product, with first-charge preview | yes | yes | unknown |
 | `ui.subscriber.deactivate` | 5 | Deactivate a product | yes | yes | unknown |
+| `ui.subscriber.bills` | 5 | Bills panel on the subscriber card | yes | yes | unknown |
+| `ui.subscriber.billDetail` | 5 | Bill dialog: charges, payments, history | yes | yes | unknown |
+| `ui.subscriber.billHold` | 5 | Put a bill on hold / release it | yes | yes | unknown |
+| `ui.subscriber.recordPayment` | 5 | Record payment, optionally to chosen bills | yes | yes | unknown |
 | `ui.catalog.list` | 5 | Product catalog | yes | yes | unknown |
 | `ui.catalog.offeringDetail` | 5 | Offering detail dialog | yes | yes | unknown |
 | `ui.catalog.lifecycle` | 5 | Offering lifecycle step (Activate / Retire) | yes | yes | unknown |

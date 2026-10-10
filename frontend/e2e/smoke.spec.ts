@@ -35,6 +35,17 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({
   await olga.click();
   await expect(page.getByRole('heading', { name: /Olga Kuznetsova/ })).toBeVisible();
   await expect(page.getByText('In arrears')).toBeVisible();
+  await expect(page.getByText('Due on bills')).toBeVisible();
+
+  // the seed puts Olga's oldest open bill on hold: its dialog offers the release only.
+  // Read-only: nothing is clicked in it.
+  const held = page.getByRole('row').filter({ hasText: 'onHold' }).first();
+  await held.click();
+  const bill = page.getByRole('dialog', { name: /^Bill BL-[0-9A-F]{8}$/ });
+  await expect(bill.getByText('History')).toBeVisible();
+  await expect(bill.getByRole('button', { name: 'Release' })).toBeVisible();
+  await bill.getByRole('button', { name: 'Close' }).click();
+  await expect(bill).toBeHidden();
 
   // the first charge comes from the backend's dry run. Any offering priced today will do:
   // the local catalog is also edited by hand during manual reviews, so no name is assumed

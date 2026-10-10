@@ -118,6 +118,10 @@ items:
   - {id: ui.subscriber.card, area: ui, stage: 5, title: "Subscriber card: account, products, charges, transactions"}
   - {id: ui.subscriber.addProduct, area: ui, stage: 5, title: "Add product, with first-charge preview"}
   - {id: ui.subscriber.deactivate, area: ui, stage: 5, title: "Deactivate a product"}
+  - {id: ui.subscriber.bills, area: ui, stage: 5, title: "Bills panel on the subscriber card"}
+  - {id: ui.subscriber.billDetail, area: ui, stage: 5, title: "Bill dialog: charges, payments, history"}
+  - {id: ui.subscriber.billHold, area: ui, stage: 5, title: "Put a bill on hold / release it"}
+  - {id: ui.subscriber.recordPayment, area: ui, stage: 5, title: "Record payment, optionally to chosen bills"}
   - {id: ui.catalog.list, area: ui, stage: 5, title: "Product catalog"}
   - {id: ui.catalog.offeringDetail, area: ui, stage: 5, title: "Offering detail dialog"}
   - {id: ui.catalog.lifecycle, area: ui, stage: 5, title: "Offering lifecycle step (Activate / Retire)"}

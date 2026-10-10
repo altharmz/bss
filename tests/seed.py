@@ -230,6 +230,37 @@ def pay(api: Api, world: World, who: str, value: int, method: str) -> None:
     api.post(apidata.PAYMENT, body)
 
 
+BILLS = "/tmf-api/customerBillManagement/v5/customerBill"
+
+
+def open_bills(api: Api, world: World, who: str) -> list[dict]:
+    """The account's bills that still owe something and take payments, oldest first."""
+    bills = api.get(f"{BILLS}?billingAccount.id={world.accounts[who]['id']}&limit=100")
+    found = [b for b in bills if b["state"] in ("sent", "partiallyPaid")]
+    if not found:
+        raise SeedError(f"{who} has no open bill to seed the bill lifecycle with")
+    return found
+
+
+def hold_oldest(api: Api, world: World, who: str) -> None:
+    """A disputed bill: the oldest open one goes on hold (TMF678 PATCH)."""
+    api.patch(f"{BILLS}/{open_bills(api, world, who)[0]['id']}", {"state": "onHold"})
+
+
+def pay_newest(api: Api, world: World, who: str, value: int, method: str) -> None:
+    """A payment lettered to the newest open bill (TMF676 paymentItem), not the oldest."""
+    newest = open_bills(api, world, who)[-1]
+    body = apidata.payment_body(world.accounts[who], value)
+    body["paymentMethod"] = {"name": method}
+    body["paymentItem"] = [
+        {
+            "item": {"id": newest["id"], "@referredType": "CustomerBill"},
+            "amount": {"unit": "RUB", "value": value},
+        }
+    ]
+    api.post(apidata.PAYMENT, body)
+
+
 def events(today: date, start: date) -> dict[date, Callable[[Api, World], None]]:
     """What happens on each day, at 10:00. `start` is day 0 (catalog and accounts)."""
 
@@ -273,6 +304,10 @@ def events(today: date, start: date) -> dict[date, Callable[[Api, World], None]]
     on(today, lambda a, w: add(a, w, "elena-mob", "elena", "MOB-S", today + timedelta(days=5)))
     on(today, lambda a, w: add(a, w, "elena-net", "elena", "NET-100", today))
     on(today, lambda a, w: delete(a, w, "anna-mob", "anna", today + timedelta(days=12)))
+    # the bill lifecycle: Olga (who never pays) disputes her oldest bill; Sergey pays 100
+    # towards his newest bill rather than the oldest
+    on(today, lambda a, w: hold_oldest(a, w, "olga"))
+    on(today, lambda a, w: pay_newest(a, w, "sergey", 100, "Bank card"))
 
     def run_all(steps: list[Callable[[Api, World], None]]) -> Callable[[Api, World], None]:
         def run(api: Api, world: World) -> None:

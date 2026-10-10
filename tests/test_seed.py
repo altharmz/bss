@@ -69,6 +69,18 @@ def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
     }
     assert types == {"charge", "refund", "payment"}
 
+    # the bill lifecycle: bills in every payment state, one on hold, a credit note, and
+    # both automatic and explicit allocations
+    bill_states = {
+        r[0] for r in db_conn.execute("SELECT DISTINCT state FROM customer_bill").fetchall()
+    }
+    assert {"sent", "partiallyPaid", "settled", "onHold"} <= bill_states, bill_states
+    assert db_conn.execute(
+        "SELECT count(*) FROM customer_bill WHERE state IN ('new', 'validated')"
+    ).fetchone() == (0,)
+    kinds = {r[0] for r in db_conn.execute("SELECT DISTINCT kind FROM bill_allocation").fetchall()}
+    assert kinds == {"automatic", "explicit"}
+
     # a second run is a no-op
     assert seeding.seed(api, api.clock, TODAY) is False
     assert counts(db_conn) == before

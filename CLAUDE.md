@@ -953,8 +953,16 @@ Design and decisions: **`docs/bill-lifecycle-design.md`**, section 6 (decided
 2026-10-10: option C, payment term 30 days configurable, credit notes pay older open
 bills, overdue is display only, a Record payment dialog). Four slices: 1. schema +
 settlement core (`cloud/bill-settlement-core`), 2. worker (`cloud/bill-settlement-worker`,
-stacked on 1), 3. API (`cloud/bill-settlement-api`, stacked on 2), 4. UI + seed.
-**Slices 1-3 are built.** Slice 3: payments settle at once and take explicit
+stacked on 1), 3. API (`cloud/bill-settlement-api`, stacked on 2), 4. UI + seed
+(`cloud/bill-settlement-ui`, stacked on 3). **All four slices are built** (none merged or
+deployed yet). Slice 4: the subscriber card's Bills panel, bill dialog with hold/release,
+Record payment with optional lettering, "Due on bills" / "Unused credit" KPIs
+(`screens/Bills.tsx`, details in `docs/ui.md`); TMF678 types are generated now
+(`gen-types.mjs`); several exact amounts in one body via `jsonWithAmounts`; the seed puts
+Olga's oldest bill on hold and letters a Sergey payment to his newest bill
+(`test_seed.py` asserts every state and both allocation kinds); `test_ui_requests.py`
+replays the payment and PATCH bodies; the e2e opens the held bill (read-only). Negative
+proofs: payment amount as a float, prefill newest first. Slice 3: payments settle at once and take explicit
 `paymentItem`s (see "TMF676 (v4) mapping"), bills carry remainingAmount, paymentDueDate,
 appliedPayment, billNo, runType, category and are held/released by PATCH (see "TMF637
 and TMF678 mapping"), and two internal endpoints (settlement summary, bill detail; see

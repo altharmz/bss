@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 import { expectUi } from '../test/expectUi';
-import { accountBody } from '../test/fixtures';
+import { accountBody, billsUrl, NO_SETTLEMENT } from '../test/fixtures';
 
 const A = 'aaaa1111-0000-4000-8000-0000000000a1';
 const C = 'cccc2222-0000-4000-8000-0000000000c2';
@@ -154,6 +154,8 @@ function backend(routes: Record<string, Handler> = {}, account = ACCOUNT) {
     [`GET ${INTERNAL}/products`]: () => json(PRODUCTS, { total: PRODUCTS.length }),
     [`GET ${INTERNAL}/charges?limit=20`]: () => json(CHARGES, { total: 2 }),
     [`GET ${INTERNAL}/transactions?limit=20`]: () => json(TRANSACTIONS, { total: 3 }),
+    [`GET ${INTERNAL}/settlement`]: () => json(NO_SETTLEMENT),
+    [billsUrl(A)]: () => json([], { total: 0 }),
     ...routes,
   });
 }

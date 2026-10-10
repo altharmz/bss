@@ -4,13 +4,15 @@
 // silently blank cell.
 
 import { toCents } from '../format/money';
-import { addDays, zonedDateTime } from '../format/dates';
+import { addDays, businessDate, zonedDateTime } from '../format/dates';
 import {
   AMOUNT,
+  amountSlot,
   getAll,
   getJson,
   getPage,
   jsonWithAmount,
+  jsonWithAmounts,
   patchJson,
   postJson,
   request,
@@ -22,6 +24,7 @@ import type { components as T622 } from './generated/tmf622';
 import type { components as T629 } from './generated/tmf629';
 import type { components as T637 } from './generated/tmf637';
 import type { components as T666 } from './generated/tmf666';
+import type { components as T678 } from './generated/tmf678';
 
 export const PATHS = {
   accounts: '/tmf-api/accountManagement/v5/billingAccount',
@@ -451,6 +454,101 @@ export async function orderDelete(accountId: string, productId: string): Promise
     ],
   });
   return outcome(order);
+}
+
+// --- bills and payments (bill lifecycle, docs/bill-lifecycle-design.md section 6) ---
+
+export const BILLS = '/tmf-api/customerBillManagement/v5/customerBill';
+export const PAYMENTS = '/tmf-api/paymentManagement/v4/payment';
+
+export type BillState = T678['schemas']['CustomerBillStateType'];
+export type AccountSettlement = Internal['schemas']['AccountSettlement'];
+export type BillDetail = Internal['schemas']['BillDetail'];
+
+export interface Bill {
+  id: string;
+  billNo: string;
+  billDate: string; // business date
+  periodEnd: string; // business date, exclusive
+  dueDate: string; // business date
+  amountDueCents: number;
+  remainingCents: number;
+  state: BillState;
+  creditNote: boolean;
+}
+
+export function toBill(body: T678['schemas']['CustomerBill'], timeZone: string): Bill {
+  return {
+    id: need(body.id, 'id'),
+    billNo: need(body.billNo, 'billNo'),
+    billDate: businessDate(need(body.billDate, 'billDate'), timeZone),
+    periodEnd: businessDate(need(body.billingPeriod?.endDateTime, 'billingPeriod'), timeZone),
+    dueDate: businessDate(need(body.paymentDueDate, 'paymentDueDate'), timeZone),
+    amountDueCents: toCents(need(body.amountDue?.value, 'amountDue')),
+    remainingCents: toCents(need(body.remainingAmount?.value, 'remainingAmount')),
+    state: need(body.state, 'state'),
+    creditNote: body.category === 'creditNote',
+  };
+}
+
+/** The account's bills, newest first. */
+export async function loadBills(
+  accountId: string,
+  timeZone: string,
+  signal: AbortSignal,
+): Promise<Bill[]> {
+  const bodies = await getAll<T678['schemas']['CustomerBill']>(
+    `${BILLS}?billingAccount.id=${accountId}`,
+    signal,
+  );
+  return bodies
+    .map((b) => toBill(b, timeZone))
+    .sort((a, b) => b.billDate.localeCompare(a.billDate));
+}
+
+export function loadSettlement(accountId: string, signal: AbortSignal): Promise<AccountSettlement> {
+  return getJson<AccountSettlement>(`${PATHS.internal}/${accountId}/settlement`, signal);
+}
+
+export function loadBillDetail(billId: string, signal: AbortSignal): Promise<BillDetail> {
+  return getJson<BillDetail>(`/internal/v1/customerBill/${billId}`, signal);
+}
+
+/** Hold or release a bill: TMF678 PATCH of its state only. The backend decides whether
+ * the change is allowed (the dialog offers only BillDetail.allowedStates). */
+export async function setBillState(billId: string, state: BillState): Promise<void> {
+  await patchJson(`${BILLS}/${billId}`, { state });
+}
+
+export interface PaymentForm {
+  amount: string; // canonical decimal string
+  currency: string;
+  method: string; // stored as the payment method's name
+  items: { billId: string; amount: string }[]; // explicit lettering; empty = oldest first
+}
+
+/** TMF676 POST /payment with exact amount tokens. Returns how many bills it paid now. */
+export async function recordPayment(accountId: string, form: PaymentForm): Promise<number> {
+  const body = {
+    '@type': 'Payment',
+    account: { id: accountId, '@referredType': 'BillingAccount' },
+    totalAmount: { unit: form.currency, value: amountSlot(0) },
+    paymentMethod: { name: form.method },
+    ...(form.items.length === 0
+      ? {}
+      : {
+          paymentItem: form.items.map((item, i) => ({
+            '@type': 'PaymentItem',
+            item: { id: item.billId, '@referredType': 'CustomerBill' },
+            amount: { unit: form.currency, value: amountSlot(i + 1) },
+          })),
+        }),
+  };
+  const created = await postJson<{ paymentItem?: unknown[] }>(
+    PAYMENTS,
+    jsonWithAmounts(body, [form.amount, ...form.items.map((i) => i.amount)]),
+  );
+  return created.paymentItem?.length ?? 0;
 }
 
 // --- billing runs (stage 4): the worker bills; the UI reads runs and queues requests ---

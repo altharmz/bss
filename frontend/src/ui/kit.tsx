@@ -95,6 +95,13 @@ const TONES: Record<string, Tone> = {
   // a billing run's per-account outcome
   ok: 'active',
   blocked: 'inactive',
+  // customer bill (TMF678): paid green, owed amber, held red, not issued yet blue
+  settled: 'active',
+  partiallyPaid: 'inactive',
+  sent: 'inactive',
+  onHold: 'failed',
+  new: 'design',
+  validated: 'design',
 };
 
 export function toneOf(status: string): Tone {
