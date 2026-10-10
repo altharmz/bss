@@ -14,9 +14,9 @@
     },
     "ui": {
       "deployed": null,
-      "implemented": 17,
-      "items": 17,
-      "tested": 17
+      "implemented": 19,
+      "items": 19,
+      "tested": 19
     },
     "worker": {
       "deployed": null,
@@ -730,6 +730,24 @@
       "stage": 5,
       "tested": true,
       "title": "Subscribers list"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscribers.new",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "New subscriber: party, customer, billing account"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.edit",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Edit subscriber: names, statuses, credit limit"
     },
     {
       "area": "ui",

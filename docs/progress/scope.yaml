@@ -115,6 +115,8 @@ items:
   # ---------------- ui: screens and major actions ----------------
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
   - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
+  - {id: ui.subscribers.new, area: ui, stage: 5, title: "New subscriber: party, customer, billing account"}
+  - {id: ui.subscriber.edit, area: ui, stage: 5, title: "Edit subscriber: names, statuses, credit limit"}
   - {id: ui.subscriber.card, area: ui, stage: 5, title: "Subscriber card: account, products, charges, transactions"}
   - {id: ui.subscriber.addProduct, area: ui, stage: 5, title: "Add product, with first-charge preview"}
   - {id: ui.subscriber.deactivate, area: ui, stage: 5, title: "Deactivate a product"}

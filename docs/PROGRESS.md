@@ -12,7 +12,7 @@ commit.
 |---|---|---|---|---|
 | Database | 18 | 18/18 (100%) | n/a | unknown |
 | API | 57 | 57/57 (100%) | n/a | unknown |
-| UI | 17 | 17/17 (100%) | 17/17 (100%) | unknown |
+| UI | 19 | 19/19 (100%) | 19/19 (100%) | unknown |
 | Worker | 12 | 12/12 (100%) | 12/12 (100%) | unknown |
 
 ## Database
@@ -106,6 +106,8 @@ commit.
 |---|---|---|---|---|---|
 | `ui.shell` | 5 | Shell: sidebar, top bar with business date and zone | yes | yes | unknown |
 | `ui.subscribers.list` | 5 | Subscribers list | yes | yes | unknown |
+| `ui.subscribers.new` | 5 | New subscriber: party, customer, billing account | yes | yes | unknown |
+| `ui.subscriber.edit` | 5 | Edit subscriber: names, statuses, credit limit | yes | yes | unknown |
 | `ui.subscriber.card` | 5 | Subscriber card: account, products, charges, transactions | yes | yes | unknown |
 | `ui.subscriber.addProduct` | 5 | Add product, with first-charge preview | yes | yes | unknown |
 | `ui.subscriber.deactivate` | 5 | Deactivate a product | yes | yes | unknown |

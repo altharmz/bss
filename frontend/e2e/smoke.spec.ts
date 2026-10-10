@@ -28,6 +28,12 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({
   await page.goto('/');
   await expect(page).toHaveURL(/\/subscribers$/);
   await expect(page.getByRole('heading', { name: 'Subscribers' })).toBeVisible();
+  // New subscriber opens and cancels (read-only: nothing is created)
+  await page.getByRole('button', { name: '+ New subscriber' }).click();
+  const create = page.getByRole('dialog', { name: 'New subscriber' });
+  await expect(create.getByText('Given name')).toBeVisible();
+  await create.getByRole('button', { name: 'Cancel' }).click();
+  await expect(create).toBeHidden();
   await expect(page.getByRole('banner').getByText(context.businessDate)).toBeVisible();
 
   const olga = page.getByRole('row').filter({ hasText: 'Olga Kuznetsova' });
@@ -46,6 +52,13 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({
   await expect(bill.getByRole('button', { name: 'Release' })).toBeVisible();
   await bill.getByRole('button', { name: 'Close' }).click();
   await expect(bill).toBeHidden();
+
+  // Edit loads the subscriber's party, customer and account; cancelled, nothing is saved
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit subscriber' });
+  await expect(edit.getByLabel('Account name')).not.toHaveValue(''); // loaded, any name
+  await edit.getByRole('button', { name: 'Cancel' }).click();
+  await expect(edit).toBeHidden();
 
   // the first charge comes from the backend's dry run. Any offering priced today will do:
   // the local catalog is also edited by hand during manual reviews, so no name is assumed

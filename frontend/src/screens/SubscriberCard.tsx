@@ -24,6 +24,7 @@ import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
 import { BillDialog, BillsPanel, RecordPaymentModal, useBills } from './Bills';
+import { EditSubscriberModal } from './SubscriberForms';
 import './screens.css';
 
 // Screen 2. Everything about one billing account. Products change only through TMF622
@@ -114,6 +115,7 @@ function Card({
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState(false);
   const [openBill, setOpenBill] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const customerStatus = useResource(`customer:${account.customerId}:${version}`, (signal) =>
     loadCustomerStatus(account.customerId, signal),
   );
@@ -158,6 +160,7 @@ function Card({
             </div>
           </div>
           <div className="bss-card-action">
+            <Button onClick={() => setEditing(true)}>Edit</Button>{' '}
             <Button onClick={() => setPaying(true)} disabled={bills.status !== 'ok'}>
               Record payment
             </Button>{' '}
@@ -226,6 +229,17 @@ function Card({
           onClose={() => setPaying(false)}
           onRecorded={(message) => {
             setPaying(false);
+            toast(message);
+            reload();
+          }}
+        />
+      )}
+      {editing && (
+        <EditSubscriberModal
+          account={account}
+          onClose={() => setEditing(false)}
+          onSaved={(message) => {
+            setEditing(false);
             toast(message);
             reload();
           }}

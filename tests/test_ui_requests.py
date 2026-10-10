@@ -275,3 +275,72 @@ def test_hold_and_release_as_the_ui_sends_them(api, db_conn):
     assert allowed == ["sent"]
     released = api.patch(f"{BILL}/{dec['id']}", {"state": allowed[0]})
     assert released.status_code == 200 and released.json()["state"] == "sent"
+
+
+# --- subscribers (frontend/src/screens/Subscribers.test.tsx, SubscriberCard.test.tsx) ---
+
+PARTY = "/tmf-api/partyManagement/v5"
+CUSTOMERS = "/tmf-api/customerManagement/v5/customer"
+ACCOUNTS = "/tmf-api/accountManagement/v5/billingAccount"
+
+
+def create_subscriber_as_the_ui_does(api, credit_limit: str | None = "1500.50") -> dict:
+    """createSubscriber(): party, customer (Active, engaging it), account."""
+    party = api.post_raw(
+        f"{PARTY}/individual",
+        '{"@type":"Individual","givenName":"Olga","familyName":"Kuznetsova"}',
+    )
+    assert party.status_code == 201, party.text
+    customer = api.post_raw(
+        CUSTOMERS,
+        '{"@type":"Customer","name":"Olga Kuznetsova","status":"Active",'
+        f'"engagedParty":{{"id":"{party.json()["id"]}","@type":"PartyRef",'
+        '"@referredType":"Individual"}}',
+    )
+    assert customer.status_code == 201, customer.text
+    limit = (
+        "" if credit_limit is None else f',"creditLimit":{{"unit":"RUB","value":{credit_limit}}}'
+    )
+    account = api.post_raw(
+        ACCOUNTS,
+        '{"@type":"BssBillingAccount","name":"Olga Kuznetsova main","billCycleDay":15,'
+        '"currency":"RUB","relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef",'
+        f'"role":"customer","partyOrPartyRole":{{"id":"{customer.json()["id"]}",'
+        '"name":"Olga Kuznetsova","@type":"PartyRoleRef","@referredType":"Customer"}}]'
+        f"{limit}}}",
+    )
+    assert account.status_code == 201, account.text
+    return {"party": party.json(), "customer": customer.json(), "account": account.json()}
+
+
+def test_new_subscriber_as_the_ui_creates_it(api):
+    made = create_subscriber_as_the_ui_does(api)
+    account = decimals(api.get(made["account"]["href"]))
+    assert account["creditLimit"] == {"unit": "RUB", "value": Decimal("1500.50")}
+    assert (account["billCycleDay"], account["state"]) == (15, "Active")
+    assert account["relatedParty"][0]["partyOrPartyRole"]["name"] == "Olga Kuznetsova"
+    assert made["customer"]["status"] == "Active"
+    assert made["customer"]["engagedParty"]["@referredType"] == "Individual"
+    org = api.post_raw(f"{PARTY}/organization", '{"@type":"Organization","name":"Vasilek LLC"}')
+    assert org.status_code == 201, org.text
+
+
+def test_edit_subscriber_as_the_ui_patches_it(api):
+    """updateSubscriber(): merge patches of only the changed attributes; the credit limit as
+    an exact token or null."""
+    made = create_subscriber_as_the_ui_does(api)
+    party = api.patch(made["party"]["href"], {"familyName": "Kuznetsova-Petrova"})
+    assert party.status_code == 200 and party.json()["familyName"] == "Kuznetsova-Petrova"
+    customer = api.patch(made["customer"]["href"], {"status": "Inactive"})
+    assert customer.status_code == 200 and customer.json()["status"] == "Inactive"
+    exact = api.request(
+        "PATCH",
+        made["account"]["href"],
+        content='{"creditLimit":{"unit":"RUB","value":2000.10}}',
+        headers={"Content-Type": "application/merge-patch+json"},
+    )
+    assert exact.status_code == 200, exact.text
+    assert decimals(exact)["creditLimit"]["value"] == Decimal("2000.10")
+    removed = api.patch(made["account"]["href"], {"state": "Suspended", "creditLimit": None})
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["state"] == "Suspended" and "creditLimit" not in removed.json()

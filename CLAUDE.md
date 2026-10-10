@@ -1088,11 +1088,17 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
   included) and one product list (`status=active`), grouped client-side, page by page.
 - "Registered" is replaced by "Cycle day" (no creation date in TMF629/666, and
   `created_at` is the database's `now()`, not the injected clock).
-- **Subscriber create and modify** (requested 2026-10-10; to be built after bill
-  lifecycle slices 2-4): through the existing TMF POST/PATCH of individual |
-  organization, customer and billingAccount. **There is no delete subscriber operation**
-  (confirmed by the human, 2026-10-10): accounts carry products, bills and payments, and
-  nothing is ever deleted.
+- **Subscriber create and modify** (`screens/SubscriberForms.tsx`, `cloud/subscriber-edit`;
+  details in `docs/ui.md`), through the existing TMF routes - no backend change. **There
+  is no delete subscriber operation** (confirmed by the human, 2026-10-10): accounts carry
+  products, bills and payments; an account can be Closed. New subscriber = party, then
+  customer (status Active), then billing account; Edit = merge patches of only what
+  changed, party -> customer -> account. A failed step names what already exists or was
+  already saved; nothing is undone. Cycle day and currency stay fixed. Bodies pinned on
+  both sides (component tests, `test_ui_requests.py`); the e2e opens both dialogs
+  read-only. Negative proofs: every account attribute always patched, the customer
+  created without `Active`. The card header carries Edit, Record payment (bill
+  lifecycle slice 4) and Add product side by side.
 - Credit limit: shown, and the over-limit warning in Add product, informational only.
 - Offering code: `externalIdentifier` (above). Subscriber no. and `BA-xxxxxxxx` are
   display ids: the first 8 hex digits of the UUID, upper case.

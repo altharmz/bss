@@ -157,8 +157,120 @@ describe('subscribers list', () => {
     backend(() => json([], { total: 0 }));
     await open();
     expect(await screen.findByText('No subscribers yet')).toBeTruthy();
-    expect(
-      screen.getByText('Subscribers appear after registration via CRM or import.'),
-    ).toBeTruthy();
+    expect(screen.getByText('Create one with + New subscriber.')).toBeTruthy();
+  });
+});
+
+// The bodies asserted here are replayed against the real API by tests/test_ui_requests.py.
+const PARTY = '/tmf-api/partyManagement/v5';
+const CUSTOMERS = '/tmf-api/customerManagement/v5/customer';
+const NEW_PARTY = 'dddd4444-0000-4000-8000-000000000004';
+const NEW_CUSTOMER = 'eeee5555-0000-4000-8000-000000000005';
+const NEW_ACCOUNT = 'ffff6666-0000-4000-8000-0000000000a6';
+
+function bodies(fetchMock: ReturnType<typeof stubFetch>['fetchMock']) {
+  return fetchMock.mock.calls
+    .filter(([, init]) => init?.method === 'POST')
+    .map(([url, init]) => [String(url), String(init?.body)]);
+}
+
+describe('new subscriber', () => {
+  it('creates the party, the customer and the account, then opens the card', async () => {
+    const { fetchMock } = backend(undefined, {
+      [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),
+      [`POST ${CUSTOMERS}`]: () => json({ id: NEW_CUSTOMER }, { status: 201 }),
+      [`POST ${ACCOUNTS}`]: () => json({ id: NEW_ACCOUNT }, { status: 201 }),
+      [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: pending, // the card it opens
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: '+ New subscriber' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    expectUi('ui.subscribers.new');
+    const create = within(dialog).getByRole('button', { name: 'Create subscriber' });
+    expect((create as HTMLButtonElement).disabled).toBe(true); // no name yet
+    fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
+    fireEvent.change(within(dialog).getByLabelText('Family name'), {
+      target: { value: ' Kuznetsova ' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Billing cycle day (1-28)'), {
+      target: { value: '29' },
+    });
+    expect(within(dialog).getByText('The cycle day is 1 to 28.')).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText('Billing cycle day (1-28)'), {
+      target: { value: '15' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Credit limit, RUB (optional)'), {
+      target: { value: '1,500.5' },
+    });
+    fireEvent.click(create);
+
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Olga Kuznetsova created',
+    );
+    expect(window.location.pathname).toBe(`/subscribers/${NEW_ACCOUNT}`);
+    expect(bodies(fetchMock)).toEqual([
+      [
+        `${PARTY}/individual`,
+        '{"@type":"Individual","givenName":"Olga","familyName":"Kuznetsova"}',
+      ],
+      [
+        CUSTOMERS,
+        '{"@type":"Customer","name":"Olga Kuznetsova","status":"Active",' +
+          `"engagedParty":{"id":"${NEW_PARTY}","@type":"PartyRef","@referredType":"Individual"}}`,
+      ],
+      [
+        ACCOUNTS,
+        '{"@type":"BssBillingAccount","name":"Olga Kuznetsova main","billCycleDay":15,' +
+          '"currency":"RUB","relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef",' +
+          `"role":"customer","partyOrPartyRole":{"id":"${NEW_CUSTOMER}",` +
+          '"name":"Olga Kuznetsova","@type":"PartyRoleRef","@referredType":"Customer"}}],' +
+          '"creditLimit":{"unit":"RUB","value":1500.50}}',
+      ],
+    ]);
+  });
+
+  it('creates an organization without a credit limit', async () => {
+    const { fetchMock } = backend(undefined, {
+      [`POST ${PARTY}/organization`]: () => json({ id: NEW_PARTY }, { status: 201 }),
+      [`POST ${CUSTOMERS}`]: () => json({ id: NEW_CUSTOMER }, { status: 201 }),
+      [`POST ${ACCOUNTS}`]: () => json({ id: NEW_ACCOUNT }, { status: 201 }),
+      [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: pending,
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: '+ New subscriber' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Organization' }));
+    fireEvent.change(within(dialog).getByLabelText('Organization name'), {
+      target: { value: 'Vasilek LLC' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Account name'), { target: { value: 'HQ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
+    await screen.findByRole('status');
+    const [party, , account] = bodies(fetchMock);
+    expect(party).toEqual([
+      `${PARTY}/organization`,
+      '{"@type":"Organization","name":"Vasilek LLC"}',
+    ]);
+    expect(JSON.parse(account?.[1] ?? '{}')).toMatchObject({ name: 'HQ', billCycleDay: 1 });
+    expect(account?.[1]).not.toContain('creditLimit');
+  });
+
+  it('says what was already created when a later step fails', async () => {
+    backend(undefined, {
+      [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),
+      [`POST ${CUSTOMERS}`]: () => json({ id: NEW_CUSTOMER }, { status: 201 }),
+      [`POST ${ACCOUNTS}`]: () => tmfError(422, 'Unprocessable Entity'),
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: '+ New subscriber' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
+    fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain('Creating the billing account failed');
+    expect(alert.textContent).toContain('Already created: individual Olga K, customer Olga K.');
+    expect(window.location.pathname).toBe('/subscribers');
   });
 });

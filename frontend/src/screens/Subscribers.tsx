@@ -6,9 +6,10 @@ import { hrefOf, useRouter } from '../app/router';
 import { matchesShortId, shortId } from '../format/ids';
 import { formatInt } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { PageTitle, Panel, Pill, Segmented, TextInput } from '../ui/kit';
+import { Button, PageTitle, Panel, Pill, Segmented, TextInput, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
+import { NewSubscriberModal } from './SubscriberForms';
 import './screens.css';
 
 // Screen 1. A row is a billing account (D1): a customer with two accounts is two rows.
@@ -44,6 +45,8 @@ export function SubscribersScreen() {
   const [query, setQuery] = useState('');
   const [state, setState] = useState<StateFilter>('All');
   const subscribers = useResource('subscribers', loadSubscribers);
+  const [creating, setCreating] = useState(false);
+  const toast = useToast();
 
   const accounts = subscribers.status === 'ok' ? subscribers.data.accounts : [];
   const countOf = (filter: StateFilter) =>
@@ -56,10 +59,25 @@ export function SubscribersScreen() {
 
   return (
     <div className="bss-screen" data-ui="ui.subscribers.list">
-      <PageTitle
-        title="Subscribers"
-        count={subscribers.status === 'ok' ? formatInt(accounts.length) : undefined}
-      />
+      <div className="bss-title-row">
+        <PageTitle
+          title="Subscribers"
+          count={subscribers.status === 'ok' ? formatInt(accounts.length) : undefined}
+        />
+        <Button variant="primary" onClick={() => setCreating(true)}>
+          + New subscriber
+        </Button>
+      </div>
+      {creating && (
+        <NewSubscriberModal
+          onClose={() => setCreating(false)}
+          onCreated={(accountId, name) => {
+            setCreating(false);
+            toast(`${name} created`);
+            navigate(hrefOf({ name: 'subscriber', accountId }));
+          }}
+        />
+      )}
       <div className="bss-toolbar">
         <TextInput
           width={340}
@@ -90,7 +108,7 @@ export function SubscribersScreen() {
           errorTitle="Failed to load subscribers"
           empty={{
             title: 'No subscribers yet',
-            text: 'Subscribers appear after registration via CRM or import.',
+            text: 'Create one with + New subscriber.',
           }}
           total={(data) => data.accounts.length}
           rows={(data) =>
