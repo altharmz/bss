@@ -25,7 +25,7 @@ class MissingPrice(BillingError):
 
 
 class InconsistentState(BillingError):
-    """Stored ABRs or bills contradict the billing rules (see CLAUDE.md)."""
+    """Stored ABRs or bills contradict the billing rules (docs/decisions/billing-core.md)."""
 
 
 @dataclass(frozen=True)

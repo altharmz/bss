@@ -1,7 +1,7 @@
 # Every package of the dev image (runtime + tooling), frozen: pip freeze of the dev image
 # whose make lint && make test passed on 2026-10-03. Used as `pip install -r
-# requirements-dev.txt -c constraints-dev.txt`. Regenerate deliberately - see CLAUDE.md,
-# "Dependencies".
+# requirements-dev.txt -c constraints-dev.txt`. Regenerate deliberately - see
+# docs/decisions/infra.md, "Dependencies are pinned".
 alembic==1.20.0
 annotated-doc==0.0.5
 annotated-types==0.8.0

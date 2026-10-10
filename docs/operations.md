@@ -1,8 +1,8 @@
 # Operations
 
 How to develop, test, deploy and watch bss. This is a summary with links; the binding
-rules are in [CLAUDE.md](../CLAUDE.md) (sections named in brackets below), which wins
-where the two differ.
+rules are in [CLAUDE.md](../CLAUDE.md) and [decisions/](decisions/README.md) (sections
+named in brackets below), which win where the two differ.
 
 ## Local development (WSL2)
 
@@ -30,8 +30,8 @@ targets; do not invent commands** (CLAUDE.md, "Commands").
 | `make spec-verify-upstream` | re-fetch the spec blob SHAs from GitHub and compare with `spec/README.md` (network) |
 
 The local PostgreSQL runs with `fsync`, `full_page_writes` and `synchronous_commit` off
-for test speed - not crash-safe; recover with `make clean && make up` (CLAUDE.md,
-"Conventions"). Node never runs on the host (CLAUDE.md, "Frontend conventions").
+for test speed - not crash-safe; recover with `make clean && make up` ([decisions/infra.md](decisions/infra.md#conventions),
+"Conventions"). Node never runs on the host ([decisions/frontend.md](decisions/frontend.md#frontend-conventions)).
 
 ## Tests
 
@@ -44,6 +44,7 @@ for test speed - not crash-safe; recover with `make clean && make up` (CLAUDE.md
 | UI lint | `make web-lint` | tsc, eslint, prettier |
 | UI end-to-end | `make web-e2e` | Playwright on the built UI against the seeded local stack, read-only |
 | Generated docs | `make docs-check` | docs/api and docs/db match the code |
+| Decision records | `make decisions-check` | every decision and rule of the old CLAUDE.md is still in CLAUDE.md or [decisions/](decisions/README.md); their links resolve |
 
 ### In a cloud session
 
@@ -61,16 +62,16 @@ unverified until a local `make check` passes** (`docs/cloud.md`).
   unless the working tree is exactly what is committed, then `make lint` and `make test`
   (plus `make web-lint` and `make web-test` when `frontend/` or `spec/` is staged); keeps a
   full log of every run under `.git/pre-commit-logs/`. Skip deliberately with `git commit
-  --no-verify` (CLAUDE.md, "Pre-commit hook").
+  --no-verify` ([decisions/harness.md](decisions/harness.md#pre-commit-hook)).
 - **Pre-push** (`scripts/pre-push.sh`): scans only the commits being pushed and refuses a
   bcrypt hash, an added `.env*` path (other than `.env.example`), a branch deletion or a
-  non-fast-forward. Never bypassed (CLAUDE.md, "Pre-push hook").
+  non-fast-forward. Never bypassed ([decisions/harness.md](decisions/harness.md#pre-push-hook)).
 
 ## Deploy
 
 `make deploy` runs `scripts/deploy.sh`, the **only** script allowed to change anything on
 the VPS. `make verify` is the gate: `make check` (`lint`, `test` with hypothesis `ci`,
-`docs-check`, `web-lint`, `web-test`, `web-e2e`), then the deploy - it exits non-zero and
+`docs-check`, `decisions-check`, `web-lint`, `web-test`, `web-e2e`), then the deploy - it exits non-zero and
 prints remote logs when anything fails. `make check` alone is the same gate without the
 deploy (e.g. to verify a cloud branch before merging it).
 
@@ -112,7 +113,7 @@ CLAUDE.md, "Hard constraints". Never run `docker build` on the VPS.
 ## Backups
 
 **Not part of this repository.** vps-infra dumps every database on the host, this one
-included, by cron; bss has no backup or restore tooling (CLAUDE.md, "Shared
+included, by cron; bss has no backup or restore tooling ([decisions/infra.md](decisions/infra.md#shared-infrastructure-vps-infra), "Shared
 infrastructure"). Make sure a fresh dump exists before any migration that alters or
 removes data. A restore drill from a cron-made dump is an open check (CLAUDE.md, "Open
 checks"). There is **no `/backup-status` endpoint** in bss; backup monitoring, if any,
@@ -136,7 +137,7 @@ repository).
 ## The agent harness
 
 Claude Code sessions on this repository run with guard rails against **agent mistakes,
-not a hostile agent** (CLAUDE.md, "Agent guardrails: what they are for"):
+not a hostile agent** ([decisions/harness.md](decisions/harness.md#agent-guardrails-what-they-are-for)):
 
 - `.claude/settings.json`: `allow` (make, docker compose, read/edit of `app/`, `tests/`,
   `frontend/`, plain pushes), `ask` (edits of `.claude/**`, compose files, `Makefile`,

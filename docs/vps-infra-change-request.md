@@ -84,8 +84,8 @@ Notes:
   precisely because of this.
 - **`header_up X-Remote-User {http.auth.user.id}`** sets the header (replacing a
   client-sent one); `header_up -X-Remote-User` on the open routes removes it. The app
-  shows it as the operator name only; nothing is authorised by it (CLAUDE.md, "Trust in
-  X-Remote-User").
+  shows it as the operator name only; nothing is authorised by it (docs/decisions/internal-api.md,
+  "Trust in X-Remote-User").
 - **Caching**: `index.html` is `no-cache` (a new deploy is picked up at once); the hashed
   `/assets/*` are immutable.
 - `/healthz` stays open for the external monitor, as today. `/billing-status` becomes the

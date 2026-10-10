@@ -230,7 +230,7 @@ matches only those three keys). Beyond them:
 | **Worker liveness heartbeat** (`/tmp/worker-alive` after every account; the prod healthcheck depends on it) - no worker item, no capability marker | `app/worker/` (`DateRun(on_account=...)`) | yes, proven by run: `test_worker_heartbeat.py` (4) |
 | **Worker start-up refusals** (`BILLING_RUN_AT` window, `WORKER_FAKE_NOW` only with `APP_ENV=test`, `APP_ENV` unset = prod) | `app/worker/__main__`, `app/config.py` | yes, proven by run: `test_worker_runtime.py` (5), parts of `test_worker_process.py` without markers |
 | **Demo seed** (`make seed`) | `tests/seed.py` | yes, proven by run: `test_seed.py` (4) |
-| FastAPI's default `/docs`, `/redoc`, `/openapi.json`, `/docs/oauth2-redirect` - not in `app.openapi()`, so invisible to the tracker; reachable behind Caddy's basic auth | `app/main.py` (FastAPI defaults) | not tested; CLAUDE.md treats `/docs` as deliberate (no response schemas) |
+| FastAPI's default `/docs`, `/redoc`, `/openapi.json`, `/docs/oauth2-redirect` - not in `app.openapi()`, so invisible to the tracker; reachable behind Caddy's basic auth | `app/main.py` (FastAPI defaults) | not tested; CLAUDE.md (now [decisions/tmf-api.md](decisions/tmf-api.md)) treats `/docs` as deliberate (no response schemas) |
 
 ## Anything in scope.yaml that looks stale
 
@@ -239,8 +239,8 @@ No item looks stale: every planned item exists in the code except the three
 describe real code (`GET /` exists; `ui.notFound` has no marker, so it is a pre-emptive
 exclusion, harmless). Nearby text that is out of date (not scope.yaml, not changed here):
 
-- CLAUDE.md, "Progress tracker": "Tested ... not measured yet; deployed ... Both come
+- CLAUDE.md (now [decisions/harness.md](decisions/harness.md)), "Progress tracker": "Tested ... not measured yet; deployed ... Both come
   after slice b" - slice b is long done; still "n/a" / "unknown".
-- CLAUDE.md, "Pre-commit hook": "418/418 each" - the suite is 585 tests now.
+- CLAUDE.md (now [decisions/harness.md](decisions/harness.md)), "Pre-commit hook": "418/418 each" - the suite is 585 tests now.
 - `App.test.tsx` asserts there is no Billing runs nav item (D6); correct today, must flip
   in slice g.

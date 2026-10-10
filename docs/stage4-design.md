@@ -2,7 +2,7 @@
 
 Status: reviewed three times; every decision is recorded in the **"Decided"** sections
 at the end, and nothing is open. Every rule from
-stage 3 stays as it is (CLAUDE.md "Billing (stage 3)"); this note decides who calls
+stage 3 stays as it is ([decisions/billing-core.md](decisions/billing-core.md), "Billing (stage 3)"); this note decides who calls
 `bill_account`, when, and what happens when it does not go to plan.
 
 ## 1. What the worker is
@@ -26,7 +26,7 @@ request.**
 The `billing_run` row per date exists since stage 1 (`run_date` UNIQUE, status
 `running | completed | failed`, `started_at`, `finished_at`, `error`). Stage 4 makes
 `start_run` answer every case instead of raising `BillingRunConflict` for two of them
-(the open question in CLAUDE.md):
+(the open question then in CLAUDE.md, resolved since: [decisions/worker.md](decisions/worker.md#resolved-questions)):
 
 | Row for D | `start_run(D)` | Why |
 |---|---|---|
@@ -296,7 +296,7 @@ approval when implemented**):
 - **D-W21 - the atomic price change** (`1a02efa`, UI `3562fd4`):
   `POST /internal/v1/productOffering/{id}/priceChange {amount, currency, validFrom}`
   ends the open-ended price at midnight (BILLING_TZ) of `validFrom` (>= tomorrow) and
-  creates the attached successor, in one transaction; documented in CLAUDE.md as our
+  creates the attached successor, in one transaction; documented in [decisions/catalog.md](decisions/catalog.md) as our
   deviation from TMF620 (no cross-request transaction, and the no-overlap constraint).
   The catalog dialog has a "Change price" action whose copy states that existing
   products pick up the new price from their next billing period starting on or after the

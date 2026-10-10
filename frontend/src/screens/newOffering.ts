@@ -3,7 +3,7 @@
 // the operator learns before submitting:
 // - the code pattern (migration 0003: ^[A-Z0-9][A-Z0-9_-]{0,31}$, upper case);
 // - a price never starts in the past, and an order prices products at midnight, so the
-//   earliest useful start is tomorrow (CLAUDE.md, TMF620 mapping).
+//   earliest useful start is tomorrow (docs/decisions/catalog.md, TMF620 mapping).
 // The backend still decides: a 409/422 from it is shown as is.
 
 import { addDays, isIsoDate } from '../format/dates';

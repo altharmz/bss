@@ -12,7 +12,7 @@ surface is the **TM Forum Open APIs** (TMF6xx) - see [domain.md](domain.md).
 
 ## What exists, by stage
 
-The project was built in stages (CLAUDE.md, "Stage order"); progress is tracked from the
+The project was built in stages ([decisions/data-model.md](decisions/data-model.md), "Stage order"); progress is tracked from the
 code by `make progress` into [PROGRESS.md](PROGRESS.md) against
 [progress/scope.yaml](progress/scope.yaml).
 
@@ -35,7 +35,7 @@ refunds when a termination becomes known after charging, bills on the account's 
 day, payments, balance, a credit limit that only warns, the daily billing run with
 failure isolation and operator catch-up/retry.
 
-Out of scope (CLAUDE.md, "Domain model & decisions"): taxes, one-time charges in billing
+Out of scope ([decisions/data-model.md](decisions/data-model.md), "Domain model & decisions"): taxes, one-time charges in billing
 (a `oneTime` price can be stored but is never billed), `modify` order items and
 cancelProductOrder, changing an account's bill cycle day, suspension semantics (a
 `Suspended` account is still billed by dates), event notifications (`/hub`, listeners),
@@ -82,7 +82,7 @@ validated against them (`tests/apiclient.py`). Per-operation reference, extensio
 Production is one VPS (`vps-test`: Debian 12, 1 vCPU, ~2 GB RAM) whose primary purpose
 is a VPN server; bss runs next to it under strict limits. PostgreSQL and Caddy are **not
 part of this repository**: the separate **vps-infra** project runs one of each for every
-app on the host, plus the database backups (CLAUDE.md, "Shared infrastructure").
+app on the host, plus the database backups ([decisions/infra.md](decisions/infra.md#shared-infrastructure-vps-infra)).
 
 ```mermaid
 flowchart LR
@@ -112,8 +112,8 @@ flowchart LR
   `127.0.0.1:18081` on the host (for an SSH tunnel) and joins vps-infra's `shared` network
   as `bss`, where Caddy reaches it. The worker serves no HTTP.
 - **The UI** is static files built locally and rsynced into `~/bss/web`, which Caddy
-  serves read-only on the same origin as the API - no CORS (CLAUDE.md, "Deploying the
-  UI").
+  serves read-only on the same origin as the API - no CORS ([decisions/infra.md](decisions/infra.md#deploying-the-ui-stage-5-checkpoint-7),
+  "Deploying the UI").
 - **Database**: database and role `bss` on vps-infra's PostgreSQL (`postgres:5432` on
   the `shared` network). Migrations run from this repository during the deploy, before
   the app starts (`scripts/deploy.sh`).

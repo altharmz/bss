@@ -1,5 +1,6 @@
 """Billing one date, account by account, and retrying what failed
-(docs/stage4-design.md, section 3; the stage 4 planning decisions in CLAUDE.md).
+(docs/stage4-design.md, section 3; the stage 4 planning decisions in
+docs/decisions/worker.md).
 
 Per account, one transaction (the account's charges and its outcome row commit together
 or not at all - bill_account's own transaction is a savepoint inside it):

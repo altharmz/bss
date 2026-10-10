@@ -12,7 +12,7 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
    deploy and the local smoke reject it.** `app/status.py` answers 200 `{"status": "running"}` for a run younger
    than the 2 h grace (proven by `tests/test_billing_status.py::test_the_latest_run_decides`),
    while `scripts/deploy.sh` (lines 251-255) and `scripts/smoke.sh` accept a 200 only
-   with `"status": "ok"`. CLAUDE.md ("Deployment (slice f)") states the same "200 must say
+   with `"status": "ok"`. CLAUDE.md ("Deployment (slice f)", now in [decisions/worker.md](decisions/worker.md)) states the same "200 must say
    ok" rule as the scripts. Consequence: a deploy (or `make smoke`) while a billing run is
    in progress - e.g. right after the deploy itself restarted the worker mid-run, which
    is then taken over - fails at the smoke step although the app is healthy. Fix would be
@@ -30,7 +30,7 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
    party to carry `role: "customer"` exactly (missing or other: 422, nothing stored), so
    the role answered is the stored relation (`app/api/account.py`, `CUSTOMER_ROLE`;
    `tests/test_api_parties.py::test_billing_account_party_role_must_be_customer`).
-   Original finding: **`billingAccount.relatedParty[].role` is not checked.** CLAUDE.md's TMF666 mapping
+   Original finding: **`billingAccount.relatedParty[].role` is not checked.** The TMF666 mapping ([decisions/tmf-api.md](decisions/tmf-api.md))
    says the related party is "role `customer`"; the code (`app/api/account.py`,
    `RelatedParty.role: str | None`) accepts any role, or none, on POST and always answers
    `role: "customer"`. No test sends another role.
@@ -43,12 +43,13 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
    stage 4 worker activates it" and the `pendingTerminate` note describe what the worker
    now does (`app/worker/process.py`, `flip_statuses`). The docs describe the current
    behaviour.
-5. **CLAUDE.md calls the frontend planned.** "Domain model & decisions" says "`frontend/`
+5. **CLAUDE.md calls the frontend planned.** "Domain model & decisions" (now
+   [decisions/data-model.md](decisions/data-model.md)) says "`frontend/`
    is planned (stage 5)"; it is built and deployed (`frontend/`, 10 of 13 UI items in
    PROGRESS.md; first web deploy `9424b9b` per CLAUDE.md itself).
 6. **No `/backup-status`.** The task brief for these docs mentions "backups and
    /backup-status"; no such endpoint, script or check exists in this repository. Backups
-   are vps-infra's (CLAUDE.md, "Shared infrastructure"); operations.md says so.
+   are vps-infra's ([decisions/infra.md](decisions/infra.md#shared-infrastructure-vps-infra)); operations.md says so.
 
 ## Behaviour that is not tested (or not guarded)
 
@@ -73,7 +74,7 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
    `patch_offering`): moved into the past, or ended before live products' dates. It only
    affects new orders (`offeringNotValid`), not billing, but no rule or test covers it.
 9. **`creationDate` (TMF637 product) and `date` (TMF678 ABR) come from the database's
-   `now()`**, not the injected clock - the mapping in CLAUDE.md says so, but it means
+   `now()`**, not the injected clock - the mapping in [decisions/tmf-api.md](decisions/tmf-api.md) says so, but it means
    seeded demo data shows the seed's run time there, not the FixedClock dates the seed
    simulates. Every other business instant is from the clock.
 10. **Bills never leave `state: new`** and nothing settles a bill against payments; the
@@ -95,7 +96,7 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
 
 12. **The spec files' server URLs differ from our base paths** (TMF629's spec says
     `/tmf-api/customer/v5/`, TMF676's `basePath` is `/payment/v4/`, others have no
-    `/tmf-api` prefix). The paths here are a project decision (CLAUDE.md, "TMF API
+    `/tmf-api` prefix). The paths here are a project decision ([decisions/tmf-api.md](decisions/tmf-api.md), "TMF API
     conventions"); the generated API pages show both.
 13. **FastAPI's `/docs`, `/redoc`, `/openapi.json` are served** (not disabled in
     `app/main.py`) - behind basic auth in production. Open decision (CLAUDE.md, "Next

@@ -85,7 +85,7 @@ def request_body(row: Row, run: Row | None) -> dict[str, Any]:
 
 
 def _operator(request: Request) -> str | None:
-    """The operator from the header the shared Caddy sets; display-only (CLAUDE.md)."""
+    """The operator from the header Caddy sets; display-only (docs/decisions/internal-api.md)."""
     value = request.headers.get("x-remote-user", "").strip()
     return value if OPERATOR.match(value) else None
 

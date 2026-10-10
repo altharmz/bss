@@ -1,6 +1,6 @@
 # Runtime dependencies, pinned exactly; every transitive package is frozen in
 # constraints.txt (the Dockerfile installs with -c). Change versions deliberately - see
-# CLAUDE.md, "Dependencies" - never let them float.
+# docs/decisions/infra.md, "Dependencies are pinned" - never let them float.
 fastapi==0.142.2
 uvicorn[standard]==0.54.0
 psycopg[binary,pool]==3.3.6

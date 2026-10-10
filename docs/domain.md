@@ -45,7 +45,7 @@ flowchart LR
 | - (ours) | `billing_run`, `billing_run_account`, `worker_request` | internal API | the billing worker's bookkeeping |
 
 A **subscriber** in the admin UI is a billing account (a customer with two accounts is
-two rows; CLAUDE.md, "Frontend (stage 5) decisions").
+two rows; [decisions/frontend.md](decisions/frontend.md), "Frontend (stage 5) decisions").
 
 ## Lifecycles
 
@@ -290,6 +290,6 @@ one bill, replay identical, daily vs catch-up equal net per period.
 
 ## Open questions (not built)
 
-From CLAUDE.md, "Open questions": changing `billCycleDay` (PATCH is a 409 today), and
+From [decisions/billing-core.md](decisions/billing-core.md#open-questions), "Open questions": changing `billCycleDay` (PATCH is a 409 today), and
 suspension semantics (a `Suspended`/`Closed` account and a `suspended` product are billed
 like any other).

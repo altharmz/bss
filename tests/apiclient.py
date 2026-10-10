@@ -64,7 +64,8 @@ INTERNAL: dict[str, str] = {
 }
 # Our own JSON Schemas for TMF extensions, served outside the TMF resource paths.
 SCHEMA_PREFIX = "/tmf-api/schema/"
-# Statuses we return that the specs do not declare on any operation (decided in CLAUDE.md).
+# Statuses we return that the specs do not declare on any operation (decided in
+# docs/decisions/tmf-api.md, "Errors").
 UNDECLARED_BUT_OURS = {"415", "422"}
 
 

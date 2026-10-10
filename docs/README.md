@@ -5,7 +5,8 @@ for demos. Every behavioural claim names the code that implements it and, where 
 exists, the test that proves it. Anything planned but not built is marked **planned**;
 the source for status is [progress/scope.yaml](progress/scope.yaml) and the generated
 [PROGRESS.md](PROGRESS.md). The project's working rules - for humans and for the coding
-agent - stay in [CLAUDE.md](../CLAUDE.md); these pages summarise and link to it.
+agent - stay in [CLAUDE.md](../CLAUDE.md), the decisions and their rationale by area in
+[decisions/](decisions/README.md); these pages summarise and link to them.
 
 ## Reading order
 

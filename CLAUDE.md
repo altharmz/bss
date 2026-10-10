@@ -1,16 +1,12 @@
 # bss
 
-This project was generated from a shared template (`vps-lab-template`). `make init
-NAME=... APP_PORT=... HTTPS_PORT=... DOMAIN=...` filled in the project name, the local/VPS
-app port, the HTTPS port, and the public domain everywhere they appear (compose files,
-Makefile, scripts, this file, README.md), created `.env` and `.env.prod` from
-`.env.example` with a generated database password, and then removed itself from the
-Makefile so it can't run twice. If an `init:` target still exists in the Makefile, or a
-double-underscore token still shows up in a `grep -r` over the repo, `make init` was never
-run — do that before anything else, not a manual find-and-replace, since it also creates
-the `.env` files and only it knows to remove itself afterward.
+FastAPI + PostgreSQL BSS on the TMF Open APIs, with a React admin UI. Developed locally
+in WSL2, verified on a remote VPS. Generated from `vps-lab-template`: if an `init:` target
+is still in the Makefile, run `make init` first ([infra.md](docs/decisions/infra.md#template-origin-make-init)).
 
-FastAPI + PostgreSQL service. Developed locally in WSL2, verified on a remote VPS.
+This file holds what every session needs. **Decisions and design detail live in
+[`docs/decisions/`](docs/decisions/README.md)** (index at the end) and bind just as
+much: read the file for an area before changing it, and record new decisions there.
 
 ## Environments
 
@@ -18,28 +14,10 @@ FastAPI + PostgreSQL service. Developed locally in WSL2, verified on a remote VP
 |-------|-----------------|
 | WSL2 (Ubuntu) | full dev loop: build, run, tests, lint |
 | VPS `vps-test` (Debian 12, 1 vCPU, 1931 MB RAM, 30 GB disk) | verification only — pre-built image, no build |
+| Cloud session (claude.ai/code) | branches only, no Docker build, no VPS: [docs/cloud.md](docs/cloud.md) |
 
 **Images are built locally and shipped to the VPS. Never run `docker build` on the VPS** —
 it has one core and a production VPN server running next to us.
-
-The runtime image is about 74 MB compressed (content size) and 317 MB on disk on the VPS,
-321 MB locally (checked at `921603f`): Debian base 88 MB, Python 41 MB, `/opt/venv` 112 MB,
-app + alembic ~120 kB. Nothing beyond the venv and app code is in it; inside the venv, pip
-(13 MB) is not needed at runtime and sqlalchemy (28 MB) is there only for Alembic.
-
-### Base image
-
-`python:3.12-slim` is **pinned by digest** in the Dockerfile (the multi-arch index digest,
-like `node:22-alpine` in compose.override.yaml). The floating tag moved once under us and
-turned a cached build into an 11-minute rebuild (apt 414 s, pip 221 s). Pinned at
-`dddfd7e07f9d` on 2026-10-03: the base `9424b9b` was deployed with (its 4 base layers
-match the deployed image's first 4). Bump it on purpose, as its own commit, for a
-security fix or a new 3.12 patch release:
-
-1. `docker buildx imagetools inspect python:3.12-slim` - the top `Digest:` is the index.
-2. Replace the digest in the `FROM` line (keep the `3.12-slim` tag in front of it for
-   readers); `make test` (expect the full ~11 min rebuild once).
-3. `make verify` - the image fingerprint changes, so the deploy ships a new image.
 
 ## Commands — use these, do not invent your own
 
@@ -51,7 +29,8 @@ make test      # pytest inside the container
 make lint      # ruff check + format check
 make smoke     # smoke-test the local instance
 make deploy    # build locally, ship image to VPS, restart there
-make check     # every local check of verify: lint, test, docs-check, web-lint, web-test, web-e2e
+make check     # every local check of verify: lint, test, docs-check, decisions-check,
+               # web-lint, web-test, web-e2e
 make verify    # make check, then deploy (+ health, smoke, UI, web smoke)
 make ssh       # open a shell on the VPS
 make migrate   # apply Alembic migrations against the local stack
@@ -65,6 +44,7 @@ make remote CMD="..."  # run a one-off command against the deployed image on the
 make hooks     # install the local pre-commit (lint + test) and pre-push (secrets) hooks
 make spec-verify-upstream  # re-fetch spec blob SHAs from GitHub, compare with spec/README.md (network)
 make progress  # regenerate docs/PROGRESS.md + docs/progress/status.json (scope.yaml vs the code)
+make decisions-check  # nothing of the old CLAUDE.md lost (docs/decisions/README.md)
 make seed          # LOCAL demo data through the public TMF API (refuses APP_ENV=prod); re-run = no-op
 make web-install   # UI: npm ci into the node_modules volume - the ONLY step that downloads
 make web-dev       # UI: Vite dev server on http://localhost:5173 (proxies /tmf-api, /internal)
@@ -78,113 +58,6 @@ make web-e2e       # UI: Playwright smoke on the built UI + seeded local stack (
 
 `make verify` is the single source of truth for "does it actually work on the server".
 It exits non-zero and prints remote logs when anything fails.
-
-## Pre-commit hook
-
-`scripts/pre-commit.sh` runs `make lint` then `make test` and blocks the commit on
-failure. `make test` takes 50-70 s wall-clock (pytest itself 46-60 s, warm or cold db),
-~105 s with every core busy (measured 2026-10-03).
-
-- Not installed by default — `.git/hooks/` is never tracked by git, so every clone (this
-  one included) needs one `make hooks` run. It installs a symlink, not a copy, so edits to
-  `scripts/pre-commit.sh` take effect immediately without reinstalling.
-- **Keeps its full log**: every run writes everything it prints (a header with time,
-  HEAD and the staged files, then each check's output) to
-  `.git/pre-commit-logs/pre-commit-<UTC time>-<pid>.log` - inside the git directory, so
-  never tracked; a worktree uses its own git dir. The last 10 are kept. On failure the
-  hook prints `Full log: <path>`. Each check runs through `tee`; the exit code is the
-  check's own (`PIPESTATUS[0]`). Proven: a deliberately failing test was refused (commit
-  exit 1, HEAD unchanged) and the log held the complete pytest failure and traceback.
-- Runs non-interactively: both `make` calls are given `</dev/null` so the hook never
-  blocks waiting on stdin, whether it fires from a terminal, an editor's git integration,
-  or any other non-interactive caller.
-- To skip it deliberately (e.g. a WIP commit): `git commit --no-verify`. The hook's own
-  failure output reminds you of this.
-- When the staged files touch `frontend/` or `spec/`, it also runs `make web-lint` and
-  `make web-test` (offline, ~+30 s: lint 20 s, test 9 s). They never install: an out-of-date node_modules fails
-  with "run make web-install". A change in `app/api` or `app/internal` alone does not
-  trigger them, though it can break the UI; `make verify` (`web-e2e`) is the gate for that.
-- **It only lets a commit through when the working tree is exactly what is committed.**
-  The checks run on the working tree, so before running them the hook refuses the commit
-  (with the list of files) if a tracked file has unstaged changes (`git diff --quiet`
-  fails) or an untracked file sits under `app/`, `tests/`, `frontend/` or `spec/`. Stage
-  everything that belongs to the commit, or set the rest aside with `git stash push
-  --keep-index`. (This replaced the old caveat that the hook tested the working tree, not
-  the index: a commit once passed while missing two repository functions that were only on
-  disk.) Proven: an untracked file under `frontend/`, and a partially staged change, are
-  each refused before any check runs; the fully staged change commits normally.
-- To check an *older* commit on its own, use a worktree: stop the local stack (`make
-  down`; port 8080 conflict), `git worktree add ../bss-check <commit>`, then in that
-  directory `COMPOSE_PROJECT_NAME=bss-check IMAGE_NAME=bss-check-app
-  POSTGRES_PASSWORD=throwaway make lint test` (compose.yaml pins `name: bss`, so without
-  the override the worktree would share this project's containers and database volume),
-  then `docker compose down -v` with the same variables and `git worktree remove`.
-- **One unexplained failure, investigation closed.** 2026-10-03 05:20Z the hook's `make
-  test` failed once on a CLAUDE.md-only commit; what failed is lost (the commit output was
-  run through `grep ... | tail -1`). Unreproduced in 30 runs (20 warm, 5 cold after `make
-  down`, 5 with all 12 cores busy; 418/418 each). The `connect_timeout=3` hypothesis
-  (see Open checks) is consistent but unconfirmed: freezing the db for 6 s with `docker
-  pause` gives 500s in API tests, but a 3 s stall was never seen under real load. The
-  two thread tests (`test_order_concurrency.py`, `test_billing_db.py`: `join(timeout=10)`)
-  are the other real-time dependency; the hypothesis deadline is off. Diagnostics
-  improved since: the 500 handler logs the exception with its traceback, and app loggers
-  are no longer silenced in tests (Alembic's `fileConfig` used to disable them).
-
-## Pre-push hook
-
-`scripts/pre-push.sh` (also installed by `make hooks`, as a symlink) scans only the
-commits being pushed - those no remote has yet - and only their added lines. It refuses
-the push if a commit adds a bcrypt hash (`$2a$`/`$2b$`/`$2y$` + cost) on a line without the
-marker `pre-push: allow-dummy-hash`, adds or changes a path matching `(^|/)\.env` other
-than `.env.example`, deletes a remote branch, or is not a fast-forward. It names the
-commit and file, never the matching value. Never bypass it (`--no-verify`). Ported from
-vps-lab `a3ada0b`. Proven 2026-10-09 in a scratch repo against a local bare remote: a
-clean commit, `.env.example`, a marked dummy hash and a clean new branch pushed; a hash
-(on `main` and on a new branch), `.env.prod`, `sub/.env.smoke`, a branch deletion and a
-non-fast-forward were refused, and the remote held only the allowed commits.
-
-## Progress tracker
-
-`make progress` writes `docs/PROGRESS.md` (committed, plain Markdown) and
-`docs/progress/status.json` (the same data, machine-readable): per area (db, api, ui,
-worker) the share of items implemented, tested and deployed, then the item table, the
-unscoped and the excluded items.
-
-- **Scope:** `docs/progress/scope.yaml`, hand-maintained, **every change needs the human's
-  approval** (`"ask"` rule in settings.json). Each item has id, area, stage, title and the
-  key the code is matched on: `table` (db), `method` + `path` exactly as `app.openapi()`
-  reports it, parameter names included (api), the id itself as the `data-ui` marker (ui).
-  `excluded` entries (id, area, reason) are ignored by the unscoped check.
-- **Implemented** (derived, never written by hand): db - the table exists in a throwaway
-  database migrated to head; api - `app.openapi()` (FastAPI's public interface, not its
-  router internals) has the operation; ui - a literal `data-ui="<id>"` (or `<Modal
-  ui="<id>">`) exists in `frontend/src`, found with the TypeScript AST. Screens carry the
-  marker on a `.bss-screen` wrapper (`display: contents`, so the layout is unchanged),
-  dialogs via `Modal`'s `ui` prop, actions on their button.
-- **Worker** items are behaviour, proven rather than detected: implemented and tested
-  together when at least one test marked `@pytest.mark.capability("<id>")` passes and
-  none fails. The collector runs those tests (`pytest -m capability`, in process, output
-  on stderr); a test marked with an id that is not a worker item in `scope.yaml` is an
-  error (exit 1). Proven: a passing marked test turns its item green, one failing test
-  next to a passing one keeps it red, an unknown id fails the run.
-- **Tested, ui** (since `cloud/billing-runs-ui`): a passing vitest test saw the marker on
-  screen - `expectUi(id)` (`frontend/src/test/expectUi.ts`) asserts it and records the id
-  on the test; `make progress` runs vitest with `frontend/scripts/ui-tested-reporter.mjs`
-  (only when `UI_TESTED_OUT` is set), which writes the ids of the **passed** tests to
-  `.progress/ui-tested.json`. An id that is not a ui item is an error (exit 1). Proven: a
-  test that calls expectUi and then fails does not count (with the passed-filter removed
-  it did), an unknown id fails the run. 13/13 today.
-- **Tested** (db, api): not measured yet ("n/a"); **deployed:** "unknown" until
-  `deploy.sh` writes `docs/progress/deployed.txt` (approved, not built).
-- **Unscoped:** a table, operation or marker in the code that is neither an item nor
-  excluded makes `make progress` exit 1 (after writing the files).
-- **How it runs:** `tests/progress_collect.py` in the app container (scope.yaml arrives
-  on stdin, parsed with the image's pinned PyYAML; tables via a throwaway
-  `vpslab_progress_*` database, dropped again), `frontend/scripts/ui-markers.mjs` and
-  vitest with the ui-tested reporter in `web-offline`, then `scripts/progress/generate.py`
-  on the host (standard library only)
-  from the collectors' JSON in `.progress/` (gitignored). The output is deterministic (no
-  timestamps, no line numbers), ready for the drift check of step 4.
 
 ## Hard constraints
 
@@ -221,1045 +94,84 @@ unscoped and the excluded items.
   `master`, and only commits the human approved.
 - **Do not add `db` or `caddy` services back to the production configuration**
   (`compose.prod.yaml`), and do not re-add a Caddyfile or backup scripts to this repo.
-  On the VPS they live in the separate vps-infra project — see "Shared infrastructure".
+  On the VPS they live in the separate vps-infra project — see ["Shared infrastructure"](docs/decisions/infra.md#shared-infrastructure-vps-infra).
 - `make deploy` is no longer fully reversible once a migration has shipped. Rolling the
   image back to a previous tag restores the old code, but not the database schema — if a
   migration already ran, reverting the image leaves the schema ahead of the code. Rolling
   back the schema requires running `alembic downgrade <revision>` by hand against the VPS
   database; there is no automated rollback path.
-
-## Agent guardrails: what they are for
-
-`.claude/settings.json` (allow/deny rules) and `.claude/hooks/guard.sh` protect against
-**agent mistakes, not a hostile agent**. They stop the obvious slip - reading `.env`, a
-destructive docker cleanup, touching the VPN - and explain why. They are not a security
-boundary:
-
-- **Docker access is root-equivalent.** `docker compose:*` and `make:*` are allowed, and
-  anyone who can start a container can bind-mount any host path into it, read or write any
-  file the docker daemon can, and reach every other container on the host.
-- **`.env` values are reachable despite the deny rules.** `docker compose config` prints
-  the compose file with every `${VAR}` already substituted, and `docker compose run ...
-  env` (or `exec ... env`) prints a container's environment. The `Read(./.env)` deny rule
-  and the guard's `cat .env` pattern only cover the direct route. Do not run those
-  commands; `docker compose config --quiet` validates without printing.
-- **`guard.sh` is a pattern matcher over the command text.** It cannot see through
-  variables, scripts, encodings or a command it has no pattern for.
-- **It is quote-aware** (`.claude/hooks/guard.py`): the command is tokenised with `shlex`
-  (POSIX quoting, shell punctuation as separate tokens), so text inside quotes - a grep
-  pattern, a commit message - is never treated as a command. What a shell does execute is
-  still checked: `sh -c`/`bash -c` scripts, `eval`, ssh remote commands, the command after
-  `docker compose run <service>`, `xargs`, `find -exec`, and `$(...)`/backtick
-  substitutions (even inside quotes). `cd` is tracked for path rules. The VPN, port and
-  mass-stop rules still scan the raw text. **A VPN port number inside a filesystem path
-  is not a port** (`/`, `~/`, `./`, `../` paths are masked first, in guard.py and in the
-  fallback; found 2026-10-10 on the cloud's `/opt/pw-browsers/chromium_headless_shell-1194/`):
-  `-p 1194:1194`, `host:1194`, `nc host 1194`, `1194/udp` still block, and over ssh or
-  naming the VPS the number counts anywhere, paths included. **Fail-closed:** a command that cannot be
-  tokenised (unbalanced quotes, a heredoc or here-string) goes through the old raw-text
-  checks, exactly as strict as before. Regression cases: `.claude/hooks/guard-cases.txt`
-  (allow/block per command), run by `.claude/hooks/test-guard.sh` and by the pre-commit
-  hook whenever `.claude/` changes.
-- **Cloud mode: `CLAUDE_CODE_REMOTE=true`**, which Claude Code sets in every cloud
-  session and never on the workstation; only the exact value `true` counts
-  (`docs/cloud.md`). The SessionStart hook (`startup|resume`) runs
-  `scripts/cloud-setup.sh`, which exits 0 at once unless cloud mode is on, then starts
-  PostgreSQL and installs the venv and `npm ci` only when missing, and always exits 0
-  (a failure is reported in the session's context, never fatal). The guard then allows `npm`/`npx`/`node` on the
-  host (the sandbox is the container; `pnpm`/`yarn`/`corepack` stay blocked), blocks any
-  command that mentions `vps-test` or `vpn2811.duckdns.org` (quotes included, checked
-  before guard.py), and lets a push through only with explicit `cloud/*` destinations
-  (a bare `git push`, `HEAD`, `master`, `main` are blocked; an untokenisable push is
-  blocked outright). Cases marked `@cloud` in `guard-cases.txt` run with
-  `CLAUDE_CODE_REMOTE=true`, `@remote-false` with `false`, all others with it removed;
-  absolute paths there are written `$CLAUDE_PROJECT_DIR`.
-
-- **Harness files need the human's OK.** `.claude/**`, `compose*.yaml`, `Makefile` and
-  `scripts/**` are under `"ask"` for the Edit tool, and `guard.sh` blocks the shell writes
-  that would skip that prompt (`>`, `>>`, `tee`, `sed -i`, `mv`, `cp` as the destination,
-  `rm`). Same limit as above: a write through an interpreter, `git checkout`/`git apply`
-  or a container mount is not caught. Change these files with the Edit tool only.
-  The `"ask"` rules are unverified under auto mode; if they don't prompt there, these
-  paths move to `"deny"`.
-
-So: the rules in "Hard constraints" bind because they are the rules, not because
-something enforces them. Anything that needs real enforcement (secrets an agent must
-never see, hosts it must never reach) has to be kept out of the environment the agent
-runs in, not filtered here.
-
-## Layout
-
-```
-app/main.py               FastAPI app: /healthz and a JSON status root
-app/config.py              settings from environment variables (pydantic-settings)
-app/db.py                  psycopg 3 connection + the liveness probe /healthz calls
-app/clock.py               Clock protocol, SystemClock, FixedClock; the only wall-clock reader
-app/repository/            data access: plain functions on a psycopg.Connection, never commit
-app/billing/               billing core (model.py dataclasses, core.py pure functions),
-                           adapter.py (bill_account: load -> compute -> write) and
-                           settlement.py (which credits pay which bills; pure). See "Billing"
-                           and "Bill lifecycle"
-app/internal/              internal API for the admin UI (/internal/v1): context, first-charge
-                           preview, open products, charges, transactions. See "Internal API"
-app/api/                   TMF Open API surface: one module per API (router, request models,
-                           row -> body mapping) + shared conventions (errors, tmfjson, common,
-                           listing, deps). See "TMF API conventions"
-spec/                      vendored TMF OpenAPI files (README.md: source, SHA, license);
-                           spec/internal/bss-internal.oas.yaml is ours (the internal API)
-alembic/                  migrations; alembic.ini reads DATABASE_URL from the env
-compose.yaml              base definition: only what both modes share (the app image)
-compose.override.yaml     local dev only (own postgres on `lab`, bind mount, --reload, ports;
-                          `tools` service: writable mount for make fmt + format hook)
-compose.prod.yaml         VPS only (shared network + alias, DATABASE_URL, limits, log rotation)
-scripts/init.sh           one-time: fills in placeholders, creates .env/.env.prod
-scripts/deploy.sh         build -> save -> ssh load -> migrate -> up -> healthcheck -> smoke
-scripts/smoke.sh          HTTP smoke test against a base URL
-scripts/pre-commit.sh     make lint + make test; installed via `make hooks`
-scripts/pre-push.sh       refuses pushes adding bcrypt hashes / .env* paths, deletions,
-                          non-fast-forwards; installed via `make hooks`
-frontend/                 admin UI (stage 5): Vite + React + TypeScript; see "Frontend conventions"
-design-ref/               design handoff for the UI - read-only reference, never edited
-tests/                    pytest suite (conftest.py spins up throwaway databases;
-                          apiclient.py + contract.py validate every API response against
-                          spec/; billing_sim.py: in-memory ledger for the billing core;
-                          test_billing_properties.py: hypothesis);
-                          test_health.py and test_migrations.py check the infrastructure
-                          this template provides and must keep passing on an otherwise
-                          empty service
-```
-
-`docker compose` picks up `compose.override.yaml` automatically, so plain
-`docker compose up` is always the *local dev* stack. Production composition is explicit:
-`-f compose.yaml -f compose.prod.yaml`.
-
-Because `compose.yaml` is merged into both, it holds only what both modes share. The
-local postgres (`db`, its healthcheck and `pgdata` volume), the app's `depends_on`,
-`DATABASE_URL` and the `lab` network all live in `compose.override.yaml`; anything put
-back into the base file would also end up in the production stack (a `lab` network there
-would attach the prod container to both `lab` and `shared`).
-
-## Conventions
-
-- App listens on **8080** inside the container. Do not hardcode host ports in code.
-- **Healthchecks** (1 vCPU on the VPS: no interpreter start per probe). **Informational
-  only here**: nothing restarts or replaces an `unhealthy` container (no autoheal;
-  `restart: unless-stopped` reacts to exits, not to health), and `deploy.sh` only reads
-  them while it waits after `up`. Real alerting is the external monitor on `/healthz`
-  and `/billing-status`.
-  - **app** (Dockerfile, `dev` and `runtime`): bash `/dev/tcp` to 127.0.0.1:8080, `GET
-    /healthz HTTP/1.0`, the status line must contain ` 200 `; exec form with `bash`
-    (`/bin/sh` is dash, no `/dev/tcp`); `read -t 2` inside the 3 s timeout.
-  - **worker** (`compose.prod.yaml`): `[[ -n $(find /tmp/worker-alive -mmin -3) ]]`
-    (`$$` in the file). GNU find 4.10 compares `-mmin` exactly, no rounding: 179 s
-    passes, 181 s fails, missing fails.
-  - Both: interval 60 s, timeout 3 s, retries 3, start period 30 s with `start_interval`
-    2 s (Engine 25+ / Compose 2.20.2+; the VPS and WSL run Engine 29.7.2, Compose
-    v5.5.0). A container is healthy ~2 s after start; a failure shows as `unhealthy`
-    after 3 probes, ~3 min.
-  - Proven locally (2026-10-05): the app server killed (port still listening) -> probe
-    exit 142 (read timeout), `unhealthy` after 3 probes, healthy 2.7 s after a restart;
-    `/healthz` returning 500 -> exit 1, `unhealthy`, healthy again at the next probe once
-    restored, no restart; `up --wait` healthy at +2.3 s. Worker check from the container
-    compose created out of `compose.prod.yaml` (the engine gets one `$`): ages 0-179 s
-    exit 0, 181/185/200 s and missing exit 1; healthy at +2 s, `unhealthy` after 3
-    probes with a 200 s old file, healthy at the next probe once fresh; with `-mmin -4`
-    the 181-200 s files passed. `docker compose config` prints `$$` re-escaped - not what
-    the engine receives.
-- Config comes from environment variables only (see `app/config.py`). No config files.
-- `/healthz` must stay cheap and must verify the DB connection — Docker's HEALTHCHECK
-  and the deploy script both depend on it.
-- Python 3.12, `ruff` for lint and format, `pytest` for tests.
-- `make test` runs the suite in parallel (`pytest -n auto`, pytest-xdist). Tests share
-  nothing: each worker migrates its own template database and every test gets its own
-  clone, dropped afterwards (a run leaves no `vpslab_%` database behind). Hypothesis
-  examples per property come from a profile selected by `HYPOTHESIS_PROFILE`: `dev` (50)
-  for `make test` and the pre-commit hook, `ci` (200) for `make verify` (a target-specific
-  variable in the Makefile). Plain `pytest` without the variable uses `dev`.
-- **The local postgres runs with `fsync=off`, `full_page_writes=off`,
-  `synchronous_commit=off`** (`command:` of `db` in `compose.override.yaml`): every test
-  clones and drops a database, and with fsync on each drop waits for a server-wide
-  checkpoint. Local only - production uses vps-infra's postgres and never reads
-  `compose.override.yaml`, so it is unaffected. Not crash-safe: after a WSL crash (or a
-  killed Docker VM) the local database may be corrupt; the recovery is `make clean`
-  (drops the local volume) and `make up`.
-- Spec YAML is parsed with libyaml (`yaml.CSafeLoader`), not `yaml.safe_load`: same
-  documents, ~6x faster, and every xdist worker parses all of `spec/` once.
-- **Dependencies are pinned, never floating** (since 2026-10-03). Direct dependencies are
-  `==` in `requirements.txt` (runtime) / `requirements-dev.txt` (tooling); every package,
-  transitive ones included, is frozen in `constraints.txt` / `constraints-dev.txt`, and
-  the Dockerfile installs with `-c` and pins pip itself (`pip==26.2.1`). Proven: the
-  rebuilt dev image's `pip freeze` equals the one that passed lint and tests, and a
-  runtime build's equals production's `9424b9b` (28 packages). **The next deploy ships a
-  new image** even without code changes: the builder layer was rebuilt (same packages,
-  new layer digests), so the deploy fingerprint differs. **To change a version:** edit
-  the `==` pin (or add the dependency), install it in a throwaway container, regenerate
-  the constraints file from that container's `pip freeze` deliberately, review the diff
-  of the constraints file, rebuild, `make lint && make test` - one commit. Never loosen a
-  pin to `>=`. Do not `pip install` inside a running container.
-- **Migrations already on `master` are immutable.** A fix to one - schema, data or
-  comment text - goes into a new migration. Alembic records only the revision id, so a
-  database already at that revision never sees an edit: it silently differs from a fresh
-  one. One exception happened before this rule: `0005` (comments only) was edited once
-  on master before its first deploy (`cloud/catalog-integrity`, the
-  `billing_run.started_at` comment), so the local stack, migrated to `0005` before the
-  edit, still has the old comment text; production gets the edited one.
-- Before every commit: `make lint && make test`. Small, focused commits.
-
-## Domain model & decisions
-
-- **SID for the database, TMF Open API v5 for the surface** (TMF676 Payment only exists
-  as v4, so v4 there). Specs live in `spec/`, pinned by commit; see `spec/README.md`.
-- **Orders are the only way to create or terminate products.** `product.created_by_item_id`
-  is NOT NULL; termination records `terminated_by_item_id`.
-- **Only the billing run writes ABRs** (`applied_customer_billing_rate.billing_run_id` is
-  NOT NULL).
-- **Half-open ranges everywhere.** `valid_for` is `tstzrange [start, end)`, NULL upper =
-  open-ended (TMF TimePeriod without endDateTime). Billing periods are `daterange [start,
-  end)`. `product.termination_date` is exclusive. Billability is driven by dates, not
-  status: `start_date <= d < termination_date`, excluding only `cancelled`/`aborted`.
-- **Enums verbatim from the spec**, camelCase included (`pendingActive`). One exception
-  rule: values are compared after `strip()` - upstream `ProductStatusType` has the typo
-  `'aborted '`, stored as `aborted`. `tests/test_enum_lock.py` locks TMF-derived enums
-  against `spec/`. Where the spec field is a free string we define our own enum ("ours,
-  not TMF" in the migration); casing: if the spec gives example values, use their exact
-  spelling (`In Design`, `Active`), otherwise lowerCamel.
-- **No balance column.** Balance = payments (`done`) - sum of all ABRs; refunds are stored
-  negative, so they already count as credits.
-- **Money** is `numeric(12,2)` / `Decimal`, never float. One currency per billing account,
-  enforced by composite FKs to `billing_account (id, currency)`. Taxes are out of scope.
-- **Injected clock.** Nothing in `app/` may call `datetime.now()`, `date.today()`,
-  `datetime.utcnow()` or `time.time()` except `app/clock.py` (a test greps for it).
-  "Today" for billing is the date in `BILLING_TZ` (default `Europe/Moscow`). Repository
-  functions take `now`/`today` as arguments.
-- **`bill_cycle_day` 1..28** with calendar-aligned billing periods (no month has fewer
-  than 28 days, so every cycle day exists every month).
-- **Exclusion constraints** (prices, ABRs, bills) forbid overlapping ranges, not just equal
-  ones. `ON CONFLICT` with a conflict target does not work with exclusion constraints;
-  only a bare `ON CONFLICT DO NOTHING` does.
-- **Out of scope for now:** taxes, `modify` items and cancelProductOrder. A `modify` item
-  is still storable - order processing rejects it with a reason instead of the schema
-  raising an IntegrityError.
-- **Stage order:** 1. schema + repository (done) -> 2. TMF Open API backend (done) -> 3.
-  billing core (done) -> 4. worker with the daily run (deployed with slice f, `dcbedeb`,
-  2026-10-05; slice g, the Billing runs screen, built on `cloud/billing-runs-ui`, not yet
-  deployed) -> 5. frontend. Bill and ABR
-  endpoints are read-only; the worker's daily run writes them through `bill_account`
-  (see "Billing worker").
-- **Rounding:** banker's rounding (`ROUND_HALF_EVEN`) to 2 decimals, applied once per ABR,
-  never on intermediate values.
-- **Billable days:** the activation day is billed, the termination day is not. This is the
-  existing half-open `[start_date, termination_date)`: a product terminated "today" has
-  `termination_date = today`, so today is not charged. A product activated and terminated
-  on the same day is charged 0 days.
-- **`frontend/`** is planned (stage 5): a separate directory built to static files and
-  served by the shared Caddy.
-- Stage 1 runs the migration as a NOSUPERUSER database owner in a test, like vps-infra's
-  `make add-db` does; `btree_gist` works because it is a trusted extension (PG13+).
-
-## TMF API conventions (stage 2)
-
-Built once in `app/api/` and shared by every API. All eight APIs of stage 2 are
-implemented; order processing lives in `app/ordering/`.
-
-- **Paths:** `/tmf-api/<apiName>/v5/<resource>`: `productCatalogManagement`,
-  `partyManagement`, `customerManagement`, `accountManagement`,
-  `productOrderingManagement`, `productInventory`, `customerBillManagement`, and
-  `paymentManagement/v4` (TMF676 only exists as v4). `href` is the absolute path, no host.
-- **Not exposed:** DELETE anywhere, POST/PATCH on product, cancelProductOrder, `/hub`, the
-  billing run. An unsupported method on an exposed path is a 405.
-- **Errors:** every non-2xx body is the TMF `Error` (`@type`, `code`, `reason`, `message`,
-  `status`), including unknown routes, FastAPI's own validation errors and unhandled
-  exceptions (500 says "internal error", nothing more). 400 = malformed JSON, unknown
-  attribute, read-only attribute, bad query parameter; 404; 405; 409 = conflicts with
-  stored state; 415 = wrong content type; 422 = well-formed but invalid (missing
-  mandatory, wrong type or value, reference to something that does not exist). The specs
-  do not declare 415 and 422; they are ours.
-- **Unknown attributes are rejected (400), never silently dropped.** Always accepted:
-  `@type`, `@baseType`, `@schemaLocation`, and `href`, `name`, `@referredType` inside
-  references. `id` and `href` are server-managed (400 on POST and PATCH). `lastUpdate` is
-  accepted and ignored on POST, because the spec's create schemas make clients send it;
-  it is read-only on PATCH.
-- **Money** is `{"unit": "<ISO 4217>", "value": <JSON number>}`, Decimal end to end.
-  FastAPI's own body parsing goes through float (proven by a test), so handlers parse the
-  raw body with `parse_float=Decimal` (`app/api/deps.py`, `tmfjson.loads`). Responses are
-  written by `tmfjson.dumps`, which emits Decimals as number tokens and raises on a float.
-  An amount with more than 2 decimals is a 422, never rounded (`19.9900` is accepted: it
-  equals `19.99`).
-- **TimePeriod** `validFor {startDateTime, endDateTime}` <-> `tstzrange [start, end)`;
-  no `endDateTime` = open-ended; `startDateTime` is required on create; date-times must
-  carry an offset. Output is UTC (`...Z`).
-- **Dates stored as `date`** (product start/termination, order requested start, bill and
-  ABR periods): an incoming date-time is converted to the calendar date in `BILLING_TZ`
-  and the normalized value is returned (`2026-10-01T23:30:00Z` is `2026-10-02` in Moscow);
-  outgoing dates are midnight in `BILLING_TZ`.
-- **Lists:** `offset` (default 0), `limit` (default 20, max 100; above the max is a 400),
-  ordered by creation. Always 200 - none of the vendored specs declares 206 for a list.
-  `X-Total-Count` = all matching rows, `X-Result-Count` = rows in this response.
-  `fields=` selects top-level attributes (`id`, `href`, `@type` always); an unknown name
-  is a 400. Filters are equality only, on the attributes listed per resource; any other
-  query parameter is a 400.
-- **POST** returns 201 with `Location`. **PATCH** accepts `application/merge-patch+json`
-  only (415 otherwise); `null` removes an optional attribute and is a 422 on a mandatory
-  one; `@type` may be repeated but not changed.
-- **Transactions:** one per request (`app/api/deps.py`, `Tx`), committed when the handler's
-  block ends, rolled back if it raises.
-- **Clock:** the `get_clock` dependency; tests override it with `FixedClock`.
-- **The contract is the vendored TMF specs, not FastAPI's `/openapi.json`.** Response
-  bodies are plain dicts written by `tmfjson` (no Pydantic response models), so the
-  generated `/docs` has no response schemas - on purpose. Stage 5 generates the frontend
-  types from `spec/*.yaml` (and the extension schemas we serve), never from `/openapi.json`.
-- **Contract-test limit:** a discriminator that sits next to `allOf` (the TMF subclass
-  pattern) is not dispatched on, so a wrong `@type` on a reference (e.g. `IndividualRef`
-  where the spec says `PartyRef`) passes schema validation. The API tests assert those
-  `@type` values explicitly.
-- **Contract tests:** `tests/apiclient.py` validates every response in the suite against
-  the schema in `spec/` for its path (`Error` for non-2xx). `tests/contract.py` uses
-  openapi-schema-validator's OAS 3.0 dialect with its discriminator handling replaced:
-  upstream recurses forever on the TMF v5 schemas (each has a self-mapping discriminator
-  next to `allOf`), and plain JSON Schema cannot validate the `...RefOrValue` `oneOf`s.
-  Because it overrides the library's keyword handlers, `openapi-schema-validator` is
-  pinned to an exact version in `requirements-dev.txt`; re-run the suite when bumping it.
-
-### TMF620 mapping
-
-| Resource | DB column <-> TMF attribute | Filters |
-|---|---|---|
-| productSpecification | `name`, `description`, `lifecycle_status` <-> `lifecycleStatus`, `updated_at` <-> `lastUpdate` | `name`, `lifecycleStatus` |
-| productOffering | `name`, `description`, `lifecycle_status`, `is_sellable` <-> `isSellable`, `valid_for` <-> `validFor`, `product_specification_id` <-> `productSpecification` (ref, mandatory - ours), attached prices <-> `productOfferingPrice[]` (refs), `code` <-> `externalIdentifier[]` (0003; see below) | `name`, `lifecycleStatus`, `isSellable`, `productSpecification.id`, `externalIdentifier.id` |
-| productOfferingPrice | `name`, `lifecycle_status`, `price_type` <-> `priceType` (`recurring`/`oneTime`), `recurring_period` <-> `recurringChargePeriodType` (`monthly`), `recurring_period_length` <-> `recurringChargePeriodLength` (1), `amount` + `currency` <-> `price`, `valid_for` <-> `validFor` | `name`, `priceType`, `lifecycleStatus` |
-
-- **An offering's lifecycle only moves forward**: PATCH `lifecycleStatus` allows In Design
-  -> Active and Active -> Retired; Retired is final. Any other transition is a 409 with
-  the reason, and nothing in that PATCH is applied. Repeating the current status is not
-  a transition (200). POST may still create an offering in any status. The admin UI only
-  offers the forward step; the rule lives here. **Specifications and prices follow the
-  same rule** (`_check_lifecycle`, `tests/test_api_catalog_lifecycle.py`).
-- **An offering's `validFor` is never rewritten in the past**: PATCH may not move
-  `startDateTime` to before now, nor set or move `endDateTime` to before now (409);
-  repeating the current value is fine. Billing never reads it (only ordering,
-  `offeringNotValid`), so ending an offering cannot leave a live product without a price.
-- **Prices attach through the offering**, as in the spec: a price is created on its own
-  (`product_offering_id` NULL) and attached by `productOfferingPrice[]` on POST/PATCH of
-  the offering; only references are accepted there, not inline prices. A price belongs to
-  at most one offering (409) and may not overlap a price of the same type and currency on
-  it (409, the exclusion constraint).
-- **Prices are never detached or re-priced.** A PATCH that drops a price from
-  `productOfferingPrice[]` is a 409; `price`, `priceType` and the recurring period are
-  read-only (400); `validFor.startDateTime` cannot move (409). Changing a price = end its
-  `validFor` and attach a new one - stage 3 billing needs the historical price.
-- **A price never starts in the past.** A price created or attached with
-  `validFor.startDateTime` < now is a 409. Stage 3 catch-up billing charges past days at
-  the price valid then, so a past-starting price would back-charge them.
-- **Business rule: a new price becomes sellable from the next midnight in BILLING_TZ at
-  the earliest.** Its start must be >= now, and an order looks up the price at midnight
-  (BILLING_TZ) of the product's start date - so a price created today can only price
-  products starting tomorrow or later.
-- **A price is never ended retroactively.** `validFor.endDateTime` can only be set or
-  moved to a value >= now (the injected clock), and only while the current end, if any,
-  is not in the past (409 otherwise): a retroactive end, or reopening a price that has
-  already ended, would change prices already used for billed periods.
-- **Ending a price never leaves a product without one (D-W18).** Setting or moving the
-  end E of a recurring price attached to an offering is a 409 unless a price of the same
-  offering, type and currency starts exactly at E, or every product of the offering on an
-  account in that currency (not cancelled/aborted) is terminated by the first business
-  date whose midnight the price no longer covers (E's date if E is midnight, else the
-  next day). A gap could never be filled later: prices never start in the past. A
-  missing price is therefore a data bug, fixed case by case with a reviewed one-off script
-  and an audit note - there is no waiver feature. Ordering keeps the other side closed
-  (`priceEnds`, D-W20): together they give the invariant **"a live product has a price
-  for every future day"**.
-- **Deviation: changing a live offering's price is one internal operation (D-W21).**
-  `POST /internal/v1/productOffering/{id}/priceChange {amount, currency, validFrom}` -
-  TMF620 cannot express it: there is no cross-request transaction, and with a product
-  live neither order of its two steps works (attaching the successor first violates the
-  no-overlap constraint; ending first is refused by the rule above). In one transaction
-  it ends the open-ended recurring price in `currency` at midnight (BILLING_TZ) of
-  `validFrom` and creates the successor, attached, from that moment; all or nothing
-  (proven by a failure injected after the end). `validFrom` is a business date >=
-  tomorrow (the next midnight); 409 if there is no open-ended price in that currency or
-  a price already starts on or after `validFrom`. Existing products pick up the new price
-  from their first billing period starting on or after `validFrom` (the core prices each
-  period at its first billable day); new orders from `validFrom`.
-- **Offering code (migration 0003):** the spec's `externalIdentifier[]` with exactly one
-  entry `{id: <code>, externalIdentifierType: "offeringCode", owner: "bss", @type:
-  ExternalIdentifier}`. `owner` may be omitted on POST (any other value is a 422). The
-  code matches `^[A-Z0-9][A-Z0-9_-]{0,31}$` (upper case, so uniqueness never depends on
-  case), is unique (409 "offering code X is already in use"), optional, set on POST only
-  and read-only after (400). Offerings without one carry no `externalIdentifier`.
-- **Deviation: only references in `productOfferingPrice[]`.** The spec's
-  `ProductOfferingPriceRefOrValue` also allows an inline price; we accept references only
-  (an entry without `id` is a 422). Create the price first, then reference it.
-- `productSpecification` of an offering is read-only on PATCH.
-- **Migration 0002** adds what the API needs and 0001 had no place for. Its NOT NULL
-  columns have no default on purpose: if the tables are not empty the migration fails
-  and the deploy stops before the app starts.
-
-### TMF632, TMF629, TMF666 mapping
-
-| Resource | DB column <-> TMF attribute | Filters |
-|---|---|---|
-| individual | `party` with `party_type = 'Individual'`: `given_name` <-> `givenName`, `family_name` <-> `familyName` (both mandatory, as in the spec's create schema) | `givenName`, `familyName` |
-| organization | `party` with `party_type = 'Organization'`: `organization_name` <-> `name` | `name` |
-| customer | `name`, `status` (`Created`/`Active`/`Inactive`, ours), `party_id` <-> `engagedParty` (`PartyRef`, `@referredType` = the party type; fixed at creation) | `name`, `status`, `engagedParty.id` |
-| billingAccount | `name`, `state` (`Active`/`Suspended`/`Closed`, ours), `customer_id` <-> `relatedParty[0]` (role `customer`, required exactly on POST - 422 otherwise; `PartyRoleRef` to the Customer; exactly one, fixed at creation), `bill_cycle_day` <-> `billCycleDay`, `currency` <-> `currency`, computed <-> `accountBalance[]`, `credit_limit` <-> `creditLimit` (0003; see below) | `name`, `state`, `relatedParty.id` |
-
-An individual is not reachable under `/organization` and vice versa (404).
-
-- **Extension `BssBillingAccount`** (TMF extension pattern). Responses carry
-  `@type: BssBillingAccount`, `@baseType: BillingAccount` and `@schemaLocation:
-  /tmf-api/schema/BssBillingAccount.schema.json`, a JSON Schema served by the app that
-  adds `billCycleDay` (integer 1..28) and `currency` (ISO 4217). Both are required on
-  create. Both are fixed after creation: `currency` for good (PATCH is a 400, read-only),
-  `billCycleDay` for now (PATCH is a 409 with the reason; see "Open questions"). TMF666 has no currency attribute at all, and
-  `billStructure.cycleSpecification.billingDateShift` means an offset of the bill date
-  from the period start, not the day the period starts - hence the extension. PATCH
-  accepts `@type` `BssBillingAccount` or `BillingAccount`. Every full billingAccount body
-  in the tests is validated against both TMF666 and the served extension schema.
-- **`creditLimit` (migration 0003)** is TMF666's own Money attribute, always in the
-  account's currency (another `unit` is a 422), never negative (422), optional; PATCH
-  `null` removes it. **Informational only:** nothing - ordering included - is ever
-  refused because of it; the admin UI shows it and warns.
-- **Balance** is the spec's `accountBalance[]` with exactly one read-only entry:
-  `{"balanceType": "currentBalance", "amount": Money, "@type": "AccountBalance"}`,
-  computed on every read as payments (`done`) minus all ABRs. **Positive = the customer
-  is in credit** (has paid more than was charged); negative = the customer owes.
-  `accountBalance` in a POST or PATCH is a 400.
-
-### TMF676 (v4) mapping
-
-| payment | `billing_account_id` <-> `account` (AccountRef, `@referredType: BillingAccount`), `amount` + `currency` <-> `totalAmount` and `amount` (equal: no taxes), `received_at` <-> `paymentDate` and `statusDate` (the clock at POST), `status` (`done`), `payment_method` <-> `paymentMethod` (`{name, @type}`, both the stored word) | `account.id`, `status` |
-|---|---|---|
-
-POST records a received payment: `account`, `totalAmount` and `paymentMethod` (with a
-`name` or an `@type`) are mandatory, as in the spec. `amount`, if sent, must equal
-`totalAmount`; `taxAmount`, if sent, must be zero. `totalAmount.unit` must be the
-account's currency (422); the composite FK behind it maps to 409 if it ever fires.
-Payments are never changed or deleted (405).
-
-**A payment settles at once** (bill lifecycle slice 3): POST takes the billing
-account's row lock (`FOR UPDATE`, as `bill_account` does) before inserting, then
-applies its `paymentItem[]` (explicit lettering: `{item: {id, @referredType:
-CustomerBill}, amount}`; `totalAmount` if sent equals `amount`, `taxAmount` zero) and
-then the oldest open bills - one transaction. 422: an item's bill unknown or another
-account's, the same bill twice, an amount <= 0 / > 2 decimals / in another currency,
-`@referredType` not CustomerBill, items above `totalAmount`; 409: an item above the
-bill's remaining amount, or a bill on hold or settled. A refused item stores nothing.
-Responses carry `paymentItem[]` = every allocation from the payment summed per bill
-(absent while none) - it **grows** when the payment's unused credit pays later bills.
-**The lock is needed for payment vs payment only**: the payment's foreign key already
-takes a key-share lock on the account row, which waits on a run's `FOR UPDATE` but not
-on another payment's key share (proven: without the explicit lock two overlapping POSTs
-both read the same open bill; `test_two_payments_settle_one_after_the_other` fails).
-
-### TMF637 and TMF678 mapping
-
-| Resource | DB column <-> TMF attribute | Filters |
-|---|---|---|
-| product | `status`, `start_date` <-> `startDate`, `termination_date` <-> `terminationDate` (exclusive: the first day not billed), `created_at` <-> `creationDate`, offering name <-> `name`, `billing_account_id` <-> `billingAccount`, `product_offering_id` <-> `productOffering`, `created_by_item_id` / `terminated_by_item_id` <-> `productOrderItem[]` (`RelatedOrderItem`, role `creation` / `termination`) | `billingAccount.id`, `status` |
-| customerBill | `bill_date` <-> `billDate`, `bill_period` <-> `billingPeriod`, `amount_due` + `currency` <-> `amountDue`, amount_due - allocations (0 for a credit note) <-> `remainingAmount`, `payment_due_date` <-> `paymentDueDate`, payment allocations <-> `appliedPayment[]` (`{appliedAmount, payment: PaymentRef}`; a credit note's credit is not a payment and not listed), `category` (`normal`/`creditNote`), `onCycle` <-> `runType`, `BL-` + 8 hex <-> `billNo`, `state`, `billing_account_id` <-> `billingAccount` | `billingAccount.id`, `state` |
-| appliedCustomerBillingRate | `charge_type` <-> `appliedBillingRateType` (`recurring` -> `appliedBillingCharge`, `refund` -> `appliedBillingCredit`), `amount` + `currency` <-> `taxExcludedAmount` (refunds negative), `period` <-> `periodCoverage`, `customer_bill_id` <-> `bill` and `isBilled`, `product_id` <-> `product`, `billing_account_id` <-> `billingAccount`, `created_at` <-> `date` | `billingAccount.id`, `product.id`, `bill.id`, `isBilled` |
-
-- Products are only written by orders; POST/PATCH/DELETE on `/product` are 405.
-- Bills and ABRs are only **created** by the billing run (`app/billing/adapter.py`),
-  which the worker's daily run calls per account. ABRs are read-only; a bill's **state**
-  changes with settlement (the run, payments) and by **`PATCH /customerBill/{id}`**
-  (merge patch, `state` only - the spec's `CustomerBill_MVO`; any other attribute 400):
-  `onHold` from `sent`/`partiallyPaid`; from `onHold` only the state its allocations
-  imply (`sent` if nothing paid, else `partiallyPaid`; strict - anything else is a 409
-  naming it); repeating the current state is a 200 no-op; every other change a 409. The
-  operator (X-Remote-User) goes into the state history. A release settles the account.
-- **Status flips:** a product ordered with a future start date is `created` until the
-  worker's run of its start date flips it to `active` (`products.flip_statuses`, see
-  "Billing worker"); until that run, on the start date itself, it still reads `created`.
-  Billing is driven by dates, not status, so money is unaffected.
-- **Likewise `pendingTerminate`:** a delete of a started product with a termination date
-  in the future sets `pendingTerminate`; the worker's run of that date flips it to
-  `terminated`. A termination date of today sets `terminated` directly. The product is
-  billed up to the day before `termination_date` either way.
-
-### TMF622 mapping and order processing
-
-| productOrder | `state`, `order_date` <-> `creationDate`, `completion_date` <-> `completionDate`, `requested_start_date` <-> `requestedStartDate` (the effective date: today when omitted), `billing_account_id` <-> `billingAccount` (mandatory - ours), items <-> `productOrderItem[]` (`item_id` <-> `id`, `action`, `state`, `product_offering_id` <-> `productOffering`, `product_id` <-> `product`; `quantity` is always 1), `product_order_error_message` <-> `productOrderErrorMessage[]` (`code`, `reason`, `timestamp`, `productOrderItem[]` refs) | `state`, `billingAccount.id` |
-|---|---|---|
-
-- **GET list, GET by id, POST only.** PATCH/DELETE are 405, cancelProductOrder is 404.
-- **Synchronous, one transaction** (`app/ordering/process.py`). States come from the pure
-  function in `app/ordering/states.py`: order `acknowledged -> inProgress -> completed`
-  or `acknowledged -> rejected`; items the same, plus `acknowledged -> cancelled`.
-- **4xx vs rejected.** Malformed JSON, an unknown attribute or an empty
-  `productOrderItem[]` is a 400; a missing mandatory field, a reference to a billing
-  account, offering or product that does not exist, duplicate item ids, a product in two
-  delete items, `quantity` other than 1, an add item without `productOffering` (or with a
-  `product`) and a delete item without `product` (or with a `productOffering`) are 422 -
-  nothing is stored. Everything else that is wrong is a business rejection: the order is
-  stored as `rejected` with its reasons and the answer is **201**.
-- **Rejection codes** (ours, in `productOrderErrorMessage[].code`): order level -
-  `accountNotActive`, `requestedStartDateInPast`; item level - `actionNotSupported`
-  (modify, noChange), `billingAccountMismatch` (item account differs from the order's),
-  `offeringNotSellable` (not `isSellable` or not `Active`), `offeringNotValid` (validFor
-  does not cover midnight of the start date), `noRecurringPrice` (none in the account's
-  currency at that midnight), `priceEnds` (from the start date, the offering's recurring
-  prices in the account currency do not form a gapless chain ending open-ended - the
-  whole chain is walked, not just the price at the start; D-W20), `productOfOtherAccount`,
-  `productAlreadyEnded`, `openDeleteItem`, `productNotStarted`.
-- **All or nothing.** One reason anywhere rejects the order: failing items are
-  `rejected`, the rest `cancelled`, nothing is executed. A rejected order is decided
-  before its rows are inserted, so its items are stored directly in their final states -
-  a rejected delete item must never be stored open, or it would collide with the open
-  delete it is rejected for (the `product_order_item_one_open_delete` index would abort
-  the transaction and the rejected order could not be stored).
-- **Row lock.** The products of delete items are locked (`SELECT ... FOR UPDATE`, in id
-  order) before anything about them is read. A concurrent second delete waits, then sees
-  the product terminated and is rejected with `productAlreadyEnded` (proven with two
-  connections in `tests/test_order_concurrency.py`; without the lock it waits on the
-  product UPDATE instead and terminates the product a second time).
-- **Dates.** `requestedStartDate` is converted to the date in BILLING_TZ and returned
-  normalized (`2026-10-01T23:30:00Z` -> product `startDate` 2026-10-02). It defaults to
-  today and may not be in the past. **Our interpretation:** it is the start date of
-  `add` items and the termination date of `delete` items (TMF has no per-item date).
-- **add** creates the product with `created_by_item_id`; status `active` if it starts
-  today, `created` if later (the worker flips it; "Status flips" above). The item then
-  references it.
-- **delete** of a started product sets `termination_date` (exclusive),
-  `terminated_by_item_id` and status `terminated` (termination today) or
-  `pendingTerminate` (termination in the future; flipped by the worker, as above).
-  **delete of a product that has not started** cancels it: status `cancelled`, `termination_date = start_date` (0 billable days); a
-  requested date after its start date is rejected (`productNotStarted`).
-
-## Billing (stage 3)
-
-`app/billing/core.py` is pure: no database, no clock, no I/O. `compute(state, as_of, tz)`
-takes one account's `BillingState` (frozen dataclasses from `model.py`) and returns the
-ABRs and bills to write. `app/billing/adapter.py` loads the state through the repository
-(`app/repository/billing.py` maps rows <-> dataclasses; the core never sees a dict) and
-writes the result: `bill_account(conn, account_id, run)`, one transaction per account
-(a savepoint inside the caller's). The stage 4 worker calls it once per account per run.
-
-**Periods.** Calendar-aligned to `bill_cycle_day` D: `[D of month M, D of month M+1)`,
-28-31 days. The cycle day is assumed fixed (see Open questions).
-
-**When a period is charged: in advance, once its first billable day is <= as_of.** The
-first billable day is `max(period start, start_date)`. Charging waits for the product's
-start, not just for the period's: the price is looked up at that day's midnight, which
-must be in the past when the charge is written (a future midnight's price can still
-change). Consequence: **a product cancelled before its start is never charged**.
-
-**Price.** The offering's monthly recurring price in the account's currency, valid at
-midnight (BILLING_TZ) of the period's first billable day. A price change mid-period
-applies from the next period. None found -> `MissingPrice` naming product, day and
-currency (never skipped); more than one -> `InconsistentState`. Prices need no visibility
-filter (unlike orders, below): a price change only takes effect at or after the moment it
-was made (prices never start in the past and are never ended retroactively), and the core
-only looks prices up at midnights <= as_of, so a replayed earlier date can never see a
-later change.
-
-**Expected-vs-actual diff, per product and period:**
-
-- `expected = round_half_even(price x billable_days / period_days, 0.01)`, rounded once.
-  `billable_days` counts `start_date <= d < termination_date` inside the period; zero for
-  `cancelled`/`aborted`. Every other status is billed by dates alone (`created`,
-  `suspended`, `pendingTerminate`, ...).
-- Nothing stored -> a `recurring` charge for the billable range, even if it rounds to 0.00.
-- A charge stored -> first re-check it still equals `round(price x its days /
-  period_days)` (else `InconsistentState`), then `diff = expected - (charge + refunds)`:
-  0 -> nothing; < 0 -> a refund of `diff` (negative) for the unbilled tail
-  `[termination_date, charge end)`, or the whole charge when nothing is billable any more,
-  `refunds_rate_id` -> the charge; > 0 -> `InconsistentState` (impossible by the rules).
-- The refund is never priced on its own days: `charge + refund` must equal one correct
-  rounding of the used days, or cent drift accumulates (`round(p x 29/30) - round(p x
-  22/30)` != `round(p x 7/30)` for p = 0.02; locked by
-  `test_refund_keeps_the_period_net_exact`).
-- **One refund per charge** (`refunds_rate_id UNIQUE`, and refunds may not overlap).
-  Enough because termination dates are immutable: a product is deleted once (a second
-  delete is rejected `productAlreadyEnded`), so the expected net of a period drops at most
-  once. A second reduction would raise `InconsistentState`.
-- If the termination is already known when the period is charged, there is one reduced
-  charge and no refund. Daily runs and one catch-up run can therefore store different rows
-  (charge + refund vs one reduced charge) with the same net per period.
-
-**Bills.** A bill on cycle day D covers `[D, next D)` and collects every unbilled ABR of
-the account whose **run date** (`billing_run.run_date` of the run that wrote it) is <= D.
-A run issues the bills for every cycle day after the account's last bill up to as_of;
-one that would collect nothing is skipped (a 0.00 bill of 0.00 charges is still issued).
-`amount_due` is the sum and may be negative. ABRs written in the run of D join the bill
-of D; a product starting mid-cycle, or a late ABR, goes onto the next bill. Run date, not
-`created_at`: `created_at` is the database's `now()`, outside the injected clock, and a run
-for D that crosses midnight or is retried the next day would date its ABRs D+1.
-
-**What a run sees: order-driven facts completed before 00:00 of its run date** in
-BILLING_TZ (end-of-day processing of D-1). The adapter filters products by the
-`completion_date` of the order that created them, and terminations/cancellations by the
-order that set them (an invisible termination is passed with the status the product had
-before it). An order placed on D is first seen by the run of D+1, whatever time the run
-of D executes. This makes a replayed date see exactly what the daily run saw.
-
-**Concurrency and guards.** `bill_account` locks the billing account row (`FOR UPDATE`)
-before reading: a concurrent second call waits, then sees the first one's ABRs and writes
-nothing (without the lock it collides on `abr_no_overlap`; proven with two connections
-in `tests/test_billing_db.py`). It only writes into a run that is `running` (re-read
-`FOR SHARE`). Any `BillingError` rolls the whole account back.
-
-**Tests.** `tests/test_billing_core.py`: the hand-checked examples (half-even 1.62 vs
-1.63, 300 x 17/31, 27/28 vs 27/29 days, refund -116.13, ...). `tests/test_billing_properties.py`
-(hypothesis, pinned exactly): idempotence, net per period = one rounding, lifetime without
-drift, refund shape, no overlap, precision/currency, bills collect every ABR exactly once,
-replay identical, daily vs one catch-up run equal in non-zero net per period. The oracle
-counts billable days one by one, independently of `app/billing`. `tests/test_billing_db.py`:
-the same through the adapter and the real schema, plus the TMF678 view, visibility on
-the day boundary and replay across an outage. Every rule above was broken once to see a
-test fail (half-up rounding, refund priced separately, overlapping charges, visibility `<=`,
-termination always visible, no account lock, no running-run guard).
-
-**Stage 4 must:**
-
-- run the date D only at or after 00:00 of D (BILLING_TZ). A run for D started earlier
-  would miss orders completed between its start and midnight, which a replay would see;
-- after an outage, replay every missed date in order, each with its own `billing_run`, so
-  run dates and bills match daily runs. A single multi-month `as_of` call is for tests
-  only (it puts every catch-up ABR on the bill after as_of);
-- call `bill_account` per account and record a failing account without stopping the run.
-
-## Billing worker (stage 4, in progress)
-
-`app/worker/`, from `docs/stage4-design.md` and the stage 4 planning decisions (Q1-Q14,
-"Next session"). What exists so far (slice b: b1, b2, b3; slices c, h, d, e):
-
-- **Ownership** (`db.py`): one connection per worker (W1: autocommit, `connect_timeout`
-  10, keepalives 30/10/3, `lock_timeout` 30s); the session advisory lock on it says who
-  owns billing - the lock and the work fail together.
-- **`start_run`** (`runs.py`): ownership first (`RunInProgress` otherwise); then new /
-  `AlreadyCompleted` / reopened (failed, attempt + 1) / taken over (running, owner gone).
-- **One date, account by account** (`process.py`, `DateRun.step()`): members = accounts
-  opened before 00:00 of the date (`opened_at`, injected clock), in id order. Per account
-  **one transaction** - its charges and its `billing_run_account` row commit together
-  (proven: a failure between them leaves neither, and a takeover bills it exactly once):
-  an unresolved earlier failure -> `blocked` (waits for that run); `BillingError` ->
-  `failed`; else `ok`. Accounts already ok in the run are never processed again.
-- **"Completed" means every member is ok**: `billing.finish_run` refuses (`RunNotComplete`)
-  while a member is failed, blocked or has no row; otherwise the run closes `failed` with
-  `failure_kind=accounts` ("N of M accounts not billed (...)") and later dates go ahead.
-- **Retry** (`retry_run`): only the run's failed accounts; an account that succeeds is
-  then billed for its blocked later dates in order, reopening one run at a time (Q2), and
-  stops at the next failure (later blocked rows then wait for that run). Proven against
-  a control database: the account ends with exactly the charges and bills of a run where
-  nothing failed (a charge on Dec 1 and a refund on Dec 3, not one reduced charge).
-- **Whole-run failure** (slice b3): anything but an account's `BillingError` - the
-  database gone, `LockNotAvailable`, a bug - aborts the run (`RunAborted`). If the
-  connection still works the run is marked `failed`, `failure_kind=run`; a dead worker
-  cannot mark it, so it stays `running` and its lock dies with the connection (takeover).
-  **No later date is billed** while a run failed as a whole (`HeldBack`), and the
-  scheduled retry of that date waits **5 min, 15 min, then hourly** from `finished_at`
-  (`NotYet`, `plan.retry_time`); an operator's retry or catch-up is not held to the
-  backoff. Accounts already ok are never billed again.
-- **`LockNotAvailable` is necessarily run-level**: an account's outcome row has a foreign
-  key to its `billing_account` row, so recording any outcome for a locked account needs
-  the same lock - proven when a mutation that classified it as an account failure still
-  aborted the run. The negative proof that counts is "skip the locked account and go on",
-  which the test catches.
-- **Takeover**: after a death between accounts or a dropped connection the successor's
-  `start_run` takes the run over (attempt + 1, `started_at` = now: the attempt's start, as
-  on a reopen) and bills only the accounts without an ok row; while the owner is alive a
-  rival gets `RunInProgress`.
-- **Status flips** (slice c, `products.flip_statuses`, run by `bill_date` at the start of
-  each run, in its own transaction, before billing, inside the whole-run failure
-  handling): `created`/`pendingActive` -> `active` once `start_date` <= run date,
-  `pendingTerminate` -> `terminated` once `termination_date` <= run date, only for
-  products whose order (creating, resp. terminating) completed before 00:00 of the run
-  date; blocked accounts included (statuses follow dates, D-W5); every other status
-  untouched; idempotent. The due products are locked `ORDER BY id FOR UPDATE` first,
-  like `lock_products` in ordering, so a delete order and the flips only wait for each
-  other (Q8) - with mismatched orders the test gets a real `DeadlockDetected`. The
-  visibility cut-off cannot decide anything for API-made data (a product due by D whose
-  order completed on D starts on D and is active at once), so it is tested with orders
-  completed at 23:59:59 and 00:00:00.
-- **The request queue** (slice h, `queue.process_requests`): the internal API only inserts
-  `worker_request` rows; the owner takes them oldest first (marks picked, carries out,
-  marks done). catchUp runs `plan.catch_up_dates` in order with the `catchUp` trigger
-  (stops at a whole-run failure); retry: `retry_run` for an accounts failure, the date
-  again (trigger `retry`, no backoff) for a whole-run failure, nothing if no longer
-  failed. A request that raises is still marked done (logged) so the queue cannot
-  block; a picked request of a dead worker is picked again. **Ties of `requested_at`
-  are broken by `created_at`** (insertion order): ordering by the random id carried out
-  two requests of the same instant in random order - 14 of 20 runs of the test failed
-  before the fix, 20 of 20 passed after.
-- **The schedule** (slice d, `plan.scheduled`, `loop.tick`): a date is due at
-  `BILLING_RUN_AT` (00:30), not 00:00 (Q5); before that only up to yesterday. A wake-up
-  bills on its own: a run that failed as a whole (its date only, after the backoff); a
-  run left `running` (its worker was killed or stopped - the 03:00 reboot, a deploy) is
-  resumed first and taken over; then every date after the latest run up to the due date
-  **if they lie in the automatic window (the due date and the day before, Q4)** - an older
-  missing date is a gap: nothing is billed, a warning says "catch up from the admin UI"
-  (billing past it would leave it impossible to replay in order); first start ever: the
-  due date only (D-W15). Before a new scheduled date the runs that failed because of
-  accounts are retried once (D-W17); then the dates; then the queue.
-- **The process** (`python -m app.worker`, `--once` for one wake-up): refuses to start
-  (exit 2) unless `BILLING_RUN_AT` is strictly between 00:00 and 02:00 (D-W13) and unless
-  `WORKER_FAKE_NOW` is unset or `APP_ENV=test` (Q14). Wakes every 60 s; SIGTERM/SIGINT
-  finish the account in hand, leave the run `running` (not failed), close the connection
-  (the lock goes with it) and exit 0 (D-W11); SIGKILL leaves nothing half-written and the
-  next worker takes the run over. The liveness file (`WORKER_LIVENESS_FILE`, default
-  `/tmp/worker-alive`) is touched every wake-up and after every account of every path -
-  scheduled, catch-up, and the retries, which have no stop checkpoint - through the
-  heartbeat (`DateRun(on_account=...)`, called in `step()`; `0d463e0`), for slice f's
-  healthcheck. `tests/test_worker_heartbeat.py` proves it scaled in time (threshold 1 s,
-  0.3 s per account, every run longer than the threshold): one heartbeat per account and
-  no gap over the threshold in all four paths; without the call all four fail. Proven on real processes on a pinned clock (`tests/test_worker_signals.py`).
-  **Found by the SIGKILL test:** the first planner only looked at dates after the latest
-  run, so a run left `running` was never resumed - fixed by resuming the earliest
-  unfinished run first.
-- **`GET /billing-status`** (slice e, `app/status.py`): the external monitor's freshness
-  signal, unauthenticated (a Caddy carve-out like `/healthz`), so the body is exactly
-  `{date, status, ageSeconds}` of the latest run - no amounts, names or counts (a strict
-  schema with `additionalProperties: false` checks every response in the tests). The
-  expected date is today once the local time (BILLING_TZ) is past `BILLING_RUN_AT` + 2 h
-  grace, else yesterday (D-W19). Latest run: failed -> 503 `failed`; running -> 200
-  `running` for under 2 h since `started_at` (a takeover restarts it), 503 after or once
-  its date is before the expected date (a worker that keeps dying cannot hold 200);
-  completed on or after the expected date -> 200 `ok`,
-  earlier -> 503 `stale`; no run at all -> 503 `{"date": null, "status": "none",
-  "ageSeconds": null}` (Q6). `ageSeconds` counts from `finished_at`, else `started_at`.
-  **Not part of `/healthz`**: a late run never marks the app unhealthy (tested). Not in
-  any spec; an unknown query parameter is a 400. Negative proofs: failed read as
-  completed, running never overdue, grace removed, an extra body field.
-  **By design, it is 503 while the worker catches up an older date after downtime**
-  (503 `running` on a late date, 503 `stale` between dates) until the run of the
-  expected date: the external monitor alerts during every catch-up - billing is behind.
-  The deploy's check and `make smoke` accept 503 `running`/`stale` (shape only), so they
-  do not fail on it (`docs/billing-worker.md`, "Billing status").
-- **Test pitfalls found here**: `pg_locks` is cluster-wide - count advisory locks of the
-  current database only (parallel tests hold their own); `pg_terminate_backend(pid)`
-  returns before the backend exits - use `pg_terminate_backend(pid, 5000)`.
-- **The seed** bills each day through `bill_date` on a worker connection; every seeded run
-  is completed with one ok row per member.
-- **Deployment** (slice f): `worker` in `compose.prod.yaml` only - same image,
-  `python -m app.worker`, `restart: unless-stopped`, `stop_grace_period: 60s` (D-W11),
-  256m / 0.25 CPU, read-only with `/tmp` tmpfs, no ports or alias, the app's environment
-  (`APP_ENV`, `LOG_LEVEL`, `DATABASE_URL`; `BILLING_TZ`/`BILLING_RUN_AT` passed to neither,
-  so both use the same defaults). **Healthcheck (Q13)** replaces the image's `/healthz`
-  probe: `/tmp/worker-alive` younger than 180 s; a worker that cannot reach the database
-  stops touching it and goes unhealthy. It is `find -mmin -3` in bash, no Python (see
-  "Healthchecks" under Conventions). `deploy.sh`
-  waits for **both** `app` and `worker` healthy (90 s) and checks `/billing-status` on
-  the VPS: 200 must say `ok` or `running` (a run younger than the 2 h grace - e.g. the
-  one the deploy's own worker restart left for its successor to take over), 503 one of
-  `stale|failed|running|none`, anything else fails (body printed - date, status, age
-  only); `make smoke` checks the same locally (proven: without `stale` in the set it
-  failed on the local 503 stale). Both call `scripts/billing-status-check.sh`; its cases
-  (`scripts/test-billing-status-check.sh`, run by `make test`) cover every answer of
-  `app/status.py` both ways - proven: with 200 = `ok` only (the earlier rule, doc finding
-  #1) both 200 `running` cases fail, with any status on a 200 five reject cases fail. Locally there is no
-  long-running worker: **`make worker-once`** (D-W14). **The first deploy starts billing
-  on the VPS**: no runs yet -> the due date only (D-W15).
-
-## Bill lifecycle (option C, in progress)
-
-Design and decisions: **`docs/bill-lifecycle-design.md`**, section 6 (decided
-2026-10-10: option C, payment term 30 days configurable, credit notes pay older open
-bills, overdue is display only, a Record payment dialog). Four slices: 1. schema +
-settlement core (`cloud/bill-settlement-core`), 2. worker (`cloud/bill-settlement-worker`,
-stacked on 1), 3. API (`cloud/bill-settlement-api`, stacked on 2), 4. UI + seed
-(`cloud/bill-settlement-ui`, stacked on 3). **All four slices are built and merged**
-(`1d7a242`, 2026-10-10; not deployed yet). Slice 4: the subscriber card's Bills panel, bill dialog with hold/release,
-Record payment with optional lettering, "Due on bills" / "Unused credit" KPIs
-(`screens/Bills.tsx`, details in `docs/ui.md`); TMF678 types are generated now
-(`gen-types.mjs`); several exact amounts in one body via `jsonWithAmounts`; the seed puts
-Olga's oldest bill on hold and letters a Sergey payment to his newest bill
-(`test_seed.py` asserts every state and both allocation kinds); `test_ui_requests.py`
-replays the payment and PATCH bodies; the e2e opens the held bill (read-only). Negative
-proofs: payment amount as a float, prefill newest first. Slice 3: payments settle at once and take explicit
-`paymentItem`s (see "TMF676 (v4) mapping"), bills carry remainingAmount, paymentDueDate,
-appliedPayment, billNo, runType, category and are held/released by PATCH (see "TMF637
-and TMF678 mapping"), and two internal endpoints (settlement summary, bill detail; see
-"Internal API"). `tests/test_api_bill_settlement.py`; negative proofs: no settlement in
-POST /payment, no settlement on release, no explicit lock in POST /payment (fails only
-the payment-vs-payment test - the foreign key already serializes a payment with a run).
-
-- **The run issues and settles** (slice 2, `bill_account`, in the account's one
-  transaction after `apply_result`): `issue_bills` takes every bill of the account still
-  `new` or `validated` (its own, and any left `new` from before 0006 - the back-fill
-  needs no data migration), validates it (`settlement.validate`: amount_due = the sum of
-  its ABRs, at least one ABR, period = [bill_date, next cycle day); a failure is
-  `InconsistentState`, so the account fails in the run and nothing of it is written),
-  then new -> validated -> sent, and -> settled when amount_due <= 0 (zero bills and
-  credit notes). Then `settle_account` applies the unused credit (cause `run`, dated by
-  the attempt's `started_at`). Every run settles every member account, so a payment is
-  applied by the next run even if it issues no bill. `write_settlement` sets the bounds
-  trigger IMMEDIATE once it has written allocations, so a breach fails inside the
-  account's savepoint, not at the worker's commit. History rows of one run share
-  `changed_at`; `seq` (identity) orders them.
-- Proven (`tests/test_bill_lifecycle_db.py`): issue steps and idempotence; the stage 3
-  example 4 credit note (-116.13) settled at issue and paying the Dec bill down to 183.87;
-  a payment before the first bill settling it at issue, the rest carried to January, a
-  later payment applied by a run without a bill; a bill left `new` issued and settled by
-  the next run; tampered amount or period failing the account with nothing written; the
-  6.5 invariant after each step. The replay test now also compares state, due date and
-  category. Negative proofs: validation skipped, no settlement in the run, credit notes
-  not settled at issue, only this run's bills issued - each failed a test.
-
-- **Migration 0006**: `customer_bill.payment_due_date` (bill_date + the term in force when
-  the bill is written; existing bills + 30, a literal) and `category` (`normal` |
-  `creditNote`, creditNote iff amount_due < 0, a CHECK); `payment` UNIQUE (id,
-  billing_account_id); **`bill_allocation`** (what paid a bill: a payment or a credit
-  note, `automatic` | `explicit`, append-only, composite FKs keep everything in one
-  account and currency) with a **deferred constraint trigger** for the bounds that span
-  rows (per paid bill <= amount_due, per payment <= amount, per credit note <=
-  -amount_due; only a positive bill is paid, only a negative one gives credit) - checked
-  at commit, so `rejected(...)`'s savepoint cannot catch it: test with `conn.commit()`;
-  **`customer_bill_state_change`** (from, to, changed_at by the injected clock, cause
-  run | payment | operator, operator only for operator). Existing bills get their issue
-  row (NULL -> new) dated by their run's `started_at`; new bills get it from `apply_result`
-  (`issued_at` = the running attempt's `started_at`).
-- **`BILL_PAYMENT_TERM_DAYS`** (`app/config.py`, 1..365, default 30): read by the worker
-  when it writes a bill; an invalid value fails settings validation at startup. Passed to
-  neither service in `compose.prod.yaml` (like `BILLING_TZ`): changing it there is a
-  compose change.
-- **`app/billing/settlement.py`** (pure): `settle(bills, payments, explicit, payment_id)`
-  applies the explicit items of one payment, then the oldest unused credit (payments by
-  `received_at`, then issued credit notes by bill date) to the oldest open bill (`sent` /
-  `partiallyPaid`, positive). `onHold`, `new`, `validated` and `settled` bills are never
-  paid automatically; explicit items to them are refused (`BillNotOpen`, and
-  `UnknownBill`, `DuplicateBill`, `ExceedsRemaining`, `ExceedsPayment`).
-  `operator_change` / `operator_states`: hold from `sent`/`partiallyPaid`; release only to
-  the state the allocations imply (strict: anything else is `TransitionRefused` naming it).
-- **Repository**: `load_settlement` (bills with allocated / credit used, payments with
-  used; call it under `load_account`'s row lock), `write_settlement` (allocations, state
-  changes with history rows, touches every paid bill so `lastUpdate` moves),
-  `record_bill_state` (refuses if the bill left `from_state`), `bill_state_history`.
-- **Tests**: `tests/test_settlement.py` (examples, hold/release table, hypothesis: the
-  remaining per bill equals the cumulative rule of the design's 3.0 whether payments
-  settle at once or only in runs; no open bill and unused credit at once; holds skipped;
-  explicit items exact), `tests/test_settlement_db.py` (round trip, trigger bounds at
-  commit, FKs, CHECKs), `test_0006_on_existing_bills`. Negative proofs, each made once
-  and reverted: newest-first allocation, holds not skipped, credit notes ignored,
-  release to any open state, the trigger's bill bound doubled, the due date ignoring the
-  configured term - each failed at least one test.
-
-## Internal API (stage 5)
-
-`app/internal/`, mounted at `/internal/v1`, serves what the admin UI cannot get from the
-TMF APIs without re-implementing billing rules. Ours, not TMF; same conventions as
-`app/api` (TMF `Error` bodies, Decimal-exact Money `{unit, value}`, one transaction per
-request, the injected clock, offset/limit paging with `X-Total-Count`/`X-Result-Count`,
-unknown query parameters are a 400), except that **dates are plain business dates**
-(`YYYY-MM-DD` in BILLING_TZ). The contract is `spec/internal/bss-internal.oas.yaml`:
-strict schemas (`additionalProperties: false`), validated for every response in the
-suite by `tests/apiclient.py`, and the source of the UI's TypeScript types (never
-FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` next to
-`allOf` does not admit null), so nullable variants are spelled out (`NullableMoney`, ...).
-
-| Endpoint | What |
-|---|---|
-| `GET /context` | businessDate (injected clock), now, timeZone, utcOffset (at now), environment (`APP_ENV`), operator, currency (`UI_CURRENCY`, default RUB), billingRunAt (`BILLING_RUN_AT`, default 00:30), paymentTermDays (`BILL_PAYMENT_TERM_DAYS`) |
-| `GET /billingAccount/{id}/settlement` | outstanding (remaining of every bill, on hold included), unallocatedCredit (payments and issued credit notes not applied yet), overdue {count, amount} (due before the business date, something remaining - display only), onHold {count, amount}, paymentTermDays. Invariant (tested through the API): outstanding - unallocatedCredit = -(balance + unbilled ABRs) |
-| `GET /customerBill/{id}` | the bill dialog: billNo, dates, amountDue, remainingAmount, state, category, overdue, allowedStates (what PATCH accepts now, from `settlement.operator_states`), charges, sources (payments / credit notes, automatic / explicit, in order), history (from, to, changedAt, cause, operator) |
-| `GET /billingAccount/{id}/firstCharge?productOffering.id=&startDate=` | dry run of an add order: the stage 3 core's `compute()` on the hypothetical product. period, cyclePeriod, billableDays of periodDays, price, amount, chargeRunDate = max(startDate, businessDate + 1), billDate = first cycle day >= chargeRunDate, next full period, balance, balanceAfter (= balance - this charge only), creditLimit, exceedsCreditLimit. startDate in the past or no price in the account currency -> 422 |
-| `GET /billingAccount/{id}/products` | not-ended products (created, pendingActive, active, pendingTerminate, suspended) with offering name/code, specification name, price valid today (or on the start date), nextChargeDate (start date if not started, else the next cycle day after today; null if the product ends by then) |
-| `GET /billingAccount/{id}/charges` | ABRs newest run first, with runDate, billableDays of periodDays (the proration), offering, bill |
-| `POST /productOffering/{id}/priceChange` | the atomic price change of a live offering (see the TMF620 deviation above): ends the open price at midnight of `validFrom`, creates and attaches the successor; 201 `{productOffering, endedPrice {endsOn}, newPrice {price, validFrom}}` |
-| `GET /billingAccount/{id}/transactions` | charges, refunds and payments as one ledger with balanceAfter. Positive = credit (as accountBalance); ordered by day (ABR: run date; payment: its date in BILLING_TZ), ABRs before payments on the same day (the run of D happens at its start), then timestamp, id. The newest balanceAfter equals the account balance (tested) |
-| `GET /billingRun` | stage 4: runs newest first - status, failureKind, trigger, attempt, times, accounts {total, ok, failed, blocked} (derived: members = accounts opened before 00:00 of the date), charges {count, amounts per currency}, error, isLatest |
-| `GET /billingRun/{id}` / `.../accounts?status=` | one run; its per-account outcomes (account, status, error, waitsFor run, attempts) |
-| `POST /billingRun/catchUp {upTo}` | queues a catch-up; **the API never bills**. upTo after the business date, or today before `BILLING_RUN_AT` (Q5) -> 422. 202 `{request, dates}` (a run that failed as a whole first, then every date after the latest run); 200 `{dates: []}` and nothing queued when nothing is due |
-| `POST /billingRun/{id}/retry` | queues a retry of any failed run (Q3); 409 if not failed or a retry is already queued; 202 `{request}` |
-
-- **operator** comes from the `X-Remote-User` header, which the shared Caddy must *set*
-  (overwrite) from the basic-auth user, so a client-sent header never passes through.
-  Anything not matching `^[A-Za-z0-9._@-]{1,64}$` is reported as null.
-- **Trust in `X-Remote-User`.** The app believes the header only because, from outside the
-  VPS, it is reachable solely through Caddy. It is not proof of identity: any other
-  container on the `shared` network can reach `bss:8080` directly and forge it, and so can
-  anyone with a shell or an SSH tunnel on the VPS (the app is also published on the host's
-  `127.0.0.1:18081`, which `make tunnel` uses). Acceptable for this demo because the value
-  is display-only - nothing is authorised by it. Anything that needs a real operator
-  identity must not rely on this header.
-- Every rule above was broken once to see a test fail (extra attribute vs the strict
-  contract, charge run date without the end-of-day rule, ledger sign, creditLimit
-  currency, duplicate code).
-- The billing run endpoints (stage 4 slice h; table above) follow the shape agreed in
-  stage 5 checkpoint 1, with retry of **any failed run** (decided in stage 4, superseding
-  "latest run only"; the worker still keeps each account's dates in order: retrying D+1
-  retries only the accounts that failed in D+1, accounts blocked on D stay blocked until
-  D is fixed). `tests/apiclient.py` maps `/billingRun/<uuid>` to `/billingRun/{id}`
-  unless the path is a declared literal (`/billingRun/catchUp`).
-
-## Frontend (stage 5) decisions
-
-- **A subscriber row is a billing account** (it has the balance, cycle day and products).
-  Name from the customer; the status pill and filter are the account's real `state`
-  (Active / Suspended / Closed), which is also what ordering checks (`accountNotActive`).
-  **A customer with two accounts shows as two rows.**
-- The subscribers list makes no per-row requests: one billingAccount list (balance
-  included) and one product list (`status=active`), grouped client-side, page by page.
-- "Registered" is replaced by "Cycle day" (no creation date in TMF629/666, and
-  `created_at` is the database's `now()`, not the injected clock).
-- **Subscriber create and modify** (`screens/SubscriberForms.tsx`, `cloud/subscriber-edit`;
-  details in `docs/ui.md`), through the existing TMF routes - no backend change. **There
-  is no delete subscriber operation** (confirmed by the human, 2026-10-10): accounts carry
-  products, bills and payments; an account can be Closed. New subscriber = party, then
-  customer (status Active), then billing account; Edit = merge patches of only what
-  changed, party -> customer -> account. A failed step names what already exists or was
-  already saved; nothing is undone. Cycle day and currency stay fixed. Bodies pinned on
-  both sides (component tests, `test_ui_requests.py`); the e2e opens both dialogs
-  read-only. Negative proofs: every account attribute always patched, the customer
-  created without `Active`. The card header carries Edit, Record payment (bill
-  lifecycle slice 4) and Add product side by side.
-- Credit limit: shown, and the over-limit warning in Add product, informational only.
-- Offering code: `externalIdentifier` (above). Subscriber no. and `BA-xxxxxxxx` are
-  display ids: the first 8 hex digits of the UUID, upper case.
-- Weekly recurrence is not offered (monthly only). One currency in the UI (`UI_CURRENCY`);
-  the backend stays multi-currency.
-- Pills for statuses the design lacks (`created`, `pendingTerminate`, `suspended`,
-  `cancelled`, Suspended/Closed accounts) reuse existing token colours only.
-- Retiring an offering does not end its prices; its products keep billing.
-- **Billing runs screen** (stage 4 slice g, `/billing-runs`, `screens/BillingRuns.tsx`;
-  details in `docs/ui.md`). The stage 4 note wins over the handoff (Q11): "Run manually
-  for a cycle date" is **Catch up to** a date (default and max = the due date: today
-  from `BILLING_RUN_AT` on, else yesterday - Q5), "Re-run" is **Retry**, offered on
-  **every** failed run (Q3: banner, history row, run dialog). A gap the worker will not
-  bill on its own (latest run older than the day before the due date, Q4) gets a note.
-  The run time shown is `BILLING_RUN_AT` (00:30) from the context. A run opens a dialog
-  with its per-account outcomes (failed / blocked / ok). The list polls every 5 s while
-  a run is running or a request queued from the screen is not carried out yet -
-  carried out = a run started at or after the request's `requestedAt` (server clock,
-  never the browser's) has finished; proven against the real worker in
-  `tests/test_ui_requests.py`. It gives up after 3 minutes with a note. The sidebar's
-  Billing runs item shows the run count, or the red "failed" badge when the latest run
-  failed, and is reloaded when the screen sees the latest run change.
-- Charge timing copy follows the end-of-day rule: an order completed today is charged by
-  the run of max(start, tomorrow) and billed on the next cycle day from there - nothing is
-  "charged on confirmation".
-- Smoke on the VPS: a separate basic-auth user `smoke` (own hash), GET-only in Caddy
-  (any other method 403); its plaintext lives only in the local `.env.smoke`, never
-  shipped and never printed.
-- Pre-commit runs `make web-lint` and `make web-test` only when staged files touch
-  `frontend/` or `spec/`. **A change in `app/api` or `app/internal` can still break the
-  UI** without touching either; `make verify` (which runs `web-e2e`) is the gate that
-  catches it.
-
-## Deploying the UI (stage 5, checkpoint 7)
-
-The Caddy side is vps-infra's: **`docs/vps-infra-change-request.md`** has the complete
-request - the read-only static mount of `~/bss/web` (created by vps-infra *before* Caddy is
-restarted, else Docker creates it root-owned), the site block (validated with Caddy 2.11.4
-in a local rehearsal), the GET-only `smoke` user, `/billing-status` unauthenticated, and
-the order of deploys (backup, vps-infra, then `make verify`).
-
-**First web deploy: done** - `9424b9b`, 2026-10-02, `make verify` end to end (migration
-0003 ran, web smoke 8/8 through Caddy).
-
-- **`deploy.sh`** builds the UI locally before any network step (`make web-build
-  WEB_BUILD=<tag>` stamps `index.html`'s `bss-build` marker) and refuses to start without
-  `SMOKE_BASIC_AUTH=smoke:<password>` in **`.env.smoke`** - a local-only file, gitignored
-  and never shipped. `.env.prod` is copied to the VPS as `~/bss/.env` (compose reads it
-  only to fill `${...}`; the container gets just the variables listed under
-  `environment:`, there is no `env_file`), so deploy.sh also refuses if `.env.prod` has a
-  `SMOKE_BASIC_AUTH` line. `.env.smoke` is denied to reads like `.env`/`.env.prod`
-  (settings.json, guard). **`DRY_RUN=1 ./scripts/deploy.sh`** runs every local check and
-  lists exactly what the rsync calls would ship (the same `ship_config`/`ship_web`
-  functions, `--dry-run` into a scratch directory), proves `.env.smoke` is not among it,
-  and stops before any network step. After the app is healthy it rsyncs
-  `frontend/dist/` **into** `~/bss/web` - hashed assets, then `index.html`, then a
-  `--delete` pass. The directory is never replaced or renamed (the bind mount holds its
-  inode); rehearsed locally: same inode across two deploys, stale assets removed. The UI
-  ships last, so it never calls an API the old app lacks.
-- **`scripts/web-smoke.sh <url> <build>`** then checks the public URL as the smoke user
-  (credentials via a curl config on a file descriptor, never argv or output): `/` without
-  auth 401; `index.html` of this build; a deep link answered by `index.html`; a hashed
-  asset; **`/internal/v1/context` as JSON, not the index.html fallback, with `operator` =
-  `smoke`** (Caddy sets the header); a `/tmf-api` list as JSON with `X-Total-Count`;
-  `POST` as smoke -> 403; `/healthz` open. In the rehearsal, removing the `/internal`
-  route, the header or the smoke 403 each failed it. A failure there leaves the app
-  deployed and healthy; fix the Caddy side and re-run `make deploy`.
-- **`make web-e2e`**: Playwright (official image, pinned by digest, same version as
-  `@playwright/test`) against the **built** UI served by `vite preview` (`web-preview`
-  service, proxying to the local app) and the seeded stack (`make seed` first). Read-only
-  and data-tolerant (it picks any offering priced today: the local catalog is also edited
-  in manual reviews); fails on any console error, page error or 5xx. Part of `make verify`
-  - the gate for API changes that break the UI.
-
-## Open questions
-
-- **Changing `billCycleDay`.** PATCH is a 409 today. Not settled in stage 3: a change has
-  to decide how the current period is treated (close it early, stretch it, or only apply
-  from the next period). The billing core assumes a fixed cycle day; with a changed one,
-  stored ABRs no longer sit inside one cycle period and `compute` raises
-  `InconsistentState`.
-- **Suspension semantics.** Billing is date-driven: `Suspended`/`Closed` billing accounts
-  and `suspended` products are billed like any other. Whether a suspension should stop or
-  reduce charges (and how a resume re-enters billing) is open; ordering already refuses
-  new orders on a non-Active account.
-
-- **Stale billing runs and `start_run` semantics: resolved in stage 4 slice b1.**
-  `app/worker/runs.py` `start_run` takes ownership first (a session advisory lock on the
-  worker's own connection, `app/worker/db.py`; another live owner -> `RunInProgress`
-  before anything is read), then: no run -> new; completed -> `AlreadyCompleted` (a
-  no-op); failed -> reopened (attempt + 1); running -> taken over (its owner is gone:
-  the lock dies with the connection; attempt + 1, trigger kept). The repository only
-  writes rows (`insert_run`, `lock_run`, `reopen_run`, `take_over_run`);
-  `BillingRunConflict` is gone.
-- **`APP_ENV` unset means `prod`** (`app/config.py`, since slice b1): the worker's clock
-  override (`WORKER_FAKE_NOW`, Q14) needs an explicit `APP_ENV=test`. compose always sets
-  it (`dev` locally); **`compose.prod.yaml` sets `staging`** for app and worker - decided
-  in slice f (2026-10-05): `vps-test` is a verification host, so it stays `staging`.
-- **Port the format fix to vps-lab-template** (fixed here, not there). In the template,
-  `make fmt` and `.claude/hooks/format.sh` both fail silently:
-  - `compose.override.yaml` mounts `app/` and `tests/` read-only on `app`, so
-    `docker compose run app ruff format` cannot write ("Read-only file system");
-  - the hook passes Claude Code's absolute host path into the container, where it does not
-    exist, sends format output to /dev/null, prints `ruff check` to stdout (not shown for
-    PostToolUse) and always exits 0.
-
-  Fix as done here: a `tools` service in `compose.override.yaml` (same `dev` target and
-  image, `profiles: [tools]`, only `./app`, `./tests`, `./alembic` mounted read-write and
-  `./pyproject.toml` read-only under `/app` - not the whole project, so the container
-  never sees `.env`, `.env.prod`, `.git` or `.claude` - venv stays in `/opt/venv`, no
-  ports, no DB, `network_mode: none`); `make fmt` runs
-  `docker compose run --rm tools sh -c 'ruff format . && ruff check --fix .'`, `make lint`
-  stays on `app`. The hook: no host-ruff branch (the container pins the ruff version);
-  acts only on `*.py` under `$CLAUDE_PROJECT_DIR`, passes the project-relative path; a
-  `.py` outside the mounted directories is reported as FAILED, not skipped silently; one
-  container start running `ruff format --force-exclude` then `ruff check --fix
-  --force-exclude --output-format concise`; clean -> exit 0 silently, findings -> stderr +
-  exit 2, any failure to run -> "format hook FAILED to run: <reason>" + exit 2; explicit
-  `timeout` in `.claude/settings.json`.
-- **Port the SSH hardening to vps-lab-template** (fixed here, not there). The template's
-  `deploy.sh` opens a new SSH connection per step (~15 per deploy) with no timeouts. The
-  VPS intermittently stalls *new* connections at the banner exchange
-  (`kex_exchange_identification: read: Connection timed out`); an rsync hung for minutes
-  and a `docker save | ssh` ship hung 17 min before failing. Fix as done here:
-  - refuse a dirty tree first, before any network call: `git status --porcelain` must be
-    empty - the tag is the commit hash, so a dirty build (image or compose files) would
-    ship different content under a clean-looking tag;
-  - one master per deploy: `SSH_OPTS=(-o ControlMaster=auto -o ControlPath=~/.ssh/cm-%C
-    -o ControlPersist=60 -o ConnectTimeout=15 -o ServerAliveInterval=15
-    -o ServerAliveCountMax=4 -o BatchMode=yes)`, opened explicitly with `ssh -MNf` before
-    the build (or reused if `ssh -O check` already finds one), verified with `ssh -O check`;
-  - the master is backgrounded, so it logs to a file: `-o ControlMaster=yes -o
-    LogLevel=VERBOSE -E "$(mktemp)"`. One `trap finish EXIT` closes the master with
-    `ssh -O exit` (only if this deploy opened it), prints the last 20 lines of that log
-    when the exit code is non-zero, and removes the log;
-  - every remote call rides the master: an `rssh` wrapper, `rsync -az --timeout=60 -e "ssh
-    <same opts>"`, and `timeout N ssh "${SSH_OPTS[@]}"` where `timeout` needs a binary;
-  - exactly one retry, 5 s apart, and only when opening the master exits 255; later steps
-    are never retried;
-  - skip the ship when the server already has the image. Not by `.Id`: both sides use the
-    containerd image store, where `.Id` is the manifest digest and differs between two
-    builds of identical content. Compare a fingerprint instead, computed by the same `sh`
-    snippet locally and remotely: sha256 of `docker image inspect --format '{{json
-    .RootFS.Layers}}{{json .Config}}'` (Layers alone miss a CMD/ENV/HEALTHCHECK-only
-    change). A missing image yields an empty fingerprint and never matches;
-  - Makefile `ssh`/`tunnel`/`remote` get the same timeouts and `BatchMode=yes` (no
-    multiplexing there).
-
-  Proven here: 1 TCP connection per deploy (sampled with `ss`), a dead endpoint (silent
-  listener or blackhole IP) fails in ~35 s (15 + 5 + 15) with a clear message.
-  Skip proven across hosts: two consecutive plain `make verify` runs of the same commit
-  (`921603f`) against the VPS - the first shipped the image, the second printed "image
-  already on server, skipping ship (fingerprint 8258832b6d9c)", so the Layers+Config
-  fingerprint survives `docker save | docker load`. The master-open retry also fired once
-  in real use, in the second run (exit 255, then success on the second attempt).
-  Connection counts were not sampled in these two runs. A run where the retry fires shows
-  2 connection attempts by design: the failed one plus the successful one.
+- The VPS reboots nightly at 03:00 (root cron). Everything must come back on its own —
+  never rely on manually started containers.
+
+## Agent guardrails
+
+Full text: [harness.md](docs/decisions/harness.md). `.claude/settings.json` and
+`.claude/hooks/guard.sh` (+ `guard.py`, quote-aware) protect against **agent mistakes,
+not a hostile agent**; they are a pattern matcher, not a security boundary. The rules
+above bind because they are the rules.
+
+- **Secrets:** besides `.env*` themselves, do not run `docker compose config` (prints
+  every substituted `${VAR}`) or `docker compose run/exec ... env`; `docker compose
+  config --quiet` validates without printing. Read, Grep, `cat` - the route does not
+  matter.
+- **Harness files need the human's OK**: `.claude/**`, `compose*.yaml`, `Makefile`,
+  `scripts/**` (and `docs/progress/scope.yaml`) - changed with the Edit tool only; the
+  guard blocks shell writes to them.
+- **Pre-commit hook** (`make hooks`; `scripts/pre-commit.sh`): `make lint` + `make test`,
+  plus `web-lint`/`web-test` when `frontend/` or `spec/` is staged. It refuses a commit
+  unless the working tree is exactly what is committed. `git commit --no-verify` only to
+  skip it deliberately (a WIP commit, or a cloud session, where it cannot run - say so in
+  the message). Full log in `.git/pre-commit-logs/`.
+- **Pre-push hook** (`scripts/pre-push.sh`): refuses bcrypt hashes, `.env*` paths, branch
+  deletions and non-fast-forwards in the pushed commits. Never bypass it (`--no-verify`).
+- **Cloud mode** (`CLAUDE_CODE_REMOTE=true`, set by Claude Code in every cloud session):
+  the SessionStart hook runs `scripts/cloud-setup.sh` (PostgreSQL, venv, `npm ci`); the
+  guard allows `npm`/`npx`/`node` on the host, blocks any command naming `vps-test` or
+  the VPS's public domain (read those files with the Read tool), and lets a push through
+  only as `git push -u origin cloud/<topic>`. The commands that replace the make targets
+  there: [docs/cloud.md](docs/cloud.md).
+
+## Working style
+
+- For anything that changes the Dockerfile, compose files, deploy script or the data
+  model: propose a plan first, then implement.
+- After changing runtime behaviour, run `make test`; before saying "it works on the
+  server", run `make verify`.
+- When a container misbehaves, read `make logs` before changing code.
+- **Files are edited only with the Edit/Write tools** - never through shell heredocs,
+  `sed -i`, `python -c`/scripts that rewrite files, or redirects (`>`, `>>`, `tee`).
+  Temporary negative-proof mutations included: make them with Edit and revert with Edit.
+- **If the guard (or any permission rule) blocks a shell command, stop and report it.**
+  Do not reach the same result another way (another tool, a script file, a different
+  path spelling) - that is exactly what the block exists to prevent, even when the block
+  looks like a false positive. Say what was blocked and why it seemed needed; the human
+  decides.
+- **Never filter or truncate the output of `git commit`, `make test`, `make verify` or
+  the pre-commit hook** - no `grep`, `tail`, `head` (or `| ... | tail -1`) on them. If the
+  output is too long, redirect all of it to a file outside the repo (the scratchpad,
+  `/tmp`) and read that file. The one unexplained hook failure (see ["Pre-commit hook"](docs/decisions/harness.md#pre-commit-hook))
+  is undiagnosable because its commit was run through `grep ... | tail -1`.
+- **Commit messages go through a file** (Write it to the scratchpad, then `git commit -F
+  <file>`), not a heredoc (`git commit -F - <<'EOF'`). `guard.py` cannot tokenise a
+  heredoc, and the raw-text fallback is deliberately broad: a message that mentions VPN
+  ports next to ssh/docker is blocked (a regression case locks this in).
+- **Per change:** plan, tests, negative proofs (break the rule once, see a test fail,
+  revert), `make lint`, `make test` (x3 for a slice), `make progress` when scope items
+  change (`scope.yaml` needs the human's approval), the decision recorded in
+  `docs/decisions/` (or here, if every session needs it), then show the diff and commit
+  only after the human's OK. Small, focused commits; `make lint && make test` before each.
+
+**Rules that bite in every area** (the full rule is in the linked file):
+Money is `Decimal`, never float ([data-model.md](docs/decisions/data-model.md)).
+Nothing in `app/` reads the wall clock except `app/clock.py` (same file). Ranges are
+half-open and billing follows dates, not status (same file). Migrations already on
+`master` are immutable; dependencies are pinned, never floating
+([infra.md](docs/decisions/infra.md#conventions)). `/healthz` stays cheap and checks the
+DB (same file). Unknown attributes are a 400; the contract is the vendored specs, never
+`/openapi.json` ([tmf-api.md](docs/decisions/tmf-api.md)). Orders alone create or end
+products; only the billing run creates ABRs and bills ([tmf-api.md](docs/decisions/tmf-api.md#tmf637-and-tmf678-mapping)).
+Node runs only in containers on the workstation; the UI's write requests are pinned on
+both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
@@ -1286,11 +198,11 @@ Then, in this order (as of 2026-10-05, after slice f):
    (`e06a22b`, `/billing-status`), f (`dcbedeb`). Per slice: plan, tests, negative proofs, `make lint`,
    `make test` x3, `make progress`, CLAUDE.md, then show the diff and commit only after
    the human's OK. Worker 10/10, API 54/54 in `docs/PROGRESS.md`. The planning
-   decisions Q1-Q14 are recorded (see "Billing worker").
+   decisions Q1-Q14 are recorded (see ["Billing worker"](docs/decisions/worker.md)).
 2. **Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests
    recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables`
    of each test database before it is dropped; UI: done for vitest - `expectUi(id)`,
-   see "Progress tracker"; Playwright could record the same way),
+   see ["Progress tracker"](docs/decisions/harness.md#progress-tracker); Playwright could record the same way),
    the drift check in the pre-commit hook and `make verify` (with negative proofs), and
    "deployed" from `docs/progress/deployed.txt`. Slice b also defines the `worker` area
    (capabilities proven by `@pytest.mark.capability(...)` tests).
@@ -1310,6 +222,11 @@ Then, in this order (as of 2026-10-05, after slice f):
 8. **FastAPI's `/docs`, `/redoc`, `/openapi.json` in prod**: decide whether they stay
    exposed (behind basic auth) or get disabled; add the decision to `scope.yaml` either
    way (needs the human's approval).
+
+Also pending, not ordered: the two fixes to port to vps-lab-template
+([infra.md](docs/decisions/infra.md#to-port-to-vps-lab-template)), and the open design
+questions - changing `billCycleDay`, suspension semantics
+([billing-core.md](docs/decisions/billing-core.md#open-questions)).
 
 ## Open checks
 
@@ -1341,25 +258,12 @@ shipped).
   Touches Makefile, compose files, maybe scripts/: diff first.
 - **App opens a new DB connection per request (`connect_timeout` was 3 s, now 10 s)** -
   open: how to bound the API's connections on prod (1 vCPU, shared with VPN/Xray).
-  Reproduced locally (2026-10-03, with 3 s): `docker pause bss-db-1` for 6 s during `make
-  test` gave 6 failed + 2 errors, each `assert response.status_code == 201` on a 500
-  "internal error"; a request during the freeze answered 500 after exactly 3.01 s, and a
-  direct connect raises `psycopg.errors.ConnectionTimeout: connection timeout expired`.
-  Only a connect that starts more than 3 s before the db recovers fails; connections
-  without a timeout (the test fixtures') just wait.
   **Decided (stage 4 planning):** the API keeps a connection per request with
   `connect_timeout` raised to 10 s (done: `app/config.py`); a pool only after measuring
-  on the VPS.
-  The worker holds one dedicated long-lived connection (advisory lock and work on the
-  same connection, TCP keepalives, `connect_timeout` 10 s). Budget measured 2026-10-03
-  (read-only, `make remote`): `max_connections` 40, 3 reserved for superusers -> 37; no
-  idle client sessions at the time. Expected peak ~10 (a few API requests, the worker, a
-  migration, `pg_dump`). **Not bounded:** sync endpoints run in FastAPI's threadpool (40
-  threads), each in-flight request opening its own connection, so a burst could make bss
-  alone ask for more than 37 - the concrete argument for a pool (max N) later. A cheaper
-  alternative to a pool: **cap concurrent DB connections from the API** - a semaphore
-  around connect, or a smaller threadpool limit (e.g. 10) - which bounds the worst case
-  without a pool's lifecycle issues (`--reload`, per-test databases). Decision deferred.
+  on the VPS. The worker holds one dedicated long-lived connection. **Not bounded:** a
+  burst could make bss alone ask for more than the 37 connections available - a pool, or
+  a cap on concurrent DB connections from the API. Decision deferred. Reproduction,
+  budget and options in full: [infra.md](docs/decisions/infra.md#db-connections-per-request-open-check).
 - **Record the deployed commit on the VPS.** Finding which image runs took an ad-hoc
   read-only `ssh vps-test 'docker ps ...'` (2026-10-03: `bss-app:9424b9b`, in the current
   history; CLAUDE.md's `921603f` predates a squash). `deploy.sh` should write the deployed
@@ -1388,169 +292,15 @@ shipped).
   cloud session's permission mode or the rule itself, and what replaces it in the cloud
   (a `"deny"` cannot depend on cloud mode; the guard sees only Bash, not the Edit tool).
 
-## Working style
+## Where the decisions are
 
-- For anything that changes the Dockerfile, compose files, deploy script or the data
-  model: propose a plan first, then implement.
-- After changing runtime behaviour, run `make test`; before saying "it works on the
-  server", run `make verify`.
-- When a container misbehaves, read `make logs` before changing code.
-- **Files are edited only with the Edit/Write tools** - never through shell heredocs,
-  `sed -i`, `python -c`/scripts that rewrite files, or redirects (`>`, `>>`, `tee`).
-  Temporary negative-proof mutations included: make them with Edit and revert with Edit.
-- **If the guard (or any permission rule) blocks a shell command, stop and report it.**
-  Do not reach the same result another way (another tool, a script file, a different
-  path spelling) - that is exactly what the block exists to prevent, even when the block
-  looks like a false positive. Say what was blocked and why it seemed needed; the human
-  decides.
-- **Never filter or truncate the output of `git commit`, `make test`, `make verify` or
-  the pre-commit hook** - no `grep`, `tail`, `head` (or `| ... | tail -1`) on them. If the
-  output is too long, redirect all of it to a file outside the repo (the scratchpad,
-  `/tmp`) and read that file. The one unexplained hook failure (see "Pre-commit hook")
-  is undiagnosable because its commit was run through `grep ... | tail -1`.
-- **Commit messages go through a file** (Write it to the scratchpad, then `git commit -F
-  <file>`), not a heredoc (`git commit -F - <<'EOF'`). `guard.py` cannot tokenise a
-  heredoc, and the raw-text fallback is deliberately broad: a message that mentions VPN
-  ports next to ssh/docker is blocked (a regression case locks this in).
-
-## Shared infrastructure (vps-infra)
-
-On the VPS, Postgres and Caddy are **not ours**. The separate vps-infra project is
-deployed once per host and runs one Postgres and one Caddy for every app there, owning
-their config, data, TLS and backups. This repo only ships the app container.
-
-- **Network**: the app joins the external network `shared`, created by vps-infra. It must
-  exist before `make deploy`; `scripts/deploy.sh` checks for it and fails early with
-  "deploy vps-infra first" otherwise. vps-infra is never needed locally — do not start it
-  for development.
-- **Alias**: on `shared` the app is reachable as `bss` (network alias in
-  `compose.prod.yaml`). Every app there names its service `app`, so that name is
-  ambiguous; always use `bss`.
-- **Database**: `DATABASE_URL` on the VPS is `postgres:5432/bss`, role
-  `bss`; `postgres` is the service name in vps-infra, and the database + role are
-  created there with `make add-db NAME=bss`. The password is `POSTGRES_PASSWORD`
-  from `.env.prod`, which must equal the role password `make add-db` used (`DB_PASSWORD_<NAME>` in
-  vps-infra's `.env.prod`) — the value `make init`
-  generated is temporary, and a mismatch makes migrations hang until the 120s timeout
-  instead of failing clearly. Migrations still run from this repo (`deploy.sh`, before the app
-  starts).
-- **Reverse proxy**: this app's site block (TLS + basic auth on `8445`,
-  `https://vpn2811.duckdns.org:8445`, `/healthz` carved out without auth for external
-  monitoring) is added **by hand** to vps-infra's Caddyfile and proxies to
-  `bss:8080`. Routing, auth and TLS changes are made there, not here. `/healthz`
-  must still stay cheap, check the DB and return nothing beyond status — the external
-  monitoring depends on it.
-- **Backups**: vps-infra dumps all databases, this one included. This project has no
-  backup or restore tooling. Make sure a fresh vps-infra dump exists before any migration
-  that alters or removes existing data.
-- The VPS reboots nightly at 03:00 (root cron). Everything must come back on its own —
-  never rely on manually started containers.
-
-## Known compose pitfalls (found on live deploys)
-
-Both of these only showed up against the real VPS, never locally:
-
-- **`docker compose run --name ...` hangs** instead of starting the container. Don't use it
-  to get a predictable name for the one-off migration container; `deploy.sh` finds a
-  leftover one by compose's labels (`com.docker.compose.project=bss` +
-  `com.docker.compose.oneoff=True`) instead.
-- **`--quiet-pull` hangs when the image was only loaded locally.** The image reaches the
-  VPS via `docker save | docker load`, with no registry behind it; with `--quiet-pull`
-  compose tries to check that nonexistent repository and never returns. Keep it off every
-  remote compose call.
-
-## Frontend conventions
-
-The admin UI (stage 5) lives in `frontend/`: Vite + React + TypeScript, built to static
-files and served by the shared Caddy on :8445 (same origin as the API, same basic auth -
-no CORS). It never enters the backend image (`.dockerignore`). `design-ref/` is the design
-handoff: a pristine reference, never edited (settings.json deny + guard.sh). Types come
-from `spec/` (TMF and `spec/internal/`), never from `/openapi.json`. Fonts are
-self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated reason:
-`package.json` carries them under `"//"`.
-
-- **Node runs only in a container, never on the host.** Two compose services (local
-  only, `profiles: [web]`), same image (`node:22-alpine` pinned by digest), same mounts
-  (`./frontend` at /web, `./spec` read-only, `node_modules` and the npm cache as named
-  volumes - the host's `frontend/node_modules` is only the empty mount point):
-  - `web` has network: `make web-dev` (Vite on 0.0.0.0 inside, published on
-    127.0.0.1:5173, proxying `/tmf-api` and `/internal` to `app`) and `make web-install`;
-  - `web-offline` has `network_mode: none`: build, lint, test, types, fmt.
-- **Installs are explicit.** Only `make web-install` downloads (`npm ci`, exactly the
-  lockfile) and stores the lockfile's hash in the volume. Every other target first runs
-  `frontend/scripts/check-deps.sh`, which only compares that hash and fails with "run make
-  web-install" - never an implicit install, in particular not from the pre-commit hook.
-  Proven: `make web-build` succeeds offline (and the container cannot reach the
-  registry); a changed lockfile makes `make web-test` fail with the hint.
-- **npm hardening** (`frontend/.npmrc`): `ignore-scripts=true` (no dependency runs code
-  at install time; nothing in the tree needs it), `save-exact=true`, no audit/fund calls.
-  TypeScript is 5.x on purpose: `openapi-typescript` requires `^5` and `typescript-eslint`
-  `<6.1`, and npm enforces peer ranges.
-- **Generated types** (`frontend/scripts/gen-types.mjs`, openapi-typescript) for TMF620,
-  622, 637, 666 and the internal API go to `src/api/generated/`, which is git-ignored
-  (~1 MB) and regenerated by every build, lint and test run - it cannot go stale.
-- **Money in the UI:** amounts become integer cents at the edge (`src/format/money.ts`);
-  the UI never does arithmetic on binary floats, and typed amounts are sent as the
-  validated decimal string. Negatives use U+2212. Dates are business dates in BILLING_TZ
-  (from `/internal/v1/context`) via `Intl`, never the browser's zone.
-- **Dates the UI sends** (requestedStartDate at noon, validFor at midnight) carry
-  BILLING_TZ's offset **for that date** (`zonedDateTime`: `Intl.DateTimeFormat` with
-  `timeZone`, so a DST zone gets the right offset either side of a change) - never the
-  browser's offset, and not `/internal/v1/context`'s `utcOffset`, which is the offset at
-  *now* (top bar only). `npm test` runs the suite twice, in UTC and with
-  `TZ=America/New_York`, so every request body is proven independent of the browser's
-  zone; a local-`Date`-constructor bug passes the UTC run and fails the second one.
-- **Harness:** `settings.json` denies `pnpm`, `yarn`, `corepack` on the host and edits
-  under `design-ref/` (`npm`, `npx`, `node` are not denied there: a deny rule cannot
-  depend on cloud mode, see "Agent guardrails"); `guard.sh` blocks a command that runs a Node
-  tool on the host (also via `sh -c`, `xargs`, substitutions) unless it runs in one of the
-  compose services `web`, `web-offline`, `web-preview`, `e2e` (or another container), and
-  shell writes into `design-ref/`. It is quote-aware, so `docker compose run web-offline
-  sh -c '... && npm ...'` and text mentioning npm in quotes pass; a heredoc still goes
-  through the old raw-text checks. The format hook runs prettier (in `web-offline`) on
-  edited UI files.
-- **Structure** (`frontend/src/`): `api/` (fetch client: every failure is an `ApiError`
-  whose message is the call, "GET /path → 503 Service Unavailable"; `getPage` requires
-  `X-Total-Count`; `getAll` pages by 100; `useResource` = loading/error/ok + retry, never
-  shows a stale or other key's result), `app/` (router, shell, system context and
-  breadcrumbs), `ui/` (tokens, kit, `Table` on CSS grid, the four list states),
-  `screens/`, `format/`. **Every list renders through `ListState`**: skeleton (8 rows
-  sized by the table's columns), error (call + Retry), empty (copy + optional action),
-  no results (Reset filters). The context (`/internal/v1/context`) loads before any
-  screen: no date can be shown without the business date and zone.
-- **Demo data: `make seed`** (`tests/seed.py`, also the e2e fixture). Everything goes
-  through the public TMF API - never SQL - run in-process with a FixedClock that starts
-  120 days before today and moves forward a day at a time: each day the billing run for
-  that date (`bill_account` for every account, then `finish_run`) and then the day's
-  orders and payments. The API refuses past-dated prices and orders, which is why the
-  real clock cannot build history. Dates are relative to today, so future-dated and
-  pendingTerminate products are really in the future. 4 offerings with codes (one In
-  Design), 7 accounts (one Suspended, one Closed, several negative balances, credit
-  limits), refunds, payments, bills. Refuses `APP_ENV=prod` and any database but the
-  local `db`. Idempotent: if its catalog exists it does nothing; a partial seed is
-  reported (reset with `make clean && make up`), never patched. Needs migrations at head
-  (`make migrate`). `tests/test_seed.py` runs it on a throwaway database.
-- **Catalog:** lifecycle steps (In Design -> Active -> Retired, Retired final) are made
-  from an offering detail dialog (row click), with an inline confirm; the table has no
-  room for an action column at 1280px. New offering = TMF620 price, then the In Design
-  offering referencing it; the amount goes out as an exact JSON number token
-  (`jsonWithAmount`), "Valid to" is inclusive in the UI and sent as the next midnight.
-  **Change price** (offering dialog, only when there is an open-ended price in the UI
-  currency) calls the atomic `priceChange` (D-W21); its copy states that existing products
-  pick up the new price from their next billing period starting on or after the date,
-  and new orders from the date.
-- **The UI's write requests are pinned on both sides**: component tests assert the exact
-  bodies, and `tests/test_ui_requests.py` replays the same bodies against the real API.
-  Change both together.
-- **Routes:** `/subscribers`, `/subscribers/{accountId}`, `/catalog`, `/billing-runs`
-  (not `/billing`: never confusable with the app's `/billing-status`, which Caddy routes
-  to the backend); `/` redirects to `/subscribers`; anything else is a not-found page.
-- **Component tests stub every request** (`src/test/fetch.ts`): an unmatched one fails
-  the test after it ends (`src/test/setup.ts`), not just renders a network error. The
-  old behaviour made App.test "recovers on Retry" flaky (2 of 5 on master, 7 of 10 in
-  the cloud): after Retry the subscribers list's unstubbed load raced the "no alert"
-  assertion. The strict stub found 9 more under-stubbed tests. `pending` stubs a load
-  the test does not care about; `NAV_RUNS`/`noRuns` the sidebar's run count.
-- **Polling tests** fake only `setTimeout`/`clearTimeout` and wait with an `until` helper
-  (`BillingRuns.test.tsx`): Testing Library's `findBy`/`waitFor` hang under a fake
-  `setTimeout`.
+[`docs/decisions/`](docs/decisions/README.md) keeps the old section names as headings:
+[data-model](docs/decisions/data-model.md) (domain model) ·
+[tmf-api](docs/decisions/tmf-api.md) (conventions; TMF632/629/666/676/637/678/622) ·
+[catalog](docs/decisions/catalog.md) (TMF620, D-W18, D-W21) ·
+[billing-core](docs/decisions/billing-core.md) (stage 3, open questions) ·
+[worker](docs/decisions/worker.md) (stage 4) · [bills](docs/decisions/bills.md) (bill
+lifecycle) · [internal-api](docs/decisions/internal-api.md) ·
+[frontend](docs/decisions/frontend.md) · [infra](docs/decisions/infra.md) (image,
+layout, conventions, vps-infra, deploying the UI) · [harness](docs/decisions/harness.md)
+(hooks, progress tracker, guardrails) · [retired](docs/decisions/retired.md).

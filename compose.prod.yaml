@@ -67,7 +67,8 @@ services:
     # wake-up (60 s) and after every account, retries included. Older than 3 minutes (or
     # missing) = unhealthy, which includes a database it cannot reach. No interpreter:
     # GNU find's -mmin -3 is an exact "< 180 s" (no rounding; proven at 179/181 s).
-    # $$ keeps compose from interpolating. Informational only (see CLAUDE.md).
+    # $$ keeps compose from interpolating. Informational only (docs/decisions/infra.md,
+    # "Healthchecks").
     healthcheck:
       test: ["CMD", "bash", "-c", "[[ -n $$(find /tmp/worker-alive -mmin -3 2>/dev/null) ]]"]
       interval: 60s

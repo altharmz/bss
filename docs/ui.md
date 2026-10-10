@@ -5,7 +5,8 @@ built to static files and served by the shared Caddy on the same origin as the A
 the same basic auth ([overview.md](overview.md#authentication-and-operator-identity)).
 The design handoff it implements is `design-ref/design_handoff_bss_admin/` (a read-only
 HTML prototype and README); where the build differs from the design, the decision is
-recorded in CLAUDE.md, "Frontend (stage 5) decisions", and summarised below.
+recorded in [decisions/frontend.md](decisions/frontend.md), "Frontend (stage 5)
+decisions", and summarised below.
 
 Progress (from `data-ui` markers in `frontend/src`, [PROGRESS.md](PROGRESS.md)): **13 of
 13 items built and tested** - tested meaning a passing component test saw the marker on

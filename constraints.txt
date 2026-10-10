@@ -1,6 +1,7 @@
 # Every package of the runtime image, frozen (pip freeze of production's 9424b9b, which the
 # dev image matched exactly on 2026-10-03). Used as `pip install -r requirements.txt -c
-# constraints.txt`. Regenerate deliberately - see CLAUDE.md, "Dependencies".
+# constraints.txt`. Regenerate deliberately - see docs/decisions/infra.md, "Dependencies
+# are pinned".
 alembic==1.20.0
 annotated-doc==0.0.5
 annotated-types==0.8.0

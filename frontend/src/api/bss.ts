@@ -125,8 +125,8 @@ export async function loadSubscribers(signal: AbortSignal): Promise<Subscribers>
 }
 
 // --- subscribers: create and edit (TMF632 party, TMF629 customer, TMF666 account) ---
-// A subscriber is three resources. There is no delete (CLAUDE.md, "Frontend (stage 5)
-// decisions"): an account carries products, bills and payments; it can be Closed.
+// A subscriber is three resources. There is no delete (docs/decisions/frontend.md):
+// an account carries products, bills and payments; it can be Closed.
 
 const PARTIES = '/tmf-api/partyManagement/v5';
 

@@ -150,6 +150,8 @@ apps from this template can share a VPS without overwriting each other's files.
 ## Claude Code setup
 
 - `CLAUDE.md` — environment rules, allowed commands, hard constraints.
+- `docs/decisions/` — the decision records by area, moved out of `CLAUDE.md`
+  (`make decisions-check` proves nothing was lost).
 - `.claude/settings.json` — allow/deny permissions.
 - `.claude/hooks/guard.sh` — PreToolUse guard: blocks VPN-adjacent commands, destructive
   docker cleanup, privileged remote commands, and reads of `.env`.

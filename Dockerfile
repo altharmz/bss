@@ -2,7 +2,7 @@
 
 # ---------- base ----------
 # Pinned by digest (the multi-arch index): a moved tag must never rebuild the image by
-# surprise. Bump deliberately - see CLAUDE.md, "Base image".
+# surprise. Bump deliberately - see docs/decisions/infra.md, "Base image".
 FROM python:3.12-slim@sha256:dddfd7e07f9d15aeeca61529320492139d21cac7f0070c00609243e51e4e0016 AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -17,7 +17,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 RUN python -m venv /opt/venv
 # Everything pinned: pip itself, the direct dependencies (==) and every transitive package
-# (constraints.txt). A rebuild installs exactly what production runs - see CLAUDE.md.
+# (constraints.txt). A rebuild installs exactly what production runs - see
+# docs/decisions/infra.md, "Dependencies are pinned".
 COPY requirements.txt constraints.txt ./
 RUN pip install pip==26.2.1 && pip install -r requirements.txt -c constraints.txt
 
@@ -49,7 +50,8 @@ EXPOSE 8080
 # /dev/tcp sends GET /healthz and the status line must contain " 200 ". Exec form with
 # bash - /bin/sh is dash, which has no /dev/tcp. read -t 2 ends a stalled answer before
 # the 3 s timeout. Every 2 s while starting (start_interval, Engine 25+), then every 60 s.
-# Informational only: nothing restarts an unhealthy container (see CLAUDE.md).
+# Informational only: nothing restarts an unhealthy container (docs/decisions/infra.md,
+# "Healthchecks").
 HEALTHCHECK --interval=60s --timeout=3s --start-period=30s --start-interval=2s --retries=3 \
   CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && IFS= read -r -t 2 line <&3 && [[ $line == *' 200 '* ]]"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]

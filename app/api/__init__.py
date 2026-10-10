@@ -1,4 +1,4 @@
-"""TMF Open API surface (v5; TMF676 Payment is v4). See CLAUDE.md, "TMF API conventions".
+"""TMF Open API surface (v5; TMF676 Payment is v4). See docs/decisions/tmf-api.md.
 
 Each API is one module with its router, request models and row -> body mapping. Handlers
 open exactly one database transaction per request (app.api.deps.Tx).
