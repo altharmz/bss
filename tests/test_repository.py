@@ -386,8 +386,14 @@ def test_insert_bill(db_conn):
         bill_date=date(2026, 2, 1),
         amount_due=Decimal("499.90"),
         billing_run_id=w.run["id"],
+        payment_due_date=date(2026, 3, 3),
     )
-    assert (bill["state"], bill["amount_due"]) == ("new", Decimal("499.90"))
+    assert (bill["state"], bill["amount_due"], bill["category"]) == (
+        "new",
+        Decimal("499.90"),
+        "normal",
+    )
+    assert bill["payment_due_date"] == date(2026, 3, 3)
     # ABRs of the same account can then be attached to it
     abr = charge(db_conn, w, days(date(2026, 1, 1), date(2026, 2, 1)))
     db_conn.execute(

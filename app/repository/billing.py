@@ -5,7 +5,7 @@ to and from the billing core's dataclasses (app/billing/model.py); the core neve
 row.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -13,6 +13,7 @@ from uuid import UUID
 import psycopg
 from psycopg.types.range import Range
 
+from app.billing import settlement
 from app.billing.model import (
     Account,
     DateRange,
@@ -468,15 +469,17 @@ def insert_bill(
     bill_date: date,
     amount_due: Decimal,
     billing_run_id: UUID,
+    payment_due_date: date,
     state: str = "new",
 ) -> Row:
+    """The category follows from the amount: a negative bill is a credit note."""
     return returning(
         conn,
         """
         INSERT INTO customer_bill
             (billing_account_id, currency, bill_period, bill_date, state, amount_due,
-             billing_run_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *
+             billing_run_id, payment_due_date, category)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
         """,
         (
             billing_account_id,
@@ -486,6 +489,8 @@ def insert_bill(
             state,
             money(amount_due),
             billing_run_id,
+            payment_due_date,
+            "creditNote" if amount_due < 0 else "normal",
         ),
     )
 
@@ -552,14 +557,17 @@ def _daterange(value: DateRange) -> Range:
     return Range(value.start, value.end, "[)")
 
 
-def running_run_date(conn: psycopg.Connection, run_id: UUID) -> date:
-    """The run date of a run that is still `running`, locked against a concurrent finish."""
+def running_run(conn: psycopg.Connection, run_id: UUID) -> Row:
+    """A run that is still `running` (run date, the attempt's start), locked against a
+    concurrent finish."""
     row = fetch_one(
-        conn, "SELECT run_date, status FROM billing_run WHERE id = %s FOR SHARE", (run_id,)
+        conn,
+        "SELECT run_date, started_at, status FROM billing_run WHERE id = %s FOR SHARE",
+        (run_id,),
     )
     if row is None or row["status"] != "running":
         raise LookupError(f"billing run {run_id} is not running")
-    return row["run_date"]
+    return row
 
 
 def load_account(conn: psycopg.Connection, account_id: UUID) -> Account:
@@ -694,7 +702,11 @@ def write_abr(conn: psycopg.Connection, account: Account, run_id: UUID, abr: New
     )["id"]
 
 
-def write_bill(conn: psycopg.Connection, account: Account, run_id: UUID, bill: NewBill) -> UUID:
+def write_bill(
+    conn: psycopg.Connection, account: Account, run_id: UUID, bill: NewBill, payment_term_days: int
+) -> UUID:
+    """Written as `new`, due `payment_term_days` after its bill date (the term in force now;
+    a later change of the term never moves it)."""
     return insert_bill(
         conn,
         billing_account_id=account.id,
@@ -703,6 +715,7 @@ def write_bill(conn: psycopg.Connection, account: Account, run_id: UUID, bill: N
         bill_date=bill.bill_date,
         amount_due=bill.amount_due,
         billing_run_id=run_id,
+        payment_due_date=bill.bill_date + timedelta(days=payment_term_days),
     )["id"]
 
 
@@ -721,6 +734,147 @@ def attach_abrs_to_bill(
     )
     if len(rows) != len(set(abr_ids)):
         raise LookupError(f"bill {bill_id}: {len(abr_ids) - len(rows)} ABRs not attachable")
+
+
+# --- settlement (app/billing/settlement.py): read and written under the account lock ---
+
+
+def load_settlement(
+    conn: psycopg.Connection, account_id: UUID
+) -> tuple[tuple[settlement.Bill, ...], tuple[settlement.Payment, ...]]:
+    """Every bill of the account with what was applied to it (or, for a credit note, from
+    it), and every received payment with what was applied from it. The caller holds the
+    billing account's row lock (`load_account`), so nothing moves under it."""
+    bills = fetch_all(
+        conn,
+        """
+        SELECT b.id, b.bill_date, b.amount_due, b.state,
+               coalesce((SELECT sum(amount) FROM bill_allocation
+                         WHERE customer_bill_id = b.id), 0) AS allocated,
+               coalesce((SELECT sum(amount) FROM bill_allocation
+                         WHERE credit_bill_id = b.id), 0) AS credit_used
+        FROM customer_bill b WHERE b.billing_account_id = %s ORDER BY b.bill_date
+        """,
+        (account_id,),
+    )
+    payments = fetch_all(
+        conn,
+        """
+        SELECT p.id, p.received_at, p.amount,
+               coalesce((SELECT sum(amount) FROM bill_allocation
+                         WHERE payment_id = p.id), 0) AS used
+        FROM payment p WHERE p.billing_account_id = %s AND p.status = 'done'
+        ORDER BY p.received_at, p.id
+        """,
+        (account_id,),
+    )
+    return (
+        tuple(
+            settlement.Bill(
+                id=r["id"],
+                bill_date=r["bill_date"],
+                amount_due=r["amount_due"],
+                state=r["state"],
+                allocated=r["allocated"],
+                credit_used=r["credit_used"],
+            )
+            for r in bills
+        ),
+        tuple(
+            settlement.Payment(
+                id=r["id"], received_at=r["received_at"], amount=r["amount"], used=r["used"]
+            )
+            for r in payments
+        ),
+    )
+
+
+def write_settlement(
+    conn: psycopg.Connection,
+    account: Account,
+    result: settlement.Settlement,
+    *,
+    now: datetime,
+    cause: str,
+    operator: str | None = None,
+) -> None:
+    """Insert the allocations, move the bills to their new states with one history row
+    each, and touch every bill that was paid (lastUpdate moves even when its state does
+    not). The amount bounds are checked by the database at commit."""
+    for a in result.allocations:
+        conn.execute(
+            """
+            INSERT INTO bill_allocation
+                (billing_account_id, currency, customer_bill_id, payment_id, credit_bill_id,
+                 amount, kind, allocated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                account.id,
+                account.currency,
+                a.bill_id,
+                a.payment_id,
+                a.credit_bill_id,
+                money(a.amount),
+                a.kind,
+                now,
+            ),
+        )
+    for change in result.changes:
+        record_bill_state(conn, change, now=now, cause=cause, operator=operator)
+    touched = {a.bill_id for a in result.allocations} - {c.bill_id for c in result.changes}
+    if touched:
+        conn.execute(
+            "UPDATE customer_bill SET updated_at = now() WHERE id = ANY(%s)", (list(touched),)
+        )
+
+
+def record_bill_state(
+    conn: psycopg.Connection,
+    change: settlement.StateChange,
+    *,
+    now: datetime,
+    cause: str,
+    operator: str | None = None,
+) -> None:
+    """Move one bill from `change.from_state` to `change.to_state` and record it. Raises
+    LookupError if the bill is no longer in `from_state`."""
+    row = fetch_one(
+        conn,
+        "UPDATE customer_bill SET state = %s WHERE id = %s AND state = %s RETURNING id",
+        (change.to_state, change.bill_id, change.from_state),
+    )
+    if row is None:
+        raise LookupError(f"bill {change.bill_id} is not {change.from_state}")
+    conn.execute(
+        """
+        INSERT INTO customer_bill_state_change
+            (customer_bill_id, from_state, to_state, changed_at, cause, operator)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        (change.bill_id, change.from_state, change.to_state, now, cause, operator),
+    )
+
+
+def record_bill_issue(conn: psycopg.Connection, bill_id: UUID, *, now: datetime) -> None:
+    """The first history row of a bill: issued as `new` by a billing run."""
+    conn.execute(
+        """
+        INSERT INTO customer_bill_state_change
+            (customer_bill_id, from_state, to_state, changed_at, cause)
+        VALUES (%s, NULL, 'new', %s, 'run')
+        """,
+        (bill_id, now),
+    )
+
+
+def bill_state_history(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
+    return fetch_all(
+        conn,
+        "SELECT * FROM customer_bill_state_change WHERE customer_bill_id = %s"
+        " ORDER BY changed_at, created_at, id",
+        (bill_id,),
+    )
 
 
 # --- the account's history, as the admin UI shows it ---

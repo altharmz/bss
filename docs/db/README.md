@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0005**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0006**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -20,6 +20,8 @@ PostgreSQL schema at Alembic head **0005**, read from `pg_catalog` of a throwawa
 | [`applied_customer_billing_rate`](applied_customer_billing_rate.md) | billing | SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recurring charge for the billable days of one cycle period, or the one refund of such a charge. Written only by a billing run. |
 | [`customer_bill`](customer_bill.md) | billing | SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every unbilled ABR of the account whose run date is <= the bill date. Bills of one account never overlap. |
 | [`payment`](payment.md) | billing | SID Payment (TMF676 v4 payment): money received on a billing account. Never changed or deleted. |
+| [`bill_allocation`](bill_allocation.md) | billing | An amount applied to a customer bill (ours; TMF678 appliedPayment, TMF676 paymentItem): from a payment or from the credit of a negative bill, automatic (oldest open bill first) or explicit. Append-only. Bounds: per paid bill <= its amount due, per payment <= its amount, per credit note <= minus its amount due (deferred constraint trigger). |
+| [`customer_bill_state_change`](customer_bill_state_change.md) | billing | Every state change of a customer bill (ours), oldest first; the first row of a bill is its issue (from_state NULL). |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
 | [`worker_request`](worker_request.md) | worker | The admin UI's queue for the billing worker (ours): catch-up and retry requests. The API only inserts; the worker picks them up oldest first. |
 
@@ -52,6 +54,8 @@ flowchart LR
     applied_customer_billing_rate[applied_customer_billing_rate]
     customer_bill[customer_bill]
     payment[payment]
+    bill_allocation[bill_allocation]
+    customer_bill_state_change[customer_bill_state_change]
   end
   subgraph area_worker["Billing worker (ours)"]
     billing_run_account[billing_run_account]
@@ -62,6 +66,10 @@ flowchart LR
   applied_customer_billing_rate -->|"customer_bill_id, billing_account_id"| customer_bill
   applied_customer_billing_rate -->|"product_id, billing_account_id"| product
   applied_customer_billing_rate -->|"refunds_rate_id, product_id"| applied_customer_billing_rate
+  bill_allocation -->|"billing_account_id"| billing_account
+  bill_allocation -->|"credit_bill_id, billing_account_id"| customer_bill
+  bill_allocation -->|"customer_bill_id, billing_account_id"| customer_bill
+  bill_allocation -->|"payment_id, billing_account_id"| payment
   billing_account -->|"customer_id"| customer
   billing_run_account -->|"billing_account_id"| billing_account
   billing_run_account -->|"run_id"| billing_run
@@ -69,6 +77,7 @@ flowchart LR
   customer -->|"party_id"| party
   customer_bill -->|"billing_account_id"| billing_account
   customer_bill -->|"billing_run_id"| billing_run
+  customer_bill_state_change -->|"customer_bill_id"| customer_bill
   payment -->|"billing_account_id"| billing_account
   product -->|"billing_account_id"| billing_account
   product -->|"created_by_item_id"| product_order_item
@@ -295,6 +304,8 @@ erDiagram
     customer_bill_state_type state
     numeric amount_due
     uuid billing_run_id FK
+    date payment_due_date
+    bill_category category
   }
   payment {
     uuid id PK
@@ -307,6 +318,28 @@ erDiagram
     payment_status status
     text payment_method
   }
+  bill_allocation {
+    uuid id PK
+    timestamptz created_at
+    uuid billing_account_id FK
+    char currency FK
+    uuid customer_bill_id FK
+    uuid payment_id FK
+    uuid credit_bill_id FK
+    numeric amount
+    bill_allocation_kind kind
+    timestamptz allocated_at
+  }
+  customer_bill_state_change {
+    uuid id PK
+    timestamptz created_at
+    uuid customer_bill_id FK
+    customer_bill_state_type from_state
+    customer_bill_state_type to_state
+    timestamptz changed_at
+    bill_state_change_cause cause
+    text operator
+  }
   billing_account {
     uuid id PK
   }
@@ -315,11 +348,16 @@ erDiagram
   }
   applied_customer_billing_rate |o--o{ applied_customer_billing_rate : "refunds_rate_id, product_id"
   billing_account ||--o{ applied_customer_billing_rate : "billing_account_id, currency"
+  billing_account ||--o{ bill_allocation : "billing_account_id, currency"
   billing_account ||--o{ customer_bill : "billing_account_id, currency"
   billing_account ||--o{ payment : "billing_account_id, currency"
   billing_run ||--o{ applied_customer_billing_rate : "billing_run_id"
   billing_run ||--o{ customer_bill : "billing_run_id"
   customer_bill |o--o{ applied_customer_billing_rate : "customer_bill_id, billing_account_id"
+  customer_bill |o--o{ bill_allocation : "credit_bill_id, billing_account_id"
+  customer_bill ||--o{ bill_allocation : "customer_bill_id, billing_account_id"
+  customer_bill ||--o{ customer_bill_state_change : "customer_bill_id"
+  payment |o--o{ bill_allocation : "payment_id, billing_account_id"
   product ||--o{ applied_customer_billing_rate : "product_id, billing_account_id"
 ```
 
@@ -373,12 +411,15 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 | Enum | Values | Used by |
 |---|---|---|
 | `account_state` | `Active`, `Suspended`, `Closed` | [`billing_account.state`](billing_account.md) |
+| `bill_allocation_kind` | `automatic`, `explicit` | [`bill_allocation.kind`](bill_allocation.md) |
+| `bill_category` | `normal`, `creditNote` | [`customer_bill.category`](customer_bill.md) |
+| `bill_state_change_cause` | `run`, `payment`, `operator` | [`customer_bill_state_change.cause`](customer_bill_state_change.md) |
 | `billing_run_account_status` | `ok`, `failed`, `blocked` | [`billing_run_account.status`](billing_run_account.md) |
 | `billing_run_failure_kind` | `accounts`, `run` | [`billing_run.failure_kind`](billing_run.md) |
 | `billing_run_status` | `running`, `completed`, `failed` | [`billing_run.status`](billing_run.md) |
 | `billing_run_trigger` | `scheduled`, `catchUp`, `retry` | [`billing_run.trigger`](billing_run.md) |
 | `charge_type` | `recurring`, `refund` | [`applied_customer_billing_rate.charge_type`](applied_customer_billing_rate.md) |
-| `customer_bill_state_type` | `new`, `onHold`, `validated`, `sent`, `settled`, `partiallyPaid` | [`customer_bill.state`](customer_bill.md) |
+| `customer_bill_state_type` | `new`, `onHold`, `validated`, `sent`, `settled`, `partiallyPaid` | [`customer_bill.state`](customer_bill.md), [`customer_bill_state_change.from_state`](customer_bill_state_change.md), [`customer_bill_state_change.to_state`](customer_bill_state_change.md) |
 | `customer_status` | `Created`, `Active`, `Inactive` | [`customer.status`](customer.md) |
 | `item_action_type` | `add`, `modify`, `delete`, `noChange` | [`product_order_item.action`](product_order_item.md) |
 | `lifecycle_status` | `In Design`, `Active`, `Retired` | [`product_offering.lifecycle_status`](product_offering.md), [`product_offering_price.lifecycle_status`](product_offering_price.md), [`product_specification.lifecycle_status`](product_specification.md) |

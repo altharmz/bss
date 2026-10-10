@@ -1,6 +1,6 @@
 """The schema itself rejects invalid data - independent of any application code."""
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from psycopg import errors
@@ -138,6 +138,7 @@ def test_abr_on_a_bill_of_another_account_is_rejected(db_conn):
         bill_date=date(2026, 2, 1),
         amount_due=Decimal("0.00"),
         billing_run_id=w.run["id"],
+        payment_due_date=date(2026, 3, 3),
     )
     with rejected(db_conn, errors.ForeignKeyViolation):
         billing.insert_abr(
@@ -165,6 +166,7 @@ def test_overlapping_bill_periods_are_rejected(db_conn):
             bill_date=end,
             amount_due=Decimal("0.00"),
             billing_run_id=w.run["id"],
+            payment_due_date=end + timedelta(days=30),
         )
 
     bill(date(2026, 1, 1), date(2026, 2, 1))

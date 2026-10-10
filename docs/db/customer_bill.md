@@ -17,9 +17,11 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 | `currency` | `character(3)` | no |  | ISO 4217 code, three upper-case letters. Always the account's currency (composite foreign key). |
 | `bill_period` | `daterange` | no |  | TMF678 billingPeriod: daterange [bill_date, next cycle day). |
 | `bill_date` | `date` | no |  | TMF678 billDate: a cycle day of the account. |
-| `state` | `customer_bill_state_type` (enum, see [README](README.md#enums)) | no |  | TMF678 state; bills are written as new. |
+| `state` | `customer_bill_state_type` (enum, see [README](README.md#enums)) | no |  | TMF678 state: new -> validated -> sent in the run that writes the bill, then partiallyPaid / settled by allocations; onHold by the operator. |
 | `amount_due` | `numeric(12,2)` | no |  | numeric(12,2), exact (never float); TMF678 amountDue: the sum of the ABRs collected; may be negative. |
 | `billing_run_id` | `uuid` | no |  | The billing run that issued the bill. |
+| `payment_due_date` | `date` | no |  | TMF678 paymentDueDate: bill_date + the payment term in force when the bill was written (BILL_PAYMENT_TERM_DAYS). |
+| `category` | `bill_category` (enum, see [README](README.md#enums)) | no |  | TMF678 category (ours): creditNote iff amount_due < 0, else normal. |
 
 ## Foreign keys
 
@@ -33,7 +35,9 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 | Name | Kind | Definition |
 |---|---|---|
 | `customer_bill_bill_period_check` | check | `CHECK (((NOT isempty(bill_period)) AND (NOT lower_inf(bill_period)) AND (NOT upper_inf(bill_period))))` |
+| `customer_bill_credit_note_iff_negative` | check | `CHECK (((category = 'creditNote'::bill_category) = (amount_due < (0)::numeric)))` |
 | `customer_bill_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
+| `customer_bill_due_after_bill_date` | check | `CHECK ((payment_due_date >= bill_date))` |
 | `customer_bill_pkey` | primary key | `PRIMARY KEY (id)` |
 | `customer_bill_id_billing_account_id_key` | unique | `UNIQUE (id, billing_account_id)` |
 | `customer_bill_no_overlap` | exclusion | `EXCLUDE USING gist (billing_account_id WITH =, bill_period WITH &&)` |
@@ -53,4 +57,4 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`customer_bill_state_change`](customer_bill_state_change.md)

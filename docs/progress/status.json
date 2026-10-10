@@ -8,8 +8,8 @@
     },
     "db": {
       "deployed": null,
-      "implemented": 16,
-      "items": 16,
+      "implemented": 18,
+      "items": 18,
       "tested": null
     },
     "ui": {
@@ -181,6 +181,24 @@
       "stage": 4,
       "tested": null,
       "title": "UI request queue for the worker (catch-up, retry)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.bill_allocation",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "What paid a bill: payments and credit notes (TMF678 appliedPayment)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.customer_bill_state_change",
+      "implemented": true,
+      "stage": 5,
+      "tested": null,
+      "title": "Bill state history"
     },
     {
       "area": "api",

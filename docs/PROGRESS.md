@@ -10,7 +10,7 @@ commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 16 | 16/16 (100%) | n/a | unknown |
+| Database | 18 | 18/18 (100%) | n/a | unknown |
 | API | 54 | 54/54 (100%) | n/a | unknown |
 | UI | 13 | 13/13 (100%) | 13/13 (100%) | unknown |
 | Worker | 10 | 10/10 (100%) | 10/10 (100%) | unknown |
@@ -35,6 +35,8 @@ commit.
 | `db.payment` | 1 | Payments (TMF676) | yes | n/a | unknown |
 | `db.billing_run_account` | 4 | Per-(run, account) outcomes: ok / failed / blocked | yes | n/a | unknown |
 | `db.worker_request` | 4 | UI request queue for the worker (catch-up, retry) | yes | n/a | unknown |
+| `db.bill_allocation` | 5 | What paid a bill: payments and credit notes (TMF678 appliedPayment) | yes | n/a | unknown |
+| `db.customer_bill_state_change` | 5 | Bill state history | yes | n/a | unknown |
 
 ## API
 

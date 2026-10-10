@@ -40,11 +40,19 @@ def load_state(
 
 
 def apply_result(
-    conn: psycopg.Connection, account: Account, run_id: UUID, result: BillingResult
+    conn: psycopg.Connection,
+    account: Account,
+    run_id: UUID,
+    result: BillingResult,
+    *,
+    issued_at: datetime,
 ) -> None:
+    """Write the ABRs and bills; each bill gets its issue row in the state history, dated
+    `issued_at` (the injected clock of the run's attempt)."""
     ids = {abr.key: billing.write_abr(conn, account, run_id, abr) for abr in result.abrs}
     for bill in result.bills:
-        bill_id = billing.write_bill(conn, account, run_id, bill)
+        bill_id = billing.write_bill(conn, account, run_id, bill, settings.bill_payment_term_days)
+        billing.record_bill_issue(conn, bill_id, now=issued_at)
         members = [*bill.abr_ids, *(ids[key] for key in bill.abr_keys)]
         billing.attach_abrs_to_bill(conn, bill_id, account.id, members)
 
@@ -57,8 +65,9 @@ def bill_account(
     nothing. Raises BillingError (nothing written) if the account cannot be billed."""
     tz = tz or ZoneInfo(settings.billing_tz)
     with conn.transaction():
-        run_date = billing.running_run_date(conn, run["id"])
+        current = billing.running_run(conn, run["id"])
+        run_date = current["run_date"]
         state = load_state(conn, account_id, run_date, tz)
         result = compute(state, run_date, tz)
-        apply_result(conn, state.account, run["id"], result)
+        apply_result(conn, state.account, run["id"], result, issued_at=current["started_at"])
     return result

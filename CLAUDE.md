@@ -291,8 +291,10 @@ app/config.py              settings from environment variables (pydantic-setting
 app/db.py                  psycopg 3 connection + the liveness probe /healthz calls
 app/clock.py               Clock protocol, SystemClock, FixedClock; the only wall-clock reader
 app/repository/            data access: plain functions on a psycopg.Connection, never commit
-app/billing/               billing core (model.py dataclasses, core.py pure functions) and
-                           adapter.py (bill_account: load -> compute -> write). See "Billing"
+app/billing/               billing core (model.py dataclasses, core.py pure functions),
+                           adapter.py (bill_account: load -> compute -> write) and
+                           settlement.py (which credits pay which bills; pure). See "Billing"
+                           and "Bill lifecycle"
 app/internal/              internal API for the admin UI (/internal/v1): context, first-charge
                            preview, open products, charges, transactions. See "Internal API"
 app/api/                   TMF Open API surface: one module per API (router, request models,
@@ -924,6 +926,53 @@ termination always visible, no account lock, no running-run guard).
   long-running worker: **`make worker-once`** (D-W14). **The first deploy starts billing
   on the VPS**: no runs yet -> the due date only (D-W15).
 
+## Bill lifecycle (option C, in progress)
+
+Design and decisions: **`docs/bill-lifecycle-design.md`**, section 6 (decided
+2026-10-10: option C, payment term 30 days configurable, credit notes pay older open
+bills, overdue is display only, a Record payment dialog). Four slices: 1. schema +
+settlement core, 2. worker, 3. API, 4. UI + seed. **Slice 1 is built** on
+`cloud/bill-settlement-core`; until slice 2 nothing calls the settlement, so every bill
+stays `new` (now with a due date, a category and its issue in the history).
+
+- **Migration 0006**: `customer_bill.payment_due_date` (bill_date + the term in force when
+  the bill is written; existing bills + 30, a literal) and `category` (`normal` |
+  `creditNote`, creditNote iff amount_due < 0, a CHECK); `payment` UNIQUE (id,
+  billing_account_id); **`bill_allocation`** (what paid a bill: a payment or a credit
+  note, `automatic` | `explicit`, append-only, composite FKs keep everything in one
+  account and currency) with a **deferred constraint trigger** for the bounds that span
+  rows (per paid bill <= amount_due, per payment <= amount, per credit note <=
+  -amount_due; only a positive bill is paid, only a negative one gives credit) - checked
+  at commit, so `rejected(...)`'s savepoint cannot catch it: test with `conn.commit()`;
+  **`customer_bill_state_change`** (from, to, changed_at by the injected clock, cause
+  run | payment | operator, operator only for operator). Existing bills get their issue
+  row (NULL -> new) dated by their run's `started_at`; new bills get it from `apply_result`
+  (`issued_at` = the running attempt's `started_at`).
+- **`BILL_PAYMENT_TERM_DAYS`** (`app/config.py`, 1..365, default 30): read by the worker
+  when it writes a bill; an invalid value fails settings validation at startup. Passed to
+  neither service in `compose.prod.yaml` (like `BILLING_TZ`): changing it there is a
+  compose change.
+- **`app/billing/settlement.py`** (pure): `settle(bills, payments, explicit, payment_id)`
+  applies the explicit items of one payment, then the oldest unused credit (payments by
+  `received_at`, then issued credit notes by bill date) to the oldest open bill (`sent` /
+  `partiallyPaid`, positive). `onHold`, `new`, `validated` and `settled` bills are never
+  paid automatically; explicit items to them are refused (`BillNotOpen`, and
+  `UnknownBill`, `DuplicateBill`, `ExceedsRemaining`, `ExceedsPayment`).
+  `operator_change` / `operator_states`: hold from `sent`/`partiallyPaid`; release only to
+  the state the allocations imply (strict: anything else is `TransitionRefused` naming it).
+- **Repository**: `load_settlement` (bills with allocated / credit used, payments with
+  used; call it under `load_account`'s row lock), `write_settlement` (allocations, state
+  changes with history rows, touches every paid bill so `lastUpdate` moves),
+  `record_bill_state` (refuses if the bill left `from_state`), `bill_state_history`.
+- **Tests**: `tests/test_settlement.py` (examples, hold/release table, hypothesis: the
+  remaining per bill equals the cumulative rule of the design's 3.0 whether payments
+  settle at once or only in runs; no open bill and unused credit at once; holds skipped;
+  explicit items exact), `tests/test_settlement_db.py` (round trip, trigger bounds at
+  commit, FKs, CHECKs), `test_0006_on_existing_bills`. Negative proofs, each made once
+  and reverted: newest-first allocation, holds not skipped, credit notes ignored,
+  release to any open state, the trigger's bill bound doubled, the due date ignoring the
+  configured term - each failed at least one test.
+
 ## Internal API (stage 5)
 
 `app/internal/`, mounted at `/internal/v1`, serves what the admin UI cannot get from the
@@ -980,6 +1029,11 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
   included) and one product list (`status=active`), grouped client-side, page by page.
 - "Registered" is replaced by "Cycle day" (no creation date in TMF629/666, and
   `created_at` is the database's `now()`, not the injected clock).
+- **Subscriber create and modify** (requested 2026-10-10; to be built after bill
+  lifecycle slices 2-4): through the existing TMF POST/PATCH of individual |
+  organization, customer and billingAccount. **There is no delete subscriber operation**
+  (confirmed by the human, 2026-10-10): accounts carry products, bills and payments, and
+  nothing is ever deleted.
 - Credit limit: shown, and the over-limit warning in Add product, informational only.
 - Offering code: `externalIdentifier` (above). Subscriber no. and `BA-xxxxxxxx` are
   display ids: the first 8 hex digits of the UUID, upper case.

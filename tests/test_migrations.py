@@ -112,7 +112,7 @@ def test_0005_comments_every_table_and_downgrade_removes_them(temp_db_url):
     """0005 is documentation only: every domain table has a COMMENT (docs/db/ is generated
     from them), and downgrading to 0004 removes every comment it wrote."""
     cfg = Config("alembic.ini")
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, "0005")
     count_tables = """
         SELECT count(*) FILTER (WHERE obj_description(c.oid, 'pg_class') IS NULL),
                count(*) FILTER (WHERE obj_description(c.oid, 'pg_class') IS NOT NULL)
@@ -134,6 +134,95 @@ def test_0005_comments_every_table_and_downgrade_removes_them(temp_db_url):
         assert conn.execute(count_columns).fetchone() == (0,)
 
 
+def test_0006_on_existing_bills(temp_db_url):
+    """0006 on a database with bills (production has them since 2026-10-05): due date =
+    bill_date + 30, category from the sign, one issue row per bill dated by its run's
+    start, no state changed; every new table and column is commented. Downgrading to 0005
+    works with the data in place and restores 0005's comment on customer_bill.state."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0005")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute(
+            "INSERT INTO party (party_type, given_name, family_name)"
+            " VALUES ('Individual', 'Ivan', 'Ivanov')"
+        )
+        conn.execute(
+            "INSERT INTO customer (party_id, name, status) SELECT id, 'I', 'Active' FROM party"
+        )
+        conn.execute(
+            """
+            INSERT INTO billing_account
+                (customer_id, name, state, currency, bill_cycle_day, opened_at)
+            SELECT id, 'I main', 'Active', 'RUB', 1, now() FROM customer
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO billing_run (run_date, status, started_at, finished_at, trigger)
+            VALUES ('2026-10-01', 'completed', '2026-10-01 00:30+03', '2026-10-01 00:31+03',
+                    'scheduled'),
+                   ('2026-11-01', 'completed', '2026-11-01 00:30+03', '2026-11-01 00:31+03',
+                    'scheduled')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO customer_bill (billing_account_id, currency, bill_period, bill_date,
+                state, amount_due, billing_run_id)
+            SELECT a.id, 'RUB', daterange(r.run_date, (r.run_date + interval '1 month')::date),
+                   r.run_date, 'new',
+                   CASE WHEN r.run_date = '2026-10-01' THEN 300.00 ELSE -116.13 END, r.id
+            FROM billing_account a CROSS JOIN billing_run r
+            """
+        )
+        conn.execute(
+            "INSERT INTO payment (billing_account_id, currency, amount, received_at,"
+            " status, payment_method) SELECT id, 'RUB', 10, now(), 'done', 'cash'"
+            " FROM billing_account"
+        )
+    command.upgrade(cfg, "0006")
+    with psycopg.connect(temp_db_url) as conn:
+        bills = conn.execute(
+            "SELECT bill_date, payment_due_date, category, state FROM customer_bill"
+            " ORDER BY bill_date"
+        ).fetchall()
+        assert [(b[0].isoformat(), b[1].isoformat(), b[2], b[3]) for b in bills] == [
+            ("2026-10-01", "2026-10-31", "normal", "new"),
+            ("2026-11-01", "2026-12-01", "creditNote", "new"),
+        ]
+        issues = conn.execute(
+            """
+            SELECT b.bill_date, h.from_state, h.to_state, h.cause, h.changed_at = r.started_at
+            FROM customer_bill_state_change h JOIN customer_bill b ON b.id = h.customer_bill_id
+            JOIN billing_run r ON r.id = b.billing_run_id ORDER BY b.bill_date
+            """
+        ).fetchall()
+        assert [i[1:] for i in issues] == [(None, "new", "run", True)] * 2
+        uncommented = conn.execute(
+            """
+            SELECT c.relname || coalesce('.' || a.attname, '') FROM pg_class c
+            LEFT JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum > 0
+            WHERE c.relname IN ('bill_allocation', 'customer_bill_state_change')
+              AND c.relkind = 'r'
+              AND ((a.attname IS NULL AND obj_description(c.oid, 'pg_class') IS NULL)
+                OR (a.attname IS NOT NULL AND col_description(c.oid, a.attnum) IS NULL))
+            """
+        ).fetchall()
+        assert uncommented == []
+    command.downgrade(cfg, "0005")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT count(*) FROM customer_bill").fetchone() == (2,)
+        assert conn.execute(
+            "SELECT count(*) FROM pg_tables WHERE tablename IN"
+            " ('bill_allocation', 'customer_bill_state_change')"
+        ).fetchone() == (0,)
+        comment = conn.execute(
+            "SELECT col_description('customer_bill'::regclass, attnum) FROM pg_attribute"
+            " WHERE attrelid = 'customer_bill'::regclass AND attname = 'state'"
+        ).fetchone()
+        assert comment == ("TMF678 state; bills are written as new.",)
+
+
 def test_cloned_test_databases_are_at_the_current_head(db_conn):
     """Most tests get their database from a template migrated once per session
     (conftest.template_db). It must be at the head of the migration scripts."""
@@ -144,4 +233,4 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 17  # 16 domain tables + alembic_version
+    assert tables == 19  # 18 domain tables + alembic_version

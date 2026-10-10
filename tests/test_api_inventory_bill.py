@@ -138,6 +138,7 @@ def test_customer_bill_and_is_billed(api, world, db_conn):
         bill_date=date(2026, 2, 1),
         amount_due=Decimal("499.90"),
         billing_run_id=world.run["id"],
+        payment_due_date=date(2026, 3, 3),
     )
     jan = factories.charge(db_conn, world, days(date(2026, 1, 1), date(2026, 2, 1)))
     db_conn.execute(

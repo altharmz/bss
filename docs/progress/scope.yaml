@@ -32,6 +32,8 @@ items:
   - {id: db.payment, area: db, stage: 1, table: payment, title: "Payments (TMF676)"}
   - {id: db.billing_run_account, area: db, stage: 4, table: billing_run_account, title: "Per-(run, account) outcomes: ok / failed / blocked"}
   - {id: db.worker_request, area: db, stage: 4, table: worker_request, title: "UI request queue for the worker (catch-up, retry)"}
+  - {id: db.bill_allocation, area: db, stage: 5, table: bill_allocation, title: "What paid a bill: payments and credit notes (TMF678 appliedPayment)"}
+  - {id: db.customer_bill_state_change, area: db, stage: 5, table: customer_bill_state_change, title: "Bill state history"}
 
   # ---------------- api: TMF620 product catalog ----------------
   - {id: api.tmf620.productSpecification.list, area: api, stage: 2, method: GET, path: /tmf-api/productCatalogManagement/v5/productSpecification, title: "List product specifications"}

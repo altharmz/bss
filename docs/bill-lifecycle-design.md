@@ -721,8 +721,9 @@ Spec deviations to add to CLAUDE.md:
 ### 6.6 Configuration
 
 - `BILL_PAYMENT_TERM_DAYS` in `app/config.py`: an integer, 1..365, default 30. An
-  invalid value fails at startup: the worker exits 2, like the existing `BILLING_RUN_AT`
-  check, and the app does not start.
+  invalid value fails settings validation at startup, so neither the app nor the worker
+  starts (as built in slice 1: a pydantic `Field(ge=1, le=365)`, the same mechanism as
+  `BILLING_RUN_AT`'s pattern).
 - Only the worker uses it to write due dates. The app reads it for `/context`.
 - Like `BILLING_TZ`/`BILLING_RUN_AT`, it is **passed to neither service** today, so both
   use the default. Changing it on the VPS means adding it to the `environment:` of both
