@@ -98,7 +98,7 @@ def test_a_running_run_whose_owner_is_gone_is_taken_over(worker, connect):
     assert isinstance(result, Started) and result.how == "takenOver"
     run = result.run
     assert (run["status"], run["attempt"], run["trigger"]) == ("running", 2, "catchUp")
-    assert (run["started_at"], run["heartbeat_at"]) == (NOW, LATER)
+    assert (run["started_at"], run["heartbeat_at"]) == (LATER, LATER)  # the attempt's start
 
 
 @pytest.mark.capability("worker.doubleStart")

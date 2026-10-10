@@ -16,6 +16,8 @@ a grace of 2 hours, yesterday before that (D-W19). The latest run decides:
     failed                                   503 failed (accounts or the whole run)
     running, for less than the grace         200 running (in progress, not yet overdue)
     running, for the grace or longer         503 running
+      (counted from started_at: the current attempt, so a takeover restarts it; a
+      running run of a date before the expected date is 503 running regardless)
     completed, the expected date or later    200 ok
     completed, an earlier date               503 stale
 
@@ -57,7 +59,12 @@ def freshness(
     if latest["status"] == "failed":
         status, code = "failed", 503
     elif latest["status"] == "running":
-        overdue = now - latest["started_at"] >= GRACE
+        # started_at is the current attempt's start, so the grace restarts on a takeover;
+        # a run older than the expected date is overdue anyway, or a worker that keeps
+        # dying and being taken over would read 200 forever
+        overdue = now - latest["started_at"] >= GRACE or latest["run_date"] < expected_date(
+            now.astimezone(tz), run_at
+        )
         status, code = "running", 503 if overdue else 200
     elif latest["run_date"] >= expected_date(now.astimezone(tz), run_at):
         status, code = "ok", 200

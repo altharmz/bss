@@ -8,7 +8,8 @@ the run's row decides:
     completed   nothing to do                             -> AlreadyCompleted
     failed      reopen it: attempt + 1, failure cleared   -> Started("reopened")
     running     its owner is gone (we hold the lock):     -> Started("takenOver")
-                take it over, attempt + 1, trigger kept
+                take it over, attempt + 1, trigger kept,
+                started_at = now (the attempt's start)
 
 A takeover is safe because bill_account is idempotent and writes one account per
 transaction; the per-account outcome rows (slice b2) keep ok accounts untouched.
