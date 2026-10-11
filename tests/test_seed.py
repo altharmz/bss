@@ -1,7 +1,7 @@
 """`make seed` (tests/seed.py) against a throwaway database, on a fixed "today": it builds
 what the demo needs, a second run changes nothing, and it refuses what it must refuse."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -9,7 +9,8 @@ import pytest
 from app.config import settings
 from tests import seed as seeding
 from tests.apiclient import decimals
-from tests.apidata import ACCOUNT, CATALOG, PRODUCT
+from tests.apidata import ACCOUNT, CATALOG, PRODUCT, RATE
+from tests.timeline import z
 
 TODAY = date(2026, 10, 1)
 
@@ -25,6 +26,16 @@ def counts(db_conn) -> dict[str, int]:
         "customer_bill",
     )
     return {t: db_conn.execute(f"SELECT count(*) FROM {t}").fetchone()[0] for t in tables}  # noqa: S608
+
+
+def all_of(api, url: str) -> list[dict]:
+    """Every item of a TMF list, page by page."""
+    items: list[dict] = []
+    while True:
+        page = api.get(f"{url}?offset={len(items)}&limit=100")
+        items += page.json()
+        if len(items) >= int(page.headers["X-Total-Count"]):
+            return items
 
 
 def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
@@ -80,6 +91,24 @@ def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
     ).fetchone() == (0,)
     kinds = {r[0] for r in db_conn.execute("SELECT DISTINCT kind FROM bill_allocation").fetchall()}
     assert kinds == {"automatic", "explicit"}
+
+    # the history is dated by the seed's FixedClock, not by when the seed ran: every ABR
+    # was written by the run of its date at 00:30, every product by an order at 10:00 on
+    # one of the simulated days (tests/seed.py, `seed`)
+    start = TODAY - timedelta(days=seeding.START_DAYS)
+    runs = db_conn.execute(
+        "SELECT a.applied_at, r.run_date FROM applied_customer_billing_rate a"
+        " JOIN billing_run r ON r.id = a.billing_run_id"
+    ).fetchall()
+    assert runs and all(applied == seeding.at(day, 0, 30) for applied, day in runs)
+    rates = all_of(api, RATE)
+    assert len(rates) == len(runs)
+    assert {r["date"] for r in rates} == {z(applied) for applied, _ in runs}
+    products = all_of(api, PRODUCT)
+    created = {datetime.fromisoformat(p["creationDate"]) for p in products}
+    days = {c.astimezone(seeding.TZ).date() for c in created}
+    assert all(c.astimezone(seeding.TZ).hour == 10 for c in created)
+    assert min(days) > start and max(days) <= TODAY
 
     # a second run is a no-op
     assert seeding.seed(api, api.clock, TODAY) is False

@@ -223,6 +223,109 @@ def test_0006_on_existing_bills(temp_db_url):
         assert comment == ("TMF678 state; bills are written as new.",)
 
 
+def test_0007_on_existing_abrs(temp_db_url):
+    """0007 on a database with ABRs (production has them since 2026-10-05): applied_at =
+    the started_at of the run that wrote each one, NOT NULL and commented. Downgrading to
+    0006 drops the column with the data in place."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0006")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute(
+            "INSERT INTO party (party_type, given_name, family_name)"
+            " VALUES ('Individual', 'Ivan', 'Ivanov')"
+        )
+        conn.execute(
+            "INSERT INTO customer (party_id, name, status) SELECT id, 'I', 'Active' FROM party"
+        )
+        conn.execute(
+            """
+            INSERT INTO billing_account
+                (customer_id, name, state, currency, bill_cycle_day, opened_at)
+            SELECT id, 'I main', 'Active', 'RUB', 1, now() FROM customer
+            """
+        )
+        conn.execute(
+            "INSERT INTO product_specification (name, lifecycle_status) VALUES ('S', 'Active')"
+        )
+        conn.execute(
+            """
+            INSERT INTO product_offering (name, lifecycle_status, product_specification_id,
+                valid_for)
+            SELECT 'O', 'Active', id, tstzrange('2026-09-01', NULL) FROM product_specification
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO product_order (billing_account_id, state, order_date,
+                requested_start_date)
+            SELECT id, 'completed', '2026-09-20 10:00+03', '2026-09-20 10:00+03'
+            FROM billing_account
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO product_order_item (product_order_id, item_id, action, state,
+                product_offering_id)
+            SELECT o.id, '1', 'add', 'completed', p.id FROM product_order o, product_offering p
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO product (billing_account_id, product_offering_id, status, start_date,
+                created_by_item_id)
+            SELECT o.billing_account_id, i.product_offering_id, 'active', '2026-10-01', i.id
+            FROM product_order_item i JOIN product_order o ON o.id = i.product_order_id
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO billing_run (run_date, status, started_at, finished_at, trigger)
+            VALUES ('2026-10-01', 'completed', '2026-10-01 00:30+03', '2026-10-01 00:31+03',
+                    'scheduled'),
+                   ('2026-10-02', 'completed', '2026-10-02 00:30+03', '2026-10-02 00:31+03',
+                    'scheduled')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO applied_customer_billing_rate (product_id, billing_account_id,
+                charge_type, amount, currency, period, billing_run_id)
+            SELECT p.id, p.billing_account_id, 'recurring', 10.00, 'RUB',
+                   daterange(r.run_date, r.run_date + 1), r.id
+            FROM product p CROSS JOIN billing_run r
+            """
+        )
+    command.upgrade(cfg, "0007")
+    with psycopg.connect(temp_db_url) as conn:
+        rows = conn.execute(
+            """
+            SELECT r.run_date, a.applied_at = r.started_at, a.applied_at <> a.created_at
+            FROM applied_customer_billing_rate a JOIN billing_run r ON r.id = a.billing_run_id
+            ORDER BY r.run_date
+            """
+        ).fetchall()
+        assert [(d.isoformat(), same, other) for d, same, other in rows] == [
+            ("2026-10-01", True, True),
+            ("2026-10-02", True, True),
+        ]
+        column = conn.execute(
+            """
+            SELECT a.attnotnull, col_description(a.attrelid, a.attnum) FROM pg_attribute a
+            WHERE a.attrelid = 'applied_customer_billing_rate'::regclass
+              AND a.attname = 'applied_at'
+            """
+        ).fetchone()
+        assert column is not None and column[0] is True
+        assert column[1].startswith("TMF678 date: ")
+    command.downgrade(cfg, "0006")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT count(*) FROM applied_customer_billing_rate").fetchone() == (2,)
+        assert conn.execute(
+            "SELECT count(*) FROM pg_attribute WHERE attname = 'applied_at'"
+            " AND attrelid = 'applied_customer_billing_rate'::regclass"
+        ).fetchone() == (0,)
+
+
 def test_cloned_test_databases_are_at_the_current_head(db_conn):
     """Most tests get their database from a template migrated once per session
     (conftest.template_db). It must be at the head of the migration scripts."""

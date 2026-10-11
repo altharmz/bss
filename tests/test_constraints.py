@@ -93,6 +93,7 @@ def _refund(conn, w, amount, refunds_rate_id, product_id=None):
         currency="RUB",
         period=days(date(2026, 1, 20), date(2026, 2, 1)),
         billing_run_id=w.run["id"],
+        applied_at=w.run["started_at"],
         refunds_rate_id=refunds_rate_id,
     )
 
@@ -150,6 +151,7 @@ def test_abr_on_a_bill_of_another_account_is_rejected(db_conn):
             currency="RUB",
             period=days(date(2026, 1, 1), date(2026, 2, 1)),
             billing_run_id=w.run["id"],
+            applied_at=w.run["started_at"],
             customer_bill_id=bill["id"],
         )
 

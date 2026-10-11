@@ -184,6 +184,10 @@ nothing deployed):
   change: diff first, needs the human's OK.
 - **Visual review of the subscriber card** with the human before `make verify`: the
   seven figures in one row, the bill dialog, Record payment, New subscriber, Edit.
+- **Migration `0007`** (`cloud/quality-1`, if merged): adds
+  `applied_customer_billing_rate.applied_at` (an ABR's TMF678 `date` from the clock),
+  back-filled from each ABR's run `started_at`, then NOT NULL. Ships with the next
+  deploy; rolling back needs `alembic downgrade 0006` by hand (drops the column).
 
 Then, in this order (as of 2026-10-05, after slice f):
 

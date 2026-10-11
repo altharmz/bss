@@ -48,9 +48,12 @@ def apply_result(
     *,
     issued_at: datetime,
 ) -> None:
-    """Write the ABRs and bills; each bill gets its issue row in the state history, dated
-    `issued_at` (the injected clock of the run's attempt)."""
-    ids = {abr.key: billing.write_abr(conn, account, run_id, abr) for abr in result.abrs}
+    """Write the ABRs and bills, both dated `issued_at` (the injected clock of the run's
+    attempt): the ABRs' applied_at, and each bill's issue row in the state history."""
+    ids = {
+        abr.key: billing.write_abr(conn, account, run_id, abr, applied_at=issued_at)
+        for abr in result.abrs
+    }
     for bill in result.bills:
         bill_id = billing.write_bill(conn, account, run_id, bill, settings.bill_payment_term_days)
         billing.record_bill_issue(conn, bill_id, now=issued_at)

@@ -62,13 +62,19 @@ def product_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     assert account is not None and offering is not None  # foreign keys
     item_ids = [row["created_by_item_id"], row["terminated_by_item_id"]]
     terminated = row["termination_date"]
+    # creationDate: the creating order's order_date - the injected clock of the request
+    # that wrote the product (products are written only by orders), not created_at
+    creating_item = orders.get_order_item(conn, row["created_by_item_id"])
+    assert creating_item is not None  # foreign key
+    creating_order = orders.get_order(conn, creating_item["product_order_id"])
+    assert creating_order is not None  # foreign key
     return without_nulls(
         {
             "id": str(row["id"]),
             "href": product_href(row["id"]),
             "name": offering["name"],
             "status": row["status"],
-            "creationDate": utc(row["created_at"]),
+            "creationDate": utc(creating_order["order_date"]),
             "startDate": from_billing_date(row["start_date"]),
             # exclusive: the first day the product is no longer billed
             "terminationDate": from_billing_date(terminated) if terminated else None,

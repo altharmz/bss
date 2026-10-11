@@ -116,9 +116,10 @@ is not**; a product activated and terminated on the same day is charged 0 days
   for date fields become the date in BILLING_TZ (`2026-10-01T23:30:00Z` is `2026-10-02`
   in Moscow), outgoing dates are midnight BILLING_TZ (`app/api/common.py`).
 - Rows' `created_at`/`updated_at` are the database's `now()`, outside the injected clock,
-  and are **never used for billing**. Where a business instant is needed it is stored
-  from the clock: `billing_account.opened_at`, `product_order.order_date` /
-  `completion_date`, `payment.received_at`.
+  and are **never used for billing**, nor shown by the API. Where a business instant is
+  needed it is stored from the clock: `billing_account.opened_at`,
+  `product_order.order_date` / `completion_date` (also a product's `creationDate`),
+  `payment.received_at`, `applied_customer_billing_rate.applied_at` (an ABR's `date`).
 
 ## Catalog invariants
 

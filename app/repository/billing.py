@@ -409,18 +409,20 @@ def insert_abr(
     currency: str,
     period: Range,
     billing_run_id: UUID,
+    applied_at: datetime,
     refunds_rate_id: UUID | None = None,
     customer_bill_id: UUID | None = None,
 ) -> Row:
-    """Insert an applied customer billing rate. Overlaps are rejected by the database
-    (EXCLUDE constraint) - note that ON CONFLICT with a target cannot catch those."""
+    """Insert an applied customer billing rate; `applied_at` (TMF678 date) is the injected
+    clock of the run's attempt. Overlaps are rejected by the database (EXCLUDE
+    constraint) - note that ON CONFLICT with a target cannot catch those."""
     return returning(
         conn,
         """
         INSERT INTO applied_customer_billing_rate
             (product_id, billing_account_id, charge_type, amount, currency, period,
-             billing_run_id, refunds_rate_id, customer_bill_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
+             billing_run_id, applied_at, refunds_rate_id, customer_bill_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
         """,
         (
             product_id,
@@ -430,6 +432,7 @@ def insert_abr(
             currency,
             period,
             billing_run_id,
+            applied_at,
             refunds_rate_id,
             customer_bill_id,
         ),
@@ -688,7 +691,9 @@ def load_bills(conn: psycopg.Connection, account_id: UUID) -> tuple[StoredBill, 
     )
 
 
-def write_abr(conn: psycopg.Connection, account: Account, run_id: UUID, abr: NewAbr) -> UUID:
+def write_abr(
+    conn: psycopg.Connection, account: Account, run_id: UUID, abr: NewAbr, *, applied_at: datetime
+) -> UUID:
     return insert_abr(
         conn,
         product_id=abr.product_id,
@@ -698,6 +703,7 @@ def write_abr(conn: psycopg.Connection, account: Account, run_id: UUID, abr: New
         currency=abr.currency,
         period=_daterange(abr.period),
         billing_run_id=run_id,
+        applied_at=applied_at,
         refunds_rate_id=abr.refunds_id,
     )["id"]
 
@@ -1080,7 +1086,7 @@ def page_account_transactions(
         WITH ledger AS (
             SELECT a.id, CASE a.charge_type WHEN 'recurring' THEN 'charge' ELSE 'refund' END
                        AS kind,
-                   -a.amount AS amount, r.run_date AS day, 0 AS rank, a.created_at AS at,
+                   -a.amount AS amount, r.run_date AS day, 0 AS rank, a.applied_at AS at,
                    o.name AS note, a.period
             FROM applied_customer_billing_rate a
             JOIN billing_run r ON r.id = a.billing_run_id

@@ -363,6 +363,7 @@ def test_list_abrs(db_conn):
         currency="RUB",
         period=days(date(2026, 2, 15), date(2026, 3, 1)),
         billing_run_id=w.run["id"],
+        applied_at=w.run["started_at"],
         refunds_rate_id=feb["id"],
     )
     all_ids = [a["id"] for a in billing.list_abrs(db_conn, product_id=w.product["id"])]
@@ -416,6 +417,7 @@ def test_account_balance(db_conn):
         currency="RUB",
         period=days(date(2026, 1, 22), date(2026, 2, 1)),
         billing_run_id=w.run["id"],
+        applied_at=w.run["started_at"],
         refunds_rate_id=jan["id"],
     )
     for amount in ("400.00", "250.50"):

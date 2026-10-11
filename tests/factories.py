@@ -105,6 +105,7 @@ def charge(
         currency=w.account["currency"],
         period=period,
         billing_run_id=w.run["id"],
+        applied_at=w.run["started_at"],
     )
 
 

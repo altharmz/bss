@@ -73,8 +73,13 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
    **An offering's `validFor` can be changed freely by PATCH** (`app/api/catalog.py`,
    `patch_offering`): moved into the past, or ended before live products' dates. It only
    affects new orders (`offeringNotValid`), not billing, but no rule or test covers it.
-9. **`creationDate` (TMF637 product) and `date` (TMF678 ABR) come from the database's
-   `now()`**, not the injected clock - the mapping in [decisions/tmf-api.md](decisions/tmf-api.md) says so, but it means
+9. **Fixed 2026-10-11** (branch `cloud/quality-1`): a product's `creationDate` is the
+   creating order's `order_date`, an ABR's `date` the new `applied_at` (migration 0007:
+   the clock of the run's attempt that wrote it, back-filled from the run's
+   `started_at`); `tests/test_clock_dates.py`, and `tests/test_seed.py` checks the seed's
+   history carries the simulated instants. Original finding: **`creationDate` (TMF637
+   product) and `date` (TMF678 ABR) come from the database's `now()`**, not the injected
+   clock - the mapping in [decisions/tmf-api.md](decisions/tmf-api.md) says so, but it means
    seeded demo data shows the seed's run time there, not the FixedClock dates the seed
    simulates. Every other business instant is from the clock.
 10. **Bills never leave `state: new`** and nothing settles a bill against payments; the
