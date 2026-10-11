@@ -95,3 +95,42 @@ ignored -> 200 after 3601 s. `use_code` always succeeding did **not** fail the "
 works once" test - the spent code is already gone when loaded; its rowcount guards the
 race of two exchanges that both loaded the code first, so a test for exactly that was
 added, and it fails without the guard ("DID NOT RAISE TokenError").
+
+## Slice 3: tools generated from the operations (2026-10-11)
+
+- **Generated at startup, in process**: `bss_mcp.tools.generate(app.main.app)` in the
+  lifespan, from `app.openapi()` plus the registry `bss_mcp/operations.py` (D2). Not at
+  build time: the image carries the app's code anyway, and a registry out of step stops
+  the service (`DriftError`) rather than serving a wrong tool set.
+- **The registry holds what app.openapi() lacks** (the app parses query parameters and
+  bodies itself): the request model per write, the query shape per read (TMF list, TMF
+  get-one, paging, none, plus extra parameters), a one-line note. `retry` is the one POST
+  without a body (`no_body`).
+- **List filters are probed, not listed**: a TMF list answers an unknown query parameter
+  with its filters before it opens a database connection - the same probe `make docs`
+  uses (`tests/docs_collect.py`), here through httpx2's ASGI transport. The filters
+  object then names exactly those attributes (`additionalProperties: false`).
+- **Exclusions = `scope.yaml`'s**: `EXCLUDED` (today `GET /`) is a copy because the runtime
+  image has no `docs/`; the drift test reads `docs/progress/scope.yaml` (mounted into
+  the test container, compose.override.yaml - approved 2026-10-11) and requires equality.
+  `/healthz` and `/billing-status` are read tools.
+- **Descriptions are curated, not copied**: 51 of 58 handlers have no docstring, and the
+  API notes (`scripts/docs/api-notes/`) are long and full of test references. Each
+  operation gets one line condensed from them; the generator adds the summary, the API,
+  the docstring if any, filters, merge-patch and write-scope hints. Kept short: the
+  whole `tools/list` is about 60 KB.
+- **Every Decimal is a decimal string**, not only `Money.value`: `PriceChange.amount` is a
+  bare Decimal. Pydantic's Decimal schema (number or numeric string) is replaced
+  wherever it occurs; the request models have exactly these two Decimal fields, both
+  with the 2-decimal rule.
+- **Bodies keep the TMF meta attributes** (`@type`, `@baseType`, `@schemaLocation`): the
+  app accepts them and some handlers check `@type`.
+
+Negative proofs (slice 3, each made with Edit and reverted): a new route in
+`app/main.py` -> the drift test fails and the connector refuses to start ("no entry for
+['drift_probe']"); `EXCLUDED` with `/healthz` added -> "EXCLUDED == scope.yaml" fails;
+`patch_bill` registered with `CustomerPatch` -> "handler parses ['BillPatch'], registry
+['CustomerPatch']"; the Decimal rewrite off -> the schema test finds a JSON number, and
+an integer amount `10` reached the app and was stored (three behavioural tests fail).
+The registry's own refusals (missing or unknown entry, a write without a body, a read
+with one) are unit-tested.

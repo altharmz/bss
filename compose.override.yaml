@@ -10,6 +10,9 @@ services:
       - ./app:/app/app:ro
       - ./bss_mcp:/app/bss_mcp:ro
       - ./tests:/app/tests:ro
+      # read by tests/test_mcp_tools.py: the MCP tools = the API
+      # operations minus scope.yaml's api exclusions (drift check)
+      - ./docs/progress/scope.yaml:/app/docs/progress/scope.yaml:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini:ro

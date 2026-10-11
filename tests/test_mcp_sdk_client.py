@@ -23,6 +23,7 @@ from mcp.shared.auth import (
 
 from app.main import app as bss_app
 from bss_mcp.clock import FixedClock
+from bss_mcp.operations import OPERATIONS
 from bss_mcp.server import build_app
 from bss_mcp.store import Store
 from tests.test_mcp_oauth import PASSWORD, USERS
@@ -111,12 +112,8 @@ def test_the_sdk_client_signs_in_lists_and_calls(api, mcp_settings):
             ):
                 await session.initialize()
                 tools = {t.name for t in (await session.list_tools()).tools}
-                assert tools == {
-                    "list_customers",
-                    "create_individual",
-                    "create_payment",
-                    "patch_bill",
-                }
+                assert len(tools) == len(OPERATIONS)  # every operation, write included
+                assert {"list_customers", "create_individual"} < tools
                 created = await session.call_tool(
                     "create_individual", {"body": {"givenName": "Ada", "familyName": "L"}}
                 )

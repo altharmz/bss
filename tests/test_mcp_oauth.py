@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
+from bss_mcp.operations import OPERATIONS
 from bss_mcp.passwords import check_password, hash_password, parse_users
 
 PASSWORD = "correct horse battery"
@@ -140,7 +141,7 @@ def test_the_full_flow_from_discovery_to_revocation(oauth, caplog):
     access, refresh = issued["access_token"], issued["refresh_token"]
 
     # 5. tools with the access token: the principal is the user
-    assert len(mcp.tools(access)) == 4
+    assert len(mcp.tools(access)) == len(OPERATIONS)
     is_error, answer = mcp.result(access, "create_individual", {"body": GIVEN})
     assert not is_error and answer["status"] == 201
 
@@ -198,7 +199,9 @@ def test_revoking_an_access_token_leaves_the_refresh_token(oauth):
 def test_read_consent_gives_a_read_token(api, oauth):
     issued = tokens(oauth, scope="read")
     assert issued["scope"] == "read"
-    assert set(oauth.tools(issued["access_token"])) == {"list_customers"}
+    listed = oauth.tools(issued["access_token"])
+    assert "list_customers" in listed and "create_individual" not in listed
+    assert all(t["annotations"]["readOnlyHint"] for t in listed.values())
     response = oauth.call(issued["access_token"], "create_individual", {"body": GIVEN})
     assert response.status_code == 403
     assert int(api.get("/tmf-api/partyManagement/v5/individual").headers["x-total-count"]) == 0

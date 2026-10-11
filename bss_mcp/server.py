@@ -52,7 +52,7 @@ from bss_mcp.passwords import parse_users
 from bss_mcp.ratelimit import RateLimit
 from bss_mcp.routes import AuthIpLimit, oauth_routes
 from bss_mcp.store import Store
-from bss_mcp.tools import TOOLS, Tool, result_text
+from bss_mcp.tools import Tool, generate, result_text
 
 log = logging.getLogger("bss_mcp")
 
@@ -215,7 +215,10 @@ def build_app(
     transport to the in-process app, and may pass their own tools."""
     clock = clock or Clock()
     store = store or Store(settings.mcp_store, clock)
-    tools = TOOLS if tools is None else tools
+    # filled at startup (lifespan) from the app's operations, unless a test passes its own;
+    # Guard and the handlers hold this same dict
+    given_tools = tools is not None
+    tools = dict(tools or {})
     bss = Bss(settings.bss_api_url, settings.mcp_api_timeout, transport)
     public = settings.mcp_public_url.rstrip("/")
     resource_metadata_url = f"{public}/.well-known/oauth-protected-resource/mcp"
@@ -309,6 +312,11 @@ def build_app(
 
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
+        if not given_tools:
+            from app.main import app as bss_app  # its code, never its database
+
+            tools.update(await generate(bss_app))
+            log.info("tools: %d generated from the app's operations", len(tools))
         await bss.identify(clock, settings.mcp_identity_wait)
         log.info("identity check: %s is bss", settings.bss_api_url)
         async with manager.run():

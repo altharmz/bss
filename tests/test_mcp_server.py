@@ -64,13 +64,10 @@ def test_a_revoked_token_is_a_401(mcp):
 def test_a_read_token_sees_only_the_read_tools(mcp):
     read = mcp.tools(mcp.token("reader", "read"))
     everything = mcp.tools(mcp.token("writer", "write"))
-    assert set(read) == {"list_customers"}
-    assert set(everything) == {
-        "list_customers",
-        "create_individual",
-        "create_payment",
-        "patch_bill",
-    }
+    assert set(read) == {n for n, t in everything.items() if t["annotations"]["readOnlyHint"]}
+    assert "list_customers" in read and "create_individual" not in read
+    assert {"create_individual", "create_payment", "patch_bill"} < set(everything)
+    assert len(everything) > len(read) > 0
     assert everything["list_customers"]["annotations"]["readOnlyHint"] is True
     assert everything["create_payment"]["annotations"] == {
         "readOnlyHint": False,

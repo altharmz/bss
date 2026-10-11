@@ -21,19 +21,26 @@ MONEY_VALUE = {
     "description": 'An exact amount as a decimal string with at most 2 decimal places, e.g. "19.99"'
     " - never a JSON number.",
 }
+# Every Decimal of the request models is an amount with the app's Money rules (at most 2
+# decimals, never rounded), so one schema serves them all.
 
 
 def model_schema(model: type[BaseModel]) -> dict[str, Any]:
     """The JSON schema of a request model as the app reads it (camelCase aliases), with
-    every $ref inlined (some clients handle no $defs), titles dropped, and Money.value as
-    a decimal string."""
+    every $ref inlined (some clients handle no $defs), titles dropped, and every Decimal
+    (Money.value, an internal amount) as a decimal string."""
     raw = model.model_json_schema(by_alias=True, mode="validation")
     defs = copy.deepcopy(raw.pop("$defs", {}))
-    if "Money" in defs:
-        defs["Money"]["properties"]["value"] = MONEY_VALUE
-    if model.__name__ == "Money":
-        raw["properties"]["value"] = MONEY_VALUE
     return _inline(raw, defs, depth=0)
+
+
+def _is_pydantic_decimal(node: dict[str, Any]) -> bool:
+    """Pydantic's schema of a Decimal: a number, or a numeric string."""
+    branches = node.get("anyOf")
+    if not isinstance(branches, list) or len(branches) != 2:
+        return False
+    types = sorted(str(b.get("type")) for b in branches if isinstance(b, dict))
+    return types == ["number", "string"]
 
 
 def _inline(node: Any, defs: dict[str, Any], depth: int) -> Any:
@@ -45,6 +52,8 @@ def _inline(node: Any, defs: dict[str, Any], depth: int) -> Any:
         return node
     if "$ref" in node:
         return _inline(defs[node["$ref"].rsplit("/", 1)[-1]], defs, depth + 1)
+    if _is_pydantic_decimal(node):
+        return dict(MONEY_VALUE)
     out: dict[str, Any] = {}
     for key, value in node.items():
         if key == "title":

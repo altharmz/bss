@@ -4,9 +4,9 @@ bss's API as MCP tools, for any MCP client (claude.ai, ChatGPT, Claude Code, Cur
 **Demo only - no real data.** Decisions: [decisions/mcp.md](decisions/mcp.md).
 
 > Built in slices. Done: **slice 1** - the server, static bearer tokens, scopes, rate
-> limit, body limit, audit, with four hand-written tools; **slice 2** - OAuth 2.1 with
-> dynamic client registration, discovery and the login page. Local only so far. Still to
-> come: tools generated from every API operation (3), the production service and the
+> limit, body limit, audit; **slice 2** - OAuth 2.1 with dynamic client registration,
+> discovery and the login page; **slice 3** - one tool per API operation, generated, with
+> a drift check. Local only so far. Still to come: the production service and the
 > vps-infra routing (4), client setup and token tooling (5). Sections for those land
 > with them.
 
@@ -110,13 +110,38 @@ separates user and password), so **an operator with `:` always comes from MCP**
 
 ## Tools
 
-One tool per API operation (slice 1: `list_customers`, `create_individual`,
-`create_payment`, `patch_bill`). GET tools are annotated `readOnlyHint`, the others
-`destructiveHint`. Arguments: the path parameters by name; for a list `offset`, `limit`,
-`fields`, `filters` (attribute -> value); for a write `body`, whose schema is the app's
-own request model. Arguments are checked against the schema before the app is called.
+**One tool per API operation**: every operation of `app.openapi()` except those
+`docs/progress/scope.yaml` excludes (today only `GET /`, the template's status root) - 57
+tools, 37 of them read-only (the TMF APIs, the internal API, `/healthz`,
+`/billing-status`). The tool's name is the operationId, which is the handler's function
+name (`create_payment`, `list_bills`, `catch_up`, ...). GET tools are annotated
+`readOnlyHint`, the others `destructiveHint`. `tools/list` is about 60 KB.
 
-**Money is a decimal string** (`"19.99"`, at most 2 decimals). A JSON number with a
+They are **generated at startup** (`bss_mcp/tools.py`) from `app.openapi()` and a small
+registry (`bss_mcp/operations.py`) that adds what the OpenAPI document does not carry:
+
+- **Arguments**: the path parameters by name; the query parameters - TMF lists `offset`,
+  `limit`, `fields` and `filters` (an object whose attributes are exactly the equality
+  filters that list accepts, read from the handler itself at startup), TMF get-one
+  `fields`, the internal lists `offset`/`limit`, `first_charge` its
+  `productOffering.id` and `startDate`, `run_accounts` its `status`; for a write `body`,
+  whose schema is the request model the handler parses, `$ref`s inlined. Arguments are
+  checked against the schema before the app is called; anything extra is refused.
+- **Descriptions**: the summary, the API (TMF number and name, or the internal API), a
+  one-line note condensed from the API notes (`docs/api/`), the handler's docstring if
+  it has one, then the list filters, "JSON merge patch" for PATCH, "Changes data (write
+  scope)" for writes, and the decimal-string rule where a body carries amounts.
+
+**Drift check** (`tests/test_mcp_tools.py`, in `make test` and so in `make check`): the
+tool set equals the API operations minus `scope.yaml`'s exclusions; the registry's copy
+of the exclusions (the runtime image has no `docs/`) equals `scope.yaml`'s; every
+POST/PATCH names the very model class its handler passes to `parse()` (read from the
+handler's source); the list filters equal what `make docs` probes. A registry out of step
+with the app also stops the service at startup (`DriftError`). Every GET tool is called
+against the real app in the tests, and every write tool too.
+
+**Money is a decimal string** (`"19.99"`, at most 2 decimals) - every amount: `Money.value`
+and the internal price change's `amount`. A JSON number with a
 fraction anywhere in the arguments is refused: an MCP client's JSON parser turns numbers
 into binary floats, and an amount must never pass through one. The string becomes an
 exact JSON number on its way to the app.
