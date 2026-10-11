@@ -5,13 +5,14 @@ edit by hand. Implemented: the table exists at migration head (db), `app.openapi
 has the operation (api), a `data-ui` marker exists in `frontend/src` (ui). Worker:
 implemented and tested when a test marked with the capability passes and none fails.
 Tested (ui): a passing component test saw the marker on screen (`expectUi`). Tested
-(db, api): not measured yet. Deployed: unknown until `deploy.sh` records the deployed
-commit.
+(db): a passing test's database got rows in the table. Tested (api): a passing test
+sent a request the app routes to the operation. Deployed: unknown until `deploy.sh`
+records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 18 | 18/18 (100%) | n/a | unknown |
-| API | 57 | 57/57 (100%) | n/a | unknown |
+| Database | 18 | 18/18 (100%) | 18/18 (100%) | unknown |
+| API | 57 | 57/57 (100%) | 57/57 (100%) | unknown |
 | UI | 19 | 19/19 (100%) | 19/19 (100%) | unknown |
 | Worker | 12 | 12/12 (100%) | 12/12 (100%) | unknown |
 
@@ -19,86 +20,86 @@ commit.
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
-| `db.product_specification` | 1 | Product specifications (TMF620) | yes | n/a | unknown |
-| `db.product_offering` | 1 | Product offerings (TMF620) | yes | n/a | unknown |
-| `db.product_offering_price` | 1 | Offering prices (TMF620) | yes | n/a | unknown |
-| `db.party` | 1 | Parties: individuals and organizations (TMF632) | yes | n/a | unknown |
-| `db.customer` | 1 | Customers (TMF629) | yes | n/a | unknown |
-| `db.billing_account` | 1 | Billing accounts (TMF666) | yes | n/a | unknown |
-| `db.product_order` | 1 | Product orders (TMF622) | yes | n/a | unknown |
-| `db.product_order_item` | 1 | Product order items (TMF622) | yes | n/a | unknown |
-| `db.product_order_error_message` | 2 | Order rejection reasons (TMF622 productOrderErrorMessage) | yes | n/a | unknown |
-| `db.product` | 1 | Products (TMF637) | yes | n/a | unknown |
-| `db.applied_customer_billing_rate` | 1 | Charges and refunds - ABRs (TMF678) | yes | n/a | unknown |
-| `db.customer_bill` | 1 | Customer bills (TMF678) | yes | n/a | unknown |
-| `db.billing_run` | 1 | Billing runs, one per date | yes | n/a | unknown |
-| `db.payment` | 1 | Payments (TMF676) | yes | n/a | unknown |
-| `db.billing_run_account` | 4 | Per-(run, account) outcomes: ok / failed / blocked | yes | n/a | unknown |
-| `db.worker_request` | 4 | UI request queue for the worker (catch-up, retry) | yes | n/a | unknown |
-| `db.bill_allocation` | 5 | What paid a bill: payments and credit notes (TMF678 appliedPayment) | yes | n/a | unknown |
-| `db.customer_bill_state_change` | 5 | Bill state history | yes | n/a | unknown |
+| `db.product_specification` | 1 | Product specifications (TMF620) | yes | yes | unknown |
+| `db.product_offering` | 1 | Product offerings (TMF620) | yes | yes | unknown |
+| `db.product_offering_price` | 1 | Offering prices (TMF620) | yes | yes | unknown |
+| `db.party` | 1 | Parties: individuals and organizations (TMF632) | yes | yes | unknown |
+| `db.customer` | 1 | Customers (TMF629) | yes | yes | unknown |
+| `db.billing_account` | 1 | Billing accounts (TMF666) | yes | yes | unknown |
+| `db.product_order` | 1 | Product orders (TMF622) | yes | yes | unknown |
+| `db.product_order_item` | 1 | Product order items (TMF622) | yes | yes | unknown |
+| `db.product_order_error_message` | 2 | Order rejection reasons (TMF622 productOrderErrorMessage) | yes | yes | unknown |
+| `db.product` | 1 | Products (TMF637) | yes | yes | unknown |
+| `db.applied_customer_billing_rate` | 1 | Charges and refunds - ABRs (TMF678) | yes | yes | unknown |
+| `db.customer_bill` | 1 | Customer bills (TMF678) | yes | yes | unknown |
+| `db.billing_run` | 1 | Billing runs, one per date | yes | yes | unknown |
+| `db.payment` | 1 | Payments (TMF676) | yes | yes | unknown |
+| `db.billing_run_account` | 4 | Per-(run, account) outcomes: ok / failed / blocked | yes | yes | unknown |
+| `db.worker_request` | 4 | UI request queue for the worker (catch-up, retry) | yes | yes | unknown |
+| `db.bill_allocation` | 5 | What paid a bill: payments and credit notes (TMF678 appliedPayment) | yes | yes | unknown |
+| `db.customer_bill_state_change` | 5 | Bill state history | yes | yes | unknown |
 
 ## API
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
-| `api.tmf620.productSpecification.list` | 2 | List product specifications | yes | n/a | unknown |
-| `api.tmf620.productSpecification.get` | 2 | Get a product specification | yes | n/a | unknown |
-| `api.tmf620.productSpecification.create` | 2 | Create a product specification | yes | n/a | unknown |
-| `api.tmf620.productSpecification.patch` | 2 | Patch a product specification | yes | n/a | unknown |
-| `api.tmf620.productOffering.list` | 2 | List product offerings | yes | n/a | unknown |
-| `api.tmf620.productOffering.get` | 2 | Get a product offering | yes | n/a | unknown |
-| `api.tmf620.productOffering.create` | 2 | Create a product offering | yes | n/a | unknown |
-| `api.tmf620.productOffering.patch` | 2 | Patch a product offering (lifecycle, prices) | yes | n/a | unknown |
-| `api.tmf620.productOfferingPrice.list` | 2 | List offering prices | yes | n/a | unknown |
-| `api.tmf620.productOfferingPrice.get` | 2 | Get an offering price | yes | n/a | unknown |
-| `api.tmf620.productOfferingPrice.create` | 2 | Create an offering price | yes | n/a | unknown |
-| `api.tmf620.productOfferingPrice.patch` | 2 | Patch an offering price (end it) | yes | n/a | unknown |
-| `api.tmf632.individual.list` | 2 | List individuals | yes | n/a | unknown |
-| `api.tmf632.individual.get` | 2 | Get an individual | yes | n/a | unknown |
-| `api.tmf632.individual.create` | 2 | Create an individual | yes | n/a | unknown |
-| `api.tmf632.individual.patch` | 2 | Patch an individual | yes | n/a | unknown |
-| `api.tmf632.organization.list` | 2 | List organizations | yes | n/a | unknown |
-| `api.tmf632.organization.get` | 2 | Get an organization | yes | n/a | unknown |
-| `api.tmf632.organization.create` | 2 | Create an organization | yes | n/a | unknown |
-| `api.tmf632.organization.patch` | 2 | Patch an organization | yes | n/a | unknown |
-| `api.tmf629.customer.list` | 2 | List customers | yes | n/a | unknown |
-| `api.tmf629.customer.get` | 2 | Get a customer | yes | n/a | unknown |
-| `api.tmf629.customer.create` | 2 | Create a customer | yes | n/a | unknown |
-| `api.tmf629.customer.patch` | 2 | Patch a customer | yes | n/a | unknown |
-| `api.tmf666.billingAccount.list` | 2 | List billing accounts (with balance) | yes | n/a | unknown |
-| `api.tmf666.billingAccount.get` | 2 | Get a billing account | yes | n/a | unknown |
-| `api.tmf666.billingAccount.create` | 2 | Create a billing account | yes | n/a | unknown |
-| `api.tmf666.billingAccount.patch` | 2 | Patch a billing account | yes | n/a | unknown |
-| `api.tmf666.extensionSchema.get` | 2 | Serve the BssBillingAccount extension schema | yes | n/a | unknown |
-| `api.tmf676.payment.list` | 2 | List payments | yes | n/a | unknown |
-| `api.tmf676.payment.get` | 2 | Get a payment | yes | n/a | unknown |
-| `api.tmf676.payment.create` | 2 | Record a payment | yes | n/a | unknown |
-| `api.tmf622.productOrder.list` | 2 | List product orders | yes | n/a | unknown |
-| `api.tmf622.productOrder.get` | 2 | Get a product order | yes | n/a | unknown |
-| `api.tmf622.productOrder.create` | 2 | Place a product order (add / delete items) | yes | n/a | unknown |
-| `api.tmf637.product.list` | 2 | List products | yes | n/a | unknown |
-| `api.tmf637.product.get` | 2 | Get a product | yes | n/a | unknown |
-| `api.tmf678.customerBill.list` | 2 | List customer bills | yes | n/a | unknown |
-| `api.tmf678.customerBill.get` | 2 | Get a customer bill | yes | n/a | unknown |
-| `api.tmf678.customerBill.patch` | 5 | Hold or release a customer bill | yes | n/a | unknown |
-| `api.tmf678.appliedCustomerBillingRate.list` | 2 | List charges and refunds (ABRs) | yes | n/a | unknown |
-| `api.tmf678.appliedCustomerBillingRate.get` | 2 | Get a charge or refund (ABR) | yes | n/a | unknown |
-| `api.internal.context.get` | 5 | System context: business date, zone, operator | yes | n/a | unknown |
-| `api.internal.firstCharge.get` | 5 | First-charge preview of an add order | yes | n/a | unknown |
-| `api.internal.accountProducts.list` | 5 | An account's not-ended products | yes | n/a | unknown |
-| `api.internal.accountCharges.list` | 5 | An account's charges (ABRs with proration) | yes | n/a | unknown |
-| `api.internal.accountTransactions.list` | 5 | An account's ledger with balance after | yes | n/a | unknown |
-| `api.internal.accountSettlement.get` | 5 | An account's bills owed, unused credit, overdue and on hold | yes | n/a | unknown |
-| `api.internal.billDetail.get` | 5 | A bill with charges, sources, history and allowed states | yes | n/a | unknown |
-| `api.internal.priceChange.create` | 5 | Atomic price change of a live offering (D-W21) | yes | n/a | unknown |
-| `api.internal.billingRun.list` | 4 | List billing runs (newest first) | yes | n/a | unknown |
-| `api.internal.billingRun.get` | 4 | Get a billing run | yes | n/a | unknown |
-| `api.internal.billingRunAccounts.list` | 4 | A run's per-account outcomes | yes | n/a | unknown |
-| `api.internal.billingRun.catchUp` | 4 | Queue a catch-up to a date | yes | n/a | unknown |
-| `api.internal.billingRun.retry` | 4 | Queue a retry of a failed run | yes | n/a | unknown |
-| `api.service.healthz` | template | Liveness with a database check | yes | n/a | unknown |
-| `api.service.billingStatus` | 4 | Freshness signal for the external monitor | yes | n/a | unknown |
+| `api.tmf620.productSpecification.list` | 2 | List product specifications | yes | yes | unknown |
+| `api.tmf620.productSpecification.get` | 2 | Get a product specification | yes | yes | unknown |
+| `api.tmf620.productSpecification.create` | 2 | Create a product specification | yes | yes | unknown |
+| `api.tmf620.productSpecification.patch` | 2 | Patch a product specification | yes | yes | unknown |
+| `api.tmf620.productOffering.list` | 2 | List product offerings | yes | yes | unknown |
+| `api.tmf620.productOffering.get` | 2 | Get a product offering | yes | yes | unknown |
+| `api.tmf620.productOffering.create` | 2 | Create a product offering | yes | yes | unknown |
+| `api.tmf620.productOffering.patch` | 2 | Patch a product offering (lifecycle, prices) | yes | yes | unknown |
+| `api.tmf620.productOfferingPrice.list` | 2 | List offering prices | yes | yes | unknown |
+| `api.tmf620.productOfferingPrice.get` | 2 | Get an offering price | yes | yes | unknown |
+| `api.tmf620.productOfferingPrice.create` | 2 | Create an offering price | yes | yes | unknown |
+| `api.tmf620.productOfferingPrice.patch` | 2 | Patch an offering price (end it) | yes | yes | unknown |
+| `api.tmf632.individual.list` | 2 | List individuals | yes | yes | unknown |
+| `api.tmf632.individual.get` | 2 | Get an individual | yes | yes | unknown |
+| `api.tmf632.individual.create` | 2 | Create an individual | yes | yes | unknown |
+| `api.tmf632.individual.patch` | 2 | Patch an individual | yes | yes | unknown |
+| `api.tmf632.organization.list` | 2 | List organizations | yes | yes | unknown |
+| `api.tmf632.organization.get` | 2 | Get an organization | yes | yes | unknown |
+| `api.tmf632.organization.create` | 2 | Create an organization | yes | yes | unknown |
+| `api.tmf632.organization.patch` | 2 | Patch an organization | yes | yes | unknown |
+| `api.tmf629.customer.list` | 2 | List customers | yes | yes | unknown |
+| `api.tmf629.customer.get` | 2 | Get a customer | yes | yes | unknown |
+| `api.tmf629.customer.create` | 2 | Create a customer | yes | yes | unknown |
+| `api.tmf629.customer.patch` | 2 | Patch a customer | yes | yes | unknown |
+| `api.tmf666.billingAccount.list` | 2 | List billing accounts (with balance) | yes | yes | unknown |
+| `api.tmf666.billingAccount.get` | 2 | Get a billing account | yes | yes | unknown |
+| `api.tmf666.billingAccount.create` | 2 | Create a billing account | yes | yes | unknown |
+| `api.tmf666.billingAccount.patch` | 2 | Patch a billing account | yes | yes | unknown |
+| `api.tmf666.extensionSchema.get` | 2 | Serve the BssBillingAccount extension schema | yes | yes | unknown |
+| `api.tmf676.payment.list` | 2 | List payments | yes | yes | unknown |
+| `api.tmf676.payment.get` | 2 | Get a payment | yes | yes | unknown |
+| `api.tmf676.payment.create` | 2 | Record a payment | yes | yes | unknown |
+| `api.tmf622.productOrder.list` | 2 | List product orders | yes | yes | unknown |
+| `api.tmf622.productOrder.get` | 2 | Get a product order | yes | yes | unknown |
+| `api.tmf622.productOrder.create` | 2 | Place a product order (add / delete items) | yes | yes | unknown |
+| `api.tmf637.product.list` | 2 | List products | yes | yes | unknown |
+| `api.tmf637.product.get` | 2 | Get a product | yes | yes | unknown |
+| `api.tmf678.customerBill.list` | 2 | List customer bills | yes | yes | unknown |
+| `api.tmf678.customerBill.get` | 2 | Get a customer bill | yes | yes | unknown |
+| `api.tmf678.customerBill.patch` | 5 | Hold or release a customer bill | yes | yes | unknown |
+| `api.tmf678.appliedCustomerBillingRate.list` | 2 | List charges and refunds (ABRs) | yes | yes | unknown |
+| `api.tmf678.appliedCustomerBillingRate.get` | 2 | Get a charge or refund (ABR) | yes | yes | unknown |
+| `api.internal.context.get` | 5 | System context: business date, zone, operator | yes | yes | unknown |
+| `api.internal.firstCharge.get` | 5 | First-charge preview of an add order | yes | yes | unknown |
+| `api.internal.accountProducts.list` | 5 | An account's not-ended products | yes | yes | unknown |
+| `api.internal.accountCharges.list` | 5 | An account's charges (ABRs with proration) | yes | yes | unknown |
+| `api.internal.accountTransactions.list` | 5 | An account's ledger with balance after | yes | yes | unknown |
+| `api.internal.accountSettlement.get` | 5 | An account's bills owed, unused credit, overdue and on hold | yes | yes | unknown |
+| `api.internal.billDetail.get` | 5 | A bill with charges, sources, history and allowed states | yes | yes | unknown |
+| `api.internal.priceChange.create` | 5 | Atomic price change of a live offering (D-W21) | yes | yes | unknown |
+| `api.internal.billingRun.list` | 4 | List billing runs (newest first) | yes | yes | unknown |
+| `api.internal.billingRun.get` | 4 | Get a billing run | yes | yes | unknown |
+| `api.internal.billingRunAccounts.list` | 4 | A run's per-account outcomes | yes | yes | unknown |
+| `api.internal.billingRun.catchUp` | 4 | Queue a catch-up to a date | yes | yes | unknown |
+| `api.internal.billingRun.retry` | 4 | Queue a retry of a failed run | yes | yes | unknown |
+| `api.service.healthz` | template | Liveness with a database check | yes | yes | unknown |
+| `api.service.billingStatus` | 4 | Freshness signal for the external monitor | yes | yes | unknown |
 
 ## UI
 
