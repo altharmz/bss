@@ -30,6 +30,9 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['src/test/setup.ts'],
+    // above setup.ts's asyncUtilTimeout (5 s), so a waitFor that misses fails with its
+    // own error, not a bare test timeout
+    testTimeout: 15000,
     // make progress: also list the data-ui ids passing tests saw (expectUi)
     ...(process.env.UI_TESTED_OUT
       ? { reporters: ['default', './scripts/ui-tested-reporter.mjs'] }

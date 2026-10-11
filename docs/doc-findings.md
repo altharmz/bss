@@ -134,7 +134,12 @@ Added 2026-10-10, after the merge of `cloud/catalog-integrity`.
     workstation, UTC or the `TZ=America/New_York` pass) are not recorded here yet - add
     them when it fails next. Not seen in the `make check` run before the merge of
     `cloud/catalog-integrity` (2026-10-10: 184 passed in both time zones).
-19. **A flaky test in `frontend/src/screens/Catalog.test.tsx`**: `catalog > lists
+19. **Fixed 2026-10-11** (branch `cloud/quality-1`): the cause was the guess below -
+    Testing Library's 1 s `waitFor` timeout against a cold first render on a loaded
+    machine. Reproduced exactly by delaying the catalog's price load 1.2 s; the async
+    utilities now wait up to 5 s ([decisions/frontend.md](decisions/frontend.md),
+    "Frontend conventions"). Original finding:
+    **A flaky test in `frontend/src/screens/Catalog.test.tsx`**: `catalog > lists
     offerings with code, specification, price, period, status and validity` failed once
     with `Error: no row Mobile L` (thrown by `row()` inside `await waitFor(() =>
     row('Mobile L'))`; the test took 3.5 s, so the `waitFor` gave up before the rows
