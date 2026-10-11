@@ -3,11 +3,14 @@
 bss's API as MCP tools, for any MCP client (claude.ai, ChatGPT, Claude Code, Cursor, ...).
 **Demo only - no real data.** Decisions: [decisions/mcp.md](decisions/mcp.md).
 
-> Built in slices. Done: **slice 1** - the server, static bearer tokens, scopes, rate
-> limit, body limit, audit; **slice 2** - OAuth 2.1 with dynamic client registration,
-> discovery and the login page; **slice 3** - one tool per API operation, generated, with
-> a drift check; **slice 4** - the production service and the vps-infra routing request
-> (not deployed yet). Still to come: client setup and token tooling (5).
+> Built in five slices (server, OAuth, tools, production service, tooling and docs),
+> all local: **not deployed yet**, and so not yet tried with the hosted clients below -
+> the OAuth flow is tested with the official MCP SDK's own client. Deploying needs the
+> vps-infra routing first ([Production](#production)).
+>
+> **The connector is the boundary.** An AI client calling these tools - Claude Code
+> included - is not seen by this repo's Bash guard or permission rules: the server's
+> scopes are the only control. Never add an unauthenticated mode.
 
 ## Architecture
 
@@ -97,7 +100,8 @@ client runs them.
 
 `bss_st_...`, for clients that can send a custom header. A name
 (`^[a-z0-9][a-z0-9._-]{0,47}$`) and a scope; shown once at creation, stored as a hash,
-revocable. The make target that creates, lists and revokes them comes in slice 5.
+revocable; no expiry. Managed with the make targets in
+[Token management](#token-management).
 
 ### Principal and operator
 
@@ -148,6 +152,109 @@ exact JSON number on its way to the app.
 The answer is the app's: `{"status", "totalCount"/"resultCount" (lists), "body"}`, amounts
 exact. A 4xx/5xx from the app is a tool error (`isError`), not an MCP error.
 
+## Client setup
+
+The server URL is **`https://vpn2811.duckdns.org:8445/mcp`** (locally
+`http://localhost:8090/mcp`). Clients that support MCP's OAuth need nothing else: they
+discover the rest, register themselves and open the login page, where you choose **Read
+only** or **Read and write**. Clients that cannot do OAuth with an https or localhost
+redirect use a static token instead. Menu names below are as of 2026-10 and move often;
+the URL and the header are what matter.
+
+| Client | How | Redirect it registers |
+|---|---|---|
+| claude.ai (and Claude Desktop, which shares its connectors) | OAuth | `https://claude.ai/api/mcp/auth_callback` |
+| ChatGPT | OAuth (developer mode) | `https://chatgpt.com/connector_platform_oauth_redirect` |
+| Claude Code | OAuth, or a static token | `http://localhost:<port>/callback` |
+| Cursor | **static token only** | a `cursor://` URI - refused |
+
+**claude.ai** - Settings -> Connectors -> *Add custom connector*: a name (`bss`) and the
+server URL; leave the advanced OAuth fields empty (the connector registers itself). Then
+*Connect*: the login page opens; log in with an `MCP_USERS` user and pick the scope. In a
+chat, enable the connector from the tools menu. claude.ai asks before each write tool
+call (they are marked `destructiveHint`); keep that on.
+
+**ChatGPT** - custom MCP connectors with arbitrary tools need **developer mode**
+(Settings -> Apps & Connectors -> Advanced settings -> Developer mode), then *Create*:
+the server URL, authentication *OAuth*. Without developer mode ChatGPT only uses
+connectors that offer `search`/`fetch` tools, which bss does not. ChatGPT asks for
+confirmation before write calls.
+
+**Claude Code** - with OAuth (a browser opens on the first use, or with `/mcp` ->
+*Authenticate*; the redirect goes to a localhost port, which the policy allows):
+
+```
+claude mcp add --transport http bss https://vpn2811.duckdns.org:8445/mcp
+```
+
+With a static token instead (no browser; the token sits in Claude Code's config in
+clear - prefer a `read` token, and `--scope local`, the default, keeps it to one
+project):
+
+```
+claude mcp add --transport http bss https://vpn2811.duckdns.org:8445/mcp \
+  --header "Authorization: Bearer bss_st_..."
+```
+
+`claude mcp list` shows the state; `claude mcp remove bss` drops it (revoke the token
+too). **In this repository**: tool calls through the connector are not checked by
+`.claude/hooks/guard.sh` or the permission rules - see the note at the top.
+
+**Cursor** - Cursor's OAuth redirect is a custom `cursor://` scheme, which registration
+refuses (https or localhost http only, the agreed policy). Use a static token in
+`~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project - not committed):
+
+```json
+{
+  "mcpServers": {
+    "bss": {
+      "url": "https://vpn2811.duckdns.org:8445/mcp",
+      "headers": { "Authorization": "Bearer ${env:BSS_MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+with the token in the environment Cursor starts from (or literally in the file, which
+then is a secret). **Other clients**: any client speaking Streamable HTTP works with
+either OAuth (https or localhost redirect) or the header; SSE-only clients do not.
+
+## Token management
+
+Static tokens and OAuth grants live in the connector's store; the tooling is
+`python -m bss_mcp.tokens` (`bss_mcp/tokens.py`), run in the `mcp` service so it has
+the store's volume. Revocation takes effect on the next request.
+
+Locally:
+
+```
+make mcp-token-create NAME=ci SCOPE=read   # prints the token once, on stdout
+make mcp-tokens                            # static tokens (id, name, scope, revoked) + live OAuth grants
+make mcp-token-revoke ID=<token id>        # a static token
+make mcp-token-revoke GRANT=<grant id>     # an OAuth login: all its access and refresh tokens
+```
+
+On the VPS (the deployed image, against the `mcp-data` volume), through `make remote`:
+
+```
+make remote SERVICE=mcp CMD="python -m bss_mcp.tokens create ci --scope read"
+make remote SERVICE=mcp CMD="python -m bss_mcp.tokens list"
+make remote SERVICE=mcp CMD="python -m bss_mcp.tokens revoke <token id>"
+make remote SERVICE=mcp CMD="python -m bss_mcp.tokens revoke-grant <grant id>"
+```
+
+A production token is a credential: **the human runs `create`** (`! make remote ...` in
+Claude Code would print it into the session). The listing never shows a token, only ids.
+Each create and revoke writes an audit line (`token_create`, `token_revoke`,
+`grant_revoke`) to the run's stderr.
+
+- **Users** (the OAuth login): `MCP_USERS` - add or remove a `name:hash` pair, then
+  redeploy. Removing a user does not end their live grants: revoke them with
+  `revoke-grant` (`tokens list` shows the user of each grant).
+- **Everything at once**: losing the store (the `mcp_data` / `mcp-data` volume) ends every
+  token and client registration; clients re-register on their next use. Removing the
+  volume is the human's call (CLAUDE.md: never `docker volume rm` from a session).
+
 ## Limits
 
 | What | Default | Setting |
@@ -169,7 +276,9 @@ One JSON line per tool call (logger `bss_mcp.audit`, the container's log): `time
 `event`, `principal`, `tool`, `outcome` (the app's status, `403`, `invalid_arguments`,
 `timeout`, ...), plus `rate_limited` events, and one per OAuth event: `register`,
 `login` (ok with the scope, failed, 429 - with the client IP), `consent` (denied),
-`token` (issued, code reused), `refresh`, `revoke`. **Never** bodies, arguments, codes,
+`token` (issued, code reused), `refresh`, `revoke`; the token tooling adds
+`token_create`, `token_revoke`, `grant_revoke` (on the run's stderr, not the service's
+log). **Never** bodies, arguments, codes,
 tokens or passwords (a test checks the log for each).
 
 ## Production
@@ -208,4 +317,24 @@ tokens or passwords (a test checks the log for each).
   registrant chose ("Claude" included). The page also shows the host the browser goes
   back to and says to approve only a connection you just started; the password is the
   real gate.
-- Public write access and prompt injection through data: see slice 5.
+- **Write access over the public internet.** Anyone holding an `MCP_USERS` password or a
+  `write` token can create customers, orders, payments, price changes and billing runs on
+  the demo instance - every write tool, with no per-tool approval on the server. Bounded
+  by: demo data only (no real customers, ever), the scopes (consent offers read only),
+  short access tokens, revocation, the rate limits, the audit log naming the principal.
+  Bills and charges from a billing run are not undone through the API; a wrecked demo is
+  restored from a backup or rebuilt.
+- **Prompt injection through data.** Every text field in bss - names, notes,
+  descriptions, reasons - is written by whoever had write access, and an AI client reads
+  it back as tool output. A planted "ignore your instructions and ..." in a customer's
+  name is just data to bss, but may steer a model that then calls write tools with the
+  user's token. Mitigations: connect with **Read only** unless the session needs writes;
+  keep the client's confirmation for write tools on; treat tool output as untrusted
+  (no escaping makes text safe for a model).
+- **The connector bypasses this repo's agent guardrails.** A Claude Code session with the
+  connector added can change the deployed demo through tools that `.claude/hooks/guard.sh`
+  never sees (it matches Bash commands). The token's scope is the only limit; do not
+  give an agent a `write` token it does not need.
+- **Tokens in client configs.** A static token in `~/.claude.json` or `mcp.json` is in
+  clear on that machine and has no expiry: prefer OAuth, use `read` tokens, name them
+  per client so one can be revoked alone.

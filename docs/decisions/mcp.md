@@ -167,3 +167,21 @@ image): the smoke test passes through Caddy; with a `path` matcher it fails ("GE
 answered 404 without basic auth"); with `/token` dropped from the list it fails ("POST
 /token answered 401 Basic"). The prod composition validates (`config --quiet`, dummy
 values) and refuses to start without `MCP_USERS`.
+
+## Slice 5: token tooling and client docs (2026-10-11)
+
+- **One CLI, `python -m bss_mcp.tokens`** (`create`, `list`, `revoke`, `revoke-grant`),
+  run in the `mcp` service so it opens the very store the server reads (SQLite WAL; the
+  server looks a token up on every request, so a revocation is immediate - no cache).
+  The token goes to stdout alone, everything else to stderr, so it can be piped.
+- **Make targets locally, `make remote SERVICE=mcp` on the VPS**: `make remote` gained a
+  `SERVICE` (default `app`) instead of a second set of remote targets; `--no-deps`, so
+  the app need not be up.
+- **A production token is created by the human**, not by a session (it would land in
+  the transcript); CLAUDE.md says so next to the rule that the connector bypasses the
+  guard.
+- **Cursor gets static tokens only**: its OAuth redirect is a custom scheme, which the
+  agreed redirect policy refuses; the policy stays.
+- **Not tried against the hosted clients yet** - they need the deployed instance. The
+  client instructions in docs/mcp.md follow each client's documented setup; the OAuth
+  flow itself is proven with the official SDK client.

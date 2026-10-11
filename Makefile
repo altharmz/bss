@@ -12,7 +12,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e docs docs-check decisions-check mcp-smoke
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e docs docs-check decisions-check mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -40,6 +40,26 @@ psql: ## psql in the local database, through compose exec (the db port is not pu
 
 mcp-smoke: ## Discovery, 401 and carve-out checks against the local mcp service (http://localhost:8090)
 	./scripts/mcp-smoke.sh http://localhost:8090 local
+
+mcp-token-create: ## Local MCP static token, printed once: make mcp-token-create NAME=ci SCOPE=read|write
+	@if [ -z "$(NAME)" ] || [ -z "$(SCOPE)" ]; then \
+		echo 'usage: make mcp-token-create NAME=ci SCOPE=read|write' >&2; \
+		exit 1; \
+	fi
+	docker compose run --rm --no-deps mcp python -m bss_mcp.tokens create '$(NAME)' --scope '$(SCOPE)'
+
+mcp-tokens: ## Local MCP static tokens and live OAuth grants (ids only, never a token)
+	docker compose run --rm --no-deps mcp python -m bss_mcp.tokens list
+
+mcp-token-revoke: ## Revoke a local MCP static token (ID=<id>) or OAuth grant (GRANT=<grant id>)
+	@if [ -n "$(ID)" ] && [ -z "$(GRANT)" ]; then \
+		docker compose run --rm --no-deps mcp python -m bss_mcp.tokens revoke '$(ID)'; \
+	elif [ -n "$(GRANT)" ] && [ -z "$(ID)" ]; then \
+		docker compose run --rm --no-deps mcp python -m bss_mcp.tokens revoke-grant '$(GRANT)'; \
+	else \
+		echo 'usage: make mcp-token-revoke ID=<token id> | GRANT=<grant id>' >&2; \
+		exit 1; \
+	fi
 
 test: ## Run the test suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the scripts' own cases
 	./scripts/test-billing-status-check.sh
@@ -123,12 +143,14 @@ tunnel: ## Forward the remote app to localhost:18081 (Ctrl-C to stop)
 ssh: ## Shell on the VPS
 	ssh $(SSH_OPTS) $(REMOTE)
 
-remote: ## Run a one-off command against the deployed image on the VPS: make remote CMD="alembic current"
+# the service `make remote` runs in; SERVICE=mcp for the token tooling (its volume)
+SERVICE := app
+remote: ## Run a one-off command against the deployed image on the VPS: make remote CMD="alembic current" [SERVICE=mcp]
 	@if [ -z "$(CMD)" ]; then \
 		echo 'usage: make remote CMD="alembic current"' >&2; \
 		exit 1; \
 	fi
-	ssh $(SSH_OPTS) $(REMOTE) "cd $(REMOTE_DIR) && IMAGE_NAME=$(IMAGE_NAME) TAG=$(TAG) $(COMPOSE_PROD) run --rm --no-deps app $(CMD)"
+	ssh $(SSH_OPTS) $(REMOTE) "cd $(REMOTE_DIR) && IMAGE_NAME=$(IMAGE_NAME) TAG=$(TAG) $(COMPOSE_PROD) run --rm --no-deps $(SERVICE) $(CMD)"
 
 progress: ## Regenerate docs/PROGRESS.md + docs/progress/status.json (scope.yaml vs the code)
 	@mkdir -p .progress

@@ -29,6 +29,10 @@ make test      # pytest inside the container
 make lint      # ruff check + format check
 make smoke     # smoke-test the local instance
 make mcp-smoke # MCP connector: discovery, 401, OAuth endpoints (local, http://localhost:8090)
+make mcp-token-create NAME=ci SCOPE=read  # local MCP static token, printed once
+make mcp-tokens                           # local MCP static tokens + live OAuth grants
+make mcp-token-revoke ID=<id>             # or GRANT=<grant id>; on the VPS: docs/mcp.md
+make remote SERVICE=mcp CMD="..."         # `make remote` in the mcp service (its volume)
 make deploy    # build locally, ship image to VPS, restart there
 make check     # every local check of verify: lint, test, docs-check, decisions-check,
                # web-lint, web-test, web-e2e
@@ -118,6 +122,11 @@ above bind because they are the rules.
 - **Harness files need the human's OK**: `.claude/**`, `compose*.yaml`, `Makefile`,
   `scripts/**` (and `docs/progress/scope.yaml`) - changed with the Edit tool only; the
   guard blocks shell writes to them.
+- **MCP tools bypass the Bash guard - server-side scopes are the boundary; never add an
+  unauthenticated mode.** The connector ([docs/mcp.md](docs/mcp.md)) acts on the deployed
+  bss through tool calls that `guard.sh` and the permission rules never see; only the
+  token's scope (`read`/`write`, enforced in `bss_mcp`) limits them. A production MCP
+  token is a credential: the human creates it, not a session.
 - **Pre-commit hook** (`make hooks`; `scripts/pre-commit.sh`): `make lint` + `make test`,
   plus `web-lint`/`web-test` when `frontend/` or `spec/` is staged. It refuses a commit
   unless the working tree is exactly what is committed. `git commit --no-verify` only to
@@ -182,7 +191,10 @@ approval. Done, local only: slice 1 (server, static tokens, scopes, limits, audi
 `6ae9f40`), slice 2 (OAuth 2.1 + DCR + discovery + login page; `15674e0`), slice 3 (57
 tools generated from `app.openapi()` + drift check; `db765f1`), slice 4 (`compose.prod.yaml`
 service, deploy.sh checks, `scripts/mcp-smoke.sh`, vps-infra change request; rehearsed
-with Caddy 2.11.4, not deployed). Next: 5 (docs + token tooling).
+with Caddy 2.11.4, not deployed; `5f2e436`), slice 5 (client setup docs, token tooling
+`python -m bss_mcp.tokens` + `make mcp-token*`). All slices done; what remains is the
+deploy (see "Before the next deploy") and a first connection from claude.ai, ChatGPT,
+Claude Code and Cursor against the deployed instance (only the SDK's client is tested).
 
 **Before the next deploy** (2026-10-10: bill lifecycle slices 1-4 merged as `1d7a242`,
 subscriber create/edit as `61d9399`; local `make check` passed on a clean database,
