@@ -42,8 +42,8 @@ fi
 # The tools service mounts only these directories (see compose.override.yaml). Anything
 # else would not exist in the container - say so instead of passing silently.
 case "$rel" in
-  app/* | tests/* | alembic/*) ;;
-  *) fail "$rel is outside the tools service mounts (app/, tests/, alembic/) - not formatted" ;;
+  app/* | bss_mcp/* | tests/* | alembic/*) ;;
+  *) fail "$rel is outside the tools service mounts (app/, bss_mcp/, tests/, alembic/) - not formatted" ;;
 esac
 
 cd "$project" || fail "cannot cd to $project"
