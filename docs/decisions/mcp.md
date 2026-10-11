@@ -1,7 +1,10 @@
 # MCP connector
 
-User-facing description: [docs/mcp.md](../mcp.md). Decisions as taken (2026-10-11, plan
-D1-D6 agreed with the human):
+User-facing description: [docs/mcp.md](../mcp.md).
+
+## Slice 1: server, static tokens, scopes (2026-10-11)
+
+Decisions as taken (plan D1-D6 agreed with the human):
 
 - **Same image, own service, HTTP only (D5).** `bss_mcp/` sits next to `app/`, not in it
   (`app/`'s wall-clock rule stays as it is; bss_mcp has its own `bss_mcp/clock.py`). It
@@ -45,3 +48,50 @@ rate limit off -> 200 instead of 429; no `X-Remote-User` -> operator None; the a
 operator pattern without `:` -> both operator tests fail; identity check accepting any
 200 -> "DID NOT RAISE NotBss"; float check off -> the float tests fail on the message
 (still refused by the schema).
+
+## Slice 2: OAuth 2.1 (2026-10-11)
+
+- **The SDK's authorization-server routes** (`create_auth_routes`) on our provider
+  (`bss_mcp/oauth.py`), not a hand-rolled OAuth: the SDK validates the requests, checks
+  PKCE S256 and the redirect URI at /token, refuses `plain`. Three adjustments, each
+  in `bss_mcp/routes.py` with its reason:
+  - the RFC 8414 metadata is served by us with `none` added to the auth methods (MCP
+    clients register as public clients; the SDK accepts them but does not list it);
+  - the issuer is passed as a string so it stays exactly `https://host` (an `AnyHttpUrl`
+    becomes `https://host/`);
+  - `/revoke`: mcp 2.3.0 types `client_secret` as `str | None` *without a default*, so a
+    public client could not revoke (400) - an absent one is sent on as empty
+    (`PublicClientRevoke`).
+- **Expiry with the injected clock only.** The SDK compares code and refresh expiry with
+  `time.time()`; the provider hands it models without an expiry (codes: `inf`) and the
+  store decides with `bss_mcp/clock.py`. Expiry is therefore testable, and a frozen test
+  clock never meets the wall clock.
+- **Login and consent are one page** (`/login`): the carve-out list stays at the paths the
+  human named (no `/consent`). The `request` id is the only handle on the parked
+  /authorize request - unguessable, single use, 10 minutes, 5 wrong passwords - and so
+  the form's CSRF token. No `form-action` in the CSP: Chrome applies it to the redirect
+  after the POST, which goes to the client.
+- **Users**: `MCP_USERS=name:hash,...`, stdlib scrypt (n=2^14, r=8, p=1), `.`-separated -
+  no `$`, which compose would interpolate in `.env`. An unknown user costs a scrypt too
+  (no timing difference).
+- **Scopes**: registration defaults to `read write`; consent narrows to read or keeps
+  write (only if the client asked for it); a token's scopes are `[read]` or `[read,
+  write]`; a refresh can narrow, never widen (the SDK's check).
+- **Tokens**: opaque random strings, SHA-256 in SQLite; refresh rotates (the old one is
+  spent); revoking a refresh token revokes its grant. Redirect URIs: https, or http on
+  localhost/127.0.0.1/[::1] - custom schemes refused (the human's policy; a client
+  needing one, e.g. some desktop apps, will not connect).
+- **Rate limits on the auth endpoints** per client IP (and failed logins per user name);
+  behind Caddy the IP is the last `X-Forwarded-For` entry (`MCP_TRUST_FORWARDED`, set in
+  prod in slice 4).
+
+Negative proofs (slice 2, each made with Edit and reverted): redirect-URI policy off ->
+the 5 refusal cases fail; password check passing any known user -> wrong-password,
+other-user's-password and the password unit test fail; client name unescaped -> the
+escaping test fails; per-IP limit off -> no 429; consent offering write to a read-only
+client -> its test fails; refresh not rotated -> the old refresh token works again;
+grant not revoked with its refresh token -> the access token still works; token expiry
+ignored -> 200 after 3601 s. `use_code` always succeeding did **not** fail the "code
+works once" test - the spent code is already gone when loaded; its rowcount guards the
+race of two exchanges that both loaded the code first, so a test for exactly that was
+added, and it fails without the guard ("DID NOT RAISE TokenError").

@@ -1,8 +1,15 @@
 """The connector's ASGI app: the MCP endpoint (Streamable HTTP, stateless, JSON
 responses - no SSE), bearer authentication, scopes, rate limit, body limit and audit.
 
+Routes: /mcp; the OAuth endpoints /authorize, /token, /register, /revoke (the SDK's, on
+bss_mcp.oauth.Provider) and /login (bss_mcp.login); discovery at
+/.well-known/oauth-authorization-server (RFC 8414) and
+/.well-known/oauth-protected-resource[/mcp] (RFC 9728); /.well-known/openid-configuration
+answers 404 (no OpenID Connect - some clients probe it); /healthz.
+
 Request path for /mcp, outermost first:
   BodyLimit          413 above MCP_MAX_BODY, before anything else reads the body
+  AuthIpLimit        (POST /login, /token, /register only) 429 per client IP
   Authentication     the SDK's BearerAuthBackend: token -> AccessToken (bss_mcp.auth)
   RequireAuth        the SDK's: 401 + WWW-Authenticate (resource_metadata) without one
   Guard              429 per principal; 403 for a write tool called with a read token
@@ -39,7 +46,11 @@ from bss_mcp.auth import WRITE, TokenVerifier, caller
 from bss_mcp.bss import Bss
 from bss_mcp.clock import Clock
 from bss_mcp.config import Settings
+from bss_mcp.login import Login
+from bss_mcp.oauth import Provider
+from bss_mcp.passwords import parse_users
 from bss_mcp.ratelimit import RateLimit
+from bss_mcp.routes import AuthIpLimit, oauth_routes
 from bss_mcp.store import Store
 from bss_mcp.tools import TOOLS, Tool, result_text
 
@@ -304,14 +315,31 @@ def build_app(
             yield
         await bss.aclose()
 
+    users = parse_users(settings.mcp_users)
+    if not users:
+        log.warning("MCP_USERS is empty: nobody can sign in through OAuth (static tokens work)")
+    provider = Provider(store, clock, settings)
+    auth_limit = RateLimit(clock, settings.mcp_auth_rate_per_min)
+    login = Login(provider, users, clock, settings, user_limit=auth_limit)
+
     return Starlette(
         routes=[
             Route("/healthz", healthz, methods=["GET"]),
             Route("/mcp", mcp_endpoint),
+            *oauth_routes(provider, login),
         ],
         middleware=[
             Middleware(BodyLimit, limit=settings.mcp_max_body),
-            Middleware(AuthenticationMiddleware, backend=BearerAuthBackend(TokenVerifier(store))),
+            Middleware(
+                AuthIpLimit,
+                limit=RateLimit(clock, settings.mcp_auth_rate_per_min),
+                clock=clock,
+                trust=settings.mcp_trust_forwarded,
+            ),
+            Middleware(
+                AuthenticationMiddleware,
+                backend=BearerAuthBackend(TokenVerifier(store, provider)),
+            ),
             Middleware(AuthContextMiddleware),
         ],
         lifespan=lifespan,

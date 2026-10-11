@@ -9,6 +9,8 @@ The scope is enforced here, in the server: a read token is not shown the write t
 is refused (HTTP 403) if it calls one anyway. Nothing on the client side is trusted.
 """
 
+from typing import Protocol
+
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
 from starlette.types import Scope as AsgiScope
@@ -27,16 +29,22 @@ def principal_of(name: str) -> str:
     return f"mcp:{name}"
 
 
-class TokenVerifier:
-    """The SDK's TokenVerifier protocol: bearer token -> AccessToken, or None (401)."""
+class AccessTokenSource(Protocol):
+    async def load_access_token(self, token: str) -> AccessToken | None: ...
 
-    def __init__(self, store: Store) -> None:
+
+class TokenVerifier:
+    """The SDK's TokenVerifier protocol: bearer token -> AccessToken, or None (401).
+    A static API token, else an OAuth access token (bss_mcp.oauth.Provider)."""
+
+    def __init__(self, store: Store, oauth: AccessTokenSource | None = None) -> None:
         self.store = store
+        self.oauth = oauth
 
     async def verify_token(self, token: str) -> AccessToken | None:
         static = self.store.find_static_token(token)
         if static is None:
-            return None
+            return await self.oauth.load_access_token(token) if self.oauth else None
         return AccessToken(
             token=token,
             client_id=f"static:{static.name}",

@@ -177,9 +177,10 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 **MCP connector** (task of 2026-10-11, [docs/mcp.md](docs/mcp.md)): five slices, each
 committed after the human's OK and then pushed; nothing deployed without a separate
-approval. Slice 1 (server, static tokens, scopes, limits, audit; local only) done; next
-slice 2 (OAuth 2.1 + DCR + discovery + login page), then 3 (tools from `app.openapi()` +
-drift check), 4 (`compose.prod.yaml` + vps-infra change request), 5 (docs + token tooling).
+approval. Done, local only: slice 1 (server, static tokens, scopes, limits, audit;
+`6ae9f40`), slice 2 (OAuth 2.1 + DCR + discovery + login page). Next: 3 (tools from
+`app.openapi()` + drift check), 4 (`compose.prod.yaml` + vps-infra change request), 5
+(docs + token tooling).
 
 **Before the next deploy** (2026-10-10: bill lifecycle slices 1-4 merged as `1d7a242`,
 subscriber create/edit as `61d9399`; local `make check` passed on a clean database,
