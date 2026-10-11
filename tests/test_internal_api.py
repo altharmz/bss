@@ -63,7 +63,14 @@ def test_context_business_date_is_the_date_in_billing_tz(api):
 
 @pytest.mark.parametrize(
     ("header", "operator"),
-    [("i.petrova", "i.petrova"), ("  i.petrova ", "i.petrova"), ("a b", None), ("x" * 65, None)],
+    [
+        ("i.petrova", "i.petrova"),
+        ("  i.petrova ", "i.petrova"),
+        ("mcp:demo", "mcp:demo"),  # the MCP connector's principal
+        ("a b", None),
+        ("a/b", None),
+        ("x" * 65, None),
+    ],
 )
 def test_context_operator_comes_from_the_proxy_header(api, header, operator):
     response = api.get(f"{BASE}/context", headers={"X-Remote-User": header})

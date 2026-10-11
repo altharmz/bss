@@ -36,7 +36,10 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
 
 - **operator** comes from the `X-Remote-User` header, which the shared Caddy must *set*
   (overwrite) from the basic-auth user, so a client-sent header never passes through.
-  Anything not matching `^[A-Za-z0-9._@-]{1,64}$` is reported as null.
+  Anything not matching `^[A-Za-z0-9._@:-]{1,64}$` is reported as null. The MCP connector
+  sets it to `mcp:<user or token name>` ([mcp.md](../mcp.md)); `:` was added for it
+  (2026-10-11). A basic-auth user cannot contain `:` (it is the user/password separator),
+  so an operator with `:` always comes from MCP.
 - **Trust in `X-Remote-User`.** The app believes the header only because, from outside the
   VPS, it is reachable solely through Caddy. It is not proof of identity: any other
   container on the `shared` network can reach `bss:8080` directly and forge it, and so can

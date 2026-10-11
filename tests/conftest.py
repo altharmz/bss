@@ -191,3 +191,37 @@ def api(db_conn, migrated_db_url, monkeypatch):
         yield client
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def mcp_settings(tmp_path):
+    """The connector's settings for a test; change them before using `mcp`."""
+    from bss_mcp.config import Settings
+
+    return Settings(
+        bss_api_url="http://bss.test",
+        mcp_public_url="https://mcp.test",
+        mcp_store=str(tmp_path / "mcp.db"),
+        mcp_identity_wait=0,
+    )
+
+
+@pytest.fixture
+def mcp(api, mcp_settings):
+    """The MCP connector (bss_mcp) in process, in front of the `api` fixture's app."""
+    import httpx2
+    from starlette.testclient import TestClient
+
+    from app.main import app
+    from bss_mcp.clock import FixedClock
+    from bss_mcp.server import build_app
+    from bss_mcp.store import Store
+    from tests.mcpclient import Mcp
+
+    clock = FixedClock()
+    store = Store(mcp_settings.mcp_store, clock)
+    connector = build_app(
+        mcp_settings, clock=clock, store=store, transport=httpx2.ASGITransport(app=app)
+    )
+    with TestClient(connector, base_url="https://mcp.test") as client:
+        yield Mcp(client, store, clock)

@@ -1,0 +1,71 @@
+"""The bss app over HTTP - the connector's only way to bss (never the database)."""
+
+import logging
+from typing import Any
+
+import anyio
+import httpx2
+
+from bss_mcp.clock import Clock
+
+log = logging.getLogger("bss_mcp")
+
+# What the app's `/` answers (app/main.py, root). Any other answer is not bss.
+IDENTITY = {"service": "bss", "status": "ok"}
+
+
+class NotBss(RuntimeError):
+    """BSS_API_URL answers, but not as bss - or never answered."""
+
+
+class Bss:
+    def __init__(
+        self, base_url: str, timeout: float, transport: httpx2.AsyncBaseTransport | None = None
+    ) -> None:
+        self.base_url = base_url
+        self.client = httpx2.AsyncClient(base_url=base_url, timeout=timeout, transport=transport)
+
+    async def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        principal: str,
+        params: dict[str, str] | None = None,
+        body: bytes | None = None,
+        content_type: str | None = None,
+    ) -> httpx2.Response:
+        # X-Remote-User: who did it, for the app's operator (display and bill history)
+        headers = {"X-Remote-User": principal, "Accept": "application/json"}
+        if content_type:
+            headers["Content-Type"] = content_type
+        return await self.client.request(method, path, params=params, content=body, headers=headers)
+
+    async def identify(self, clock: Clock, wait: float) -> None:
+        """Refuse to serve unless BSS_API_URL is bss: `GET /` must answer exactly
+        IDENTITY. No answer at all (the app still starting, e.g. after the nightly reboot)
+        is retried for `wait` seconds; a wrong answer fails at once."""
+        deadline = clock.monotonic() + wait
+        while True:
+            try:
+                response = await self.client.get("/")
+            except httpx2.TransportError as exc:
+                if clock.monotonic() >= deadline:
+                    raise NotBss(f"{self.base_url} did not answer: {exc!r}") from exc
+                log.info("identity check: %s not answering yet, retrying", self.base_url)
+                await anyio.sleep(1)
+                continue
+            body: Any
+            try:
+                body = response.json()
+            except ValueError:
+                body = None
+            if response.status_code != 200 or body != IDENTITY:
+                raise NotBss(
+                    f"{self.base_url} is not bss: GET / answered {response.status_code}"
+                    f" {response.text[:200]!r}"
+                )
+            return
+
+    async def aclose(self) -> None:
+        await self.client.aclose()

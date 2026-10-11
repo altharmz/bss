@@ -8,6 +8,7 @@ services:
       target: dev
     volumes:
       - ./app:/app/app:ro
+      - ./bss_mcp:/app/bss_mcp:ro
       - ./tests:/app/tests:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./alembic:/app/alembic
@@ -40,11 +41,43 @@ services:
     profiles: [tools]
     volumes:
       - ./app:/app/app
+      - ./bss_mcp:/app/bss_mcp
       - ./tests:/app/tests
       - ./alembic:/app/alembic
       - ./pyproject.toml:/app/pyproject.toml:ro
     network_mode: none
     command: ["ruff", "--version"]
+
+  # The MCP connector (bss_mcp/, docs/mcp.md): the same dev image in its own process.
+  # Reaches the app over HTTP only (BSS_API_URL), never the database: no DATABASE_URL.
+  # OAuth clients and tokens live in SQLite on the mcp_data volume, not in the bss
+  # database; losing it only means re-authorizing. Listens on 8080 inside, like the app,
+  # so the image's /healthz probe applies unchanged; published on host port 8090.
+  # Refuses to start unless BSS_API_URL answers as bss (startup identity check).
+  mcp:
+    build:
+      context: .
+      target: dev
+    image: ${IMAGE_NAME:-bss-app}:${TAG:-dev}
+    command: ["uvicorn", "bss_mcp.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+    volumes:
+      - ./app:/app/app:ro
+      - ./bss_mcp:/app/bss_mcp:ro
+      - mcp_data:/data
+    ports:
+      - "127.0.0.1:8090:8080"
+    environment:
+      APP_ENV: dev
+      LOG_LEVEL: debug
+      BSS_API_URL: http://app:8080
+      MCP_PUBLIC_URL: http://localhost:8090
+      MCP_STORE: /data/mcp.db
+      # name:<scrypt hash>[,name:<hash>] - the OAuth login (slice 2); in .env, never committed
+      MCP_USERS: ${MCP_USERS:-}
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [lab]
 
   # Node toolchain for the admin UI (frontend/). Node never runs on the host: every npm
   # command goes through this service (make web-*). Only frontend/ is mounted, plus spec/
@@ -149,6 +182,7 @@ services:
 
 volumes:
   pgdata:
+  mcp_data:
   web_node_modules:
   web_npm_cache:
 

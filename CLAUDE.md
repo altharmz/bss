@@ -175,6 +175,12 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
+**MCP connector** (task of 2026-10-11, [docs/mcp.md](docs/mcp.md)): five slices, each
+committed after the human's OK and then pushed; nothing deployed without a separate
+approval. Slice 1 (server, static tokens, scopes, limits, audit; local only) done; next
+slice 2 (OAuth 2.1 + DCR + discovery + login page), then 3 (tools from `app.openapi()` +
+drift check), 4 (`compose.prod.yaml` + vps-infra change request), 5 (docs + token tooling).
+
 **Before the next deploy** (2026-10-10: bill lifecycle slices 1-4 merged as `1d7a242`,
 subscriber create/edit as `61d9399`; local `make check` passed on a clean database,
 nothing deployed):
@@ -240,6 +246,9 @@ Nothing below is done; remove an item only when it has passed (or, for work item
 shipped).
 
 - **Stage 4 (the worker)** is in progress - see "Next session" above.
+- **bss app is reachable without auth from any container on `shared` and from VPS
+  loopback 127.0.0.1:18081** - close with a private app<->mcp network and a Caddy-side
+  alias (separate task). Documented as a known demo risk in [docs/mcp.md](docs/mcp.md).
 - **Demo data in prod: decision pending.** `make seed` refuses prod on purpose. If prod
   gets demo data, it can only be current state: history cannot be backdated through the
   API (prices and orders in the past are refused), and the seed builds its history with a
@@ -306,7 +315,8 @@ shipped).
 [catalog](docs/decisions/catalog.md) (TMF620, D-W18, D-W21) ·
 [billing-core](docs/decisions/billing-core.md) (stage 3, open questions) ·
 [worker](docs/decisions/worker.md) (stage 4) · [bills](docs/decisions/bills.md) (bill
-lifecycle) · [internal-api](docs/decisions/internal-api.md) ·
+lifecycle) · [internal-api](docs/decisions/internal-api.md) · [mcp](docs/decisions/mcp.md) (MCP
+connector) ·
 [frontend](docs/decisions/frontend.md) · [infra](docs/decisions/infra.md) (image,
 layout, conventions, vps-infra, deploying the UI) · [harness](docs/decisions/harness.md)
 (hooks, progress tracker, guardrails) · [retired](docs/decisions/retired.md).

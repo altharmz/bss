@@ -29,7 +29,9 @@ COPY --from=builder /opt/venv /opt/venv
 COPY requirements-dev.txt constraints-dev.txt ./
 RUN pip install -r requirements-dev.txt -c constraints-dev.txt
 # uid/gid 1000 matches the default WSL user, so bind-mounted files stay writable
-RUN useradd --uid 1000 --create-home appuser && chown appuser:appuser /app
+# /data: the mcp service's SQLite volume; a new named volume copies this owner
+RUN useradd --uid 1000 --create-home appuser && chown appuser:appuser /app \
+ && install -d -o appuser -g appuser /data
 USER appuser
 EXPOSE 8080
 # Same probe as runtime (see there).
@@ -40,8 +42,9 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload
 # ---------- runtime ----------
 FROM base AS runtime
 COPY --from=builder /opt/venv /opt/venv
-RUN useradd --uid 1000 --create-home appuser
+RUN useradd --uid 1000 --create-home appuser && install -d -o appuser -g appuser /data
 COPY --chown=appuser:appuser app ./app
+COPY --chown=appuser:appuser bss_mcp ./bss_mcp
 COPY --chown=appuser:appuser alembic ./alembic
 COPY --chown=appuser:appuser alembic.ini ./alembic.ini
 USER appuser

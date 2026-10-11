@@ -6,3 +6,8 @@ uvicorn[standard]==0.54.0
 psycopg[binary,pool]==3.3.6
 pydantic-settings==2.15.0
 alembic==1.20.0
+# The MCP connector (bss_mcp/, the `mcp` service; docs/mcp.md): the official SDK's
+# Streamable HTTP server and its OAuth 2.1 authorization-server support. Exact pin:
+# bss_mcp implements the SDK's provider protocol (mcp.server.auth.provider) and uses
+# its low-level server, both internals that move between versions.
+mcp==2.3.0
