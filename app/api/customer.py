@@ -13,6 +13,7 @@ from app.api import listing
 from app.api.common import (
     Ref,
     TmfModel,
+    check_referred_type,
     check_type,
     columns,
     created,
@@ -37,7 +38,7 @@ ATTRIBUTES = ("name", "status", "engagedParty")
 
 class CustomerCreate(TmfModel):
     name: str = Field(min_length=1)
-    engaged_party: Ref
+    engaged_party: Ref  # Individual or Organization: checked against the party in POST
     status: CustomerStatus = "Created"
 
 
@@ -103,8 +104,10 @@ def get_customer(customer_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_customer(body: JsonBody, tx: Tx) -> TmfJSONResponse:
     data = parse(CustomerCreate, body)
     with tx() as conn:
-        if parties.get_party(conn, data.engaged_party.id) is None:
+        party = parties.get_party(conn, data.engaged_party.id)
+        if party is None:
             raise unprocessable(f"engagedParty {data.engaged_party.id} does not exist")
+        check_referred_type(data.engaged_party, party["party_type"], "engagedParty")
         row = parties.create_customer(
             conn, party_id=data.engaged_party.id, name=data.name, status=data.status
         )

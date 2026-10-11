@@ -28,8 +28,8 @@ from pydantic import Field
 from app.api import listing
 from app.api.common import (
     CENT,
+    CustomerRef,
     Money,
-    Ref,
     TmfModel,
     check_type,
     columns,
@@ -104,7 +104,7 @@ CUSTOMER_ROLE = "customer"
 
 class RelatedParty(TmfModel):
     role: str | None = None
-    party_or_party_role: Ref
+    party_or_party_role: CustomerRef
 
 
 class AccountCreate(TmfModel):

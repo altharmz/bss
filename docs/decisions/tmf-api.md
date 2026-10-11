@@ -28,6 +28,20 @@ implemented; order processing lives in `app/ordering/`.
   references. `id` and `href` are server-managed (400 on POST and PATCH). `lastUpdate` is
   accepted and ignored on POST, because the spec's create schemas make clients send it;
   it is read-only on PATCH.
+- **`@referredType` in a reference is checked, never rewritten** (`cloud/quality-1`,
+  doc-findings #17). The vendored specs define it as "the actual type of the target
+  instance when needed for disambiguation": optional, but when sent it must be the type
+  the response states for that reference, else 422 and nothing is stored. Fixed types
+  (`app/api/common.py`, `BillingAccountRef`, `CustomerRef`, `CustomerBillRef`,
+  `ProductRef`, `ProductOfferingRef`, `ProductOfferingPriceRef`,
+  `ProductSpecificationRef`): an order's and its items' `billingAccount`, an item's
+  `productOffering` and `product`, a payment's `account` and `paymentItem.item`, an
+  account's `relatedParty.partyOrPartyRole` (`Customer`), an offering's
+  `productSpecification` and `productOfferingPrice[]`. A customer's `engagedParty` is
+  checked against the party it names (`Individual` or `Organization`;
+  `check_referred_type`). Not a supertype (`Party` for an Individual is a 422): the
+  response would state another value. Same principle as the account's `role` (#3).
+  `tests/test_api_referred_type.py`.
 - **Money** is `{"unit": "<ISO 4217>", "value": <JSON number>}`, Decimal end to end.
   FastAPI's own body parsing goes through float (proven by a test), so handlers parse the
   raw body with `parse_float=Decimal` (`app/api/deps.py`, `tmfjson.loads`). Responses are

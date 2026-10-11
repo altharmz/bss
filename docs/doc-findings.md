@@ -120,7 +120,12 @@ where CLAUDE.md or another doc says something else, the docs follow the code.
 
 Added 2026-10-10, after the merge of `cloud/catalog-integrity`.
 
-17. **`@referredType` in a request is rewritten silently.** Every incoming reference is
+17. **Fixed 2026-10-11** (branch `cloud/quality-1`): refused, per the vendored specs
+    ("the actual type of the target instance"): a `@referredType` other than the type the
+    response states is a 422 and nothing is stored; omitting it is still fine
+    ([decisions/tmf-api.md](decisions/tmf-api.md), "TMF API conventions";
+    `tests/test_api_referred_type.py`). Original finding:
+    **`@referredType` in a request is rewritten silently.** Every incoming reference is
     `app/api/common.py` `Ref`, which accepts any `@referredType` (or none) and never
     checks it; only `id` is used. The response then states the real type (`ref()`,
     `common.py`: `@referredType` = the resource type). So a POST naming a customer's

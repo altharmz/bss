@@ -4,7 +4,7 @@ references, and the helpers that turn database rows into response bodies."""
 import re
 from datetime import UTC, date, datetime, time
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, ClassVar
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -38,12 +38,66 @@ class TmfModel(BaseModel):
 
 
 class Ref(TmfModel):
-    """A reference to another resource. Only `id` matters; the rest is accepted as sent."""
+    """A reference to another resource. Only `id` is used; href and name are accepted as
+    sent. `@referredType` is "the actual type of the target instance" (TMF630; the vendored
+    specs' EntityRef): optional, but when sent it must be the type the response will state
+    (422 otherwise) - a contradicting one is refused, never silently answered with another
+    value. Where the type is fixed, use the subclass that names it (below); where it
+    depends on the target (a party), the handler calls `check_referred_type` once it has
+    loaded it."""
+
+    # the one type this reference may name; None: checked by the handler
+    referred_type: ClassVar[str | None] = None
 
     id: UUID
     href: str | None = None
     name: str | None = None
     at_referred_type: str | None = Field(default=None, alias="@referredType")
+
+    @field_validator("at_referred_type")
+    @classmethod
+    def _actual_type(cls, value: str | None) -> str | None:
+        if value is not None and cls.referred_type is not None and value != cls.referred_type:
+            raise ValueError(f"must be {cls.referred_type} (the type of the referred resource)")
+        return value
+
+
+class BillingAccountRef(Ref):
+    referred_type = "BillingAccount"
+
+
+class CustomerRef(Ref):
+    referred_type = "Customer"
+
+
+class CustomerBillRef(Ref):
+    referred_type = "CustomerBill"
+
+
+class ProductRef(Ref):
+    referred_type = "Product"
+
+
+class ProductOfferingRef(Ref):
+    referred_type = "ProductOffering"
+
+
+class ProductOfferingPriceRef(Ref):
+    referred_type = "ProductOfferingPrice"
+
+
+class ProductSpecificationRef(Ref):
+    referred_type = "ProductSpecification"
+
+
+def check_referred_type(reference: Ref, actual_type: str, name: str) -> None:
+    """422 when a reference's `@referredType` contradicts the target's actual type."""
+    sent = reference.at_referred_type
+    if sent is not None and sent != actual_type:
+        raise unprocessable(
+            f"{name}.@referredType: must be {actual_type} (the type of the referred"
+            f" resource), not {sent}"
+        )
 
 
 class Money(TmfModel):
