@@ -199,7 +199,8 @@ their config, data, TLS and backups. This repo only ships the app container.
   for development.
 - **Alias**: on `shared` the app is reachable as `bss` (network alias in
   `compose.prod.yaml`). Every app there names its service `app`, so that name is
-  ambiguous; always use `bss`.
+  ambiguous; always use `bss`. The MCP connector (`mcp`, [mcp.md](mcp.md)) is
+  `bss-mcp:8080` there and calls the app as `bss:8080`.
 - **Database**: `DATABASE_URL` on the VPS is `postgres:5432/bss`, role
   `bss`; `postgres` is the service name in vps-infra, and the database + role are
   created there with `make add-db NAME=bss`. The password is `POSTGRES_PASSWORD`

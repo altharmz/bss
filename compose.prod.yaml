@@ -83,6 +83,52 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # The MCP connector (bss_mcp/, docs/mcp.md): the same image, its own process. Reaches
+  # the app over HTTP only, as bss:8080 (`app` is ambiguous on `shared`), and refuses to
+  # start unless that answers as bss. Publishes nothing: the shared Caddy reaches it as
+  # bss-mcp:8080 on `shared` (docs/vps-infra-change-request.md). Tokens and OAuth clients
+  # live in SQLite on the mcp-data volume, not in the bss database; losing it only means
+  # clients re-authorize and static tokens are issued again.
+  mcp:
+    image: ${IMAGE_NAME:-bss-app}:${TAG:-dev}
+    # one process; --limit-concurrency answers 503 beyond 32 open requests (1 vCPU)
+    command: ["uvicorn", "bss_mcp.main:app", "--host", "0.0.0.0", "--port", "8080",
+              "--workers", "1", "--limit-concurrency", "32"]
+    restart: unless-stopped
+    # ~100 MB resident (the app's code is imported for the tool definitions), plus 16 MB
+    # per password check in flight (scrypt)
+    mem_limit: 192m
+    memswap_limit: 192m
+    cpus: 0.25
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      APP_ENV: staging
+      LOG_LEVEL: info
+      BSS_API_URL: http://bss:8080
+      MCP_PUBLIC_URL: https://vpn2811.duckdns.org:8445
+      MCP_STORE: /data/mcp.db
+      # behind Caddy: the client IP is the last X-Forwarded-For entry (Caddy sets it)
+      MCP_TRUST_FORWARDED: "true"
+      MCP_USERS: ${MCP_USERS:?MCP_USERS is required - see .env.example}
+    volumes:
+      - mcp-data:/data
+    networks:
+      shared:
+        aliases: [bss-mcp]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  # the mcp service's SQLite store (tokens, OAuth clients) - never pruned by us
+  mcp-data:
+
 networks:
   shared:
     # Created and owned by vps-infra; must exist before this stack starts.

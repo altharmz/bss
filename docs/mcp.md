@@ -6,9 +6,8 @@ bss's API as MCP tools, for any MCP client (claude.ai, ChatGPT, Claude Code, Cur
 > Built in slices. Done: **slice 1** - the server, static bearer tokens, scopes, rate
 > limit, body limit, audit; **slice 2** - OAuth 2.1 with dynamic client registration,
 > discovery and the login page; **slice 3** - one tool per API operation, generated, with
-> a drift check. Local only so far. Still to come: the production service and the
-> vps-infra routing (4), client setup and token tooling (5). Sections for those land
-> with them.
+> a drift check; **slice 4** - the production service and the vps-infra routing request
+> (not deployed yet). Still to come: client setup and token tooling (5).
 
 ## Architecture
 
@@ -172,6 +171,31 @@ One JSON line per tool call (logger `bss_mcp.audit`, the container's log): `time
 `login` (ok with the scope, failed, 429 - with the client IP), `consent` (denied),
 `token` (issued, code reused), `refresh`, `revoke`. **Never** bodies, arguments, codes,
 tokens or passwords (a test checks the log for each).
+
+## Production
+
+- **Service** `mcp` in `compose.prod.yaml`: the app's image, `uvicorn bss_mcp.main:app`,
+  one worker, `--limit-concurrency 32`; 192 MB (about 75-100 MB used), 0.25 CPU,
+  read-only root, `restart: unless-stopped` (back after the 03:00 reboot - the identity
+  check waits up to 60 s for the app, then the restart policy retries). Publishes nothing;
+  on `shared` as **`bss-mcp:8080`**. `BSS_API_URL=http://bss:8080`,
+  `MCP_PUBLIC_URL=https://vpn2811.duckdns.org:8445`, `MCP_TRUST_FORWARDED=true`. Its store
+  is the volume `mcp-data` (`/data/mcp.db`).
+- **`MCP_USERS` in `.env.prod` is required**: `deploy.sh` refuses to start without it
+  (checked before any network step, never printed), and so does compose.
+- **Routing** (vps-infra's Caddy, requested in
+  [vps-infra-change-request.md](vps-infra-change-request.md#2026-10-11-route-the-mcp-connector)):
+  ten exact, case-sensitive paths of `https://vpn2811.duckdns.org:8445` bypass basic auth
+  and go to `bss-mcp:8080` - `/mcp`, `/authorize`, `/token`, `/register`, `/revoke`,
+  `/login`, `/.well-known/oauth-protected-resource`,
+  `/.well-known/oauth-protected-resource/mcp`, `/.well-known/oauth-authorization-server`,
+  `/.well-known/openid-configuration`. Everything else stays behind basic auth. Port 443
+  and the VPN are untouched.
+- **Deploy checks**: `deploy.sh` waits for `mcp` to be healthy with app and worker, then,
+  after the web smoke test, runs **`scripts/mcp-smoke.sh <url> caddy`** through Caddy:
+  discovery, the 401 challenge, the OAuth endpoints answered by the connector - and
+  `/`, `/MCP`, `/Mcp`, `/mcp/x`, `/authorize/x`, an upper-case well-known path still
+  behind basic auth. It sends no credentials. Locally: `make mcp-smoke`.
 
 ## Known demo risks
 

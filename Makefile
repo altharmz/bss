@@ -12,7 +12,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e docs docs-check decisions-check
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e docs docs-check decisions-check mcp-smoke
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -37,6 +37,9 @@ shell: ## Shell inside the running app container
 
 psql: ## psql in the local database, through compose exec (the db port is not published)
 	docker compose exec db sh -c 'exec psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
+
+mcp-smoke: ## Discovery, 401 and carve-out checks against the local mcp service (http://localhost:8090)
+	./scripts/mcp-smoke.sh http://localhost:8090 local
 
 test: ## Run the test suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the scripts' own cases
 	./scripts/test-billing-status-check.sh

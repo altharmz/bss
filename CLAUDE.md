@@ -28,6 +28,7 @@ make logs      # last 5 min of app logs
 make test      # pytest inside the container
 make lint      # ruff check + format check
 make smoke     # smoke-test the local instance
+make mcp-smoke # MCP connector: discovery, 401, OAuth endpoints (local, http://localhost:8090)
 make deploy    # build locally, ship image to VPS, restart there
 make check     # every local check of verify: lint, test, docs-check, decisions-check,
                # web-lint, web-test, web-e2e
@@ -179,8 +180,9 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 committed after the human's OK and then pushed; nothing deployed without a separate
 approval. Done, local only: slice 1 (server, static tokens, scopes, limits, audit;
 `6ae9f40`), slice 2 (OAuth 2.1 + DCR + discovery + login page; `15674e0`), slice 3 (57
-tools generated from `app.openapi()` + drift check). Next: 4 (`compose.prod.yaml` +
-vps-infra change request), 5 (docs + token tooling).
+tools generated from `app.openapi()` + drift check; `db765f1`), slice 4 (`compose.prod.yaml`
+service, deploy.sh checks, `scripts/mcp-smoke.sh`, vps-infra change request; rehearsed
+with Caddy 2.11.4, not deployed). Next: 5 (docs + token tooling).
 
 **Before the next deploy** (2026-10-10: bill lifecycle slices 1-4 merged as `1d7a242`,
 subscriber create/edit as `61d9399`; local `make check` passed on a clean database,
@@ -195,6 +197,13 @@ nothing deployed):
   `applied_customer_billing_rate.applied_at` (an ABR's TMF678 `date` from the clock),
   back-filled from each ABR's run `started_at`, then NOT NULL. Ships with the next
   deploy; rolling back needs `alembic downgrade 0006` by hand (drops the column).
+- **The MCP connector ships with the next deploy** (`compose.prod.yaml` has the `mcp`
+  service since slice 4). Before `make verify`: (1) vps-infra applies the Caddy carve-out
+  in [docs/vps-infra-change-request.md](docs/vps-infra-change-request.md#2026-10-11-route-the-mcp-connector)
+  - otherwise deploy.sh's last step, the MCP smoke test through Caddy, fails (the app,
+  UI and mcp would already be up); (2) the human puts `MCP_USERS` (name:scrypt hash,
+  `python -m bss_mcp.passwords`) into `.env.prod` - deploy.sh refuses without it. The
+  deploy itself needs the human's separate approval.
 
 Then, in this order (as of 2026-10-05, after slice f):
 

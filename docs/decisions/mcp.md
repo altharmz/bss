@@ -134,3 +134,36 @@ Negative proofs (slice 3, each made with Edit and reverted): a new route in
 an integer amount `10` reached the app and was stored (three behavioural tests fail).
 The registry's own refusals (missing or unknown entry, a write without a body, a read
 with one) are unit-tested.
+
+## Slice 4: production service and routing (2026-10-11)
+
+- **`compose.prod.yaml` service `mcp`** (diff approved): same image, one uvicorn worker
+  with `--limit-concurrency 32`, 192 MB / 0.25 CPU (measured: ~100 MB in dev with the
+  reloader, 73 MB prod-like after startup; scrypt adds 16 MB per login in flight), the
+  app's hardening (read-only root, tmpfs, no-new-privileges), `restart: unless-stopped`,
+  no published port, alias `bss-mcp` on `shared`, volume `mcp-data`. Budget: 384 + 256 +
+  192 = 832 MB of the VPS's 1931 MB. `MCP_USERS` is required (`${MCP_USERS:?...}`), so a
+  prod start without a login user fails loudly; deploy.sh checks it before any network
+  step.
+- **No `depends_on`** in prod (the base compose rule) and none needed: after the nightly
+  reboot Docker restarts each container on its own; the identity check waits up to 60 s
+  for the app and the restart policy covers a longer wait.
+- **Exact carve-outs need an `expression` matcher**: Caddy's `path` matcher is
+  case-insensitive - proven in the rehearsal (`/MCP` reached the connector with a `path`
+  matcher). The human's brief assumed the existing carve-outs were case-sensitive; they
+  are not (harmless for `/healthz` and `/billing-status`, recorded in the change request).
+- **X-Forwarded-For**: Caddy replaces a client-sent value (no `trusted_proxies`), so the
+  connector trusts the last entry (`MCP_TRUST_FORWARDED=true` in prod only) - proven:
+  a spoofed `6.6.6.6` was audited as the real client.
+- **The deploy proves the routing**: `scripts/mcp-smoke.sh <url> caddy` after the web
+  smoke test - no credentials, nothing changed; it checks both the open paths and that
+  `/`, `/MCP`, `/Mcp`, `/mcp/x`, `/authorize/x` and an upper-case well-known path still
+  get the Basic challenge. `make mcp-smoke` runs the local half.
+- **The change request keeps the applied stage-5 request** below the new one (infra.md
+  links to it as the reference for the current block).
+
+Rehearsal and proofs (Caddy 2.11.4 on the workstation, prod-like `mcp` from the runtime
+image): the smoke test passes through Caddy; with a `path` matcher it fails ("GET /MCP
+answered 404 without basic auth"); with `/token` dropped from the list it fails ("POST
+/token answered 401 Basic"). The prod composition validates (`config --quiet`, dummy
+values) and refuses to start without `MCP_USERS`.

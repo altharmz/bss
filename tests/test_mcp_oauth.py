@@ -470,6 +470,24 @@ def test_the_login_page_escapes_the_client_name_and_cannot_be_framed(oauth):
     assert response.headers["cache-control"] == "no-store"
 
 
+@pytest.mark.parametrize(
+    ("trust", "forwarded", "expected"),
+    [
+        (False, "6.6.6.6", "10.0.0.9"),  # locally: the peer, whatever the header says
+        (True, None, "10.0.0.9"),
+        (True, "6.6.6.6, 203.0.113.7", "203.0.113.7"),  # prod: Caddy's entry is the last
+    ],
+)
+def test_the_client_ip_trusts_x_forwarded_for_only_behind_caddy(trust, forwarded, expected):
+    from starlette.requests import Request
+
+    from bss_mcp.login import client_ip
+
+    headers = [(b"x-forwarded-for", forwarded.encode())] if forwarded else []
+    request = Request({"type": "http", "headers": headers, "client": ("10.0.0.9", 5000)})
+    assert client_ip(request, trust) == expected
+
+
 def test_openid_configuration_is_a_404(oauth):
     assert oauth.client.get("/.well-known/openid-configuration").status_code == 404
 

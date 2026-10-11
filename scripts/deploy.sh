@@ -95,6 +95,11 @@ SMOKE_BASIC_AUTH="$(sed -n 's/^SMOKE_BASIC_AUTH=//p' "${SMOKE_ENV}" | tail -n 1)
 ! grep -q '^SMOKE_BASIC_AUTH=' .env.prod \
   || fail ".env.prod contains SMOKE_BASIC_AUTH: remove it - .env.prod is shipped to the VPS, the smoke credential belongs in .env.smoke only"
 
+# The MCP login needs at least one user; checked here, before any network step (the value
+# is never printed). compose would refuse too, but only after the migration.
+grep -q '^MCP_USERS=.' .env.prod \
+  || fail "MCP_USERS is empty or missing in .env.prod (see .env.example; hashes: python -m bss_mcp.passwords)"
+
 # What ships, in one place: the real deploy calls these with the VPS as destination,
 # DRY_RUN=1 with --dry-run against a local scratch directory - the same calls.
 # Chained with && so a failed rsync fails the function wherever it is called - set -e does
@@ -214,26 +219,26 @@ rssh "cd ${REMOTE_DIR} && \
 
 # Both services must go healthy: the app (/healthz) and the billing worker (its liveness
 # file, touched after its first wake-up). One unhealthy service ends the wait at once.
-log "Waiting for the app and worker containers to become healthy"
+log "Waiting for the app, worker and mcp containers to become healthy"
 deadline=$(( SECONDS + 90 ))
-declare -A status=([app]="" [worker]="")
+declare -A status=([app]="" [worker]="" [mcp]="")
 while (( SECONDS < deadline )); do
-  for svc in app worker; do
+  for svc in app worker mcp; do
     [[ "${status[${svc}]}" == "healthy" ]] && continue
     cid="$(rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} ps -q ${svc}" || true)"
     if [[ -n "${cid}" ]]; then
       status[${svc}]="$(rssh "docker inspect -f '{{.State.Health.Status}}' ${cid}" 2>/dev/null || echo unknown)"
     fi
   done
-  [[ "${status[app]}" == "healthy" && "${status[worker]}" == "healthy" ]] && break
-  [[ "${status[app]}" == "unhealthy" || "${status[worker]}" == "unhealthy" ]] && break
+  [[ "${status[app]}" == "healthy" && "${status[worker]}" == "healthy" && "${status[mcp]}" == "healthy" ]] && break
+  [[ "${status[app]}" == "unhealthy" || "${status[worker]}" == "unhealthy" || "${status[mcp]}" == "unhealthy" ]] && break
   sleep 3
 done
 
-if [[ "${status[app]}" != "healthy" || "${status[worker]}" != "healthy" ]]; then
+if [[ "${status[app]}" != "healthy" || "${status[worker]}" != "healthy" || "${status[mcp]}" != "healthy" ]]; then
   printf '\n--- remote logs (last 100 lines) ---\n' >&2
   rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2 || true
-  fail "containers did not become healthy (last status: app ${status[app]:-none}, worker ${status[worker]:-none})"
+  fail "containers did not become healthy (last status: app ${status[app]:-none}, worker ${status[worker]:-none}, mcp ${status[mcp]:-none})"
 fi
 
 log "Remote smoke test"
@@ -266,6 +271,10 @@ ship_web "${REMOTE}:${REMOTE_DIR}"
 log "Web smoke test through Caddy (${WEB_URL})"
 SMOKE_BASIC_AUTH="${SMOKE_BASIC_AUTH}" ./scripts/web-smoke.sh "${WEB_URL}" "${TAG}" \
   || fail "web smoke test failed (see above). The app itself is deployed and healthy; check the vps-infra Caddy routes and the files in ~/${REMOTE_DIR}/web"
+
+log "MCP smoke test through Caddy (${WEB_URL})"
+./scripts/mcp-smoke.sh "${WEB_URL}" caddy \
+  || fail "MCP smoke test failed (see above). App, UI and mcp are deployed and healthy; check the vps-infra Caddy carve-outs (docs/vps-infra-change-request.md)"
 
 log "Pruning old ${IMAGE_NAME} images on ${REMOTE} (keeping ${KEEP_IMAGES}, nothing else is touched)"
 rssh "docker images '${IMAGE_NAME}' --format '{{.ID}} {{.CreatedAt}}' \
