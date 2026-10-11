@@ -154,6 +154,17 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   the cloud): after Retry the subscribers list's unstubbed load raced the "no alert"
   assertion. The strict stub found 9 more under-stubbed tests. `pending` stubs a load
   the test does not care about; `NAV_RUNS`/`noRuns` the sidebar's run count.
+- **`findBy`/`waitFor` wait up to 5 s** (`asyncUtilTimeout` in `src/test/setup.ts`;
+  `testTimeout` 15 s in `vite.config.ts`, so a miss still reports the query's own error).
+  Testing Library's 1 s default made Catalog's first test flaky ("no row Mobile L",
+  doc-findings #19): a file's first render pays every cold cost (stubbed fetches, JSON,
+  Intl, the table), and on a loaded workstation the single vitest pass of `make
+  progress` took more than 1 s of wall clock for it. Proven (`cloud/quality-1`): delaying
+  the catalog's price load by 1.2 s reproduced the exact error with the 1 s default and
+  passed with 5 s; a 6 s delay still fails with "no row Mobile L" (a hang is still
+  caught). Then 20/20 `npm test` runs (UTC and New York each) with four busy loops on
+  the 4 cores. The timeout is a hang guard, not a speed assertion: no test waits for it
+  to expire.
 - **Polling tests** fake only `setTimeout`/`clearTimeout` and wait with an `until` helper
   (`BillingRuns.test.tsx`): Testing Library's `findBy`/`waitFor` hang under a fake
   `setTimeout`.

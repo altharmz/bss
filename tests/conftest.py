@@ -1,4 +1,5 @@
 import os
+import time
 import uuid
 from collections.abc import Iterator
 
@@ -27,6 +28,65 @@ hypothesis.settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "dev"))
 # Captured at import: the `api` fixture points settings.database_url at the test database,
 # and creating or dropping databases must not connect to the one being dropped.
 ADMIN_URL = settings.database_url
+
+# --- "tested" for the progress tracker (make progress; tests/progress_collect.py) ---
+# Set by the collector only, so make test is unchanged. Per test, it records the requests
+# sent to the app (method, path - any TestClient of app.main.app: TmfClient, and the raw
+# clients of test_health) and the tables of the test's database that got rows (the
+# database's own statistics, read before it is dropped). The `_progress_record` fixture
+# hands both to the collector in the test's user_properties; the collector counts a test
+# only if it passed.
+PROGRESS_RECORD = os.environ.get("BSS_PROGRESS_RECORD") == "1"
+_requests: set[tuple[str, str]] = set()
+_tables: set[str] = set()
+
+if PROGRESS_RECORD:
+    from urllib.parse import urlsplit
+
+    from starlette.testclient import TestClient
+
+    _send = TestClient.request
+
+    def _recording_request(self, method, url, *args, **kwargs):
+        from app.main import app
+
+        if self.app is app:
+            _requests.add((method.upper(), urlsplit(str(url)).path))
+        return _send(self, method, url, *args, **kwargs)
+
+    TestClient.request = _recording_request
+
+
+def _record_written_tables(url: str) -> None:
+    """The tables of the database at `url` that got rows (pg_stat_user_tables.n_tup_ins).
+    A backend reports its counts when it ends, before it leaves pg_stat_activity: wait
+    for every other session of the database to be gone first (5 s at most)."""
+    with psycopg.connect(url, autocommit=True) as conn:
+        deadline = time.monotonic() + 5
+        while conn.execute(
+            "SELECT count(*) FROM pg_stat_activity"
+            " WHERE datname = current_database() AND pid <> pg_backend_pid()"
+        ).fetchone()[0]:
+            if time.monotonic() > deadline:
+                raise RuntimeError("progress: sessions of the test database did not end")
+            time.sleep(0.01)
+        rows = conn.execute("SELECT relname FROM pg_stat_user_tables WHERE n_tup_ins > 0")
+        _tables.update(row[0] for row in rows)
+
+
+@pytest.fixture(autouse=True)
+def _progress_record(request) -> Iterator[None]:
+    """Autouse, so it is set up first and torn down last - after the test database has
+    been read and dropped."""
+    if not PROGRESS_RECORD:
+        yield
+        return
+    _requests.clear()
+    _tables.clear()
+    yield
+    request.node.user_properties.append(
+        ("progress", {"requests": sorted(_requests), "tables": sorted(_tables)})
+    )
 
 
 def _create_database(name: str, template: str | None = None) -> str:
@@ -89,7 +149,11 @@ def migrated_db_url(template_db, monkeypatch) -> Iterator[str]:
     try:
         yield test_url
     finally:
-        _drop_database(test_db)
+        try:
+            if PROGRESS_RECORD:
+                _record_written_tables(test_url)
+        finally:
+            _drop_database(test_db)
 
 
 @pytest.fixture

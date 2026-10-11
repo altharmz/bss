@@ -8,4 +8,4 @@ rule the human changed.
 
 Format: one entry per line, `- "<the old line>" - <date>: <reason>`.
 
-None yet.
+- "**Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables` of each test database before it is dropped; UI: done for vitest - `expectUi(id)`, see "Progress tracker"; Playwright could record the same way), the drift check in the pre-commit hook and `make verify` (with negative proofs), and "deployed" from `docs/progress/deployed.txt`. Slice b also defines the `worker` area (capabilities proven by `@pytest.mark.capability(...)` tests)." - 2026-10-11: "tested" for db and api is built (`cloud/quality-1`); the requests are recorded at the starlette `TestClient` rather than in `tests/apiclient.py`, so `test_health.py`'s raw clients count too. The rest of the item (drift check, "deployed") stays in CLAUDE.md, reworded ([harness.md](harness.md#progress-tracker)).

@@ -21,7 +21,17 @@ from pydantic import Field, model_validator
 from app.api import listing
 from app.api.account import account_href
 from app.api.bill import bill_href
-from app.api.common import Money, Ref, TmfModel, created, money, parse, parse_id, utc
+from app.api.common import (
+    BillingAccountRef,
+    CustomerBillRef,
+    Money,
+    TmfModel,
+    created,
+    money,
+    parse,
+    parse_id,
+    utc,
+)
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
@@ -48,15 +58,13 @@ ATTRIBUTES = (
 class PaymentItem(TmfModel):
     """Explicit lettering: this much of the payment pays that bill."""
 
-    item: Ref
+    item: CustomerBillRef
     amount: Money
     total_amount: Money | None = None
     tax_amount: Money | None = None
 
     @model_validator(mode="after")
     def _shape(self) -> "PaymentItem":
-        if self.item.at_referred_type not in (None, "CustomerBill"):
-            raise ValueError("paymentItem.item must refer to a CustomerBill")
         if self.amount.value <= 0:
             raise ValueError("paymentItem.amount.value must be positive")
         if self.total_amount is not None and self.total_amount != self.amount:
@@ -79,7 +87,7 @@ class PaymentMethod(TmfModel):
 
 
 class PaymentCreate(TmfModel):
-    account: Ref
+    account: BillingAccountRef
     total_amount: Money
     payment_method: PaymentMethod
     amount: Money | None = None

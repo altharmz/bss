@@ -99,13 +99,36 @@ unscoped and the excluded items.
   `.progress/ui-tested.json`. An id that is not a ui item is an error (exit 1). Proven: a
   test that calls expectUi and then fails does not count (with the passed-filter removed
   it did), an unknown id fails the run. 13/13 today.
-- **Tested** (db, api): not measured yet ("n/a"); **deployed:** "unknown" until
-  `deploy.sh` writes `docs/progress/deployed.txt` (approved, not built).
+- **Tested, db and api** (since `cloud/quality-1`): what the **passing** tests
+  exercised, from one in-process run of the whole suite by the collector (which also
+  yields the worker capabilities; serial, ~3.5 min in the cloud). `tests/conftest.py`
+  records per test, only when the collector sets `BSS_PROGRESS_RECORD=1` (`make test` is
+  unchanged): api - every request sent to `app.main.app` through any starlette
+  `TestClient` (class-level wrapper of `TestClient.request`: `TmfClient` and the raw
+  clients of `test_health.py`, which a `TmfClient`-only recorder would miss), matched by
+  the collector to the `app.openapi()` operation (method + path template, a literal
+  segment before a parameter; a request no operation serves, e.g. a 404 probe, counts
+  for nothing); db - the tables of the test's throwaway database with
+  `pg_stat_user_tables.n_tup_ins > 0`, read in `migrated_db_url`'s teardown before the
+  drop, after waiting for the database's other sessions to end (a backend flushes its
+  counts at exit, before it leaves `pg_stat_activity`). An autouse fixture hands both to
+  the collector in the test's `user_properties`; a test that failed in any phase counts
+  for nothing. Migration tests' empty databases (`temp_db_url`) are not counted. Proven:
+  with `test_healthz_ok_when_db_reachable` and
+  `test_balance_is_payments_minus_charges_positive_means_credit` failing after their
+  requests and writes, a run of those two counted no operation and no table; with the
+  passed-filter removed it counted `GET /healthz`, `POST /payment` and `payment` (and
+  the rest they touch). Not proven: the wait for the sessions to end - five runs
+  without it lost nothing. 18/18 and 57/57 today.
+- **Deployed:** "unknown" until `deploy.sh` writes `docs/progress/deployed.txt`
+  (approved, not built).
 - **Unscoped:** a table, operation or marker in the code that is neither an item nor
   excluded makes `make progress` exit 1 (after writing the files).
 - **How it runs:** `tests/progress_collect.py` in the app container (scope.yaml arrives
   on stdin, parsed with the image's pinned PyYAML; tables via a throwaway
-  `vpslab_progress_*` database, dropped again), `frontend/scripts/ui-markers.mjs` and
+  `vpslab_progress_*` database, dropped again; then the whole test suite, in process -
+  its output on stderr; extra arguments narrow that run, for negative proofs),
+  `frontend/scripts/ui-markers.mjs` and
   vitest with the ui-tested reporter in `web-offline`, then `scripts/progress/generate.py`
   on the host (standard library only)
   from the collectors' JSON in `.progress/` (gitignored). The output is deterministic (no

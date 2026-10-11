@@ -151,7 +151,7 @@ def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         {
             "id": str(row["id"]),
             "href": f"{BASE}/appliedCustomerBillingRate/{row['id']}",
-            "date": utc(row["created_at"]),
+            "date": utc(row["applied_at"]),
             "appliedBillingRateType": RATE_TYPE[row["charge_type"]],
             "taxExcludedAmount": money(row["amount"], row["currency"]),
             "periodCoverage": date_period(row["period"]),

@@ -28,6 +28,20 @@ implemented; order processing lives in `app/ordering/`.
   references. `id` and `href` are server-managed (400 on POST and PATCH). `lastUpdate` is
   accepted and ignored on POST, because the spec's create schemas make clients send it;
   it is read-only on PATCH.
+- **`@referredType` in a reference is checked, never rewritten** (`cloud/quality-1`,
+  doc-findings #17). The vendored specs define it as "the actual type of the target
+  instance when needed for disambiguation": optional, but when sent it must be the type
+  the response states for that reference, else 422 and nothing is stored. Fixed types
+  (`app/api/common.py`, `BillingAccountRef`, `CustomerRef`, `CustomerBillRef`,
+  `ProductRef`, `ProductOfferingRef`, `ProductOfferingPriceRef`,
+  `ProductSpecificationRef`): an order's and its items' `billingAccount`, an item's
+  `productOffering` and `product`, a payment's `account` and `paymentItem.item`, an
+  account's `relatedParty.partyOrPartyRole` (`Customer`), an offering's
+  `productSpecification` and `productOfferingPrice[]`. A customer's `engagedParty` is
+  checked against the party it names (`Individual` or `Organization`;
+  `check_referred_type`). Not a supertype (`Party` for an Individual is a 422): the
+  response would state another value. Same principle as the account's `role` (#3).
+  `tests/test_api_referred_type.py`.
 - **Money** is `{"unit": "<ISO 4217>", "value": <JSON number>}`, Decimal end to end.
   FastAPI's own body parsing goes through float (proven by a test), so handlers parse the
   raw body with `parse_float=Decimal` (`app/api/deps.py`, `tmfjson.loads`). Responses are
@@ -130,9 +144,9 @@ both read the same open bill; `test_two_payments_settle_one_after_the_other` fai
 
 | Resource | DB column <-> TMF attribute | Filters |
 |---|---|---|
-| product | `status`, `start_date` <-> `startDate`, `termination_date` <-> `terminationDate` (exclusive: the first day not billed), `created_at` <-> `creationDate`, offering name <-> `name`, `billing_account_id` <-> `billingAccount`, `product_offering_id` <-> `productOffering`, `created_by_item_id` / `terminated_by_item_id` <-> `productOrderItem[]` (`RelatedOrderItem`, role `creation` / `termination`) | `billingAccount.id`, `status` |
+| product | `status`, `start_date` <-> `startDate`, `termination_date` <-> `terminationDate` (exclusive: the first day not billed), the creating order's `order_date` <-> `creationDate` (the injected clock; not `created_at`), offering name <-> `name`, `billing_account_id` <-> `billingAccount`, `product_offering_id` <-> `productOffering`, `created_by_item_id` / `terminated_by_item_id` <-> `productOrderItem[]` (`RelatedOrderItem`, role `creation` / `termination`) | `billingAccount.id`, `status` |
 | customerBill | `bill_date` <-> `billDate`, `bill_period` <-> `billingPeriod`, `amount_due` + `currency` <-> `amountDue`, amount_due - allocations (0 for a credit note) <-> `remainingAmount`, `payment_due_date` <-> `paymentDueDate`, payment allocations <-> `appliedPayment[]` (`{appliedAmount, payment: PaymentRef}`; a credit note's credit is not a payment and not listed), `category` (`normal`/`creditNote`), `onCycle` <-> `runType`, `BL-` + 8 hex <-> `billNo`, `state`, `billing_account_id` <-> `billingAccount` | `billingAccount.id`, `state` |
-| appliedCustomerBillingRate | `charge_type` <-> `appliedBillingRateType` (`recurring` -> `appliedBillingCharge`, `refund` -> `appliedBillingCredit`), `amount` + `currency` <-> `taxExcludedAmount` (refunds negative), `period` <-> `periodCoverage`, `customer_bill_id` <-> `bill` and `isBilled`, `product_id` <-> `product`, `billing_account_id` <-> `billingAccount`, `created_at` <-> `date` | `billingAccount.id`, `product.id`, `bill.id`, `isBilled` |
+| appliedCustomerBillingRate | `charge_type` <-> `appliedBillingRateType` (`recurring` -> `appliedBillingCharge`, `refund` -> `appliedBillingCredit`), `amount` + `currency` <-> `taxExcludedAmount` (refunds negative), `period` <-> `periodCoverage`, `customer_bill_id` <-> `bill` and `isBilled`, `product_id` <-> `product`, `billing_account_id` <-> `billingAccount`, `applied_at` <-> `date` (the injected clock of the run's attempt that wrote it, as its bills' issue; migration 0007 - before it, `created_at`) | `billingAccount.id`, `product.id`, `bill.id`, `isBilled` |
 
 - Products are only written by orders; POST/PATCH/DELETE on `/product` are 405.
 - Bills and ABRs are only **created** by the billing run (`app/billing/adapter.py`),

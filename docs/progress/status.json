@@ -4,13 +4,13 @@
       "deployed": null,
       "implemented": 57,
       "items": 57,
-      "tested": null
+      "tested": 57
     },
     "db": {
       "deployed": null,
       "implemented": 18,
       "items": 18,
-      "tested": null
+      "tested": 18
     },
     "ui": {
       "deployed": null,
@@ -44,7 +44,7 @@
       "id": "db.product_specification",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Product specifications (TMF620)"
     },
     {
@@ -53,7 +53,7 @@
       "id": "db.product_offering",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Product offerings (TMF620)"
     },
     {
@@ -62,7 +62,7 @@
       "id": "db.product_offering_price",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Offering prices (TMF620)"
     },
     {
@@ -71,7 +71,7 @@
       "id": "db.party",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Parties: individuals and organizations (TMF632)"
     },
     {
@@ -80,7 +80,7 @@
       "id": "db.customer",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Customers (TMF629)"
     },
     {
@@ -89,7 +89,7 @@
       "id": "db.billing_account",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Billing accounts (TMF666)"
     },
     {
@@ -98,7 +98,7 @@
       "id": "db.product_order",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Product orders (TMF622)"
     },
     {
@@ -107,7 +107,7 @@
       "id": "db.product_order_item",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Product order items (TMF622)"
     },
     {
@@ -116,7 +116,7 @@
       "id": "db.product_order_error_message",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Order rejection reasons (TMF622 productOrderErrorMessage)"
     },
     {
@@ -125,7 +125,7 @@
       "id": "db.product",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Products (TMF637)"
     },
     {
@@ -134,7 +134,7 @@
       "id": "db.applied_customer_billing_rate",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Charges and refunds - ABRs (TMF678)"
     },
     {
@@ -143,7 +143,7 @@
       "id": "db.customer_bill",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Customer bills (TMF678)"
     },
     {
@@ -152,7 +152,7 @@
       "id": "db.billing_run",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Billing runs, one per date"
     },
     {
@@ -161,7 +161,7 @@
       "id": "db.payment",
       "implemented": true,
       "stage": 1,
-      "tested": null,
+      "tested": true,
       "title": "Payments (TMF676)"
     },
     {
@@ -170,7 +170,7 @@
       "id": "db.billing_run_account",
       "implemented": true,
       "stage": 4,
-      "tested": null,
+      "tested": true,
       "title": "Per-(run, account) outcomes: ok / failed / blocked"
     },
     {
@@ -179,7 +179,7 @@
       "id": "db.worker_request",
       "implemented": true,
       "stage": 4,
-      "tested": null,
+      "tested": true,
       "title": "UI request queue for the worker (catch-up, retry)"
     },
     {
@@ -188,7 +188,7 @@
       "id": "db.bill_allocation",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "What paid a bill: payments and credit notes (TMF678 appliedPayment)"
     },
     {
@@ -197,7 +197,7 @@
       "id": "db.customer_bill_state_change",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Bill state history"
     },
     {
@@ -206,7 +206,7 @@
       "id": "api.tmf620.productSpecification.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List product specifications"
     },
     {
@@ -215,7 +215,7 @@
       "id": "api.tmf620.productSpecification.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get a product specification"
     },
     {
@@ -224,7 +224,7 @@
       "id": "api.tmf620.productSpecification.create",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Create a product specification"
     },
     {
@@ -233,7 +233,7 @@
       "id": "api.tmf620.productSpecification.patch",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Patch a product specification"
     },
     {
@@ -242,7 +242,7 @@
       "id": "api.tmf620.productOffering.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List product offerings"
     },
     {
@@ -251,7 +251,7 @@
       "id": "api.tmf620.productOffering.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get a product offering"
     },
     {
@@ -260,7 +260,7 @@
       "id": "api.tmf620.productOffering.create",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Create a product offering"
     },
     {
@@ -269,7 +269,7 @@
       "id": "api.tmf620.productOffering.patch",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Patch a product offering (lifecycle, prices)"
     },
     {
@@ -278,7 +278,7 @@
       "id": "api.tmf620.productOfferingPrice.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List offering prices"
     },
     {
@@ -287,7 +287,7 @@
       "id": "api.tmf620.productOfferingPrice.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get an offering price"
     },
     {
@@ -296,7 +296,7 @@
       "id": "api.tmf620.productOfferingPrice.create",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Create an offering price"
     },
     {
@@ -305,7 +305,7 @@
       "id": "api.tmf620.productOfferingPrice.patch",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Patch an offering price (end it)"
     },
     {
@@ -314,7 +314,7 @@
       "id": "api.tmf632.individual.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List individuals"
     },
     {
@@ -323,7 +323,7 @@
       "id": "api.tmf632.individual.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get an individual"
     },
     {
@@ -332,7 +332,7 @@
       "id": "api.tmf632.individual.create",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Create an individual"
     },
     {
@@ -341,7 +341,7 @@
       "id": "api.tmf632.individual.patch",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Patch an individual"
     },
     {
@@ -350,7 +350,7 @@
       "id": "api.tmf632.organization.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List organizations"
     },
     {
@@ -359,7 +359,7 @@
       "id": "api.tmf632.organization.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get an organization"
     },
     {
@@ -368,7 +368,7 @@
       "id": "api.tmf632.organization.create",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Create an organization"
     },
     {
@@ -377,7 +377,7 @@
       "id": "api.tmf632.organization.patch",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Patch an organization"
     },
     {
@@ -386,7 +386,7 @@
       "id": "api.tmf629.customer.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List customers"
     },
     {
@@ -395,7 +395,7 @@
       "id": "api.tmf629.customer.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get a customer"
     },
     {
@@ -404,7 +404,7 @@
       "id": "api.tmf629.customer.create",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Create a customer"
     },
     {
@@ -413,7 +413,7 @@
       "id": "api.tmf629.customer.patch",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Patch a customer"
     },
     {
@@ -422,7 +422,7 @@
       "id": "api.tmf666.billingAccount.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List billing accounts (with balance)"
     },
     {
@@ -431,7 +431,7 @@
       "id": "api.tmf666.billingAccount.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get a billing account"
     },
     {
@@ -440,7 +440,7 @@
       "id": "api.tmf666.billingAccount.create",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Create a billing account"
     },
     {
@@ -449,7 +449,7 @@
       "id": "api.tmf666.billingAccount.patch",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Patch a billing account"
     },
     {
@@ -458,7 +458,7 @@
       "id": "api.tmf666.extensionSchema.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Serve the BssBillingAccount extension schema"
     },
     {
@@ -467,7 +467,7 @@
       "id": "api.tmf676.payment.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List payments"
     },
     {
@@ -476,7 +476,7 @@
       "id": "api.tmf676.payment.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get a payment"
     },
     {
@@ -485,7 +485,7 @@
       "id": "api.tmf676.payment.create",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Record a payment"
     },
     {
@@ -494,7 +494,7 @@
       "id": "api.tmf622.productOrder.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List product orders"
     },
     {
@@ -503,7 +503,7 @@
       "id": "api.tmf622.productOrder.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get a product order"
     },
     {
@@ -512,7 +512,7 @@
       "id": "api.tmf622.productOrder.create",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Place a product order (add / delete items)"
     },
     {
@@ -521,7 +521,7 @@
       "id": "api.tmf637.product.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List products"
     },
     {
@@ -530,7 +530,7 @@
       "id": "api.tmf637.product.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get a product"
     },
     {
@@ -539,7 +539,7 @@
       "id": "api.tmf678.customerBill.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List customer bills"
     },
     {
@@ -548,7 +548,7 @@
       "id": "api.tmf678.customerBill.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get a customer bill"
     },
     {
@@ -557,7 +557,7 @@
       "id": "api.tmf678.customerBill.patch",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Hold or release a customer bill"
     },
     {
@@ -566,7 +566,7 @@
       "id": "api.tmf678.appliedCustomerBillingRate.list",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "List charges and refunds (ABRs)"
     },
     {
@@ -575,7 +575,7 @@
       "id": "api.tmf678.appliedCustomerBillingRate.get",
       "implemented": true,
       "stage": 2,
-      "tested": null,
+      "tested": true,
       "title": "Get a charge or refund (ABR)"
     },
     {
@@ -584,7 +584,7 @@
       "id": "api.internal.context.get",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "System context: business date, zone, operator"
     },
     {
@@ -593,7 +593,7 @@
       "id": "api.internal.firstCharge.get",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "First-charge preview of an add order"
     },
     {
@@ -602,7 +602,7 @@
       "id": "api.internal.accountProducts.list",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "An account's not-ended products"
     },
     {
@@ -611,7 +611,7 @@
       "id": "api.internal.accountCharges.list",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "An account's charges (ABRs with proration)"
     },
     {
@@ -620,7 +620,7 @@
       "id": "api.internal.accountTransactions.list",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "An account's ledger with balance after"
     },
     {
@@ -629,7 +629,7 @@
       "id": "api.internal.accountSettlement.get",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "An account's bills owed, unused credit, overdue and on hold"
     },
     {
@@ -638,7 +638,7 @@
       "id": "api.internal.billDetail.get",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "A bill with charges, sources, history and allowed states"
     },
     {
@@ -647,7 +647,7 @@
       "id": "api.internal.priceChange.create",
       "implemented": true,
       "stage": 5,
-      "tested": null,
+      "tested": true,
       "title": "Atomic price change of a live offering (D-W21)"
     },
     {
@@ -656,7 +656,7 @@
       "id": "api.internal.billingRun.list",
       "implemented": true,
       "stage": 4,
-      "tested": null,
+      "tested": true,
       "title": "List billing runs (newest first)"
     },
     {
@@ -665,7 +665,7 @@
       "id": "api.internal.billingRun.get",
       "implemented": true,
       "stage": 4,
-      "tested": null,
+      "tested": true,
       "title": "Get a billing run"
     },
     {
@@ -674,7 +674,7 @@
       "id": "api.internal.billingRunAccounts.list",
       "implemented": true,
       "stage": 4,
-      "tested": null,
+      "tested": true,
       "title": "A run's per-account outcomes"
     },
     {
@@ -683,7 +683,7 @@
       "id": "api.internal.billingRun.catchUp",
       "implemented": true,
       "stage": 4,
-      "tested": null,
+      "tested": true,
       "title": "Queue a catch-up to a date"
     },
     {
@@ -692,7 +692,7 @@
       "id": "api.internal.billingRun.retry",
       "implemented": true,
       "stage": 4,
-      "tested": null,
+      "tested": true,
       "title": "Queue a retry of a failed run"
     },
     {
@@ -701,7 +701,7 @@
       "id": "api.service.healthz",
       "implemented": true,
       "stage": "template",
-      "tested": null,
+      "tested": true,
       "title": "Liveness with a database check"
     },
     {
@@ -710,7 +710,7 @@
       "id": "api.service.billingStatus",
       "implemented": true,
       "stage": 4,
-      "tested": null,
+      "tested": true,
       "title": "Freshness signal for the external monitor"
     },
     {

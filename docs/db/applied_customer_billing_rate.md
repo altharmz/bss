@@ -22,6 +22,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `billing_run_id` | `uuid` | no |  | The billing run that wrote it; its run_date is the ABR's run date. |
 | `customer_bill_id` | `uuid` | yes |  | The bill that collected it; NULL = not yet billed (TMF678 isBilled false). |
 | `refunds_rate_id` | `uuid` | yes |  | On a refund: the charge it refunds (same product; one refund per charge). |
+| `applied_at` | `timestamp with time zone` | no |  | TMF678 date: when the ABR was written - the injected clock of the billing run's attempt that wrote it (the instant that run issues its bills at), not the database's now(). |
 
 ## Foreign keys
 

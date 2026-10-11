@@ -24,7 +24,8 @@ from pydantic import Field, model_validator
 from app.api import listing
 from app.api.common import (
     Money,
-    Ref,
+    ProductOfferingPriceRef,
+    ProductSpecificationRef,
     TimePeriod,
     TmfModel,
     billing_tz,
@@ -382,10 +383,10 @@ class OfferingCreate(TmfModel):
     name: str = Field(min_length=1)
     lifecycle_status: LifecycleStatus
     valid_for: TimePeriod
-    product_specification: Ref
+    product_specification: ProductSpecificationRef
     description: str | None = None
     is_sellable: bool = True
-    product_offering_price: list[Ref] = []
+    product_offering_price: list[ProductOfferingPriceRef] = []
     external_identifier: list[OfferingCode] = Field(default=[], max_length=1)
     last_update: Any = None
 
@@ -396,7 +397,7 @@ class OfferingPatch(TmfModel):
     valid_for: TimePeriod | None = None
     description: str | None = None
     is_sellable: bool | None = None
-    product_offering_price: list[Ref] | None = None
+    product_offering_price: list[ProductOfferingPriceRef] | None = None
 
 
 def offering_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
@@ -472,7 +473,10 @@ def _not_in_the_past(price_id: UUID, start: datetime, now: datetime) -> None:
 
 
 def _attach_prices(
-    conn: psycopg.Connection, offering_id: UUID, refs: list[Ref], now: datetime
+    conn: psycopg.Connection,
+    offering_id: UUID,
+    refs: list[ProductOfferingPriceRef],
+    now: datetime,
 ) -> None:
     for price_ref in refs:
         price = catalog.get_product_offering_price(conn, price_ref.id)

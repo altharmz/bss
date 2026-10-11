@@ -17,7 +17,9 @@ from app.api import listing
 from app.api.account import account_ref
 from app.api.catalog import BASE as CATALOG_BASE
 from app.api.common import (
-    Ref,
+    BillingAccountRef,
+    ProductOfferingRef,
+    ProductRef,
     TmfModel,
     created,
     from_billing_date,
@@ -54,13 +56,13 @@ class OrderItemIn(TmfModel):
     id: str = Field(min_length=1)
     action: Literal["add", "modify", "delete", "noChange"]
     quantity: Literal[1] = 1
-    product_offering: Ref | None = None
-    product: Ref | None = None
-    billing_account: Ref | None = None
+    product_offering: ProductOfferingRef | None = None
+    product: ProductRef | None = None
+    billing_account: BillingAccountRef | None = None
 
 
 class OrderIn(TmfModel):
-    billing_account: Ref
+    billing_account: BillingAccountRef
     product_order_item: list[OrderItemIn]
     requested_start_date: AwareDatetime | None = None
 

@@ -108,6 +108,7 @@ def test_applied_billing_rates(api, world, db_conn):
         currency="RUB",
         period=days(date(2026, 2, 15), date(2026, 3, 1)),
         billing_run_id=world.run["id"],
+        applied_at=world.run["started_at"],
         refunds_rate_id=feb["id"],
     )
     db_conn.commit()

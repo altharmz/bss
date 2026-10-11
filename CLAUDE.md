@@ -184,6 +184,10 @@ nothing deployed):
   change: diff first, needs the human's OK.
 - **Visual review of the subscriber card** with the human before `make verify`: the
   seven figures in one row, the bill dialog, Record payment, New subscriber, Edit.
+- **Migration `0007`** (`cloud/quality-1`, if merged): adds
+  `applied_customer_billing_rate.applied_at` (an ABR's TMF678 `date` from the clock),
+  back-filled from each ABR's run `started_at`, then NOT NULL. Ships with the next
+  deploy; rolling back needs `alembic downgrade 0006` by hand (drops the column).
 
 Then, in this order (as of 2026-10-05, after slice f):
 
@@ -199,10 +203,12 @@ Then, in this order (as of 2026-10-05, after slice f):
    `make test` x3, `make progress`, CLAUDE.md, then show the diff and commit only after
    the human's OK. Worker 10/10, API 54/54 in `docs/PROGRESS.md`. The planning
    decisions Q1-Q14 are recorded (see ["Billing worker"](docs/decisions/worker.md)).
-2. **Progress tracker steps 3-5** (after slice b): "tested" (pytest plugin: requests
-   recorded by `tests/apiclient.py` matched to OpenAPI templates, `pg_stat_user_tables`
-   of each test database before it is dropped; UI: done for vitest - `expectUi(id)`,
-   see ["Progress tracker"](docs/decisions/harness.md#progress-tracker); Playwright could record the same way),
+2. **Progress tracker steps 3-5** (after slice b): "tested" (done for db and api on
+   `cloud/quality-1`: requests to the app recorded per test - at the `TestClient`, so
+   `test_health.py`'s raw clients count too - matched to OpenAPI templates, and
+   `pg_stat_user_tables` of each test database before it is dropped; UI: done for
+   vitest - `expectUi(id)`, see ["Progress tracker"](docs/decisions/harness.md#progress-tracker);
+   Playwright could record the same way),
    the drift check in the pre-commit hook and `make verify` (with negative proofs), and
    "deployed" from `docs/progress/deployed.txt`. Slice b also defines the `worker` area
    (capabilities proven by `@pytest.mark.capability(...)` tests).

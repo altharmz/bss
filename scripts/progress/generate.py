@@ -3,8 +3,9 @@
 
 Inputs (the collectors' JSON, written by `make progress` into .progress/):
   backend.json  tests/progress_collect.py: scope.yaml parsed, app.openapi() operations,
-                tables at migration head, and the outcome of the tests marked
-                @pytest.mark.capability (run by the collector)
+                tables at migration head, and from one run of the test suite: the outcome
+                of the tests marked @pytest.mark.capability, and what the passing tests
+                exercised (operations requested, tables written)
   ui.json       frontend/scripts/ui-markers.mjs: data-ui markers in frontend/src
   ui-tested.json  frontend/scripts/ui-tested-reporter.mjs: the data-ui ids that passing
                 vitest tests saw on screen through expectUi (frontend/src/test/expectUi.ts)
@@ -15,7 +16,9 @@ Status is derived, never written by hand:
   tested        worker: at least one test marked with the capability passed and none
                 failed (implemented and tested together - a capability is proven, not
                 detected); ui: a passing component test saw the marker on screen
-                (expectUi); db, api: not measured yet (step 3) - shown as "n/a"
+                (expectUi); db: a passing test's database got rows in the table
+                (pg_stat_user_tables); api: a passing test sent a request the app routes
+                to the operation
   deployed      "unknown" until deploy.sh records the deployed commit
                 (docs/progress/deployed.txt, step 5 of the tracker)
 
@@ -91,6 +94,8 @@ def build(backend: dict, ui_markers: list[dict], ui_tested: list[str]) -> tuple[
     present |= {("ui", m["marker"]) for m in ui_markers}
     capabilities = backend["capabilities"]
     proven = set(capabilities["passed"]) - set(capabilities["failed"])
+    exercised = {("db", t) for t in backend["tested"]["tables"]}
+    exercised |= {("api", op["method"], op["path"]) for op in backend["tested"]["api"]}
 
     known = {key_of(e) for e in (scope.get("items") or []) + (scope.get("excluded") or []) if e.get("area") in AREAS}
     for capability in sorted(set(capabilities["seen"])):
@@ -111,7 +116,7 @@ def build(backend: dict, ui_markers: list[dict], ui_tested: list[str]) -> tuple[
         elif item["area"] == "ui":
             tested = item["id"] in ui_tested
         else:
-            tested = None  # not measured yet
+            tested = key_of(item) in exercised
         items.append(
             {
                 "id": item["id"],
@@ -139,7 +144,7 @@ def build(backend: dict, ui_markers: list[dict], ui_tested: list[str]) -> tuple[
         areas[area] = {
             "items": len(mine),
             "implemented": sum(i["implemented"] for i in mine),
-            "tested": sum(i["tested"] for i in mine) if area in ("worker", "ui") else None,
+            "tested": sum(i["tested"] for i in mine),
             "deployed": None,
         }
     excluded = [
@@ -164,8 +169,9 @@ def render(status: dict) -> str:
         'has the operation (api), a `data-ui` marker exists in `frontend/src` (ui). Worker:',
         "implemented and tested when a test marked with the capability passes and none fails.",
         "Tested (ui): a passing component test saw the marker on screen (`expectUi`). Tested",
-        "(db, api): not measured yet. Deployed: unknown until `deploy.sh` records the deployed",
-        "commit.",
+        "(db): a passing test's database got rows in the table. Tested (api): a passing test",
+        "sent a request the app routes to the operation. Deployed: unknown until `deploy.sh`",
+        "records the deployed commit.",
         "",
         "| Area | Items | Implemented | Tested | Deployed |",
         "|---|---|---|---|---|",
