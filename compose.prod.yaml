@@ -104,6 +104,11 @@ services:
     mem_limit: 192m
     memswap_limit: 192m
     cpus: 0.25
+    # Starting takes >30 s at 0.25 CPU (tool generation, identity check): keep the image's
+    # probe at every 2 s for up to 2 minutes, so deploy.sh's wait sees "healthy" in time
+    # (2026-10-12: with the image's 30 s the first probe after it came past the 90 s wait).
+    healthcheck:
+      start_period: 120s
     read_only: true
     tmpfs:
       - /tmp
