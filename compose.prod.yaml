@@ -28,6 +28,9 @@ services:
       # `postgres` is the service name in vps-infra; database and role are both
       # bss, created there with `make add-db NAME=bss`.
       DATABASE_URL: postgresql://bss:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/bss
+      # /internal/v1/context and the account card report it; the worker writes it as
+      # paymentDueDate - same value in both services
+      BILL_PAYMENT_TERM_DAYS: "30"
     networks:
       shared:
         # Every app on the shared network calls its service `app`, so that name is
@@ -63,6 +66,7 @@ services:
       APP_ENV: staging
       LOG_LEVEL: info
       DATABASE_URL: postgresql://bss:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/bss
+      BILL_PAYMENT_TERM_DAYS: "30"
     # Replaces the image's /healthz probe: the worker touches /tmp/worker-alive on every
     # wake-up (60 s) and after every account, retries included. Older than 3 minutes (or
     # missing) = unhealthy, which includes a database it cannot reach. No interpreter:
@@ -109,7 +113,9 @@ services:
       APP_ENV: staging
       LOG_LEVEL: info
       BSS_API_URL: http://bss:8080
-      MCP_PUBLIC_URL: https://vpn2811.duckdns.org:8445
+      # every OAuth URL (issuer, resource, endpoints, resource_metadata) is built from it;
+      # the host's nginx routes bss2811 on 443 to Caddy's :8445 (vps-infra)
+      MCP_PUBLIC_URL: https://bss2811.duckdns.org
       MCP_STORE: /data/mcp.db
       # behind Caddy: the client IP is the last X-Forwarded-For entry (Caddy sets it)
       MCP_TRUST_FORWARDED: "true"

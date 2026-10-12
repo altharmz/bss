@@ -4,7 +4,7 @@
 # auth and nothing else does.
 # Usage: scripts/mcp-smoke.sh <base url> [local|caddy]
 #   local: http://localhost:8090 (make mcp-smoke)
-#   caddy: https://vpn2811.duckdns.org:8445 (deploy.sh, after the web smoke test)
+#   caddy: https://bss2811.duckdns.org (deploy.sh, after the web smoke test)
 #
 # Sends no credential of any kind, so there is nothing to leak; changes nothing (the POSTs
 # are refused before anything is stored).
@@ -89,6 +89,10 @@ if [[ "${MODE}" == caddy ]]; then
     [[ "${code}" == 401 ]] && basic_challenge || fail "GET ${path} answered ${code} without basic auth"
   done
   ok "/, /MCP, /Mcp, /mcp/x, /authorize/x, an upper-case well-known -> 401 Basic"
+  # the public URL is reached over 443/TCP only: no HTTP/3 advertised for it
+  call GET /.well-known/oauth-authorization-server >/dev/null
+  [[ "$(header Alt-Svc)" != *h3* ]] || fail "Alt-Svc advertises HTTP/3: $(header Alt-Svc)"
+  ok "no HTTP/3 in Alt-Svc"
 fi
 
 printf 'mcp smoke: all checks passed (%s, %s)\n' "${BASE}" "${MODE}"

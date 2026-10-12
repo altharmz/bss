@@ -86,6 +86,9 @@ ${dirty}"
 # workstation-only counterpart of .env.prod, which IS shipped to the VPS as ~/bss/.env).
 # SMOKE_ENV points elsewhere only for a rehearsal with a dummy file.
 WEB_URL="${WEB_URL:-https://vpn2811.duckdns.org:8445}"
+# The MCP connector's public URL: MCP_PUBLIC_URL in compose.prod.yaml (port 443 through the
+# host's SNI router to Caddy's :8445). Its OAuth metadata names this URL only.
+MCP_URL="${MCP_URL:-https://bss2811.duckdns.org}"
 SMOKE_ENV="${SMOKE_ENV:-.env.smoke}"
 [[ -f "${SMOKE_ENV}" ]] \
   || fail "${SMOKE_ENV} is missing: create .env.smoke with SMOKE_BASIC_AUTH=smoke:<password> (see .env.example and docs/vps-infra-change-request.md)"
@@ -272,8 +275,8 @@ log "Web smoke test through Caddy (${WEB_URL})"
 SMOKE_BASIC_AUTH="${SMOKE_BASIC_AUTH}" ./scripts/web-smoke.sh "${WEB_URL}" "${TAG}" \
   || fail "web smoke test failed (see above). The app itself is deployed and healthy; check the vps-infra Caddy routes and the files in ~/${REMOTE_DIR}/web"
 
-log "MCP smoke test through Caddy (${WEB_URL})"
-./scripts/mcp-smoke.sh "${WEB_URL}" caddy \
+log "MCP smoke test through Caddy (${MCP_URL})"
+./scripts/mcp-smoke.sh "${MCP_URL}" caddy \
   || fail "MCP smoke test failed (see above). App, UI and mcp are deployed and healthy; check the vps-infra Caddy carve-outs (docs/vps-infra-change-request.md)"
 
 log "Pruning old ${IMAGE_NAME} images on ${REMOTE} (keeping ${KEEP_IMAGES}, nothing else is touched)"

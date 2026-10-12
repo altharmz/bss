@@ -15,7 +15,7 @@ bss's API as MCP tools, for any MCP client (claude.ai, ChatGPT, Claude Code, Cur
 ## Architecture
 
 ```
-MCP client ──HTTPS──> Caddy (:8445, vps-infra) ──> mcp (bss_mcp, :8080) ──HTTP──> app (bss:8080)
+MCP client ──HTTPS :443──> host nginx (SNI, raw TLS) ──> Caddy (:8445, vps-infra) ──> mcp (bss_mcp, :8080) ──HTTP──> app (bss:8080)
                                                      │                    X-Remote-User: mcp:<name>
                                                      └── SQLite /data/mcp.db (mcp_data volume)
 ```
@@ -154,8 +154,10 @@ exact. A 4xx/5xx from the app is a tool error (`isError`), not an MCP error.
 
 ## Client setup
 
-The server URL is **`https://vpn2811.duckdns.org:8445/mcp`** (locally
-`http://localhost:8090/mcp`). Clients that support MCP's OAuth need nothing else: they
+The server URL is **`https://bss2811.duckdns.org/mcp`** (locally
+`http://localhost:8090/mcp`) - the standard port: claude.ai's connector service did not
+reach `https://vpn2811.duckdns.org:8445/mcp` (2026-10-12, a 502 from its proxy), and the
+OAuth metadata names only the new URL, so OAuth clients must use it. Clients that support MCP's OAuth need nothing else: they
 discover the rest, register themselves and open the login page, where you choose **Read
 only** or **Read and write**. Clients that cannot do OAuth with an https or localhost
 redirect use a static token instead. Menu names below are as of 2026-10 and move often;
@@ -184,7 +186,7 @@ confirmation before write calls.
 *Authenticate*; the redirect goes to a localhost port, which the policy allows):
 
 ```
-claude mcp add --transport http bss https://vpn2811.duckdns.org:8445/mcp
+claude mcp add --transport http bss https://bss2811.duckdns.org/mcp
 ```
 
 With a static token instead (no browser; the token sits in Claude Code's config in
@@ -192,7 +194,7 @@ clear - prefer a `read` token, and `--scope local`, the default, keeps it to one
 project):
 
 ```
-claude mcp add --transport http bss https://vpn2811.duckdns.org:8445/mcp \
+claude mcp add --transport http bss https://bss2811.duckdns.org/mcp \
   --header "Authorization: Bearer bss_st_..."
 ```
 
@@ -208,7 +210,7 @@ refuses (https or localhost http only, the agreed policy). Use a static token in
 {
   "mcpServers": {
     "bss": {
-      "url": "https://vpn2811.duckdns.org:8445/mcp",
+      "url": "https://bss2811.duckdns.org/mcp",
       "headers": { "Authorization": "Bearer ${env:BSS_MCP_TOKEN}" }
     }
   }
@@ -269,6 +271,11 @@ Each create and revoke writes an audit line (`token_create`, `token_revoke`,
 
 The client IP is the peer address, or - behind the shared Caddy, with
 `MCP_TRUST_FORWARDED=true` - the last `X-Forwarded-For` entry (Caddy sets it).
+**Through `bss2811.duckdns.org` that is the docker gateway, not the client**: the host's
+nginx forwards raw TCP, so Caddy only sees the gateway. Every client then shares one
+per-IP bucket (20 a minute on login, token and registration, together), and the audit
+log's client IP is the gateway. Accepted for the demo; the per-user and per-token limits
+are unaffected.
 
 ## Audit
 
@@ -288,23 +295,28 @@ tokens or passwords (a test checks the log for each).
   read-only root, `restart: unless-stopped` (back after the 03:00 reboot - the identity
   check waits up to 60 s for the app, then the restart policy retries). Publishes nothing;
   on `shared` as **`bss-mcp:8080`**. `BSS_API_URL=http://bss:8080`,
-  `MCP_PUBLIC_URL=https://vpn2811.duckdns.org:8445`, `MCP_TRUST_FORWARDED=true`. Its store
+  `MCP_PUBLIC_URL=https://bss2811.duckdns.org` (every OAuth URL is built from it),
+  `MCP_TRUST_FORWARDED=true`. Its store
   is the volume `mcp-data` (`/data/mcp.db`).
 - **`MCP_USERS` in `.env.prod` is required**: `deploy.sh` refuses to start without it
   (checked before any network step, never printed), and so does compose.
 - **Routing** (vps-infra's Caddy, requested in
   [vps-infra-change-request.md](vps-infra-change-request.md#2026-10-11-route-the-mcp-connector)):
-  ten exact, case-sensitive paths of `https://vpn2811.duckdns.org:8445` bypass basic auth
+  ten exact, case-sensitive paths of the bss site (`vpn2811.duckdns.org:8445` and, since
+  2026-10-12, `bss2811.duckdns.org` - 443 is the host's nginx SNI router, which passes that
+  name as raw TLS to Caddy's :8445; Caddy holds its certificate) bypass basic auth
   and go to `bss-mcp:8080` - `/mcp`, `/authorize`, `/token`, `/register`, `/revoke`,
   `/login`, `/.well-known/oauth-protected-resource`,
   `/.well-known/oauth-protected-resource/mcp`, `/.well-known/oauth-authorization-server`,
-  `/.well-known/openid-configuration`. Everything else stays behind basic auth. Port 443
-  and the VPN are untouched.
+  `/.well-known/openid-configuration`. Everything else stays behind basic auth. Nothing of
+  ours binds 443 or touches nginx or the VPN. No HTTP/3 is advertised for bss2811 (its
+  Alt-Svc would point at UDP 8445, which nothing routes).
 - **Deploy checks**: `deploy.sh` waits for `mcp` to be healthy with app and worker, then,
   after the web smoke test, runs **`scripts/mcp-smoke.sh <url> caddy`** through Caddy:
   discovery, the 401 challenge, the OAuth endpoints answered by the connector - and
   `/`, `/MCP`, `/Mcp`, `/mcp/x`, `/authorize/x`, an upper-case well-known path still
-  behind basic auth. It sends no credentials. Locally: `make mcp-smoke`.
+  behind basic auth, and no h3 in Alt-Svc - against `MCP_URL` (default
+  `https://bss2811.duckdns.org`). It sends no credentials. Locally: `make mcp-smoke`.
 
 ## Known demo risks
 
