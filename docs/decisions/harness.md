@@ -4,6 +4,24 @@ Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. T
 needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
 proves nothing was lost in the move. Index: [README.md](README.md).
 
+## Codex compatibility
+
+Codex discovers `AGENTS.md`, which directs it to read and follow the shared
+`CLAUDE.md` and the relevant decision records. Project instructions are kept in one
+place rather than copied into a separate Codex policy.
+
+`.codex/hooks.json` registers the Bash `PreToolUse` hook. Its adapter,
+`.codex/guard.sh`, sets `CLAUDE_PROJECT_DIR` from its own location and passes stdin
+and the exit status through to the existing `.claude/hooks/guard.sh`. It preserves
+`CLAUDE_CODE_REMOTE` when supplied. Codex cloud detection, startup setup, formatting
+and translation of Claude permission rules are outside this initial integration.
+
+Automatic hooks require a Codex client with hook support, a trusted project and
+review/trust of the hook definition. Verify activation in a fresh session; running
+the adapter directly proves its policy behavior but not client activation. The
+adapter uses the existing guard cases unchanged, including cloud cases, and should
+be checked from a nested working directory without `CLAUDE_PROJECT_DIR` set.
+
 ## Pre-commit hook
 
 `scripts/pre-commit.sh` runs `make lint` then `make test` and blocks the commit on
