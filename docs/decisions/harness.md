@@ -13,8 +13,30 @@ place rather than copied into a separate Codex policy.
 `.codex/hooks.json` registers the Bash `PreToolUse` hook. Its adapter,
 `.codex/guard.sh`, sets `CLAUDE_PROJECT_DIR` from its own location and passes stdin
 and the exit status through to the existing `.claude/hooks/guard.sh`. It preserves
-`CLAUDE_CODE_REMOTE` when supplied. Codex cloud detection, startup setup, formatting
-and translation of Claude permission rules are outside this initial integration.
+`CLAUDE_CODE_REMOTE` when supplied. Codex cloud detection, startup setup and
+formatting are outside this integration.
+
+Hardening after review (2026-10-14):
+
+- **Fail closed.** Both hook commands find the repository with `git rev-parse`; if
+  that or the script is missing (Codex started outside the repo), they exit 2 instead
+  of exit 127, which Codex would treat as a failed hook and run the tool anyway.
+- **`apply_patch` hook** (`.codex/patch-guard.sh`): Codex never reads
+  `.claude/settings.json`, so its Edit rules are re-stated for the patch text (every
+  `Add/Update/Delete File` and `Move to` path, absolute or relative to the payload's
+  `cwd`). Claude's `deny` paths (`.env`, `.env.prod`, `.env.smoke`, `design-ref/`) and
+  its `ask` paths (`.claude/`, `compose*.yaml`, `Makefile`, `scripts/`,
+  `docs/progress/scope.yaml`), plus `.codex/`, are blocked: Codex hooks have no "ask",
+  so the human applies or approves a harness edit. An unreadable payload is blocked.
+- **`make` approval.** The human's `~/.codex/rules/default.rules` allows the local make
+  targets and prompts for `deploy`, `verify`, `remote`, `ssh`, `tunnel`, `clean`,
+  `spec-verify-upstream` and `hooks` (proposed in the review; that file is the human's
+  and lives outside the repo). A prefix rule sees only the first target, so
+  `.codex/guard.sh` blocks those targets anywhere after the first in one `make` call.
+- **Regression cases:** `.codex/test-hooks.sh` (27 cases: payloads in Codex's
+  documented shape - `tool_name`, `tool_input.command`, `cwd` - fed to the commands
+  exactly as `hooks.json` writes them, from a nested and an outside directory). Not yet
+  wired into `scripts/pre-commit.sh`; run it after changing `.codex/`.
 
 Automatic hooks require a Codex client with hook support, a trusted project and
 review/trust of the hook definition. Verify activation in a fresh session; running

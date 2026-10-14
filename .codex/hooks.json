@@ -6,9 +6,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/guard.sh\"",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" && [ -f \"$root/.codex/guard.sh\" ] && exec bash \"$root/.codex/guard.sh\"; echo 'BLOCKED: bss guard not found - run Codex inside the repository' >&2; exit 2",
             "timeout": 30,
             "statusMessage": "Checking project shell policy"
+          }
+        ]
+      },
+      {
+        "matcher": "^apply_patch$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "root=\"$(git rev-parse --show-toplevel 2>/dev/null)\" && [ -f \"$root/.codex/patch-guard.sh\" ] && exec bash \"$root/.codex/patch-guard.sh\"; echo 'BLOCKED: bss patch guard not found - run Codex inside the repository' >&2; exit 2",
+            "timeout": 30,
+            "statusMessage": "Checking project edit policy"
           }
         ]
       }
