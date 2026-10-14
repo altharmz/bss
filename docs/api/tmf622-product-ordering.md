@@ -12,7 +12,7 @@
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
 | GET | `/tmf-api/productOrderingManagement/v5/productOrder` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `state` | - | 200 `array of ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
-| POST | `/tmf-api/productOrderingManagement/v5/productOrder` | body: `application/json` | `ProductOrder_FVO` | 201 `ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
+| POST | `/tmf-api/productOrderingManagement/v5/productOrder` | query: `fields`; body: `application/json` | `ProductOrder_FVO` | 201 `ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
 | GET | `/tmf-api/productOrderingManagement/v5/productOrder/{order_id}` | path: `order_id`; query: `fields` | - | 200 `ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF622-ProductOrdering-v5.0.0.oas.yaml`](../../spec/TMF622-ProductOrdering-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
@@ -25,6 +25,12 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF622-P
 
 
 ## Behaviour and deviations
+
+Completed add items expose `itemPrice` and `itemTotalPrice` as snapshots of their
+quoted full monthly fee (`0008`); `orderTotalPrice` sums those add fees. These are not
+the prorated first charge or a lifetime total. Catalog changes do not rewrite a
+quote. Deletes have no quote, and old orders without recorded quotes and rejected
+orders omit it. `tests/test_api_read_completeness.py` verifies exact totals and history.
 
 Orders are the only way to create or terminate products. POST processes the order
 **synchronously, in the request's transaction** (`app/ordering/process.py`,

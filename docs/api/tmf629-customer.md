@@ -12,9 +12,9 @@
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
 | GET | `/tmf-api/customerManagement/v5/customer` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `engagedParty.id`, `name`, `status` | - | 200 `array of Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
-| POST | `/tmf-api/customerManagement/v5/customer` | body: `application/json` | `Customer_FVO` | 201 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
+| POST | `/tmf-api/customerManagement/v5/customer` | query: `fields`; body: `application/json` | `Customer_FVO` | 201 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
 | GET | `/tmf-api/customerManagement/v5/customer/{customer_id}` | path: `customer_id`; query: `fields` | - | 200 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
-| PATCH | `/tmf-api/customerManagement/v5/customer/{customer_id}` | path: `customer_id`; body: `application/merge-patch+json` | `Customer_MVO` | 200 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
+| PATCH | `/tmf-api/customerManagement/v5/customer/{customer_id}` | path: `customer_id`; query: `fields`; body: `application/merge-patch+json` | `Customer_MVO` | 200 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF629-Customer_Management-v5.0.1.oas.yaml`](../../spec/TMF629-Customer_Management-v5.0.1.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 
@@ -26,6 +26,10 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF629-C
 
 
 ## Behaviour and deviations
+
+- `account[]` returns all billing accounts of this customer as `AccountRef` with
+  `@referredType: BillingAccount`, without the default list-page limit. It is derived
+  and read-only (`tests/test_api_read_completeness.py`).
 
 - A customer is the role a party plays towards us: `engagedParty` is a `PartyRef` whose
   `@referredType` is the party's type (`Individual` / `Organization`); mandatory on

@@ -1,5 +1,14 @@
 ## Conventions
 
+**Input correctness slice (2026-10-14).** POST checks a supplied `@type` rather than
+silently rewriting it. Every TMF POST/PATCH accepts `fields` once and rejects other
+query parameters and unknown field names before writing; selected responses retain
+`id`, `href`, `@type` and POST's `Location`. Equality filters reject comma-separated
+values except commas in literal free-text names. Repeated paging/fields parameters
+are errors. `tests/test_api_read_completeness.py` covers these rules and their MCP
+equivalents. For `fields` projections the contract checker waives only omitted
+top-level required attributes; nested required attributes remain checked.
+
 Shared by every TMF API (`app/api/`); the internal API follows the same rules except that
 its dates are plain business dates (`YYYY-MM-DD` in BILLING_TZ). In the last column,
 `::name` is a test in `tests/test_api_conventions.py`.

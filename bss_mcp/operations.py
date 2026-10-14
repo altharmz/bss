@@ -165,6 +165,10 @@ OPERATIONS: dict[str, Op] = {
     "get_product": Op("One product.", query=FIELDS),
     # --- TMF678 customer bill ---
     "list_bills": Op("Customer bills, written by the billing runs.", query=LIST),
+    "list_bill_cycles": Op("Daily billing cycles, one per billing run.", query=LIST),
+    "get_bill_cycle": Op(
+        "One daily billing cycle (not an account's monthly period).", query=FIELDS
+    ),
     "get_bill": Op(
         "One customer bill: amounts, remainingAmount, paymentDueDate, state.", query=FIELDS
     ),

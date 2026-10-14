@@ -13,13 +13,22 @@ One page per API, generated from `app.openapi()` (what the app really serves) an
 | [TMF637 Product Inventory](tmf637-product-inventory.md) | v5 | `/tmf-api/productInventory/v5` | 2 | [`spec/TMF637-ProductInventory-v5.0.0.oas.yaml`](../../spec/TMF637-ProductInventory-v5.0.0.oas.yaml) |
 | [TMF666 Account Management](tmf666-account.md) | v5 | `/tmf-api/accountManagement/v5` | 5 | [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml) |
 | [TMF676 Payment Management](tmf676-payment.md) | v4 | `/tmf-api/paymentManagement/v4` | 3 | [`spec/TMF676-Payment-v4.0.0.swagger.json`](../../spec/TMF676-Payment-v4.0.0.swagger.json) |
-| [TMF678 Customer Bill Management](tmf678-customer-bill.md) | v5 | `/tmf-api/customerBillManagement/v5` | 5 | [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml) |
+| [TMF678 Customer Bill Management](tmf678-customer-bill.md) | v5 | `/tmf-api/customerBillManagement/v5` | 7 | [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml) |
 | [Internal API (admin UI)](internal.md) | v1 | `/internal/v1` | 13 | [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) |
 | [Service endpoints](service.md) | - | - | 3 | - |
 
-58 operations in total.
+60 operations in total.
 
 ## Conventions
+
+**Input correctness slice (2026-10-14).** POST checks a supplied `@type` rather than
+silently rewriting it. Every TMF POST/PATCH accepts `fields` once and rejects other
+query parameters and unknown field names before writing; selected responses retain
+`id`, `href`, `@type` and POST's `Location`. Equality filters reject comma-separated
+values except commas in literal free-text names. Repeated paging/fields parameters
+are errors. `tests/test_api_read_completeness.py` covers these rules and their MCP
+equivalents. For `fields` projections the contract checker waives only omitted
+top-level required attributes; nested required attributes remain checked.
 
 Shared by every TMF API (`app/api/`); the internal API follows the same rules except that
 its dates are plain business dates (`YYYY-MM-DD` in BILLING_TZ). In the last column,

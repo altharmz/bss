@@ -12,9 +12,9 @@
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
 | GET | `/tmf-api/accountManagement/v5/billingAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `name`, `relatedParty.id`, `state` | - | 200 `array of BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
-| POST | `/tmf-api/accountManagement/v5/billingAccount` | body: `application/json` | `BillingAccount_FVO` | 201 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| POST | `/tmf-api/accountManagement/v5/billingAccount` | query: `fields`; body: `application/json` | `BillingAccount_FVO` | 201 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
-| PATCH | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; body: `application/merge-patch+json` | `BillingAccount_MVO` | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| PATCH | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `BillingAccount_MVO` | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/schema/BssBillingAccount.schema.json` | - | - | 200 - JSON Schema of the BssBillingAccount extension (`app/api/account.py`) | [`app/api/account.py`](../../app/api/account.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).

@@ -2,12 +2,13 @@
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
 import psycopg
 
-from app.repository._sql import Row, fetch_all, fetch_one, returning, select_page
+from app.repository._sql import Row, fetch_all, fetch_one, money, returning, select_page
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,10 @@ class NewOrderItem:
     product_offering_id: UUID | None = None
     product_id: UUID | None = None
     state: str = "acknowledged"
+    quoted_price_id: UUID | None = None
+    quoted_price_name: str | None = None
+    quoted_amount: Decimal | None = None
+    quoted_currency: str | None = None
 
 
 def create_order(
@@ -42,8 +47,9 @@ def create_order(
             conn,
             """
             INSERT INTO product_order_item
-                (product_order_id, item_id, action, state, product_offering_id, product_id)
-            VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
+                (product_order_id, item_id, action, state, product_offering_id, product_id,
+                 quoted_price_id, quoted_price_name, quoted_amount, quoted_currency)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
             """,
             (
                 order["id"],
@@ -52,6 +58,10 @@ def create_order(
                 item.state,
                 item.product_offering_id,
                 item.product_id,
+                item.quoted_price_id,
+                item.quoted_price_name,
+                money(item.quoted_amount) if item.quoted_amount is not None else None,
+                item.quoted_currency,
             ),
         )
         for item in items

@@ -52,3 +52,7 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 ## Triggers
 
 - `product_offering_price_set_updated_at`: `CREATE TRIGGER product_offering_price_set_updated_at BEFORE UPDATE ON product_offering_price FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
+
+## Referenced by
+
+[`product_order_item`](product_order_item.md)

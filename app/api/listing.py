@@ -60,6 +60,8 @@ def _int_param(request: Request, name: str, default: int, minimum: int) -> int:
 
 
 def parse_fields(request: Request, attributes: Collection[str]) -> frozenset[str] | None:
+    if len(request.query_params.getlist("fields")) > 1:
+        raise bad_request("fields given more than once")
     raw = request.query_params.get("fields")
     if raw is None:
         return None
@@ -82,6 +84,9 @@ def parse_list_query(
     if limit > MAX_LIMIT:
         raise bad_request(f"limit must be at most {MAX_LIMIT}")
     where: dict[str, Any] = {}
+    for name in ("offset", "limit"):
+        if len(request.query_params.getlist(name)) > 1:
+            raise bad_request(f"{name} given more than once")
     for name, raw in request.query_params.multi_items():
         if name in ("offset", "limit", "fields"):
             continue
@@ -91,6 +96,10 @@ def parse_list_query(
         column, convert = filters[name]
         if column in where:
             raise bad_request(f"{name} given more than once")
+        if "," in raw and (
+            convert is not as_str or name not in ("name", "givenName", "familyName")
+        ):
+            raise bad_request(f"{name}: comma-separated filters are not supported")
         try:
             where[column] = convert(raw)
         except ValueError:

@@ -2,9 +2,9 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 57,
-      "items": 57,
-      "tested": 57
+      "implemented": 59,
+      "items": 59,
+      "tested": 59
     },
     "db": {
       "deployed": null,
@@ -532,6 +532,24 @@
       "stage": 2,
       "tested": true,
       "title": "Get a product"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf678.billCycle.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "List daily billing cycles"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf678.billCycle.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Get a daily billing cycle"
     },
     {
       "area": "api",

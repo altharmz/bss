@@ -211,6 +211,8 @@ async def generate(app: Any) -> dict[str, Tool]:
         if writes != (op.body is not None or op.no_body) or (op.body and op.no_body):
             raise DriftError(f"{o['name']}: a {o['method']} with body {op.body}")
         query, hint = await _query(app, o["path"], op)
+        if writes and o["path"].startswith("/tmf-api/"):
+            query["fields"] = FIELDS_ARG
         parts = [f"{o['summary']} - {_family(o['path'])}.", op.note]
         if o["doc"]:
             parts.append(" ".join(o["doc"].split()))

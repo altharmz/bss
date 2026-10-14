@@ -105,24 +105,29 @@ def get_individual(party_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/individual")
-def create_individual(body: JsonBody, tx: Tx) -> TmfJSONResponse:
+def create_individual(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, INDIVIDUAL_ATTRIBUTES)
+    check_type(body, "Individual")
     data = parse(IndividualCreate, body)
     with tx() as conn:
         row = parties.create_individual(
             conn, given_name=data.given_name, family_name=data.family_name
         )
-    return created(party_body(row))
+    return created(listing.select_fields(party_body(row), fields))
 
 
 @router.patch("/individual/{party_id}")
-def patch_individual(party_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONResponse:
+def patch_individual(
+    party_id: str, body: MergePatchBody, request: Request, tx: Tx
+) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, INDIVIDUAL_ATTRIBUTES)
     check_type(body, "Individual")
     data = parse(IndividualPatch, body)
     not_null(data, "given_name", "family_name")
     with tx() as conn:
         current = _get(conn, "Individual", "individual", party_id)
         row = parties.update_party(conn, current["id"], columns(data))
-    return TmfJSONResponse(party_body(row))
+    return TmfJSONResponse(listing.select_fields(party_body(row), fields))
 
 
 # --- organization ---
@@ -151,15 +156,20 @@ def get_organization(party_id: str, request: Request, tx: Tx) -> TmfJSONResponse
 
 
 @router.post("/organization")
-def create_organization(body: JsonBody, tx: Tx) -> TmfJSONResponse:
+def create_organization(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, ORGANIZATION_ATTRIBUTES)
+    check_type(body, "Organization")
     data = parse(OrganizationCreate, body)
     with tx() as conn:
         row = parties.create_organization(conn, name=data.name)
-    return created(party_body(row))
+    return created(listing.select_fields(party_body(row), fields))
 
 
 @router.patch("/organization/{party_id}")
-def patch_organization(party_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONResponse:
+def patch_organization(
+    party_id: str, body: MergePatchBody, request: Request, tx: Tx
+) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, ORGANIZATION_ATTRIBUTES)
     check_type(body, "Organization")
     data = parse(OrganizationPatch, body)
     not_null(data, "name")
@@ -167,4 +177,4 @@ def patch_organization(party_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONRe
     with tx() as conn:
         current = _get(conn, "Organization", "organization", party_id)
         row = parties.update_party(conn, current["id"], changes)
-    return TmfJSONResponse(party_body(row))
+    return TmfJSONResponse(listing.select_fields(party_body(row), fields))

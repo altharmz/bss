@@ -18,15 +18,18 @@ code by `make progress` into [PROGRESS.md](PROGRESS.md) against
 
 | Stage | What | Status |
 |---|---|---|
-| 1 | Database schema and repository functions | built: 16 tables, migrations `0001`-`0005` ([db/](db/README.md)) |
-| 2 | TMF Open API backend (8 APIs) | built: 54/54 API items in PROGRESS.md |
+| 1 | Database schema and repository functions | built: 18 tables, migrations `0001`-`0008` ([db/](db/README.md)) |
+| 2 | TMF Open API backend (8 APIs) | built: 59/59 scoped API items, including internal/service routes, in PROGRESS.md |
 | 3 | Billing core (pure) and its database adapter | built ([domain.md](domain.md#billing)) |
-| 4 | Billing worker: the daily run, failures, catch-up, retry | built and deployed: worker 10/10 proven ([billing-worker.md](billing-worker.md)); the **Billing runs UI screen is planned** (`ui.billingRuns.*` not implemented, 0/3) |
-| 5 | Admin UI (React) and its internal API | built: 10/13 UI items - all but the Billing runs screen ([ui.md](ui.md)) |
+| 4 | Billing worker: the daily run, failures, catch-up, retry | built: worker 12/12 proven ([billing-worker.md](billing-worker.md)); Billing runs UI built; deployment status unknown |
+| 5 | Admin UI (React) and its internal API | built: 19/19 UI items, including Billing runs and bill settlement ([ui.md](ui.md)) |
 
-"Tested" for db/api/ui and "deployed" for every area are not measured yet (PROGRESS.md
-shows `n/a` / `unknown`): the tracker's steps 3-5 are **planned** (CLAUDE.md, "Next
-session").
+Implementation and test coverage are measured for all four areas in PROGRESS.md.
+Deployment status remains unknown until the deploy script records the deployed commit.
+
+The input/read-completeness slice adds strict TMF write queries and type checks,
+historical order price quotes, product prices/navigation, and daily bill-cycle reads
+with bill links and next bill dates ([decisions/tmf-api.md](decisions/tmf-api.md)).
 
 ## Scope
 

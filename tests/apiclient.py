@@ -41,6 +41,7 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
         {
             "customerBill": "CustomerBill",
             "appliedCustomerBillingRate": "AppliedCustomerBillingRate",
+            "billCycle": "BillCycle",
         },
     ),
 }
@@ -126,7 +127,7 @@ class TmfClient:
             self._validate(api, schema, body, partial)
 
     def _validate(self, api: str, schema: str, body: dict[str, Any], partial: bool) -> None:
-        contract.assert_valid(api, schema, body)
+        contract.assert_valid(api, schema, body, partial=partial)
         if api == "TMF666" and not partial:
             # A TMF extension: the body must name the schema of its additions, the app
             # must serve it, and the body must satisfy it. (A fields= selection leaves

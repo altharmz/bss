@@ -7,7 +7,15 @@ from uuid import UUID
 
 import psycopg
 
-from app.repository._sql import Row, fetch_one, money, returning, select_page, update_by_id
+from app.repository._sql import (
+    Row,
+    fetch_all,
+    fetch_one,
+    money,
+    returning,
+    select_page,
+    update_by_id,
+)
 
 
 def create_individual(
@@ -106,6 +114,15 @@ def list_customers(
 
 def update_customer(conn: psycopg.Connection, customer_id: UUID, changes: dict[str, Any]) -> Row:
     return update_by_id(conn, "customer", customer_id, changes)
+
+
+def accounts_of_customer(conn: psycopg.Connection, customer_id: UUID) -> list[Row]:
+    """All of a customer's accounts, without list pagination truncating navigation."""
+    return fetch_all(
+        conn,
+        "SELECT * FROM billing_account WHERE customer_id = %s ORDER BY created_at, id",
+        (customer_id,),
+    )
 
 
 def list_billing_accounts(

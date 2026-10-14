@@ -3,6 +3,13 @@
 Analysis only - nothing in the code was changed. Written 2026-10-12 against `master` at
 `94200ee`.
 
+**Implementation follow-up (2026-10-14).** The input/read-completeness slice addresses
+C1's POST `@type` validation, C2's unsupported comma filters, C6's write queries, and
+B1/B2/B3's prices, navigation and bill-cycle reads. The tables below remain the dated
+analysis of `94200ee`; current behavior and the limits on historical quotes are in
+[decisions/tmf-api.md](decisions/tmf-api.md#input-correctness-and-read-completeness-2026-10-14).
+The accepted `@baseType`/`@schemaLocation` metadata is still not persisted.
+
 **Sources.** The vendored specs in `spec/` (versions and upstream commits in
 [spec/README.md](../spec/README.md)), the code in `app/` and `bss_mcp/`, the tests, and the
 decisions in [CLAUDE.md](../CLAUDE.md) and [decisions/](decisions/README.md). The "not

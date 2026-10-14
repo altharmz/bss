@@ -10,6 +10,7 @@ settled, and PATCH lets the operator put it on hold or release it - nothing else
 remainingAmount and appliedPayment come from the allocations.
 """
 
+from datetime import datetime, timedelta
 from typing import Any, Literal
 
 import psycopg
@@ -27,6 +28,7 @@ from app.api.common import (
     parse,
     parse_id,
     ref,
+    to_billing_date,
     utc,
     without_nulls,
 )
@@ -37,7 +39,7 @@ from app.api.tmfjson import TmfJSONResponse
 from app.billing import settlement
 from app.billing.adapter import settle_account
 from app.repository import billing, catalog, parties, products
-from app.repository._sql import IS_NULL, NOT_NULL, Row
+from app.repository._sql import IS_NULL, NOT_NULL, Row, select_page
 
 BASE = "/tmf-api/customerBillManagement/v5"
 router = APIRouter(prefix=BASE)
@@ -60,6 +62,10 @@ BILL_ATTRIBUTES = (
     "state",
     "billingAccount",
     "lastUpdate",
+    "billCycle",
+    "nextBillDate",
+    "taxExcludedAmount",
+    "taxIncludedAmount",
 )
 # Every other attribute of the spec's CustomerBill: present, but not changed by a PATCH.
 BILL_READ_ONLY = (
@@ -124,6 +130,11 @@ def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "billingPeriod": date_period(row["bill_period"]),
         "paymentDueDate": from_billing_date(row["payment_due_date"]),
         "amountDue": money(row["amount_due"], currency),
+        "taxExcludedAmount": money(row["amount_due"], currency),
+        "taxIncludedAmount": money(row["amount_due"], currency),
+        "billCycle": ref("BillCycle", cycle_href(row["billing_run_id"]), row["billing_run_id"]),
+        # the bill's own period ends on the next cycle day, whatever the account says today
+        "nextBillDate": from_billing_date(row["bill_period"].upper),
         "remainingAmount": money(billing.remaining_amount(row, allocated), currency),
         "appliedPayment": [
             {
@@ -205,6 +216,7 @@ def patch_bill(
     onHold only the state its allocations imply (sent if nothing was paid, else
     partiallyPaid). Repeating the current state is a 200 no-op; anything else is a 409
     with the reason. A release settles the account: credit may have waited for the bill."""
+    fields = listing.retrieve_fields(request, BILL_ATTRIBUTES)
     check_type(body, "CustomerBill")
     data = parse(BillPatch, body, read_only=BILL_READ_ONLY)
     with tx() as conn:
@@ -239,7 +251,64 @@ def patch_bill(
             if change.from_state == "onHold":
                 settle_account(conn, account, now=now, cause="payment")
         patched = bill_body(conn, billing.get_bill(conn, uid))
-    return TmfJSONResponse(patched)
+    return TmfJSONResponse(listing.select_fields(patched, fields))
+
+
+CYCLE_ATTRIBUTES = ("name", "billingDate", "billingPeriod", "description", "validFor")
+
+
+def cycle_href(cycle_id: Any) -> str:
+    return f"{BASE}/billCycle/{cycle_id}"
+
+
+def cycle_body(row: Row) -> dict[str, Any]:
+    day = row["run_date"]
+    return {
+        "id": str(row["id"]),
+        "href": cycle_href(row["id"]),
+        "@type": "BillCycle",
+        "name": f"Daily billing {day}",
+        "billingDate": from_billing_date(day),
+        "billingPeriod": day.isoformat(),
+        "description": (
+            "Daily billing run; account billing periods are carried by individual bills."
+        ),
+        "validFor": {
+            "startDateTime": from_billing_date(day),
+            "endDateTime": from_billing_date(day + timedelta(days=1)),
+        },
+    }
+
+
+def _billing_date(raw: str):
+    value = datetime.fromisoformat(raw)
+    if value.tzinfo is None:
+        raise ValueError("billingDate needs an offset")
+    return to_billing_date(value)
+
+
+@router.get("/billCycle")
+def list_bill_cycles(request: Request, tx: Tx) -> TmfJSONResponse:
+    query = listing.parse_list_query(
+        request,
+        filters={"billingDate": ("run_date", _billing_date)},
+        attributes=CYCLE_ATTRIBUTES,
+    )
+    with tx() as conn:
+        rows, total = select_page(
+            conn, "billing_run", where=query.where, offset=query.offset, limit=query.limit
+        )
+    return listing.list_response([cycle_body(row) for row in rows], total, query)
+
+
+@router.get("/billCycle/{cycle_id}")
+def get_bill_cycle(cycle_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, CYCLE_ATTRIBUTES)
+    with tx() as conn:
+        row = billing.get_run_by_id(conn, parse_id("billCycle", cycle_id))
+        if row is None:
+            raise not_found("billCycle", cycle_id)
+    return TmfJSONResponse(listing.select_fields(cycle_body(row), fields))
 
 
 @router.get("/appliedCustomerBillingRate")

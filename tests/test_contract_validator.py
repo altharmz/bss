@@ -78,6 +78,19 @@ def test_wrong_type_in_an_inherited_property_is_rejected():
     assert any(e.startswith("href:") for e in _errors({**VALUE, "href": 5}))
 
 
+def test_fields_projection_waives_only_omitted_top_level_required_fields():
+    body = {"@type": "Payment", "id": "42"}
+    assert contract.errors("TMF676", "Payment", body)
+    assert contract.errors("TMF676", "Payment", body, partial=True) == []
+    broken = {"@type": "Product", "productPrice": [{"@type": "ProductPrice", "price": {}}]}
+    assert any(
+        "productPrice/0/price" in e and "@type" in e
+        for e in contract.errors("TMF637", "Product", broken, partial=True)
+    )
+    broken["productPrice"][0]["price"] = {"@type": "Price", "dutyFreeAmount": {"value": "bad"}}
+    assert contract.errors("TMF637", "Product", broken, partial=True)
+
+
 @pytest.mark.parametrize("api", sorted(contract.SPEC_FILES))
 def test_error_schema_requires_code_and_reason(api):
     body = {"@type": "Error", "code": "404", "reason": "Not Found"}

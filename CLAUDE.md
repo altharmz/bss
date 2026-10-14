@@ -185,6 +185,15 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
+**TMF input/read completeness** (2026-10-14): one local slice implements POST type
+checks, strict write queries/fields, explicit errors for unsupported comma filters,
+product/order monthly price views, customer/account and product navigation, and
+read-only bill cycles with bill links, next dates and tax-free totals. Migration
+`0008` snapshots prices for new completed add items; old orders keep unknown quotes.
+Decisions: [tmf-api.md](docs/decisions/tmf-api.md#input-correctness-and-read-completeness-2026-10-14).
+New tests: `tests/test_api_read_completeness.py`; progress scope is now 59 API items.
+Not committed or deployed; commit and deployment still require separate approval.
+
 **MCP connector** (task of 2026-10-11, [docs/mcp.md](docs/mcp.md)): five slices, each
 committed after the human's OK and then pushed; nothing deployed without a separate
 approval. Done, local only: slice 1 (server, static tokens, scopes, limits, audit;

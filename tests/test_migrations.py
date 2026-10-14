@@ -337,3 +337,44 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
     assert tables == 19  # 18 domain tables + alembic_version
+
+
+def test_0008_preserves_legacy_orders_without_inventing_quotes(temp_db_url):
+    from tests import factories
+
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0007")
+    with psycopg.connect(temp_db_url) as conn:
+        account = factories.account(conn)
+        offering = factories.offering(conn)
+        order_id = conn.execute(
+            "INSERT INTO product_order (billing_account_id, state, order_date)"
+            " VALUES (%s, 'completed', %s) RETURNING id",
+            (account["id"], factories.NOW),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO product_order_item (product_order_id, item_id, action, state,"
+            " product_offering_id) VALUES (%s, '1', 'add', 'completed', %s)",
+            (order_id, offering["id"]),
+        )
+    command.upgrade(cfg, "0008")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT quoted_price_id, quoted_price_name, quoted_amount, quoted_currency"
+            " FROM product_order_item"
+        ).fetchone() == (None, None, None, None)
+        comments = conn.execute(
+            "SELECT col_description(attrelid, attnum) FROM pg_attribute"
+            " WHERE attrelid = 'product_order_item'::regclass AND attname LIKE 'quoted_%'"
+        ).fetchall()
+        assert len(comments) == 4 and all(row[0] for row in comments)
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE product_order_item SET quoted_amount = 1")
+    command.downgrade(cfg, "0007")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT count(*) FROM product_order_item").fetchone() == (1,)
+        assert conn.execute(
+            "SELECT count(*) FROM pg_attribute WHERE attrelid = 'product_order_item'::regclass"
+            " AND attname LIKE 'quoted_%' AND NOT attisdropped"
+        ).fetchone() == (0,)
+    command.upgrade(cfg, "0008")

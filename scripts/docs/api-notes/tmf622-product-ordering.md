@@ -1,5 +1,11 @@
 ## Behaviour and deviations
 
+Completed add items expose `itemPrice` and `itemTotalPrice` as snapshots of their
+quoted full monthly fee (`0008`); `orderTotalPrice` sums those add fees. These are not
+the prorated first charge or a lifetime total. Catalog changes do not rewrite a
+quote. Deletes have no quote, and old orders without recorded quotes and rejected
+orders omit it. `tests/test_api_read_completeness.py` verifies exact totals and history.
+
 Orders are the only way to create or terminate products. POST processes the order
 **synchronously, in the request's transaction** (`app/ordering/process.py`,
 `place_order`). There is no PATCH, DELETE or cancelProductOrder (405 / 404:

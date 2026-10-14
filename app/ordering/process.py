@@ -93,7 +93,8 @@ def place_order(
     start = request.requested_start or today
     # Validate before anything is inserted: a rejected delete item must never be stored in
     # an open state, or it would collide with the open delete it is rejected for.
-    problems = _validate(conn, request, account, start, today, locked)
+    quotes: dict[str, Row] = {}
+    problems = _validate(conn, request, account, start, today, locked, quotes)
     failing = {problem.item_id for problem in problems}
 
     def initial(item: ItemRequest) -> str:
@@ -116,6 +117,18 @@ def place_order(
                 product_offering_id=item.product_offering_id,
                 product_id=item.product_id,
                 state=initial(item),
+                quoted_price_id=quotes[item.item_id]["id"]
+                if not problems and item.item_id in quotes
+                else None,
+                quoted_price_name=quotes[item.item_id]["name"]
+                if not problems and item.item_id in quotes
+                else None,
+                quoted_amount=quotes[item.item_id]["amount"]
+                if not problems and item.item_id in quotes
+                else None,
+                quoted_currency=quotes[item.item_id]["currency"]
+                if not problems and item.item_id in quotes
+                else None,
             )
             for item in request.items
         ],
@@ -135,6 +148,7 @@ def _validate(
     start: date,
     today: date,
     locked: dict[UUID, Row],
+    quotes: dict[str, Row],
 ) -> list[Problem]:
     problems: list[Problem] = []
     if account["state"] != "Active":
@@ -146,7 +160,7 @@ def _validate(
     for item in request.items:
         problems += [
             Problem(item.item_id, code, reason)
-            for code, reason in _item_problems(conn, item, account, start, today, locked)
+            for code, reason in _item_problems(conn, item, account, start, today, locked, quotes)
         ]
     return problems
 
@@ -158,18 +172,23 @@ def _item_problems(
     start: date,
     today: date,
     locked: dict[UUID, Row],
+    quotes: dict[str, Row],
 ) -> list[tuple[str, str]]:
     if item.billing_account_id not in (None, account["id"]):
         return [("billingAccountMismatch", "the item's billingAccount differs from the order's")]
     if item.action in ("modify", "noChange"):
         return [("actionNotSupported", f"action {item.action} is not supported")]
     if item.action == "add":
-        return _add_problems(conn, item, account, start)
+        return _add_problems(conn, item, account, start, quotes)
     return _delete_problems(conn, item, account, start, today, locked)
 
 
 def _add_problems(
-    conn: psycopg.Connection, item: ItemRequest, account: Row, start: date
+    conn: psycopg.Connection,
+    item: ItemRequest,
+    account: Row,
+    start: date,
+    quotes: dict[str, Row],
 ) -> list[tuple[str, str]]:
     offering = catalog.get_product_offering(conn, item.product_offering_id)
     assert offering is not None  # checked before the order was stored
@@ -190,7 +209,9 @@ def _add_problems(
         problems.append(
             ("noRecurringPrice", f"no recurring price in {account['currency']} on {start}")
         )
-    elif (gap := _price_gap(conn, price)) is not None:
+    else:
+        quotes[item.item_id] = price
+    if price is not None and (gap := _price_gap(conn, price)) is not None:
         local = gap.astimezone(ZoneInfo(settings.billing_tz))
         problems.append(
             (

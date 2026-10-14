@@ -33,7 +33,7 @@ BASE = "/tmf-api/customerManagement/v5"
 router = APIRouter(prefix=BASE)
 
 CustomerStatus = Literal["Created", "Active", "Inactive"]
-ATTRIBUTES = ("name", "status", "engagedParty")
+ATTRIBUTES = ("name", "status", "engagedParty", "account")
 
 
 class CustomerCreate(TmfModel):
@@ -66,6 +66,16 @@ def customer_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             party_name(party),
             ref_type="PartyRef",
         ),
+        "account": [
+            ref(
+                "BillingAccount",
+                f"/tmf-api/accountManagement/v5/billingAccount/{a['id']}",
+                a["id"],
+                a["name"],
+                ref_type="AccountRef",
+            )
+            for a in parties.accounts_of_customer(conn, row["id"])
+        ],
         "@type": "Customer",
     }
 
@@ -101,7 +111,9 @@ def get_customer(customer_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/customer")
-def create_customer(body: JsonBody, tx: Tx) -> TmfJSONResponse:
+def create_customer(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, ATTRIBUTES)
+    check_type(body, "Customer")
     data = parse(CustomerCreate, body)
     with tx() as conn:
         party = parties.get_party(conn, data.engaged_party.id)
@@ -112,11 +124,14 @@ def create_customer(body: JsonBody, tx: Tx) -> TmfJSONResponse:
             conn, party_id=data.engaged_party.id, name=data.name, status=data.status
         )
         new = customer_body(conn, row)
-    return created(new)
+    return created(listing.select_fields(new, fields))
 
 
 @router.patch("/customer/{customer_id}")
-def patch_customer(customer_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONResponse:
+def patch_customer(
+    customer_id: str, body: MergePatchBody, request: Request, tx: Tx
+) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Customer")
     data = parse(CustomerPatch, body, read_only=("engagedParty",))
     not_null(data, "name", "status")
@@ -126,4 +141,4 @@ def patch_customer(customer_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONRes
             raise not_found("customer", customer_id)
         row = parties.update_customer(conn, uid, columns(data))
         patched = customer_body(conn, row)
-    return TmfJSONResponse(patched)
+    return TmfJSONResponse(listing.select_fields(patched, fields))

@@ -114,7 +114,7 @@ separates user and password), so **an operator with `:` always comes from MCP**
 ## Tools
 
 **One tool per API operation**: every operation of `app.openapi()` except those
-`docs/progress/scope.yaml` excludes (today only `GET /`, the template's status root) - 57
+`docs/progress/scope.yaml` excludes (today only `GET /`, the template's status root) - 59
 tools, 37 of them read-only (the TMF APIs, the internal API, `/healthz`,
 `/billing-status`). The tool's name is the operationId, which is the handler's function
 name (`create_payment`, `list_bills`, `catch_up`, ...). GET tools are annotated

@@ -12,17 +12,17 @@
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
 | GET | `/tmf-api/productCatalogManagement/v5/productOffering` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `externalIdentifier.id`, `isSellable`, `lifecycleStatus`, `name`, `productSpecification.id` | - | 200 `array of ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
-| POST | `/tmf-api/productCatalogManagement/v5/productOffering` | body: `application/json` | `ProductOffering_FVO` | 201 `ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| POST | `/tmf-api/productCatalogManagement/v5/productOffering` | query: `fields`; body: `application/json` | `ProductOffering_FVO` | 201 `ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productOffering/{offering_id}` | path: `offering_id`; query: `fields` | - | 200 `ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
-| PATCH | `/tmf-api/productCatalogManagement/v5/productOffering/{offering_id}` | path: `offering_id`; body: `application/merge-patch+json` | `ProductOffering_MVO` | 200 `ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| PATCH | `/tmf-api/productCatalogManagement/v5/productOffering/{offering_id}` | path: `offering_id`; query: `fields`; body: `application/merge-patch+json` | `ProductOffering_MVO` | 200 `ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productOfferingPrice` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `lifecycleStatus`, `name`, `priceType` | - | 200 `array of ProductOfferingPrice` | [`app/api/catalog.py`](../../app/api/catalog.py) |
-| POST | `/tmf-api/productCatalogManagement/v5/productOfferingPrice` | body: `application/json` | `ProductOfferingPrice_FVO` | 201 `ProductOfferingPrice` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| POST | `/tmf-api/productCatalogManagement/v5/productOfferingPrice` | query: `fields`; body: `application/json` | `ProductOfferingPrice_FVO` | 201 `ProductOfferingPrice` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productOfferingPrice/{price_id}` | path: `price_id`; query: `fields` | - | 200 `ProductOfferingPrice` | [`app/api/catalog.py`](../../app/api/catalog.py) |
-| PATCH | `/tmf-api/productCatalogManagement/v5/productOfferingPrice/{price_id}` | path: `price_id`; body: `application/merge-patch+json` | `ProductOfferingPrice_MVO` | 200 `ProductOfferingPrice` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| PATCH | `/tmf-api/productCatalogManagement/v5/productOfferingPrice/{price_id}` | path: `price_id`; query: `fields`; body: `application/merge-patch+json` | `ProductOfferingPrice_MVO` | 200 `ProductOfferingPrice` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productSpecification` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `lifecycleStatus`, `name` | - | 200 `array of ProductSpecification` | [`app/api/catalog.py`](../../app/api/catalog.py) |
-| POST | `/tmf-api/productCatalogManagement/v5/productSpecification` | body: `application/json` | `ProductSpecification_FVO` | 201 `ProductSpecification` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| POST | `/tmf-api/productCatalogManagement/v5/productSpecification` | query: `fields`; body: `application/json` | `ProductSpecification_FVO` | 201 `ProductSpecification` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productSpecification/{spec_id}` | path: `spec_id`; query: `fields` | - | 200 `ProductSpecification` | [`app/api/catalog.py`](../../app/api/catalog.py) |
-| PATCH | `/tmf-api/productCatalogManagement/v5/productSpecification/{spec_id}` | path: `spec_id`; body: `application/merge-patch+json` | `ProductSpecification_MVO` | 200 `ProductSpecification` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| PATCH | `/tmf-api/productCatalogManagement/v5/productSpecification/{spec_id}` | path: `spec_id`; query: `fields`; body: `application/merge-patch+json` | `ProductSpecification_MVO` | 200 `ProductSpecification` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml`](../../spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 

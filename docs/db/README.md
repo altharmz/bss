@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0007**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0008**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -91,6 +91,7 @@ flowchart LR
   product_order_item -->|"product_id"| product
   product_order_item -->|"product_offering_id"| product_offering
   product_order_item -->|"product_order_id"| product_order
+  product_order_item -->|"quoted_price_id"| product_offering_price
   worker_request -->|"run_id"| billing_run
 ```
 
@@ -197,6 +198,10 @@ erDiagram
     product_order_item_state_type state
     uuid product_offering_id FK
     uuid product_id FK
+    uuid quoted_price_id FK
+    text quoted_price_name
+    numeric quoted_amount
+    text quoted_currency
   }
   product_order_error_message {
     uuid id PK
@@ -218,15 +223,19 @@ erDiagram
   product_offering {
     uuid id PK
   }
+  product_offering_price {
+    uuid id PK
+  }
   billing_account ||--o{ product_order : "billing_account_id"
   product |o--o{ product_order_item : "product_id"
   product_offering |o--o{ product_order_item : "product_offering_id"
+  product_offering_price |o--o{ product_order_item : "quoted_price_id"
   product_order ||--o{ product_order_error_message : "product_order_id"
   product_order ||--o{ product_order_item : "product_order_id"
   product_order_item |o--o{ product_order_error_message : "product_order_item_id"
 ```
 
-Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product`](product.md), [`product_offering`](product_offering.md).
+Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product`](product.md), [`product_offering`](product_offering.md), [`product_offering_price`](product_offering_price.md).
 
 ## Inventory (TMF637)
 

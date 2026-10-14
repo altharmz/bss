@@ -26,6 +26,7 @@ from app.api.common import (
     CustomerBillRef,
     Money,
     TmfModel,
+    check_type,
     created,
     money,
     parse,
@@ -202,7 +203,9 @@ def get_payment(payment_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/payment")
-def create_payment(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+def create_payment(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, ATTRIBUTES)
+    check_type(body, "Payment")
     data = parse(PaymentCreate, body, read_only=("status", "statusDate", "paymentDate"))
     with tx() as conn:
         account = parties.get_billing_account(conn, data.account.id)
@@ -232,4 +235,4 @@ def create_payment(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
             raise conflict("the payment's currency does not match the account's") from None
         _settle(conn, account["id"], row, data, now)
         new = payment_body(conn, row)
-    return created(new)
+    return created(listing.select_fields(new, fields))

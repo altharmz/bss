@@ -92,16 +92,18 @@ def validator(api: str, schema: str) -> Draft4Validator:
     return TmfValidator({"$ref": f"{uri}{_schemas_pointer(api)}/{schema}"}, registry=registry)
 
 
-def errors(api: str, schema: str, instance: Any) -> list[str]:
+def errors(api: str, schema: str, instance: Any, *, partial: bool = False) -> list[str]:
     """Human-readable validation errors; empty when the instance conforms."""
     found = validator(api, schema).iter_errors(instance)
     return sorted(
-        f"{'/'.join(str(p) for p in e.absolute_path) or '<root>'}: {e.message}" for e in found
+        f"{'/'.join(str(p) for p in e.absolute_path) or '<root>'}: {e.message}"
+        for e in found
+        if not (partial and e.validator == "required" and not e.absolute_path)
     )
 
 
-def assert_valid(api: str, schema: str, instance: Any) -> None:
-    problems = errors(api, schema, instance)
+def assert_valid(api: str, schema: str, instance: Any, *, partial: bool = False) -> None:
+    problems = errors(api, schema, instance, partial=partial)
     assert not problems, f"body does not conform to {api} {schema}:\n  " + "\n  ".join(problems)
 
 

@@ -7,6 +7,79 @@ mapping is in [catalog.md](catalog.md).
 
 ## TMF API conventions (stage 2)
 
+### Input correctness and read completeness (2026-10-14)
+
+One slice covers gap-analysis C1 (`@type`), C2 (comma filters), C6 (write queries),
+B1 (prices), B2 (navigation) and B3 (bill cycles). The rules below extend the original
+stage-2 mappings; they do not add taxes, payment processing or order modifications.
+
+- Every TMF POST checks the supplied root `@type`, as PATCH already did. Missing
+  `@type` remains accepted for existing clients. A foreign or null value is a 400
+  before any write. Billing-account creation accepts `BillingAccount` and
+  `BssBillingAccount`; order items, when typed, must be `ProductOrderItem`.
+- TMF POST and PATCH accept only `fields`, exactly once. It selects the response's
+  top-level attributes, retaining `id`, `href`, `@type` and POST's `Location`.
+  Unknown query parameters or fields are a 400 before the transaction opens.
+  This does not change which request attributes are writable. MCP write tools expose
+  the same optional `fields` argument.
+- Equality filters on statuses/types, UUIDs, booleans and dates reject comma-separated
+  values with 400; there is no OR filter syntax. Commas in free-text names remain
+  literal. Repeated paging and fields parameters are errors rather than last-value-wins.
+- `Customer.account[]` returns all of the customer's billing-account references,
+  including accounts beyond the default page size. References use `AccountRef` with
+  `@referredType: BillingAccount`. Product reads expose `productSpecification`, the
+  owning Customer as `relatedParty` (`role: customer`, `PartyRoleRef`), and `orderDate`
+  equal to the creating order's injected-clock `creationDate`.
+- `Product.productPrice[]` is the full monthly recurring fee applicable to the
+  current billing period: price selection is at max(product start, period start),
+  matching the billing core. A mid-period price change takes effect at the next
+  period. Future products use their start date; ended products use their last
+  billable period; cancelled/aborted products have an empty price list. Missing prices
+  yield an empty list, not an invented amount. `ProductPrice` contains the catalog
+  reference and a `Price` with equal duty-free and tax-included Money and zero tax.
+- Migration `0008` adds four nullable quote columns to `product_order_item` (no new
+  table). Each successful add snapshots the selected price's id, name, amount and
+  currency in the order transaction. `itemPrice` and `itemTotalPrice` expose this
+  snapshot as `OrderPrice` (quantity is one); `orderTotalPrice` sums new add items'
+  monthly fees. These are full monthly fees, not prorated first charges or lifetime
+  totals. Deletes carry no quote; rejected orders and old add orders whose quotes
+  were never recorded omit it. An aggregate is omitted if any add lacks a quote.
+  Existing orders are left unchanged rather than reconstructed from today's catalog.
+  Downgrading `0008` drops the new quote columns and loses that new history.
+- Read-only `GET /billCycle` and `/billCycle/{cycle_id}` project the daily billing
+  runs. A cycle's id is its run id, `billingDate` is run-date midnight in BILLING_TZ,
+  `billingPeriod` is its ISO business date string, and `validFor` spans that day.
+  The list has standard paging/fields and an offset-aware `billingDate` equality
+  filter (normalized to BILLING_TZ). A daily run is not an account's monthly period;
+  that stays in the bill's `billingPeriod`. Run failures remain visible through the
+  internal billing-run API, not invented TMF attributes.
+- Every bill has a resolvable `BillCycleRef` to its issuing run, `nextBillDate` equal
+  to the end of its own stored `bill_period` (the next cycle day; not recomputed from
+  the account's current `billCycleDay`), and tax-excluded/included
+  amounts equal to its issued `amountDue`. These historical dates/totals do not move
+  with the clock or settlement; negative credit notes retain their negative amounts.
+  They are read-only. No bill is created by a new endpoint.
+
+Validation: `tests/test_api_read_completeness.py`, the real-database `0008` migration
+round trip in `tests/test_migrations.py`, and the generated-tool drift checks in
+`tests/test_mcp_tools.py`. Fields-projected responses still validate every returned
+attribute and nested required field; only omitted top-level required fields are
+waived by the contract test client.
+
+Local validation (2026-10-14): three full backend runs passed (866, then 869 in the CI
+profile, then 869 in the dev profile); the progress collector also passed all 869.
+Frontend lint and all 226 component tests passed in both configured time zones;
+both Playwright smoke tests passed with the local database migrated to `0008`.
+Six deliberate regressions in type checks, comma filters, quote amounts, product
+period pricing, navigation completeness and next bill dates caused the expected
+test failures and were restored. The final progress report has db 18/18, API 59/59,
+UI 19/19 and worker 12/12 implemented and tested. The new endpoints use API stage 2;
+an initial unsupported stage label was corrected in the scope and collected metadata
+before rendering the report. Generated API/database documentation is deterministic
+across two regenerations. `make check` stopped at `docs-check` because that guard
+compares generated pages with Git's index, where this uncommitted slice is absent;
+the later checks were run independently. No commit or deployment was made.
+
 Built once in `app/api/` and shared by every API. All eight APIs of stage 2 are
 implemented; order processing lives in `app/ordering/`.
 

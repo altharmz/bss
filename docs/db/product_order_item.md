@@ -19,6 +19,10 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 | `state` | `product_order_item_state_type` (enum, see [README](README.md#enums)) | no |  | TMF622 item state: completed, rejected or cancelled once processed. |
 | `product_offering_id` | `uuid` | yes |  | TMF622 productOffering; required for add items. |
 | `product_id` | `uuid` | yes |  | TMF622 product: the product created (add) or the one deleted (delete). |
+| `quoted_price_id` | `uuid` | yes |  | Monthly catalog price selected at the order's requested start; NULL for legacy or rejected orders. |
+| `quoted_price_name` | `text` | yes |  | Price name at ordering time; immutable quote, not today's catalog name. |
+| `quoted_amount` | `numeric(12,2)` | yes |  | Quoted full monthly fee (not the prorated first charge), exact cents. |
+| `quoted_currency` | `text` | yes |  | ISO currency of the monthly quote, the order account's currency. |
 
 ## Foreign keys
 
@@ -27,6 +31,7 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 | `product_id` | [`product`](product.md) (id) | `product_order_item_product_id_fkey` |
 | `product_offering_id` | [`product_offering`](product_offering.md) (id) | `product_order_item_product_offering_id_fkey` |
 | `product_order_id` | [`product_order`](product_order.md) (id) | `product_order_item_product_order_id_fkey` |
+| `quoted_price_id` | [`product_offering_price`](product_offering_price.md) (id) | `product_order_item_quoted_price_id_fkey` |
 
 ## Constraints
 
@@ -34,6 +39,7 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 |---|---|---|
 | `product_order_item_add_has_offering` | check | `CHECK (((action <> 'add'::item_action_type) OR (product_offering_id IS NOT NULL)))` |
 | `product_order_item_delete_has_product` | check | `CHECK (((action <> 'delete'::item_action_type) OR (product_id IS NOT NULL)))` |
+| `product_order_item_quote` | check | `CHECK ((((quoted_price_id IS NULL) AND (quoted_price_name IS NULL) AND (quoted_amount IS NULL) AND (quoted_currency IS NULL)) OR ((action = 'add'::item_action_type) AND (quoted_price_id IS NOT NULL) AND (quoted_price_name IS NOT NULL) AND (quoted_amount IS NOT NULL) AND (quoted_amount >= (0)::numeric) AND (quoted_currency IS NOT NULL) AND (quoted_currency ~ '^[A-Z]{3}$'::text))))` |
 | `product_order_item_pkey` | primary key | `PRIMARY KEY (id)` |
 | `product_order_item_product_order_id_item_id_key` | unique | `UNIQUE (product_order_id, item_id)` |
 

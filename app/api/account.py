@@ -224,7 +224,9 @@ def get_account(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/billingAccount")
-def create_account(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, ATTRIBUTES)
+    check_type(body, EXTENSION_TYPE, "BillingAccount")
     data = parse(AccountCreate, body, read_only=("accountBalance",))
     (party,) = data.related_party
     if party.role != CUSTOMER_ROLE:
@@ -247,11 +249,14 @@ def create_account(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
             opened_at=clock.now(),
         )
         new = account_body(conn, row)
-    return created(new)
+    return created(listing.select_fields(new, fields))
 
 
 @router.patch("/billingAccount/{account_id}")
-def patch_account(account_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONResponse:
+def patch_account(
+    account_id: str, body: MergePatchBody, request: Request, tx: Tx
+) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, EXTENSION_TYPE, "BillingAccount")
     if "billCycleDay" in body:
         # Open question for stage 3: how a cycle change treats the current period.
@@ -275,4 +280,4 @@ def patch_account(account_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONRespo
             changes["credit_limit"] = _credit_limit(data.credit_limit, current["currency"])
         row = parties.update_billing_account(conn, uid, changes)
         patched = account_body(conn, row)
-    return TmfJSONResponse(patched)
+    return TmfJSONResponse(listing.select_fields(patched, fields))

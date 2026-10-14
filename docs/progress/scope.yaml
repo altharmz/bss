@@ -87,6 +87,8 @@ items:
   - {id: api.tmf637.product.get, area: api, stage: 2, method: GET, path: "/tmf-api/productInventory/v5/product/{product_id}", title: "Get a product"}
 
   # ---------------- api: TMF678 bills and charges ----------------
+  - {id: api.tmf678.billCycle.list, area: api, stage: 2, method: GET, path: /tmf-api/customerBillManagement/v5/billCycle, title: "List daily billing cycles"}
+  - {id: api.tmf678.billCycle.get, area: api, stage: 2, method: GET, path: "/tmf-api/customerBillManagement/v5/billCycle/{cycle_id}", title: "Get a daily billing cycle"}
   - {id: api.tmf678.customerBill.list, area: api, stage: 2, method: GET, path: /tmf-api/customerBillManagement/v5/customerBill, title: "List customer bills"}
   - {id: api.tmf678.customerBill.get, area: api, stage: 2, method: GET, path: "/tmf-api/customerBillManagement/v5/customerBill/{bill_id}", title: "Get a customer bill"}
   - {id: api.tmf678.customerBill.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/customerBillManagement/v5/customerBill/{bill_id}", title: "Hold or release a customer bill"}

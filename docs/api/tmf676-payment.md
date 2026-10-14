@@ -12,7 +12,7 @@
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
 | GET | `/tmf-api/paymentManagement/v4/payment` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `account.id`, `status` | - | 200 `array of Payment` | [`app/api/payment.py`](../../app/api/payment.py) |
-| POST | `/tmf-api/paymentManagement/v4/payment` | body: `application/json` | `Payment_Create` | 201 `Payment` | [`app/api/payment.py`](../../app/api/payment.py) |
+| POST | `/tmf-api/paymentManagement/v4/payment` | query: `fields`; body: `application/json` | `Payment_Create` | 201 `Payment` | [`app/api/payment.py`](../../app/api/payment.py) |
 | GET | `/tmf-api/paymentManagement/v4/payment/{payment_id}` | path: `payment_id`; query: `fields` | - | 200 `Payment` | [`app/api/payment.py`](../../app/api/payment.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF676-Payment-v4.0.0.swagger.json`](../../spec/TMF676-Payment-v4.0.0.swagger.json). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).

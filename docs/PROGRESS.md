@@ -12,7 +12,7 @@ records the deployed commit.
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
 | Database | 18 | 18/18 (100%) | 18/18 (100%) | unknown |
-| API | 57 | 57/57 (100%) | 57/57 (100%) | unknown |
+| API | 59 | 59/59 (100%) | 59/59 (100%) | unknown |
 | UI | 19 | 19/19 (100%) | 19/19 (100%) | unknown |
 | Worker | 12 | 12/12 (100%) | 12/12 (100%) | unknown |
 
@@ -80,6 +80,8 @@ records the deployed commit.
 | `api.tmf622.productOrder.create` | 2 | Place a product order (add / delete items) | yes | yes | unknown |
 | `api.tmf637.product.list` | 2 | List products | yes | yes | unknown |
 | `api.tmf637.product.get` | 2 | Get a product | yes | yes | unknown |
+| `api.tmf678.billCycle.list` | 2 | List daily billing cycles | yes | yes | unknown |
+| `api.tmf678.billCycle.get` | 2 | Get a daily billing cycle | yes | yes | unknown |
 | `api.tmf678.customerBill.list` | 2 | List customer bills | yes | yes | unknown |
 | `api.tmf678.customerBill.get` | 2 | Get a customer bill | yes | yes | unknown |
 | `api.tmf678.customerBill.patch` | 5 | Hold or release a customer bill | yes | yes | unknown |

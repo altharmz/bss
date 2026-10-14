@@ -217,6 +217,7 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_payment": {"payment_id": world["payment"]["id"]},
         "get_product": {"product_id": world["product"]["id"]},
         "get_bill": {"bill_id": world["bill"]["id"]},
+        "get_bill_cycle": {"cycle_id": str(world["run"]["id"])},
         "get_rate": {"rate_id": world["rate"]["id"]},
         "get_order": {"order_id": world["order"]["id"]},
         "first_charge": {

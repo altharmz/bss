@@ -1,5 +1,9 @@
 ## Behaviour and deviations
 
+- `account[]` returns all billing accounts of this customer as `AccountRef` with
+  `@referredType: BillingAccount`, without the default list-page limit. It is derived
+  and read-only (`tests/test_api_read_completeness.py`).
+
 - A customer is the role a party plays towards us: `engagedParty` is a `PartyRef` whose
   `@referredType` is the party's type (`Individual` / `Organization`); mandatory on
   create, must exist (422), read-only on PATCH (`app/api/customer.py`;

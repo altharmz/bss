@@ -151,7 +151,7 @@ def parse[M: BaseModel](
 
 
 def check_type(body: dict[str, Any], *resource_types: str) -> None:
-    """PATCH may repeat @type (the spec's _MVO schemas require it) but not change it."""
+    """POST/PATCH may name the resource's type, never silently substitute another."""
     if "@type" in body and body["@type"] not in resource_types:
         raise bad_request(f"@type is read-only (this resource is a {resource_types[0]})")
 

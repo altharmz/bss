@@ -161,7 +161,9 @@ def get_specification(spec_id: str, request: Request, tx: Tx) -> TmfJSONResponse
 
 
 @router.post("/productSpecification")
-def create_specification(body: JsonBody, tx: Tx) -> TmfJSONResponse:
+def create_specification(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, SPEC_ATTRIBUTES)
+    check_type(body, "ProductSpecification")
     data = parse(SpecificationCreate, body)
     with tx() as conn:
         row = catalog.create_product_specification(
@@ -170,11 +172,14 @@ def create_specification(body: JsonBody, tx: Tx) -> TmfJSONResponse:
             lifecycle_status=data.lifecycle_status,
             description=data.description,
         )
-    return created(specification_body(row))
+    return created(listing.select_fields(specification_body(row), fields))
 
 
 @router.patch("/productSpecification/{spec_id}")
-def patch_specification(spec_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONResponse:
+def patch_specification(
+    spec_id: str, body: MergePatchBody, request: Request, tx: Tx
+) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, SPEC_ATTRIBUTES)
     check_type(body, "ProductSpecification")
     data = parse(SpecificationPatch, body, read_only=("lastUpdate",))
     not_null(data, "name", "lifecycle_status")
@@ -187,7 +192,7 @@ def patch_specification(spec_id: str, body: MergePatchBody, tx: Tx) -> TmfJSONRe
         if data.lifecycle_status is not None:
             _check_lifecycle("specification", current["lifecycle_status"], data.lifecycle_status)
         row = catalog.update_product_specification(conn, uid, changes)
-    return TmfJSONResponse(specification_body(row))
+    return TmfJSONResponse(listing.select_fields(specification_body(row), fields))
 
 
 # --- productOfferingPrice ---
@@ -269,7 +274,9 @@ def get_price(price_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/productOfferingPrice")
-def create_price(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+def create_price(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, PRICE_ATTRIBUTES)
+    check_type(body, "ProductOfferingPrice")
     data = parse(PriceCreate, body)
     valid_for = data.valid_for.to_range()
     if valid_for.lower < clock.now():
@@ -288,7 +295,7 @@ def create_price(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
             currency=data.price.unit,
             valid_for=valid_for,
         )
-    return created(price_body(row))
+    return created(listing.select_fields(price_body(row), fields))
 
 
 def _first_uncovered_day(end: datetime) -> date:
@@ -329,7 +336,10 @@ def _no_gap(conn: psycopg.Connection, price: Row, new_end: datetime) -> None:
 
 
 @router.patch("/productOfferingPrice/{price_id}")
-def patch_price(price_id: str, body: MergePatchBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+def patch_price(
+    price_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, PRICE_ATTRIBUTES)
     check_type(body, "ProductOfferingPrice")
     data = parse(PricePatch, body, read_only=("lastUpdate", *PRICE_IMMUTABLE))
     not_null(data, "name", "lifecycle_status", "valid_for")
@@ -365,7 +375,7 @@ def patch_price(price_id: str, body: MergePatchBody, tx: Tx, clock: ClockDep) ->
             raise conflict(
                 "validFor overlaps another price of the same type and currency on the offering"
             ) from None
-    return TmfJSONResponse(price_body(row))
+    return TmfJSONResponse(listing.select_fields(price_body(row), fields))
 
 
 # --- productOffering ---
@@ -535,7 +545,9 @@ def get_offering(offering_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/productOffering")
-def create_offering(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+def create_offering(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, OFFERING_ATTRIBUTES)
+    check_type(body, "ProductOffering")
     data = parse(OfferingCreate, body)
     valid_for = data.valid_for.to_range()
     with tx() as conn:
@@ -560,13 +572,14 @@ def create_offering(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
             raise conflict(f"offering code {code} is already in use") from None
         _attach_prices(conn, row["id"], data.product_offering_price, clock.now())
         new = offering_body(conn, row)
-    return created(new)
+    return created(listing.select_fields(new, fields))
 
 
 @router.patch("/productOffering/{offering_id}")
 def patch_offering(
-    offering_id: str, body: MergePatchBody, tx: Tx, clock: ClockDep
+    offering_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, OFFERING_ATTRIBUTES)
     check_type(body, "ProductOffering")
     data = parse(
         OfferingPatch,
@@ -598,4 +611,4 @@ def patch_offering(
             _attach_prices(conn, uid, data.product_offering_price, clock.now())
         row = catalog.update_product_offering(conn, uid, changes)
         patched = offering_body(conn, row)
-    return TmfJSONResponse(patched)
+    return TmfJSONResponse(listing.select_fields(patched, fields))

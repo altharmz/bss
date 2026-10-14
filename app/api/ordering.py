@@ -7,6 +7,7 @@ references something that does not exist, is a 4xx. No PATCH, DELETE or
 cancelProductOrder.
 """
 
+from decimal import Decimal
 from typing import Any, Literal
 
 import psycopg
@@ -21,6 +22,7 @@ from app.api.common import (
     ProductOfferingRef,
     ProductRef,
     TmfModel,
+    check_type,
     created,
     from_billing_date,
     parse,
@@ -34,6 +36,7 @@ from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import bad_request, not_found, unprocessable
 from app.api.inventory import ORDERING_BASE as BASE
 from app.api.inventory import order_href, product_href
+from app.api.prices import monthly_price
 from app.api.tmfjson import TmfJSONResponse
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
 from app.repository import catalog, orders, parties
@@ -49,6 +52,7 @@ ATTRIBUTES = (
     "billingAccount",
     "productOrderItem",
     "productOrderErrorMessage",
+    "orderTotalPrice",
 )
 
 
@@ -107,6 +111,16 @@ def _item_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     if row["product_id"] is not None:
         body["product"] = ref("Product", product_href(row["product_id"]), row["product_id"])
     body["@type"] = "ProductOrderItem"
+    if row["quoted_price_id"] is not None:
+        price = monthly_price(
+            row["quoted_amount"],
+            row["quoted_currency"],
+            resource_type="OrderPrice",
+            price_id=row["quoted_price_id"],
+            name=row["quoted_price_name"],
+        )
+        body["itemPrice"] = [price]
+        body["itemTotalPrice"] = [price]  # quantity is always 1
     return body
 
 
@@ -141,6 +155,17 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         for message in orders.error_messages(conn, row["id"])
     ]
     completion = row["completion_date"]
+    adds = [item for item in items if item["action"] == "add"]
+    total = None
+    if row["state"] == "completed" and adds and all(i["quoted_price_id"] for i in adds):
+        total = [
+            monthly_price(
+                sum((i["quoted_amount"] for i in adds), Decimal("0.00")),
+                account["currency"],
+                resource_type="OrderPrice",
+                name="New subscriptions monthly total",
+            )
+        ]
     return without_nulls(
         {
             "id": str(row["id"]),
@@ -152,6 +177,7 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "billingAccount": account_ref(account),
             "productOrderItem": [_item_body(conn, item) for item in items],
             "productOrderErrorMessage": errors or None,
+            "orderTotalPrice": total,
             "@type": "ProductOrder",
         }
     )
@@ -187,14 +213,24 @@ def get_order(order_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/productOrder")
-def create_order(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, ATTRIBUTES)
+    check_type(body, "ProductOrder")
     if body.get("productOrderItem") == []:
         raise bad_request("an order needs at least one productOrderItem")
     data = parse(
         OrderIn,
         body,
-        read_only=("state", "creationDate", "completionDate", "productOrderErrorMessage"),
+        read_only=(
+            "state",
+            "creationDate",
+            "completionDate",
+            "productOrderErrorMessage",
+            "orderTotalPrice",
+        ),
     )
+    for item in body.get("productOrderItem", []):
+        check_type(item, "ProductOrderItem")
     requested = data.requested_start_date
     order_request = OrderRequest(
         billing_account_id=data.billing_account.id,
@@ -209,4 +245,4 @@ def create_order(body: JsonBody, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
         row = orders.get_order(conn, order_id)
         assert row is not None
         new = order_body(conn, row)
-    return created(new)
+    return created(listing.select_fields(new, fields))

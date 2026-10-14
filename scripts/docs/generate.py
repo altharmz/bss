@@ -268,7 +268,7 @@ def params_text(op: dict, filters: dict[str, list[str]]) -> str:
             parts.append(
                 "filters (equality): " + (", ".join(code(f) for f in listed) if listed else "none")
             )
-        elif op["method"] == "GET":
+        elif op["method"] in ("GET", "POST", "PATCH"):
             parts.append("query: `fields`")
     elif spec_op is not None:
         query = [p for p in spec_op["params"] if p["in"] == "query"]
