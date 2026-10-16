@@ -19,6 +19,7 @@ from tests.timeline import iso, z
 BASE = "/tmf-api/productCatalogManagement/v5"
 SPEC = f"{BASE}/productSpecification"
 PRICE = f"{BASE}/productOfferingPrice"
+PARTY = "/tmf-api/partyManagement/v5/organization"
 START = iso(timeline.START)
 END = timeline.START + timedelta(days=31)  # a month later, in BILLING_TZ
 
@@ -328,8 +329,12 @@ def test_unknown_resources_and_routes_answer_with_a_tmf_error(api):
 
 @pytest.mark.parametrize("method", ["DELETE", "PUT"])
 def test_unsupported_methods_are_405_with_a_tmf_error(api, method):
-    href = api.post(SPEC, spec_body()).json()["href"]
-    for path in (SPEC, href):
+    # DELETE exists in TMF620 only (unreferenced entries); a party has none
+    resource, body = (PARTY, {"@type": "Organization", "name": "Acme"})
+    if method == "PUT":
+        resource, body = SPEC, spec_body()
+    href = api.post(resource, body).json()["href"]
+    for path in (resource, href):
         response = api.request(method, path)
         assert response.status_code == 405
         assert response.json()["reason"] == "Method Not Allowed"

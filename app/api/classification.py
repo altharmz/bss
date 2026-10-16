@@ -4,11 +4,17 @@ from typing import Any
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import Field
 
 from app.api import listing
-from app.api.catalog import BASE, LifecycleStatus, _check_lifecycle
+from app.api.catalog import (
+    BASE,
+    LifecycleStatus,
+    _check_lifecycle,
+    delete_row,
+    refuse_if_referenced,
+)
 from app.api.common import (
     ProductOfferingRef,
     Ref,
@@ -29,7 +35,7 @@ from app.api.deps import JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.repository import classification as repo
-from app.repository._sql import Row, select_page
+from app.repository._sql import Row, count_references, select_page
 
 router = APIRouter(prefix=BASE)
 
@@ -301,3 +307,40 @@ def patch_catalog(
                 save(conn, data, False, parse_id("productCatalog", catalog_id)), fields
             )
         )
+
+
+@router.delete("/category/{category_id}", status_code=204, response_class=Response)
+def delete_category(category_id: str, request: Request, tx: Tx) -> Response:
+    """Only an empty category: no subcategories, offerings or catalogs referring to it."""
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id("category", category_id)
+        repo.lock(conn)
+        if repo.get(conn, "category", uid) is None:
+            raise not_found("category", category_id)
+        counts = count_references(
+            conn,
+            uid,
+            {
+                "subCategory": ("category", "parent_id"),
+                "productOffering": ("offering_category", "category_id"),
+                "productCatalog": ("catalog_category", "category_id"),
+            },
+        )
+        refuse_if_referenced("category", uid, counts, "remove them from it first")
+        delete_row(conn, "category", uid)
+    return Response(status_code=204)
+
+
+@router.delete("/productCatalog/{catalog_id}", status_code=204, response_class=Response)
+def delete_catalog(catalog_id: str, request: Request, tx: Tx) -> Response:
+    """Nothing refers to a catalog; its root categories stay, only the membership goes."""
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id("productCatalog", catalog_id)
+        repo.lock(conn)
+        if repo.get(conn, "product_catalog", uid) is None:
+            raise not_found("productCatalog", catalog_id)
+        repo.remove_memberships(conn, "catalog", uid)
+        delete_row(conn, "product_catalog", uid)
+    return Response(status_code=204)

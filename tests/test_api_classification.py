@@ -101,7 +101,9 @@ def test_organization_validation_fields_and_lifecycle(api, path, typ, links):
     assert api.get(f"{path}/{NIL}").status_code == 404
     assert api.patch(f"{path}/{NIL}", {"name": "x"}).status_code == 404
     assert api.get(f"{path}/invalid").status_code == 404
-    assert api.client.delete(href).status_code == 405
+    assert api.delete(f"{path}/{NIL}").status_code == 404
+    assert api.delete(f"{path}/invalid").status_code == 404
+    assert api.delete(path).status_code == 405
     assert api.get(f"{path}?unknown=1").status_code == 400
     assert api.post(f"{path}?unknown=1", {"name": "x"}).status_code == 400
     assert api.get(f"{path}?name=x&fields=name&limit=1").headers["X-Total-Count"] == "1"

@@ -80,6 +80,32 @@ def select_page(
     return rows, total["n"]
 
 
+def count_references(
+    conn: psycopg.Connection, row_id: Any, sources: dict[str, tuple[str, str]]
+) -> dict[str, int]:
+    """For each label -> (table, column): how many rows of `table` have `column = row_id`.
+    Labels nothing refers through are left out, so an empty result means unreferenced."""
+    counts = {}
+    for label, (table, column) in sources.items():
+        row = fetch_one(
+            conn,
+            sql.SQL("SELECT count(*) AS n FROM {} WHERE {} = %s").format(
+                sql.Identifier(table), sql.Identifier(column)
+            ),
+            (row_id,),
+        )
+        assert row is not None
+        if row["n"]:
+            counts[label] = row["n"]
+    return counts
+
+
+def delete_by_id(conn: psycopg.Connection, table: str, row_id: Any) -> bool:
+    """Delete one row; False if it was not there."""
+    query = sql.SQL("DELETE FROM {} WHERE id = %s RETURNING id").format(sql.Identifier(table))
+    return fetch_one(conn, query, (row_id,)) is not None
+
+
 def update_by_id(conn: psycopg.Connection, table: str, row_id: Any, changes: dict[str, Any]) -> Row:
     """Set the given columns on one row and return it. Raises LookupError if it is gone."""
     if not changes:

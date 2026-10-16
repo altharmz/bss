@@ -10,6 +10,9 @@ created or attached with validFor.startDateTime < now is a 409.
 An offering may carry a code, as the spec's externalIdentifier with exactly one entry
 {id: <code>, externalIdentifierType: "offeringCode", owner: "bss"}. The code is unique
 (409), upper case (^[A-Z0-9][A-Z0-9_-]{0,31}$), set on POST only and read-only after.
+
+DELETE removes only what nothing references (see "deletes" below and in
+app/api/classification.py).
 """
 
 from datetime import date, datetime, time, timedelta
@@ -17,7 +20,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from psycopg import errors as pg_errors
 from pydantic import Field, model_validator
 
@@ -45,7 +48,7 @@ from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.repository import catalog, classification
-from app.repository._sql import Row
+from app.repository._sql import Row, count_references, delete_by_id
 
 BASE = "/tmf-api/productCatalogManagement/v5"
 router = APIRouter(prefix=BASE)
@@ -556,7 +559,8 @@ def create_offering(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -
     data = parse(OfferingCreate, body)
     valid_for = data.valid_for.to_range()
     with tx() as conn:
-        if catalog.get_product_specification(conn, data.product_specification.id) is None:
+        spec_id = data.product_specification.id
+        if catalog.lock_product_specification(conn, spec_id, share=True) is None:
             raise unprocessable(
                 f"productSpecification {data.product_specification.id} does not exist"
             )
@@ -597,7 +601,7 @@ def patch_offering(
         changes["valid_for"] = data.valid_for.to_range()
     with tx() as conn:
         uid = parse_id("productOffering", offering_id)
-        current = catalog.get_product_offering(conn, uid)
+        current = catalog.lock_offering(conn, uid)  # a concurrent delete goes first or waits
         if current is None:
             raise not_found("productOffering", offering_id)
         if data.lifecycle_status is not None:
@@ -617,3 +621,92 @@ def patch_offering(
         row = catalog.update_product_offering(conn, uid, changes)
         patched = offering_body(conn, row)
     return TmfJSONResponse(listing.select_fields(patched, fields))
+
+
+# --- deletes ---
+# Only what nothing references is deleted (409 otherwise, naming the references). An
+# offering that was ever ordered keeps itself and all its prices, so billing history and
+# future bills never change; such an entry is retired instead.
+
+ORDERED = {
+    "product": ("product", "product_offering_id"),
+    "productOrderItem": ("product_order_item", "product_offering_id"),
+}
+
+
+def refuse_if_referenced(resource: str, uid: UUID, counts: dict[str, int], advice: str) -> None:
+    if counts:
+        listed = ", ".join(f"{n} {label}" for label, n in counts.items())
+        raise conflict(f"{resource} {uid} is still referenced by {listed}: {advice}")
+
+
+def delete_row(conn: psycopg.Connection, table: str, uid: UUID) -> None:
+    """The last step of a delete; the foreign keys (all NO ACTION) back the checks."""
+    try:
+        with conn.transaction():
+            delete_by_id(conn, table, uid)
+    except pg_errors.ForeignKeyViolation:
+        raise conflict(f"{uid} is still referenced") from None
+
+
+@router.delete("/productSpecification/{spec_id}", status_code=204, response_class=Response)
+def delete_specification(spec_id: str, request: Request, tx: Tx) -> Response:
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id("productSpecification", spec_id)
+        if catalog.lock_product_specification(conn, uid) is None:
+            raise not_found("productSpecification", spec_id)
+        counts = count_references(
+            conn, uid, {"productOffering": ("product_offering", "product_specification_id")}
+        )
+        refuse_if_referenced("productSpecification", uid, counts, "delete those offerings first")
+        delete_row(conn, "product_specification", uid)
+    return Response(status_code=204)
+
+
+@router.delete("/productOfferingPrice/{price_id}", status_code=204, response_class=Response)
+def delete_price(price_id: str, request: Request, tx: Tx) -> Response:
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id("productOfferingPrice", price_id)
+        price = catalog.get_product_offering_price(conn, uid)
+        if price is None:
+            raise not_found("productOfferingPrice", price_id)
+        offering_id = price["product_offering_id"]
+        if offering_id is None:
+            if not catalog.delete_unattached_price(conn, uid):
+                raise conflict(f"productOfferingPrice {uid} was attached meanwhile; try again")
+            return Response(status_code=204)
+        # An attached price never moves. Lock its offering first, as price changes do;
+        # orders hold it FOR SHARE, so none is in flight.
+        catalog.lock_offering(conn, offering_id)
+        counts = count_references(conn, offering_id, ORDERED)
+        refuse_if_referenced(
+            "productOfferingPrice",
+            uid,
+            {f"{label} of its offering": n for label, n in counts.items()},
+            "a price of an ordered offering stays; end its validFor instead",
+        )
+        delete_row(conn, "product_offering_price", uid)
+    return Response(status_code=204)
+
+
+@router.delete("/productOffering/{offering_id}", status_code=204, response_class=Response)
+def delete_offering(offering_id: str, request: Request, tx: Tx) -> Response:
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id("productOffering", offering_id)
+        classification.lock(conn)  # category memberships are written under it
+        if catalog.lock_offering(conn, uid) is None:
+            raise not_found("productOffering", offering_id)
+        ordered = count_references(conn, uid, ORDERED)
+        refuse_if_referenced(
+            "productOffering", uid, ordered, "retire it instead (lifecycleStatus Retired)"
+        )
+        prices = count_references(
+            conn, uid, {"productOfferingPrice": ("product_offering_price", "product_offering_id")}
+        )
+        refuse_if_referenced("productOffering", uid, prices, "delete its prices first")
+        classification.remove_memberships(conn, "offering", uid)
+        delete_row(conn, "product_offering", uid)
+    return Response(status_code=204)

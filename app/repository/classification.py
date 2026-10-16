@@ -90,6 +90,17 @@ def replace(
         )
 
 
+def remove_memberships(conn: psycopg.Connection, kind: Membership, owner_id: UUID) -> None:
+    """Drop every category membership of a catalog or offering (before it is deleted)."""
+    owner = "catalog_id" if kind == "catalog" else "offering_id"
+    conn.execute(
+        sql.SQL("DELETE FROM {} WHERE {} = %s").format(
+            sql.Identifier(f"{kind}_category"), sql.Identifier(owner)
+        ),
+        (owner_id,),
+    )
+
+
 def ancestors(conn: psycopg.Connection, uid: UUID) -> list[Row]:
     return fetch_all(
         conn,

@@ -7,6 +7,45 @@ conventions: [tmf-api.md](tmf-api.md).
 
 ## TMF620 mapping
 
+### Deleting catalog entries (2026-10-16)
+
+D1 ("DELETE anywhere") is narrowed to the catalog. `DELETE` on `productSpecification`,
+`productOffering`, `productOfferingPrice`, `category` and `productCatalog` answers 204
+(no body, no query parameters - any is a 400) when nothing references the entry, and a
+409 naming the references otherwise, with nothing changed:
+
+| Entry | 409 while | Removed with it |
+|---|---|---|
+| specification | an offering uses it | - |
+| offering | it was ever ordered (a product or any order item, rejected ones included) - retire it instead; or it still has prices - delete them first | its category memberships |
+| price | it is attached to an offering that was ever ordered - end its validFor instead | - |
+| category | it has subcategories or offerings, or a catalog lists it | - |
+| catalog | never (nothing refers to a catalog) | its root-category memberships; the categories stay |
+
+**Why this is safe for billing:** billing reads an offering's prices by date, not through
+a foreign key, so the rule is about the offering: once anything ordered it, the offering
+and all of its prices stay. An unattached price, or one on a never-ordered offering, has
+priced nothing. The foreign keys to the catalog (all `NO ACTION`) back the checks: a
+reference the checks missed is a 409 "still referenced", never a dangling row.
+
+**Concurrency.** Orders take each offering `FOR SHARE` before validating (formerly a
+plain read), offering POST takes its specification `FOR SHARE`, offering PATCH takes the
+offering `FOR UPDATE`; deletes take the row `FOR UPDATE` (a price: its offering's row,
+as price changes do), category/catalog/offering deletes also the advisory lock
+`(620, 9)`. So a delete either waits for an order in flight and then sees it (409), or
+goes first and the order sees the catalog without the entry (rejected `noRecurringPrice`,
+or 422 for a missing offering/specification). Without the order's lock, an order could
+validate a price chain that a concurrent delete shortens - the reason for the lock.
+Concurrent orders still run side by side (shared locks).
+
+MCP gets five write-scope tools (`delete_specification`, `delete_offering`,
+`delete_price`, `delete_category`, `delete_catalog`). Coverage: 84/129 non-listener
+operations (65.1%). Tests: `tests/test_api_catalog_delete.py`. Negative proofs: without
+the order's `FOR SHARE` lock the racing order is a 500 instead of a rejection; without
+the specification lock the racing offering POST is a 500 instead of a 422; without the
+price's reference check the price of an offering with a rejected order is deleted. All
+three tests failed and the protections were restored.
+
 ### Categories and product catalogs (2026-10-16)
 
 Eight operations add list/retrieve/create/merge-patch on `category` and

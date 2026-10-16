@@ -140,11 +140,46 @@ def price_at(
     )
 
 
-def lock_offering(conn: psycopg.Connection, offering_id: UUID) -> Row | None:
-    """The offering, locked until the transaction ends (concurrent price changes queue)."""
+def lock_product_specification(
+    conn: psycopg.Connection, spec_id: UUID, *, share: bool = False
+) -> Row | None:
+    """The specification, locked until the transaction ends: FOR SHARE by a new offering
+    that references it, FOR UPDATE by a delete - which then waits for that offering to
+    commit and sees it, or goes first and the offering finds no specification."""
+    if share:
+        return fetch_one(
+            conn, "SELECT * FROM product_specification WHERE id = %s FOR SHARE", (spec_id,)
+        )
+    return fetch_one(
+        conn, "SELECT * FROM product_specification WHERE id = %s FOR UPDATE", (spec_id,)
+    )
+
+
+def lock_offering(
+    conn: psycopg.Connection, offering_id: UUID, *, share: bool = False
+) -> Row | None:
+    """The offering, locked until the transaction ends. FOR UPDATE: price changes, PATCH
+    and deletes queue behind each other. FOR SHARE: orders run side by side, but wait for
+    (and are waited for by) those - an order never validates prices that a concurrent
+    delete then removes, and a delete never misses an order still in flight."""
+    if share:
+        return fetch_one(
+            conn, "SELECT * FROM product_offering WHERE id = %s FOR SHARE", (offering_id,)
+        )
     return fetch_one(
         conn, "SELECT * FROM product_offering WHERE id = %s FOR UPDATE", (offering_id,)
     )
+
+
+def delete_unattached_price(conn: psycopg.Connection, price_id: UUID) -> bool:
+    """Delete a price that belongs to no offering; False if it was attached meanwhile."""
+    row = fetch_one(
+        conn,
+        "DELETE FROM product_offering_price WHERE id = %s AND product_offering_id IS NULL"
+        " RETURNING id",
+        (price_id,),
+    )
+    return row is not None
 
 
 def recurring_prices_from(

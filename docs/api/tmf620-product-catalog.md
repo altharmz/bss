@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/productCatalogManagement/v5`
 - Contract: [`spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml`](../../spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml) - Product Catalog Management version 5.0.0; the spec's server URL is `https://serverRoot/productCatalogManagement/v5/`
-- Operations exposed: 20
+- Operations exposed: 25
 
 
 ## Operations
@@ -13,22 +13,27 @@
 |---|---|---|---|---|---|
 | GET | `/tmf-api/productCatalogManagement/v5/category` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `lifecycleStatus`, `name`, `parent.id` | - | 200 `array of Category` | [`app/api/classification.py`](../../app/api/classification.py) |
 | POST | `/tmf-api/productCatalogManagement/v5/category` | query: `fields`; body: `application/json` | `Category_FVO` | 201 `Category` | [`app/api/classification.py`](../../app/api/classification.py) |
+| DELETE | `/tmf-api/productCatalogManagement/v5/category/{category_id}` | path: `category_id` | - | 204 (no body) | [`app/api/classification.py`](../../app/api/classification.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/category/{category_id}` | path: `category_id`; query: `fields` | - | 200 `Category` | [`app/api/classification.py`](../../app/api/classification.py) |
 | PATCH | `/tmf-api/productCatalogManagement/v5/category/{category_id}` | path: `category_id`; query: `fields`; body: `application/merge-patch+json` | `Category_MVO` | 200 `Category` | [`app/api/classification.py`](../../app/api/classification.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productCatalog` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `catalogType`, `lifecycleStatus`, `name` | - | 200 `array of ProductCatalog` | [`app/api/classification.py`](../../app/api/classification.py) |
 | POST | `/tmf-api/productCatalogManagement/v5/productCatalog` | query: `fields`; body: `application/json` | `ProductCatalog_FVO` | 201 `ProductCatalog` | [`app/api/classification.py`](../../app/api/classification.py) |
+| DELETE | `/tmf-api/productCatalogManagement/v5/productCatalog/{catalog_id}` | path: `catalog_id` | - | 204 (no body) | [`app/api/classification.py`](../../app/api/classification.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productCatalog/{catalog_id}` | path: `catalog_id`; query: `fields` | - | 200 `ProductCatalog` | [`app/api/classification.py`](../../app/api/classification.py) |
 | PATCH | `/tmf-api/productCatalogManagement/v5/productCatalog/{catalog_id}` | path: `catalog_id`; query: `fields`; body: `application/merge-patch+json` | `ProductCatalog_MVO` | 200 `ProductCatalog` | [`app/api/classification.py`](../../app/api/classification.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productOffering` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `externalIdentifier.id`, `isSellable`, `lifecycleStatus`, `name`, `productSpecification.id` | - | 200 `array of ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | POST | `/tmf-api/productCatalogManagement/v5/productOffering` | query: `fields`; body: `application/json` | `ProductOffering_FVO` | 201 `ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| DELETE | `/tmf-api/productCatalogManagement/v5/productOffering/{offering_id}` | path: `offering_id` | - | 204 (no body) | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productOffering/{offering_id}` | path: `offering_id`; query: `fields` | - | 200 `ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | PATCH | `/tmf-api/productCatalogManagement/v5/productOffering/{offering_id}` | path: `offering_id`; query: `fields`; body: `application/merge-patch+json` | `ProductOffering_MVO` | 200 `ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productOfferingPrice` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `lifecycleStatus`, `name`, `priceType` | - | 200 `array of ProductOfferingPrice` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | POST | `/tmf-api/productCatalogManagement/v5/productOfferingPrice` | query: `fields`; body: `application/json` | `ProductOfferingPrice_FVO` | 201 `ProductOfferingPrice` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| DELETE | `/tmf-api/productCatalogManagement/v5/productOfferingPrice/{price_id}` | path: `price_id` | - | 204 (no body) | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productOfferingPrice/{price_id}` | path: `price_id`; query: `fields` | - | 200 `ProductOfferingPrice` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | PATCH | `/tmf-api/productCatalogManagement/v5/productOfferingPrice/{price_id}` | path: `price_id`; query: `fields`; body: `application/merge-patch+json` | `ProductOfferingPrice_MVO` | 200 `ProductOfferingPrice` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productSpecification` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `lifecycleStatus`, `name` | - | 200 `array of ProductSpecification` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | POST | `/tmf-api/productCatalogManagement/v5/productSpecification` | query: `fields`; body: `application/json` | `ProductSpecification_FVO` | 201 `ProductSpecification` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| DELETE | `/tmf-api/productCatalogManagement/v5/productSpecification/{spec_id}` | path: `spec_id` | - | 204 (no body) | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productSpecification/{spec_id}` | path: `spec_id`; query: `fields` | - | 200 `ProductSpecification` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | PATCH | `/tmf-api/productCatalogManagement/v5/productSpecification/{spec_id}` | path: `spec_id`; query: `fields`; body: `application/merge-patch+json` | `ProductSpecification_MVO` | 200 `ProductSpecification` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 
@@ -37,7 +42,6 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF620-P
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /category/{id}`, `DELETE /productCatalog/{id}`, `DELETE /productOffering/{id}`, `DELETE /productOfferingPrice/{id}`, `DELETE /productSpecification/{id}`.
 - Resources of the spec that are **not implemented**: `/exportJob`, `/hub`, `/importJob`, `/listener` (`/hub` and `/listener/*`: no event notifications).
 
 
@@ -64,6 +68,8 @@ See [the catalog decision](../decisions/catalog.md#categories-and-product-catalo
 | `productSpecification` is mandatory on an offering (ours) and read-only on PATCH | `OfferingCreate`, `patch_offering` | `tests/test_api_catalog.py::test_offering_needs_an_existing_specification` |
 | Prices are monthly only: `recurringChargePeriodType` `monthly` (required for recurring, not allowed for oneTime), `recurringChargePeriodLength` 1 | `PriceCreate` | `::test_price_validation` |
 | `lastUpdate` is accepted and ignored on POST (the spec's `_FVO` schemas make clients send it), read-only on PATCH | `last_update` fields | `tests/test_api_conventions.py::test_patch_rejects_read_only_attributes` |
+| DELETE (204) only what nothing references, else 409 naming the references: a specification no offering uses; an offering never ordered (no product, no order item - rejected ones included) and without prices; a price that is unattached or whose offering was never ordered; a category without subcategories, offerings or catalogs; any catalog (its root memberships go, the categories stay). An offering's category memberships go with it | `refuse_if_referenced`, `delete_*` in `catalog.py` and `classification.py` | `tests/test_api_catalog_delete.py::test_an_ordered_offering_and_its_prices_stay`, `::test_an_unordered_offering_goes_after_its_prices`, `::test_category_and_catalog_rules` |
+| A delete and an order (or a new offering) never race: orders hold their offerings `FOR SHARE`, offering POST its specification; deletes lock the row (a price: its offering) `FOR UPDATE` | `lock_offering`, `lock_product_specification` | `::test_a_price_delete_waits_for_an_order_in_flight`, `::test_an_order_waits_for_a_price_delete_in_flight`, `::test_a_new_offering_waits_for_a_specification_delete_in_flight` |
 
 Changing the price of a live offering cannot be done with these operations (neither
 order of "end" and "attach" works while a product is live, proven by

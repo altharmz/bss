@@ -304,8 +304,9 @@ def schemas_text(op: dict, spec_file: str | None) -> tuple[str, str]:
     success = [
         f"{status} {code(schema) if schema else '(no body)'}"
         for status, schema in sorted(spec_op["responses"].items())
-        # a 2xx without a body (the TMF specs' asynchronous 202/204) is never answered here
-        if status.startswith("2") and schema
+        # a 2xx without a body (the TMF specs' asynchronous 202) is never answered here,
+        # except 204 on a DELETE (TMF620 catalog deletes, tests/apiclient.py checks it)
+        if status.startswith("2") and (schema or (status == "204" and op["method"] == "DELETE"))
     ]
     return request, ", ".join(success) or "-"
 

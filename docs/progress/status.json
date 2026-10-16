@@ -2,9 +2,9 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 95,
-      "items": 95,
-      "tested": 95
+      "implemented": 100,
+      "items": 100,
+      "tested": 100
     },
     "db": {
       "deployed": null,
@@ -489,6 +489,24 @@
       "title": "Patch a product catalog"
     },
     {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.category.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete an empty category"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productCatalog.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete a product catalog"
+    },
+    {
       "area": "db",
       "deployed": null,
       "id": "db.product_specification",
@@ -757,6 +775,33 @@
       "stage": 2,
       "tested": true,
       "title": "Patch an offering price (end it)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productSpecification.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete an unused product specification"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productOffering.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete a never-ordered offering"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productOfferingPrice.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete a price of a never-ordered offering"
     },
     {
       "area": "api",

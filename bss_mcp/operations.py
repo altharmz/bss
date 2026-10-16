@@ -94,6 +94,9 @@ OPERATIONS: dict[str, Op] = {
     "patch_category": Op(
         "Change a category; parent controls hierarchy, subCategory is derived.", body=CategoryPatch
     ),
+    "delete_category": Op(
+        "Delete an empty category: 409 while subcategories, offerings or catalogs refer to it."
+    ),
     "list_catalogs": Op("Product catalogs and their root categories.", query=LIST),
     "get_catalog": Op("One product catalog.", query=FIELDS),
     "create_catalog": Op(
@@ -102,6 +105,7 @@ OPERATIONS: dict[str, Op] = {
     "patch_catalog": Op(
         "Change a product catalog; category replaces the root category list.", body=CatalogPatch
     ),
+    "delete_catalog": Op("Delete a product catalog; its root categories stay."),
     "list_specifications": Op("Product specifications.", query=LIST),
     "get_specification": Op("One product specification.", query=FIELDS),
     "create_specification": Op(
@@ -113,6 +117,7 @@ OPERATIONS: dict[str, Op] = {
         " Retired).",
         body=SpecificationPatch,
     ),
+    "delete_specification": Op("Delete a specification no offering uses (409 otherwise)."),
     "list_prices": Op("Product offering prices.", query=LIST),
     "get_price": Op("One product offering price.", query=FIELDS),
     "create_price": Op(
@@ -125,6 +130,10 @@ OPERATIONS: dict[str, Op] = {
         " The amount and type are read-only - to change a live price use price_change.",
         body=PricePatch,
     ),
+    "delete_price": Op(
+        "Delete a price that is unattached or whose offering was never ordered; a price of"
+        " an ordered offering is a 409 (end its validFor instead)."
+    ),
     "list_offerings": Op("Product offerings (what can be ordered).", query=LIST),
     "get_offering": Op("One product offering.", query=FIELDS),
     "create_offering": Op(
@@ -136,6 +145,10 @@ OPERATIONS: dict[str, Op] = {
         "Change an offering: attach prices, move lifecycleStatus forward, set validFor (not"
         " in the past). Prices are never detached.",
         body=OfferingPatch,
+    ),
+    "delete_offering": Op(
+        "Delete an offering that was never ordered and has no prices left (delete them"
+        " first); an ordered one is a 409 - retire it instead."
     ),
     # --- TMF632 party ---
     "list_individuals": Op("Individuals (people).", query=LIST),

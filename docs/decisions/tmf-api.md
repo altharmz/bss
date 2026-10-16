@@ -128,7 +128,10 @@ implemented; order processing lives in `app/ordering/`.
   `productOrderingManagement`, `productInventory`, `customerBillManagement`, and
   `paymentManagement/v4` (TMF676 only exists as v4). `href` is the absolute path, no host.
 - **Not exposed:** DELETE anywhere, POST/PATCH on product, cancelProductOrder, `/hub`, the
-  billing run. An unsupported method on an exposed path is a 405.
+  billing run. An unsupported method on an exposed path is a 405. **Narrowed 2026-10-16:**
+  DELETE exists in TMF620 only, for catalog entries nothing references
+  ([catalog.md](catalog.md#deleting-catalog-entries-2026-10-16)); everywhere else it is
+  still a 405.
 - **Errors:** every non-2xx body is the TMF `Error` (`@type`, `code`, `reason`, `message`,
   `status`), including unknown routes, FastAPI's own validation errors and unhandled
   exceptions (500 says "internal error", nothing more). 400 = malformed JSON, unknown

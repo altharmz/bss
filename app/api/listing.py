@@ -125,6 +125,12 @@ def parse_page(request: Request, extra: Collection[str] = ()) -> tuple[int, int]
     return _int_param(request, "offset", 0, 0), limit
 
 
+def no_query(request: Request) -> None:
+    """Query handling for DELETE: none is allowed."""
+    for name in request.query_params:
+        raise bad_request(f"unknown query parameter {name}")
+
+
 def retrieve_fields(request: Request, attributes: Collection[str]) -> frozenset[str] | None:
     """Query handling for GET by id: only fields= is allowed."""
     for name in request.query_params:

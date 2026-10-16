@@ -75,7 +75,9 @@ def place_order(
         raise OrderRefused(f"billingAccount {request.billing_account_id} does not exist")
     for item in request.items:
         offering_id = item.product_offering_id
-        if offering_id and catalog.get_product_offering(conn, offering_id) is None:
+        # FOR SHARE until commit: a concurrent price or offering delete waits for this
+        # order (then sees it), or goes first (then this order sees the catalog without it).
+        if offering_id and catalog.lock_offering(conn, offering_id, share=True) is None:
             raise OrderRefused(f"item {item.item_id}: productOffering {offering_id} does not exist")
 
     # Lock the products of delete items before reading anything about them: a concurrent

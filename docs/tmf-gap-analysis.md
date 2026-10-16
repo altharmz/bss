@@ -1,5 +1,11 @@
 # TMF conformance gap analysis
 
+**TMF620 catalog deletes (2026-10-16).** DELETE on productSpecification,
+productOffering, productOfferingPrice, category and productCatalog, for entries nothing
+references (D1 narrowed to TMF620), brings non-listener operation coverage to 84/129
+(65.1%). TMF620 now lacks only importJob/exportJob and `/hub`. See
+[the catalog decision](decisions/catalog.md#deleting-catalog-entries-2026-10-16).
+
 **TMF666 accounts (2026-10-16).** financialAccount, partyAccount and settlementAccount
 list/retrieve/create/PATCH (12 operations), with the `financialAccount` link on billing,
 party and settlement accounts, bring non-listener operation coverage to 79/129 (61.2%).

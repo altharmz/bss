@@ -105,6 +105,9 @@ class TmfClient:
     def post(self, url: str, body: Any, **kwargs: Any) -> Response:
         return self.request("POST", url, json=body, **kwargs)
 
+    def delete(self, url: str) -> Response:
+        return self.request("DELETE", url)
+
     def post_raw(self, url: str, text: str, content_type: str = "application/json") -> Response:
         """Send the body text verbatim - for number literals the json module would alter."""
         return self.request("POST", url, content=text, headers={"Content-Type": content_type})
@@ -116,6 +119,12 @@ class TmfClient:
 
     def _check(self, method: str, path: str, response: Response, partial: bool = False) -> None:
         self.checked += 1
+        if response.status_code == 204:  # DELETE: no body, and the spec must declare it
+            assert response.content == b"" and "content-type" not in response.headers, path
+            api, _, _, spec_path = self._locate(path)
+            declared = contract.declared_statuses(api, spec_path, method.lower())
+            assert "204" in declared, f"{method} {spec_path} answered 204, spec declares {declared}"
+            return
         assert response.headers["content-type"] == "application/json", path
         body = response.json()
         if path.startswith(SCHEMA_PREFIX) and response.status_code == 200:

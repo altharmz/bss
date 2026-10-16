@@ -333,20 +333,15 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         "create_catalog", {"body": {"name": "MCP catalog", "category": [{"id": category["id"]}]}}
     )
     call("patch_catalog", {"catalog_id": catalog["id"], "body": {"description": "via MCP"}})
-    price = call(
-        "create_price",
-        {
-            "body": {
-                "@type": "ProductOfferingPrice",
-                "name": "Monthly",
-                "lifecycleStatus": "Active",
-                "priceType": "recurring",
-                "recurringChargePeriodType": "monthly",
-                "price": {"unit": "RUB", "value": "450.50"},
-                "validFor": {"startDateTime": start},
-            }
-        },
-    )
+    price_fields = {
+        "@type": "ProductOfferingPrice",
+        "name": "Monthly",
+        "lifecycleStatus": "Active",
+        "priceType": "recurring",
+        "recurringChargePeriodType": "monthly",
+        "price": {"unit": "RUB", "value": "450.50"},
+    }
+    price = call("create_price", {"body": {**price_fields, "validFor": {"startDateTime": start}}})
     assert price["price"]["value"] == 450.5
     call("patch_price", {"price_id": price["id"], "body": {"name": "Monthly fee"}})
     offering = call(
@@ -363,6 +358,31 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         },
     )
     call("patch_offering", {"offering_id": offering["id"], "body": {"description": "via MCP"}})
+    # deletes: a spare chain nothing references, then the catalog and its root category
+    spare_spec = call(
+        "create_specification",
+        {"body": {"@type": "ProductSpecification", "name": "Spare", "lifecycleStatus": "Active"}},
+    )
+    spare = call(
+        "create_offering",
+        {
+            "body": {
+                "@type": "ProductOffering",
+                "name": "Spare",
+                "lifecycleStatus": "In Design",
+                "validFor": {"startDateTime": start},
+                "productSpecification": {"id": spare_spec["id"]},
+            }
+        },
+    )
+    call("delete_offering", {"offering_id": spare["id"]}, expected=(204,))
+    call("delete_specification", {"spec_id": spare_spec["id"]}, expected=(204,))
+    spare_price = call(
+        "create_price", {"body": {**price_fields, "validFor": {"startDateTime": start}}}
+    )
+    call("delete_price", {"price_id": spare_price["id"]}, expected=(204,))
+    call("delete_catalog", {"catalog_id": catalog["id"]}, expected=(204,))
+    call("delete_category", {"category_id": category["id"]}, expected=(204,))
     person = call("create_individual", {"body": {"givenName": "Ada", "familyName": "Lovelace"}})
     call("patch_individual", {"party_id": person["id"], "body": {"familyName": "King"}})
     org = call("create_organization", {"body": {"name": "Analytical Engines"}})

@@ -65,6 +65,8 @@ items:
   - {id: api.tmf620.productCatalog.get, area: api, stage: 2, method: GET, path: "/tmf-api/productCatalogManagement/v5/productCatalog/{catalog_id}", title: "Get a product catalog"}
   - {id: api.tmf620.productCatalog.create, area: api, stage: 2, method: POST, path: /tmf-api/productCatalogManagement/v5/productCatalog, title: "Create a product catalog"}
   - {id: api.tmf620.productCatalog.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/productCatalogManagement/v5/productCatalog/{catalog_id}", title: "Patch a product catalog"}
+  - {id: api.tmf620.category.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productCatalogManagement/v5/category/{category_id}", title: "Delete an empty category"}
+  - {id: api.tmf620.productCatalog.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productCatalogManagement/v5/productCatalog/{catalog_id}", title: "Delete a product catalog"}
   # ---------------- db: tables ----------------
   - {id: db.product_specification, area: db, stage: 1, table: product_specification, title: "Product specifications (TMF620)"}
   - {id: db.product_offering, area: db, stage: 1, table: product_offering, title: "Product offerings (TMF620)"}
@@ -98,6 +100,9 @@ items:
   - {id: api.tmf620.productOfferingPrice.get, area: api, stage: 2, method: GET, path: "/tmf-api/productCatalogManagement/v5/productOfferingPrice/{price_id}", title: "Get an offering price"}
   - {id: api.tmf620.productOfferingPrice.create, area: api, stage: 2, method: POST, path: /tmf-api/productCatalogManagement/v5/productOfferingPrice, title: "Create an offering price"}
   - {id: api.tmf620.productOfferingPrice.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/productCatalogManagement/v5/productOfferingPrice/{price_id}", title: "Patch an offering price (end it)"}
+  - {id: api.tmf620.productSpecification.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productCatalogManagement/v5/productSpecification/{spec_id}", title: "Delete an unused product specification"}
+  - {id: api.tmf620.productOffering.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productCatalogManagement/v5/productOffering/{offering_id}", title: "Delete a never-ordered offering"}
+  - {id: api.tmf620.productOfferingPrice.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productCatalogManagement/v5/productOfferingPrice/{price_id}", title: "Delete a price of a never-ordered offering"}
 
   # ---------------- api: TMF632 party ----------------
   - {id: api.tmf632.individual.list, area: api, stage: 2, method: GET, path: /tmf-api/partyManagement/v5/individual, title: "List individuals"}

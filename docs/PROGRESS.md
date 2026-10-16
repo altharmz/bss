@@ -12,7 +12,7 @@ records the deployed commit.
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
 | Database | 30 | 30/30 (100%) | 30/30 (100%) | unknown |
-| API | 95 | 95/95 (100%) | 95/95 (100%) | unknown |
+| API | 100 | 100/100 (100%) | 100/100 (100%) | unknown |
 | UI | 21 | 21/21 (100%) | 21/21 (100%) | unknown |
 | Worker | 14 | 14/14 (100%) | 14/14 (100%) | unknown |
 
@@ -89,6 +89,8 @@ records the deployed commit.
 | `api.tmf620.productCatalog.get` | 2 | Get a product catalog | yes | yes | unknown |
 | `api.tmf620.productCatalog.create` | 2 | Create a product catalog | yes | yes | unknown |
 | `api.tmf620.productCatalog.patch` | 2 | Patch a product catalog | yes | yes | unknown |
+| `api.tmf620.category.delete` | 5 | Delete an empty category | yes | yes | unknown |
+| `api.tmf620.productCatalog.delete` | 5 | Delete a product catalog | yes | yes | unknown |
 | `api.tmf620.productSpecification.list` | 2 | List product specifications | yes | yes | unknown |
 | `api.tmf620.productSpecification.get` | 2 | Get a product specification | yes | yes | unknown |
 | `api.tmf620.productSpecification.create` | 2 | Create a product specification | yes | yes | unknown |
@@ -101,6 +103,9 @@ records the deployed commit.
 | `api.tmf620.productOfferingPrice.get` | 2 | Get an offering price | yes | yes | unknown |
 | `api.tmf620.productOfferingPrice.create` | 2 | Create an offering price | yes | yes | unknown |
 | `api.tmf620.productOfferingPrice.patch` | 2 | Patch an offering price (end it) | yes | yes | unknown |
+| `api.tmf620.productSpecification.delete` | 5 | Delete an unused product specification | yes | yes | unknown |
+| `api.tmf620.productOffering.delete` | 5 | Delete a never-ordered offering | yes | yes | unknown |
+| `api.tmf620.productOfferingPrice.delete` | 5 | Delete a price of a never-ordered offering | yes | yes | unknown |
 | `api.tmf632.individual.list` | 2 | List individuals | yes | yes | unknown |
 | `api.tmf632.individual.get` | 2 | Get an individual | yes | yes | unknown |
 | `api.tmf632.individual.create` | 2 | Create an individual | yes | yes | unknown |

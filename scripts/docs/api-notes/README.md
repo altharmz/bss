@@ -26,7 +26,7 @@ its dates are plain business dates (`YYYY-MM-DD` in BILLING_TZ). In the last col
 | POST answers 201 with `Location` | `app/api/common.py` (`created`) | `::test_post_returns_201_with_location_of_the_new_resource` |
 | PATCH accepts `application/merge-patch+json` only (else 415); `null` removes an optional attribute and is a 422 on a mandatory one; `@type` may be repeated, not changed; read-only attributes are a 400 | `app/api/deps.py`, `app/api/common.py` (`not_null`, `check_type`) | `::test_patch_is_a_merge_patch`, `::test_patch_accepts_only_merge_patch_json`, `::test_patch_rejects_read_only_attributes` |
 | One database transaction per request, rolled back if the handler raises | `app/api/deps.py` (`Tx`) | `::test_a_failed_request_leaves_nothing_behind` |
-| No DELETE anywhere, no `/hub` or listeners, no cancelProductOrder | the routers in `app/api/` | `tests/test_api_ordering.py::test_cancel_product_order_is_not_exposed`, `tests/test_api_inventory_bill.py::test_products_are_not_written_through_tmf637` |
+| DELETE only in TMF620, only for entries nothing references (204, else 409; no query parameters), elsewhere a 405; no `/hub` or listeners, no cancelProductOrder | the routers in `app/api/`; `app/api/catalog.py` (`refuse_if_referenced`) | `tests/test_api_catalog_delete.py`, `::test_unsupported_methods_are_405_with_a_tmf_error`, `tests/test_api_ordering.py::test_cancel_product_order_is_not_exposed`, `tests/test_api_inventory_bill.py::test_products_are_not_written_through_tmf637` |
 
 **Contract tests.** `tests/apiclient.py` validates every response the suite receives
 against the schema in `spec/` for its path (`Error` for non-2xx), with
