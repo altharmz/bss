@@ -7,6 +7,62 @@ conventions: [tmf-api.md](tmf-api.md).
 
 ## TMF620 mapping
 
+### Categories and product catalogs (2026-10-16)
+
+Eight operations add list/retrieve/create/merge-patch on `category` and
+`productCatalog`. Migration `0009` adds `category`, `product_catalog`,
+`catalog_category`, and `offering_category`; existing offerings remain unclassified.
+No DELETE, import/export or UI management screen is added in this slice.
+
+Both resources support name (required), description, version, optional validFor,
+and lifecycleStatus (default In Design, then the existing forward-only lifecycle).
+lastUpdate is server-managed, accepted and ignored on create and read-only on PATCH.
+Optional description/version/validFor/catalogType may be removed with null.
+Validity here is organizational metadata: it does not change sellability or billing.
+
+A category has at most one parent. `parent` is writable, null removes it;
+`subCategory` is derived and read-only. `isRoot` is derived from the absence of a
+parent; an input value must agree with the resulting parent. Cycles are a 409.
+Catalog `category[]` contains root categories only (409 otherwise). A root referenced
+by a catalog cannot acquire a parent until removed from all catalogs.
+
+Category `productOffering[]` replaces its offering membership atomically; offerings
+may belong to multiple categories. The reciprocal `ProductOffering.category[]` is
+read-only; edit membership through the category. Catalog `category[]` also replaces
+membership. Empty arrays clear membership; PATCH null arrays are a 422. References
+must exist and have the expected referred type; duplicates are a 422. Stored target
+names/hrefs are returned. Reference arrays have stable insertion-time/id ordering.
+
+All category and catalog writes take transaction advisory lock `(620, 9)` before
+reading state, so concurrent reparenting cannot create cycles or invalidate catalog
+roots. Each write and its memberships use one transaction. The new foreign keys,
+membership primary keys and direct self-parent check also protect stored relations.
+List equality filters: name/lifecycleStatus on both, parent.id on categories,
+catalogType on catalogs. Standard pagination, fields and strict queries apply.
+Unsupported optional attributes are rejected rather than discarded.
+
+This adds eight non-listener spec operations: 53/129 (41.1%) implemented across the
+eight vendored APIs, an operation count rather than a conformance certification.
+
+Validation covers schema-checked navigation, replacement without disturbing other
+memberships, missing/duplicate/wrong-type references, fields/queries, lifecycle,
+invalid validity periods, concurrent reparenting, and migration upgrade/downgrade
+while retaining legacy catalog data. Negative proofs removed the cycle guard and
+advisory lock; both corresponding tests failed and the protections were restored.
+The local development database has migrated to `0009`; the browser smoke passed.
+Final backend validation passed 896 tests in each of the CI and dev profiles
+(an earlier full pass had 889 tests before the last seven cases were added).
+Frontend lint, 226 component tests in both configured time zones, and both browser
+smokes passed. Two overlapping backend runs hit the unchanged one-second heartbeat
+threshold; the four heartbeat tests and both final sequential full runs passed.
+Progress reports were regenerated: database 22/22, API 69/69, UI 19/19 and worker
+12/12 implemented and tested. The collection run had one stale-source MCP inspection
+failure because the module changed after import; the fresh-process check and final
+full suites passed. Generated API/database reference pages still await approval of
+the required `scripts/docs/` registry and notes edits. No commit or deployment made.
+
+### Specifications, offerings and prices
+
 | Resource | DB column <-> TMF attribute | Filters |
 |---|---|---|
 | productSpecification | `name`, `description`, `lifecycle_status` <-> `lifecycleStatus`, `updated_at` <-> `lastUpdate` | `name`, `lifecycleStatus` |

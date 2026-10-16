@@ -55,7 +55,7 @@ run 2 "$n" "$patch_cmd" "$(patchp "$(P Update compose.prod.yaml)")" "patch: comp
 run 2 "$n" "$patch_cmd" "$(patchp "$(P Update ../../scripts/deploy.sh)" "$n")" "patch: scripts/ via ../"
 run 2 "$n" "$patch_cmd" "$(patchp "$(P Delete .claude/hooks/guard.sh)")" "patch: delete the Claude guard"
 run 2 "$n" "$patch_cmd" "$(patchp "$(P Update .codex/hooks.json)")" "patch: .codex/"
-run 2 "$n" "$patch_cmd" "$(patchp "$(P Update docs/progress/scope.yaml)")" "patch: scope.yaml"
+run 0 "$n" "$patch_cmd" "$(patchp "$(P Update docs/progress/scope.yaml)")" "patch: scope.yaml is editable"
 run 2 "$n" "$patch_cmd" "$(patchp "$(printf '*** Begin Patch\n*** Update File: app/x.py\n*** Move to: scripts/x.py\n@@\n*** End Patch\n')")" "patch: move into scripts/"
 run 2 "$n" "$patch_cmd" "$(patchp "$(P Update design-ref/a.html)")" "patch: design-ref/"
 run 2 "$n" "$patch_cmd" 'not json' "patch: unparsable payload"

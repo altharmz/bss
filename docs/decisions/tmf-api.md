@@ -1,11 +1,51 @@
 # TMF API: conventions and mappings (TMF632, 629, 666, 676, 637, 678, 622)
 
+The approved [refund/bill-delivery milestone](billing-completion.md) adds TMF676
+refunds, TMF678 customerBillOnDemand, and TMF666 billFormat/billPresentationMedia.
+It extends account billStructure with writable format/media preferences while
+keeping cycleSpecification read-only. Cash payouts reduce balance and unused
+credit; issued bills carry immutable JSON attachments. These decisions extend
+the original mappings below. TMF operation coverage becomes 67/129 (51.9%).
+
 Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
 needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
 proves nothing was lost in the move. Index: [README.md](README.md). The TMF620 catalog
 mapping is in [catalog.md](catalog.md).
 
 ## TMF API conventions (stage 2)
+
+### Billing cycle specification discovery (2026-10-14)
+
+TMF666 now exposes read-only `GET /billingCycleSpecification` and
+`GET /billingCycleSpecification/{id}`. The single supported specification has the
+stable id `monthly`, `billingPeriod` and `frequency` equal to `monthly`, and
+`billingDateShift: 0`: bills collect unbilled charges at the account period start.
+This is the existing billing policy, available even when no accounts exist, not a
+new configurable schedule. Catch-up runs retain the original business dates.
+Offsets for mailing, payment due dates, credits and charges are omitted rather than
+invented: these cannot all be expressed as fixed offsets from the period start.
+
+Every billing account returns a read-only `billStructure.cycleSpecification`
+reference to this policy. The account's `billCycleDay` extension still sets its
+calendar anchor (1..28); it is not a `billingDateShift`. POST/PATCH reject
+`billStructure` rather than silently accepting an unsupported policy choice.
+The list supports equality filters on name, billingPeriod and frequency, standard
+paging/count headers and fields selection; retrieval accepts fields only. Other
+ids return 404. No migration or billing behavior change is needed. The two new
+operations also have read-only MCP tools and vendored-spec contract tests in
+`tests/test_api_cycle_specification.py`.
+
+Local validation: 24 focused contract/MCP tests and three full backend runs passed
+(882 tests each; two dev-profile runs and one CI-profile run). Backend/frontend lint
+and 226 UI tests in each configured time zone passed, as did decisions-check.
+Changing billingDateShift to 1 made the policy test fail; it was restored to 0.
+`make docs` regenerated the API inventory, whose path/method comparison with the
+eight vendored specs confirms 45/129 non-listener operations implemented.
+The human applied the two API scope entries together with the policy change making
+`docs/progress/scope.yaml` editable within authorized feature work. No commit or
+deployment was made for this slice.
+`make progress` then passed all 882 backend and 226 UI tests and regenerated the
+report: db 18/18, API 61/61, UI 19/19 and worker 12/12 implemented and tested.
 
 ### Input correctness and read completeness (2026-10-14)
 

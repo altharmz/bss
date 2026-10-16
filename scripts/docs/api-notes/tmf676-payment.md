@@ -13,4 +13,11 @@
   `::test_currency_must_match_the_account`); the composite foreign key behind it maps to a
   409 if it ever fires (`::test_currency_foreign_key_violation_is_a_409_not_a_500`).
 - Payments are never changed or deleted: PATCH/DELETE are 405 (`::test_payments_cannot_be_changed`).
-- Refunds of payments (`/refund`) are not implemented.
+- Refunds expose list/retrieve/create. POST records a completed payout, never external
+  payment processing. It consumes unused payments then issued credit-note credit, or
+  only a named payment. It cannot exceed positive net balance (including unbilled
+  charges). The account lock and combined source bounds prevent double spending.
+  The ledger calls cash refunds payout; negative ABR refunds remain account credits.
+  Refund method name/type are preserved. Records are immutable. See
+  [billing completion](../decisions/billing-completion.md), tested by
+  tests/test_billing_completion.py.

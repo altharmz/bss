@@ -605,7 +605,7 @@ components:
       properties:
         id: {type: string, format: uuid}
         href: {type: string}
-        type: {type: string, enum: [charge, refund, payment]}
+        type: {type: string, enum: [charge, refund, payment, payout]}
         date:
           description: A charge's or refund's billing run date; a payment's date.
           allOf: [{$ref: '#/components/schemas/BusinessDate'}]

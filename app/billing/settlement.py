@@ -256,6 +256,7 @@ class IssueCandidate:
     state: BillState
     abr_total: Decimal
     abr_count: int
+    on_demand: bool = False
 
 
 def validate(bill: IssueCandidate, period_end: date) -> None:

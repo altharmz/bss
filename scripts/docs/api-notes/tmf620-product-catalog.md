@@ -1,5 +1,11 @@
 ## Behaviour and deviations
 
+Categories form a single-parent hierarchy. Edit parent; subCategory and isRoot are
+derived. Catalogs reference roots only. Cycles and reparenting a catalog root are
+refused (409). Category productOffering and catalog category arrays replace membership;
+[] clears them, PATCH null is refused. ProductOffering.category is read-only.
+See [the catalog decision](../decisions/catalog.md#categories-and-product-catalogs-2026-10-16).
+
 | Rule | Code | Proven by |
 |---|---|---|
 | A price is created on its own (unattached) and attached through the offering's `productOfferingPrice[]` on POST or PATCH. **Deviation:** only references are accepted there, not inline prices (an entry without `id` is a 422) | `app/api/catalog.py` (`_attach_prices`, `OfferingCreate`) | `tests/test_api_catalog.py::test_prices_attach_on_create_and_on_patch` |

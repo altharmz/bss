@@ -26,10 +26,14 @@ from app.api.catalog import (
     SpecificationCreate,
     SpecificationPatch,
 )
+from app.api.classification import CatalogCreate, CatalogPatch, CategoryCreate, CategoryPatch
 from app.api.customer import CustomerCreate, CustomerPatch
+from app.api.on_demand import DemandCreate
 from app.api.ordering import OrderIn
 from app.api.party import IndividualCreate, IndividualPatch, OrganizationCreate, OrganizationPatch
 from app.api.payment import PaymentCreate
+from app.api.presentation import FormatCreate, FormatPatch, MediaCreate, MediaPatch
+from app.api.refunds import RefundCreate
 from app.internal.billing_runs import OUTCOMES, CatchUp
 from app.internal.catalog import PriceChange
 
@@ -75,6 +79,23 @@ class Op:
 
 OPERATIONS: dict[str, Op] = {
     # --- TMF620 product catalog ---
+    "list_categories": Op("Categories and their offerings and child categories.", query=LIST),
+    "get_category": Op("One category.", query=FIELDS),
+    "create_category": Op(
+        "Create a category; parent is optional; productOffering replaces membership.",
+        body=CategoryCreate,
+    ),
+    "patch_category": Op(
+        "Change a category; parent controls hierarchy, subCategory is derived.", body=CategoryPatch
+    ),
+    "list_catalogs": Op("Product catalogs and their root categories.", query=LIST),
+    "get_catalog": Op("One product catalog.", query=FIELDS),
+    "create_catalog": Op(
+        "Create a product catalog referencing root categories.", body=CatalogCreate
+    ),
+    "patch_catalog": Op(
+        "Change a product catalog; category replaces the root category list.", body=CatalogPatch
+    ),
     "list_specifications": Op("Product specifications.", query=LIST),
     "get_specification": Op("One product specification.", query=FIELDS),
     "create_specification": Op(
@@ -133,6 +154,20 @@ OPERATIONS: dict[str, Op] = {
         "Change a customer's name or status; engagedParty is read-only.", body=CustomerPatch
     ),
     # --- TMF666 account ---
+    "list_bill_formats": Op("Bill formats (JSON detailed or JSON summary).", query=LIST),
+    "get_bill_format": Op("One bill format.", query=FIELDS),
+    "create_bill_format": Op(
+        "Create a supported JSON bill renderer configuration.", body=FormatCreate
+    ),
+    "patch_bill_format": Op("Change a bill format for future documents.", body=FormatPatch),
+    "list_bill_media": Op("Bill presentation media preferences.", query=LIST),
+    "get_bill_media": Op("One presentation medium.", query=FIELDS),
+    "create_bill_media": Op(
+        "Create a presentation medium descriptor; no external delivery.", body=MediaCreate
+    ),
+    "patch_bill_media": Op("Change a presentation medium descriptor.", body=MediaPatch),
+    "list_cycle_specifications": Op("Supported billing cycle specifications.", query=LIST),
+    "get_cycle_specification": Op("The monthly billing policy.", query=FIELDS),
     "list_accounts": Op("Billing accounts, with their balance.", query=LIST),
     "get_account": Op(
         "One billing account; accountBalance is payments minus charges (positive = credit).",
@@ -149,6 +184,12 @@ OPERATIONS: dict[str, Op] = {
         body=AccountPatch,
     ),
     # --- TMF676 payment ---
+    "list_refunds": Op("Completed refunds paid out of unused credit.", query=LIST),
+    "get_refund": Op("One completed refund.", query=FIELDS),
+    "create_refund": Op(
+        "Record a completed payout, bounded by unused credit and net account balance.",
+        body=RefundCreate,
+    ),
     "list_payments": Op("Payments received.", query=LIST),
     "get_payment": Op("One payment, with the bills it paid (paymentItem).", query=FIELDS),
     "create_payment": Op(
@@ -164,6 +205,13 @@ OPERATIONS: dict[str, Op] = {
     ),
     "get_product": Op("One product.", query=FIELDS),
     # --- TMF678 customer bill ---
+    "list_bill_demands": Op("On-demand bill requests.", query=LIST),
+    "get_bill_demand": Op("One on-demand bill request and its result.", query=FIELDS),
+    "create_bill_demand": Op(
+        "Queue an off-cycle bill; the worker waits for the next daily run then collects"
+        " posted unbilled charges.",
+        body=DemandCreate,
+    ),
     "list_bills": Op("Customer bills, written by the billing runs.", query=LIST),
     "list_bill_cycles": Op("Daily billing cycles, one per billing run.", query=LIST),
     "get_bill_cycle": Op(

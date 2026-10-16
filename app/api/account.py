@@ -44,8 +44,9 @@ from app.api.common import (
 from app.api.customer import customer_href
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
+from app.api.presentation import BillStructure, structure_body
 from app.api.tmfjson import TmfJSONResponse
-from app.repository import billing, parties
+from app.repository import billing, parties, presentation
 from app.repository._sql import Row
 
 BASE = "/tmf-api/accountManagement/v5"
@@ -85,6 +86,7 @@ EXTENSION_SCHEMA: dict[str, Any] = {
 AccountState = Literal["Active", "Suspended", "Closed"]
 ATTRIBUTES = (
     "name",
+    "billStructure",
     "state",
     "relatedParty",
     "accountBalance",
@@ -101,6 +103,53 @@ BALANCE_TYPE = "currentBalance"
 # never a rewrite of whatever the client sent.
 CUSTOMER_ROLE = "customer"
 
+# The implemented policy is shared by all accounts; the calendar anchor remains the
+# account's billCycleDay extension, not TMF's billingDateShift (an offset).
+CYCLE_ID = "monthly"
+CYCLE_BASE = f"{BASE}/billingCycleSpecification"
+CYCLE_ATTRIBUTES = ("name", "description", "billingPeriod", "frequency", "billingDateShift")
+
+
+def cycle_specification_body() -> dict[str, Any]:
+    return {
+        "id": CYCLE_ID,
+        "href": f"{CYCLE_BASE}/{CYCLE_ID}",
+        "@type": "BillingCycleSpecification",
+        "name": "Monthly billing",
+        "description": (
+            "Calendar monthly periods anchored by the billing account's billCycleDay."
+            " Bills collect unbilled charges on the period start date; daily runs"
+            " catch up missed dates."
+        ),
+        "billingPeriod": "monthly",
+        "frequency": "monthly",
+        "billingDateShift": 0,
+    }
+
+
+@router.get("/billingCycleSpecification")
+def list_cycle_specifications(request: Request) -> TmfJSONResponse:
+    query = listing.parse_list_query(
+        request,
+        filters={
+            "name": ("name", listing.as_str),
+            "billingPeriod": ("billingPeriod", listing.as_str),
+            "frequency": ("frequency", listing.as_str),
+        },
+        attributes=CYCLE_ATTRIBUTES,
+    )
+    policy = cycle_specification_body()
+    rows = [policy] if all(policy[key] == value for key, value in query.where.items()) else []
+    return listing.list_response(rows[query.offset : query.offset + query.limit], len(rows), query)
+
+
+@router.get("/billingCycleSpecification/{specification_id}")
+def get_cycle_specification(specification_id: str, request: Request) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, CYCLE_ATTRIBUTES)
+    if specification_id != CYCLE_ID:
+        raise not_found("billingCycleSpecification", specification_id)
+    return TmfJSONResponse(listing.select_fields(cycle_specification_body(), fields))
+
 
 class RelatedParty(TmfModel):
     role: str | None = None
@@ -115,12 +164,14 @@ class AccountCreate(TmfModel):
     state: AccountState = "Active"
     credit_limit: Money | None = None
     last_update: Any = None
+    bill_structure: BillStructure | None = None
 
 
 class AccountPatch(TmfModel):
     name: str | None = Field(default=None, min_length=1)
     state: AccountState | None = None
     credit_limit: Money | None = None
+    bill_structure: BillStructure | None = None
 
 
 def _credit_limit(limit: Money | None, currency: str) -> Any:
@@ -152,6 +203,16 @@ def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "href": account_href(row["id"]),
         "name": row["name"],
         "state": row["state"],
+        "billStructure": {
+            **structure_body(conn, row["id"]),
+            "@type": "BillStructure",
+            "cycleSpecification": ref(
+                "BillingCycleSpecification",
+                f"{CYCLE_BASE}/{CYCLE_ID}",
+                CYCLE_ID,
+                "Monthly billing",
+            ),
+        },
         "relatedParty": [
             {
                 "role": CUSTOMER_ROLE,
@@ -248,6 +309,9 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
             credit_limit=_credit_limit(data.credit_limit, data.currency),
             opened_at=clock.now(),
         )
+        if data.bill_structure is not None:
+            presentation.set_preferences(conn, row["id"], data.bill_structure)
+            row = parties.get_billing_account(conn, row["id"])
         new = account_body(conn, row)
     return created(listing.select_fields(new, fields))
 
@@ -269,15 +333,19 @@ def patch_account(
         body,
         read_only=("accountBalance", "currency", "relatedParty", "lastUpdate"),
     )
-    not_null(data, "name", "state")
+    not_null(data, "name", "state", "bill_structure")
     with tx() as conn:
         uid = parse_id("billingAccount", account_id)
         current = parties.get_billing_account(conn, uid)
         if current is None:
             raise not_found("billingAccount", account_id)
-        changes = columns(data, exclude=frozenset({"credit_limit"}))
+        billing.load_account(conn, uid)
+        changes = columns(data, exclude=frozenset({"credit_limit", "bill_structure"}))
         if "credit_limit" in data.model_fields_set:  # null removes it
             changes["credit_limit"] = _credit_limit(data.credit_limit, current["currency"])
         row = parties.update_billing_account(conn, uid, changes)
+        if data.bill_structure is not None:
+            presentation.set_preferences(conn, uid, data.bill_structure)
+            row = parties.get_billing_account(conn, uid)
         patched = account_body(conn, row)
     return TmfJSONResponse(listing.select_fields(patched, fields))

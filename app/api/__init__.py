@@ -10,17 +10,34 @@ from app.api import (
     account,
     bill,
     catalog,
+    classification,
     customer,
     errors,
     inventory,
+    on_demand,
     ordering,
     party,
     payment,
+    presentation,
+    refunds,
 )
 
 
 def install(app: FastAPI) -> None:
     errors.install(app)
-    for module in (catalog, party, customer, account, payment, inventory, bill, ordering):
+    for module in (
+        catalog,
+        classification,
+        party,
+        customer,
+        account,
+        payment,
+        refunds,
+        presentation,
+        inventory,
+        bill,
+        on_demand,
+        ordering,
+    ):
         app.include_router(module.router)
     app.include_router(account.schema_router)

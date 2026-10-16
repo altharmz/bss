@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/customerBillManagement/v5`
 - Contract: [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml) - CustomerBill version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 7
+- Operations exposed: 10
 
 
 ## Operations
@@ -18,13 +18,16 @@
 | GET | `/tmf-api/customerBillManagement/v5/customerBill` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `state` | - | 200 `array of CustomerBill` | [`app/api/bill.py`](../../app/api/bill.py) |
 | GET | `/tmf-api/customerBillManagement/v5/customerBill/{bill_id}` | path: `bill_id`; query: `fields` | - | 200 `CustomerBill` | [`app/api/bill.py`](../../app/api/bill.py) |
 | PATCH | `/tmf-api/customerBillManagement/v5/customerBill/{bill_id}` | path: `bill_id`; query: `fields`; body: `application/merge-patch+json` | `CustomerBill_MVO` | 200 `CustomerBill` | [`app/api/bill.py`](../../app/api/bill.py) |
+| GET | `/tmf-api/customerBillManagement/v5/customerBillOnDemand` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `state` | - | 200 `array of CustomerBillOnDemand` | [`app/api/on_demand.py`](../../app/api/on_demand.py) |
+| POST | `/tmf-api/customerBillManagement/v5/customerBillOnDemand` | query: `fields`; body: `application/json` | `CustomerBillOnDemand_FVO` | 201 `CustomerBillOnDemand` | [`app/api/on_demand.py`](../../app/api/on_demand.py) |
+| GET | `/tmf-api/customerBillManagement/v5/customerBillOnDemand/{demand_id}` | path: `demand_id`; query: `fields` | - | 200 `CustomerBillOnDemand` | [`app/api/on_demand.py`](../../app/api/on_demand.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 
 
 ## Coverage of the spec
 
-- Resources of the spec that are **not implemented**: `/customerBillOnDemand`, `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
+- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
 
 
 ## Behaviour and deviations
@@ -51,7 +54,16 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF678-C
   own date, unaffected by today's clock. Tax-included/excluded amounts equal the
   issued `amountDue` (no taxes), including negative credit notes.
   `tests/test_api_read_completeness.py` checks links, dates, fields and MCP tools.
-- `/customerBillOnDemand` is not implemented.
+- /customerBillOnDemand exposes list/retrieve/create of durable requests. The worker
+  waits for a successful account run that sees orders completed on the request day,
+  then issues one offCycle bill from posted unbilled ABRs, or rejects if none remain.
+  Request state and bill commit together; replay is harmless. Monthly anchors stay
+  unchanged. Failed/blocked account runs keep requests pending; validation errors
+  terminate the request with rollback of its financial writes.
+- Newly issued bills carry billDocument: a base64 JSON attachment with exact totals,
+  optional charge detail, and snapshotted presentation preferences. Configuration
+  and settlement changes do not rewrite it. Legacy documents are not fabricated.
+  See [billing completion](../decisions/billing-completion.md).
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf678-customer-bill.md`](../../scripts/docs/api-notes/tmf678-customer-bill.md).
 

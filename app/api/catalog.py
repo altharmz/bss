@@ -44,7 +44,7 @@ from app.api.common import (
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
-from app.repository import catalog
+from app.repository import catalog, classification
 from app.repository._sql import Row
 
 BASE = "/tmf-api/productCatalogManagement/v5"
@@ -81,6 +81,7 @@ OFFERING_ATTRIBUTES = (
     "productOfferingPrice",
     "externalIdentifier",
     "lastUpdate",
+    "category",
 )
 CODE_TYPE = "offeringCode"
 CODE_OWNER = "bss"
@@ -438,6 +439,10 @@ def offering_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                 )
                 for price in prices
             ],
+            "category": [
+                ref("Category", _href("category", c["id"]), c["id"], c["name"])
+                for c in classification.memberships(conn, "offering", row["id"])
+            ],
             "externalIdentifier": None
             if row["code"] is None
             else [
@@ -584,7 +589,7 @@ def patch_offering(
     data = parse(
         OfferingPatch,
         body,
-        read_only=("lastUpdate", "productSpecification", "externalIdentifier"),
+        read_only=("lastUpdate", "productSpecification", "externalIdentifier", "category"),
     )
     not_null(data, "name", "lifecycle_status", "valid_for", "is_sellable", "product_offering_price")
     changes = columns(data, exclude=frozenset({"valid_for", "product_offering_price"}))

@@ -22,4 +22,13 @@
   own date, unaffected by today's clock. Tax-included/excluded amounts equal the
   issued `amountDue` (no taxes), including negative credit notes.
   `tests/test_api_read_completeness.py` checks links, dates, fields and MCP tools.
-- `/customerBillOnDemand` is not implemented.
+- /customerBillOnDemand exposes list/retrieve/create of durable requests. The worker
+  waits for a successful account run that sees orders completed on the request day,
+  then issues one offCycle bill from posted unbilled ABRs, or rejects if none remain.
+  Request state and bill commit together; replay is harmless. Monthly anchors stay
+  unchanged. Failed/blocked account runs keep requests pending; validation errors
+  terminate the request with rollback of its financial writes.
+- Newly issued bills carry billDocument: a base64 JSON attachment with exact totals,
+  optional charge detail, and snapshotted presentation preferences. Configuration
+  and settlement changes do not rewrite it. Legacy documents are not fabricated.
+  See [billing completion](../decisions/billing-completion.md).

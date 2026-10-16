@@ -50,4 +50,4 @@ SID ProductOffering (TMF620 productOffering): a sellable offer built on one spec
 
 ## Referenced by
 
-[`product`](product.md), [`product_offering_price`](product_offering_price.md), [`product_order_item`](product_order_item.md)
+[`offering_category`](offering_category.md), [`product`](product.md), [`product_offering_price`](product_offering_price.md), [`product_order_item`](product_order_item.md)

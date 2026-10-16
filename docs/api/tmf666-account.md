@@ -4,17 +4,27 @@
 
 - Base path here: `/tmf-api/accountManagement/v5`
 - Contract: [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml) - Account Management version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 5
+- Operations exposed: 15
 
 
 ## Operations
 
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
+| GET | `/tmf-api/accountManagement/v5/billFormat` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `name` | - | 200 `array of BillFormat` | [`app/api/presentation.py`](../../app/api/presentation.py) |
+| POST | `/tmf-api/accountManagement/v5/billFormat` | query: `fields`; body: `application/json` | `BillFormat_FVO` | 201 `BillFormat` | [`app/api/presentation.py`](../../app/api/presentation.py) |
+| GET | `/tmf-api/accountManagement/v5/billFormat/{format_id}` | path: `format_id`; query: `fields` | - | 200 `BillFormat` | [`app/api/presentation.py`](../../app/api/presentation.py) |
+| PATCH | `/tmf-api/accountManagement/v5/billFormat/{format_id}` | path: `format_id`; query: `fields`; body: `application/merge-patch+json` | `BillFormat_MVO` | 200 `BillFormat` | [`app/api/presentation.py`](../../app/api/presentation.py) |
+| GET | `/tmf-api/accountManagement/v5/billPresentationMedia` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `name` | - | 200 `array of BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
+| POST | `/tmf-api/accountManagement/v5/billPresentationMedia` | query: `fields`; body: `application/json` | `BillPresentationMedia_FVO` | 201 `BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
+| GET | `/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}` | path: `media_id`; query: `fields` | - | 200 `BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
+| PATCH | `/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}` | path: `media_id`; query: `fields`; body: `application/merge-patch+json` | `BillPresentationMedia_MVO` | 200 `BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | GET | `/tmf-api/accountManagement/v5/billingAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `name`, `relatedParty.id`, `state` | - | 200 `array of BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | POST | `/tmf-api/accountManagement/v5/billingAccount` | query: `fields`; body: `application/json` | `BillingAccount_FVO` | 201 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | PATCH | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `BillingAccount_MVO` | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| GET | `/tmf-api/accountManagement/v5/billingCycleSpecification` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingPeriod`, `frequency`, `name` | - | 200 `array of BillingCycleSpecification` | [`app/api/account.py`](../../app/api/account.py) |
+| GET | `/tmf-api/accountManagement/v5/billingCycleSpecification/{specification_id}` | path: `specification_id`; query: `fields` | - | 200 `BillingCycleSpecification` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/schema/BssBillingAccount.schema.json` | - | - | 200 - JSON Schema of the BssBillingAccount extension (`app/api/account.py`) | [`app/api/account.py`](../../app/api/account.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
@@ -62,11 +72,20 @@ Every billingAccount body carries `@type: BssBillingAccount`, `@baseType: Billin
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /billingAccount/{id}`.
-- Resources of the spec that are **not implemented**: `/billFormat`, `/billPresentationMedia`, `/billingCycleSpecification`, `/financialAccount`, `/hub`, `/listener`, `/partyAccount`, `/settlementAccount` (`/hub` and `/listener/*`: no event notifications).
+- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /billFormat/{id}`, `DELETE /billPresentationMedia/{id}`, `DELETE /billingAccount/{id}`, `POST /billingCycleSpecification`, `DELETE /billingCycleSpecification/{id}`, `PATCH /billingCycleSpecification/{id}`.
+- Resources of the spec that are **not implemented**: `/financialAccount`, `/hub`, `/listener`, `/partyAccount`, `/settlementAccount` (`/hub` and `/listener/*`: no event notifications).
 
 
 ## Behaviour and deviations
+
+Bill formats and presentation media expose list/retrieve/create/PATCH. Formats are
+JSON detailed (charges and totals) or JSON summary (totals). Names are unique.
+Account billStructure.format and presentationMedia reference configuration records;
+partial merge-patch preserves unspecified preferences. Format null restores the
+default; media []/null clears media. CycleSpecification remains read-only.
+Issued documents snapshot preferences; external delivery is not performed.
+The balance formula below is extended by subtracting completed cash refunds.
+See [billing completion](../decisions/billing-completion.md).
 
 | Rule | Code | Proven by |
 |---|---|---|

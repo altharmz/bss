@@ -24,7 +24,8 @@
       "Edit(./tests/**)",
       "Read(./frontend/**)",
       "Edit(./frontend/**)",
-      "Read(./design-ref/**)"
+      "Read(./design-ref/**)",
+      "Edit(./docs/progress/scope.yaml)"
     ],
     "ask": [
       "Edit(./.claude/**)",
@@ -32,8 +33,7 @@
       "Edit(./compose.yaml)",
       "Edit(./compose.prod.yaml)",
       "Edit(./Makefile)",
-      "Edit(./scripts/**)",
-      "Edit(./docs/progress/scope.yaml)"
+      "Edit(./scripts/**)"
     ],
     "deny": [
       "Read(./.env)",

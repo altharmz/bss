@@ -1,5 +1,14 @@
 ## Behaviour and deviations
 
+Bill formats and presentation media expose list/retrieve/create/PATCH. Formats are
+JSON detailed (charges and totals) or JSON summary (totals). Names are unique.
+Account billStructure.format and presentationMedia reference configuration records;
+partial merge-patch preserves unspecified preferences. Format null restores the
+default; media []/null clears media. CycleSpecification remains read-only.
+Issued documents snapshot preferences; external delivery is not performed.
+The balance formula below is extended by subtracting completed cash refunds.
+See [billing completion](../decisions/billing-completion.md).
+
 | Rule | Code | Proven by |
 |---|---|---|
 | Responses are the extension `BssBillingAccount` (above): `billCycleDay` (1..28) and `currency` (ISO 4217) are required on create. TMF666 has no currency attribute, and `billStructure.cycleSpecification.billingDateShift` is an offset of the bill date, not the day a period starts - hence the extension | `app/api/account.py` | `tests/test_api_parties.py::test_billing_account_with_extension_and_balance`, `::test_the_extension_schema_is_served_and_valid`, `::test_the_client_checks_the_extension_schema` |

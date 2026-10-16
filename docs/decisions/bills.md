@@ -1,5 +1,10 @@
 # Bill lifecycle (option C)
 
+The approved refund/bill-delivery milestone extends credit sources with payout
+consumption, adds worker-owned off-cycle requests and immutable issued JSON bill
+documents. See [billing-completion.md](billing-completion.md). Its rules supersede
+the original payment-only source totals where payouts are present.
+
 Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
 needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
 proves nothing was lost in the move. Index: [README.md](README.md).

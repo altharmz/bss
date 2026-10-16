@@ -474,6 +474,7 @@ def insert_bill(
     billing_run_id: UUID,
     payment_due_date: date,
     state: str = "new",
+    run_type: str = "onCycle",
 ) -> Row:
     """The category follows from the amount: a negative bill is a credit note."""
     return returning(
@@ -481,8 +482,8 @@ def insert_bill(
         """
         INSERT INTO customer_bill
             (billing_account_id, currency, bill_period, bill_date, state, amount_due,
-             billing_run_id, payment_due_date, category)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
+             billing_run_id, payment_due_date, category, run_type)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
         """,
         (
             billing_account_id,
@@ -494,6 +495,7 @@ def insert_bill(
             billing_run_id,
             payment_due_date,
             "creditNote" if amount_due < 0 else "normal",
+            run_type,
         ),
     )
 
@@ -511,6 +513,8 @@ def account_balance(conn: psycopg.Connection, billing_account_id: UUID) -> Decim
             (SELECT coalesce(sum(amount), 0) FROM payment
              WHERE billing_account_id = %(id)s AND status = 'done')
           - (SELECT coalesce(sum(amount), 0) FROM applied_customer_billing_rate
+             WHERE billing_account_id = %(id)s)
+          - (SELECT coalesce(sum(amount), 0) FROM refund
              WHERE billing_account_id = %(id)s) AS balance
         """,
         {"id": billing_account_id},
@@ -682,7 +686,7 @@ def load_bills(conn: psycopg.Connection, account_id: UUID) -> tuple[StoredBill, 
     rows = fetch_all(
         conn,
         "SELECT id, bill_period, bill_date FROM customer_bill WHERE billing_account_id = %s"
-        " ORDER BY bill_date",
+        " AND run_type = 'onCycle' ORDER BY bill_date",
         (account_id,),
     )
     return tuple(
@@ -758,7 +762,9 @@ def load_settlement(
                coalesce((SELECT sum(amount) FROM bill_allocation
                          WHERE customer_bill_id = b.id), 0) AS allocated,
                coalesce((SELECT sum(amount) FROM bill_allocation
-                         WHERE credit_bill_id = b.id), 0) AS credit_used
+                         WHERE credit_bill_id = b.id), 0)
+               + coalesce((SELECT sum(amount) FROM refund_source
+                           WHERE credit_bill_id = b.id), 0) AS credit_used
         FROM customer_bill b WHERE b.billing_account_id = %s ORDER BY b.bill_date
         """,
         (account_id,),
@@ -768,7 +774,9 @@ def load_settlement(
         """
         SELECT p.id, p.received_at, p.amount,
                coalesce((SELECT sum(amount) FROM bill_allocation
-                         WHERE payment_id = p.id), 0) AS used
+                         WHERE payment_id = p.id), 0)
+               + coalesce((SELECT sum(amount) FROM refund_source
+                           WHERE payment_id = p.id), 0) AS used
         FROM payment p WHERE p.billing_account_id = %s AND p.status = 'done'
         ORDER BY p.received_at, p.id
         """,
@@ -886,7 +894,7 @@ def load_issue_candidates(
     rows = fetch_all(
         conn,
         """
-        SELECT b.id, b.bill_date, b.bill_period, b.amount_due, b.state,
+        SELECT b.id, b.bill_date, b.bill_period, b.amount_due, b.state, b.run_type,
                coalesce(sum(a.amount), 0) AS abr_total, count(a.id) AS abr_count
         FROM customer_bill b
         LEFT JOIN applied_customer_billing_rate a ON a.customer_bill_id = b.id
@@ -905,6 +913,7 @@ def load_issue_candidates(
             state=r["state"],
             abr_total=r["abr_total"],
             abr_count=r["abr_count"],
+            on_demand=r["run_type"] == "offCycle",
         )
         for r in rows
     )
@@ -1005,6 +1014,8 @@ def settlement_summary(conn: psycopg.Connection, account_id: UUID, today: date) 
                         WHERE customer_bill_id = b.id), 0) ELSE 0 END AS remaining,
                    CASE WHEN b.amount_due < 0 AND b.state = 'settled' THEN -b.amount_due
                        - coalesce((SELECT sum(amount) FROM bill_allocation
+                                   WHERE credit_bill_id = b.id), 0)
+                       - coalesce((SELECT sum(amount) FROM refund_source
                                    WHERE credit_bill_id = b.id), 0) ELSE 0 END AS credit_left
             FROM customer_bill b WHERE b.billing_account_id = %(account)s
         )
@@ -1018,7 +1029,9 @@ def settlement_summary(conn: psycopg.Connection, account_id: UUID, today: date) 
             coalesce(sum(remaining) FILTER (WHERE state = 'onHold'), 0) AS on_hold_amount,
             coalesce(sum(credit_left), 0)
               + (SELECT coalesce(sum(p.amount - coalesce((SELECT sum(amount)
-                         FROM bill_allocation WHERE payment_id = p.id), 0)), 0)
+                         FROM bill_allocation WHERE payment_id = p.id), 0)
+                         - coalesce((SELECT sum(amount) FROM refund_source
+                                     WHERE payment_id = p.id), 0)), 0)
                  FROM payment p
                  WHERE p.billing_account_id = %(account)s AND p.status = 'done')
                 AS unallocated_credit
@@ -1098,13 +1111,19 @@ def page_account_transactions(
                    received_at, payment_method, NULL
             FROM payment
             WHERE billing_account_id = %(account)s AND status = 'done'
+            UNION ALL
+            SELECT id, 'payout', -amount, (refunded_at AT TIME ZONE %(tz)s)::date, 1,
+                   refunded_at, coalesce(method_name, method_type), NULL
+            FROM refund WHERE billing_account_id = %(account)s
         ),
         running AS (
-            SELECT *, sum(amount) OVER (ORDER BY day, rank, at, id) AS balance_after
+            SELECT *, sum(amount) OVER (
+                ORDER BY day, rank, at, (kind = 'payout'), id
+            ) AS balance_after
             FROM ledger
         )
         SELECT * FROM running
-        ORDER BY day DESC, rank DESC, at DESC, id DESC
+        ORDER BY day DESC, rank DESC, at DESC, (kind = 'payout') DESC, id DESC
         OFFSET %(offset)s LIMIT %(limit)s
         """,
         {"account": account_id, "tz": tz, "offset": offset, "limit": limit},
@@ -1115,7 +1134,8 @@ def page_account_transactions(
         SELECT (SELECT count(*) FROM applied_customer_billing_rate
                 WHERE billing_account_id = %(account)s)
              + (SELECT count(*) FROM payment
-                WHERE billing_account_id = %(account)s AND status = 'done') AS n
+                WHERE billing_account_id = %(account)s AND status = 'done')
+             + (SELECT count(*) FROM refund WHERE billing_account_id = %(account)s) AS n
         """,
         {"account": account_id},
     )

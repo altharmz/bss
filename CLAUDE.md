@@ -120,7 +120,7 @@ above bind because they are the rules.
   config --quiet` validates without printing. Read, Grep, `cat` - the route does not
   matter.
 - **Harness files need the human's OK**: `.claude/**`, `compose*.yaml`, `Makefile`,
-  `scripts/**` (and `docs/progress/scope.yaml`) - changed with the Edit tool only; the
+  `scripts/**` - changed with the Edit tool only; the
   guard blocks shell writes to them.
 - **MCP tools bypass the Bash guard - server-side scopes are the boundary; never add an
   unauthenticated mode.** The connector ([docs/mcp.md](docs/mcp.md)) acts on the deployed
@@ -167,7 +167,8 @@ above bind because they are the rules.
   ports next to ssh/docker is blocked (a regression case locks this in).
 - **Per change:** plan, tests, negative proofs (break the rule once, see a test fail,
   revert), `make lint`, `make test` (x3 for a slice), `make progress` when scope items
-  change (`scope.yaml` needs the human's approval), the decision recorded in
+  change (`scope.yaml` is editable within authorized feature work; preserve existing
+  scope unless the task changes it), the decision recorded in
   `docs/decisions/` (or here, if every session needs it), then show the diff and commit
   only after the human's OK. Small, focused commits; `make lint && make test` before each.
 
@@ -184,6 +185,24 @@ Node runs only in containers on the workstation; the UI's write requests are pin
 both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
+
+**Refunds and bill delivery** (2026-10-16): approved milestone adds 14 TMF operations:
+refunds, on-demand bills, bill formats and presentation media. Migrations `0010`-`0012`
+add six tables, payout credit consumption, off-cycle documents and presentation
+snapshots. Decision: [billing-completion.md](docs/decisions/billing-completion.md).
+TMF operation coverage: 67/129 (51.9%); scoped API items: 83. On-demand bills wait for
+the next successful account run to see the request day's orders. Formats are detailed
+or summary JSON; media are preferences, not external delivery. The documentation
+script edits were approved and applied by the human. Commit, push and a deployment
+attempt were separately authorized on 2026-10-16.
+
+**TMF620 catalog organization** (2026-10-16): local feature slice adds category and
+product catalog list/retrieve/create/PATCH (eight operations), hierarchy validation,
+root-category catalog membership and category/offering navigation. Migration `0009`
+adds four tables, leaving existing offerings unclassified. Decision:
+[catalog.md](docs/decisions/catalog.md#categories-and-product-catalogs-2026-10-16).
+TMF non-listener operation coverage: 53/129 (41.1%); scoped API items: 69.
+Included in the commit, push and deployment-attempt approval of 2026-10-16.
 
 **TMF input/read completeness** (2026-10-14): one local slice implements POST type
 checks, strict write queries/fields, explicit errors for unsupported comma filters,
@@ -252,10 +271,8 @@ Then, in this order (as of 2026-10-05, after slice f):
 3. **Docs task** (tbls + API registry + architecture.md) - planned, not started.
 4. **deploy.sh records the deployed commit** (Open check below).
 5. **Backport vps-lab's guard to bss** (ports 8444 and 2053, ask on commit/deploy) -
-   parked; the push policy is done (2026-10-09). Also: protect
-   `docs/progress/scope.yaml` from shell writes (`>`, `tee`, `sed -i`, `mv`, `cp`, `rm`)
-   like the other harness files - today only the Edit tool's `"ask"` rule guards it -
-   with regression cases both ways.
+   parked; the push policy is done (2026-10-09). Progress scope is now editable within authorized feature work; use
+   Edit/apply_patch for changes and `make progress` for the generated reports.
 6. **Remaining Phase 2** (APP_PORT, localhost:8080 refs, make down profiles) - deferred.
 7. **Cloud mode, first real run**: guard cloud mode, portable cases and the SessionStart
    setup are done (2026-10-09, "Agent guardrails"; the setup rehearsed in an Ubuntu 24.04

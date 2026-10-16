@@ -1,5 +1,10 @@
 # Internal API (`/internal/v1`)
 
+Refund/bill-delivery milestone: the transaction ledger also includes `payout`
+(negative cash refund), while `refund` remains a positive ABR credit. Balance and
+unallocated credit subtract consumed payout sources. See
+[billing-completion.md](billing-completion.md) for the extended financial rules.
+
 Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
 needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
 proves nothing was lost in the move. Index: [README.md](README.md).

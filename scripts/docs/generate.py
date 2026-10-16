@@ -113,6 +113,12 @@ NO_SPEC = {
 
 # Where each operation's handler lives (for the "Code" column).
 HANDLERS = {
+    "/tmf-api/productCatalogManagement/v5/category": "app/api/classification.py",
+    "/tmf-api/productCatalogManagement/v5/productCatalog": "app/api/classification.py",
+    "/tmf-api/paymentManagement/v4/refund": "app/api/refunds.py",
+    "/tmf-api/customerBillManagement/v5/customerBillOnDemand": "app/api/on_demand.py",
+    "/tmf-api/accountManagement/v5/billFormat": "app/api/presentation.py",
+    "/tmf-api/accountManagement/v5/billPresentationMedia": "app/api/presentation.py",
     "/tmf-api/productCatalogManagement/v5": "app/api/catalog.py",
     "/tmf-api/productOrderingManagement/v5": "app/api/ordering.py",
     "/tmf-api/customerManagement/v5": "app/api/customer.py",
@@ -134,7 +140,10 @@ HANDLERS = {
 # Table -> area of the ER diagram. Every table must be listed (and nothing else).
 AREAS = {
     "party": ("party", "customer", "billing_account"),
-    "catalog": ("product_specification", "product_offering", "product_offering_price"),
+    "catalog": (
+        "product_specification", "product_offering", "product_offering_price",
+        "category", "product_catalog", "catalog_category", "offering_category",
+    ),
     "ordering": ("product_order", "product_order_item", "product_order_error_message"),
     "inventory": ("product",),
     "billing": (
@@ -144,6 +153,8 @@ AREAS = {
         "payment",
         "bill_allocation",
         "customer_bill_state_change",
+        "refund", "refund_source", "customer_bill_on_demand",
+        "bill_format", "bill_presentation_media", "account_presentation_media",
     ),
     "worker": ("billing_run_account", "worker_request"),
 }

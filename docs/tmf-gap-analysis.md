@@ -1,5 +1,17 @@
 # TMF conformance gap analysis
 
+**Refund/bill-delivery milestone (2026-10-16).** Refunds (3 operations), on-demand
+bills (3), formats and presentation media (8) bring non-listener TMF operation
+coverage to 67/129 (51.9%). Account preferences drive immutable JSON bill documents;
+refunds consume real unused credit. See [the decision](decisions/billing-completion.md)
+for supported behavior and limits. Older tables below remain a dated snapshot.
+
+**Catalog organization follow-up (2026-10-16).** Category and product catalog
+list/retrieve/create/PATCH add eight operations, bringing non-listener operation
+coverage to 53/129 (41.1%). Category hierarchies, catalog root membership and
+category/offering navigation are supported. See [the catalog decision](decisions/catalog.md#categories-and-product-catalogs-2026-10-16).
+The original analysis below remains a dated snapshot.
+
 Analysis only - nothing in the code was changed. Written 2026-10-12 against `master` at
 `94200ee`.
 
@@ -9,6 +21,13 @@ B1/B2/B3's prices, navigation and bill-cycle reads. The tables below remain the 
 analysis of `94200ee`; current behavior and the limits on historical quotes are in
 [decisions/tmf-api.md](decisions/tmf-api.md#input-correctness-and-read-completeness-2026-10-14).
 The accepted `@baseType`/`@schemaLocation` metadata is still not persisted.
+
+**Billing policy follow-up (2026-10-14).** TMF666's billing cycle specification
+list/retrieve operations now expose the supported monthly policy, referenced by
+billing accounts. Together with the two bill-cycle reads above, this brings the
+implemented non-listener operations to 45/129 (34.9%). The dated tables below are
+unchanged; see [the current decision](decisions/tmf-api.md#billing-cycle-specification-discovery-2026-10-14)
+for the read-only policy and its distinction from an account's calendar anchor.
 
 **Sources.** The vendored specs in `spec/` (versions and upstream commits in
 [spec/README.md](../spec/README.md)), the code in `app/` and `bss_mcp/`, the tests, and the

@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0008**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0012**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -12,6 +12,10 @@ PostgreSQL schema at Alembic head **0008**, read from `pg_catalog` of a throwawa
 | [`product_specification`](product_specification.md) | catalog | SID ProductSpecification (TMF620 productSpecification): what a product is, independent of how it is sold. |
 | [`product_offering`](product_offering.md) | catalog | SID ProductOffering (TMF620 productOffering): a sellable offer built on one specification. Lifecycle only moves forward: In Design -> Active -> Retired. |
 | [`product_offering_price`](product_offering_price.md) | catalog | SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its own and attached to at most one offering. Never re-priced, never starts in the past, never ended retroactively; prices of one offering, type and currency never overlap. |
+| [`category`](category.md) | catalog | TMF620 catalog organization resource. |
+| [`product_catalog`](product_catalog.md) | catalog | TMF620 catalog organization resource. |
+| [`catalog_category`](catalog_category.md) | catalog | TMF620 many-to-many category membership. |
+| [`offering_category`](offering_category.md) | catalog | TMF620 many-to-many category membership. |
 | [`product_order`](product_order.md) | ordering | SID ProductOrder (TMF622 productOrder): the only way to create or terminate products. Processed synchronously; a rejected order is stored with its reasons. |
 | [`product_order_item`](product_order_item.md) | ordering | SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product. At most one open delete item per product (partial unique index). |
 | [`product_order_error_message`](product_order_error_message.md) | ordering | TMF622 productOrderErrorMessage: why an order was rejected - one row per reason, for the order as a whole or for one item. |
@@ -22,6 +26,12 @@ PostgreSQL schema at Alembic head **0008**, read from `pg_catalog` of a throwawa
 | [`payment`](payment.md) | billing | SID Payment (TMF676 v4 payment): money received on a billing account. Never changed or deleted. |
 | [`bill_allocation`](bill_allocation.md) | billing | An amount applied to a customer bill (ours; TMF678 appliedPayment, TMF676 paymentItem): from a payment or from the credit of a negative bill, automatic (oldest open bill first) or explicit. Append-only. Bounds: per paid bill <= its amount due, per payment <= its amount, per credit note <= minus its amount due (deferred constraint trigger). |
 | [`customer_bill_state_change`](customer_bill_state_change.md) | billing | Every state change of a customer bill (ours), oldest first; the first row of a bill is its issue (from_state NULL). |
+| [`refund`](refund.md) | billing | TMF676 recorded refund and its consumed credit. |
+| [`refund_source`](refund_source.md) | billing | TMF676 recorded refund and its consumed credit. |
+| [`customer_bill_on_demand`](customer_bill_on_demand.md) | billing | Durable TMF678 on-demand request consumed by the billing owner. |
+| [`bill_format`](bill_format.md) | billing | TMF666 bill presentation configuration. |
+| [`bill_presentation_media`](bill_presentation_media.md) | billing | TMF666 bill presentation configuration. |
+| [`account_presentation_media`](account_presentation_media.md) | billing | Account bill delivery preferences; no external delivery is performed. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
 | [`worker_request`](worker_request.md) | worker | The admin UI's queue for the billing worker (ours): catch-up and retry requests. The API only inserts; the worker picks them up oldest first. |
 
@@ -40,6 +50,10 @@ flowchart LR
     product_specification[product_specification]
     product_offering[product_offering]
     product_offering_price[product_offering_price]
+    category[category]
+    product_catalog[product_catalog]
+    catalog_category[catalog_category]
+    offering_category[offering_category]
   end
   subgraph area_ordering["Ordering (TMF622)"]
     product_order[product_order]
@@ -56,11 +70,19 @@ flowchart LR
     payment[payment]
     bill_allocation[bill_allocation]
     customer_bill_state_change[customer_bill_state_change]
+    refund[refund]
+    refund_source[refund_source]
+    customer_bill_on_demand[customer_bill_on_demand]
+    bill_format[bill_format]
+    bill_presentation_media[bill_presentation_media]
+    account_presentation_media[account_presentation_media]
   end
   subgraph area_worker["Billing worker (ours)"]
     billing_run_account[billing_run_account]
     worker_request[worker_request]
   end
+  account_presentation_media -->|"billing_account_id"| billing_account
+  account_presentation_media -->|"media_id"| bill_presentation_media
   applied_customer_billing_rate -->|"billing_account_id"| billing_account
   applied_customer_billing_rate -->|"billing_run_id"| billing_run
   applied_customer_billing_rate -->|"customer_bill_id, billing_account_id"| customer_bill
@@ -70,14 +92,22 @@ flowchart LR
   bill_allocation -->|"credit_bill_id, billing_account_id"| customer_bill
   bill_allocation -->|"customer_bill_id, billing_account_id"| customer_bill
   bill_allocation -->|"payment_id, billing_account_id"| payment
+  billing_account -->|"bill_format_id"| bill_format
   billing_account -->|"customer_id"| customer
   billing_run_account -->|"billing_account_id"| billing_account
   billing_run_account -->|"run_id"| billing_run
   billing_run_account -->|"waits_for_run_id"| billing_run
+  catalog_category -->|"catalog_id"| product_catalog
+  catalog_category -->|"category_id"| category
+  category -->|"parent_id"| category
   customer -->|"party_id"| party
   customer_bill -->|"billing_account_id"| billing_account
   customer_bill -->|"billing_run_id"| billing_run
+  customer_bill_on_demand -->|"billing_account_id"| billing_account
+  customer_bill_on_demand -->|"customer_bill_id"| customer_bill
   customer_bill_state_change -->|"customer_bill_id"| customer_bill
+  offering_category -->|"category_id"| category
+  offering_category -->|"offering_id"| product_offering
   payment -->|"billing_account_id"| billing_account
   product -->|"billing_account_id"| billing_account
   product -->|"created_by_item_id"| product_order_item
@@ -92,6 +122,11 @@ flowchart LR
   product_order_item -->|"product_offering_id"| product_offering
   product_order_item -->|"product_order_id"| product_order
   product_order_item -->|"quoted_price_id"| product_offering_price
+  refund -->|"billing_account_id"| billing_account
+  refund -->|"payment_id, billing_account_id"| payment
+  refund_source -->|"credit_bill_id, billing_account_id"| customer_bill
+  refund_source -->|"payment_id, billing_account_id"| payment
+  refund_source -->|"refund_id, billing_account_id"| refund
   worker_request -->|"run_id"| billing_run
 ```
 
@@ -127,10 +162,17 @@ erDiagram
     smallint bill_cycle_day
     numeric credit_limit
     timestamptz opened_at
+    uuid bill_format_id FK
   }
+  bill_format {
+    uuid id PK
+  }
+  bill_format |o--o{ billing_account : "bill_format_id"
   customer ||--o{ billing_account : "customer_id"
   party ||--o{ customer : "party_id"
 ```
+
+Tables from other areas are shown with their key only: [`bill_format`](bill_format.md).
 
 ## Catalog (TMF620)
 
@@ -170,7 +212,44 @@ erDiagram
     tstzrange valid_for
     lifecycle_status lifecycle_status
   }
+  category {
+    uuid id PK
+    text name
+    text description
+    lifecycle_status lifecycle_status
+    text version
+    tstzrange valid_for
+    timestamptz created_at
+    timestamptz updated_at
+    uuid parent_id FK
+  }
+  product_catalog {
+    uuid id PK
+    text name
+    text description
+    lifecycle_status lifecycle_status
+    text version
+    tstzrange valid_for
+    timestamptz created_at
+    timestamptz updated_at
+    text catalog_type
+  }
+  catalog_category {
+    uuid catalog_id PK,FK
+    uuid category_id PK,FK
+    timestamptz created_at
+  }
+  offering_category {
+    uuid offering_id PK,FK
+    uuid category_id PK,FK
+    timestamptz created_at
+  }
+  category |o--o{ category : "parent_id"
+  category ||--o{ catalog_category : "category_id"
+  category ||--o{ offering_category : "category_id"
+  product_catalog ||--o{ catalog_category : "catalog_id"
   product_offering |o--o{ product_offering_price : "product_offering_id"
+  product_offering ||--o{ offering_category : "offering_id"
   product_specification ||--o{ product_offering : "product_specification_id"
 ```
 
@@ -316,6 +395,8 @@ erDiagram
     uuid billing_run_id FK
     date payment_due_date
     bill_category category
+    text run_type
+    text bill_document
   }
   payment {
     uuid id PK
@@ -351,6 +432,60 @@ erDiagram
     bill_state_change_cause cause
     text operator
   }
+  refund {
+    uuid id PK
+    timestamptz created_at
+    uuid billing_account_id FK
+    char currency FK
+    numeric amount
+    timestamptz refunded_at
+    text status
+    text method_name
+    text method_type
+    text description
+    uuid payment_id FK
+  }
+  refund_source {
+    uuid id PK
+    timestamptz created_at
+    uuid refund_id FK
+    uuid billing_account_id FK
+    uuid payment_id FK
+    uuid credit_bill_id FK
+    numeric amount
+  }
+  customer_bill_on_demand {
+    uuid id PK
+    timestamptz created_at
+    timestamptz updated_at
+    uuid billing_account_id FK
+    uuid customer_bill_id FK
+    timestamptz requested_at
+    date ready_on
+    customer_bill_on_demand_state_type state
+    text name
+    text description
+  }
+  bill_format {
+    uuid id PK
+    timestamptz created_at
+    timestamptz updated_at
+    text name
+    text description
+  }
+  bill_presentation_media {
+    uuid id PK
+    timestamptz created_at
+    timestamptz updated_at
+    text name
+    text description
+  }
+  account_presentation_media {
+    uuid id PK
+    timestamptz created_at
+    uuid billing_account_id FK
+    uuid media_id FK
+  }
   billing_account {
     uuid id PK
   }
@@ -358,18 +493,27 @@ erDiagram
     uuid id PK
   }
   applied_customer_billing_rate |o--o{ applied_customer_billing_rate : "refunds_rate_id, product_id"
+  bill_presentation_media ||--o{ account_presentation_media : "media_id"
+  billing_account ||--o{ account_presentation_media : "billing_account_id"
   billing_account ||--o{ applied_customer_billing_rate : "billing_account_id, currency"
   billing_account ||--o{ bill_allocation : "billing_account_id, currency"
   billing_account ||--o{ customer_bill : "billing_account_id, currency"
+  billing_account ||--o{ customer_bill_on_demand : "billing_account_id"
   billing_account ||--o{ payment : "billing_account_id, currency"
+  billing_account ||--o{ refund : "billing_account_id, currency"
   billing_run ||--o{ applied_customer_billing_rate : "billing_run_id"
   billing_run ||--o{ customer_bill : "billing_run_id"
   customer_bill |o--o{ applied_customer_billing_rate : "customer_bill_id, billing_account_id"
   customer_bill |o--o{ bill_allocation : "credit_bill_id, billing_account_id"
+  customer_bill |o--o{ customer_bill_on_demand : "customer_bill_id"
+  customer_bill |o--o{ refund_source : "credit_bill_id, billing_account_id"
   customer_bill ||--o{ bill_allocation : "customer_bill_id, billing_account_id"
   customer_bill ||--o{ customer_bill_state_change : "customer_bill_id"
   payment |o--o{ bill_allocation : "payment_id, billing_account_id"
+  payment |o--o{ refund : "payment_id, billing_account_id"
+  payment |o--o{ refund_source : "payment_id, billing_account_id"
   product ||--o{ applied_customer_billing_rate : "product_id, billing_account_id"
+  refund ||--o{ refund_source : "refund_id, billing_account_id"
 ```
 
 Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product`](product.md).
@@ -430,10 +574,11 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 | `billing_run_status` | `running`, `completed`, `failed` | [`billing_run.status`](billing_run.md) |
 | `billing_run_trigger` | `scheduled`, `catchUp`, `retry` | [`billing_run.trigger`](billing_run.md) |
 | `charge_type` | `recurring`, `refund` | [`applied_customer_billing_rate.charge_type`](applied_customer_billing_rate.md) |
+| `customer_bill_on_demand_state_type` | `inProgress`, `rejected`, `done`, `terminatedWithError` | [`customer_bill_on_demand.state`](customer_bill_on_demand.md) |
 | `customer_bill_state_type` | `new`, `onHold`, `validated`, `sent`, `settled`, `partiallyPaid` | [`customer_bill.state`](customer_bill.md), [`customer_bill_state_change.from_state`](customer_bill_state_change.md), [`customer_bill_state_change.to_state`](customer_bill_state_change.md) |
 | `customer_status` | `Created`, `Active`, `Inactive` | [`customer.status`](customer.md) |
 | `item_action_type` | `add`, `modify`, `delete`, `noChange` | [`product_order_item.action`](product_order_item.md) |
-| `lifecycle_status` | `In Design`, `Active`, `Retired` | [`product_offering.lifecycle_status`](product_offering.md), [`product_offering_price.lifecycle_status`](product_offering_price.md), [`product_specification.lifecycle_status`](product_specification.md) |
+| `lifecycle_status` | `In Design`, `Active`, `Retired` | [`category.lifecycle_status`](category.md), [`product_catalog.lifecycle_status`](product_catalog.md), [`product_offering.lifecycle_status`](product_offering.md), [`product_offering_price.lifecycle_status`](product_offering_price.md), [`product_specification.lifecycle_status`](product_specification.md) |
 | `party_type` | `Individual`, `Organization` | [`party.party_type`](party.md) |
 | `payment_status` | `done` | [`payment.status`](payment.md) |
 | `price_type` | `recurring`, `oneTime` | [`product_offering_price.price_type`](product_offering_price.md) |

@@ -230,7 +230,7 @@ def date_period(value: Range) -> dict[str, Any]:
 def ref(
     resource_type: str,
     href: str,
-    row_id: UUID,
+    row_id: UUID | str,
     name: str | None = None,
     *,
     ref_type: str | None = None,

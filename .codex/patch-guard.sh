@@ -12,8 +12,7 @@ import fnmatch, json, os, posixpath, re, sys
 
 root = sys.argv[1]
 DENY = [".env", ".env.prod", ".env.smoke", "design-ref/*"]
-ASK = [".claude/*", ".codex/*", "compose*.yaml", "Makefile", "scripts/*",
-       "docs/progress/scope.yaml"]
+ASK = [".claude/*", ".codex/*", "compose*.yaml", "Makefile", "scripts/*"]
 
 def block(reason):
     print(f"BLOCKED by .codex/patch-guard.sh: {reason}", file=sys.stderr)

@@ -25,6 +25,8 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
             "productSpecification": "ProductSpecification",
             "productOffering": "ProductOffering",
             "productOfferingPrice": "ProductOfferingPrice",
+            "category": "Category",
+            "productCatalog": "ProductCatalog",
         },
     ),
     "/tmf-api/partyManagement/v5": (
@@ -32,8 +34,16 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
         {"individual": "Individual", "organization": "Organization"},
     ),
     "/tmf-api/customerManagement/v5": ("TMF629", {"customer": "Customer"}),
-    "/tmf-api/accountManagement/v5": ("TMF666", {"billingAccount": "BillingAccount"}),
-    "/tmf-api/paymentManagement/v4": ("TMF676", {"payment": "Payment"}),
+    "/tmf-api/accountManagement/v5": (
+        "TMF666",
+        {
+            "billingAccount": "BillingAccount",
+            "billingCycleSpecification": "BillingCycleSpecification",
+            "billFormat": "BillFormat",
+            "billPresentationMedia": "BillPresentationMedia",
+        },
+    ),
+    "/tmf-api/paymentManagement/v4": ("TMF676", {"payment": "Payment", "refund": "Refund"}),
     "/tmf-api/productInventory/v5": ("TMF637", {"product": "Product"}),
     "/tmf-api/productOrderingManagement/v5": ("TMF622", {"productOrder": "ProductOrder"}),
     "/tmf-api/customerBillManagement/v5": (
@@ -42,6 +52,7 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
             "customerBill": "CustomerBill",
             "appliedCustomerBillingRate": "AppliedCustomerBillingRate",
             "billCycle": "BillCycle",
+            "customerBillOnDemand": "CustomerBillOnDemand",
         },
     ),
 }
@@ -128,7 +139,7 @@ class TmfClient:
 
     def _validate(self, api: str, schema: str, body: dict[str, Any], partial: bool) -> None:
         contract.assert_valid(api, schema, body, partial=partial)
-        if api == "TMF666" and not partial:
+        if api == "TMF666" and schema == "BillingAccount" and not partial:
             # A TMF extension: the body must name the schema of its additions, the app
             # must serve it, and the body must satisfy it. (A fields= selection leaves
             # attributes out on request, so only full bodies are checked.)

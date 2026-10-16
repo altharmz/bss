@@ -11,15 +11,25 @@ records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 18 | 18/18 (100%) | 18/18 (100%) | unknown |
-| API | 59 | 59/59 (100%) | 59/59 (100%) | unknown |
+| Database | 28 | 28/28 (100%) | 28/28 (100%) | unknown |
+| API | 83 | 83/83 (100%) | 83/83 (100%) | unknown |
 | UI | 19 | 19/19 (100%) | 19/19 (100%) | unknown |
-| Worker | 12 | 12/12 (100%) | 12/12 (100%) | unknown |
+| Worker | 14 | 14/14 (100%) | 14/14 (100%) | unknown |
 
 ## Database
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
+| `db.refund` | 5 | Completed cash refunds (TMF676) | yes | yes | unknown |
+| `db.refund_source` | 5 | Credit consumed by refunds | yes | yes | unknown |
+| `db.customer_bill_on_demand` | 5 | On-demand bill requests (TMF678) | yes | yes | unknown |
+| `db.bill_format` | 5 | Bill formats (TMF666) | yes | yes | unknown |
+| `db.bill_presentation_media` | 5 | Bill presentation media (TMF666) | yes | yes | unknown |
+| `db.account_presentation_media` | 5 | Account presentation preferences | yes | yes | unknown |
+| `db.category` | 2 | Catalog categories (TMF620) | yes | yes | unknown |
+| `db.product_catalog` | 2 | Product catalogs (TMF620) | yes | yes | unknown |
+| `db.catalog_category` | 2 | Catalog root category membership | yes | yes | unknown |
+| `db.offering_category` | 2 | Category offering membership | yes | yes | unknown |
 | `db.product_specification` | 1 | Product specifications (TMF620) | yes | yes | unknown |
 | `db.product_offering` | 1 | Product offerings (TMF620) | yes | yes | unknown |
 | `db.product_offering_price` | 1 | Offering prices (TMF620) | yes | yes | unknown |
@@ -43,6 +53,28 @@ records the deployed commit.
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
+| `api.tmf676.refund.list` | 5 | List refunds | yes | yes | unknown |
+| `api.tmf676.refund.get` | 5 | Get a refund | yes | yes | unknown |
+| `api.tmf676.refund.create` | 5 | Record a completed refund | yes | yes | unknown |
+| `api.tmf678.customerBillOnDemand.list` | 5 | List on-demand bill requests | yes | yes | unknown |
+| `api.tmf678.customerBillOnDemand.get` | 5 | Get an on-demand bill request | yes | yes | unknown |
+| `api.tmf678.customerBillOnDemand.create` | 5 | Request an off-cycle bill | yes | yes | unknown |
+| `api.tmf666.billFormat.list` | 5 | List bill formats | yes | yes | unknown |
+| `api.tmf666.billFormat.get` | 5 | Get a bill format | yes | yes | unknown |
+| `api.tmf666.billFormat.create` | 5 | Create a bill format | yes | yes | unknown |
+| `api.tmf666.billFormat.patch` | 5 | Patch a bill format | yes | yes | unknown |
+| `api.tmf666.billPresentationMedia.list` | 5 | List bill presentation media | yes | yes | unknown |
+| `api.tmf666.billPresentationMedia.get` | 5 | Get a bill presentation medium | yes | yes | unknown |
+| `api.tmf666.billPresentationMedia.create` | 5 | Create a bill presentation medium | yes | yes | unknown |
+| `api.tmf666.billPresentationMedia.patch` | 5 | Patch a bill presentation medium | yes | yes | unknown |
+| `api.tmf620.category.list` | 2 | List categories | yes | yes | unknown |
+| `api.tmf620.category.get` | 2 | Get a category | yes | yes | unknown |
+| `api.tmf620.category.create` | 2 | Create a category | yes | yes | unknown |
+| `api.tmf620.category.patch` | 2 | Patch a category | yes | yes | unknown |
+| `api.tmf620.productCatalog.list` | 2 | List product catalogs | yes | yes | unknown |
+| `api.tmf620.productCatalog.get` | 2 | Get a product catalog | yes | yes | unknown |
+| `api.tmf620.productCatalog.create` | 2 | Create a product catalog | yes | yes | unknown |
+| `api.tmf620.productCatalog.patch` | 2 | Patch a product catalog | yes | yes | unknown |
 | `api.tmf620.productSpecification.list` | 2 | List product specifications | yes | yes | unknown |
 | `api.tmf620.productSpecification.get` | 2 | Get a product specification | yes | yes | unknown |
 | `api.tmf620.productSpecification.create` | 2 | Create a product specification | yes | yes | unknown |
@@ -67,6 +99,8 @@ records the deployed commit.
 | `api.tmf629.customer.get` | 2 | Get a customer | yes | yes | unknown |
 | `api.tmf629.customer.create` | 2 | Create a customer | yes | yes | unknown |
 | `api.tmf629.customer.patch` | 2 | Patch a customer | yes | yes | unknown |
+| `api.tmf666.billingCycleSpecification.list` | 2 | List billing cycle specifications | yes | yes | unknown |
+| `api.tmf666.billingCycleSpecification.get` | 2 | Get a billing cycle specification | yes | yes | unknown |
 | `api.tmf666.billingAccount.list` | 2 | List billing accounts (with balance) | yes | yes | unknown |
 | `api.tmf666.billingAccount.get` | 2 | Get a billing account | yes | yes | unknown |
 | `api.tmf666.billingAccount.create` | 2 | Create a billing account | yes | yes | unknown |
@@ -131,6 +165,8 @@ records the deployed commit.
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
+| `worker.onDemand` | 5 | Issue on-demand bills without moving monthly anchors | yes | yes | unknown |
+| `worker.billDocument` | 5 | Snapshot issued JSON documents with presentation preferences | yes | yes | unknown |
 | `worker.runLifecycle` | 4 | start_run answers every case: new, completed (no-op), failed (reopen), running | yes | yes | unknown |
 | `worker.takeover` | 4 | Takeover of a running run whose owner died; ok accounts untouched | yes | yes | unknown |
 | `worker.doubleStart` | 4 | A second worker while the lock is held backs off and writes nothing | yes | yes | unknown |

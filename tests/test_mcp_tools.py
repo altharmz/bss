@@ -187,7 +187,35 @@ def world(api, db_conn) -> dict[str, Any]:
     def first(path: str) -> dict:
         return api.get(f"{path}?limit=1").json()[0]
 
+    category = api.post(f"{CATALOG}/category", {"name": "Connectivity"}).json()
+    catalog = api.post(
+        f"{CATALOG}/productCatalog", {"name": "Residential", "category": [{"id": category["id"]}]}
+    ).json()
+    fmt = api.post("/tmf-api/accountManagement/v5/billFormat", {"name": "JSON summary"}).json()
+    media = api.post(
+        "/tmf-api/accountManagement/v5/billPresentationMedia", {"name": "Portal"}
+    ).json()
+    demand = api.post(
+        "/tmf-api/customerBillManagement/v5/customerBillOnDemand",
+        {"billingAccount": {"id": account["id"]}},
+    ).json()
+    refund_account = apidata.account(api)
+    pay(api, refund_account, 100, date(2026, 12, 3))
+    refund = api.post(
+        "/tmf-api/paymentManagement/v4/refund",
+        {
+            "account": {"id": refund_account["id"]},
+            "totalAmount": {"unit": "RUB", "value": 10},
+            "paymentMethod": {"@type": "Cash"},
+        },
+    ).json()
     return {
+        "format": fmt,
+        "media": media,
+        "demand": demand,
+        "refund": refund,
+        "category": category,
+        "catalog": catalog,
         "offering": offering,
         "account": account,
         "bill": bill,
@@ -207,6 +235,12 @@ def world(api, db_conn) -> dict[str, Any]:
 def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
     acc, offering = world["account"]["id"], world["offering"]["id"]
     by_id = {
+        "get_bill_format": {"format_id": world["format"]["id"]},
+        "get_bill_media": {"media_id": world["media"]["id"]},
+        "get_bill_demand": {"demand_id": world["demand"]["id"]},
+        "get_refund": {"refund_id": world["refund"]["id"]},
+        "get_category": {"category_id": world["category"]["id"]},
+        "get_catalog": {"catalog_id": world["catalog"]["id"]},
         "get_specification": {"spec_id": world["spec"]["id"]},
         "get_price": {"price_id": world["price"]["id"]},
         "get_offering": {"offering_id": offering, "fields": "name"},
@@ -214,6 +248,7 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_organization": {"party_id": world["organization"]["id"]},
         "get_customer": {"customer_id": world["customer"]["id"]},
         "get_account": {"account_id": acc},
+        "get_cycle_specification": {"specification_id": "monthly"},
         "get_payment": {"payment_id": world["payment"]["id"]},
         "get_product": {"product_id": world["product"]["id"]},
         "get_bill": {"bill_id": world["bill"]["id"]},
@@ -272,6 +307,12 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         {"body": {"@type": "ProductSpecification", "name": "Mobile", "lifecycleStatus": "Active"}},
     )
     call("patch_specification", {"spec_id": spec["id"], "body": {"description": "via MCP"}})
+    category = call("create_category", {"body": {"name": "MCP category"}})
+    call("patch_category", {"category_id": category["id"], "body": {"description": "via MCP"}})
+    catalog = call(
+        "create_catalog", {"body": {"name": "MCP catalog", "category": [{"id": category["id"]}]}}
+    )
+    call("patch_catalog", {"catalog_id": catalog["id"], "body": {"description": "via MCP"}})
     price = call(
         "create_price",
         {
@@ -310,6 +351,11 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
     call("patch_customer", {"customer_id": customer["id"], "body": {"status": "Active"}})
     account = call("create_account", {"body": apidata.account_body(customer)})
     call("patch_account", {"account_id": account["id"], "body": {"name": "Main"}})
+    fmt = call("create_bill_format", {"body": {"name": "JSON detailed"}})
+    call("patch_bill_format", {"format_id": fmt["id"], "body": {"description": "Detailed JSON"}})
+    media = call("create_bill_media", {"body": {"name": "Download"}})
+    call("patch_bill_media", {"media_id": media["id"], "body": {"description": "Downloadable"}})
+    call("create_bill_demand", {"body": {"billingAccount": {"id": account["id"]}}})
     call(
         "create_order",
         {"body": apidata.order_body(account, apidata.add_item(offering))},
@@ -317,6 +363,16 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
     call(
         "create_payment",
         {"body": money_as_strings(apidata.payment_body(account, "120.00"))},
+    )
+    call(
+        "create_refund",
+        {
+            "body": {
+                "account": {"id": account["id"]},
+                "totalAmount": {"unit": "RUB", "value": "20.00"},
+                "paymentMethod": {"@type": "Cash"},
+            }
+        },
     )
     call("patch_bill", {"bill_id": world["bill"]["id"], "body": {"state": "onHold"}})
     call(

@@ -336,7 +336,36 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 19  # 18 domain tables + alembic_version
+    assert tables == 29  # 28 domain tables + alembic_version
+
+
+def test_0009_catalog_round_trip(temp_db_url):
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0008")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute(
+            "INSERT INTO product_specification (name, lifecycle_status) VALUES ('Legacy', 'Active')"
+        )
+    command.upgrade(cfg, "0009")
+    with psycopg.connect(temp_db_url) as conn:
+        root = conn.execute("INSERT INTO category (name) VALUES ('Root') RETURNING id").fetchone()[
+            0
+        ]
+        catalog = conn.execute(
+            "INSERT INTO product_catalog (name) VALUES ('Catalog') RETURNING id"
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO catalog_category (catalog_id, category_id) VALUES (%s, %s)",
+            (catalog, root),
+        )
+        assert conn.execute("SELECT name FROM product_specification").fetchall() == [("Legacy",)]
+    command.downgrade(cfg, "0008")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT to_regclass('category'), to_regclass('product_catalog')"
+        ).fetchone() == (None, None)
+        assert conn.execute("SELECT name FROM product_specification").fetchall() == [("Legacy",)]
+    command.upgrade(cfg, "0009")
 
 
 def test_0008_preserves_legacy_orders_without_inventing_quotes(temp_db_url):

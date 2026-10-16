@@ -2,15 +2,15 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 59,
-      "items": 59,
-      "tested": 59
+      "implemented": 83,
+      "items": 83,
+      "tested": 83
     },
     "db": {
       "deployed": null,
-      "implemented": 18,
-      "items": 18,
-      "tested": 18
+      "implemented": 28,
+      "items": 28,
+      "tested": 28
     },
     "ui": {
       "deployed": null,
@@ -20,9 +20,9 @@
     },
     "worker": {
       "deployed": null,
-      "implemented": 12,
-      "items": 12,
-      "tested": 12
+      "implemented": 14,
+      "items": 14,
+      "tested": 14
     }
   },
   "excluded": [
@@ -38,6 +38,312 @@
     }
   ],
   "items": [
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.refund",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Completed cash refunds (TMF676)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.refund_source",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Credit consumed by refunds"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.customer_bill_on_demand",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "On-demand bill requests (TMF678)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.bill_format",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Bill formats (TMF666)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.bill_presentation_media",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Bill presentation media (TMF666)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.account_presentation_media",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Account presentation preferences"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.onDemand",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Issue on-demand bills without moving monthly anchors"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.billDocument",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Snapshot issued JSON documents with presentation preferences"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf676.refund.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "List refunds"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf676.refund.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Get a refund"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf676.refund.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Record a completed refund"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf678.customerBillOnDemand.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "List on-demand bill requests"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf678.customerBillOnDemand.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Get an on-demand bill request"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf678.customerBillOnDemand.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Request an off-cycle bill"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billFormat.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "List bill formats"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billFormat.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Get a bill format"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billFormat.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Create a bill format"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billFormat.patch",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Patch a bill format"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billPresentationMedia.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "List bill presentation media"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billPresentationMedia.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Get a bill presentation medium"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billPresentationMedia.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Create a bill presentation medium"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billPresentationMedia.patch",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Patch a bill presentation medium"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.category",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Catalog categories (TMF620)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.product_catalog",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Product catalogs (TMF620)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.catalog_category",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Catalog root category membership"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.offering_category",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Category offering membership"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.category.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "List categories"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.category.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Get a category"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.category.create",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Create a category"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.category.patch",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Patch a category"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productCatalog.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "List product catalogs"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productCatalog.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Get a product catalog"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productCatalog.create",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Create a product catalog"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.productCatalog.patch",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Patch a product catalog"
+    },
     {
       "area": "db",
       "deployed": null,
@@ -415,6 +721,24 @@
       "stage": 2,
       "tested": true,
       "title": "Patch a customer"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billingCycleSpecification.list",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "List billing cycle specifications"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billingCycleSpecification.get",
+      "implemented": true,
+      "stage": 2,
+      "tested": true,
+      "title": "Get a billing cycle specification"
     },
     {
       "area": "api",

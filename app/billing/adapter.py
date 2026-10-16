@@ -13,10 +13,10 @@ from zoneinfo import ZoneInfo
 import psycopg
 
 from app.billing import settlement
-from app.billing.core import add_month, compute
+from app.billing.core import add_month, compute, cycle_period
 from app.billing.model import Account, BillingResult, BillingState
 from app.config import settings
-from app.repository import billing
+from app.repository import billing, presentation
 
 
 def visible_before(run_date: date, tz: ZoneInfo) -> datetime:
@@ -67,7 +67,13 @@ def issue_bills(conn: psycopg.Connection, account: Account, *, now: datetime) ->
     nothing is due). A bill that fails validation raises InconsistentState, so the account
     fails in the run and nothing of it is written."""
     for candidate in billing.load_issue_candidates(conn, account.id):
-        settlement.validate(candidate, add_month(candidate.bill_date))
+        end = (
+            cycle_period(candidate.bill_date, account.bill_cycle_day).end
+            if candidate.on_demand
+            else add_month(candidate.bill_date)
+        )
+        settlement.validate(candidate, end)
+        presentation.snapshot_bill(conn, candidate.id, now=now)
         for change in settlement.issue(candidate):
             billing.record_bill_state(conn, change, now=now, cause="run")
 

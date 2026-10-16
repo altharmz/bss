@@ -21,10 +21,14 @@ call: run such a target alone, so the user's Codex rules ask first.
 
 A second `PreToolUse` hook, `.codex/patch-guard.sh`, checks every path in an
 `apply_patch`. `.env`, `.env.prod`, `.env.smoke` and `design-ref/` are never edited.
-Harness files (`.claude/`, `.codex/`, `compose*.yaml`, `Makefile`, `scripts/`,
-`docs/progress/scope.yaml`) need the user's OK: when blocked, show the diff and ask
+Harness files (`.claude/`, `.codex/`, `compose*.yaml`, `Makefile`, `scripts/`)
+need the user's OK: when blocked, show the diff and ask
 the user to apply or approve it. Never edit them another way (a shell redirect,
 `sed -i`, a script) - CLAUDE.md forbids that, and the shell guard blocks it.
+
+Progress scope (`docs/progress/scope.yaml`) is editable within authorized feature
+work. Preserve existing items and exclusions unless the task changes their scope;
+generate `docs/PROGRESS.md` and `docs/progress/status.json` with `make progress`.
 
 Both hooks fail closed when started outside the repository. Regression cases:
 `bash .codex/test-hooks.sh`.

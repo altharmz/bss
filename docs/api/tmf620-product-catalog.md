@@ -4,13 +4,21 @@
 
 - Base path here: `/tmf-api/productCatalogManagement/v5`
 - Contract: [`spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml`](../../spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml) - Product Catalog Management version 5.0.0; the spec's server URL is `https://serverRoot/productCatalogManagement/v5/`
-- Operations exposed: 12
+- Operations exposed: 20
 
 
 ## Operations
 
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
+| GET | `/tmf-api/productCatalogManagement/v5/category` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `lifecycleStatus`, `name`, `parent.id` | - | 200 `array of Category` | [`app/api/classification.py`](../../app/api/classification.py) |
+| POST | `/tmf-api/productCatalogManagement/v5/category` | query: `fields`; body: `application/json` | `Category_FVO` | 201 `Category` | [`app/api/classification.py`](../../app/api/classification.py) |
+| GET | `/tmf-api/productCatalogManagement/v5/category/{category_id}` | path: `category_id`; query: `fields` | - | 200 `Category` | [`app/api/classification.py`](../../app/api/classification.py) |
+| PATCH | `/tmf-api/productCatalogManagement/v5/category/{category_id}` | path: `category_id`; query: `fields`; body: `application/merge-patch+json` | `Category_MVO` | 200 `Category` | [`app/api/classification.py`](../../app/api/classification.py) |
+| GET | `/tmf-api/productCatalogManagement/v5/productCatalog` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `catalogType`, `lifecycleStatus`, `name` | - | 200 `array of ProductCatalog` | [`app/api/classification.py`](../../app/api/classification.py) |
+| POST | `/tmf-api/productCatalogManagement/v5/productCatalog` | query: `fields`; body: `application/json` | `ProductCatalog_FVO` | 201 `ProductCatalog` | [`app/api/classification.py`](../../app/api/classification.py) |
+| GET | `/tmf-api/productCatalogManagement/v5/productCatalog/{catalog_id}` | path: `catalog_id`; query: `fields` | - | 200 `ProductCatalog` | [`app/api/classification.py`](../../app/api/classification.py) |
+| PATCH | `/tmf-api/productCatalogManagement/v5/productCatalog/{catalog_id}` | path: `catalog_id`; query: `fields`; body: `application/merge-patch+json` | `ProductCatalog_MVO` | 200 `ProductCatalog` | [`app/api/classification.py`](../../app/api/classification.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productOffering` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `externalIdentifier.id`, `isSellable`, `lifecycleStatus`, `name`, `productSpecification.id` | - | 200 `array of ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | POST | `/tmf-api/productCatalogManagement/v5/productOffering` | query: `fields`; body: `application/json` | `ProductOffering_FVO` | 201 `ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productOffering/{offering_id}` | path: `offering_id`; query: `fields` | - | 200 `ProductOffering` | [`app/api/catalog.py`](../../app/api/catalog.py) |
@@ -29,11 +37,17 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF620-P
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /productOffering/{id}`, `DELETE /productOfferingPrice/{id}`, `DELETE /productSpecification/{id}`.
-- Resources of the spec that are **not implemented**: `/category`, `/exportJob`, `/hub`, `/importJob`, `/listener`, `/productCatalog` (`/hub` and `/listener/*`: no event notifications).
+- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /category/{id}`, `DELETE /productCatalog/{id}`, `DELETE /productOffering/{id}`, `DELETE /productOfferingPrice/{id}`, `DELETE /productSpecification/{id}`.
+- Resources of the spec that are **not implemented**: `/exportJob`, `/hub`, `/importJob`, `/listener` (`/hub` and `/listener/*`: no event notifications).
 
 
 ## Behaviour and deviations
+
+Categories form a single-parent hierarchy. Edit parent; subCategory and isRoot are
+derived. Catalogs reference roots only. Cycles and reparenting a catalog root are
+refused (409). Category productOffering and catalog category arrays replace membership;
+[] clears them, PATCH null is refused. ProductOffering.category is read-only.
+See [the catalog decision](../decisions/catalog.md#categories-and-product-catalogs-2026-10-16).
 
 | Rule | Code | Proven by |
 |---|---|---|

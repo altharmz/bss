@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/paymentManagement/v4`
 - Contract: [`spec/TMF676-Payment-v4.0.0.swagger.json`](../../spec/TMF676-Payment-v4.0.0.swagger.json) - Payment version 4.0.0; the spec's server URL is `/payment/v4/`
-- Operations exposed: 3
+- Operations exposed: 6
 
 
 ## Operations
@@ -14,13 +14,16 @@
 | GET | `/tmf-api/paymentManagement/v4/payment` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `account.id`, `status` | - | 200 `array of Payment` | [`app/api/payment.py`](../../app/api/payment.py) |
 | POST | `/tmf-api/paymentManagement/v4/payment` | query: `fields`; body: `application/json` | `Payment_Create` | 201 `Payment` | [`app/api/payment.py`](../../app/api/payment.py) |
 | GET | `/tmf-api/paymentManagement/v4/payment/{payment_id}` | path: `payment_id`; query: `fields` | - | 200 `Payment` | [`app/api/payment.py`](../../app/api/payment.py) |
+| GET | `/tmf-api/paymentManagement/v4/refund` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `account.id`, `payment.id`, `status` | - | 200 `array of Refund` | [`app/api/refunds.py`](../../app/api/refunds.py) |
+| POST | `/tmf-api/paymentManagement/v4/refund` | query: `fields`; body: `application/json` | `Refund_Create` | 201 `Refund` | [`app/api/refunds.py`](../../app/api/refunds.py) |
+| GET | `/tmf-api/paymentManagement/v4/refund/{refund_id}` | path: `refund_id`; query: `fields` | - | 200 `Refund` | [`app/api/refunds.py`](../../app/api/refunds.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF676-Payment-v4.0.0.swagger.json`](../../spec/TMF676-Payment-v4.0.0.swagger.json). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 
 
 ## Coverage of the spec
 
-- Resources of the spec that are **not implemented**: `/hub`, `/listener`, `/refund` (`/hub` and `/listener/*`: no event notifications).
+- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
 
 
 ## Behaviour and deviations
@@ -38,7 +41,14 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF676-P
   `::test_currency_must_match_the_account`); the composite foreign key behind it maps to a
   409 if it ever fires (`::test_currency_foreign_key_violation_is_a_409_not_a_500`).
 - Payments are never changed or deleted: PATCH/DELETE are 405 (`::test_payments_cannot_be_changed`).
-- Refunds of payments (`/refund`) are not implemented.
+- Refunds expose list/retrieve/create. POST records a completed payout, never external
+  payment processing. It consumes unused payments then issued credit-note credit, or
+  only a named payment. It cannot exceed positive net balance (including unbilled
+  charges). The account lock and combined source bounds prevent double spending.
+  The ledger calls cash refunds payout; negative ABR refunds remain account credits.
+  Refund method name/type are preserved. Records are immutable. See
+  [billing completion](../decisions/billing-completion.md), tested by
+  tests/test_billing_completion.py.
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf676-payment.md`](../../scripts/docs/api-notes/tmf676-payment.md).
 

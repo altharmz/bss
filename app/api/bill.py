@@ -66,6 +66,7 @@ BILL_ATTRIBUTES = (
     "nextBillDate",
     "taxExcludedAmount",
     "taxIncludedAmount",
+    "billDocument",
 )
 # Every other attribute of the spec's CustomerBill: present, but not changed by a PATCH.
 BILL_READ_ONLY = (
@@ -144,7 +145,18 @@ def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             for a in billing.applied_payments(conn, row["id"])
         ],
         "category": row["category"],
-        "runType": "onCycle",
+        "runType": row["run_type"],
+        "billDocument": [
+            {
+                "@type": "Attachment",
+                "name": f"{bill_no(row['id'])}.json",
+                "attachmentType": "bill",
+                "mimeType": "application/json",
+                "content": row["bill_document"],
+            }
+        ]
+        if row["bill_document"]
+        else [],
         "state": row["state"],
         "billingAccount": _account_ref(conn, row["billing_account_id"]),
         "lastUpdate": utc(row["updated_at"]),

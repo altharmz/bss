@@ -1,5 +1,11 @@
 # Billing worker (stage 4)
 
+The [refund/bill-delivery milestone](billing-completion.md) adds durable on-demand
+requests after the ordinary request queue, and JSON document snapshots at bill
+issue. Both paths keep the billing ownership lock and account row locks. Monthly
+runs exclude offCycle documents when finding cycle anchors; settlement excludes
+credit consumed by cash payouts.
+
 Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
 needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
 proves nothing was lost in the move. Index: [README.md](README.md). The design note is

@@ -18,10 +18,10 @@ code by `make progress` into [PROGRESS.md](PROGRESS.md) against
 
 | Stage | What | Status |
 |---|---|---|
-| 1 | Database schema and repository functions | built: 18 tables, migrations `0001`-`0008` ([db/](db/README.md)) |
-| 2 | TMF Open API backend (8 APIs) | built: 59/59 scoped API items, including internal/service routes, in PROGRESS.md |
+| 1 | Database schema and repository functions | built: 28 tables, migrations `0001`-`0012` ([db/](db/README.md)) |
+| 2 | TMF Open API backend (8 APIs) | built: 83 scoped API items, including internal/service routes, in PROGRESS.md |
 | 3 | Billing core (pure) and its database adapter | built ([domain.md](domain.md#billing)) |
-| 4 | Billing worker: the daily run, failures, catch-up, retry | built: worker 12/12 proven ([billing-worker.md](billing-worker.md)); Billing runs UI built; deployment status unknown |
+| 4 | Billing worker: daily runs, catch-up/retry, on-demand bills and documents | built: worker 14/14 proven ([billing-worker.md](billing-worker.md)); Billing runs UI built; deployment status unknown |
 | 5 | Admin UI (React) and its internal API | built: 19/19 UI items, including Billing runs and bill settlement ([ui.md](ui.md)) |
 
 Implementation and test coverage are measured for all four areas in PROGRESS.md.
@@ -30,6 +30,14 @@ Deployment status remains unknown until the deploy script records the deployed c
 The input/read-completeness slice adds strict TMF write queries and type checks,
 historical order price quotes, product prices/navigation, and daily bill-cycle reads
 with bill links and next bill dates ([decisions/tmf-api.md](decisions/tmf-api.md)).
+
+TMF620 includes product catalogs, root categories, subcategories and offering
+membership ([decisions/catalog.md](decisions/catalog.md#categories-and-product-catalogs-2026-10-16)).
+Refunds, on-demand bills and presentation configuration extend the billing lifecycle
+([decision](decisions/billing-completion.md)). Formats render detailed/summary JSON;
+external delivery and payment processing remain out of scope.
+Non-listener operation coverage across the eight vendored TMF APIs is 67/129 (51.9%);
+this counts operations, not complete conformance of every attribute or behavior.
 
 ## Scope
 

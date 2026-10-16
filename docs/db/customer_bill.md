@@ -22,6 +22,8 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 | `billing_run_id` | `uuid` | no |  | The billing run that issued the bill. |
 | `payment_due_date` | `date` | no |  | TMF678 paymentDueDate: bill_date + the payment term in force when the bill was written (BILL_PAYMENT_TERM_DAYS). |
 | `category` | `bill_category` (enum, see [README](README.md#enums)) | no |  | TMF678 category (ours): creditNote iff amount_due < 0, else normal. |
+| `run_type` | `text` | no | `'onCycle'::text` | TMF678 runType; off-cycle documents do not advance monthly billing anchors. |
+| `bill_document` | `text` | yes |  | Base64 JSON document snapshotted at issue; NULL for legacy documents. |
 
 ## Foreign keys
 
@@ -38,9 +40,10 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 | `customer_bill_credit_note_iff_negative` | check | `CHECK (((category = 'creditNote'::bill_category) = (amount_due < (0)::numeric)))` |
 | `customer_bill_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
 | `customer_bill_due_after_bill_date` | check | `CHECK ((payment_due_date >= bill_date))` |
+| `customer_bill_run_type_check` | check | `CHECK ((run_type = ANY (ARRAY['onCycle'::text, 'offCycle'::text])))` |
 | `customer_bill_pkey` | primary key | `PRIMARY KEY (id)` |
 | `customer_bill_id_billing_account_id_key` | unique | `UNIQUE (id, billing_account_id)` |
-| `customer_bill_no_overlap` | exclusion | `EXCLUDE USING gist (billing_account_id WITH =, bill_period WITH &&)` |
+| `customer_bill_no_overlap` | exclusion | `EXCLUDE USING gist (billing_account_id WITH =, bill_period WITH &&) WHERE ((run_type = 'onCycle'::text))` |
 
 ## Indexes
 
@@ -48,7 +51,7 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 |---|---|---|
 | `customer_bill_billing_run_id_idx` | `CREATE INDEX customer_bill_billing_run_id_idx ON customer_bill USING btree (billing_run_id)` | no |
 | `customer_bill_id_billing_account_id_key` | `CREATE UNIQUE INDEX customer_bill_id_billing_account_id_key ON customer_bill USING btree (id, billing_account_id)` | yes |
-| `customer_bill_no_overlap` | `CREATE INDEX customer_bill_no_overlap ON customer_bill USING gist (billing_account_id, bill_period)` | yes |
+| `customer_bill_no_overlap` | `CREATE INDEX customer_bill_no_overlap ON customer_bill USING gist (billing_account_id, bill_period) WHERE (run_type = 'onCycle'::text)` | yes |
 | `customer_bill_pkey` | `CREATE UNIQUE INDEX customer_bill_pkey ON customer_bill USING btree (id)` | yes |
 
 ## Triggers
@@ -57,4 +60,4 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`customer_bill_state_change`](customer_bill_state_change.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`customer_bill_state_change`](customer_bill_state_change.md), [`refund_source`](refund_source.md)

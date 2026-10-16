@@ -49,4 +49,4 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 
 ## Referenced by
 
-[`bill_allocation`](bill_allocation.md)
+[`bill_allocation`](bill_allocation.md), [`refund`](refund.md), [`refund_source`](refund_source.md)

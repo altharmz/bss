@@ -61,6 +61,7 @@ const TYPE_LABEL: Record<string, string> = {
   charge: 'Charge',
   refund: 'Refund',
   payment: 'Payment',
+  payout: 'Refund paid out',
 };
 
 export function SubscriberCardScreen({ accountId }: { accountId: string }) {

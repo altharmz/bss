@@ -60,7 +60,7 @@ def process_requests(
         with conn.transaction():
             request = worker_requests.next_pending(conn)
             if request is None:
-                return done
+                break
             worker_requests.mark_picked(conn, request["id"], clock.now())
         try:
             carry_out(conn, request, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
@@ -71,6 +71,11 @@ def process_requests(
         with conn.transaction():
             worker_requests.mark_done(conn, request["id"], clock.now())
         done.append(request["id"])
+    from app.worker.on_demand import process_demands
+
+    return done + process_demands(
+        conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
+    )
 
 
 def carry_out(

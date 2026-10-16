@@ -20,11 +20,13 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | `bill_cycle_day` | `smallint` | no |  | Day of month 1..28 on which the account's billing periods start (BssBillingAccount extension); fixed after creation. |
 | `credit_limit` | `numeric(12,2)` | yes |  | numeric(12,2), exact (never float); TMF666 creditLimit in the account's currency; informational only, never refuses anything. NULL = none recorded. |
 | `opened_at` | `timestamp with time zone` | no |  | When the account was created, by the injected clock. A billing run for D covers the accounts opened before 00:00 of D (BILLING_TZ). Unlike created_at, which is the database's now(). |
+| `bill_format_id` | `uuid` | yes |  | Optional renderer choice for future bills; default JSON detailed. |
 
 ## Foreign keys
 
 | Columns | References | Name |
 |---|---|---|
+| `bill_format_id` | [`bill_format`](bill_format.md) (id) | `billing_account_bill_format_id_fkey` |
 | `customer_id` | [`customer`](customer.md) (id) | `billing_account_customer_id_fkey` |
 
 ## Constraints
@@ -51,4 +53,4 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`payment`](payment.md), [`product`](product.md), [`product_order`](product_order.md)
+[`account_presentation_media`](account_presentation_media.md), [`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`payment`](payment.md), [`product`](product.md), [`product_order`](product_order.md), [`refund`](refund.md)

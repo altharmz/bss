@@ -1,5 +1,9 @@
 # Frontend (admin UI, stage 5): decisions and conventions
 
+The refund/bill-delivery milestone adds the ledger type `payout`, displayed as
+“Refund paid out”. The existing `refund` label still denotes an ABR credit.
+Refund and presentation management remain API/MCP workflows in this milestone.
+
 Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
 needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
 proves nothing was lost in the move. Index: [README.md](README.md). Screen-level detail:

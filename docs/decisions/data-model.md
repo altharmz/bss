@@ -1,5 +1,10 @@
 # Data model and cross-cutting domain decisions
 
+Refund/bill-delivery milestone (2026-10-16): the balance rule below is extended by
+subtracting completed cash payouts (`refund`), separately from negative refund ABRs.
+On-demand bills are also written only by the billing owner, from posted ABRs.
+See [billing-completion.md](billing-completion.md) for the approved semantics.
+
 Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
 needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
 proves nothing was lost in the move. Index: [README.md](README.md).
