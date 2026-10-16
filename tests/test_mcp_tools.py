@@ -217,8 +217,16 @@ def world(api, db_conn) -> dict[str, Any]:
             "relatedParty": [{"role": "owner", "partyOrPartyRole": {"id": organization["id"]}}],
         },
     ).json()
+    owned = {
+        "name": "Partner",
+        "relatedParty": [{"role": "owner", "partyOrPartyRole": {"id": organization["id"]}}],
+    }
+    party_account = api.post("/tmf-api/accountManagement/v5/partyAccount", owned).json()
+    settlement = api.post("/tmf-api/accountManagement/v5/settlementAccount", owned).json()
     return {
         "financial": financial,
+        "party_account": party_account,
+        "settlement": settlement,
         "format": fmt,
         "media": media,
         "demand": demand,
@@ -258,6 +266,8 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_customer": {"customer_id": world["customer"]["id"]},
         "get_account": {"account_id": acc},
         "get_financial_account": {"account_id": world["financial"]["id"]},
+        "get_party_account": {"account_id": world["party_account"]["id"]},
+        "get_settlement_account": {"account_id": world["settlement"]["id"]},
         "get_cycle_specification": {"specification_id": "monthly"},
         "get_payment": {"payment_id": world["payment"]["id"]},
         "get_product": {"product_id": world["product"]["id"]},
@@ -369,6 +379,21 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         },
     )
     call("patch_financial_account", {"account_id": financial["id"], "body": {"state": "Active"}})
+    for resource in ("party", "settlement"):
+        created = call(
+            f"create_{resource}_account",
+            {
+                "body": {
+                    "name": "Partner",
+                    "relatedParty": [{"role": "owner", "partyOrPartyRole": {"id": person["id"]}}],
+                    "financialAccount": {"id": financial["id"]},
+                }
+            },
+        )
+        call(
+            f"patch_{resource}_account",
+            {"account_id": created["id"], "body": {"financialAccount": None}},
+        )
     account = call("create_account", {"body": apidata.account_body(customer)})
     call(
         "patch_account",

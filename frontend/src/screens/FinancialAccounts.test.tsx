@@ -44,7 +44,10 @@ const GROUP = {
   state: 'Active',
   relatedParty: owner('Romashka LLC', 'Organization'),
   accountBalance: [balance('EUR', 7), balance('RUB', -120.5)],
-  accountRelationship: [contains(B1, 'Main account', 'BillingAccount')],
+  accountRelationship: [
+    contains(B1, 'Main account', 'BillingAccount'),
+    contains('s0000001-0000-4000-8000-000000000001', 'Partner payouts', 'SettlementAccount'),
+  ],
   '@type': 'FinancialAccount',
 };
 const EMPTY = {
@@ -96,6 +99,10 @@ describe('financial accounts', () => {
     const link = within(group).getByRole('link', { name: 'Main account' });
     expect(link.getAttribute('href')).toBe(`/subscribers/${B1}`);
     expect(within(group).getByText('(billing)')).toBeTruthy();
+    // settlement and party accounts have no screen: named, not linked
+    expect(within(group).getByText('Partner payouts').closest('a')).toBeNull();
+    expect(within(group).getByText('(settlement)')).toBeTruthy();
+    expect(within(group).getAllByRole('link')).toHaveLength(1);
     const empty = rowOf('Personal');
     expect(within(empty).getByText('nothing linked')).toBeTruthy();
     expect(within(empty).getByText('—')).toBeTruthy();

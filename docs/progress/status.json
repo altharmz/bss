@@ -2,15 +2,15 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 87,
-      "items": 87,
-      "tested": 87
+      "implemented": 95,
+      "items": 95,
+      "tested": 95
     },
     "db": {
       "deployed": null,
-      "implemented": 29,
-      "items": 29,
-      "tested": 29
+      "implemented": 30,
+      "items": 30,
+      "tested": 30
     },
     "ui": {
       "deployed": null,
@@ -82,6 +82,87 @@
       "stage": 5,
       "tested": true,
       "title": "Patch a financial account"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.party_account",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Party and settlement accounts (TMF666)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.partyAccount.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "List party accounts"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.partyAccount.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Get a party account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.partyAccount.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Create a party account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.partyAccount.patch",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Patch a party account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.settlementAccount.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "List settlement accounts"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.settlementAccount.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Get a settlement account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.settlementAccount.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Create a settlement account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.settlementAccount.patch",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Patch a settlement account"
     },
     {
       "area": "ui",

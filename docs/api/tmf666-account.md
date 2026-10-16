@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/accountManagement/v5`
 - Contract: [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml) - Account Management version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 19
+- Operations exposed: 27
 
 
 ## Operations
@@ -29,6 +29,14 @@
 | POST | `/tmf-api/accountManagement/v5/financialAccount` | query: `fields`; body: `application/json` | `FinancialAccount_FVO` | 201 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/financialAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | PATCH | `/tmf-api/accountManagement/v5/financialAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `FinancialAccount_MVO` | 200 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| GET | `/tmf-api/accountManagement/v5/partyAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `accountType`, `financialAccount.id`, `name`, `relatedParty.id`, `state` | - | 200 `array of PartyAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| POST | `/tmf-api/accountManagement/v5/partyAccount` | query: `fields`; body: `application/json` | `PartyAccount_FVO` | 201 `PartyAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| GET | `/tmf-api/accountManagement/v5/partyAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `PartyAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| PATCH | `/tmf-api/accountManagement/v5/partyAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `PartyAccount_MVO` | 200 `PartyAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| GET | `/tmf-api/accountManagement/v5/settlementAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `accountType`, `financialAccount.id`, `name`, `relatedParty.id`, `state` | - | 200 `array of SettlementAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| POST | `/tmf-api/accountManagement/v5/settlementAccount` | query: `fields`; body: `application/json` | `SettlementAccount_FVO` | 201 `SettlementAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| GET | `/tmf-api/accountManagement/v5/settlementAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `SettlementAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| PATCH | `/tmf-api/accountManagement/v5/settlementAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `SettlementAccount_MVO` | 200 `SettlementAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/schema/BssBillingAccount.schema.json` | - | - | 200 - JSON Schema of the BssBillingAccount extension (`app/api/account.py`) | [`app/api/account.py`](../../app/api/account.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
@@ -76,8 +84,8 @@ Every billingAccount body carries `@type: BssBillingAccount`, `@baseType: Billin
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /billFormat/{id}`, `DELETE /billPresentationMedia/{id}`, `DELETE /billingAccount/{id}`, `POST /billingCycleSpecification`, `DELETE /billingCycleSpecification/{id}`, `PATCH /billingCycleSpecification/{id}`, `DELETE /financialAccount/{id}`.
-- Resources of the spec that are **not implemented**: `/hub`, `/listener`, `/partyAccount`, `/settlementAccount` (`/hub` and `/listener/*`: no event notifications).
+- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /billFormat/{id}`, `DELETE /billPresentationMedia/{id}`, `DELETE /billingAccount/{id}`, `POST /billingCycleSpecification`, `DELETE /billingCycleSpecification/{id}`, `PATCH /billingCycleSpecification/{id}`, `DELETE /financialAccount/{id}`, `DELETE /partyAccount/{id}`, `DELETE /settlementAccount/{id}`.
+- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
 
 
 ## Behaviour and deviations

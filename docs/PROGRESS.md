@@ -11,8 +11,8 @@ records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 29 | 29/29 (100%) | 29/29 (100%) | unknown |
-| API | 87 | 87/87 (100%) | 87/87 (100%) | unknown |
+| Database | 30 | 30/30 (100%) | 30/30 (100%) | unknown |
+| API | 95 | 95/95 (100%) | 95/95 (100%) | unknown |
 | UI | 21 | 21/21 (100%) | 21/21 (100%) | unknown |
 | Worker | 14 | 14/14 (100%) | 14/14 (100%) | unknown |
 
@@ -21,6 +21,7 @@ records the deployed commit.
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
 | `db.financial_account` | 5 | Financial accounts (TMF666) | yes | yes | unknown |
+| `db.party_account` | 5 | Party and settlement accounts (TMF666) | yes | yes | unknown |
 | `db.refund` | 5 | Completed cash refunds (TMF676) | yes | yes | unknown |
 | `db.refund_source` | 5 | Credit consumed by refunds | yes | yes | unknown |
 | `db.customer_bill_on_demand` | 5 | On-demand bill requests (TMF678) | yes | yes | unknown |
@@ -58,6 +59,14 @@ records the deployed commit.
 | `api.tmf666.financialAccount.get` | 5 | Get a financial account | yes | yes | unknown |
 | `api.tmf666.financialAccount.create` | 5 | Create a financial account | yes | yes | unknown |
 | `api.tmf666.financialAccount.patch` | 5 | Patch a financial account | yes | yes | unknown |
+| `api.tmf666.partyAccount.list` | 5 | List party accounts | yes | yes | unknown |
+| `api.tmf666.partyAccount.get` | 5 | Get a party account | yes | yes | unknown |
+| `api.tmf666.partyAccount.create` | 5 | Create a party account | yes | yes | unknown |
+| `api.tmf666.partyAccount.patch` | 5 | Patch a party account | yes | yes | unknown |
+| `api.tmf666.settlementAccount.list` | 5 | List settlement accounts | yes | yes | unknown |
+| `api.tmf666.settlementAccount.get` | 5 | Get a settlement account | yes | yes | unknown |
+| `api.tmf666.settlementAccount.create` | 5 | Create a settlement account | yes | yes | unknown |
+| `api.tmf666.settlementAccount.patch` | 5 | Patch a settlement account | yes | yes | unknown |
 | `api.tmf676.refund.list` | 5 | List refunds | yes | yes | unknown |
 | `api.tmf676.refund.get` | 5 | Get a refund | yes | yes | unknown |
 | `api.tmf676.refund.create` | 5 | Record a completed refund | yes | yes | unknown |

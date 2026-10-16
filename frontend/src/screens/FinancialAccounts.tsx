@@ -107,7 +107,7 @@ export function FinancialAccountsScreen() {
                                   {item.name}
                                 </Link>
                               ) : (
-                                item.name
+                                <span>{item.name}</span>
                               )}
                               <span className="bss-secondary"> ({KIND_LABEL[item.kind]})</span>
                             </Fragment>

@@ -1,8 +1,10 @@
 # TMF conformance gap analysis
 
-**Financial accounts (2026-10-16).** TMF666 financialAccount list/retrieve/create/PATCH
-and the billing account's `financialAccount` link bring non-listener operation coverage
-to 71/129 (55.0%). See [the accounts decision](decisions/accounts.md).
+**TMF666 accounts (2026-10-16).** financialAccount, partyAccount and settlementAccount
+list/retrieve/create/PATCH (12 operations), with the `financialAccount` link on billing,
+party and settlement accounts, bring non-listener operation coverage to 79/129 (61.2%).
+TMF666 now lacks only DELETE, `/hub` and the two `billingCycleSpecification` writes. See
+[the accounts decision](decisions/accounts.md).
 
 **Refund/bill-delivery milestone (2026-10-16).** Refunds (3 operations), on-demand
 bills (3), formats and presentation media (8) bring non-listener TMF operation

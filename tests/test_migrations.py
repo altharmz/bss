@@ -336,7 +336,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 30  # 29 domain tables + alembic_version
+    assert tables == 31  # 30 domain tables + alembic_version
 
 
 def test_0009_catalog_round_trip(temp_db_url):
@@ -400,6 +400,44 @@ def test_0013_financial_accounts_round_trip(temp_db_url):
     with psycopg.connect(temp_db_url) as conn:
         assert conn.execute("SELECT to_regclass('financial_account')").fetchone() == (None,)
         assert conn.execute("SELECT name FROM billing_account").fetchall() == [("Main",)]
+    command.upgrade(cfg, "head")
+
+
+def test_0014_party_accounts_round_trip(temp_db_url):
+    """A party account may only join a financial account of its own party (composite FK);
+    downgrading to 0013 drops party accounts and their enum, keeping financial accounts."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0014")
+    with psycopg.connect(temp_db_url) as conn:
+        owner, other = (
+            conn.execute(
+                "INSERT INTO party (party_type, organization_name) VALUES ('Organization', %s)"
+                " RETURNING id",
+                (name,),
+            ).fetchone()[0]
+            for name in ("Romashka", "Other")
+        )
+        financial = conn.execute(
+            "INSERT INTO financial_account (party_id, name) VALUES (%s, 'Group') RETURNING id",
+            (owner,),
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO party_account (kind, party_id, name, financial_account_id)"
+            " VALUES ('SettlementAccount', %s, 'Payouts', %s)",
+            (owner, financial),
+        )
+    with psycopg.connect(temp_db_url) as conn, pytest.raises(psycopg.errors.ForeignKeyViolation):
+        conn.execute(
+            "INSERT INTO party_account (kind, party_id, name, financial_account_id)"
+            " VALUES ('PartyAccount', %s, 'Foreign', %s)",
+            (other, financial),
+        )
+    command.downgrade(cfg, "0013")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT to_regclass('party_account'), to_regtype('party_account_kind')"
+        ).fetchone() == (None, None)
+        assert conn.execute("SELECT name FROM financial_account").fetchall() == [("Group",)]
     command.upgrade(cfg, "head")
 
 

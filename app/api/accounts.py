@@ -1,11 +1,15 @@
-"""TMF666 Account Management v5: financialAccount.
+"""TMF666 Account Management v5: financialAccount, partyAccount, settlementAccount.
 
 A financial account is owned by a party (Individual or Organization: `relatedParty`, role
-`owner`, fixed at creation) and aggregates the billing accounts of that party's customers.
-The link is set on the billing account (`financialAccount`); here it is the derived,
-read-only `accountRelationship[]` (`contains`). `accountBalance[]` is one `currentBalance`
-entry per currency of the linked billing accounts - their balances summed, positive = in
-credit - and empty without links. Billing never looks at a financial account.
+`owner`, fixed at creation) and aggregates the billing accounts of that party's customers
+and the party's own party and settlement accounts. The link is set on the contained
+account (`financialAccount`); here it is the derived, read-only `accountRelationship[]`
+(`contains`). `accountBalance[]` is one `currentBalance` entry per currency of the linked
+billing accounts - their balances summed, positive = in credit - and empty without
+them: party and settlement accounts have no ledger. Billing never looks at any of these.
+
+Party and settlement accounts share one table and one shape; each has its own path and
+`@type`, and neither list contains the other (no polymorphic lists).
 docs/decisions/accounts.md.
 """
 
@@ -60,6 +64,24 @@ ATTRIBUTES = (
 )
 
 
+PARTY_ATTRIBUTES = (
+    "name",
+    "description",
+    "accountType",
+    "state",
+    "relatedParty",
+    "creditLimit",
+    "financialAccount",
+    "lastUpdate",
+)
+# @type (and party_account.kind) -> resource path segment
+RESOURCE = {
+    "BillingAccount": "billingAccount",
+    "PartyAccount": "partyAccount",
+    "SettlementAccount": "settlementAccount",
+}
+
+
 class FinancialAccountRef(Ref):
     referred_type = "FinancialAccount"
 
@@ -85,6 +107,14 @@ class FinancialPatch(TmfModel):
     account_type: str | None = Field(default=None, min_length=1)
     state: AccountState | None = None
     credit_limit: Money | None = None
+
+
+class PartyAccountCreate(FinancialCreate):
+    financial_account: FinancialAccountRef | None = None
+
+
+class PartyAccountPatch(FinancialPatch):
+    financial_account: FinancialAccountRef | None = None
 
 
 def owner_party(conn: psycopg.Connection, related: list[OwnerParty]) -> Row:
@@ -197,8 +227,8 @@ def financial_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             for currency, amount in accounts.balances(conn, row["id"]).items()
         ],
         "accountRelationship": [
-            relationship("BillingAccount", "billingAccount", account)
-            for account in accounts.linked_billing_accounts(conn, row["id"])
+            relationship(account["kind"], RESOURCE[account["kind"]], account)
+            for account in accounts.linked_accounts(conn, row["id"])
         ],
         "lastUpdate": utc(row["updated_at"]),
         "@type": "FinancialAccount",
@@ -281,3 +311,170 @@ def patch_financial_account(
         row = accounts.update_financial(conn, uid, changes)
         patched = financial_body(conn, row)
     return TmfJSONResponse(listing.select_fields(patched, fields))
+
+
+# --- partyAccount and settlementAccount: one shape, `kind` = @type ---
+
+
+def party_account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    financial = (
+        None
+        if row["financial_account_id"] is None
+        else accounts.get_financial(conn, row["financial_account_id"])
+    )
+    body = {
+        "id": str(row["id"]),
+        "href": f"{BASE}/{RESOURCE[row['kind']]}/{row['id']}",
+        "name": row["name"],
+        "description": row["description"],
+        "accountType": row["account_type"],
+        "state": row["state"],
+        "relatedParty": owner_body(conn, row["party_id"]),
+        "creditLimit": credit_limit_body(row),
+        "financialAccount": None if financial is None else financial_ref(financial),
+        "lastUpdate": utc(row["updated_at"]),
+        "@type": row["kind"],
+    }
+    return without_nulls(body)
+
+
+def _list_party_accounts(request: Request, tx: Tx, kind: str) -> TmfJSONResponse:
+    query = listing.parse_list_query(
+        request,
+        filters={
+            "name": ("name", listing.as_str),
+            "state": ("state", listing.as_str),
+            "accountType": ("account_type", listing.as_str),
+            "relatedParty.id": ("party_id", listing.as_uuid),
+            "financialAccount.id": ("financial_account_id", listing.as_uuid),
+        },
+        attributes=PARTY_ATTRIBUTES,
+    )
+    with tx() as conn:
+        rows, total = accounts.page_party_accounts(
+            conn, kind, where=query.where, offset=query.offset, limit=query.limit
+        )
+        items = [party_account_body(conn, row) for row in rows]
+    return listing.list_response(items, total, query)
+
+
+def _get_party_account(account_id: str, request: Request, tx: Tx, kind: str) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, PARTY_ATTRIBUTES)
+    with tx() as conn:
+        row = accounts.get_party_account(conn, kind, parse_id(RESOURCE[kind], account_id))
+        if row is None:
+            raise not_found(RESOURCE[kind], account_id)
+        body = party_account_body(conn, row)
+    return TmfJSONResponse(listing.select_fields(body, fields))
+
+
+def _create_party_account(
+    data: PartyAccountCreate, request: Request, tx: Tx, kind: str
+) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, PARTY_ATTRIBUTES)
+    with tx() as conn:
+        party = owner_party(conn, data.related_party)
+        financial_id = (
+            None
+            if data.financial_account is None
+            else link_financial(conn, data.financial_account, party["id"], None)
+        )
+        row = accounts.create_party_account(
+            conn,
+            {
+                "kind": kind,
+                "party_id": party["id"],
+                "name": data.name,
+                "description": data.description,
+                "account_type": data.account_type,
+                "state": data.state,
+                "financial_account_id": financial_id,
+                **credit_limit_columns(data.credit_limit),
+            },
+        )
+        new = party_account_body(conn, row)
+    return created(listing.select_fields(new, fields))
+
+
+def _patch_party_account(
+    account_id: str, data: PartyAccountPatch, request: Request, tx: Tx, kind: str
+) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, PARTY_ATTRIBUTES)
+    not_null(data, "name", "state")
+    with tx() as conn:
+        uid = parse_id(RESOURCE[kind], account_id)
+        current = accounts.get_party_account(conn, kind, uid)
+        if current is None:
+            raise not_found(RESOURCE[kind], account_id)
+        changes = columns(data, exclude=frozenset({"credit_limit", "financial_account"}))
+        if "credit_limit" in data.model_fields_set:  # null removes it
+            changes |= credit_limit_columns(data.credit_limit)
+        if "financial_account" in data.model_fields_set:  # null unlinks
+            changes["financial_account_id"] = (
+                None
+                if data.financial_account is None
+                else link_financial(
+                    conn,
+                    data.financial_account,
+                    current["party_id"],
+                    current["financial_account_id"],
+                )
+            )
+        row = accounts.update_party_account(conn, uid, changes)
+        patched = party_account_body(conn, row)
+    return TmfJSONResponse(listing.select_fields(patched, fields))
+
+
+PARTY_READ_ONLY = ("relatedParty", "lastUpdate")
+
+
+@router.get("/partyAccount")
+def list_party_accounts(request: Request, tx: Tx) -> TmfJSONResponse:
+    return _list_party_accounts(request, tx, "PartyAccount")
+
+
+@router.get("/partyAccount/{account_id}")
+def get_party_account(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
+    return _get_party_account(account_id, request, tx, "PartyAccount")
+
+
+@router.post("/partyAccount")
+def create_party_account(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+    check_type(body, "PartyAccount")
+    data = parse(PartyAccountCreate, body, read_only=("accountBalance",))
+    return _create_party_account(data, request, tx, "PartyAccount")
+
+
+@router.patch("/partyAccount/{account_id}")
+def patch_party_account(
+    account_id: str, body: MergePatchBody, request: Request, tx: Tx
+) -> TmfJSONResponse:
+    check_type(body, "PartyAccount")
+    data = parse(PartyAccountPatch, body, read_only=(*PARTY_READ_ONLY, "accountBalance"))
+    return _patch_party_account(account_id, data, request, tx, "PartyAccount")
+
+
+@router.get("/settlementAccount")
+def list_settlement_accounts(request: Request, tx: Tx) -> TmfJSONResponse:
+    return _list_party_accounts(request, tx, "SettlementAccount")
+
+
+@router.get("/settlementAccount/{account_id}")
+def get_settlement_account(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
+    return _get_party_account(account_id, request, tx, "SettlementAccount")
+
+
+@router.post("/settlementAccount")
+def create_settlement_account(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+    check_type(body, "SettlementAccount")
+    data = parse(PartyAccountCreate, body, read_only=("accountBalance",))
+    return _create_party_account(data, request, tx, "SettlementAccount")
+
+
+@router.patch("/settlementAccount/{account_id}")
+def patch_settlement_account(
+    account_id: str, body: MergePatchBody, request: Request, tx: Tx
+) -> TmfJSONResponse:
+    check_type(body, "SettlementAccount")
+    data = parse(PartyAccountPatch, body, read_only=(*PARTY_READ_ONLY, "accountBalance"))
+    return _patch_party_account(account_id, data, request, tx, "SettlementAccount")

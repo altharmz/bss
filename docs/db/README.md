@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0013**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0014**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -10,6 +10,7 @@ PostgreSQL schema at Alembic head **0013**, read from `pg_catalog` of a throwawa
 | [`customer`](customer.md) | party | SID Customer (TMF629 customer): the role a party plays towards us. The party is fixed at creation. |
 | [`billing_account`](billing_account.md) | party | SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount extension): one customer, one currency, one bill cycle day. The balance is not stored: payments (done) minus all ABRs. |
 | [`financial_account`](financial_account.md) | party | TMF666 financial accounts: a party's receivables across its billing accounts. |
+| [`party_account`](party_account.md) | party | TMF666 party and settlement accounts: records only, no ledger, never billed. |
 | [`product_specification`](product_specification.md) | catalog | SID ProductSpecification (TMF620 productSpecification): what a product is, independent of how it is sold. |
 | [`product_offering`](product_offering.md) | catalog | SID ProductOffering (TMF620 productOffering): a sellable offer built on one specification. Lifecycle only moves forward: In Design -> Active -> Retired. |
 | [`product_offering_price`](product_offering_price.md) | catalog | SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its own and attached to at most one offering. Never re-priced, never starts in the past, never ended retroactively; prices of one offering, type and currency never overlap. |
@@ -47,6 +48,7 @@ flowchart LR
     customer[customer]
     billing_account[billing_account]
     financial_account[financial_account]
+    party_account[party_account]
   end
   subgraph area_catalog["Catalog (TMF620)"]
     product_specification[product_specification]
@@ -112,6 +114,8 @@ flowchart LR
   financial_account -->|"party_id"| party
   offering_category -->|"category_id"| category
   offering_category -->|"offering_id"| product_offering
+  party_account -->|"financial_account_id, party_id"| financial_account
+  party_account -->|"party_id"| party
   payment -->|"billing_account_id"| billing_account
   product -->|"billing_account_id"| billing_account
   product -->|"created_by_item_id"| product_order_item
@@ -181,14 +185,30 @@ erDiagram
     numeric credit_limit
     char credit_limit_currency
   }
+  party_account {
+    uuid id PK
+    timestamptz created_at
+    timestamptz updated_at
+    party_account_kind kind
+    uuid party_id FK
+    text name
+    text description
+    text account_type
+    account_state state
+    numeric credit_limit
+    char credit_limit_currency
+    uuid financial_account_id FK
+  }
   bill_format {
     uuid id PK
   }
   bill_format |o--o{ billing_account : "bill_format_id"
   customer ||--o{ billing_account : "customer_id"
   financial_account |o--o{ billing_account : "financial_account_id"
+  financial_account |o--o{ party_account : "financial_account_id, party_id"
   party ||--o{ customer : "party_id"
   party ||--o{ financial_account : "party_id"
+  party ||--o{ party_account : "party_id"
 ```
 
 Tables from other areas are shown with their key only: [`bill_format`](bill_format.md).
@@ -584,7 +604,7 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 
 | Enum | Values | Used by |
 |---|---|---|
-| `account_state` | `Active`, `Suspended`, `Closed` | [`billing_account.state`](billing_account.md), [`financial_account.state`](financial_account.md) |
+| `account_state` | `Active`, `Suspended`, `Closed` | [`billing_account.state`](billing_account.md), [`financial_account.state`](financial_account.md), [`party_account.state`](party_account.md) |
 | `bill_allocation_kind` | `automatic`, `explicit` | [`bill_allocation.kind`](bill_allocation.md) |
 | `bill_category` | `normal`, `creditNote` | [`customer_bill.category`](customer_bill.md) |
 | `bill_state_change_cause` | `run`, `payment`, `operator` | [`customer_bill_state_change.cause`](customer_bill_state_change.md) |
@@ -598,6 +618,7 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 | `customer_status` | `Created`, `Active`, `Inactive` | [`customer.status`](customer.md) |
 | `item_action_type` | `add`, `modify`, `delete`, `noChange` | [`product_order_item.action`](product_order_item.md) |
 | `lifecycle_status` | `In Design`, `Active`, `Retired` | [`category.lifecycle_status`](category.md), [`product_catalog.lifecycle_status`](product_catalog.md), [`product_offering.lifecycle_status`](product_offering.md), [`product_offering_price.lifecycle_status`](product_offering_price.md), [`product_specification.lifecycle_status`](product_specification.md) |
+| `party_account_kind` | `PartyAccount`, `SettlementAccount` | [`party_account.kind`](party_account.md) |
 | `party_type` | `Individual`, `Organization` | [`party.party_type`](party.md) |
 | `payment_status` | `done` | [`payment.status`](payment.md) |
 | `price_type` | `recurring`, `oneTime` | [`product_offering_price.price_type`](product_offering_price.md) |

@@ -4,7 +4,8 @@ Approved as two slices: financial accounts with the billing account link (4 oper
 migration `0013`), then party and settlement accounts (8 operations, migration `0014`).
 Together they complete TMF666's list/retrieve/create/PATCH surface except the two
 `billingCycleSpecification` writes. Coverage after slice 1: 71/129 non-listener TMF
-operations (55.0%). This is endpoint coverage, not full conformance.
+operations (55.0%); after slice 2: 79/129 (61.2%). This is endpoint coverage, not full
+conformance.
 
 ## Financial accounts (slice 1)
 
@@ -58,3 +59,38 @@ contract (frontend.md) for a feature the demo does not need on screen.
 party_id)` for slice 2's composite foreign key), `billing_account.financial_account_id`
 (nullable, indexed; existing accounts stay unlinked) and the owner trigger. Rollback:
 `alembic downgrade 0012` drops the links and the table.
+
+## Party and settlement accounts (slice 2)
+
+TMF666's `SettlementAccount` is a specialization of `PartyAccount` with the same
+attributes. Both are **records only**: accounts of a party - a partner, a supplier - that
+this BSS does not bill and holds no ledger for. They have no `accountBalance` (sending one
+is a 400): a zero would be an invented number. Billing and the worker never read them.
+
+**Same rules as a financial account** for the owner (`relatedParty` role `owner`, an
+Individual or Organization, fixed), `name`, `description`, `accountType`, `state`,
+`creditLimit` and `lastUpdate`. `financialAccount` is accepted on POST and PATCH (`null`
+unlinks) under the billing account's rules: it must exist, have the **same owner** (the
+account's own party), and not be `Closed` unless unchanged. The owners are equal by
+construction in the database too: a composite foreign key `(financial_account_id,
+party_id) -> financial_account (id, party_id)`. A linked party or settlement account
+appears in its financial account's `accountRelationship[]` with its own `@referredType`
+and href, ordered with the billing accounts by creation; it adds nothing to the balance.
+`billStructure`, `paymentPlan`, `paymentStatus`, `defaultPaymentMethod`, `contact`,
+`taxExemption` and `accountRelationship` are refused (400). Filters: `name`, `state`,
+`accountType`, `relatedParty.id`, `financialAccount.id`.
+
+**No polymorphic lists (deviation by decision).** Each resource has its own path and
+`@type`: `/partyAccount` lists only `PartyAccount`s - not settlement or billing accounts,
+which the spec's inheritance would allow - and `/settlementAccount` only
+`SettlementAccount`s. A GET or PATCH of one resource's id on the other's path is a 404; a
+POST or PATCH naming the other `@type` is a 400. A list mixing resources would answer ids
+that belong to other paths, and the billing account would need two shapes.
+
+**UI**: the Financial accounts screen lists contained party and settlement accounts by
+name and kind; they have no screen of their own, so they are not links.
+
+**Migration `0014`**: enum `party_account_kind` (`PartyAccount`, `SettlementAccount` - ours,
+equal to the `@type`) and table `party_account` with `kind`, the same columns as
+`financial_account` and the composite foreign key. Rollback: `alembic downgrade 0013`
+drops the table and the enum (their data is lost; financial accounts stay).

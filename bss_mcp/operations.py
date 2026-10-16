@@ -17,7 +17,12 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.api.account import AccountCreate, AccountPatch
-from app.api.accounts import FinancialCreate, FinancialPatch
+from app.api.accounts import (
+    FinancialCreate,
+    FinancialPatch,
+    PartyAccountCreate,
+    PartyAccountPatch,
+)
 from app.api.bill import BillPatch
 from app.api.catalog import (
     OfferingCreate,
@@ -202,6 +207,32 @@ OPERATIONS: dict[str, Op] = {
         "Change a financial account's name, description, accountType, state or"
         " creditLimit; the owner is fixed.",
         body=FinancialPatch,
+    ),
+    "list_party_accounts": Op(
+        "Party accounts: a party's accounts that are not billed (no balance).", query=LIST
+    ),
+    "get_party_account": Op("One party account.", query=FIELDS),
+    "create_party_account": Op(
+        "Create a party account owned by one party (relatedParty role owner); optional"
+        " financialAccount of the same owner.",
+        body=PartyAccountCreate,
+    ),
+    "patch_party_account": Op(
+        "Change a party account; financialAccount null unlinks; the owner is fixed.",
+        body=PartyAccountPatch,
+    ),
+    "list_settlement_accounts": Op(
+        "Settlement accounts: records for settling with a party; never billed.", query=LIST
+    ),
+    "get_settlement_account": Op("One settlement account.", query=FIELDS),
+    "create_settlement_account": Op(
+        "Create a settlement account owned by one party (relatedParty role owner);"
+        " optional financialAccount of the same owner.",
+        body=PartyAccountCreate,
+    ),
+    "patch_settlement_account": Op(
+        "Change a settlement account; financialAccount null unlinks; the owner is fixed.",
+        body=PartyAccountPatch,
     ),
     # --- TMF676 payment ---
     "list_refunds": Op("Completed refunds paid out of unused credit.", query=LIST),

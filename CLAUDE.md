@@ -186,12 +186,15 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
-**TMF666 accounts** (2026-10-16): two approved slices. Slice 1: financial accounts
-(4 operations) owned by a party, billing accounts linked via `financialAccount`,
-per-currency balance, read-only UI screen; migration `0013`. TMF operation coverage:
-71/129 (55.0%); scoped API items: 87. Decision:
-[accounts.md](docs/decisions/accounts.md). Not deployed: `make verify` needs the
-human's approval (migrations `0009`-`0013` ship together).
+**TMF666 accounts** (2026-10-16): two approved slices, both committed. Slice 1:
+financial accounts (4 operations) owned by a party, billing accounts linked via
+`financialAccount`, per-currency balance, read-only UI screen; migration `0013`. Slice 2:
+party and settlement accounts (8 operations), records only (no ledger), linkable to the
+same owner's financial account; migration `0014`. TMF operation coverage: 79/129
+(61.2%); scoped API items: 95. Decision: [accounts.md](docs/decisions/accounts.md). Not
+deployed: `make verify` needs the human's approval (migrations `0009`-`0014` ship
+together). Not done: API notes for the new resources in
+`scripts/docs/api-notes/tmf666-account.md` (a harness file).
 
 **Refunds and bill delivery** (2026-10-16): approved milestone adds 14 TMF operations:
 refunds, on-demand bills, bill formats and presentation media. Migrations `0010`-`0012`

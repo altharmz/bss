@@ -53,4 +53,4 @@ TMF666 financial accounts: a party's receivables across its billing accounts.
 
 ## Referenced by
 
-[`billing_account`](billing_account.md)
+[`billing_account`](billing_account.md), [`party_account`](party_account.md)

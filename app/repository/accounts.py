@@ -1,4 +1,5 @@
-"""TMF666 financial accounts (and the billing accounts linked to them)."""
+"""TMF666 financial accounts (and the accounts linked to them), party and settlement
+accounts (one table, `kind`)."""
 
 from decimal import Decimal
 from typing import Any
@@ -25,11 +26,11 @@ def page_financial(
     return select_page(conn, FINANCIAL, where=where, offset=offset, limit=limit)
 
 
-def create_financial(conn: psycopg.Connection, values: dict[str, Any]) -> Row:
+def _insert(conn: psycopg.Connection, table: str, values: dict[str, Any]) -> Row:
     return returning(
         conn,
         sql.SQL("INSERT INTO {} ({}) VALUES ({}) RETURNING *").format(
-            sql.Identifier(FINANCIAL),
+            sql.Identifier(table),
             sql.SQL(", ").join(map(sql.Identifier, values)),
             sql.SQL(", ").join(sql.Placeholder() * len(values)),
         ),
@@ -37,8 +38,50 @@ def create_financial(conn: psycopg.Connection, values: dict[str, Any]) -> Row:
     )
 
 
+def create_financial(conn: psycopg.Connection, values: dict[str, Any]) -> Row:
+    return _insert(conn, FINANCIAL, values)
+
+
 def update_financial(conn: psycopg.Connection, uid: UUID, changes: dict[str, Any]) -> Row:
     return update_by_id(conn, FINANCIAL, uid, changes)
+
+
+def get_party_account(conn: psycopg.Connection, kind: str, uid: UUID) -> Row | None:
+    return fetch_one(conn, "SELECT * FROM party_account WHERE id = %s AND kind = %s", (uid, kind))
+
+
+def page_party_accounts(
+    conn: psycopg.Connection, kind: str, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(
+        conn, "party_account", where={**where, "kind": kind}, offset=offset, limit=limit
+    )
+
+
+def create_party_account(conn: psycopg.Connection, values: dict[str, Any]) -> Row:
+    return _insert(conn, "party_account", values)
+
+
+def update_party_account(conn: psycopg.Connection, uid: UUID, changes: dict[str, Any]) -> Row:
+    return update_by_id(conn, "party_account", uid, changes)
+
+
+def linked_accounts(conn: psycopg.Connection, uid: UUID) -> list[Row]:
+    """Every account a financial account contains, in creation order: billing accounts
+    (`kind` BillingAccount) and party/settlement accounts. Only id, name, kind."""
+    return fetch_all(
+        conn,
+        """
+        SELECT id, name, kind, created_at FROM (
+            SELECT id, name, 'BillingAccount' AS kind, created_at FROM billing_account
+            WHERE financial_account_id = %(id)s
+            UNION ALL
+            SELECT id, name, kind::text, created_at FROM party_account
+            WHERE financial_account_id = %(id)s
+        ) linked ORDER BY created_at, id
+        """,
+        {"id": uid},
+    )
 
 
 def linked_billing_accounts(conn: psycopg.Connection, uid: UUID) -> list[Row]:
