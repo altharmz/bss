@@ -25,14 +25,16 @@ def create_product_specification(
     name: str,
     lifecycle_status: str,
     description: str | None = None,
+    id: UUID | None = None,
 ) -> Row:
+    """`id` None: a new one (an import passes the source's)."""
     return returning(
         conn,
         """
-        INSERT INTO product_specification (name, description, lifecycle_status)
-        VALUES (%s, %s, %s) RETURNING *
+        INSERT INTO product_specification (id, name, description, lifecycle_status)
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s) RETURNING *
         """,
-        (name, description, lifecycle_status),
+        (id, name, description, lifecycle_status),
     )
 
 
@@ -50,17 +52,21 @@ def create_product_offering(
     is_sellable: bool = True,
     description: str | None = None,
     code: str | None = None,
+    id: UUID | None = None,
 ) -> Row:
-    """`code` is unique: a duplicate raises psycopg.errors.UniqueViolation."""
+    """`code` is unique: a duplicate raises psycopg.errors.UniqueViolation. `id` None: a
+    new one (an import passes the source's)."""
     return returning(
         conn,
         """
         INSERT INTO product_offering
-            (product_specification_id, name, description, lifecycle_status,
+            (id, product_specification_id, name, description, lifecycle_status,
              is_sellable, valid_for, code)
-        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s)
+        RETURNING *
         """,
         (
+            id,
             product_specification_id,
             name,
             description,
@@ -87,17 +93,21 @@ def create_product_offering_price(
     recurring_period: str | None = None,
     name: str | None = None,
     lifecycle_status: str = "Active",
+    id: UUID | None = None,
 ) -> Row:
-    """`product_offering_id=None` creates an unattached price (see `attach_price`)."""
+    """`product_offering_id=None` creates an unattached price (see `attach_price`). `id`
+    None: a new one (an import passes the source's)."""
     return returning(
         conn,
         """
         INSERT INTO product_offering_price
-            (product_offering_id, name, lifecycle_status, price_type, recurring_period,
+            (id, product_offering_id, name, lifecycle_status, price_type, recurring_period,
              amount, currency, valid_for)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING *
         """,
         (
+            id,
             product_offering_id,
             name,
             lifecycle_status,

@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/productCatalogManagement/v5`
 - Contract: [`spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml`](../../spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml) - Product Catalog Management version 5.0.0; the spec's server URL is `https://serverRoot/productCatalogManagement/v5/`
-- Operations exposed: 25
+- Operations exposed: 33
 
 
 ## Operations
@@ -16,6 +16,14 @@
 | DELETE | `/tmf-api/productCatalogManagement/v5/category/{category_id}` | path: `category_id` | - | 204 (no body) | [`app/api/classification.py`](../../app/api/classification.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/category/{category_id}` | path: `category_id`; query: `fields` | - | 200 `Category` | [`app/api/classification.py`](../../app/api/classification.py) |
 | PATCH | `/tmf-api/productCatalogManagement/v5/category/{category_id}` | path: `category_id`; query: `fields`; body: `application/merge-patch+json` | `Category_MVO` | 200 `Category` | [`app/api/classification.py`](../../app/api/classification.py) |
+| GET | `/tmf-api/productCatalogManagement/v5/exportJob` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `status` | - | 200 `array of ExportJob` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| POST | `/tmf-api/productCatalogManagement/v5/exportJob` | query: `fields`; body: `application/json` | `ExportJob_FVO` | 201 `ExportJob` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| DELETE | `/tmf-api/productCatalogManagement/v5/exportJob/{job_id}` | path: `job_id` | - | 204 (no body) | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| GET | `/tmf-api/productCatalogManagement/v5/exportJob/{job_id}` | path: `job_id`; query: `fields` | - | 200 `ExportJob` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| GET | `/tmf-api/productCatalogManagement/v5/importJob` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `status` | - | 200 `array of ImportJob` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| POST | `/tmf-api/productCatalogManagement/v5/importJob` | query: `fields`; body: `application/json` | `ImportJob_FVO` | 201 `ImportJob` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| DELETE | `/tmf-api/productCatalogManagement/v5/importJob/{job_id}` | path: `job_id` | - | 204 (no body) | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| GET | `/tmf-api/productCatalogManagement/v5/importJob/{job_id}` | path: `job_id`; query: `fields` | - | 200 `ImportJob` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/productCatalog` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `catalogType`, `lifecycleStatus`, `name` | - | 200 `array of ProductCatalog` | [`app/api/classification.py`](../../app/api/classification.py) |
 | POST | `/tmf-api/productCatalogManagement/v5/productCatalog` | query: `fields`; body: `application/json` | `ProductCatalog_FVO` | 201 `ProductCatalog` | [`app/api/classification.py`](../../app/api/classification.py) |
 | DELETE | `/tmf-api/productCatalogManagement/v5/productCatalog/{catalog_id}` | path: `catalog_id` | - | 204 (no body) | [`app/api/classification.py`](../../app/api/classification.py) |
@@ -42,7 +50,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF620-P
 
 ## Coverage of the spec
 
-- Resources of the spec that are **not implemented**: `/exportJob`, `/hub`, `/importJob`, `/listener` (`/hub` and `/listener/*`: no event notifications).
+- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
 
 
 ## Behaviour and deviations
@@ -69,6 +77,7 @@ See [the catalog decision](../decisions/catalog.md#categories-and-product-catalo
 | Prices are monthly only: `recurringChargePeriodType` `monthly` (required for recurring, not allowed for oneTime), `recurringChargePeriodLength` 1 | `PriceCreate` | `::test_price_validation` |
 | `lastUpdate` is accepted and ignored on POST (the spec's `_FVO` schemas make clients send it), read-only on PATCH | `last_update` fields | `tests/test_api_conventions.py::test_patch_rejects_read_only_attributes` |
 | DELETE (204) only what nothing references, else 409 naming the references: a specification no offering uses; an offering never ordered (no product, no order item - rejected ones included) and without prices; a price that is unattached or whose offering was never ordered; a category without subcategories, offerings or catalogs; any catalog (its root memberships go, the categories stay). An offering's category memberships go with it | `refuse_if_referenced`, `delete_*` in `catalog.py` and `classification.py` | `tests/test_api_catalog_delete.py::test_an_ordered_offering_and_its_prices_stay`, `::test_an_unordered_offering_goes_after_its_prices`, `::test_category_and_catalog_rules` |
+| importJob/exportJob: the catalog as a `BssCatalogDocument` in a `data:application/json;base64,...` URL; the server fetches and writes nothing else (another `url` is a 422). Synchronous: 201 with status `Succeeded` or `Failed`; `errorLog` is the reason as text. Export `query`: empty or `productCatalog.id=<id>`. Import: POST's rules, the source's ids, all or nothing; identical existing entries are skipped, different ones fail the job. Deleting a job undoes nothing | `app/api/catalog_jobs.py` | `tests/test_api_catalog_jobs.py` |
 | A delete and an order (or a new offering) never race: orders hold their offerings `FOR SHARE`, offering POST its specification; deletes lock the row (a price: its offering) `FOR UPDATE` | `lock_offering`, `lock_product_specification` | `::test_a_price_delete_waits_for_an_order_in_flight`, `::test_an_order_waits_for_a_price_delete_in_flight`, `::test_a_new_offering_waits_for_a_specification_delete_in_flight` |
 
 Changing the price of a live offering cannot be done with these operations (neither

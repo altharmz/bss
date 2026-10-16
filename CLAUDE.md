@@ -190,11 +190,13 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 Slice 1 (catalog deletes, 5 operations): DELETE on specification, offering, price,
 category and catalog for entries nothing references (D1 narrowed to TMF620); orders now
 hold their offerings `FOR SHARE`. Coverage 84/129 (65.1%). Decision:
-[catalog.md](docs/decisions/catalog.md#deleting-catalog-entries-2026-10-16). Slice 2
-(next): importJob/exportJob (8 operations), migration `0015` `catalog_job`, an internal
-download endpoint, `data:` URLs or own exports only (no outbound fetch), import under
-POST's rules (past-dated prices refused). Slice 1 committed and pushed with the human's
-OK; `scripts/docs/generate.py` lists a DELETE's 204 (approved).
+[catalog.md](docs/decisions/catalog.md#deleting-catalog-entries-2026-10-16). Slice 1
+committed and pushed (`284ada1`). Slice 2: importJob/exportJob (8 operations),
+migration `0015` `catalog_job`; documents inline as `data:` URLs both ways (no download
+endpoint - a change from the plan, because the spec's ExportJob_FVO requires `url`);
+import under POST's rules, all or nothing. Coverage 92/129 (71.3%). Decision:
+[catalog.md](docs/decisions/catalog.md#import-and-export-jobs-2026-10-16). Not deployed:
+migrations `0009`-`0015` ship together with the next `make verify`.
 
 **TMF666 accounts** (2026-10-16): two approved slices, both committed. Slice 1:
 financial accounts (4 operations) owned by a party, billing accounts linked via

@@ -170,13 +170,21 @@ def create_specification(body: JsonBody, request: Request, tx: Tx) -> TmfJSONRes
     check_type(body, "ProductSpecification")
     data = parse(SpecificationCreate, body)
     with tx() as conn:
-        row = catalog.create_product_specification(
-            conn,
-            name=data.name,
-            lifecycle_status=data.lifecycle_status,
-            description=data.description,
-        )
+        row = insert_specification(conn, data)
     return created(listing.select_fields(specification_body(row), fields))
+
+
+def insert_specification(
+    conn: psycopg.Connection, data: SpecificationCreate, new_id: UUID | None = None
+) -> Row:
+    """POST's write; an import passes the source's id."""
+    return catalog.create_product_specification(
+        conn,
+        name=data.name,
+        lifecycle_status=data.lifecycle_status,
+        description=data.description,
+        id=new_id,
+    )
 
 
 @router.patch("/productSpecification/{spec_id}")
@@ -282,24 +290,32 @@ def create_price(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
     fields = listing.retrieve_fields(request, PRICE_ATTRIBUTES)
     check_type(body, "ProductOfferingPrice")
     data = parse(PriceCreate, body)
+    with tx() as conn:
+        row = insert_price(conn, data, clock.now())
+    return created(listing.select_fields(price_body(row), fields))
+
+
+def insert_price(
+    conn: psycopg.Connection, data: PriceCreate, now: datetime, new_id: UUID | None = None
+) -> Row:
+    """POST's rule and write; an import passes the source's id."""
     valid_for = data.valid_for.to_range()
-    if valid_for.lower < clock.now():
+    if valid_for.lower < now:
         raise conflict(
             "validFor.startDateTime is in the past; a price can only take effect from now on"
         )
-    with tx() as conn:
-        row = catalog.create_product_offering_price(
-            conn,
-            product_offering_id=None,
-            name=data.name,
-            lifecycle_status=data.lifecycle_status,
-            price_type=data.price_type,
-            recurring_period=data.recurring_charge_period_type,
-            amount=data.price.value,
-            currency=data.price.unit,
-            valid_for=valid_for,
-        )
-    return created(listing.select_fields(price_body(row), fields))
+    return catalog.create_product_offering_price(
+        conn,
+        product_offering_id=None,
+        name=data.name,
+        lifecycle_status=data.lifecycle_status,
+        price_type=data.price_type,
+        recurring_period=data.recurring_charge_period_type,
+        amount=data.price.value,
+        currency=data.price.unit,
+        valid_for=valid_for,
+        id=new_id,
+    )
 
 
 def _first_uncovered_day(end: datetime) -> date:
@@ -557,31 +573,38 @@ def create_offering(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -
     fields = listing.retrieve_fields(request, OFFERING_ATTRIBUTES)
     check_type(body, "ProductOffering")
     data = parse(OfferingCreate, body)
-    valid_for = data.valid_for.to_range()
     with tx() as conn:
-        spec_id = data.product_specification.id
-        if catalog.lock_product_specification(conn, spec_id, share=True) is None:
-            raise unprocessable(
-                f"productSpecification {data.product_specification.id} does not exist"
-            )
-        code = data.external_identifier[0].id if data.external_identifier else None
-        try:
-            with conn.transaction():
-                row = catalog.create_product_offering(
-                    conn,
-                    product_specification_id=data.product_specification.id,
-                    name=data.name,
-                    lifecycle_status=data.lifecycle_status,
-                    valid_for=valid_for,
-                    is_sellable=data.is_sellable,
-                    description=data.description,
-                    code=code,
-                )
-        except pg_errors.UniqueViolation:
-            raise conflict(f"offering code {code} is already in use") from None
-        _attach_prices(conn, row["id"], data.product_offering_price, clock.now())
-        new = offering_body(conn, row)
+        new = offering_body(conn, insert_offering(conn, data, clock.now()))
     return created(listing.select_fields(new, fields))
+
+
+def insert_offering(
+    conn: psycopg.Connection, data: OfferingCreate, now: datetime, new_id: UUID | None = None
+) -> Row:
+    """POST's rules and write, prices attached; an import passes the source's id."""
+    spec_id = data.product_specification.id
+    if catalog.lock_product_specification(conn, spec_id, share=True) is None:
+        raise unprocessable(f"productSpecification {spec_id} does not exist")
+    code = data.external_identifier[0].id if data.external_identifier else None
+    try:
+        with conn.transaction():
+            row = catalog.create_product_offering(
+                conn,
+                product_specification_id=spec_id,
+                name=data.name,
+                lifecycle_status=data.lifecycle_status,
+                valid_for=data.valid_for.to_range(),
+                is_sellable=data.is_sellable,
+                description=data.description,
+                code=code,
+                id=new_id,
+            )
+    except pg_errors.UniqueViolation as exc:
+        if exc.diag.constraint_name == "product_offering_pkey":  # an import's id, raced
+            raise conflict(f"productOffering {new_id} already exists") from None
+        raise conflict(f"offering code {code} is already in use") from None
+    _attach_prices(conn, row["id"], data.product_offering_price, now)
+    return row
 
 
 @router.patch("/productOffering/{offering_id}")

@@ -1,5 +1,11 @@
 # TMF conformance gap analysis
 
+**TMF620 import and export jobs (2026-10-16).** importJob and exportJob (eight
+operations) move the catalog as an inline data: URL document, synchronously, imports
+all or nothing under POST's rules. Non-listener operation coverage: 92/129 (71.3%);
+TMF620 lacks only `/hub`. See
+[the catalog decision](decisions/catalog.md#import-and-export-jobs-2026-10-16).
+
 **TMF620 catalog deletes (2026-10-16).** DELETE on productSpecification,
 productOffering, productOfferingPrice, category and productCatalog, for entries nothing
 references (D1 narrowed to TMF620), brings non-listener operation coverage to 84/129

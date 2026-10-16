@@ -27,6 +27,8 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
             "productOfferingPrice": "ProductOfferingPrice",
             "category": "Category",
             "productCatalog": "ProductCatalog",
+            "importJob": "ImportJob",
+            "exportJob": "ExportJob",
         },
     ),
     "/tmf-api/partyManagement/v5": (

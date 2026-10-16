@@ -149,8 +149,10 @@ def save(
     data: CategoryCreate | CategoryPatch | CatalogCreate | CatalogPatch,
     category: bool,
     uid: UUID | None = None,
+    new_id: UUID | None = None,
 ) -> dict[str, Any]:
-    """Validate against serialized state, then replace scalar fields and memberships."""
+    """Validate against serialized state, then replace scalar fields and memberships.
+    `uid`: the entry to PATCH; `new_id`: the id of a new one (an import's source id)."""
     repo.lock(conn)
     table = "category" if category else "product_catalog"
     current = repo.get(conn, table, uid) if uid else None
@@ -199,6 +201,8 @@ def save(
     if current and ids is not None and not values:
         # Membership is part of this resource: fire its lastUpdate trigger too.
         values["name"] = current["name"]
+    if not current and new_id is not None:
+        values["id"] = new_id
     row = repo.update(conn, table, uid, values) if current else repo.create(conn, table, values)
     if ids is not None:
         repo.replace(conn, "offering" if category else "catalog", row["id"], ids, reverse=category)

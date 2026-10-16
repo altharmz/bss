@@ -176,6 +176,13 @@ def money_as_strings(value: Any) -> Any:
 
 
 @pytest.fixture
+def mcp_settings(mcp_settings):
+    """Every tool once per test: more calls than the default per-minute budget (60)."""
+    mcp_settings.mcp_rate_per_min = 200
+    return mcp_settings
+
+
+@pytest.fixture
 def world(api, db_conn) -> dict[str, Any]:
     """One of everything, written through the API (and a billing run)."""
     offering = apidata.sellable_offering(api, value=300)
@@ -223,7 +230,13 @@ def world(api, db_conn) -> dict[str, Any]:
     }
     party_account = api.post("/tmf-api/accountManagement/v5/partyAccount", owned).json()
     settlement = api.post("/tmf-api/accountManagement/v5/settlementAccount", owned).json()
+    export_job = api.post(f"{CATALOG}/exportJob", {"@type": "ExportJob"}).json()
+    import_job = api.post(
+        f"{CATALOG}/importJob", {"@type": "ImportJob", "url": export_job["url"]}
+    ).json()
     return {
+        "export_job": export_job,
+        "import_job": import_job,
         "financial": financial,
         "party_account": party_account,
         "settlement": settlement,
@@ -258,6 +271,8 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_refund": {"refund_id": world["refund"]["id"]},
         "get_category": {"category_id": world["category"]["id"]},
         "get_catalog": {"catalog_id": world["catalog"]["id"]},
+        "get_export_job": {"job_id": world["export_job"]["id"], "fields": "status"},
+        "get_import_job": {"job_id": world["import_job"]["id"]},
         "get_specification": {"spec_id": world["spec"]["id"]},
         "get_price": {"price_id": world["price"]["id"]},
         "get_offering": {"offering_id": offering, "fields": "name"},
@@ -383,6 +398,11 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
     call("delete_price", {"price_id": spare_price["id"]}, expected=(204,))
     call("delete_catalog", {"catalog_id": catalog["id"]}, expected=(204,))
     call("delete_category", {"category_id": category["id"]}, expected=(204,))
+    exported = call("create_export_job", {"body": {"@type": "ExportJob"}})
+    imported = call("create_import_job", {"body": {"url": exported["url"]}})
+    assert imported["status"] == "Succeeded", imported
+    call("delete_import_job", {"job_id": imported["id"]}, expected=(204,))
+    call("delete_export_job", {"job_id": exported["id"]}, expected=(204,))
     person = call("create_individual", {"body": {"givenName": "Ada", "familyName": "Lovelace"}})
     call("patch_individual", {"party_id": person["id"], "body": {"familyName": "King"}})
     org = call("create_organization", {"body": {"name": "Analytical Engines"}})

@@ -32,6 +32,7 @@ from app.api.catalog import (
     SpecificationCreate,
     SpecificationPatch,
 )
+from app.api.catalog_jobs import ExportJobCreate, ImportJobCreate
 from app.api.classification import CatalogCreate, CatalogPatch, CategoryCreate, CategoryPatch
 from app.api.customer import CustomerCreate, CustomerPatch
 from app.api.on_demand import DemandCreate
@@ -106,6 +107,25 @@ OPERATIONS: dict[str, Op] = {
         "Change a product catalog; category replaces the root category list.", body=CatalogPatch
     ),
     "delete_catalog": Op("Delete a product catalog; its root categories stay."),
+    "list_export_jobs": Op("Catalog export jobs (finished: Succeeded or Failed).", query=LIST),
+    "get_export_job": Op(
+        "One export job; url is the exported document as a data: URL.", query=FIELDS
+    ),
+    "create_export_job": Op(
+        "Export the whole catalog, or one product catalog with query productCatalog.id=<id>:"
+        " the job's url is the document as a data: URL that create_import_job accepts.",
+        body=ExportJobCreate,
+    ),
+    "delete_export_job": Op("Delete an export job record."),
+    "list_import_jobs": Op("Catalog import jobs (finished: Succeeded or Failed).", query=LIST),
+    "get_import_job": Op("One import job; errorLog says why a failed one failed.", query=FIELDS),
+    "create_import_job": Op(
+        "Import a catalog document: url is an export's data: URL. All or nothing under the"
+        " POST rules, keeping the source ids; identical entries are skipped, a failure is"
+        " stored as status Failed with errorLog.",
+        body=ImportJobCreate,
+    ),
+    "delete_import_job": Op("Delete an import job record; what it imported stays."),
     "list_specifications": Op("Product specifications.", query=LIST),
     "get_specification": Op("One product specification.", query=FIELDS),
     "create_specification": Op(

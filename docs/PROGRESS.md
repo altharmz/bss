@@ -11,8 +11,8 @@ records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 30 | 30/30 (100%) | 30/30 (100%) | unknown |
-| API | 100 | 100/100 (100%) | 100/100 (100%) | unknown |
+| Database | 31 | 31/31 (100%) | 31/31 (100%) | unknown |
+| API | 108 | 108/108 (100%) | 108/108 (100%) | unknown |
 | UI | 21 | 21/21 (100%) | 21/21 (100%) | unknown |
 | Worker | 14 | 14/14 (100%) | 14/14 (100%) | unknown |
 
@@ -32,6 +32,7 @@ records the deployed commit.
 | `db.product_catalog` | 2 | Product catalogs (TMF620) | yes | yes | unknown |
 | `db.catalog_category` | 2 | Catalog root category membership | yes | yes | unknown |
 | `db.offering_category` | 2 | Category offering membership | yes | yes | unknown |
+| `db.catalog_job` | 5 | Catalog import and export jobs (TMF620) | yes | yes | unknown |
 | `db.product_specification` | 1 | Product specifications (TMF620) | yes | yes | unknown |
 | `db.product_offering` | 1 | Product offerings (TMF620) | yes | yes | unknown |
 | `db.product_offering_price` | 1 | Offering prices (TMF620) | yes | yes | unknown |
@@ -91,6 +92,14 @@ records the deployed commit.
 | `api.tmf620.productCatalog.patch` | 2 | Patch a product catalog | yes | yes | unknown |
 | `api.tmf620.category.delete` | 5 | Delete an empty category | yes | yes | unknown |
 | `api.tmf620.productCatalog.delete` | 5 | Delete a product catalog | yes | yes | unknown |
+| `api.tmf620.exportJob.list` | 5 | List export jobs | yes | yes | unknown |
+| `api.tmf620.exportJob.get` | 5 | Get an export job | yes | yes | unknown |
+| `api.tmf620.exportJob.create` | 5 | Export the catalog as a data: URL | yes | yes | unknown |
+| `api.tmf620.exportJob.delete` | 5 | Delete an export job | yes | yes | unknown |
+| `api.tmf620.importJob.list` | 5 | List import jobs | yes | yes | unknown |
+| `api.tmf620.importJob.get` | 5 | Get an import job | yes | yes | unknown |
+| `api.tmf620.importJob.create` | 5 | Import a catalog document (all or nothing) | yes | yes | unknown |
+| `api.tmf620.importJob.delete` | 5 | Delete an import job | yes | yes | unknown |
 | `api.tmf620.productSpecification.list` | 2 | List product specifications | yes | yes | unknown |
 | `api.tmf620.productSpecification.get` | 2 | Get a product specification | yes | yes | unknown |
 | `api.tmf620.productSpecification.create` | 2 | Create a product specification | yes | yes | unknown |

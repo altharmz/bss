@@ -67,6 +67,15 @@ items:
   - {id: api.tmf620.productCatalog.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/productCatalogManagement/v5/productCatalog/{catalog_id}", title: "Patch a product catalog"}
   - {id: api.tmf620.category.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productCatalogManagement/v5/category/{category_id}", title: "Delete an empty category"}
   - {id: api.tmf620.productCatalog.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productCatalogManagement/v5/productCatalog/{catalog_id}", title: "Delete a product catalog"}
+  - {id: db.catalog_job, area: db, stage: 5, table: catalog_job, title: "Catalog import and export jobs (TMF620)"}
+  - {id: api.tmf620.exportJob.list, area: api, stage: 5, method: GET, path: /tmf-api/productCatalogManagement/v5/exportJob, title: "List export jobs"}
+  - {id: api.tmf620.exportJob.get, area: api, stage: 5, method: GET, path: "/tmf-api/productCatalogManagement/v5/exportJob/{job_id}", title: "Get an export job"}
+  - {id: api.tmf620.exportJob.create, area: api, stage: 5, method: POST, path: /tmf-api/productCatalogManagement/v5/exportJob, title: "Export the catalog as a data: URL"}
+  - {id: api.tmf620.exportJob.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productCatalogManagement/v5/exportJob/{job_id}", title: "Delete an export job"}
+  - {id: api.tmf620.importJob.list, area: api, stage: 5, method: GET, path: /tmf-api/productCatalogManagement/v5/importJob, title: "List import jobs"}
+  - {id: api.tmf620.importJob.get, area: api, stage: 5, method: GET, path: "/tmf-api/productCatalogManagement/v5/importJob/{job_id}", title: "Get an import job"}
+  - {id: api.tmf620.importJob.create, area: api, stage: 5, method: POST, path: /tmf-api/productCatalogManagement/v5/importJob, title: "Import a catalog document (all or nothing)"}
+  - {id: api.tmf620.importJob.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productCatalogManagement/v5/importJob/{job_id}", title: "Delete an import job"}
   # ---------------- db: tables ----------------
   - {id: db.product_specification, area: db, stage: 1, table: product_specification, title: "Product specifications (TMF620)"}
   - {id: db.product_offering, area: db, stage: 1, table: product_offering, title: "Product offerings (TMF620)"}

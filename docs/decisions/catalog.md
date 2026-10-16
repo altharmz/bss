@@ -7,6 +7,50 @@ conventions: [tmf-api.md](tmf-api.md).
 
 ## TMF620 mapping
 
+### Import and export jobs (2026-10-16)
+
+`importJob` and `exportJob` (list, retrieve, create, delete: eight operations) move the
+catalog as one JSON document, a `BssCatalogDocument` (version 1) holding the full TMF620
+bodies of specifications, prices, offerings, categories and catalogs, in import order.
+Migration `0015` adds `catalog_job` (one table, `kind` = `ImportJob`/`ExportJob`).
+
+- **Inline only, no outbound traffic.** The document travels as a
+  `data:application/json;base64,...` URL. An export's `url` is the document; an
+  import's `url` must be one (anything else is a 422 - the server fetches nothing). The
+  spec's `ExportJob_FVO` requires `url` (the file to write): we accept it only as
+  `data:application/json`, or not at all. Changed from the approved plan, which had an
+  internal download endpoint: the required `url` made the inline form the honest one,
+  and an export can be handed to an import (here or on another instance) as is.
+  Documents are capped at 1 MB (a larger export is stored `Failed`).
+- **Synchronous.** Both run in their request and answer 201 with a finished job:
+  `Succeeded` or `Failed` (the JobStateType values `Not Started`/`Running` never occur).
+  `status`, `creationDate`, `completionDate` and `errorLog` are server-managed (400 on
+  POST). `errorLog` holds the reason as text (the spec describes a path to a log; ours is
+  the log). `path` is the TMF620 base path (another value is a 422); `contentType` only
+  `application/json`.
+- **Export scope:** `query` empty (everything, unattached prices included) or
+  `productCatalog.id=<id>`: that catalog, its root categories and their descendants, the
+  offerings in them, and those offerings' specifications and prices.
+- **Import under POST's rules, keeping the source's ids, all or nothing** (a savepoint).
+  The same code paths as POST (`insert_specification`, `insert_price`,
+  `insert_offering`, `save`): references must exist, a price never starts in the past
+  (so a catalog whose prices already took effect cannot be imported - approved, strict),
+  codes are unique, categories nest without cycles, catalogs take roots only. An entry
+  whose id exists is compared with the document (ignoring `lastUpdate` and derived
+  navigation: an offering's `category[]`, a category's `subCategory[]`): equal is
+  skipped, so re-importing is a no-op; different fails the job, naming the attributes.
+  A failed import is stored with its `errorLog` and writes nothing, like a rejected order.
+- **Deleting a job** removes the record only; nothing it imported is undone.
+
+MCP gets eight tools (`create_export_job` -> `create_import_job` round trip; the job
+writes need the write scope). Coverage: 92/129 non-listener operations (71.3%); TMF620
+now lacks only `/hub`. Tests: `tests/test_api_catalog_jobs.py`,
+`tests/test_migrations.py::test_0015_catalog_jobs_round_trip`. Negative proofs: without
+the savepoint a failed import left its specification behind; without the comparison a
+conflicting entry was skipped and the import succeeded; without the past-price rule the
+import failed only later, at the offering's attach check - each test failed and the code
+was restored.
+
 ### Deleting catalog entries (2026-10-16)
 
 D1 ("DELETE anywhere") is narrowed to the catalog. `DELETE` on `productSpecification`,

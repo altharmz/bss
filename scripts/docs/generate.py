@@ -142,7 +142,7 @@ AREAS = {
     "party": ("party", "customer", "billing_account", "financial_account", "party_account"),
     "catalog": (
         "product_specification", "product_offering", "product_offering_price",
-        "category", "product_catalog", "catalog_category", "offering_category",
+        "category", "product_catalog", "catalog_category", "offering_category", "catalog_job",
     ),
     "ordering": ("product_order", "product_order_item", "product_order_error_message"),
     "inventory": ("product",),

@@ -336,7 +336,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 31  # 30 domain tables + alembic_version
+    assert tables == 32  # 31 domain tables + alembic_version
 
 
 def test_0009_catalog_round_trip(temp_db_url):
@@ -438,6 +438,35 @@ def test_0014_party_accounts_round_trip(temp_db_url):
             "SELECT to_regclass('party_account'), to_regtype('party_account_kind')"
         ).fetchone() == (None, None)
         assert conn.execute("SELECT name FROM financial_account").fetchall() == [("Group",)]
+    command.upgrade(cfg, "head")
+
+
+def test_0015_catalog_jobs_round_trip(temp_db_url):
+    """A stored job is finished: a failed one has its errorLog and only an export has a
+    query; downgrading to 0014 drops the table and both enums."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0015")
+    insert = (
+        "INSERT INTO catalog_job (kind, status, content_type, path, query, error_log,"
+        " creation_date, completion_date) VALUES (%s, %s, 'application/json', '/x', %s, %s,"
+        " now(), now())"
+    )
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute(insert, ("ExportJob", "Succeeded", "productCatalog.id=1", None))
+        conn.execute(insert, ("ImportJob", "Failed", None, "why"))
+    for values in (
+        ("ImportJob", "Failed", None, None),  # failed without a log
+        ("ImportJob", "Succeeded", None, "log"),  # a log on success
+        ("ImportJob", "Succeeded", "q", None),  # a query on an import
+    ):
+        with psycopg.connect(temp_db_url) as conn, pytest.raises(psycopg.errors.CheckViolation):
+            conn.execute(insert, values)
+    command.downgrade(cfg, "0014")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT to_regclass('catalog_job'), to_regtype('catalog_job_kind'),"
+            " to_regtype('catalog_job_status')"
+        ).fetchone() == (None, None, None)
     command.upgrade(cfg, "head")
 
 

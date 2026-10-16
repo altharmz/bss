@@ -11,6 +11,7 @@ from app.api import (
     accounts,
     bill,
     catalog,
+    catalog_jobs,
     classification,
     customer,
     errors,
@@ -29,6 +30,7 @@ def install(app: FastAPI) -> None:
     for module in (
         catalog,
         classification,
+        catalog_jobs,
         party,
         customer,
         account,

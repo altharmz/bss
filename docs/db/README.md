@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0014**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0015**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -18,6 +18,7 @@ PostgreSQL schema at Alembic head **0014**, read from `pg_catalog` of a throwawa
 | [`product_catalog`](product_catalog.md) | catalog | TMF620 catalog organization resource. |
 | [`catalog_category`](catalog_category.md) | catalog | TMF620 many-to-many category membership. |
 | [`offering_category`](offering_category.md) | catalog | TMF620 many-to-many category membership. |
+| [`catalog_job`](catalog_job.md) | catalog | TMF620 importJob/exportJob: synchronous, finished on insert; documents as data: URLs. |
 | [`product_order`](product_order.md) | ordering | SID ProductOrder (TMF622 productOrder): the only way to create or terminate products. Processed synchronously; a rejected order is stored with its reasons. |
 | [`product_order_item`](product_order_item.md) | ordering | SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product. At most one open delete item per product (partial unique index). |
 | [`product_order_error_message`](product_order_error_message.md) | ordering | TMF622 productOrderErrorMessage: why an order was rejected - one row per reason, for the order as a whole or for one item. |
@@ -58,6 +59,7 @@ flowchart LR
     product_catalog[product_catalog]
     catalog_category[catalog_category]
     offering_category[offering_category]
+    catalog_job[catalog_job]
   end
   subgraph area_ordering["Ordering (TMF622)"]
     product_order[product_order]
@@ -282,6 +284,19 @@ erDiagram
     uuid offering_id PK,FK
     uuid category_id PK,FK
     timestamptz created_at
+  }
+  catalog_job {
+    uuid id PK
+    timestamptz created_at
+    catalog_job_kind kind
+    catalog_job_status status
+    text content_type
+    text path
+    text query
+    text url
+    text error_log
+    timestamptz creation_date
+    timestamptz completion_date
   }
   category |o--o{ category : "parent_id"
   category ||--o{ catalog_category : "category_id"
@@ -612,6 +627,8 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 | `billing_run_failure_kind` | `accounts`, `run` | [`billing_run.failure_kind`](billing_run.md) |
 | `billing_run_status` | `running`, `completed`, `failed` | [`billing_run.status`](billing_run.md) |
 | `billing_run_trigger` | `scheduled`, `catchUp`, `retry` | [`billing_run.trigger`](billing_run.md) |
+| `catalog_job_kind` | `ImportJob`, `ExportJob` | [`catalog_job.kind`](catalog_job.md) |
+| `catalog_job_status` | `Succeeded`, `Failed` | [`catalog_job.status`](catalog_job.md) |
 | `charge_type` | `recurring`, `refund` | [`applied_customer_billing_rate.charge_type`](applied_customer_billing_rate.md) |
 | `customer_bill_on_demand_state_type` | `inProgress`, `rejected`, `done`, `terminatedWithError` | [`customer_bill_on_demand.state`](customer_bill_on_demand.md) |
 | `customer_bill_state_type` | `new`, `onHold`, `validated`, `sent`, `settled`, `partiallyPaid` | [`customer_bill.state`](customer_bill.md), [`customer_bill_state_change.from_state`](customer_bill_state_change.md), [`customer_bill_state_change.to_state`](customer_bill_state_change.md) |

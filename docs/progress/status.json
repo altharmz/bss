@@ -2,15 +2,15 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 100,
-      "items": 100,
-      "tested": 100
+      "implemented": 108,
+      "items": 108,
+      "tested": 108
     },
     "db": {
       "deployed": null,
-      "implemented": 30,
-      "items": 30,
-      "tested": 30
+      "implemented": 31,
+      "items": 31,
+      "tested": 31
     },
     "ui": {
       "deployed": null,
@@ -505,6 +505,87 @@
       "stage": 5,
       "tested": true,
       "title": "Delete a product catalog"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.catalog_job",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Catalog import and export jobs (TMF620)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.exportJob.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "List export jobs"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.exportJob.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Get an export job"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.exportJob.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Export the catalog as a data: URL"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.exportJob.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete an export job"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.importJob.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "List import jobs"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.importJob.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Get an import job"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.importJob.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Import a catalog document (all or nothing)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.importJob.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete an import job"
     },
     {
       "area": "db",
