@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/accountManagement/v5`
 - Contract: [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml) - Account Management version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 15
+- Operations exposed: 19
 
 
 ## Operations
@@ -19,12 +19,16 @@
 | POST | `/tmf-api/accountManagement/v5/billPresentationMedia` | query: `fields`; body: `application/json` | `BillPresentationMedia_FVO` | 201 `BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | GET | `/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}` | path: `media_id`; query: `fields` | - | 200 `BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | PATCH | `/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}` | path: `media_id`; query: `fields`; body: `application/merge-patch+json` | `BillPresentationMedia_MVO` | 200 `BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
-| GET | `/tmf-api/accountManagement/v5/billingAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `name`, `relatedParty.id`, `state` | - | 200 `array of BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| GET | `/tmf-api/accountManagement/v5/billingAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `financialAccount.id`, `name`, `relatedParty.id`, `state` | - | 200 `array of BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | POST | `/tmf-api/accountManagement/v5/billingAccount` | query: `fields`; body: `application/json` | `BillingAccount_FVO` | 201 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | PATCH | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `BillingAccount_MVO` | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/billingCycleSpecification` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingPeriod`, `frequency`, `name` | - | 200 `array of BillingCycleSpecification` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/billingCycleSpecification/{specification_id}` | path: `specification_id`; query: `fields` | - | 200 `BillingCycleSpecification` | [`app/api/account.py`](../../app/api/account.py) |
+| GET | `/tmf-api/accountManagement/v5/financialAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `accountType`, `name`, `relatedParty.id`, `state` | - | 200 `array of FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| POST | `/tmf-api/accountManagement/v5/financialAccount` | query: `fields`; body: `application/json` | `FinancialAccount_FVO` | 201 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| GET | `/tmf-api/accountManagement/v5/financialAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| PATCH | `/tmf-api/accountManagement/v5/financialAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `FinancialAccount_MVO` | 200 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/schema/BssBillingAccount.schema.json` | - | - | 200 - JSON Schema of the BssBillingAccount extension (`app/api/account.py`) | [`app/api/account.py`](../../app/api/account.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
@@ -72,8 +76,8 @@ Every billingAccount body carries `@type: BssBillingAccount`, `@baseType: Billin
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /billFormat/{id}`, `DELETE /billPresentationMedia/{id}`, `DELETE /billingAccount/{id}`, `POST /billingCycleSpecification`, `DELETE /billingCycleSpecification/{id}`, `PATCH /billingCycleSpecification/{id}`.
-- Resources of the spec that are **not implemented**: `/financialAccount`, `/hub`, `/listener`, `/partyAccount`, `/settlementAccount` (`/hub` and `/listener/*`: no event notifications).
+- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /billFormat/{id}`, `DELETE /billPresentationMedia/{id}`, `DELETE /billingAccount/{id}`, `POST /billingCycleSpecification`, `DELETE /billingCycleSpecification/{id}`, `PATCH /billingCycleSpecification/{id}`, `DELETE /financialAccount/{id}`.
+- Resources of the spec that are **not implemented**: `/hub`, `/listener`, `/partyAccount`, `/settlementAccount` (`/hub` and `/listener/*`: no event notifications).
 
 
 ## Behaviour and deviations

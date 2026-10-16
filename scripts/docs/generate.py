@@ -139,7 +139,7 @@ HANDLERS = {
 
 # Table -> area of the ER diagram. Every table must be listed (and nothing else).
 AREAS = {
-    "party": ("party", "customer", "billing_account"),
+    "party": ("party", "customer", "billing_account", "financial_account"),
     "catalog": (
         "product_specification", "product_offering", "product_offering_price",
         "category", "product_catalog", "catalog_category", "offering_category",

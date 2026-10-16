@@ -2,6 +2,7 @@ import { getJson } from '../api/client';
 import { useResource } from '../api/useResource';
 import { BillingRunsScreen } from '../screens/BillingRuns';
 import { CatalogScreen } from '../screens/Catalog';
+import { FinancialAccountsScreen } from '../screens/FinancialAccounts';
 import { NotFoundScreen } from '../screens/placeholders';
 import { SubscriberCardScreen } from '../screens/SubscriberCard';
 import { SubscribersScreen } from '../screens/Subscribers';
@@ -30,6 +31,8 @@ function Screen() {
       return <CatalogScreen />;
     case 'billingRuns':
       return <BillingRunsScreen />;
+    case 'financialAccounts':
+      return <FinancialAccountsScreen />;
     case 'notFound':
       return <NotFoundScreen path={route.path} />;
   }

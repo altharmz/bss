@@ -52,6 +52,7 @@ describe('routes', () => {
     [`/subscribers/${ID.toUpperCase()}`, { name: 'subscriber', accountId: ID }],
     ['/catalog', { name: 'catalog' }],
     ['/billing-runs', { name: 'billingRuns' }],
+    ['/financial-accounts', { name: 'financialAccounts' }],
     ['/billing', { name: 'notFound', path: '/billing' }], // not /billing: /billing-status
     ['/subscribers/nope', { name: 'notFound', path: '/subscribers/nope' }],
   ])('%s', (path, route) => {
@@ -113,6 +114,7 @@ describe('shell', () => {
       '/subscribers',
       '/catalog',
       '/billing-runs',
+      '/financial-accounts',
     ]);
     expect(await within(nav).findByText('1,284')).toBeTruthy();
     expect(await within(nav).findByText('12')).toBeTruthy();

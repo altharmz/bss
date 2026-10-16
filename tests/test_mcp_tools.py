@@ -209,7 +209,16 @@ def world(api, db_conn) -> dict[str, Any]:
             "paymentMethod": {"@type": "Cash"},
         },
     ).json()
+    organization = apidata.organization(api)
+    financial = api.post(
+        "/tmf-api/accountManagement/v5/financialAccount",
+        {
+            "name": "Group",
+            "relatedParty": [{"role": "owner", "partyOrPartyRole": {"id": organization["id"]}}],
+        },
+    ).json()
     return {
+        "financial": financial,
         "format": fmt,
         "media": media,
         "demand": demand,
@@ -220,7 +229,7 @@ def world(api, db_conn) -> dict[str, Any]:
         "account": account,
         "bill": bill,
         "payment": payment,
-        "organization": apidata.organization(api),
+        "organization": organization,
         "individual": first(f"{apidata.PARTY}/individual"),
         "customer": first(apidata.CUSTOMER),
         "spec": first(f"{CATALOG}/productSpecification"),
@@ -248,6 +257,7 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_organization": {"party_id": world["organization"]["id"]},
         "get_customer": {"customer_id": world["customer"]["id"]},
         "get_account": {"account_id": acc},
+        "get_financial_account": {"account_id": world["financial"]["id"]},
         "get_cycle_specification": {"specification_id": "monthly"},
         "get_payment": {"payment_id": world["payment"]["id"]},
         "get_product": {"product_id": world["product"]["id"]},
@@ -349,8 +359,24 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
     call("patch_organization", {"party_id": org["id"], "body": {"name": "AE Ltd"}})
     customer = call("create_customer", {"body": apidata.customer_body(person)})
     call("patch_customer", {"customer_id": customer["id"], "body": {"status": "Active"}})
+    financial = call(
+        "create_financial_account",
+        {
+            "body": {
+                "name": "Group",
+                "relatedParty": [{"role": "owner", "partyOrPartyRole": {"id": person["id"]}}],
+            }
+        },
+    )
+    call("patch_financial_account", {"account_id": financial["id"], "body": {"state": "Active"}})
     account = call("create_account", {"body": apidata.account_body(customer)})
-    call("patch_account", {"account_id": account["id"], "body": {"name": "Main"}})
+    call(
+        "patch_account",
+        {
+            "account_id": account["id"],
+            "body": {"name": "Main", "financialAccount": {"id": financial["id"]}},
+        },
+    )
     fmt = call("create_bill_format", {"body": {"name": "JSON detailed"}})
     call("patch_bill_format", {"format_id": fmt["id"], "body": {"description": "Detailed JSON"}})
     media = call("create_bill_media", {"body": {"name": "Download"}})

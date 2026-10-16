@@ -2,13 +2,14 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0012**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0013**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
 | [`party`](party.md) | party | SID Party (TMF632 individual / organization): a person or an organization, told apart by party_type. |
 | [`customer`](customer.md) | party | SID Customer (TMF629 customer): the role a party plays towards us. The party is fixed at creation. |
 | [`billing_account`](billing_account.md) | party | SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount extension): one customer, one currency, one bill cycle day. The balance is not stored: payments (done) minus all ABRs. |
+| [`financial_account`](financial_account.md) | party | TMF666 financial accounts: a party's receivables across its billing accounts. |
 | [`product_specification`](product_specification.md) | catalog | SID ProductSpecification (TMF620 productSpecification): what a product is, independent of how it is sold. |
 | [`product_offering`](product_offering.md) | catalog | SID ProductOffering (TMF620 productOffering): a sellable offer built on one specification. Lifecycle only moves forward: In Design -> Active -> Retired. |
 | [`product_offering_price`](product_offering_price.md) | catalog | SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its own and attached to at most one offering. Never re-priced, never starts in the past, never ended retroactively; prices of one offering, type and currency never overlap. |
@@ -45,6 +46,7 @@ flowchart LR
     party[party]
     customer[customer]
     billing_account[billing_account]
+    financial_account[financial_account]
   end
   subgraph area_catalog["Catalog (TMF620)"]
     product_specification[product_specification]
@@ -94,6 +96,7 @@ flowchart LR
   bill_allocation -->|"payment_id, billing_account_id"| payment
   billing_account -->|"bill_format_id"| bill_format
   billing_account -->|"customer_id"| customer
+  billing_account -->|"financial_account_id"| financial_account
   billing_run_account -->|"billing_account_id"| billing_account
   billing_run_account -->|"run_id"| billing_run
   billing_run_account -->|"waits_for_run_id"| billing_run
@@ -106,6 +109,7 @@ flowchart LR
   customer_bill_on_demand -->|"billing_account_id"| billing_account
   customer_bill_on_demand -->|"customer_bill_id"| customer_bill
   customer_bill_state_change -->|"customer_bill_id"| customer_bill
+  financial_account -->|"party_id"| party
   offering_category -->|"category_id"| category
   offering_category -->|"offering_id"| product_offering
   payment -->|"billing_account_id"| billing_account
@@ -163,13 +167,28 @@ erDiagram
     numeric credit_limit
     timestamptz opened_at
     uuid bill_format_id FK
+    uuid financial_account_id FK
+  }
+  financial_account {
+    uuid id PK
+    timestamptz created_at
+    timestamptz updated_at
+    uuid party_id FK
+    text name
+    text description
+    text account_type
+    account_state state
+    numeric credit_limit
+    char credit_limit_currency
   }
   bill_format {
     uuid id PK
   }
   bill_format |o--o{ billing_account : "bill_format_id"
   customer ||--o{ billing_account : "customer_id"
+  financial_account |o--o{ billing_account : "financial_account_id"
   party ||--o{ customer : "party_id"
+  party ||--o{ financial_account : "party_id"
 ```
 
 Tables from other areas are shown with their key only: [`bill_format`](bill_format.md).
@@ -565,7 +584,7 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 
 | Enum | Values | Used by |
 |---|---|---|
-| `account_state` | `Active`, `Suspended`, `Closed` | [`billing_account.state`](billing_account.md) |
+| `account_state` | `Active`, `Suspended`, `Closed` | [`billing_account.state`](billing_account.md), [`financial_account.state`](financial_account.md) |
 | `bill_allocation_kind` | `automatic`, `explicit` | [`bill_allocation.kind`](bill_allocation.md) |
 | `bill_category` | `normal`, `creditNote` | [`customer_bill.category`](customer_bill.md) |
 | `bill_state_change_cause` | `run`, `payment`, `operator` | [`customer_bill_state_change.cause`](customer_bill_state_change.md) |

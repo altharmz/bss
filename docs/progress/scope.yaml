@@ -15,6 +15,13 @@
 # Status (implemented / tested / deployed) is never written here - it is derived.
 
 items:
+  - {id: db.financial_account, area: db, stage: 5, table: financial_account, title: "Financial accounts (TMF666)"}
+  - {id: api.tmf666.financialAccount.list, area: api, stage: 5, method: GET, path: /tmf-api/accountManagement/v5/financialAccount, title: "List financial accounts"}
+  - {id: api.tmf666.financialAccount.get, area: api, stage: 5, method: GET, path: "/tmf-api/accountManagement/v5/financialAccount/{account_id}", title: "Get a financial account"}
+  - {id: api.tmf666.financialAccount.create, area: api, stage: 5, method: POST, path: /tmf-api/accountManagement/v5/financialAccount, title: "Create a financial account"}
+  - {id: api.tmf666.financialAccount.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/accountManagement/v5/financialAccount/{account_id}", title: "Patch a financial account"}
+  - {id: ui.financialAccounts.list, area: ui, stage: 5, title: "Financial accounts: owner, balance per currency, contained accounts"}
+  - {id: ui.subscriber.financialAccount, area: ui, stage: 5, title: "Subscriber card: link to the account's financial account"}
   - {id: db.refund, area: db, stage: 5, table: refund, title: "Completed cash refunds (TMF676)"}
   - {id: db.refund_source, area: db, stage: 5, table: refund_source, title: "Credit consumed by refunds"}
   - {id: db.customer_bill_on_demand, area: db, stage: 5, table: customer_bill_on_demand, title: "On-demand bill requests (TMF678)"}

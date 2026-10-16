@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from app.api import (
     account,
+    accounts,
     bill,
     catalog,
     classification,
@@ -31,6 +32,7 @@ def install(app: FastAPI) -> None:
         party,
         customer,
         account,
+        accounts,
         payment,
         refunds,
         presentation,

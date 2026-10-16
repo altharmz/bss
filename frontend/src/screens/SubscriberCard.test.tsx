@@ -140,7 +140,7 @@ const FIRST_CHARGE = {
   exceedsCreditLimit: true,
 };
 
-function backend(routes: Record<string, Handler> = {}, account = ACCOUNT) {
+function backend(routes: Record<string, Handler> = {}, account: object = ACCOUNT) {
   return stubFetch({
     'GET /internal/v1/context': () => json(CONTEXT),
     [NAV_RUNS]: noRuns,
@@ -180,6 +180,32 @@ function productRow(name: string): HTMLElement {
 }
 
 describe('subscriber card', () => {
+  it('links the account to its financial account', async () => {
+    backend(
+      {},
+      {
+        ...ACCOUNT,
+        financialAccount: {
+          id: 'f0000001-0000-4000-8000-000000000001',
+          name: 'Group receivables',
+          '@type': 'FinancialAccountRef',
+          '@referredType': 'FinancialAccount',
+        },
+      },
+    );
+    await open();
+    const link = within(expectUi('ui.subscriber.financialAccount')).getByRole('link', {
+      name: 'Group receivables',
+    });
+    expect(link.getAttribute('href')).toBe('/financial-accounts');
+  });
+
+  it('shows no financial account when the account has none', async () => {
+    backend();
+    await open();
+    expect(document.querySelector('[data-ui="ui.subscriber.financialAccount"]')).toBeNull();
+  });
+
   it('shows the account: state, ids, customer status and the KPIs', async () => {
     backend();
     await open();

@@ -336,7 +336,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 29  # 28 domain tables + alembic_version
+    assert tables == 30  # 29 domain tables + alembic_version
 
 
 def test_0009_catalog_round_trip(temp_db_url):
@@ -366,6 +366,41 @@ def test_0009_catalog_round_trip(temp_db_url):
         ).fetchone() == (None, None)
         assert conn.execute("SELECT name FROM product_specification").fetchall() == [("Legacy",)]
     command.upgrade(cfg, "0009")
+
+
+def test_0013_financial_accounts_round_trip(temp_db_url):
+    """Existing billing accounts stay unlinked; a link survives only while 0013 does, and
+    downgrading to 0012 keeps the accounts."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0012")
+    with psycopg.connect(temp_db_url) as conn:
+        party = conn.execute(
+            "INSERT INTO party (party_type, organization_name)"
+            " VALUES ('Organization', 'Romashka') RETURNING id"
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO customer (party_id, name, status) VALUES (%s, 'R', 'Active')", (party,)
+        )
+        conn.execute(
+            "INSERT INTO billing_account"
+            " (customer_id, name, state, currency, bill_cycle_day, opened_at)"
+            " SELECT id, 'Main', 'Active', 'RUB', 1, now() FROM customer"
+        )
+    command.upgrade(cfg, "0013")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT financial_account_id FROM billing_account").fetchall() == [
+            (None,)
+        ]
+        financial = conn.execute(
+            "INSERT INTO financial_account (party_id, name) VALUES (%s, 'Group') RETURNING id",
+            (party,),
+        ).fetchone()[0]
+        conn.execute("UPDATE billing_account SET financial_account_id = %s", (financial,))
+    command.downgrade(cfg, "0012")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT to_regclass('financial_account')").fetchone() == (None,)
+        assert conn.execute("SELECT name FROM billing_account").fetchall() == [("Main",)]
+    command.upgrade(cfg, "head")
 
 
 def test_0008_preserves_legacy_orders_without_inventing_quotes(temp_db_url):

@@ -29,6 +29,7 @@ import type { components as T678 } from './generated/tmf678';
 
 export const PATHS = {
   accounts: '/tmf-api/accountManagement/v5/billingAccount',
+  financialAccounts: '/tmf-api/accountManagement/v5/financialAccount',
   customers: '/tmf-api/customerManagement/v5/customer',
   products: '/tmf-api/productInventory/v5/product',
   offerings: '/tmf-api/productCatalogManagement/v5/productOffering',
@@ -68,13 +69,18 @@ export interface Account {
   currency: string;
   balanceCents: number; // positive = in credit
   creditLimitCents: number | null;
+  financialAccount: { id: string; name: string } | null;
 }
 
 export function toAccount(body: BillingAccountBody): Account {
   const customer = need(body.relatedParty?.[0]?.partyOrPartyRole, 'relatedParty customer');
   const balance = need(body.accountBalance?.[0]?.amount?.value, 'accountBalance');
   const limit = body.creditLimit?.value;
+  const financial = body.financialAccount;
   return {
+    financialAccount: financial
+      ? { id: need(financial.id, 'financialAccount id'), name: financial.name ?? '' }
+      : null,
     id: need(body.id, 'id'),
     name: need(body.name, 'name'),
     state: need(body.state, 'state') as AccountState,
@@ -93,6 +99,50 @@ export async function loadAccounts(signal: AbortSignal): Promise<Account[]> {
 
 export async function loadAccount(id: string, signal: AbortSignal): Promise<Account> {
   return toAccount(await getJson<BillingAccountBody>(`${PATHS.accounts}/${id}`, signal));
+}
+
+// --- financial accounts (TMF666): read-only in the UI (docs/decisions/accounts.md) ---
+
+export type ContainedKind = 'BillingAccount' | 'PartyAccount' | 'SettlementAccount';
+
+export interface FinancialAccount {
+  id: string;
+  name: string;
+  state: AccountState;
+  accountType: string | null;
+  ownerName: string;
+  ownerKind: string; // Individual | Organization
+  balances: { currency: string; cents: number }[]; // positive = in credit
+  contains: { id: string; name: string; kind: ContainedKind }[];
+}
+
+export function toFinancialAccount(body: T666['schemas']['FinancialAccount']): FinancialAccount {
+  const owner = need(body.relatedParty?.[0]?.partyOrPartyRole, 'relatedParty owner');
+  return {
+    id: need(body.id, 'id'),
+    name: need(body.name, 'name'),
+    state: need(body.state, 'state') as AccountState,
+    accountType: body.accountType ?? null,
+    ownerName: need(owner.name, 'owner name'),
+    ownerKind: need(owner['@referredType'], 'owner @referredType'),
+    balances: need(body.accountBalance, 'accountBalance').map((balance) => ({
+      currency: need(balance.amount?.unit, 'balance unit'),
+      cents: toCents(need(balance.amount?.value, 'balance value')),
+    })),
+    contains: need(body.accountRelationship, 'accountRelationship').map((relation) => {
+      const account = need(relation.account, 'accountRelationship account');
+      return {
+        id: need(account.id, 'contained account id'),
+        name: account.name ?? '',
+        kind: need(account['@referredType'], 'contained @referredType') as ContainedKind,
+      };
+    }),
+  };
+}
+
+export async function loadFinancialAccounts(signal: AbortSignal): Promise<FinancialAccount[]> {
+  type Body = T666['schemas']['FinancialAccount'];
+  return (await getAll<Body>(PATHS.financialAccounts, signal)).map(toFinancialAccount);
 }
 
 /** Active products per billing account: one product list (status=active), grouped here

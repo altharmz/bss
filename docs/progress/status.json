@@ -2,21 +2,21 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 83,
-      "items": 83,
-      "tested": 83
+      "implemented": 87,
+      "items": 87,
+      "tested": 87
     },
     "db": {
       "deployed": null,
-      "implemented": 28,
-      "items": 28,
-      "tested": 28
+      "implemented": 29,
+      "items": 29,
+      "tested": 29
     },
     "ui": {
       "deployed": null,
-      "implemented": 19,
-      "items": 19,
-      "tested": 19
+      "implemented": 21,
+      "items": 21,
+      "tested": 21
     },
     "worker": {
       "deployed": null,
@@ -38,6 +38,69 @@
     }
   ],
   "items": [
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.financial_account",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Financial accounts (TMF666)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.financialAccount.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "List financial accounts"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.financialAccount.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Get a financial account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.financialAccount.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Create a financial account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.financialAccount.patch",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Patch a financial account"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.financialAccounts.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Financial accounts: owner, balance per currency, contained accounts"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.financialAccount",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Subscriber card: link to the account's financial account"
+    },
     {
       "area": "db",
       "deployed": null,

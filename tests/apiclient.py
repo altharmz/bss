@@ -41,6 +41,7 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
             "billingCycleSpecification": "BillingCycleSpecification",
             "billFormat": "BillFormat",
             "billPresentationMedia": "BillPresentationMedia",
+            "financialAccount": "FinancialAccount",
         },
     ),
     "/tmf-api/paymentManagement/v4": ("TMF676", {"payment": "Payment", "refund": "Refund"}),

@@ -291,6 +291,15 @@ function BillingAccountPanel({
       title="Billing account"
       right={
         <span className="bss-secondary">
+          {account.financialAccount !== null && (
+            <span data-ui="ui.subscriber.financialAccount">
+              Financial account{' '}
+              <Link className="bss-link" href={hrefOf({ name: 'financialAccounts' })}>
+                {account.financialAccount.name}
+              </Link>
+              {' · '}
+            </span>
+          )}
           BillingAccount <span className="num">{accountLabel(account.id)}</span>
         </span>
       }

@@ -38,4 +38,4 @@ SID Party (TMF632 individual / organization): a person or an organization, told 
 
 ## Referenced by
 
-[`customer`](customer.md)
+[`customer`](customer.md), [`financial_account`](financial_account.md)

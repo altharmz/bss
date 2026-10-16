@@ -1,5 +1,9 @@
 # TMF conformance gap analysis
 
+**Financial accounts (2026-10-16).** TMF666 financialAccount list/retrieve/create/PATCH
+and the billing account's `financialAccount` link bring non-listener operation coverage
+to 71/129 (55.0%). See [the accounts decision](decisions/accounts.md).
+
 **Refund/bill-delivery milestone (2026-10-16).** Refunds (3 operations), on-demand
 bills (3), formats and presentation media (8) bring non-listener TMF operation
 coverage to 67/129 (51.9%). Account preferences drive immutable JSON bill documents;

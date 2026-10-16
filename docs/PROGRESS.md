@@ -11,15 +11,16 @@ records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 28 | 28/28 (100%) | 28/28 (100%) | unknown |
-| API | 83 | 83/83 (100%) | 83/83 (100%) | unknown |
-| UI | 19 | 19/19 (100%) | 19/19 (100%) | unknown |
+| Database | 29 | 29/29 (100%) | 29/29 (100%) | unknown |
+| API | 87 | 87/87 (100%) | 87/87 (100%) | unknown |
+| UI | 21 | 21/21 (100%) | 21/21 (100%) | unknown |
 | Worker | 14 | 14/14 (100%) | 14/14 (100%) | unknown |
 
 ## Database
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
+| `db.financial_account` | 5 | Financial accounts (TMF666) | yes | yes | unknown |
 | `db.refund` | 5 | Completed cash refunds (TMF676) | yes | yes | unknown |
 | `db.refund_source` | 5 | Credit consumed by refunds | yes | yes | unknown |
 | `db.customer_bill_on_demand` | 5 | On-demand bill requests (TMF678) | yes | yes | unknown |
@@ -53,6 +54,10 @@ records the deployed commit.
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
+| `api.tmf666.financialAccount.list` | 5 | List financial accounts | yes | yes | unknown |
+| `api.tmf666.financialAccount.get` | 5 | Get a financial account | yes | yes | unknown |
+| `api.tmf666.financialAccount.create` | 5 | Create a financial account | yes | yes | unknown |
+| `api.tmf666.financialAccount.patch` | 5 | Patch a financial account | yes | yes | unknown |
 | `api.tmf676.refund.list` | 5 | List refunds | yes | yes | unknown |
 | `api.tmf676.refund.get` | 5 | Get a refund | yes | yes | unknown |
 | `api.tmf676.refund.create` | 5 | Record a completed refund | yes | yes | unknown |
@@ -141,6 +146,8 @@ records the deployed commit.
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
+| `ui.financialAccounts.list` | 5 | Financial accounts: owner, balance per currency, contained accounts | yes | yes | unknown |
+| `ui.subscriber.financialAccount` | 5 | Subscriber card: link to the account's financial account | yes | yes | unknown |
 | `ui.shell` | 5 | Shell: sidebar, top bar with business date and zone | yes | yes | unknown |
 | `ui.subscribers.list` | 5 | Subscribers list | yes | yes | unknown |
 | `ui.subscribers.new` | 5 | New subscriber: party, customer, billing account | yes | yes | unknown |

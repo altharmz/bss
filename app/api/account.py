@@ -17,6 +17,9 @@ computed on every read. Positive = the customer is in credit (payments exceed ch
 
 `creditLimit` is the spec's own Money attribute, always in the account's currency.
 Informational only: nothing (ordering included) is ever refused because of it.
+
+`financialAccount` (optional, POST and PATCH, null unlinks) links the account to a
+financial account owned by its customer's engagedParty (app/api/accounts.py).
 """
 
 from typing import Any, Literal
@@ -26,6 +29,7 @@ from fastapi import APIRouter, Request
 from pydantic import Field
 
 from app.api import listing
+from app.api.accounts import FinancialAccountRef, financial_ref, link_financial
 from app.api.common import (
     CENT,
     CustomerRef,
@@ -46,7 +50,7 @@ from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.presentation import BillStructure, structure_body
 from app.api.tmfjson import TmfJSONResponse
-from app.repository import billing, parties, presentation
+from app.repository import accounts, billing, parties, presentation
 from app.repository._sql import Row
 
 BASE = "/tmf-api/accountManagement/v5"
@@ -93,6 +97,7 @@ ATTRIBUTES = (
     "creditLimit",
     "billCycleDay",
     "currency",
+    "financialAccount",
     "lastUpdate",
     "@baseType",
     "@schemaLocation",
@@ -165,6 +170,7 @@ class AccountCreate(TmfModel):
     credit_limit: Money | None = None
     last_update: Any = None
     bill_structure: BillStructure | None = None
+    financial_account: FinancialAccountRef | None = None
 
 
 class AccountPatch(TmfModel):
@@ -172,6 +178,7 @@ class AccountPatch(TmfModel):
     state: AccountState | None = None
     credit_limit: Money | None = None
     bill_structure: BillStructure | None = None
+    financial_account: FinancialAccountRef | None = None
 
 
 def _credit_limit(limit: Money | None, currency: str) -> Any:
@@ -187,6 +194,13 @@ def _credit_limit(limit: Money | None, currency: str) -> Any:
     return limit.value
 
 
+def _owner_of(conn: psycopg.Connection, row: Row) -> Any:
+    """The party a billing account belongs to: its customer's engagedParty."""
+    customer = parties.get_customer(conn, row["customer_id"])
+    assert customer is not None  # foreign key
+    return customer["party_id"]
+
+
 def account_href(account_id: Any) -> str:
     return f"{BASE}/billingAccount/{account_id}"
 
@@ -198,6 +212,11 @@ def account_ref(row: Row) -> dict[str, Any]:
 def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     customer = parties.get_customer(conn, row["customer_id"])
     assert customer is not None  # foreign key
+    financial = (
+        None
+        if row["financial_account_id"] is None
+        else accounts.get_financial(conn, row["financial_account_id"])
+    )
     return {
         "id": str(row["id"]),
         "href": account_href(row["id"]),
@@ -240,6 +259,7 @@ def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             if row["credit_limit"] is None
             else {"creditLimit": money(row["credit_limit"], row["currency"])}
         ),
+        **({} if financial is None else {"financialAccount": financial_ref(financial)}),
         "billCycleDay": row["bill_cycle_day"],
         "currency": row["currency"],
         "lastUpdate": utc(row["updated_at"]),
@@ -262,6 +282,7 @@ def list_accounts(request: Request, tx: Tx) -> TmfJSONResponse:
             "name": ("name", listing.as_str),
             "state": ("state", listing.as_str),
             "relatedParty.id": ("customer_id", listing.as_uuid),
+            "financialAccount.id": ("financial_account_id", listing.as_uuid),
         },
         attributes=ATTRIBUTES,
     )
@@ -297,8 +318,14 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
         )
     customer_id = party.party_or_party_role.id
     with tx() as conn:
-        if parties.get_customer(conn, customer_id) is None:
+        customer = parties.get_customer(conn, customer_id)
+        if customer is None:
             raise unprocessable(f"relatedParty: customer {customer_id} does not exist")
+        financial_id = (
+            None
+            if data.financial_account is None
+            else link_financial(conn, data.financial_account, customer["party_id"], None)
+        )
         row = parties.create_billing_account(
             conn,
             customer_id=customer_id,
@@ -309,6 +336,10 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
             credit_limit=_credit_limit(data.credit_limit, data.currency),
             opened_at=clock.now(),
         )
+        if financial_id is not None:
+            row = parties.update_billing_account(
+                conn, row["id"], {"financial_account_id": financial_id}
+            )
         if data.bill_structure is not None:
             presentation.set_preferences(conn, row["id"], data.bill_structure)
             row = parties.get_billing_account(conn, row["id"])
@@ -340,9 +371,22 @@ def patch_account(
         if current is None:
             raise not_found("billingAccount", account_id)
         billing.load_account(conn, uid)
-        changes = columns(data, exclude=frozenset({"credit_limit", "bill_structure"}))
+        changes = columns(
+            data, exclude=frozenset({"credit_limit", "bill_structure", "financial_account"})
+        )
         if "credit_limit" in data.model_fields_set:  # null removes it
             changes["credit_limit"] = _credit_limit(data.credit_limit, current["currency"])
+        if "financial_account" in data.model_fields_set:  # null unlinks
+            changes["financial_account_id"] = (
+                None
+                if data.financial_account is None
+                else link_financial(
+                    conn,
+                    data.financial_account,
+                    _owner_of(conn, current),
+                    current["financial_account_id"],
+                )
+            )
         row = parties.update_billing_account(conn, uid, changes)
         if data.bill_structure is not None:
             presentation.set_preferences(conn, uid, data.bill_structure)

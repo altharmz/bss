@@ -17,6 +17,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.api.account import AccountCreate, AccountPatch
+from app.api.accounts import FinancialCreate, FinancialPatch
 from app.api.bill import BillPatch
 from app.api.catalog import (
     OfferingCreate,
@@ -179,9 +180,28 @@ OPERATIONS: dict[str, Op] = {
         body=AccountCreate,
     ),
     "patch_account": Op(
-        "Change an account's name, state (Active, Suspended, Closed) or creditLimit;"
-        " currency and billCycleDay are fixed.",
+        "Change an account's name, state (Active, Suspended, Closed), creditLimit or"
+        " financialAccount (null unlinks); currency and billCycleDay are fixed.",
         body=AccountPatch,
+    ),
+    "list_financial_accounts": Op(
+        "Financial accounts: a party's receivables across its linked billing accounts.",
+        query=LIST,
+    ),
+    "get_financial_account": Op(
+        "One financial account; accountBalance is one entry per currency of the linked"
+        " billing accounts, accountRelationship lists them.",
+        query=FIELDS,
+    ),
+    "create_financial_account": Op(
+        "Create a financial account owned by one party (relatedParty role owner, an"
+        " Individual or Organization). Link billing accounts via their financialAccount.",
+        body=FinancialCreate,
+    ),
+    "patch_financial_account": Op(
+        "Change a financial account's name, description, accountType, state or"
+        " creditLimit; the owner is fixed.",
+        body=FinancialPatch,
     ),
     # --- TMF676 payment ---
     "list_refunds": Op("Completed refunds paid out of unused credit.", query=LIST),

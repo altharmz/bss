@@ -67,6 +67,13 @@ export function Sidebar({ context }: { context: SystemContext }) {
       failed: runs.failed,
       active: (r) => r.name === 'billingRuns',
     },
+    {
+      // no count: one more request on every screen for a rarely used list
+      label: 'Financial accounts',
+      href: '/financial-accounts',
+      count: '',
+      active: (r) => r.name === 'financialAccounts',
+    },
   ];
   return (
     <aside className="bss-sidebar">

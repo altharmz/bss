@@ -186,6 +186,13 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
+**TMF666 accounts** (2026-10-16): two approved slices. Slice 1: financial accounts
+(4 operations) owned by a party, billing accounts linked via `financialAccount`,
+per-currency balance, read-only UI screen; migration `0013`. TMF operation coverage:
+71/129 (55.0%); scoped API items: 87. Decision:
+[accounts.md](docs/decisions/accounts.md). Not deployed: `make verify` needs the
+human's approval (migrations `0009`-`0013` ship together).
+
 **Refunds and bill delivery** (2026-10-16): approved milestone adds 14 TMF operations:
 refunds, on-demand bills, bill formats and presentation media. Migrations `0010`-`0012`
 add six tables, payout credit consumption, off-cycle documents and presentation
@@ -361,6 +368,7 @@ shipped).
 [data-model](docs/decisions/data-model.md) (domain model) ·
 [tmf-api](docs/decisions/tmf-api.md) (conventions; TMF632/629/666/676/637/678/622) ·
 [catalog](docs/decisions/catalog.md) (TMF620, D-W18, D-W21) ·
+[accounts](docs/decisions/accounts.md) (TMF666 financial/party/settlement accounts) ·
 [billing-core](docs/decisions/billing-core.md) (stage 3, open questions) ·
 [worker](docs/decisions/worker.md) (stage 4) · [bills](docs/decisions/bills.md) (bill
 lifecycle) · [internal-api](docs/decisions/internal-api.md) · [mcp](docs/decisions/mcp.md) (MCP
