@@ -186,6 +186,13 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
+**Following TMF** (2026-10-17, the human's rule: what the vendored specs define is
+implemented, the rest skipped; "proceed with development"). Slice 0 done locally: the
+exact gap list `tests/tmf-gaps.txt` (831 lines), probed by `tests/tmf_gaps.py` and
+locked by `tests/test_tmf_gaps.py` - each slice removes the lines it closes. Next:
+slices 1-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
+notes before taxes, `modify` items, suspension and payment states.
+
 **100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders
 placed on the caller's behalf (a would-be rejection is a 409, nothing stored; DELETE ends
 today and the product stays readable), billingCycleSpecification writes (named monthly

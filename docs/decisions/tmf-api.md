@@ -14,6 +14,42 @@ mapping is in [catalog.md](catalog.md).
 
 ## TMF API conventions (stage 2)
 
+### Following TMF (2026-10-17)
+
+The human's rule for closing [the gap analysis](../tmf-gap-analysis.md): **what the
+vendored specs in `spec/` define is implemented; what they do not define is skipped.**
+"TMF" means the eight vendored specs (the human accepted this reading): TMF630's filter
+operators and `sort`, and APIs we have not vendored (TMF635, TMF670, ...), stay out
+until a spec for them is vendored. The rule supersedes, each in the slice that closes
+it: taxes and `modify` items being out of scope (D4 in the gap analysis), payment
+processing (D5: payment states other than `done`), merge-patch only (D6), and our own
+requirements the specs do not make (offering `validFor`, an order's `billingAccount`,
+the account's `billCycleDay` and `currency`, ...) - kept only where billing cannot work
+without them, with the reason recorded. Where a spec defines the shape but not the
+behaviour (suspension, tax rates, `modify` proration, payment state transitions,
+discounts), a design note is approved before the slice.
+
+**The gap list is exact and locked.** `tests/tmf_gaps.py` probes the app through HTTP:
+every attribute of every POST/PATCH request schema (and one level below), sent alone
+(`refused` = unknown attribute, `read-only`), the attributes an empty POST requires that
+the spec does not (`requires`), every top-level attribute of each resource schema
+through `fields=` (`missing`), every PATCH content type a spec lists (`content-type`),
+and the API name/version of each spec's server URL (`base path`). A control attribute
+must be refused at each probed place, else the place is reported `unprobed`.
+`tests/test_tmf_gaps.py` requires the result to equal `tests/tmf-gaps.txt` line for line
+(831 lines on 2026-10-17): a slice that closes a gap removes its lines, and nothing opens
+unnoticed. Behaviour the probe cannot see - states never reached, values rewritten
+(`paymentMethod.@type`), item order, nested response attributes - is listed in the gap
+analysis. Negative proofs: accepting `description` on POST customer fails the lock with
+that line "closed"; a broken control check fails both probe tests.
+
+Slices, in order: (1) nothing dropped or rewritten (`@baseType`/`@schemaLocation`
+persisted, `engagedParty` on PATCH customer, `paymentMethod.@type`, item
+`billingAccount`, item order); (2) PATCH formats (`application/json`, JSON Patch,
+JSON-Patch-Query); (3) base paths `customer/v5`, `payment/v4`; (4) TMF632/629
+attributes; (5) TMF666; (6) TMF620; (7) taxes; (8) TMF622 (`modify` items, states);
+(9) TMF637 (suspension); (10) TMF676 (payment states and attributes).
+
 ### Product writes through orders (2026-10-17)
 
 The last seven operations, approved by the human on 2026-10-17 ("reach 100%"), close
