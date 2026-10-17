@@ -12,14 +12,13 @@ from pydantic import BaseModel
 
 from app.api import tmfjson
 from app.repository import catalog
-from tests import contract, timeline
+from tests import apidata, contract, timeline
 from tests.apiclient import decimals
 from tests.timeline import iso, z
 
 BASE = "/tmf-api/productCatalogManagement/v5"
 SPEC = f"{BASE}/productSpecification"
 PRICE = f"{BASE}/productOfferingPrice"
-PARTY = "/tmf-api/partyManagement/v5/organization"
 START = iso(timeline.START)
 END = timeline.START + timedelta(days=31)  # a month later, in BILLING_TZ
 
@@ -329,10 +328,12 @@ def test_unknown_resources_and_routes_answer_with_a_tmf_error(api):
 
 @pytest.mark.parametrize("method", ["DELETE", "PUT"])
 def test_unsupported_methods_are_405_with_a_tmf_error(api, method):
-    # DELETE exists in TMF620 only (unreferenced entries); a party has none
-    resource, body = (PARTY, {"@type": "Organization", "name": "Acme"})
+    # DELETE exists for unreferenced entries only; a payment has none (it is history)
     if method == "PUT":
         resource, body = SPEC, spec_body()
+    else:
+        resource = apidata.PAYMENT
+        body = apidata.payment_body(apidata.account(api))
     href = api.post(resource, body).json()["href"]
     for path in (resource, href):
         response = api.request(method, path)

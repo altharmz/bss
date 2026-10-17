@@ -66,6 +66,20 @@ def update_party_account(conn: psycopg.Connection, uid: UUID, changes: dict[str,
     return update_by_id(conn, "party_account", uid, changes)
 
 
+def count_party_accounts(conn: psycopg.Connection, column: str, uid: UUID) -> dict[str, int]:
+    """kind -> how many party/settlement accounts have `column = uid` (kinds with none
+    left out). `column` is chosen by the caller's code: party_id or financial_account_id."""
+    rows = fetch_all(
+        conn,
+        sql.SQL(
+            "SELECT kind::text AS kind, count(*) AS n FROM party_account WHERE {} = %s"
+            " GROUP BY kind ORDER BY kind"
+        ).format(sql.Identifier(column)),
+        (uid,),
+    )
+    return {row["kind"]: row["n"] for row in rows}
+
+
 def linked_accounts(conn: psycopg.Connection, uid: UUID) -> list[Row]:
     """Every account a financial account contains, in creation order: billing accounts
     (`kind` BillingAccount) and party/settlement accounts. Only id, name, kind."""

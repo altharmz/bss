@@ -17,7 +17,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import Field
 
 from app.api import listing
@@ -38,12 +38,13 @@ from app.api.common import (
     utc,
     without_nulls,
 )
+from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import JsonBody, MergePatchBody, Tx
 from app.api.errors import not_found, unprocessable
 from app.api.party import party_href, party_name
 from app.api.tmfjson import TmfJSONResponse
 from app.repository import accounts, parties
-from app.repository._sql import Row
+from app.repository._sql import Row, count_references, select_by_id
 
 BASE = "/tmf-api/accountManagement/v5"
 router = APIRouter(prefix=BASE)
@@ -125,7 +126,8 @@ def owner_party(conn: psycopg.Connection, related: list[OwnerParty]) -> Row:
         raise unprocessable(
             f'relatedParty: exactly one party with role "{OWNER_ROLE}" is required, not {sent}'
         )
-    row = parties.get_party(conn, party.party_or_party_role.id)
+    # FOR KEY SHARE until commit: a concurrent delete of the party waits for this account
+    row = parties.get_party(conn, party.party_or_party_role.id, "key share")
     if row is None:
         raise unprocessable(f"relatedParty: party {party.party_or_party_role.id} does not exist")
     check_referred_type(
@@ -313,6 +315,24 @@ def patch_financial_account(
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
+@router.delete("/financialAccount/{account_id}", status_code=204, response_class=Response)
+def delete_financial_account(account_id: str, request: Request, tx: Tx) -> Response:
+    """Only while no account links to it; links take it FOR SHARE (`link_financial`)."""
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id("financialAccount", account_id)
+        if select_by_id(conn, accounts.FINANCIAL, uid, "update") is None:
+            raise not_found("financialAccount", account_id)
+        counts = count_references(
+            conn, uid, {"billingAccount": ("billing_account", "financial_account_id")}
+        )
+        for kind, n in accounts.count_party_accounts(conn, "financial_account_id", uid).items():
+            counts[RESOURCE[kind]] = n
+        refuse_if_referenced("financialAccount", uid, counts, "unlink those accounts first")
+        delete_row(conn, accounts.FINANCIAL, uid)
+    return Response(status_code=204)
+
+
 # --- partyAccount and settlementAccount: one shape, `kind` = @type ---
 
 
@@ -425,6 +445,17 @@ def _patch_party_account(
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
+def _delete_party_account(account_id: str, request: Request, tx: Tx, kind: str) -> Response:
+    """Nothing refers to a party or settlement account: records only, never billed."""
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id(RESOURCE[kind], account_id)
+        if accounts.get_party_account(conn, kind, uid) is None:
+            raise not_found(RESOURCE[kind], account_id)
+        delete_row(conn, "party_account", uid)
+    return Response(status_code=204)
+
+
 PARTY_READ_ONLY = ("relatedParty", "lastUpdate")
 
 
@@ -454,6 +485,11 @@ def patch_party_account(
     return _patch_party_account(account_id, data, request, tx, "PartyAccount")
 
 
+@router.delete("/partyAccount/{account_id}", status_code=204, response_class=Response)
+def delete_party_account(account_id: str, request: Request, tx: Tx) -> Response:
+    return _delete_party_account(account_id, request, tx, "PartyAccount")
+
+
 @router.get("/settlementAccount")
 def list_settlement_accounts(request: Request, tx: Tx) -> TmfJSONResponse:
     return _list_party_accounts(request, tx, "SettlementAccount")
@@ -478,3 +514,8 @@ def patch_settlement_account(
     check_type(body, "SettlementAccount")
     data = parse(PartyAccountPatch, body, read_only=(*PARTY_READ_ONLY, "accountBalance"))
     return _patch_party_account(account_id, data, request, tx, "SettlementAccount")
+
+
+@router.delete("/settlementAccount/{account_id}", status_code=204, response_class=Response)
+def delete_settlement_account(account_id: str, request: Request, tx: Tx) -> Response:
+    return _delete_party_account(account_id, request, tx, "SettlementAccount")

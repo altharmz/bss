@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 import psycopg
 from psycopg import sql
@@ -30,6 +30,20 @@ def returning(conn: psycopg.Connection, query: str, params: Any = None) -> Row:
     if row is None:
         raise LookupError("statement returned no row")
     return row
+
+
+Lock = Literal["key share", "update"] | None
+LOCK_CLAUSE = {None: "", "key share": " FOR KEY SHARE", "update": " FOR UPDATE"}
+
+
+def select_by_id(
+    conn: psycopg.Connection, table: str, row_id: Any, lock: Lock = None
+) -> Row | None:
+    """One row by id. `lock`: "key share" for a writer that is about to reference the row
+    (a delete, which locks "update", waits for it), "update" for the delete itself or a
+    writer that changes the row anyway."""
+    query = sql.SQL("SELECT * FROM {} WHERE id = %s").format(sql.Identifier(table))
+    return fetch_one(conn, query + sql.SQL(LOCK_CLAUSE[lock]), (row_id,))
 
 
 def money(value: Decimal) -> Decimal:

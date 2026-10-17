@@ -2,9 +2,9 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 108,
-      "items": 108,
-      "tested": 108
+      "implemented": 117,
+      "items": 117,
+      "tested": 117
     },
     "db": {
       "deployed": null,
@@ -84,6 +84,15 @@
       "title": "Patch a financial account"
     },
     {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.financialAccount.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete an unlinked financial account"
+    },
+    {
       "area": "db",
       "deployed": null,
       "id": "db.party_account",
@@ -131,6 +140,15 @@
     {
       "area": "api",
       "deployed": null,
+      "id": "api.tmf666.partyAccount.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete a party account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
       "id": "api.tmf666.settlementAccount.list",
       "implemented": true,
       "stage": 5,
@@ -163,6 +181,15 @@
       "stage": 5,
       "tested": true,
       "title": "Patch a settlement account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.settlementAccount.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete a settlement account"
     },
     {
       "area": "ui",
@@ -347,6 +374,15 @@
     {
       "area": "api",
       "deployed": null,
+      "id": "api.tmf666.billFormat.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete an unused bill format"
+    },
+    {
+      "area": "api",
+      "deployed": null,
       "id": "api.tmf666.billPresentationMedia.list",
       "implemented": true,
       "stage": 5,
@@ -379,6 +415,15 @@
       "stage": 5,
       "tested": true,
       "title": "Patch a bill presentation medium"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billPresentationMedia.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete an unused bill presentation medium"
     },
     {
       "area": "db",
@@ -923,6 +968,15 @@
     {
       "area": "api",
       "deployed": null,
+      "id": "api.tmf632.individual.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete an unreferenced individual"
+    },
+    {
+      "area": "api",
+      "deployed": null,
       "id": "api.tmf632.organization.list",
       "implemented": true,
       "stage": 2,
@@ -959,6 +1013,15 @@
     {
       "area": "api",
       "deployed": null,
+      "id": "api.tmf632.organization.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete an unreferenced organization"
+    },
+    {
+      "area": "api",
+      "deployed": null,
       "id": "api.tmf629.customer.list",
       "implemented": true,
       "stage": 2,
@@ -991,6 +1054,15 @@
       "stage": 2,
       "tested": true,
       "title": "Patch a customer"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf629.customer.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete a customer without accounts"
     },
     {
       "area": "api",
@@ -1045,6 +1117,15 @@
       "stage": 2,
       "tested": true,
       "title": "Patch a billing account"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billingAccount.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete a billing account without history"
     },
     {
       "area": "api",

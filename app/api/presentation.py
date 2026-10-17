@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from psycopg.errors import UniqueViolation
 from pydantic import Field
 
@@ -19,10 +19,12 @@ from app.api.common import (
     ref,
     without_nulls,
 )
+from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found
 from app.api.tmfjson import TmfJSONResponse
 from app.repository import presentation as repo
+from app.repository._sql import count_references
 
 BASE = "/tmf-api/accountManagement/v5"
 router = APIRouter(prefix=BASE)
@@ -219,3 +221,37 @@ def patch_bill_media(
                 fields,
             )
         )
+
+
+# --- deletes: only what no billing account prefers (issued bills keep a snapshot) ---
+
+
+def _delete(request: Request, tx: Tx, table: str, resource: str, raw_id: str, refs) -> Response:
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id(resource, raw_id)
+        if repo.get(conn, table, uid, "update") is None:
+            raise not_found(resource, raw_id)
+        counts = count_references(conn, uid, {"billingAccount": refs})
+        refuse_if_referenced(resource, uid, counts, "change their billStructure first")
+        delete_row(conn, table, uid)
+    return Response(status_code=204)
+
+
+@router.delete("/billFormat/{format_id}", status_code=204, response_class=Response)
+def delete_bill_format(format_id: str, request: Request, tx: Tx) -> Response:
+    return _delete(
+        request, tx, "bill_format", "billFormat", format_id, ("billing_account", "bill_format_id")
+    )
+
+
+@router.delete("/billPresentationMedia/{media_id}", status_code=204, response_class=Response)
+def delete_bill_media(media_id: str, request: Request, tx: Tx) -> Response:
+    return _delete(
+        request,
+        tx,
+        "bill_presentation_media",
+        "billPresentationMedia",
+        media_id,
+        ("account_presentation_media", "media_id"),
+    )

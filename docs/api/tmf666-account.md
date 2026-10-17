@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/accountManagement/v5`
 - Contract: [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml) - Account Management version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 27
+- Operations exposed: 33
 
 
 ## Operations
@@ -13,28 +13,34 @@
 |---|---|---|---|---|---|
 | GET | `/tmf-api/accountManagement/v5/billFormat` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `name` | - | 200 `array of BillFormat` | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | POST | `/tmf-api/accountManagement/v5/billFormat` | query: `fields`; body: `application/json` | `BillFormat_FVO` | 201 `BillFormat` | [`app/api/presentation.py`](../../app/api/presentation.py) |
+| DELETE | `/tmf-api/accountManagement/v5/billFormat/{format_id}` | path: `format_id` | - | 204 (no body) | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | GET | `/tmf-api/accountManagement/v5/billFormat/{format_id}` | path: `format_id`; query: `fields` | - | 200 `BillFormat` | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | PATCH | `/tmf-api/accountManagement/v5/billFormat/{format_id}` | path: `format_id`; query: `fields`; body: `application/merge-patch+json` | `BillFormat_MVO` | 200 `BillFormat` | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | GET | `/tmf-api/accountManagement/v5/billPresentationMedia` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `name` | - | 200 `array of BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | POST | `/tmf-api/accountManagement/v5/billPresentationMedia` | query: `fields`; body: `application/json` | `BillPresentationMedia_FVO` | 201 `BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
+| DELETE | `/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}` | path: `media_id` | - | 204 (no body) | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | GET | `/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}` | path: `media_id`; query: `fields` | - | 200 `BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | PATCH | `/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}` | path: `media_id`; query: `fields`; body: `application/merge-patch+json` | `BillPresentationMedia_MVO` | 200 `BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | GET | `/tmf-api/accountManagement/v5/billingAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `financialAccount.id`, `name`, `relatedParty.id`, `state` | - | 200 `array of BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | POST | `/tmf-api/accountManagement/v5/billingAccount` | query: `fields`; body: `application/json` | `BillingAccount_FVO` | 201 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| DELETE | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id` | - | 204 (no body) | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | PATCH | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `BillingAccount_MVO` | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/billingCycleSpecification` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingPeriod`, `frequency`, `name` | - | 200 `array of BillingCycleSpecification` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/billingCycleSpecification/{specification_id}` | path: `specification_id`; query: `fields` | - | 200 `BillingCycleSpecification` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/financialAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `accountType`, `name`, `relatedParty.id`, `state` | - | 200 `array of FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | POST | `/tmf-api/accountManagement/v5/financialAccount` | query: `fields`; body: `application/json` | `FinancialAccount_FVO` | 201 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| DELETE | `/tmf-api/accountManagement/v5/financialAccount/{account_id}` | path: `account_id` | - | 204 (no body) | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/financialAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | PATCH | `/tmf-api/accountManagement/v5/financialAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `FinancialAccount_MVO` | 200 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/partyAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `accountType`, `financialAccount.id`, `name`, `relatedParty.id`, `state` | - | 200 `array of PartyAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | POST | `/tmf-api/accountManagement/v5/partyAccount` | query: `fields`; body: `application/json` | `PartyAccount_FVO` | 201 `PartyAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| DELETE | `/tmf-api/accountManagement/v5/partyAccount/{account_id}` | path: `account_id` | - | 204 (no body) | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/partyAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `PartyAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | PATCH | `/tmf-api/accountManagement/v5/partyAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `PartyAccount_MVO` | 200 `PartyAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/settlementAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `accountType`, `financialAccount.id`, `name`, `relatedParty.id`, `state` | - | 200 `array of SettlementAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | POST | `/tmf-api/accountManagement/v5/settlementAccount` | query: `fields`; body: `application/json` | `SettlementAccount_FVO` | 201 `SettlementAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| DELETE | `/tmf-api/accountManagement/v5/settlementAccount/{account_id}` | path: `account_id` | - | 204 (no body) | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/settlementAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `SettlementAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | PATCH | `/tmf-api/accountManagement/v5/settlementAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `SettlementAccount_MVO` | 200 `SettlementAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/schema/BssBillingAccount.schema.json` | - | - | 200 - JSON Schema of the BssBillingAccount extension (`app/api/account.py`) | [`app/api/account.py`](../../app/api/account.py) |
@@ -84,7 +90,7 @@ Every billingAccount body carries `@type: BssBillingAccount`, `@baseType: Billin
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /billFormat/{id}`, `DELETE /billPresentationMedia/{id}`, `DELETE /billingAccount/{id}`, `POST /billingCycleSpecification`, `DELETE /billingCycleSpecification/{id}`, `PATCH /billingCycleSpecification/{id}`, `DELETE /financialAccount/{id}`, `DELETE /partyAccount/{id}`, `DELETE /settlementAccount/{id}`.
+- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `POST /billingCycleSpecification`, `DELETE /billingCycleSpecification/{id}`, `PATCH /billingCycleSpecification/{id}`.
 - Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
 
 
@@ -109,6 +115,8 @@ See [billing completion](../decisions/billing-completion.md).
 | `creditLimit` (TMF666's own Money): in the account's currency (another unit is a 422), never negative (422), optional, PATCH `null` removes it. **Informational only**: nothing, ordering included, is ever refused because of it | `_credit_limit` | `tests/test_api_credit_limit_and_code.py::test_credit_limit_is_stored_returned_changed_and_removed`, `::test_invalid_credit_limits`, `::test_the_credit_limit_never_blocks_an_order` |
 | `opened_at` (not exposed) is set from the injected clock at creation: it decides which billing runs include the account | `create_account` | `tests/test_api_parties.py::test_billing_account_opened_at_comes_from_the_injected_clock` |
 | PATCH accepts `@type` `BssBillingAccount` or `BillingAccount` | `check_type` | `tests/test_api_parties.py::test_billing_account_patch` |
+| DELETE (204) only what nothing references, else 409 naming the references: a billing account without history (no order - rejected ones too - product, ABR, bill, on-demand request, payment, refund, allocation or billing run outcome; close it instead), its presentation preferences go with it; a financial account no account links to; any party or settlement account; a format or medium no account prefers (issued bills keep their snapshot) | `ACCOUNT_HISTORY`, `delete_*` in `account.py`, `accounts.py`, `presentation.py` | `tests/test_api_deletes.py::test_a_billing_account_with_history_stays`, `::test_an_account_a_billing_run_processed_stays`, `::test_a_financial_account_stays_while_accounts_link_to_it`, `::test_formats_and_media_stay_while_an_account_prefers_them` |
+| A delete never races a writer: orders and on-demand requests take the account FOR KEY SHARE, payments, refunds and PATCH FOR UPDATE; the worker skips an account deleted after its run started | `get_billing_account(lock=...)`, `DateRun.process` | `::test_an_account_delete_waits_for_an_order_in_flight`, `::test_a_payment_waits_for_an_account_delete_in_flight`, `::test_the_worker_skips_an_account_deleted_after_its_run_started` |
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf666-account.md`](../../scripts/docs/api-notes/tmf666-account.md).
 

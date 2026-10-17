@@ -4,13 +4,19 @@ import base64
 
 from psycopg import sql
 
-from app.repository._sql import fetch_all, fetch_one, returning, select_page, update_by_id
+from app.repository._sql import (
+    Lock,
+    fetch_all,
+    fetch_one,
+    returning,
+    select_by_id,
+    select_page,
+    update_by_id,
+)
 
 
-def get(conn, table, uid):
-    return fetch_one(
-        conn, sql.SQL("SELECT * FROM {} WHERE id = %s").format(sql.Identifier(table)), (uid,)
-    )
+def get(conn, table, uid, lock: Lock = None):
+    return select_by_id(conn, table, uid, lock)
 
 
 def page(conn, table, **kwargs):
@@ -52,8 +58,12 @@ def preferences(conn, account_id):
 def set_preferences(conn, uid, data):
     from app.api.errors import unprocessable
 
+    # Referenced formats and media FOR KEY SHARE until commit: their delete waits for this
     if "format" in data.model_fields_set:
-        if data.format is not None and get(conn, "bill_format", data.format.id) is None:
+        if (
+            data.format is not None
+            and get(conn, "bill_format", data.format.id, "key share") is None
+        ):
             raise unprocessable("billStructure.format does not exist")
         conn.execute(
             "UPDATE billing_account SET bill_format_id = %s WHERE id = %s",
@@ -64,7 +74,7 @@ def set_preferences(conn, uid, data):
         if len(set(ids)) != len(ids):
             raise unprocessable("duplicate presentationMedia references")
         for mid in ids:
-            if get(conn, "bill_presentation_media", mid) is None:
+            if get(conn, "bill_presentation_media", mid, "key share") is None:
                 raise unprocessable("presentationMedia does not exist")
         conn.execute("DELETE FROM account_presentation_media WHERE billing_account_id = %s", (uid,))
         for mid in ids:
@@ -74,6 +84,13 @@ def set_preferences(conn, uid, data):
                 (uid, mid),
             )
         conn.execute("UPDATE billing_account SET name = name WHERE id = %s", (uid,))
+
+
+def remove_preferences(conn, account_id):
+    """Drop an account's presentation media choices (before the account is deleted)."""
+    conn.execute(
+        "DELETE FROM account_presentation_media WHERE billing_account_id = %s", (account_id,)
+    )
 
 
 def snapshot_bill(conn, bill_id, *, now):

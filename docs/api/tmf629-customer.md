@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/customerManagement/v5`
 - Contract: [`spec/TMF629-Customer_Management-v5.0.1.oas.yaml`](../../spec/TMF629-Customer_Management-v5.0.1.oas.yaml) - Customer Management version 5.0.1; the spec's server URL is `{apiRoot}/tmf-api/customer/v5/`
-- Operations exposed: 4
+- Operations exposed: 5
 
 
 ## Operations
@@ -13,6 +13,7 @@
 |---|---|---|---|---|---|
 | GET | `/tmf-api/customerManagement/v5/customer` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `engagedParty.id`, `name`, `status` | - | 200 `array of Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
 | POST | `/tmf-api/customerManagement/v5/customer` | query: `fields`; body: `application/json` | `Customer_FVO` | 201 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
+| DELETE | `/tmf-api/customerManagement/v5/customer/{customer_id}` | path: `customer_id` | - | 204 (no body) | [`app/api/customer.py`](../../app/api/customer.py) |
 | GET | `/tmf-api/customerManagement/v5/customer/{customer_id}` | path: `customer_id`; query: `fields` | - | 200 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
 | PATCH | `/tmf-api/customerManagement/v5/customer/{customer_id}` | path: `customer_id`; query: `fields`; body: `application/merge-patch+json` | `Customer_MVO` | 200 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
 
@@ -21,7 +22,6 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF629-C
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /customer/{id}`.
 - Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
 
 
@@ -40,6 +40,9 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF629-C
 - `status` is ours (a free string in TMF629): `Created` (the default), `Active`,
   `Inactive`. PATCH may set any of them; no transition rule. Any other value is a 422
   that changes nothing (`::test_customer_status_outside_the_enum_is_refused_on_patch`).
+- DELETE (204) only a customer without billing accounts (409 otherwise, naming them);
+  billing account POST takes the customer FOR KEY SHARE - `delete_customer`;
+  `tests/test_api_deletes.py::test_a_customer_stays_while_it_has_billing_accounts`.
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf629-customer.md`](../../scripts/docs/api-notes/tmf629-customer.md).
 

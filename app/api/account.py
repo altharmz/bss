@@ -25,7 +25,7 @@ financial account owned by its customer's engagedParty (app/api/accounts.py).
 from typing import Any, Literal
 
 import psycopg
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import Field
 
 from app.api import listing
@@ -46,12 +46,13 @@ from app.api.common import (
     utc,
 )
 from app.api.customer import customer_href
+from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.presentation import BillStructure, structure_body
 from app.api.tmfjson import TmfJSONResponse
 from app.repository import accounts, billing, parties, presentation
-from app.repository._sql import Row
+from app.repository._sql import Row, count_references
 
 BASE = "/tmf-api/accountManagement/v5"
 router = APIRouter(prefix=BASE)
@@ -318,7 +319,8 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
         )
     customer_id = party.party_or_party_role.id
     with tx() as conn:
-        customer = parties.get_customer(conn, customer_id)
+        # FOR KEY SHARE until commit: a concurrent delete of the customer waits for this
+        customer = parties.get_customer(conn, customer_id, "key share")
         if customer is None:
             raise unprocessable(f"relatedParty: customer {customer_id} does not exist")
         financial_id = (
@@ -367,10 +369,11 @@ def patch_account(
     not_null(data, "name", "state", "bill_structure")
     with tx() as conn:
         uid = parse_id("billingAccount", account_id)
-        current = parties.get_billing_account(conn, uid)
+        # FOR UPDATE, as billing locks it: a concurrent delete either went first (404)
+        # or waits for this change
+        current = parties.get_billing_account(conn, uid, "update")
         if current is None:
             raise not_found("billingAccount", account_id)
-        billing.load_account(conn, uid)
         changes = columns(
             data, exclude=frozenset({"credit_limit", "bill_structure", "financial_account"})
         )
@@ -393,3 +396,22 @@ def patch_account(
             row = parties.get_billing_account(conn, uid)
         patched = account_body(conn, row)
     return TmfJSONResponse(listing.select_fields(patched, fields))
+
+
+@router.delete("/billingAccount/{account_id}", status_code=204, response_class=Response)
+def delete_account(account_id: str, request: Request, tx: Tx) -> Response:
+    """Only an account without history: nothing ordered, charged, billed, paid, refunded
+    or processed by a billing run (`parties.ACCOUNT_HISTORY`) - close it otherwise. Its
+    presentation preferences go with it. Every writer that adds history takes the
+    account FOR KEY SHARE or FOR UPDATE first, and the worker skips an account that is
+    gone, so the delete waits for them or they see it gone."""
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id("billingAccount", account_id)
+        if parties.get_billing_account(conn, uid, "update") is None:
+            raise not_found("billingAccount", account_id)
+        counts = count_references(conn, uid, parties.ACCOUNT_HISTORY)
+        refuse_if_referenced("billingAccount", uid, counts, "close it instead (state Closed)")
+        presentation.remove_preferences(conn, uid)
+        delete_row(conn, "billing_account", uid)
+    return Response(status_code=204)

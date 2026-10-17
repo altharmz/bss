@@ -434,6 +434,7 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
             f"patch_{resource}_account",
             {"account_id": created["id"], "body": {"financialAccount": None}},
         )
+        call(f"delete_{resource}_account", {"account_id": created["id"]}, expected=(204,))
     account = call("create_account", {"body": apidata.account_body(customer)})
     call(
         "patch_account",
@@ -446,6 +447,31 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
     call("patch_bill_format", {"format_id": fmt["id"], "body": {"description": "Detailed JSON"}})
     media = call("create_bill_media", {"body": {"name": "Download"}})
     call("patch_bill_media", {"media_id": media["id"], "body": {"description": "Downloadable"}})
+    # deletes: a spare chain nothing references, removed from the top
+    spare_person = call("create_individual", {"body": {"givenName": "Spare", "familyName": "P"}})
+    spare_org = call("create_organization", {"body": {"name": "Spare Ltd"}})
+    spare_customer = call("create_customer", {"body": apidata.customer_body(spare_person)})
+    spare_account = call("create_account", {"body": apidata.account_body(spare_customer)})
+    spare_financial = call(
+        "create_financial_account",
+        {
+            "body": {
+                "name": "Spare",
+                "relatedParty": [{"role": "owner", "partyOrPartyRole": {"id": spare_org["id"]}}],
+            }
+        },
+    )
+    spare_media = call("create_bill_media", {"body": {"name": "Spare medium"}})
+    for name, key, entry in (
+        ("delete_account", "account_id", spare_account),
+        ("delete_customer", "customer_id", spare_customer),
+        ("delete_individual", "party_id", spare_person),
+        ("delete_financial_account", "account_id", spare_financial),
+        ("delete_organization", "party_id", spare_org),
+        ("delete_bill_media", "media_id", spare_media),
+        ("delete_bill_format", "format_id", fmt),  # names are unique: no spare format
+    ):
+        call(name, {key: entry["id"]}, expected=(204,))
     call("create_bill_demand", {"body": {"billingAccount": {"id": account["id"]}}})
     call(
         "create_order",

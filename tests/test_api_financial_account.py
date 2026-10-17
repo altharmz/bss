@@ -263,7 +263,7 @@ def test_list_filters_fields_and_not_found(api):
     assert api.get(f"{FINANCIAL}/{NIL}").status_code == 404
     assert api.get(f"{FINANCIAL}/invalid").status_code == 404
     assert api.patch(f"{FINANCIAL}/{NIL}", {"name": "x"}).status_code == 404
-    assert api.client.delete(a["href"]).status_code == 405
+    assert api.client.put(a["href"], json={}).status_code == 405  # DELETE: test_api_deletes
     assert api.get(f"{PARTY}/organization/{org['id']}").status_code == 200
 
 

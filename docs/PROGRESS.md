@@ -12,7 +12,7 @@ records the deployed commit.
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
 | Database | 31 | 31/31 (100%) | 31/31 (100%) | unknown |
-| API | 108 | 108/108 (100%) | 108/108 (100%) | unknown |
+| API | 117 | 117/117 (100%) | 117/117 (100%) | unknown |
 | UI | 21 | 21/21 (100%) | 21/21 (100%) | unknown |
 | Worker | 14 | 14/14 (100%) | 14/14 (100%) | unknown |
 
@@ -60,14 +60,17 @@ records the deployed commit.
 | `api.tmf666.financialAccount.get` | 5 | Get a financial account | yes | yes | unknown |
 | `api.tmf666.financialAccount.create` | 5 | Create a financial account | yes | yes | unknown |
 | `api.tmf666.financialAccount.patch` | 5 | Patch a financial account | yes | yes | unknown |
+| `api.tmf666.financialAccount.delete` | 5 | Delete an unlinked financial account | yes | yes | unknown |
 | `api.tmf666.partyAccount.list` | 5 | List party accounts | yes | yes | unknown |
 | `api.tmf666.partyAccount.get` | 5 | Get a party account | yes | yes | unknown |
 | `api.tmf666.partyAccount.create` | 5 | Create a party account | yes | yes | unknown |
 | `api.tmf666.partyAccount.patch` | 5 | Patch a party account | yes | yes | unknown |
+| `api.tmf666.partyAccount.delete` | 5 | Delete a party account | yes | yes | unknown |
 | `api.tmf666.settlementAccount.list` | 5 | List settlement accounts | yes | yes | unknown |
 | `api.tmf666.settlementAccount.get` | 5 | Get a settlement account | yes | yes | unknown |
 | `api.tmf666.settlementAccount.create` | 5 | Create a settlement account | yes | yes | unknown |
 | `api.tmf666.settlementAccount.patch` | 5 | Patch a settlement account | yes | yes | unknown |
+| `api.tmf666.settlementAccount.delete` | 5 | Delete a settlement account | yes | yes | unknown |
 | `api.tmf676.refund.list` | 5 | List refunds | yes | yes | unknown |
 | `api.tmf676.refund.get` | 5 | Get a refund | yes | yes | unknown |
 | `api.tmf676.refund.create` | 5 | Record a completed refund | yes | yes | unknown |
@@ -78,10 +81,12 @@ records the deployed commit.
 | `api.tmf666.billFormat.get` | 5 | Get a bill format | yes | yes | unknown |
 | `api.tmf666.billFormat.create` | 5 | Create a bill format | yes | yes | unknown |
 | `api.tmf666.billFormat.patch` | 5 | Patch a bill format | yes | yes | unknown |
+| `api.tmf666.billFormat.delete` | 5 | Delete an unused bill format | yes | yes | unknown |
 | `api.tmf666.billPresentationMedia.list` | 5 | List bill presentation media | yes | yes | unknown |
 | `api.tmf666.billPresentationMedia.get` | 5 | Get a bill presentation medium | yes | yes | unknown |
 | `api.tmf666.billPresentationMedia.create` | 5 | Create a bill presentation medium | yes | yes | unknown |
 | `api.tmf666.billPresentationMedia.patch` | 5 | Patch a bill presentation medium | yes | yes | unknown |
+| `api.tmf666.billPresentationMedia.delete` | 5 | Delete an unused bill presentation medium | yes | yes | unknown |
 | `api.tmf620.category.list` | 2 | List categories | yes | yes | unknown |
 | `api.tmf620.category.get` | 2 | Get a category | yes | yes | unknown |
 | `api.tmf620.category.create` | 2 | Create a category | yes | yes | unknown |
@@ -119,20 +124,24 @@ records the deployed commit.
 | `api.tmf632.individual.get` | 2 | Get an individual | yes | yes | unknown |
 | `api.tmf632.individual.create` | 2 | Create an individual | yes | yes | unknown |
 | `api.tmf632.individual.patch` | 2 | Patch an individual | yes | yes | unknown |
+| `api.tmf632.individual.delete` | 5 | Delete an unreferenced individual | yes | yes | unknown |
 | `api.tmf632.organization.list` | 2 | List organizations | yes | yes | unknown |
 | `api.tmf632.organization.get` | 2 | Get an organization | yes | yes | unknown |
 | `api.tmf632.organization.create` | 2 | Create an organization | yes | yes | unknown |
 | `api.tmf632.organization.patch` | 2 | Patch an organization | yes | yes | unknown |
+| `api.tmf632.organization.delete` | 5 | Delete an unreferenced organization | yes | yes | unknown |
 | `api.tmf629.customer.list` | 2 | List customers | yes | yes | unknown |
 | `api.tmf629.customer.get` | 2 | Get a customer | yes | yes | unknown |
 | `api.tmf629.customer.create` | 2 | Create a customer | yes | yes | unknown |
 | `api.tmf629.customer.patch` | 2 | Patch a customer | yes | yes | unknown |
+| `api.tmf629.customer.delete` | 5 | Delete a customer without accounts | yes | yes | unknown |
 | `api.tmf666.billingCycleSpecification.list` | 2 | List billing cycle specifications | yes | yes | unknown |
 | `api.tmf666.billingCycleSpecification.get` | 2 | Get a billing cycle specification | yes | yes | unknown |
 | `api.tmf666.billingAccount.list` | 2 | List billing accounts (with balance) | yes | yes | unknown |
 | `api.tmf666.billingAccount.get` | 2 | Get a billing account | yes | yes | unknown |
 | `api.tmf666.billingAccount.create` | 2 | Create a billing account | yes | yes | unknown |
 | `api.tmf666.billingAccount.patch` | 2 | Patch a billing account | yes | yes | unknown |
+| `api.tmf666.billingAccount.delete` | 5 | Delete a billing account without history | yes | yes | unknown |
 | `api.tmf666.extensionSchema.get` | 2 | Serve the BssBillingAccount extension schema | yes | yes | unknown |
 | `api.tmf676.payment.list` | 2 | List payments | yes | yes | unknown |
 | `api.tmf676.payment.get` | 2 | Get a payment | yes | yes | unknown |

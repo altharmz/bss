@@ -70,7 +70,8 @@ def place_order(
     ids = [item.item_id for item in request.items]
     if len(set(ids)) != len(ids):
         raise OrderRefused("productOrderItem ids must be unique within the order")
-    account = parties.get_billing_account(conn, request.billing_account_id)
+    # FOR KEY SHARE until commit: a concurrent delete of the account waits for this order
+    account = parties.get_billing_account(conn, request.billing_account_id, "key share")
     if account is None:
         raise OrderRefused(f"billingAccount {request.billing_account_id} does not exist")
     for item in request.items:

@@ -1,5 +1,13 @@
 # TMF conformance gap analysis
 
+**Party, customer and account deletes (2026-10-17).** DELETE on individual,
+organization, customer, billingAccount, financialAccount, partyAccount,
+settlementAccount, billFormat and billPresentationMedia, for entries nothing references
+(a billing account: no history at all), brings non-listener operation coverage to
+101/129 (78.3%). TMF632 and TMF629 now lack only `/hub`; TMF666 lacks
+billingCycleSpecification writes and `/hub`. See
+[the decision](decisions/tmf-api.md#deleting-parties-customers-and-accounts-2026-10-17).
+
 **TMF620 import and export jobs (2026-10-16).** importJob and exportJob (eight
 operations) move the catalog as an inline data: URL document, synchronously, imports
 all or nothing under POST's rules. Non-listener operation coverage: 92/129 (71.3%);

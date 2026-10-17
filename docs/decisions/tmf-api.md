@@ -14,6 +14,55 @@ mapping is in [catalog.md](catalog.md).
 
 ## TMF API conventions (stage 2)
 
+### Deleting parties, customers and accounts (2026-10-17)
+
+The catalog's delete rule ([catalog.md](catalog.md#deleting-catalog-entries-2026-10-16))
+extends to TMF632, TMF629 and TMF666: `DELETE` on individual, organization, customer,
+billingAccount, financialAccount, partyAccount, settlementAccount, billFormat and
+billPresentationMedia answers 204 (no body, no query parameters - any is a 400) when
+nothing references the entry, else a 409 naming the references, with nothing changed.
+No migration: the existing `NO ACTION` foreign keys back every check (a reference the
+checks missed is a 409 "still referenced", never a dangling row).
+
+| Entry | 409 while | Removed with it |
+|---|---|---|
+| individual / organization | a customer engages it, or it owns a financial, party or settlement account | - |
+| customer | it has a billing account | - |
+| billingAccount | it has history: any order (rejected ones too), product, ABR, bill, on-demand request, payment, refund, bill allocation, or an outcome of a billing run (`parties.ACCOUNT_HISTORY`) - close it instead | its presentation media preferences |
+| financialAccount | a billing, party or settlement account links to it | - |
+| partyAccount / settlementAccount | never (nothing refers to one) | - |
+| billFormat / billPresentationMedia | a billing account prefers it (issued bills keep their own JSON snapshot, no reference) | - |
+
+**What it is for:** entries created by mistake. A billing account becomes undeletable
+as soon as a billing run has processed it: every run records an outcome for each account
+opened before its date, even one without products. In practice an account can be
+deleted on the day it was opened, or until its first billing run.
+
+**Concurrency.** Deletes lock their row `FOR UPDATE`. Writers that are about to
+reference a row take it `FOR KEY SHARE` until commit: customer POST its party, financial,
+party and settlement account POST their owner (`owner_party`), billing account POST its
+customer, `billStructure` its format and media, orders and on-demand requests their
+account. Writers that lock the account `FOR UPDATE` anyway (billing account PATCH,
+payment, refund) take that lock up front instead, because a `KEY SHARE` lock upgraded
+later would deadlock against a second writer doing the same. Links to a financial account
+were already `FOR SHARE`. So a delete either waits for the writer and then sees its row
+(409), or goes first and the writer sees the entry gone (422 for a POST's reference).
+**The worker** lists a run's members when the run starts; `DateRun.process` now locks
+the account (`FOR UPDATE`, as `bill_account` does) and skips it if it is gone - nothing
+is billed or recorded, and `close_run` counts only accounts that still exist.
+
+MCP gets nine write-scope tools (`delete_individual`, `delete_organization`,
+`delete_customer`, `delete_account`, `delete_financial_account`,
+`delete_party_account`, `delete_settlement_account`, `delete_bill_format`,
+`delete_bill_media`). The shared helpers moved from `app/api/catalog.py` to
+`app/api/deletes.py`. Coverage: 101/129 non-listener operations (78.3%). Tests:
+`tests/test_api_deletes.py`. Negative proofs, each reverted: without the customer's
+`FOR KEY SHARE` on its party, a customer racing a party delete is a 500 instead of a 422;
+without the payment's up-front `FOR UPDATE`, a payment racing an account delete is a 500
+(LookupError in `load_account`); without the worker's check, a run whose member was
+deleted aborts with a LookupError; without `billingRun` in `ACCOUNT_HISTORY` the
+foreign key still refuses the delete, but the 409 no longer names the reason.
+
 ### Billing cycle specification discovery (2026-10-14)
 
 TMF666 now exposes read-only `GET /billingCycleSpecification` and
@@ -131,7 +180,8 @@ implemented; order processing lives in `app/ordering/`.
   billing run. An unsupported method on an exposed path is a 405. **Narrowed 2026-10-16:**
   DELETE exists in TMF620 only, for catalog entries nothing references
   ([catalog.md](catalog.md#deleting-catalog-entries-2026-10-16)); everywhere else it is
-  still a 405.
+  still a 405. **Narrowed again 2026-10-17:** the same rule for parties, customers and
+  the TMF666 resources ([below](#deleting-parties-customers-and-accounts-2026-10-17)).
 - **Errors:** every non-2xx body is the TMF `Error` (`@type`, `code`, `reason`, `message`,
   `status`), including unknown routes, FastAPI's own validation errors and unhandled
   exceptions (500 says "internal error", nothing more). 400 = malformed JSON, unknown

@@ -8,11 +8,12 @@ from uuid import UUID
 import psycopg
 
 from app.repository._sql import (
+    Lock,
     Row,
     fetch_all,
-    fetch_one,
     money,
     returning,
+    select_by_id,
     select_page,
     update_by_id,
 )
@@ -42,8 +43,8 @@ def create_organization(conn: psycopg.Connection, *, name: str) -> Row:
     )
 
 
-def get_party(conn: psycopg.Connection, party_id: UUID) -> Row | None:
-    return fetch_one(conn, "SELECT * FROM party WHERE id = %s", (party_id,))
+def get_party(conn: psycopg.Connection, party_id: UUID, lock: Lock = None) -> Row | None:
+    return select_by_id(conn, "party", party_id, lock)
 
 
 def create_customer(
@@ -56,8 +57,8 @@ def create_customer(
     )
 
 
-def get_customer(conn: psycopg.Connection, customer_id: UUID) -> Row | None:
-    return fetch_one(conn, "SELECT * FROM customer WHERE id = %s", (customer_id,))
+def get_customer(conn: psycopg.Connection, customer_id: UUID, lock: Lock = None) -> Row | None:
+    return select_by_id(conn, "customer", customer_id, lock)
 
 
 def create_billing_account(
@@ -92,8 +93,25 @@ def create_billing_account(
     )
 
 
-def get_billing_account(conn: psycopg.Connection, account_id: UUID) -> Row | None:
-    return fetch_one(conn, "SELECT * FROM billing_account WHERE id = %s", (account_id,))
+def get_billing_account(
+    conn: psycopg.Connection, account_id: UUID, lock: Lock = None
+) -> Row | None:
+    return select_by_id(conn, "billing_account", account_id, lock)
+
+
+# What a billing account's history is made of: while any of these refers to it, the
+# account stays (close it instead). Only its presentation preferences go with it.
+ACCOUNT_HISTORY = {
+    "productOrder": ("product_order", "billing_account_id"),
+    "product": ("product", "billing_account_id"),
+    "appliedCustomerBillingRate": ("applied_customer_billing_rate", "billing_account_id"),
+    "customerBill": ("customer_bill", "billing_account_id"),
+    "customerBillOnDemand": ("customer_bill_on_demand", "billing_account_id"),
+    "payment": ("payment", "billing_account_id"),
+    "refund": ("refund", "billing_account_id"),
+    "billAllocation": ("bill_allocation", "billing_account_id"),
+    "billingRun": ("billing_run_account", "billing_account_id"),
+}
 
 
 def list_parties(

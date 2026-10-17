@@ -208,7 +208,9 @@ def create_payment(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
     check_type(body, "Payment")
     data = parse(PaymentCreate, body, read_only=("status", "statusDate", "paymentDate"))
     with tx() as conn:
-        account = parties.get_billing_account(conn, data.account.id)
+        # FOR UPDATE, the lock load_account takes below: a concurrent delete of the account
+        # went first (422) or waits for this payment
+        account = parties.get_billing_account(conn, data.account.id, "update")
         if account is None:
             raise unprocessable(f"account {data.account.id} does not exist")
         if account["currency"] != data.total_amount.unit:

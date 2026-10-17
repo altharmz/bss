@@ -180,7 +180,7 @@ def test_validation(api, resource, typ):
     assert api.get(f"{url}?balance=1").status_code == 400
     assert api.get(f"{url}/{NIL}").status_code == 404
     assert api.get(f"{url}/invalid").status_code == 404
-    assert api.client.delete(acc["href"]).status_code == 405
+    assert api.client.put(acc["href"], json={}).status_code == 405  # DELETE: test_api_deletes
 
 
 def test_the_database_refuses_a_link_across_owners(api, db_conn):

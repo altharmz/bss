@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/partyManagement/v5`
 - Contract: [`spec/TMF632-Party_Management-v5.0.0.oas.yaml`](../../spec/TMF632-Party_Management-v5.0.0.oas.yaml) - Party Management version 5.0.0; the spec's server URL is `https://serverRoot/partyManagement/v5/`
-- Operations exposed: 8
+- Operations exposed: 10
 
 
 ## Operations
@@ -13,10 +13,12 @@
 |---|---|---|---|---|---|
 | GET | `/tmf-api/partyManagement/v5/individual` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `familyName`, `givenName` | - | 200 `array of Individual` | [`app/api/party.py`](../../app/api/party.py) |
 | POST | `/tmf-api/partyManagement/v5/individual` | query: `fields`; body: `application/json` | `Individual_FVO` | 201 `Individual` | [`app/api/party.py`](../../app/api/party.py) |
+| DELETE | `/tmf-api/partyManagement/v5/individual/{party_id}` | path: `party_id` | - | 204 (no body) | [`app/api/party.py`](../../app/api/party.py) |
 | GET | `/tmf-api/partyManagement/v5/individual/{party_id}` | path: `party_id`; query: `fields` | - | 200 `Individual` | [`app/api/party.py`](../../app/api/party.py) |
 | PATCH | `/tmf-api/partyManagement/v5/individual/{party_id}` | path: `party_id`; query: `fields`; body: `application/merge-patch+json` | `Individual_MVO` | 200 `Individual` | [`app/api/party.py`](../../app/api/party.py) |
 | GET | `/tmf-api/partyManagement/v5/organization` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `name` | - | 200 `array of Organization` | [`app/api/party.py`](../../app/api/party.py) |
 | POST | `/tmf-api/partyManagement/v5/organization` | query: `fields`; body: `application/json` | `Organization_FVO` | 201 `Organization` | [`app/api/party.py`](../../app/api/party.py) |
+| DELETE | `/tmf-api/partyManagement/v5/organization/{party_id}` | path: `party_id` | - | 204 (no body) | [`app/api/party.py`](../../app/api/party.py) |
 | GET | `/tmf-api/partyManagement/v5/organization/{party_id}` | path: `party_id`; query: `fields` | - | 200 `Organization` | [`app/api/party.py`](../../app/api/party.py) |
 | PATCH | `/tmf-api/partyManagement/v5/organization/{party_id}` | path: `party_id`; query: `fields`; body: `application/merge-patch+json` | `Organization_MVO` | 200 `Organization` | [`app/api/party.py`](../../app/api/party.py) |
 
@@ -25,7 +27,6 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF632-P
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /individual/{id}`, `DELETE /organization/{id}`.
 - Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
 
 
@@ -37,6 +38,11 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF632-P
 - Individual: `givenName` and `familyName` are both mandatory (as in the spec's create
   schema); organization: `name`. No other TMF632 attributes are stored - an unknown
   attribute is a 400 like everywhere else (`::test_individual_validation`).
+- DELETE (204) only a party nothing refers to: a 409 names the customers engaging it
+  and the financial, party and settlement accounts it owns. Customers and accounts take
+  the party FOR KEY SHARE when they refer to it, so a delete never races them - `_delete`;
+  `tests/test_api_deletes.py::test_a_party_stays_while_a_customer_or_an_account_refers_to_it`,
+  `::test_a_new_customer_waits_for_a_party_delete_in_flight`.
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf632-party.md`](../../scripts/docs/api-notes/tmf632-party.md).
 

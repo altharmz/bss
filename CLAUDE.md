@@ -186,6 +186,17 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
+**Another 10%: deletes and order cancellation** (2026-10-17, approved plan: two slices,
+13 operations, no `/hub`; cancel failures are a 409 with nothing stored; the UI gets an
+"Undo deactivation" for products pending termination). Slice 1 (9 operations, no
+migration): DELETE on individual, organization, customer, billingAccount,
+financialAccount, partyAccount, settlementAccount, billFormat, billPresentationMedia
+for entries nothing references (a billing account: no history at all); writers take
+what they reference FOR KEY SHARE, the worker skips a deleted account. Coverage 101/129
+(78.3%). Decision: [tmf-api.md](docs/decisions/tmf-api.md#deleting-parties-customers-and-accounts-2026-10-17).
+API notes added with the human's OK. Slice 2:
+cancelProductOrder (3) + DELETE of rejected orders, migration `0016`, UI.
+
 **TMF620 completion** (2026-10-16, approved plan: two slices, 13 operations, no `/hub`).
 Slice 1 (catalog deletes, 5 operations): DELETE on specification, offering, price,
 category and catalog for entries nothing references (D1 narrowed to TMF620); orders now

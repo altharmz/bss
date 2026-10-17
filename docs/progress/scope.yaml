@@ -20,15 +20,18 @@ items:
   - {id: api.tmf666.financialAccount.get, area: api, stage: 5, method: GET, path: "/tmf-api/accountManagement/v5/financialAccount/{account_id}", title: "Get a financial account"}
   - {id: api.tmf666.financialAccount.create, area: api, stage: 5, method: POST, path: /tmf-api/accountManagement/v5/financialAccount, title: "Create a financial account"}
   - {id: api.tmf666.financialAccount.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/accountManagement/v5/financialAccount/{account_id}", title: "Patch a financial account"}
+  - {id: api.tmf666.financialAccount.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/accountManagement/v5/financialAccount/{account_id}", title: "Delete an unlinked financial account"}
   - {id: db.party_account, area: db, stage: 5, table: party_account, title: "Party and settlement accounts (TMF666)"}
   - {id: api.tmf666.partyAccount.list, area: api, stage: 5, method: GET, path: /tmf-api/accountManagement/v5/partyAccount, title: "List party accounts"}
   - {id: api.tmf666.partyAccount.get, area: api, stage: 5, method: GET, path: "/tmf-api/accountManagement/v5/partyAccount/{account_id}", title: "Get a party account"}
   - {id: api.tmf666.partyAccount.create, area: api, stage: 5, method: POST, path: /tmf-api/accountManagement/v5/partyAccount, title: "Create a party account"}
   - {id: api.tmf666.partyAccount.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/accountManagement/v5/partyAccount/{account_id}", title: "Patch a party account"}
+  - {id: api.tmf666.partyAccount.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/accountManagement/v5/partyAccount/{account_id}", title: "Delete a party account"}
   - {id: api.tmf666.settlementAccount.list, area: api, stage: 5, method: GET, path: /tmf-api/accountManagement/v5/settlementAccount, title: "List settlement accounts"}
   - {id: api.tmf666.settlementAccount.get, area: api, stage: 5, method: GET, path: "/tmf-api/accountManagement/v5/settlementAccount/{account_id}", title: "Get a settlement account"}
   - {id: api.tmf666.settlementAccount.create, area: api, stage: 5, method: POST, path: /tmf-api/accountManagement/v5/settlementAccount, title: "Create a settlement account"}
   - {id: api.tmf666.settlementAccount.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/accountManagement/v5/settlementAccount/{account_id}", title: "Patch a settlement account"}
+  - {id: api.tmf666.settlementAccount.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/accountManagement/v5/settlementAccount/{account_id}", title: "Delete a settlement account"}
   - {id: ui.financialAccounts.list, area: ui, stage: 5, title: "Financial accounts: owner, balance per currency, contained accounts"}
   - {id: ui.subscriber.financialAccount, area: ui, stage: 5, title: "Subscriber card: link to the account's financial account"}
   - {id: db.refund, area: db, stage: 5, table: refund, title: "Completed cash refunds (TMF676)"}
@@ -49,10 +52,12 @@ items:
   - {id: api.tmf666.billFormat.get, area: api, stage: 5, method: GET, path: "/tmf-api/accountManagement/v5/billFormat/{format_id}", title: "Get a bill format"}
   - {id: api.tmf666.billFormat.create, area: api, stage: 5, method: POST, path: /tmf-api/accountManagement/v5/billFormat, title: "Create a bill format"}
   - {id: api.tmf666.billFormat.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/accountManagement/v5/billFormat/{format_id}", title: "Patch a bill format"}
+  - {id: api.tmf666.billFormat.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/accountManagement/v5/billFormat/{format_id}", title: "Delete an unused bill format"}
   - {id: api.tmf666.billPresentationMedia.list, area: api, stage: 5, method: GET, path: /tmf-api/accountManagement/v5/billPresentationMedia, title: "List bill presentation media"}
   - {id: api.tmf666.billPresentationMedia.get, area: api, stage: 5, method: GET, path: "/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}", title: "Get a bill presentation medium"}
   - {id: api.tmf666.billPresentationMedia.create, area: api, stage: 5, method: POST, path: /tmf-api/accountManagement/v5/billPresentationMedia, title: "Create a bill presentation medium"}
   - {id: api.tmf666.billPresentationMedia.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}", title: "Patch a bill presentation medium"}
+  - {id: api.tmf666.billPresentationMedia.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}", title: "Delete an unused bill presentation medium"}
   - {id: db.category, area: db, stage: 2, table: category, title: "Catalog categories (TMF620)"}
   - {id: db.product_catalog, area: db, stage: 2, table: product_catalog, title: "Product catalogs (TMF620)"}
   - {id: db.catalog_category, area: db, stage: 2, table: catalog_category, title: "Catalog root category membership"}
@@ -118,16 +123,19 @@ items:
   - {id: api.tmf632.individual.get, area: api, stage: 2, method: GET, path: "/tmf-api/partyManagement/v5/individual/{party_id}", title: "Get an individual"}
   - {id: api.tmf632.individual.create, area: api, stage: 2, method: POST, path: /tmf-api/partyManagement/v5/individual, title: "Create an individual"}
   - {id: api.tmf632.individual.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/partyManagement/v5/individual/{party_id}", title: "Patch an individual"}
+  - {id: api.tmf632.individual.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/partyManagement/v5/individual/{party_id}", title: "Delete an unreferenced individual"}
   - {id: api.tmf632.organization.list, area: api, stage: 2, method: GET, path: /tmf-api/partyManagement/v5/organization, title: "List organizations"}
   - {id: api.tmf632.organization.get, area: api, stage: 2, method: GET, path: "/tmf-api/partyManagement/v5/organization/{party_id}", title: "Get an organization"}
   - {id: api.tmf632.organization.create, area: api, stage: 2, method: POST, path: /tmf-api/partyManagement/v5/organization, title: "Create an organization"}
   - {id: api.tmf632.organization.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/partyManagement/v5/organization/{party_id}", title: "Patch an organization"}
+  - {id: api.tmf632.organization.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/partyManagement/v5/organization/{party_id}", title: "Delete an unreferenced organization"}
 
   # ---------------- api: TMF629 customer ----------------
   - {id: api.tmf629.customer.list, area: api, stage: 2, method: GET, path: /tmf-api/customerManagement/v5/customer, title: "List customers"}
   - {id: api.tmf629.customer.get, area: api, stage: 2, method: GET, path: "/tmf-api/customerManagement/v5/customer/{customer_id}", title: "Get a customer"}
   - {id: api.tmf629.customer.create, area: api, stage: 2, method: POST, path: /tmf-api/customerManagement/v5/customer, title: "Create a customer"}
   - {id: api.tmf629.customer.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/customerManagement/v5/customer/{customer_id}", title: "Patch a customer"}
+  - {id: api.tmf629.customer.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/customerManagement/v5/customer/{customer_id}", title: "Delete a customer without accounts"}
 
   # ---------------- api: TMF666 account ----------------
   - {id: api.tmf666.billingCycleSpecification.list, area: api, stage: 2, method: GET, path: /tmf-api/accountManagement/v5/billingCycleSpecification, title: "List billing cycle specifications"}
@@ -136,6 +144,7 @@ items:
   - {id: api.tmf666.billingAccount.get, area: api, stage: 2, method: GET, path: "/tmf-api/accountManagement/v5/billingAccount/{account_id}", title: "Get a billing account"}
   - {id: api.tmf666.billingAccount.create, area: api, stage: 2, method: POST, path: /tmf-api/accountManagement/v5/billingAccount, title: "Create a billing account"}
   - {id: api.tmf666.billingAccount.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/accountManagement/v5/billingAccount/{account_id}", title: "Patch a billing account"}
+  - {id: api.tmf666.billingAccount.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/accountManagement/v5/billingAccount/{account_id}", title: "Delete a billing account without history"}
   - {id: api.tmf666.extensionSchema.get, area: api, stage: 2, method: GET, path: /tmf-api/schema/BssBillingAccount.schema.json, title: "Serve the BssBillingAccount extension schema"}
 
   # ---------------- api: TMF676 payment (v4) ----------------

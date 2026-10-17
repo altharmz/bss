@@ -115,8 +115,8 @@ def test_currency_foreign_key_violation_is_a_409_not_a_500(api, db_conn, monkeyp
     acc = apidata.account(api)  # RUB
     real = payment_api.parties.get_billing_account
 
-    def claims_eur(conn, account_id):
-        row = real(conn, account_id)
+    def claims_eur(conn, account_id, lock=None):
+        row = real(conn, account_id, lock)
         return None if row is None else {**row, "currency": "EUR"}
 
     monkeypatch.setattr(payment_api.parties, "get_billing_account", claims_eur)

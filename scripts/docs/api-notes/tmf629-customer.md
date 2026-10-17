@@ -13,3 +13,6 @@
 - `status` is ours (a free string in TMF629): `Created` (the default), `Active`,
   `Inactive`. PATCH may set any of them; no transition rule. Any other value is a 422
   that changes nothing (`::test_customer_status_outside_the_enum_is_refused_on_patch`).
+- DELETE (204) only a customer without billing accounts (409 otherwise, naming them);
+  billing account POST takes the customer FOR KEY SHARE - `delete_customer`;
+  `tests/test_api_deletes.py::test_a_customer_stays_while_it_has_billing_accounts`.

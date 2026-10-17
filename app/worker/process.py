@@ -35,7 +35,7 @@ import psycopg
 from app.billing.adapter import bill_account, visible_before
 from app.billing.model import BillingError
 from app.clock import Clock
-from app.repository import billing, products
+from app.repository import billing, parties, products
 from app.repository._sql import Row
 from app.worker.plan import retry_time
 from app.worker.runs import AlreadyCompleted, Started, start_run
@@ -126,6 +126,11 @@ class DateRun:
         conn, run_id, now = self.conn, self.run["id"], self.clock.now()
         blocker = billing.earliest_failure_before(conn, account_id, self.run_date)
         with conn.transaction():
+            # Deleted since the run listed its members (DELETE billingAccount, only one
+            # without history): nothing to bill or record, and close_run no longer counts
+            # it. The lock is bill_account's own, so a delete in flight finishes first.
+            if parties.get_billing_account(conn, account_id, "update") is None:
+                return
             if blocker is not None:
                 billing.record_outcome(
                     conn, run_id, account_id, "blocked", now=now, waits_for=blocker["run_id"]

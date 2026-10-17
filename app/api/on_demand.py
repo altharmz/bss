@@ -102,7 +102,8 @@ def create_bill_demand(
     check_type(body, "CustomerBillOnDemand")
     data = parse(DemandCreate, body, read_only=("state", "customerBill", "lastUpdate"))
     with tx() as conn:
-        if parties.get_billing_account(conn, data.billing_account.id) is None:
+        # FOR KEY SHARE until commit: a concurrent delete of the account waits for this
+        if parties.get_billing_account(conn, data.billing_account.id, "key share") is None:
             raise unprocessable("billingAccount does not exist")
         now = clock.now()
         try:

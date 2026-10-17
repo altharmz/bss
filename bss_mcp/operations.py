@@ -177,10 +177,18 @@ OPERATIONS: dict[str, Op] = {
         "Create an individual: givenName and familyName.", body=IndividualCreate
     ),
     "patch_individual": Op("Change an individual's name.", body=IndividualPatch),
+    "delete_individual": Op(
+        "Delete an individual nothing refers to: 409 while a customer engages it or it owns"
+        " an account."
+    ),
     "list_organizations": Op("Organizations.", query=LIST),
     "get_organization": Op("One organization.", query=FIELDS),
     "create_organization": Op("Create an organization: name.", body=OrganizationCreate),
     "patch_organization": Op("Change an organization's name.", body=OrganizationPatch),
+    "delete_organization": Op(
+        "Delete an organization nothing refers to: 409 while a customer engages it or it"
+        " owns an account."
+    ),
     # --- TMF629 customer ---
     "list_customers": Op("Customers (the role a party plays towards us).", query=LIST),
     "get_customer": Op("One customer.", query=FIELDS),
@@ -192,6 +200,7 @@ OPERATIONS: dict[str, Op] = {
     "patch_customer": Op(
         "Change a customer's name or status; engagedParty is read-only.", body=CustomerPatch
     ),
+    "delete_customer": Op("Delete a customer without billing accounts (409 otherwise)."),
     # --- TMF666 account ---
     "list_bill_formats": Op("Bill formats (JSON detailed or JSON summary).", query=LIST),
     "get_bill_format": Op("One bill format.", query=FIELDS),
@@ -199,12 +208,19 @@ OPERATIONS: dict[str, Op] = {
         "Create a supported JSON bill renderer configuration.", body=FormatCreate
     ),
     "patch_bill_format": Op("Change a bill format for future documents.", body=FormatPatch),
+    "delete_bill_format": Op(
+        "Delete a bill format no billing account uses (409 otherwise); issued bills keep"
+        " their snapshot."
+    ),
     "list_bill_media": Op("Bill presentation media preferences.", query=LIST),
     "get_bill_media": Op("One presentation medium.", query=FIELDS),
     "create_bill_media": Op(
         "Create a presentation medium descriptor; no external delivery.", body=MediaCreate
     ),
     "patch_bill_media": Op("Change a presentation medium descriptor.", body=MediaPatch),
+    "delete_bill_media": Op(
+        "Delete a presentation medium no billing account prefers (409 otherwise)."
+    ),
     "list_cycle_specifications": Op("Supported billing cycle specifications.", query=LIST),
     "get_cycle_specification": Op("The monthly billing policy.", query=FIELDS),
     "list_accounts": Op("Billing accounts, with their balance.", query=LIST),
@@ -221,6 +237,10 @@ OPERATIONS: dict[str, Op] = {
         "Change an account's name, state (Active, Suspended, Closed), creditLimit or"
         " financialAccount (null unlinks); currency and billCycleDay are fixed.",
         body=AccountPatch,
+    ),
+    "delete_account": Op(
+        "Delete a billing account without history: 409 once anything was ordered, charged,"
+        " billed, paid or refunded on it or a billing run processed it - close it instead."
     ),
     "list_financial_accounts": Op(
         "Financial accounts: a party's receivables across its linked billing accounts.",
@@ -241,6 +261,9 @@ OPERATIONS: dict[str, Op] = {
         " creditLimit; the owner is fixed.",
         body=FinancialPatch,
     ),
+    "delete_financial_account": Op(
+        "Delete a financial account no account links to (409 otherwise: unlink them first)."
+    ),
     "list_party_accounts": Op(
         "Party accounts: a party's accounts that are not billed (no balance).", query=LIST
     ),
@@ -254,6 +277,7 @@ OPERATIONS: dict[str, Op] = {
         "Change a party account; financialAccount null unlinks; the owner is fixed.",
         body=PartyAccountPatch,
     ),
+    "delete_party_account": Op("Delete a party account (nothing refers to one)."),
     "list_settlement_accounts": Op(
         "Settlement accounts: records for settling with a party; never billed.", query=LIST
     ),
@@ -267,6 +291,7 @@ OPERATIONS: dict[str, Op] = {
         "Change a settlement account; financialAccount null unlinks; the owner is fixed.",
         body=PartyAccountPatch,
     ),
+    "delete_settlement_account": Op("Delete a settlement account (nothing refers to one)."),
     # --- TMF676 payment ---
     "list_refunds": Op("Completed refunds paid out of unused credit.", query=LIST),
     "get_refund": Op("One completed refund.", query=FIELDS),

@@ -6,7 +6,7 @@ A customer is the role a party plays towards us; `engagedParty` is fixed at crea
 from typing import Any, Literal
 
 import psycopg
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import Field
 
 from app.api import listing
@@ -22,12 +22,13 @@ from app.api.common import (
     parse_id,
     ref,
 )
+from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import JsonBody, MergePatchBody, Tx
 from app.api.errors import not_found, unprocessable
 from app.api.party import party_href, party_name
 from app.api.tmfjson import TmfJSONResponse
 from app.repository import parties
-from app.repository._sql import Row
+from app.repository._sql import Row, count_references
 
 BASE = "/tmf-api/customerManagement/v5"
 router = APIRouter(prefix=BASE)
@@ -116,7 +117,8 @@ def create_customer(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse
     check_type(body, "Customer")
     data = parse(CustomerCreate, body)
     with tx() as conn:
-        party = parties.get_party(conn, data.engaged_party.id)
+        # FOR KEY SHARE until commit: a concurrent delete of the party waits for this
+        party = parties.get_party(conn, data.engaged_party.id, "key share")
         if party is None:
             raise unprocessable(f"engagedParty {data.engaged_party.id} does not exist")
         check_referred_type(data.engaged_party, party["party_type"], "engagedParty")
@@ -142,3 +144,17 @@ def patch_customer(
         row = parties.update_customer(conn, uid, columns(data))
         patched = customer_body(conn, row)
     return TmfJSONResponse(listing.select_fields(patched, fields))
+
+
+@router.delete("/customer/{customer_id}", status_code=204, response_class=Response)
+def delete_customer(customer_id: str, request: Request, tx: Tx) -> Response:
+    """Only a customer without billing accounts (they take it FOR KEY SHARE on create)."""
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id("customer", customer_id)
+        if parties.get_customer(conn, uid, "update") is None:
+            raise not_found("customer", customer_id)
+        counts = count_references(conn, uid, {"billingAccount": ("billing_account", "customer_id")})
+        refuse_if_referenced("customer", uid, counts, "delete them first")
+        delete_row(conn, "customer", uid)
+    return Response(status_code=204)

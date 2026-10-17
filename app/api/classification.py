@@ -12,8 +12,6 @@ from app.api.catalog import (
     BASE,
     LifecycleStatus,
     _check_lifecycle,
-    delete_row,
-    refuse_if_referenced,
 )
 from app.api.common import (
     ProductOfferingRef,
@@ -31,6 +29,7 @@ from app.api.common import (
     utc,
     without_nulls,
 )
+from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse

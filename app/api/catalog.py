@@ -44,11 +44,12 @@ from app.api.common import (
     utc,
     without_nulls,
 )
+from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.repository import catalog, classification
-from app.repository._sql import Row, count_references, delete_by_id
+from app.repository._sql import Row, count_references
 
 BASE = "/tmf-api/productCatalogManagement/v5"
 router = APIRouter(prefix=BASE)
@@ -655,21 +656,6 @@ ORDERED = {
     "product": ("product", "product_offering_id"),
     "productOrderItem": ("product_order_item", "product_offering_id"),
 }
-
-
-def refuse_if_referenced(resource: str, uid: UUID, counts: dict[str, int], advice: str) -> None:
-    if counts:
-        listed = ", ".join(f"{n} {label}" for label, n in counts.items())
-        raise conflict(f"{resource} {uid} is still referenced by {listed}: {advice}")
-
-
-def delete_row(conn: psycopg.Connection, table: str, uid: UUID) -> None:
-    """The last step of a delete; the foreign keys (all NO ACTION) back the checks."""
-    try:
-        with conn.transaction():
-            delete_by_id(conn, table, uid)
-    except pg_errors.ForeignKeyViolation:
-        raise conflict(f"{uid} is still referenced") from None
 
 
 @router.delete("/productSpecification/{spec_id}", status_code=204, response_class=Response)

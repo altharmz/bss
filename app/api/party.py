@@ -7,7 +7,7 @@ reachable under /organization and vice versa.
 from typing import Any
 
 import psycopg
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import Field
 
 from app.api import listing
@@ -21,11 +21,12 @@ from app.api.common import (
     parse_id,
     without_nulls,
 )
+from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import JsonBody, MergePatchBody, Tx
 from app.api.errors import not_found
 from app.api.tmfjson import TmfJSONResponse
-from app.repository import parties
-from app.repository._sql import Row
+from app.repository import accounts, parties
+from app.repository._sql import Row, count_references
 
 BASE = "/tmf-api/partyManagement/v5"
 router = APIRouter(prefix=BASE)
@@ -60,6 +61,30 @@ def _get(conn: psycopg.Connection, party_type: str, resource: str, raw_id: str) 
     if row is None or row["party_type"] != party_type:
         raise not_found(resource, raw_id)
     return row
+
+
+def _delete(request: Request, tx: Tx, party_type: str, resource: str, raw_id: str) -> Response:
+    """Only a party nothing refers to: no customer engages it, it owns no account.
+    Customers and accounts take the party FOR KEY SHARE when they refer to it."""
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id(resource, raw_id)
+        row = parties.get_party(conn, uid, "update")
+        if row is None or row["party_type"] != party_type:
+            raise not_found(resource, raw_id)
+        counts = count_references(
+            conn,
+            uid,
+            {
+                "customer": ("customer", "party_id"),
+                "financialAccount": ("financial_account", "party_id"),
+            },
+        )
+        for kind, n in accounts.count_party_accounts(conn, "party_id", uid).items():
+            counts[kind[0].lower() + kind[1:]] = n
+        refuse_if_referenced(resource, uid, counts, "delete those first")
+        delete_row(conn, "party", uid)
+    return Response(status_code=204)
 
 
 def _list(request: Request, tx: Tx, party_type: str, filters, attributes) -> TmfJSONResponse:
@@ -130,6 +155,11 @@ def patch_individual(
     return TmfJSONResponse(listing.select_fields(party_body(row), fields))
 
 
+@router.delete("/individual/{party_id}", status_code=204, response_class=Response)
+def delete_individual(party_id: str, request: Request, tx: Tx) -> Response:
+    return _delete(request, tx, "Individual", "individual", party_id)
+
+
 # --- organization ---
 
 
@@ -178,3 +208,8 @@ def patch_organization(
         current = _get(conn, "Organization", "organization", party_id)
         row = parties.update_party(conn, current["id"], changes)
     return TmfJSONResponse(listing.select_fields(party_body(row), fields))
+
+
+@router.delete("/organization/{party_id}", status_code=204, response_class=Response)
+def delete_organization(party_id: str, request: Request, tx: Tx) -> Response:
+    return _delete(request, tx, "Organization", "organization", party_id)

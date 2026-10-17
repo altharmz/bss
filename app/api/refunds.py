@@ -130,7 +130,8 @@ def create_refund(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> 
     check_type(body, "Refund")
     data = parse(RefundCreate, body, read_only=("status", "statusDate", "refundDate"))
     with tx() as conn:
-        account_row = parties.get_billing_account(conn, data.account.id)
+        # FOR UPDATE, as load_account below: a concurrent account delete went first or waits
+        account_row = parties.get_billing_account(conn, data.account.id, "update")
         if account_row is None:
             raise unprocessable("account does not exist")
         account = billing.load_account(conn, data.account.id)
