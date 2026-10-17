@@ -39,7 +39,21 @@ from app.api.catalog import (
     specification_body,
 )
 from app.api.classification import CatalogCreate, CategoryCreate, organization_body, save
-from app.api.common import TmfModel, check_type, created, parse, parse_id, utc, without_nulls
+from app.api.common import (
+    TmfModel,
+    check_server_set,
+    check_type,
+    claim_id,
+    created,
+    meta_body,
+    parse,
+    parse_id,
+    take_id,
+    take_server_set,
+    utc,
+    with_meta,
+    without_nulls,
+)
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import TmfError, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
@@ -134,7 +148,7 @@ def job_body(row: Row) -> dict[str, Any]:
             "completionDate": utc(row["completion_date"]),
             "errorLog": row["error_log"],
         }
-    )
+    ) | meta_body(row)
 
 
 def _store(
@@ -145,10 +159,12 @@ def _store(
     url: str | None,
     query: str | None = None,
     error: str | None = None,
+    new_id: UUID | None = None,
 ) -> Row:
     return catalog_jobs.insert(
         conn,
         {
+            "id": new_id,
             "kind": kind,
             "status": "Failed" if error else "Succeeded",
             "content_type": CONTENT_TYPE,
@@ -395,7 +411,9 @@ def get_export_job(job_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_export_job(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, EXPORT_ATTRIBUTES)
     check_type(body, "ExportJob")
-    data = parse(ExportJobCreate, body, read_only=SERVER_MANAGED)
+    new_id = take_id(body)
+    server_set = take_server_set(body, SERVER_MANAGED)
+    data = parse(ExportJobCreate, body)
     _check_path(data.path)
     if data.url not in (None, f"data:{CONTENT_TYPE}"):
         raise unprocessable(
@@ -405,14 +423,19 @@ def create_export_job(body: JsonBody, request: Request, tx: Tx, clock: ClockDep)
     scope = _scope(data.query)
     now = clock.now()
     with tx() as conn:
+        claim_id(conn, "catalog_job", new_id)
         document = export_document(conn, scope)
+        query = data.query or None
         try:
             row = _store(
-                conn, "ExportJob", now, url=as_data_url(document), query=data.query or None
+                conn, "ExportJob", now, url=as_data_url(document), query=query, new_id=new_id
             )
         except ImportProblem as exc:
-            row = _store(conn, "ExportJob", now, url=None, query=data.query or None, error=str(exc))
-        new = job_body(row)
+            row = _store(
+                conn, "ExportJob", now, url=None, query=query, error=str(exc), new_id=new_id
+            )
+        new = job_body(with_meta(conn, "catalog_job", row, data))
+        check_server_set(server_set, new)
         emit.created(conn, API, "exportJob", new, at=now)
     return created(listing.select_fields(new, fields))
 
@@ -436,20 +459,24 @@ def get_import_job(job_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_import_job(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, JOB_ATTRIBUTES)
     check_type(body, "ImportJob")
-    data = parse(ImportJobCreate, body, read_only=SERVER_MANAGED)
+    new_id = take_id(body)
+    server_set = take_server_set(body, SERVER_MANAGED)
+    data = parse(ImportJobCreate, body)
     _check_path(data.path)
     document = read_data_url(data.url)
     now = clock.now()
     with tx() as conn:
+        claim_id(conn, "catalog_job", new_id)
         try:
             with conn.transaction():  # all or nothing
                 import_document(conn, document, now)
             error = None
         except ImportProblem as exc:
             error = str(exc)
-        row = _store(conn, "ImportJob", now, url=data.url, error=error)
+        row = _store(conn, "ImportJob", now, url=data.url, error=error, new_id=new_id)
         # one event for the job: the entries it imported emit no Create events of their own
-        new = job_body(row)
+        new = job_body(with_meta(conn, "catalog_job", row, data))
+        check_server_set(server_set, new)
         emit.created(conn, API, "importJob", new, at=now)
     return created(listing.select_fields(new, fields))
 

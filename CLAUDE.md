@@ -189,9 +189,12 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 **Following TMF** (2026-10-17, the human's rule: what the vendored specs define is
 implemented, the rest skipped; "proceed with development"). Slice 0 done locally: the
 exact gap list `tests/tmf-gaps.txt` (831 lines), probed by `tests/tmf_gaps.py` and
-locked by `tests/test_tmf_gaps.py` - each slice removes the lines it closes. Next:
-slices 1-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
-notes before taxes, `modify` items, suspension and payment states.
+locked by `tests/test_tmf_gaps.py` - each slice removes the lines it closes (`94b6ff2`).
+Slice 1 (nothing dropped or rewritten; migration `0021`; 705 lines left) done locally,
+[decision](docs/decisions/tmf-api.md#nothing-dropped-or-rewritten-2026-10-17). Next:
+slices 2-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
+notes before taxes, `modify` items, suspension and payment states. Not deployed:
+migrations `0009`-`0021` ship together.
 
 **100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders
 placed on the caller's behalf (a would-be rejection is a 409, nothing stored; DELETE ends

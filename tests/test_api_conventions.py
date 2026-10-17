@@ -266,10 +266,13 @@ def test_missing_mandatory_field_is_422_and_malformed_json_is_400(api):
 
 
 def test_server_managed_attributes_are_rejected_on_post(api):
-    for name in ("id", "href"):
-        response = api.post(SPEC, spec_body(**{name: "x"}))
-        assert response.status_code == 400
-        assert f"{name} is read-only" in response.json()["message"]
+    response = api.post(SPEC, spec_body(href="x"))
+    assert response.status_code == 400
+    assert "href is read-only" in response.json()["message"]
+    # a client may choose the id (the spec's Addressable_FVO), but ours are UUIDs
+    response = api.post(SPEC, spec_body(id="x"))
+    assert response.status_code == 422
+    assert "id must be a UUID" in response.json()["message"]
     # the spec's create schema makes clients send lastUpdate; accepted, server-managed
     assert api.post(SPEC, spec_body(lastUpdate="2020-01-01T00:00:00Z")).status_code == 201
 

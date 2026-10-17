@@ -19,7 +19,15 @@ from fastapi import APIRouter, Request, Response
 from pydantic import Field
 
 from app.api import listing
-from app.api.common import TmfModel, check_type, created, parse, parse_id
+from app.api.common import (
+    TmfModel,
+    check_type,
+    created,
+    meta_body,
+    parse,
+    parse_id,
+    with_meta,
+)
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import bad_request, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
@@ -64,7 +72,7 @@ def hub_body(api: str, row: Row) -> dict[str, Any]:
         body["query"] = row["query"]
     if api not in V4:
         body["@type"] = "Hub"
-    return body
+    return body | meta_body(row)
 
 
 def _checked(body: dict[str, Any], request: Request) -> None:
@@ -87,6 +95,7 @@ def _create(api: str, data: HubIn, tx: Tx, clock) -> TmfJSONResponse:
             event_types=types,
             at=clock.now(),
         )
+        row = with_meta(conn, "event_subscription", row, data)
     hub = hub_body(api, row)
     if api in V4:  # no href to point a Location at
         return TmfJSONResponse(hub, status_code=201)

@@ -11,13 +11,15 @@ Kind = Literal["ImportJob", "ExportJob"]
 
 
 def insert(conn: psycopg.Connection, values: dict[str, Any]) -> Row:
+    """`values["id"]` None: a new one (a client may choose it)."""
     return returning(
         conn,
         """
         INSERT INTO catalog_job
-            (kind, status, content_type, path, query, url, error_log,
+            (id, kind, status, content_type, path, query, url, error_log,
              creation_date, completion_date)
-        VALUES (%(kind)s, %(status)s, %(content_type)s, %(path)s, %(query)s, %(url)s,
+        VALUES (COALESCE(%(id)s::uuid, gen_random_uuid()), %(kind)s, %(status)s,
+                %(content_type)s, %(path)s, %(query)s, %(url)s,
                 %(error_log)s, %(creation_date)s, %(completion_date)s)
         RETURNING *
         """,

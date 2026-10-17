@@ -18,16 +18,20 @@ TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their
 | `event_types` | `text[]` | yes |  | The event types parsed from query; NULL exactly when query is. |
 | `subscribed_at` | `timestamp with time zone` | no |  | When the hub was created (application clock). |
 | `deleted_at` | `timestamp with time zone` | yes |  | When DELETE /hub removed it; NULL while live. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Constraints
 
 | Name | Kind | Definition |
 |---|---|---|
 | `event_subscription_api_check` | check | `CHECK ((api ~ '^TMF[0-9]{3}$'::text))` |
+| `event_subscription_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `event_subscription_callback_check` | check | `CHECK ((length(callback) > 0))` |
 | `event_subscription_deleted_after_subscribed` | check | `CHECK ((deleted_at >= subscribed_at))` |
 | `event_subscription_event_types_check` | check | `CHECK ((cardinality(event_types) > 0))` |
 | `event_subscription_query_check` | check | `CHECK ((length(query) > 0))` |
+| `event_subscription_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `event_subscription_types_from_query` | check | `CHECK (((query IS NULL) = (event_types IS NULL)))` |
 | `event_subscription_pkey` | primary key | `PRIMARY KEY (id)` |
 

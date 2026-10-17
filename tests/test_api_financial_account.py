@@ -174,21 +174,31 @@ def test_owner_must_be_one_existing_party_with_role_owner(api):
 
 
 @pytest.mark.parametrize(
-    "extra",
+    ("extra", "status"),
     [
-        {"accountBalance": []},
-        {"accountRelationship": []},
-        {"contact": []},
-        {"paymentStatus": "In Arrears"},
-        {"@type": "BillingAccount"},
-        {"id": NIL},
+        # server-set: accepted only as the server sets them (a new account has neither)
+        ({"accountBalance": [{"balanceType": "currentBalance"}]}, 422),
+        ({"accountRelationship": [{"relationshipType": "contains"}]}, 422),
+        ({"contact": []}, 400),
+        ({"paymentStatus": "In Arrears"}, 400),
+        ({"@type": "BillingAccount"}, 400),
+        ({"id": "not-a-uuid"}, 422),
     ],
 )
-def test_read_only_and_unsupported_attributes_on_create(api, extra):
+def test_read_only_and_unsupported_attributes_on_create(api, extra, status):
     org = apidata.organization(api)
     body = {"name": "x", "relatedParty": [owner(org)], **extra}
-    assert api.post(FINANCIAL, body).status_code == 400
+    assert api.post(FINANCIAL, body).status_code == status
     assert api.get(FINANCIAL).json() == []
+
+
+def test_create_repeating_what_the_server_sets_and_choosing_the_id(api):
+    org = apidata.organization(api)
+    body = {"name": "x", "relatedParty": [owner(org)], "accountBalance": [], "id": NIL}
+    created = api.post(FINANCIAL, body)
+    assert created.status_code == 201, created.text
+    assert created.json()["id"] == NIL
+    assert api.post(FINANCIAL, body).status_code == 409  # the id is taken
 
 
 def test_patch_and_credit_limit(api):
@@ -222,11 +232,14 @@ def test_patch_and_credit_limit(api):
         ({"creditLimit": {"unit": "RUB", "value": -1}}, 422),
         ({"creditLimit": {"unit": "RUB", "value": 0.001}}, 422),
         ({"relatedParty": [owner(org)]}, 400),
-        ({"accountBalance": []}, 400),
-        ({"accountRelationship": []}, 400),
-        ({"lastUpdate": "2026-01-01T00:00:00Z"}, 400),
+        ({"accountBalance": [{"balanceType": "currentBalance"}]}, 422),
+        ({"accountRelationship": [{"relationshipType": "contains"}]}, 422),
+        ({"lastUpdate": "2026-01-01T00:00:00Z"}, 422),
         ({"@type": "PartyAccount"}, 400),
         ({"taxExemption": []}, 400),
+        # repeating what the server holds changes nothing
+        ({"accountBalance": [], "accountRelationship": []}, 200),
+        ({"lastUpdate": cleared["lastUpdate"]}, 200),
     ]:
         assert api.patch(fa["href"], body).status_code == status, body
     assert api.get(fa["href"]).json() == cleared

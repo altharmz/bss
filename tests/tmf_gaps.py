@@ -7,7 +7,9 @@ Black-box, through the app itself (docs/decisions/tmf-api.md, "Following TMF"):
   for object and array attributes. The app answers "<path>: unknown attribute" (the
   attribute is **refused**) or "<path> is read-only" (**read-only**), or neither (taken).
   A control attribute, `zzProbe`, must be refused at the same place, else the place is
-  **unprobed** - the handler failed before it looked at the body there.
+  **unprobed** - the handler failed before it looked at the body there. An attribute the
+  server sets (a balance, a job's status) is taken when it equals the server's value and
+  is a 422 otherwise; it counts as taken, and nothing below it is probed.
 - **Required.** An empty body: every attribute the app reports missing that the spec's
   request schema does not require is listed as **requires**.
 - **Reads.** For every resource with a GET by id, every top-level attribute of the spec's
@@ -30,6 +32,7 @@ from urllib.parse import urlsplit
 
 from fastapi.testclient import TestClient
 
+from app.api import common
 from tests import contract
 from tests.apiclient import APIS, MERGE_PATCH
 
@@ -140,6 +143,17 @@ def _value(shape: str | None, inner: dict[str, Any] | None = None) -> Any:
 
 
 def probe_writes(client: TestClient) -> list[str]:
+    """The app tells which attributes a request took as server-set (`on_server_set`):
+    those are compared whole, so the level below them is not probed."""
+    taken: set[str] = set()
+    common.on_server_set = taken.update
+    try:
+        return _probe_writes(client, taken)
+    finally:
+        common.on_server_set = None
+
+
+def _probe_writes(client: TestClient, taken: set[str]) -> list[str]:
     lines = []
     for api, method, path, schema in write_operations():
         url = _url(api, path)
@@ -153,13 +167,14 @@ def probe_writes(client: TestClient) -> list[str]:
             if name.startswith("@"):  # @type, @baseType, @schemaLocation: TmfModel
                 continue
             shape = _shape(api, prop)
+            taken.clear()
             _, message = _send(client, method, url, {name: _value(shape)})
             verdict = _verdict(message, name)
             if verdict:
                 lines.append(f"{label} {verdict} {name}")
                 continue
-            if shape is None:
-                continue
+            if shape is None or name in taken:
+                continue  # a server-set attribute is compared whole: nothing below it
             index = ".0" if shape == "array" else ""
             _, message = _send(client, method, url, {name: _value(shape, {CONTROL: 1})})
             if _verdict(message, f"{name}{index}.{CONTROL}") != "refused":

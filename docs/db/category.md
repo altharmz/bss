@@ -19,6 +19,8 @@ TMF620 catalog organization resource.
 | `created_at` | `timestamp with time zone` | no | `now()` | Database insertion time; stable list ordering. |
 | `updated_at` | `timestamp with time zone` | no | `now()` | Database update time exposed as lastUpdate. |
 | `parent_id` | `uuid` | yes |  | Optional single parent; API serializes hierarchy changes and rejects cycles. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Foreign keys
 
@@ -30,8 +32,10 @@ TMF620 catalog organization resource.
 
 | Name | Kind | Definition |
 |---|---|---|
+| `category_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `category_check` | check | `CHECK ((parent_id <> id))` |
 | `category_name_check` | check | `CHECK ((length(name) > 0))` |
+| `category_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `category_valid_for_check` | check | `CHECK (((valid_for IS NULL) OR ((NOT isempty(valid_for)) AND (NOT lower_inf(valid_for)) AND lower_inc(valid_for) AND (NOT upper_inc(valid_for)))))` |
 | `category_pkey` | primary key | `PRIMARY KEY (id)` |
 

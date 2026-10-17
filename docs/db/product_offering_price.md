@@ -22,6 +22,8 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | `currency` | `character(3)` | no |  | ISO 4217 code, three upper-case letters. Immutable. |
 | `valid_for` | `tstzrange` | no |  | TMF620 validFor as a half-open tstzrange [start, end); NULL upper = open-ended. The start never lies in the past and never moves; the end is only set or moved to now or later, and never so that a product is left without a price. |
 | `lifecycle_status` | `lifecycle_status` (enum, see [README](README.md#enums)) | no |  | TMF620 lifecycleStatus (ours). |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Foreign keys
 
@@ -34,9 +36,11 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | Name | Kind | Definition |
 |---|---|---|
 | `product_offering_price_amount_check` | check | `CHECK ((amount >= (0)::numeric))` |
+| `product_offering_price_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `product_offering_price_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
 | `product_offering_price_recurring_has_period` | check | `CHECK (((price_type = 'recurring'::price_type) = (recurring_period IS NOT NULL)))` |
 | `product_offering_price_recurring_period_length_check` | check | `CHECK ((recurring_period_length = 1))` |
+| `product_offering_price_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `product_offering_price_valid_for_check` | check | `CHECK (((NOT isempty(valid_for)) AND (NOT lower_inf(valid_for)) AND lower_inc(valid_for) AND (NOT upper_inc(valid_for))))` |
 | `product_offering_price_pkey` | primary key | `PRIMARY KEY (id)` |
 | `product_offering_price_no_overlap` | exclusion | `EXCLUDE USING gist (product_offering_id WITH =, price_type WITH =, currency WITH =, valid_for WITH &&)` |

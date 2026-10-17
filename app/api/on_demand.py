@@ -11,13 +11,19 @@ from app.api.bill import BASE, bill_href
 from app.api.common import (
     BillingAccountRef,
     TmfModel,
+    check_server_set,
     check_type,
+    claim_id,
     created,
+    meta_body,
     parse,
     parse_id,
     ref,
+    take_id,
+    take_server_set,
     to_billing_date,
     utc,
+    with_meta,
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, Tx
@@ -56,7 +62,7 @@ def demand_body(conn, row):
             if row["customer_bill_id"]
             else None,
         }
-    )
+    ) | meta_body(row)
 
 
 @router.get("/customerBillOnDemand")
@@ -101,11 +107,14 @@ def create_bill_demand(
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "CustomerBillOnDemand")
-    data = parse(DemandCreate, body, read_only=("state", "customerBill", "lastUpdate"))
+    uid = take_id(body)
+    server_set = take_server_set(body, ("state", "customerBill", "lastUpdate"))
+    data = parse(DemandCreate, body)
     with tx() as conn:
         # FOR KEY SHARE until commit: a concurrent delete of the account waits for this
         if parties.get_billing_account(conn, data.billing_account.id, "key share") is None:
             raise unprocessable("billingAccount does not exist")
+        claim_id(conn, "customer_bill_on_demand", uid)
         now = clock.now()
         try:
             with conn.transaction():
@@ -113,10 +122,13 @@ def create_bill_demand(
                     conn,
                     """
                     INSERT INTO customer_bill_on_demand
-                        (billing_account_id, requested_at, ready_on, updated_at, name, description)
-                    VALUES (%s,%s,%s,%s,%s,%s) RETURNING *
+                        (id, billing_account_id, requested_at, ready_on, updated_at, name,
+                         description)
+                    VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s)
+                    RETURNING *
                 """,
                     (
+                        uid,
                         data.billing_account.id,
                         now,
                         to_billing_date(now) + timedelta(days=1),
@@ -127,6 +139,7 @@ def create_bill_demand(
                 )
         except UniqueViolation:
             raise conflict("an on-demand request is already in progress for this account") from None
-        new = demand_body(conn, row)
+        new = demand_body(conn, with_meta(conn, "customer_bill_on_demand", row, data))
+        check_server_set(server_set, new)
         emit.created(conn, "TMF678", "customerBillOnDemand", new, at=now)
     return created(listing.select_fields(new, fields))

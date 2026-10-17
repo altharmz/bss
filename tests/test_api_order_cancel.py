@@ -189,8 +189,10 @@ def test_cancellation_request_validation(api, shop):
     assert response.status_code == 422
     assert "must be today (2026-10-20)" in response.json()["message"]
     assert api.post(CANCEL, cancel_body({"id": apidata.NIL})).status_code == 422
+    # state is the server's (a stored cancellation is done): another value is a 422
     assert (
-        api.post(CANCEL, {"productOrder": {"id": order["id"]}, "state": "done"}).status_code == 400
+        api.post(CANCEL, {"productOrder": {"id": order["id"]}, "state": "failed"}).status_code
+        == 422
     )
     assert api.post(CANCEL, {**cancel_body(order), "priority": "1"}).status_code == 400
     assert api.post(CANCEL, {"@type": "CancelProductOrder"}).status_code == 422

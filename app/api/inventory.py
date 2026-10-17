@@ -22,14 +22,21 @@ from app.api.common import (
     BillingAccountRef,
     ProductOfferingRef,
     TmfModel,
+    check_server_set,
     check_type,
+    claim_id,
     created,
     from_billing_date,
+    meta_body,
+    meta_columns,
     parse,
     parse_id,
     ref,
+    take_id,
+    take_server_set,
     to_billing_date,
     utc,
+    with_meta,
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
@@ -42,6 +49,7 @@ from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_
 from app.repository import catalog, orders, parties, products
 from app.repository._sql import Row
 
+API = "TMF637"
 BASE = "/tmf-api/productInventory/v5"
 ORDERING_BASE = "/tmf-api/productOrderingManagement/v5"
 router = APIRouter(prefix=BASE)
@@ -165,7 +173,7 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
             ],
             "@type": "Product",
         }
-    )
+    ) | meta_body(row)
 
 
 @router.get("/product")
@@ -211,18 +219,19 @@ class ProductPatch(TmfModel):
     termination_date: AwareDatetime | None = None
 
 
-# What the order decides (or the server derives): never written through TMF637.
-PRODUCT_READ_ONLY = (
-    "status",
-    "terminationDate",
+# Derived by the server (from the orders, the catalog, the account): a POST or PATCH may
+# repeat them, never set them.
+SERVER_SET = (
     "creationDate",
     "orderDate",
     "productOrderItem",
     "productPrice",
     "productSpecification",
     "relatedParty",
-    "name",
 )
+# What the orders decide: not written through TMF637 (yet; docs/decisions/tmf-api.md,
+# "Following TMF", slice 9).
+ORDER_DECIDED = ("status", "terminationDate", "name")
 
 
 def _place(conn: psycopg.Connection, request: OrderRequest, *, now, today) -> Row:
@@ -284,22 +293,29 @@ def create_product(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
     (today if absent)."""
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Product")
-    data = parse(ProductCreate, body, read_only=PRODUCT_READ_ONLY)
+    uid = take_id(body)
+    server_set = take_server_set(body, (*SERVER_SET, "status"))
+    data = parse(ProductCreate, body, read_only=ORDER_DECIDED)
     now, today = clock.now(), clock.today()
     start = to_billing_date(data.start_date) if data.start_date else None
+    meta = meta_columns(data)
+    chosen = products.NewProduct(
+        id=uid, base_type=meta.get("base_type"), schema_location=meta.get("schema_location")
+    )
+    item = ItemRequest("1", "add", product_offering_id=data.product_offering.id, new_product=chosen)
     with tx() as conn:
+        claim_id(conn, "product", uid)
         order = _place(
             conn,
             OrderRequest(
-                billing_account_id=data.billing_account.id,
-                items=(ItemRequest("1", "add", product_offering_id=data.product_offering.id),),
-                requested_start=start,
+                billing_account_id=data.billing_account.id, items=(item,), requested_start=start
             ),
             now=now,
             today=today,
         )
-        (item,) = order["items"]
-        new = product_body(conn, products.get_product(conn, item["product_id"]), today)
+        (placed,) = order["items"]
+        new = product_body(conn, products.get_product(conn, placed["product_id"]), today)
+        check_server_set(server_set, new)
     return created(listing.select_fields(new, fields))
 
 
@@ -307,27 +323,41 @@ def create_product(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
 def patch_product(
     product_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
-    """terminationDate only: a delete order with that date (the product's last day is
-    the day before). Taking an end back is cancelProductOrder's job."""
+    """terminationDate: a delete order with that date (the product's last day is the day
+    before). Taking an end back is cancelProductOrder's job. Besides, only @baseType and
+    @schemaLocation change."""
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Product")
-    read_only = tuple(name for name in PRODUCT_READ_ONLY if name != "terminationDate")
+    server_set = take_server_set(body, SERVER_SET)
+    read_only = tuple(name for name in ORDER_DECIDED if name != "terminationDate")
     data = parse(
         ProductPatch, body, read_only=(*read_only, "billingAccount", "productOffering", "startDate")
     )
-    if "termination_date" not in data.model_fields_set:
-        raise bad_request("PATCH changes terminationDate only")
-    if data.termination_date is None:
+    ends = "termination_date" in data.model_fields_set
+    if not ends and not meta_columns(data) and not server_set:
+        raise bad_request("PATCH changes terminationDate, @baseType and @schemaLocation only")
+    if ends and data.termination_date is None:
         raise unprocessable(
             "terminationDate cannot be removed: cancel the order that set it (cancelProductOrder)"
         )
     now, today = clock.now(), clock.today()
     with tx() as conn:
         uid = parse_id("product", product_id)
-        ended = _end(
-            conn, uid, product_id, to_billing_date(data.termination_date), now=now, today=today
-        )
-        patched = product_body(conn, ended, today)
+        current = products.get_product(conn, uid)
+        if current is None:
+            raise not_found("product", product_id)
+        before = product_body(conn, current, today)
+        check_server_set(server_set, before)
+        if ends:
+            row = _end(
+                conn, uid, product_id, to_billing_date(data.termination_date), now=now, today=today
+            )
+            old = emit.before(conn, API, "product", lambda: product_body(conn, row, today))
+        else:
+            row, old = current, emit.before(conn, API, "product", lambda: before)
+        patched = product_body(conn, with_meta(conn, "product", row, data), today)
+        if meta_columns(data):
+            emit.changed(conn, API, "product", old, patched, at=now)
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 

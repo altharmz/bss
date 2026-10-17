@@ -24,13 +24,14 @@ def page(conn, table, **kwargs):
     return select_page(conn, table, **kwargs)
 
 
-def create(conn, table, data):
+def create(conn, table, data, new_id=None):
     return returning(
         conn,
-        sql.SQL("INSERT INTO {} (name, description) VALUES (%s,%s) RETURNING *").format(
-            sql.Identifier(table)
-        ),
-        (data.name, data.description),
+        sql.SQL(
+            "INSERT INTO {} (id, name, description)"
+            " VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s) RETURNING *"
+        ).format(sql.Identifier(table)),
+        (new_id, data.name, data.description),
     )
 
 

@@ -21,14 +21,18 @@ TMF620 importJob/exportJob: synchronous, finished on insert; documents as data: 
 | `error_log` | `text` | yes |  | Why the job failed, as text; set exactly when it failed. |
 | `creation_date` | `timestamp with time zone` | no |  | When the job was requested (application clock). |
 | `completion_date` | `timestamp with time zone` | no |  | When it finished; the same request, so equal or later. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Constraints
 
 | Name | Kind | Definition |
 |---|---|---|
+| `catalog_job_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `catalog_job_completed_after_created` | check | `CHECK ((completion_date >= creation_date))` |
 | `catalog_job_failed_has_log` | check | `CHECK (((status = 'Failed'::catalog_job_status) = (error_log IS NOT NULL)))` |
 | `catalog_job_query_on_export` | check | `CHECK (((kind = 'ExportJob'::catalog_job_kind) OR (query IS NULL)))` |
+| `catalog_job_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `catalog_job_pkey` | primary key | `PRIMARY KEY (id)` |
 
 ## Indexes

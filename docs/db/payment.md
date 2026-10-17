@@ -18,7 +18,11 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 | `amount` | `numeric(12,2)` | no |  | numeric(12,2), exact (never float); TMF676 totalAmount (= amount: no taxes); positive. |
 | `received_at` | `timestamp with time zone` | no |  | TMF676 paymentDate and statusDate: the injected clock at POST. |
 | `status` | `payment_status` (enum, see [README](README.md#enums)) | no |  | TMF676 status; always done (a received payment). |
-| `payment_method` | `text` | no |  | TMF676 paymentMethod: the one word stored (its name or @type). |
+| `payment_method` | `text` | no |  | The one-word label of the method (its name, else its @type) the UI shows. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
+| `payment_method_name` | `text` | yes |  | TMF676 paymentMethod.name as sent; null when only @type was sent. |
+| `payment_method_type` | `text` | yes |  | TMF676 paymentMethod.@type as sent; null when only name was sent. |
 
 ## Foreign keys
 
@@ -31,7 +35,12 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 | Name | Kind | Definition |
 |---|---|---|
 | `payment_amount_check` | check | `CHECK ((amount > (0)::numeric))` |
+| `payment_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `payment_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
+| `payment_method_named` | check | `CHECK (((payment_method_name IS NOT NULL) OR (payment_method_type IS NOT NULL)))` |
+| `payment_payment_method_name_check` | check | `CHECK ((length(payment_method_name) > 0))` |
+| `payment_payment_method_type_check` | check | `CHECK ((length(payment_method_type) > 0))` |
+| `payment_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `payment_pkey` | primary key | `PRIMARY KEY (id)` |
 | `payment_id_billing_account_id_key` | unique | `UNIQUE (id, billing_account_id)` |
 

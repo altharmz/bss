@@ -14,11 +14,15 @@ from app.api import listing
 from app.api.common import (
     TmfModel,
     check_type,
+    claim_id,
     columns,
     created,
+    meta_body,
     not_null,
     parse,
     parse_id,
+    take_id,
+    with_meta,
     without_nulls,
 )
 from app.api.deletes import delete_row, refuse_if_referenced
@@ -55,7 +59,7 @@ def party_body(row: Row) -> dict[str, Any]:
     else:
         body |= {"name": row["organization_name"]}
     body["@type"] = row["party_type"]
-    return without_nulls(body)
+    return without_nulls(body) | meta_body(row)
 
 
 def _get(conn: psycopg.Connection, party_type: str, resource: str, raw_id: str) -> Row:
@@ -138,12 +142,14 @@ def get_individual(party_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_individual(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, INDIVIDUAL_ATTRIBUTES)
     check_type(body, "Individual")
+    uid = take_id(body)
     data = parse(IndividualCreate, body)
     with tx() as conn:
+        claim_id(conn, "party", uid)
         row = parties.create_individual(
-            conn, given_name=data.given_name, family_name=data.family_name
+            conn, given_name=data.given_name, family_name=data.family_name, id=uid
         )
-        new = party_body(row)
+        new = party_body(with_meta(conn, "party", row, data))
         emit.created(conn, API, "individual", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
@@ -160,7 +166,7 @@ def patch_individual(
         current = _get(conn, "Individual", "individual", party_id)
         old = emit.before(conn, API, "individual", lambda: party_body(current))
         row = parties.update_party(conn, current["id"], columns(data))
-        new = party_body(row)
+        new = party_body(with_meta(conn, "party", row, data))
         emit.changed(conn, API, "individual", old, new, at=clock.now())
     return TmfJSONResponse(listing.select_fields(new, fields))
 
@@ -201,10 +207,12 @@ def create_organization(
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ORGANIZATION_ATTRIBUTES)
     check_type(body, "Organization")
+    uid = take_id(body)
     data = parse(OrganizationCreate, body)
     with tx() as conn:
-        row = parties.create_organization(conn, name=data.name)
-        new = party_body(row)
+        claim_id(conn, "party", uid)
+        row = parties.create_organization(conn, name=data.name, id=uid)
+        new = party_body(with_meta(conn, "party", row, data))
         emit.created(conn, API, "organization", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
@@ -222,7 +230,7 @@ def patch_organization(
         current = _get(conn, "Organization", "organization", party_id)
         old = emit.before(conn, API, "organization", lambda: party_body(current))
         row = parties.update_party(conn, current["id"], changes)
-        new = party_body(row)
+        new = party_body(with_meta(conn, "party", row, data))
         emit.changed(conn, API, "organization", old, new, at=clock.now())
     return TmfJSONResponse(listing.select_fields(new, fields))
 

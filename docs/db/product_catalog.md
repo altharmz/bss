@@ -19,12 +19,16 @@ TMF620 catalog organization resource.
 | `created_at` | `timestamp with time zone` | no | `now()` | Database insertion time; stable list ordering. |
 | `updated_at` | `timestamp with time zone` | no | `now()` | Database update time exposed as lastUpdate. |
 | `catalog_type` | `text` | yes |  | Optional catalogType label; this resource groups products. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Constraints
 
 | Name | Kind | Definition |
 |---|---|---|
+| `product_catalog_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `product_catalog_name_check` | check | `CHECK ((length(name) > 0))` |
+| `product_catalog_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `product_catalog_valid_for_check` | check | `CHECK (((valid_for IS NULL) OR ((NOT isempty(valid_for)) AND (NOT lower_inf(valid_for)) AND lower_inc(valid_for) AND (NOT upper_inc(valid_for)))))` |
 | `product_catalog_pkey` | primary key | `PRIMARY KEY (id)` |
 

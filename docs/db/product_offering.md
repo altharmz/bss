@@ -20,6 +20,8 @@ SID ProductOffering (TMF620 productOffering): a sellable offer built on one spec
 | `is_sellable` | `boolean` | no | `true` | TMF620 isSellable; ordering requires true. |
 | `valid_for` | `tstzrange` | no |  | TMF620 validFor as a half-open tstzrange [start, end); NULL upper = open-ended. An add order needs it to cover midnight (BILLING_TZ) of the start date. |
 | `code` | `text` | yes |  | Offering code, served as TMF620 externalIdentifier[{id, externalIdentifierType: offeringCode, owner: bss}]. Upper case, unique, set on create only. NULL = none. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Foreign keys
 
@@ -31,7 +33,9 @@ SID ProductOffering (TMF620 productOffering): a sellable offer built on one spec
 
 | Name | Kind | Definition |
 |---|---|---|
+| `product_offering_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `product_offering_code_format` | check | `CHECK ((code ~ '^[A-Z0-9][A-Z0-9_-]{0,31}$'::text))` |
+| `product_offering_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `product_offering_valid_for_check` | check | `CHECK (((NOT isempty(valid_for)) AND (NOT lower_inf(valid_for)) AND lower_inc(valid_for) AND (NOT upper_inc(valid_for))))` |
 | `product_offering_pkey` | primary key | `PRIMARY KEY (id)` |
 | `product_offering_code_key` | unique | `UNIQUE (code)` |

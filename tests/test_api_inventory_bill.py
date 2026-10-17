@@ -79,7 +79,7 @@ def test_product_filters(api, world, db_conn):
     assert api.get(f"{PRODUCT}?productOffering.id={world.offering['id']}").status_code == 400
 
 
-@pytest.mark.parametrize(("method", "path", "status"), [("POST", "", 400), ("PUT", "/x", 405)])
+@pytest.mark.parametrize(("method", "path", "status"), [("POST", "", 422), ("PUT", "/x", 405)])
 def test_a_product_status_is_never_written_directly(api, world, method, path, status):
     """Writes go through orders (tests/test_api_product_writes.py); status is theirs."""
     url = f"{PRODUCT}/{world.product['id']}" if path else PRODUCT

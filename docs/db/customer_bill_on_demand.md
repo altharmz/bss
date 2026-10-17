@@ -20,6 +20,8 @@ Durable TMF678 on-demand request consumed by the billing owner.
 | `state` | `customer_bill_on_demand_state_type` (enum, see [README](README.md#enums)) | no | `'inProgress'::customer_bill_on_demand_state_type` | TMF678 request state. |
 | `name` | `text` | yes |  | Optional friendly name. |
 | `description` | `text` | yes |  | Request description or rejection/error explanation. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Foreign keys
 
@@ -32,7 +34,9 @@ Durable TMF678 on-demand request consumed by the billing owner.
 
 | Name | Kind | Definition |
 |---|---|---|
+| `customer_bill_on_demand_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `customer_bill_on_demand_check` | check | `CHECK (((state = 'done'::customer_bill_on_demand_state_type) = (customer_bill_id IS NOT NULL)))` |
+| `customer_bill_on_demand_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `customer_bill_on_demand_pkey` | primary key | `PRIMARY KEY (id)` |
 
 ## Indexes

@@ -257,7 +257,7 @@ def _orders(db_conn) -> int:
         (lambda b: {k: v for k, v in b.items() if k != "billingAccount"}, 422),
         (lambda b: b | {"billingAccount": {"id": NIL}}, 422),
         (lambda b: b | {"note": [{"text": "please"}]}, 400),  # not stored: unknown
-        (lambda b: b | {"state": "completed"}, 400),
+        (lambda b: b | {"state": "acknowledged"}, 422),  # the server's: never set
         (lambda b: b | {"requestedStartDate": "2026-10-02T00:00:00"}, 422),
         (lambda b: _items(b, lambda i: i | {"productOffering": {"id": NIL}}), 422),
         (
@@ -277,7 +277,7 @@ def _orders(db_conn) -> int:
         "account missing",
         "unknown account",
         "unknown attribute",
-        "state is read-only",
+        "state is the server's",
         "date without offset",
         "unknown offering",
         "add without offering",

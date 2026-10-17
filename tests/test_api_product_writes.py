@@ -71,7 +71,10 @@ def test_a_post_the_order_would_reject_is_a_409_and_stores_nothing(api, shop):
 
 def test_post_validation(api, shop):
     offering, account = shop
-    assert api.post(PRODUCT, product_body(account, offering, status="active")).status_code == 400
+    # status is the order's: repeating it is fine, another value a 422 (nothing stored)
+    assert (
+        api.post(PRODUCT, product_body(account, offering, status="terminated")).status_code == 422
+    )
     assert api.post(PRODUCT, product_body(account, offering, colour="red")).status_code == 400
     assert api.post(PRODUCT, {"productOffering": {"id": offering["id"]}}).status_code == 422
     missing = product_body({"id": apidata.NIL}, offering)

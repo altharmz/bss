@@ -16,6 +16,8 @@ SID Customer (TMF629 customer): the role a party plays towards us. The party is 
 | `party_id` | `uuid` | no |  | TMF629 engagedParty (a PartyRef); fixed at creation. |
 | `status` | `customer_status` (enum, see [README](README.md#enums)) | no |  | Created, Active or Inactive (ours: a free string in TMF629). |
 | `name` | `text` | no |  |  |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Foreign keys
 
@@ -27,6 +29,8 @@ SID Customer (TMF629 customer): the role a party plays towards us. The party is 
 
 | Name | Kind | Definition |
 |---|---|---|
+| `customer_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
+| `customer_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `customer_pkey` | primary key | `PRIMARY KEY (id)` |
 
 ## Indexes

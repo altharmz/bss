@@ -1,6 +1,7 @@
 """TMF629 Customer Management v5: customer.
 
-A customer is the role a party plays towards us; `engagedParty` is fixed at creation.
+A customer is the role a party plays towards us. `engagedParty` changes only while the
+customer has no billing account: the accounts' financial accounts belong to that party.
 """
 
 from typing import Any, Literal
@@ -14,17 +15,23 @@ from app.api.common import (
     Ref,
     TmfModel,
     check_referred_type,
+    check_server_set,
     check_type,
+    claim_id,
     columns,
     created,
+    meta_body,
     not_null,
     parse,
     parse_id,
     ref,
+    take_id,
+    take_server_set,
+    with_meta,
 )
 from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
-from app.api.errors import not_found, unprocessable
+from app.api.errors import conflict, not_found, unprocessable
 from app.api.party import party_href, party_name
 from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
@@ -48,6 +55,11 @@ class CustomerCreate(TmfModel):
 class CustomerPatch(TmfModel):
     name: str | None = Field(default=None, min_length=1)
     status: CustomerStatus | None = None
+    engaged_party: Ref | None = None
+
+
+# Customer_FVO and Customer_MVO carry the identity too: accepted when unchanged.
+IDENTITY = ("id", "href")
 
 
 def customer_href(customer_id: Any) -> str:
@@ -80,6 +92,7 @@ def customer_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             for a in parties.accounts_of_customer(conn, row["id"])
         ],
         "@type": "Customer",
+        **meta_body(row),
     }
 
 
@@ -117,19 +130,27 @@ def get_customer(customer_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_customer(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Customer")
+    uid = take_id(body)
+    href = take_server_set(body, ("href",))
     data = parse(CustomerCreate, body)
     with tx() as conn:
-        # FOR KEY SHARE until commit: a concurrent delete of the party waits for this
-        party = parties.get_party(conn, data.engaged_party.id, "key share")
-        if party is None:
-            raise unprocessable(f"engagedParty {data.engaged_party.id} does not exist")
-        check_referred_type(data.engaged_party, party["party_type"], "engagedParty")
+        _engaged_party(conn, data.engaged_party)
+        claim_id(conn, "customer", uid)
         row = parties.create_customer(
-            conn, party_id=data.engaged_party.id, name=data.name, status=data.status
+            conn, party_id=data.engaged_party.id, name=data.name, status=data.status, id=uid
         )
-        new = customer_body(conn, row)
+        new = customer_body(conn, with_meta(conn, "customer", row, data))
+        check_server_set(href, new)
         emit.created(conn, API, "customer", new, at=clock.now())
     return created(listing.select_fields(new, fields))
+
+
+def _engaged_party(conn: psycopg.Connection, reference: Ref) -> None:
+    # FOR KEY SHARE until commit: a concurrent delete of the party waits for this
+    party = parties.get_party(conn, reference.id, "key share")
+    if party is None:
+        raise unprocessable(f"engagedParty {reference.id} does not exist")
+    check_referred_type(reference, party["party_type"], "engagedParty")
 
 
 @router.patch("/customer/{customer_id}")
@@ -138,16 +159,33 @@ def patch_customer(
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Customer")
-    data = parse(CustomerPatch, body, read_only=("engagedParty",))
-    not_null(data, "name", "status")
+    identity = take_server_set(body, IDENTITY)
+    data = parse(CustomerPatch, body)
+    not_null(data, "name", "status", "engaged_party")
     with tx() as conn:
         uid = parse_id("customer", customer_id)
-        current = parties.get_customer(conn, uid)
+        # FOR UPDATE: a billing account created meanwhile (it takes the customer FOR KEY
+        # SHARE) waits, so the engagedParty check below cannot miss it
+        current = parties.get_customer(conn, uid, "update")
         if current is None:
             raise not_found("customer", customer_id)
-        old = emit.before(conn, API, "customer", lambda: customer_body(conn, current))
-        row = parties.update_customer(conn, uid, columns(data))
-        patched = customer_body(conn, row)
+        before = customer_body(conn, current)
+        check_server_set(identity, before)
+        changes = columns(data, exclude=frozenset({"engaged_party"}))
+        if data.engaged_party is not None and data.engaged_party.id != current["party_id"]:
+            if parties.accounts_of_customer(conn, uid):
+                raise conflict(
+                    "engagedParty cannot change while the customer has billing accounts"
+                    " (their financial accounts belong to the party)"
+                )
+            _engaged_party(conn, data.engaged_party)
+            changes["party_id"] = data.engaged_party.id
+        elif data.engaged_party is not None:
+            party_type = before["engagedParty"]["@referredType"]
+            check_referred_type(data.engaged_party, party_type, "engagedParty")
+        old = emit.before(conn, API, "customer", lambda: before)
+        row = parties.update_customer(conn, uid, changes)
+        patched = customer_body(conn, with_meta(conn, "customer", row, data))
         emit.changed(conn, API, "customer", old, patched, at=clock.now(), state="status")
     return TmfJSONResponse(listing.select_fields(patched, fields))
 

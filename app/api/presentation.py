@@ -11,12 +11,16 @@ from app.api.common import (
     Ref,
     TmfModel,
     check_type,
+    claim_id,
     columns,
     created,
+    meta_body,
     not_null,
     parse,
     parse_id,
     ref,
+    take_id,
+    with_meta,
     without_nulls,
 )
 from app.api.deletes import delete_row, refuse_if_referenced
@@ -86,7 +90,7 @@ def resource_body(row, resource):
             "name": row["name"],
             "description": row["description"],
         }
-    )
+    ) | meta_body(row)
 
 
 def structure_body(conn, uid):
@@ -108,8 +112,10 @@ def structure_body(conn, uid):
     return body
 
 
-def save(conn, data, table, resource, uid=None, *, at):
+def save(conn, data, table, resource, uid=None, *, at, new_id=None):
+    """`uid`: the one to change; else a new one (`new_id`: chosen by the client)."""
     old = None
+    claim_id(conn, table, new_id)
     if uid:
         row = repo.get(conn, table, uid)
         if row is None:
@@ -122,11 +128,11 @@ def save(conn, data, table, resource, uid=None, *, at):
             row = (
                 repo.update(conn, table, uid, columns(data))
                 if uid
-                else repo.create(conn, table, data)
+                else repo.create(conn, table, data, new_id)
             )
     except UniqueViolation:
         raise conflict("presentation name already exists") from None
-    new = resource_body(row, resource)
+    new = resource_body(with_meta(conn, table, row, data), resource)
     if uid:
         emit.changed(conn, API, resource, old, new, at=at)
     else:
@@ -162,9 +168,10 @@ def create_bill_format(
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "BillFormat")
+    new_id = take_id(body)
     data = parse(FormatCreate, body)
     with tx() as conn:
-        new = save(conn, data, "bill_format", "billFormat", at=clock.now())
+        new = save(conn, data, "bill_format", "billFormat", at=clock.now(), new_id=new_id)
     return created(listing.select_fields(new, fields))
 
 
@@ -215,9 +222,17 @@ def get_bill_media(media_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_bill_media(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "BillPresentationMedia")
+    new_id = take_id(body)
     data = parse(MediaCreate, body)
     with tx() as conn:
-        new = save(conn, data, "bill_presentation_media", "billPresentationMedia", at=clock.now())
+        new = save(
+            conn,
+            data,
+            "bill_presentation_media",
+            "billPresentationMedia",
+            at=clock.now(),
+            new_id=new_id,
+        )
     return created(listing.select_fields(new, fields))
 
 

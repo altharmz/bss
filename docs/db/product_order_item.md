@@ -23,6 +23,7 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 | `quoted_price_name` | `text` | yes |  | Price name at ordering time; immutable quote, not today's catalog name. |
 | `quoted_amount` | `numeric(12,2)` | yes |  | Quoted full monthly fee (not the prorated first charge), exact cents. |
 | `quoted_currency` | `text` | yes |  | ISO currency of the monthly quote, the order account's currency. |
+| `position` | `integer` | no |  | Where the client put the item in productOrderItem[] (1 = first). |
 
 ## Foreign keys
 
@@ -41,6 +42,7 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 | `product_order_item_delete_has_product` | check | `CHECK (((action <> 'delete'::item_action_type) OR (product_id IS NOT NULL)))` |
 | `product_order_item_quote` | check | `CHECK ((((quoted_price_id IS NULL) AND (quoted_price_name IS NULL) AND (quoted_amount IS NULL) AND (quoted_currency IS NULL)) OR ((action = 'add'::item_action_type) AND (quoted_price_id IS NOT NULL) AND (quoted_price_name IS NOT NULL) AND (quoted_amount IS NOT NULL) AND (quoted_amount >= (0)::numeric) AND (quoted_currency IS NOT NULL) AND (quoted_currency ~ '^[A-Z]{3}$'::text))))` |
 | `product_order_item_pkey` | primary key | `PRIMARY KEY (id)` |
+| `product_order_item_position_unique` | unique | `UNIQUE (product_order_id, "position")` |
 | `product_order_item_product_order_id_item_id_key` | unique | `UNIQUE (product_order_id, item_id)` |
 
 ## Indexes
@@ -49,6 +51,7 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 |---|---|---|
 | `product_order_item_one_open_delete` | `CREATE UNIQUE INDEX product_order_item_one_open_delete ON product_order_item USING btree (product_id) WHERE ((action = 'delete'::item_action_type) AND (state <> ALL (ARRAY['completed'::product_order_item_state_type, 'cancelled'::product_order_item_state_type, 'rejected'::product_order_item_state_type, 'failed'::product_order_item_state_type])))` | no |
 | `product_order_item_pkey` | `CREATE UNIQUE INDEX product_order_item_pkey ON product_order_item USING btree (id)` | yes |
+| `product_order_item_position_unique` | `CREATE UNIQUE INDEX product_order_item_position_unique ON product_order_item USING btree (product_order_id, "position")` | yes |
 | `product_order_item_product_id_idx` | `CREATE INDEX product_order_item_product_id_idx ON product_order_item USING btree (product_id)` | no |
 | `product_order_item_product_order_id_item_id_key` | `CREATE UNIQUE INDEX product_order_item_product_order_id_item_id_key ON product_order_item USING btree (product_order_id, item_id)` | yes |
 

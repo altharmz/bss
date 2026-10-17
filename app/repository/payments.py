@@ -19,15 +19,31 @@ def insert_payment(
     received_at: datetime,
     payment_method: str,
     status: str = "done",
+    method_name: str | None = None,
+    method_type: str | None = None,
 ) -> Row:
+    """`payment_method` is the one-word label; `method_name`/`method_type` the TMF
+    paymentMethod's name and @type as sent (neither given: the label is the name)."""
+    if method_name is None and method_type is None:
+        method_name = payment_method
     return returning(
         conn,
         """
         INSERT INTO payment
-            (billing_account_id, currency, amount, received_at, payment_method, status)
-        VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
+            (billing_account_id, currency, amount, received_at, payment_method, status,
+             payment_method_name, payment_method_type)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
         """,
-        (billing_account_id, currency, money(amount), received_at, payment_method, status),
+        (
+            billing_account_id,
+            currency,
+            money(amount),
+            received_at,
+            payment_method,
+            status,
+            method_name,
+            method_type,
+        ),
     )
 
 

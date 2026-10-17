@@ -36,7 +36,7 @@ def test_payment_is_recorded_as_done(api, db_conn):
         "name": acc["name"],
         "@referredType": "BillingAccount",
     }
-    assert body["paymentMethod"] == {"name": "bankTransfer", "@type": "bankTransfer"}
+    assert body["paymentMethod"] == {"name": "bankTransfer"}  # as sent, no @type invented
     ((amount, currency, method, status, received_at),) = stored(db_conn)
     assert (amount, currency, method, status) == (Decimal("1500.50"), "RUB", "bankTransfer", "done")
     assert received_at == api.clock.now()
@@ -66,7 +66,12 @@ def test_payment_method_is_mandatory(api, db_conn):
     )
     assert api.post(PAYMENT, {**body, "paymentMethod": {}}).status_code == 422
     by_type = {**body, "paymentMethod": {"@type": "Cash"}}
-    assert api.post(PAYMENT, by_type).json()["paymentMethod"]["name"] == "Cash"
+    assert api.post(PAYMENT, by_type).json()["paymentMethod"] == {"@type": "Cash"}
+    both = {**body, "paymentMethod": {"name": "card", "@type": "CreditCard"}}
+    assert api.post(PAYMENT, both).json()["paymentMethod"] == {
+        "name": "card",
+        "@type": "CreditCard",
+    }
     unknown = {**body, "paymentMethod": {"name": "card", "isPreferred": True}}
     assert api.post(PAYMENT, unknown).status_code == 400
 

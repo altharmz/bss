@@ -22,6 +22,8 @@ TMF666 party and settlement accounts: records only, no ledger, never billed.
 | `credit_limit` | `numeric(12,2)` | yes |  | Optional informational creditLimit value; never enforced. |
 | `credit_limit_currency` | `character(3)` | yes |  | Currency of credit_limit; set exactly when it is. |
 | `financial_account_id` | `uuid` | yes |  | Optional TMF666 financialAccount with the same owner. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Foreign keys
 
@@ -35,10 +37,12 @@ TMF666 party and settlement accounts: records only, no ledger, never billed.
 | Name | Kind | Definition |
 |---|---|---|
 | `party_account_account_type_check` | check | `CHECK ((length(account_type) > 0))` |
+| `party_account_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `party_account_credit_limit_check` | check | `CHECK ((credit_limit >= (0)::numeric))` |
 | `party_account_credit_limit_currency_check` | check | `CHECK ((credit_limit_currency ~ '^[A-Z]{3}$'::text))` |
 | `party_account_credit_limit_has_currency` | check | `CHECK (((credit_limit IS NULL) = (credit_limit_currency IS NULL)))` |
 | `party_account_name_check` | check | `CHECK ((length(name) > 0))` |
+| `party_account_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `party_account_pkey` | primary key | `PRIMARY KEY (id)` |
 
 ## Indexes

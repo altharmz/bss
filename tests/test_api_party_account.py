@@ -143,7 +143,7 @@ def test_validation(api, resource, typ):
     ]:
         assert api.post(url, {"name": "x", "relatedParty": related}).status_code == status
     for extra, status in [
-        ({"accountBalance": []}, 400),
+        ({"accountBalance": []}, 422),  # the server's, and these accounts have none
         ({"billStructure": {}}, 400),
         ({"paymentStatus": "In Arrears"}, 400),
         ({"defaultPaymentMethod": {"id": "1"}}, 400),
@@ -166,8 +166,8 @@ def test_validation(api, resource, typ):
         ({"name": None}, 422),
         ({"state": None}, 422),
         ({"relatedParty": [owner(person)]}, 400),
-        ({"lastUpdate": "2026-01-01T00:00:00Z"}, 400),
-        ({"accountBalance": []}, 400),
+        ({"lastUpdate": "2026-01-01T00:00:00Z"}, 422),
+        ({"accountBalance": []}, 422),
         ({"contact": []}, 400),
     ]:
         assert api.patch(acc["href"], body).status_code == status, body

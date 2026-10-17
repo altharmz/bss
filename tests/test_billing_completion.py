@@ -257,7 +257,7 @@ def test_refund_and_preferences_invalid_requests_are_atomic(api):
     )
     assert (
         api.post(REFUND, payout_body(account, 20, refundDate="2026-12-01T00:00:00Z")).status_code
-        == 400
+        == 422  # the server's (now): another value rolls the refund back
     )
     assert api.get(REFUND).json() == []
     assert summary(api, account)["unallocatedCredit"]["value"] == 100

@@ -20,26 +20,31 @@ from app.repository._sql import (
 
 
 def create_individual(
-    conn: psycopg.Connection, *, family_name: str, given_name: str | None = None
+    conn: psycopg.Connection,
+    *,
+    family_name: str,
+    given_name: str | None = None,
+    id: UUID | None = None,
 ) -> Row:
+    """`id` None: a new one (a client may choose it)."""
     return returning(
         conn,
         """
-        INSERT INTO party (party_type, given_name, family_name)
-        VALUES ('Individual', %s, %s) RETURNING *
+        INSERT INTO party (id, party_type, given_name, family_name)
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), 'Individual', %s, %s) RETURNING *
         """,
-        (given_name, family_name),
+        (id, given_name, family_name),
     )
 
 
-def create_organization(conn: psycopg.Connection, *, name: str) -> Row:
+def create_organization(conn: psycopg.Connection, *, name: str, id: UUID | None = None) -> Row:
     return returning(
         conn,
         """
-        INSERT INTO party (party_type, organization_name)
-        VALUES ('Organization', %s) RETURNING *
+        INSERT INTO party (id, party_type, organization_name)
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), 'Organization', %s) RETURNING *
         """,
-        (name,),
+        (id, name),
     )
 
 
@@ -48,12 +53,18 @@ def get_party(conn: psycopg.Connection, party_id: UUID, lock: Lock = None) -> Ro
 
 
 def create_customer(
-    conn: psycopg.Connection, *, party_id: UUID, name: str, status: str = "Created"
+    conn: psycopg.Connection,
+    *,
+    party_id: UUID,
+    name: str,
+    status: str = "Created",
+    id: UUID | None = None,
 ) -> Row:
     return returning(
         conn,
-        "INSERT INTO customer (party_id, name, status) VALUES (%s, %s, %s) RETURNING *",
-        (party_id, name, status),
+        "INSERT INTO customer (id, party_id, name, status)"
+        " VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s) RETURNING *",
+        (id, party_id, name, status),
     )
 
 
@@ -71,6 +82,7 @@ def create_billing_account(
     opened_at: datetime,
     state: str = "Active",
     credit_limit: Decimal | None = None,
+    id: UUID | None = None,
 ) -> Row:
     """`opened_at` comes from the injected clock (not the database's now()): a billing run
     for D covers the accounts opened before 00:00 of D."""
@@ -78,10 +90,11 @@ def create_billing_account(
         conn,
         """
         INSERT INTO billing_account
-            (customer_id, name, state, currency, bill_cycle_day, credit_limit, opened_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING *
+            (id, customer_id, name, state, currency, bill_cycle_day, credit_limit, opened_at)
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s) RETURNING *
         """,
         (
+            id,
             customer_id,
             name,
             state,

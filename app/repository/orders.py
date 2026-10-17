@@ -41,28 +41,33 @@ def create_order(
     items: list[NewOrderItem],
     requested_start_date: date | None = None,
     state: str = "acknowledged",
+    id: UUID | None = None,
 ) -> Row:
-    """Insert an order and its items. Returns the order row with an `items` list."""
+    """Insert an order and its items, in the order given (`position`). Returns the order
+    row with an `items` list. `id` None: a new one (a client may choose it)."""
     order = returning(
         conn,
         """
-        INSERT INTO product_order (billing_account_id, state, order_date, requested_start_date)
-        VALUES (%s, %s, %s, %s) RETURNING *
+        INSERT INTO product_order
+            (id, billing_account_id, state, order_date, requested_start_date)
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s) RETURNING *
         """,
-        (billing_account_id, state, order_date, requested_start_date),
+        (id, billing_account_id, state, order_date, requested_start_date),
     )
     order["items"] = [
         returning(
             conn,
             """
             INSERT INTO product_order_item
-                (product_order_id, item_id, action, state, product_offering_id, product_id,
-                 quoted_price_id, quoted_price_name, quoted_amount, quoted_currency)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
+                (product_order_id, item_id, position, action, state, product_offering_id,
+                 product_id, quoted_price_id, quoted_price_name, quoted_amount,
+                 quoted_currency)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
             """,
             (
                 order["id"],
                 item.item_id,
+                position,
                 item.action,
                 item.state,
                 item.product_offering_id,
@@ -73,7 +78,7 @@ def create_order(
                 item.quoted_currency,
             ),
         )
-        for item in items
+        for position, item in enumerate(items, start=1)
     ]
     return order
 
@@ -83,7 +88,7 @@ def get_order(conn: psycopg.Connection, order_id: UUID) -> Row | None:
     if order is not None:
         order["items"] = fetch_all(
             conn,
-            "SELECT * FROM product_order_item WHERE product_order_id = %s ORDER BY item_id",
+            "SELECT * FROM product_order_item WHERE product_order_id = %s ORDER BY position",
             (order_id,),
         )
     return order
@@ -151,15 +156,17 @@ def insert_cancellation(
     at: datetime,
     requested: datetime | None,
     reason: str | None,
+    id: UUID | None = None,
 ) -> Row:
     return returning(
         conn,
         """
         INSERT INTO cancel_product_order
-            (product_order_id, creation_date, requested_cancellation_date, cancellation_reason)
-        VALUES (%s, %s, %s, %s) RETURNING *
+            (id, product_order_id, creation_date, requested_cancellation_date,
+             cancellation_reason)
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s) RETURNING *
         """,
-        (order_id, at, requested, reason),
+        (id, order_id, at, requested, reason),
     )
 
 
@@ -195,7 +202,7 @@ def list_orders(
 def items_of(conn: psycopg.Connection, order_id: UUID) -> list[Row]:
     return fetch_all(
         conn,
-        "SELECT * FROM product_order_item WHERE product_order_id = %s ORDER BY item_id",
+        "SELECT * FROM product_order_item WHERE product_order_id = %s ORDER BY position",
         (order_id,),
     )
 

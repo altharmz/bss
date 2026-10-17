@@ -15,13 +15,17 @@ TMF666 bill presentation configuration.
 | `updated_at` | `timestamp with time zone` | no | `now()` | Database update time. |
 | `name` | `text` | no |  | Unique presentation name. |
 | `description` | `text` | yes |  | Optional description. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Constraints
 
 | Name | Kind | Definition |
 |---|---|---|
+| `bill_format_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `bill_format_name_check` | check | `CHECK ((length(name) > 0))` |
 | `bill_format_name_check1` | check | `CHECK ((name = ANY (ARRAY['JSON detailed'::text, 'JSON summary'::text])))` |
+| `bill_format_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `bill_format_pkey` | primary key | `PRIMARY KEY (id)` |
 | `bill_format_name_key` | unique | `UNIQUE (name)` |
 

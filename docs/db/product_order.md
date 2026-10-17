@@ -24,6 +24,8 @@ SID ProductOrder (TMF622 productOrder): the only way to create or terminate prod
 | `category` | `text` | yes |  | TMF622 category, e.g. residential or enterprise; optional, free text. |
 | `priority` | `text` | yes |  | TMF622 priority: 0 (highest) to 4 (lowest); optional. |
 | `external_id` | `jsonb` | no | `'[]'::jsonb` | TMF622 externalId[]: the order's identifiers in other systems (id, owner, type). |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Foreign keys
 
@@ -35,6 +37,7 @@ SID ProductOrder (TMF622 productOrder): the only way to create or terminate prod
 
 | Name | Kind | Definition |
 |---|---|---|
+| `product_order_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `product_order_cancellation_reason_check` | check | `CHECK ((length(cancellation_reason) > 0))` |
 | `product_order_cancelled_has_date` | check | `CHECK (((state = 'cancelled'::product_order_state_type) = (cancellation_date IS NOT NULL)))` |
 | `product_order_category_check` | check | `CHECK ((length(category) > 0))` |
@@ -43,6 +46,7 @@ SID ProductOrder (TMF622 productOrder): the only way to create or terminate prod
 | `product_order_external_id_check` | check | `CHECK ((jsonb_typeof(external_id) = 'array'::text))` |
 | `product_order_priority_check` | check | `CHECK ((priority = ANY (ARRAY['0'::text, '1'::text, '2'::text, '3'::text, '4'::text])))` |
 | `product_order_reason_when_cancelled` | check | `CHECK (((cancellation_reason IS NULL) OR (cancellation_date IS NOT NULL)))` |
+| `product_order_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `product_order_pkey` | primary key | `PRIMARY KEY (id)` |
 
 ## Indexes

@@ -3,15 +3,12 @@
 **Following TMF (2026-10-17).** Rule: what the vendored specs define is implemented, the
 rest skipped ([the decision](decisions/tmf-api.md#following-tmf-2026-10-17)). The
 attribute-level gaps are no longer tracked in this file: **`tests/tmf-gaps.txt` is the
-exact, test-locked list** (831 lines on 2026-10-17), produced by the probe in
-`tests/tmf_gaps.py`. Sections 3 and 5 below are superseded by it. What it cannot probe,
-and is still open:
+exact, test-locked list** (831 lines on 2026-10-17, 705 after slice 1), produced by the
+probe in `tests/tmf_gaps.py`. Sections 3 and 5 below are superseded by it. C3, C5, C7,
+C8, the client-chosen `id` and `@baseType`/`@schemaLocation` are closed
+([slice 1](decisions/tmf-api.md#nothing-dropped-or-rewritten-2026-10-17)). What the probe
+cannot see, and is still open:
 
-- `paymentMethod.@type` of a payment rewritten to the method's name (C5; refunds keep
-  both).
-- Order items returned in text order of their ids, not as sent (C7).
-- Item `billingAccount` checked, never stored or returned (C8).
-- A client-supplied `id` on POST (`Addressable_FVO` has one) is a 400.
 - States never reached (section 4): order item actions `modify`/`noChange`; order
   `held`, `pending`, `failed`, `partial`, `draft`, `inProgress.accepted`,
   `assessingCancellation`, `pendingCancellation`; product `pendingActive`, `suspended`,

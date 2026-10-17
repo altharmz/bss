@@ -28,10 +28,13 @@ from app.api.common import (
     TmfModel,
     check_type,
     created,
+    meta_body,
     money,
     parse,
     parse_id,
     utc,
+    with_meta,
+    without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
@@ -77,7 +80,7 @@ class PaymentItem(TmfModel):
 
 
 class PaymentMethod(TmfModel):
-    """We keep one word about how the money arrived: the method's name, or its @type."""
+    """How the money arrived: the method's name and @type, each kept as sent."""
 
     name: str | None = Field(default=None, min_length=1)
 
@@ -125,9 +128,12 @@ def payment_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         },
         "amount": amount,
         "totalAmount": amount,
-        "paymentMethod": {"name": row["payment_method"], "@type": row["payment_method"]},
+        "paymentMethod": without_nulls(
+            {"name": row["payment_method_name"], "@type": row["payment_method_type"]}
+        ),
         **_items(conn, row),
         "@type": "Payment",
+        **meta_body(row),
     }
 
 
@@ -231,11 +237,14 @@ def create_payment(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
                 currency=data.total_amount.unit,
                 received_at=now,
                 payment_method=data.payment_method.name or data.payment_method.at_type,
+                method_name=data.payment_method.name,
+                method_type=data.payment_method.at_type,
             )
         except pg_errors.ForeignKeyViolation:
             # Backstop for the check above: the composite FK (account, currency) is what
             # actually guarantees one currency per account.
             raise conflict("the payment's currency does not match the account's") from None
+        row = with_meta(conn, "payment", row, data)
         _settle(conn, account["id"], row, data, now)
         new = payment_body(conn, row)
         emit.created(conn, "TMF676", "payment", new, at=now)

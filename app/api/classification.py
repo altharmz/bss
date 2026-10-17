@@ -19,15 +19,21 @@ from app.api.common import (
     Ref,
     TimePeriod,
     TmfModel,
+    check_server_set,
     check_type,
+    claim_id,
     columns,
     created,
+    meta_body,
     not_null,
     parse,
     parse_id,
     ref,
+    take_id,
+    take_server_set,
     time_period,
     utc,
+    with_meta,
     without_nulls,
 )
 from app.api.deletes import delete_row, refuse_if_referenced
@@ -110,7 +116,7 @@ def organization_body(conn: psycopg.Connection, row: Row, category: bool) -> dic
             "validFor": time_period(row["valid_for"]) if row["valid_for"] is not None else None,
             "lastUpdate": utc(row["updated_at"]),
         }
-    )
+    ) | meta_body(row)
     if category:
         body["isRoot"] = row["parent_id"] is None
         if row["parent_id"] is not None:
@@ -205,6 +211,7 @@ def save(
     if not current and new_id is not None:
         values["id"] = new_id
     row = repo.update(conn, table, uid, values) if current else repo.create(conn, table, values)
+    row = with_meta(conn, table, row, data)
     if ids is not None:
         repo.replace(conn, "offering" if category else "catalog", row["id"], ids, reverse=category)
     return organization_body(conn, row, category)
@@ -243,20 +250,26 @@ def _resource(category: bool) -> tuple[str, str]:
     return ("category", "category") if category else ("productCatalog", "product_catalog")
 
 
-def _created(conn: psycopg.Connection, data, category: bool, at) -> dict[str, Any]:
-    new = save(conn, data, category)
+def _created(
+    conn: psycopg.Connection, data, category: bool, at, new_id: UUID | None, server_set
+) -> dict[str, Any]:
+    claim_id(conn, _resource(category)[1], new_id)
+    new = save(conn, data, category, new_id=new_id)
+    check_server_set(server_set, new)
     emit.created(conn, API, _resource(category)[0], new, at=at)
     return new
 
 
-def _patched(conn: psycopg.Connection, data, category: bool, uid: UUID, at) -> dict[str, Any]:
+def _patched(
+    conn: psycopg.Connection, data, category: bool, uid: UUID, at, server_set
+) -> dict[str, Any]:
     resource, table = _resource(category)
     current = repo.get(conn, table, uid)
-    old = (
-        None
-        if current is None  # save answers the 404
-        else emit.before(conn, API, resource, lambda: organization_body(conn, current, category))
-    )
+    old = None
+    if current is not None:  # else save answers the 404
+        before = organization_body(conn, current, category)
+        check_server_set(server_set, before)
+        old = emit.before(conn, API, resource, lambda: before)
     new = save(conn, data, category, uid)
     emit.changed(conn, API, resource, old, new, at=at, state="lifecycleStatus")
     return new
@@ -266,9 +279,11 @@ def _patched(conn: psycopg.Connection, data, category: bool, uid: UUID, at) -> d
 def create_category(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, CATEGORY_ATTRIBUTES)
     check_type(body, "Category")
-    data = parse(CategoryCreate, body, read_only=("subCategory",))
+    uid = take_id(body)
+    server_set = take_server_set(body, ("subCategory",))
+    data = parse(CategoryCreate, body)
     with tx() as conn:
-        new = _created(conn, data, True, clock.now())
+        new = _created(conn, data, True, clock.now(), uid, server_set)
     return created(listing.select_fields(new, fields))
 
 
@@ -278,10 +293,11 @@ def patch_category(
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, CATEGORY_ATTRIBUTES)
     check_type(body, "Category")
-    data = parse(CategoryPatch, body, read_only=("lastUpdate", "subCategory"))
+    server_set = take_server_set(body, ("lastUpdate", "subCategory"))
+    data = parse(CategoryPatch, body)
     uid = parse_id("category", category_id)
     with tx() as conn:
-        patched = _patched(conn, data, True, uid, clock.now())
+        patched = _patched(conn, data, True, uid, clock.now(), server_set)
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
@@ -318,9 +334,10 @@ def get_catalog(catalog_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_catalog(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, CATALOG_ATTRIBUTES)
     check_type(body, "ProductCatalog")
+    uid = take_id(body)
     data = parse(CatalogCreate, body)
     with tx() as conn:
-        new = _created(conn, data, False, clock.now())
+        new = _created(conn, data, False, clock.now(), uid, {})
     return created(listing.select_fields(new, fields))
 
 
@@ -330,10 +347,11 @@ def patch_catalog(
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, CATALOG_ATTRIBUTES)
     check_type(body, "ProductCatalog")
-    data = parse(CatalogPatch, body, read_only=("lastUpdate",))
+    server_set = take_server_set(body, ("lastUpdate",))
+    data = parse(CatalogPatch, body)
     uid = parse_id("productCatalog", catalog_id)
     with tx() as conn:
-        patched = _patched(conn, data, False, uid, clock.now())
+        patched = _patched(conn, data, False, uid, clock.now(), server_set)
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 

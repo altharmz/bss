@@ -44,6 +44,7 @@ class CancelRequest:
     order_id: UUID
     requested: datetime | None = None
     reason: str | None = None
+    id: UUID | None = None  # of the cancellation; None: a new one (a client may choose it)
 
 
 def _item_problem(
@@ -108,5 +109,10 @@ def cancel_order(
     order_transition(order["state"], "cancelled")
     orders.set_cancelled(conn, order["id"], at=now, reason=request.reason)
     return orders.insert_cancellation(
-        conn, order_id=order["id"], at=now, requested=request.requested, reason=request.reason
+        conn,
+        order_id=order["id"],
+        at=now,
+        requested=request.requested,
+        reason=request.reason,
+        id=request.id,
     )

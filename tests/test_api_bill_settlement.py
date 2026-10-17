@@ -289,12 +289,14 @@ def test_a_held_partly_paid_bill_is_released_as_partially_paid(api, db_conn, off
     [
         ('{"state": "validated"}', "application/merge-patch+json", 409),
         ('{"state": "unknown"}', "application/merge-patch+json", 422),
-        ('{"amountDue": {"unit": "RUB", "value": 1}}', "application/merge-patch+json", 400),
-        ('{"billCycle": {"id": "x"}}', "application/merge-patch+json", 400),
+        # the run's attributes: repeated, never changed (422 for another value)
+        ('{"amountDue": {"unit": "RUB", "value": 1}}', "application/merge-patch+json", 422),
+        ('{"billCycle": {"id": "x"}}', "application/merge-patch+json", 422),
         ('{"state": "onHold", "colour": 1}', "application/merge-patch+json", 400),
         ('{"state": "onHold", "@type": "Product"}', "application/merge-patch+json", 400),
         ('{"state": "onHold"}', "application/json", 415),
-        ("{}", "application/merge-patch+json", 422),
+        ('{"state": null}', "application/merge-patch+json", 422),
+        ("{}", "application/merge-patch+json", 200),  # an empty merge patch changes nothing
     ],
 )
 def test_patch_takes_the_state_only(api, db_conn, offering, body, content_type, status):

@@ -20,6 +20,8 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `termination_date` | `date` | yes |  | TMF637 terminationDate, exclusive: the first day no longer billed. NULL = open-ended. Immutable once set (a product is deleted once). |
 | `created_by_item_id` | `uuid` | no |  | The add order item that created the product (TMF637 productOrderItem, role creation). |
 | `terminated_by_item_id` | `uuid` | yes |  | The delete order item that terminated or cancelled the product (role termination); NULL while open. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Foreign keys
 
@@ -34,7 +36,9 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 
 | Name | Kind | Definition |
 |---|---|---|
+| `product_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `product_check` | check | `CHECK ((termination_date >= start_date))` |
+| `product_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `product_pkey` | primary key | `PRIMARY KEY (id)` |
 | `product_created_by_item_id_key` | unique | `UNIQUE (created_by_item_id)` |
 | `product_id_billing_account_id_key` | unique | `UNIQUE (id, billing_account_id)` |

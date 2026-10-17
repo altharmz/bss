@@ -54,7 +54,7 @@ def test_patch_changes_and_removes_them_only(api, placed):
 @pytest.mark.parametrize(
     "body,status",
     [
-        ({"state": "cancelled"}, 400),
+        ({"state": "cancelled"}, 422),  # the server's: repeated, never set
         ({"productOrderItem": []}, 400),
         ({"requestedStartDate": "2026-12-01T00:00:00Z"}, 400),
         ({"billingAccount": {"id": apidata.NIL}}, 400),

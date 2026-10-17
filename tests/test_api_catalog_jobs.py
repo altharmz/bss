@@ -238,7 +238,8 @@ def test_request_validation(api):
     for body, status in [
         ({"@type": "ImportJob"}, 422),  # url is required
         ({"@type": "ExportJob", "url": "x"}, 400),  # wrong @type for the resource
-        ({"@type": "ImportJob", "url": _data_url({}), "status": "Succeeded"}, 400),
+        # status is the server's: this import fails, so "Succeeded" is not its value
+        ({"@type": "ImportJob", "url": _data_url({}), "status": "Succeeded"}, 422),
         ({"@type": "ImportJob", "url": _data_url({}), "path": "/elsewhere"}, 422),
         ({"@type": "ImportJob", "url": _data_url({}), "contentType": "text/csv"}, 422),
     ]:
@@ -247,7 +248,7 @@ def test_request_validation(api):
         ({"url": "https://example.org/out.json"}, 422),
         ({"query": "name=Home"}, 422),
         ({"query": f"productCatalog.id={NIL}"}, 422),
-        ({"errorLog": "x"}, 400),
+        ({"errorLog": "x"}, 422),  # the server's, and a successful export has none
         ({"unknown": 1}, 400),
     ]:
         assert api.post(EXPORT, {"@type": "ExportJob", **body}).status_code == status, body

@@ -16,11 +16,15 @@ SID ProductSpecification (TMF620 productSpecification): what a product is, indep
 | `name` | `text` | no |  |  |
 | `description` | `text` | yes |  |  |
 | `lifecycle_status` | `lifecycle_status` (enum, see [README](README.md#enums)) | no |  | TMF620 lifecycleStatus: In Design, Active or Retired (ours). |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Constraints
 
 | Name | Kind | Definition |
 |---|---|---|
+| `product_specification_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
+| `product_specification_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `product_specification_pkey` | primary key | `PRIMARY KEY (id)` |
 
 ## Indexes

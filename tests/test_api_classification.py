@@ -92,7 +92,7 @@ def test_organization_validation_fields_and_lifecycle(api, path, typ, links):
     for body, status in [
         ({"name": None}, 422),
         ({links: None}, 422),
-        ({"lastUpdate": "x"}, 400),
+        ({"lastUpdate": "x"}, 422),  # the server's: repeated, never set
         ({"unknown": 1}, 400),
     ]:
         assert api.patch(href, body).status_code == status
@@ -129,7 +129,8 @@ def test_duplicate_and_wrong_type_references_are_atomic(api):
             == 422
         )
     assert api.post(CATEGORY, {"name": "x", "parent": {"id": NIL}}).status_code == 422
-    assert api.post(CATEGORY, {"name": "x", "subCategory": []}).status_code == 400
+    # subCategory is derived from the children: a new category has none
+    assert api.post(CATEGORY, {"name": "x", "subCategory": [{"id": NIL}]}).status_code == 422
     assert api.post(CATEGORY, {"name": "x", "isRoot": False}).status_code == 422
     assert len(api.get(CATEGORY).json()) == 1
     assert api.get(CATALOG).json() == []

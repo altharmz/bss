@@ -20,14 +20,17 @@ from app.api import listing
 from app.api.account import account_ref
 from app.api.common import (
     TmfModel,
+    check_server_set,
     check_type,
     date_period,
     from_billing_date,
     money,
+    not_null,
     operator_of,
     parse,
     parse_id,
     ref,
+    take_server_set,
     to_billing_date,
     utc,
     without_nulls,
@@ -86,7 +89,7 @@ BillState = Literal["new", "onHold", "validated", "sent", "settled", "partiallyP
 
 
 class BillPatch(TmfModel):
-    state: BillState
+    state: BillState | None = None
 
 
 RATE_ATTRIBUTES = (
@@ -230,12 +233,18 @@ def patch_bill(
     with the reason. A release settles the account: credit may have waited for the bill."""
     fields = listing.retrieve_fields(request, BILL_ATTRIBUTES)
     check_type(body, "CustomerBill")
-    data = parse(BillPatch, body, read_only=BILL_READ_ONLY)
+    # every attribute but state is the billing run's: repeated, never changed
+    server_set = take_server_set(body, BILL_READ_ONLY)
+    data = parse(BillPatch, body)
+    not_null(data, "state")
     with tx() as conn:
         uid = parse_id("customerBill", bill_id)
         row = billing.get_bill(conn, uid)
         if row is None:
             raise not_found("customerBill", bill_id)
+        check_server_set(server_set, bill_body(conn, row))
+        if data.state is None:
+            return TmfJSONResponse(listing.select_fields(bill_body(conn, row), fields))
         account = billing.load_account(conn, row["billing_account_id"])  # lock order
         row = billing.lock_bill(conn, uid)
         assert row is not None

@@ -17,13 +17,17 @@ SID Party (TMF632 individual / organization): a person or an organization, told 
 | `given_name` | `text` | yes |  | TMF632 Individual.givenName. |
 | `family_name` | `text` | yes |  | TMF632 Individual.familyName; required for an Individual. |
 | `organization_name` | `text` | yes |  | TMF632 Organization.name; required for an Organization. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Constraints
 
 | Name | Kind | Definition |
 |---|---|---|
+| `party_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `party_individual_has_family_name` | check | `CHECK (((party_type <> 'Individual'::party_type) OR (family_name IS NOT NULL)))` |
 | `party_organization_has_name` | check | `CHECK (((party_type <> 'Organization'::party_type) OR (organization_name IS NOT NULL)))` |
+| `party_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `party_pkey` | primary key | `PRIMARY KEY (id)` |
 
 ## Indexes

@@ -97,8 +97,12 @@ def test_customer_validation(api):
     assert api.post(CUSTOMER, {**body, "creditProfile": []}).status_code == 400
     href = apidata.customer(api, person)["href"]
     other = apidata.individual(api, "Anna", "Petrova")
-    assert api.patch(href, {"engagedParty": {"id": other["id"]}}).status_code == 400
+    # without billing accounts the engaged party may change (tests/test_api_tmf_meta.py)
+    assert api.patch(href, {"engagedParty": {"id": NIL}}).status_code == 422
+    assert api.patch(href, {"engagedParty": None}).status_code == 422
     assert api.patch(href, {"status": None}).status_code == 422
+    assert api.get(href).json()["engagedParty"]["id"] == person["id"]
+    assert other["id"] != person["id"]
     assert len(api.get(CUSTOMER).json()) == 1
 
 
@@ -192,7 +196,7 @@ def test_balance_is_payments_minus_charges_positive_means_credit(api):
         ({"currency": None}, 422),
         ({"state": "Open"}, 422),
         ({"relatedParty": []}, 422),
-        ({"accountBalance": []}, 400),
+        ({"accountBalance": []}, 422),  # the server's: a new account has a zero balance
         ({"paymentStatus": "due"}, 400),  # a TMF666 attribute we do not support
     ],
 )
@@ -266,10 +270,17 @@ def test_billing_account_patch(api):
         assert response.status_code == 409, day
         assert "billCycleDay cannot be changed yet" in response.json()["message"]
     assert api.get(acc["href"]).json()["billCycleDay"] == 1
-    for read_only in ("currency", "accountBalance", "relatedParty", "lastUpdate"):
+    for read_only in ("currency", "relatedParty"):
         response = api.patch(acc["href"], {read_only: "x"})
         assert response.status_code == 400, read_only
         assert f"{read_only} is read-only" in response.json()["message"]
+    for server_set in ("accountBalance", "lastUpdate"):  # repeated, never set
+        response = api.patch(acc["href"], {server_set: "x"})
+        assert response.status_code == 422, server_set
+        assert f"{server_set} is set by the server" in response.json()["message"]
+    current = api.get(acc["href"]).json()
+    repeated = {k: current[k] for k in ("accountBalance", "lastUpdate")}
+    assert api.patch(acc["href"], repeated).json() == current
     assert api.patch(acc["href"], {"@type": "BillingAccount", "name": "B"}).status_code == 200
     assert api.patch(acc["href"], {"@type": "PartyAccount"}).status_code == 400
     assert api.get(acc["href"]).json()["currency"] == "RUB"

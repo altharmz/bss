@@ -635,3 +635,58 @@ def test_0008_preserves_legacy_orders_without_inventing_quotes(temp_db_url):
             " AND attname LIKE 'quoted_%' AND NOT attisdropped"
         ).fetchone() == (0,)
     command.upgrade(cfg, "0008")
+
+
+def test_0021_meta_payment_method_and_item_position(temp_db_url):
+    """Existing payments answer what they answered (the one word as name and @type);
+    existing items keep the order they were listed in (item_id as text); the meta
+    columns refuse an empty value; downgrading to 0020 keeps every row."""
+    from tests import factories
+
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0020")
+    with psycopg.connect(temp_db_url) as conn:
+        account = factories.account(conn)
+        conn.execute(
+            "INSERT INTO payment (billing_account_id, currency, amount, received_at,"
+            " payment_method, status) VALUES (%s, 'RUB', 10, %s, 'cash', 'done')",
+            (account["id"], factories.NOW),
+        )
+        order_id = conn.execute(
+            "INSERT INTO product_order (billing_account_id, state, order_date)"
+            " VALUES (%s, 'rejected', %s) RETURNING id",
+            (account["id"], factories.NOW),
+        ).fetchone()[0]
+        for item_id in ("2", "10", "1"):
+            conn.execute(
+                "INSERT INTO product_order_item (product_order_id, item_id, action, state)"
+                " VALUES (%s, %s, 'modify', 'rejected')",
+                (order_id, item_id),
+            )
+    command.upgrade(cfg, "0021")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT payment_method_name, payment_method_type FROM payment"
+        ).fetchone() == ("cash", "cash")
+        positions = conn.execute(
+            "SELECT item_id FROM product_order_item ORDER BY position"
+        ).fetchall()
+        assert [row[0] for row in positions] == ["1", "10", "2"]
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute(
+                "UPDATE payment SET payment_method_name = NULL, payment_method_type = NULL"
+            )
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE party SET base_type = ''")
+        with pytest.raises(psycopg.errors.UniqueViolation), conn.transaction():
+            conn.execute("UPDATE product_order_item SET position = 1")
+    command.downgrade(cfg, "0020")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT count(*) FROM product_order_item").fetchone() == (3,)
+        assert conn.execute("SELECT payment_method FROM payment").fetchone() == ("cash",)
+        assert conn.execute(
+            "SELECT count(*) FROM pg_attribute a JOIN pg_class c ON c.oid = a.attrelid"
+            " WHERE a.attname = 'base_type' AND NOT a.attisdropped"
+            " AND c.relnamespace = 'public'::regnamespace"
+        ).fetchone() == (0,)
+    command.upgrade(cfg, "0021")

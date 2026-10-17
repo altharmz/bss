@@ -36,15 +36,21 @@ from app.api.common import (
     CustomerRef,
     Money,
     TmfModel,
+    check_server_set,
     check_type,
+    claim_id,
     columns,
     created,
+    meta_body,
     money,
     not_null,
     parse,
     parse_id,
     ref,
+    take_id,
+    take_server_set,
     utc,
+    with_meta,
     without_nulls,
 )
 from app.api.customer import customer_href
@@ -170,7 +176,7 @@ def stored_cycle_body(row: Row) -> dict[str, Any]:
             "frequency": row["frequency"],
             "billingDateShift": row["billing_date_shift"],
         }
-    )
+    ) | meta_body(row)
 
 
 def _stored_cycle(conn: psycopg.Connection, raw_id: str, lock=None) -> Row | None:
@@ -229,10 +235,13 @@ def create_cycle_specification(
     """Values billing cannot honour (another period, a date shift) are a 422."""
     fields = listing.retrieve_fields(request, CYCLE_ATTRIBUTES)
     check_type(body, "BillingCycleSpecification")
+    uid = take_id(body)
     data = parse(CycleCreate, body)
     with tx() as conn:
-        row = cycles.create(conn, {"name": data.name, "description": data.description})
-        new = stored_cycle_body(row)
+        claim_id(conn, cycles.TABLE, uid)
+        values = {"name": data.name, "description": data.description}
+        row = cycles.create(conn, values if uid is None else {"id": uid, **values})
+        new = stored_cycle_body(with_meta(conn, cycles.TABLE, row, data))
         emit.created(conn, API, "billingCycleSpecification", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
@@ -255,7 +264,8 @@ def patch_cycle_specification(
             conn, API, "billingCycleSpecification", lambda: stored_cycle_body(current)
         )
         changes = {k: v for k, v in columns(data).items() if k in ("name", "description")}
-        new = stored_cycle_body(cycles.update(conn, current["id"], changes))
+        row = cycles.update(conn, current["id"], changes)
+        new = stored_cycle_body(with_meta(conn, cycles.TABLE, row, data))
         emit.changed(conn, API, "billingCycleSpecification", old, new, at=clock.now())
     return TmfJSONResponse(listing.select_fields(new, fields))
 
@@ -433,7 +443,9 @@ def get_account(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, EXTENSION_TYPE, "BillingAccount")
-    data = parse(AccountCreate, body, read_only=("accountBalance",))
+    uid = take_id(body)
+    server_set = take_server_set(body, ("accountBalance",))
+    data = parse(AccountCreate, body)
     (party,) = data.related_party
     if party.role != CUSTOMER_ROLE:
         sent = "no role" if party.role is None else f"role {party.role!r}"
@@ -451,6 +463,7 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
             if data.financial_account is None
             else link_financial(conn, data.financial_account, customer["party_id"], None)
         )
+        claim_id(conn, "billing_account", uid)
         row = parties.create_billing_account(
             conn,
             customer_id=customer_id,
@@ -460,6 +473,7 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
             state=data.state,
             credit_limit=_credit_limit(data.credit_limit, data.currency),
             opened_at=clock.now(),
+            id=uid,
         )
         if financial_id is not None:
             row = parties.update_billing_account(
@@ -469,6 +483,7 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
             presentation.set_preferences(conn, row["id"], data.bill_structure)
             row = parties.get_billing_account(conn, row["id"])
         new = account_body(conn, row)
+        check_server_set(server_set, new)
         emit.created(conn, API, "billingAccount", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
@@ -485,11 +500,8 @@ def patch_account(
             "billCycleDay cannot be changed yet: how a change treats the current billing"
             " period is not decided"
         )
-    data = parse(
-        AccountPatch,
-        body,
-        read_only=("accountBalance", "currency", "relatedParty", "lastUpdate"),
-    )
+    server_set = take_server_set(body, ("accountBalance", "lastUpdate"))
+    data = parse(AccountPatch, body, read_only=("currency", "relatedParty"))
     not_null(data, "name", "state", "bill_structure")
     with tx() as conn:
         uid = parse_id("billingAccount", account_id)
@@ -498,7 +510,9 @@ def patch_account(
         current = parties.get_billing_account(conn, uid, "update")
         if current is None:
             raise not_found("billingAccount", account_id)
-        old = emit.before(conn, API, "billingAccount", lambda: account_body(conn, current))
+        before = account_body(conn, current)
+        check_server_set(server_set, before)
+        old = emit.before(conn, API, "billingAccount", lambda: before)
         changes = columns(
             data, exclude=frozenset({"credit_limit", "bill_structure", "financial_account"})
         )

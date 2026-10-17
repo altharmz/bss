@@ -12,12 +12,16 @@ from app.api.common import (
     Money,
     Ref,
     TmfModel,
+    check_server_set,
     check_type,
     created,
+    meta_body,
     money,
     parse,
     parse_id,
+    take_server_set,
     utc,
+    with_meta,
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, Tx
@@ -96,7 +100,7 @@ def refund_body(row: dict) -> dict[str, Any]:
                 {"name": row["method_name"], "@type": row["method_type"]}
             ),
         }
-    )
+    ) | meta_body(row)
 
 
 @router.get("/refund")
@@ -129,7 +133,8 @@ def get_refund(refund_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_refund(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Refund")
-    data = parse(RefundCreate, body, read_only=("status", "statusDate", "refundDate"))
+    server_set = take_server_set(body, ("status", "statusDate", "refundDate"))
+    data = parse(RefundCreate, body)
     with tx() as conn:
         # FOR UPDATE, as load_account below: a concurrent account delete went first or waits
         account_row = parties.get_billing_account(conn, data.account.id, "update")
@@ -169,6 +174,7 @@ def create_refund(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> 
             if left == 0:
                 break
         conn.execute("SET CONSTRAINTS credit_usage_bounds IMMEDIATE")
-        new = refund_body(row)
+        new = refund_body(with_meta(conn, "refund", row, data))
+        check_server_set(server_set, new)
         emit.created(conn, "TMF676", "refund", new, at=now)
     return created(listing.select_fields(new, fields))

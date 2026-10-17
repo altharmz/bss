@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0020**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0021**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -168,6 +168,8 @@ erDiagram
     text given_name
     text family_name
     text organization_name
+    text base_type
+    text schema_location
   }
   customer {
     uuid id PK
@@ -176,6 +178,8 @@ erDiagram
     uuid party_id FK
     customer_status status
     text name
+    text base_type
+    text schema_location
   }
   billing_account {
     uuid id PK
@@ -203,6 +207,8 @@ erDiagram
     account_state state
     numeric credit_limit
     char credit_limit_currency
+    text base_type
+    text schema_location
   }
   party_account {
     uuid id PK
@@ -217,6 +223,8 @@ erDiagram
     numeric credit_limit
     char credit_limit_currency
     uuid financial_account_id FK
+    text base_type
+    text schema_location
   }
   bill_format {
     uuid id PK
@@ -247,6 +255,8 @@ erDiagram
     text name
     text description
     lifecycle_status lifecycle_status
+    text base_type
+    text schema_location
   }
   product_offering {
     uuid id PK
@@ -259,6 +269,8 @@ erDiagram
     boolean is_sellable
     tstzrange valid_for
     text code
+    text base_type
+    text schema_location
   }
   product_offering_price {
     uuid id PK
@@ -273,6 +285,8 @@ erDiagram
     char currency
     tstzrange valid_for
     lifecycle_status lifecycle_status
+    text base_type
+    text schema_location
   }
   category {
     uuid id PK
@@ -284,6 +298,8 @@ erDiagram
     timestamptz created_at
     timestamptz updated_at
     uuid parent_id FK
+    text base_type
+    text schema_location
   }
   product_catalog {
     uuid id PK
@@ -295,6 +311,8 @@ erDiagram
     timestamptz created_at
     timestamptz updated_at
     text catalog_type
+    text base_type
+    text schema_location
   }
   catalog_category {
     uuid catalog_id PK,FK
@@ -318,6 +336,8 @@ erDiagram
     text error_log
     timestamptz creation_date
     timestamptz completion_date
+    text base_type
+    text schema_location
   }
   category |o--o{ category : "parent_id"
   category ||--o{ catalog_category : "category_id"
@@ -347,6 +367,8 @@ erDiagram
     text category
     text priority
     jsonb external_id
+    text base_type
+    text schema_location
   }
   product_order_item {
     uuid id PK
@@ -362,6 +384,7 @@ erDiagram
     text quoted_price_name
     numeric quoted_amount
     text quoted_currency
+    integer position
   }
   product_order_error_message {
     uuid id PK
@@ -381,6 +404,8 @@ erDiagram
     timestamptz creation_date
     timestamptz requested_cancellation_date
     text cancellation_reason
+    text base_type
+    text schema_location
   }
   billing_account {
     uuid id PK
@@ -421,6 +446,8 @@ erDiagram
     date termination_date
     uuid created_by_item_id FK
     uuid terminated_by_item_id FK
+    text base_type
+    text schema_location
   }
   billing_account {
     uuid id PK
@@ -498,6 +525,10 @@ erDiagram
     timestamptz received_at
     payment_status status
     text payment_method
+    text base_type
+    text schema_location
+    text payment_method_name
+    text payment_method_type
   }
   bill_allocation {
     uuid id PK
@@ -534,6 +565,8 @@ erDiagram
     text method_type
     text description
     uuid payment_id FK
+    text base_type
+    text schema_location
   }
   refund_source {
     uuid id PK
@@ -555,6 +588,8 @@ erDiagram
     customer_bill_on_demand_state_type state
     text name
     text description
+    text base_type
+    text schema_location
   }
   bill_format {
     uuid id PK
@@ -562,6 +597,8 @@ erDiagram
     timestamptz updated_at
     text name
     text description
+    text base_type
+    text schema_location
   }
   bill_presentation_media {
     uuid id PK
@@ -569,6 +606,8 @@ erDiagram
     timestamptz updated_at
     text name
     text description
+    text base_type
+    text schema_location
   }
   account_presentation_media {
     uuid id PK
@@ -585,6 +624,8 @@ erDiagram
     text billing_period
     text frequency
     integer billing_date_shift
+    text base_type
+    text schema_location
   }
   billing_account {
     uuid id PK
@@ -672,6 +713,8 @@ erDiagram
     text event_types
     timestamptz subscribed_at
     timestamptz deleted_at
+    text base_type
+    text schema_location
   }
   event {
     uuid id PK

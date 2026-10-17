@@ -16,6 +16,8 @@ TMF622 cancelProductOrder: done on insert (a refused one is not stored); one per
 | `creation_date` | `timestamp with time zone` | no |  | When it was requested and took effect (application clock). |
 | `requested_cancellation_date` | `timestamp with time zone` | yes |  | As requested: absent or today (BILLING_TZ); never later. |
 | `cancellation_reason` | `text` | yes |  | Optional free text, copied onto the order. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Foreign keys
 
@@ -27,7 +29,9 @@ TMF622 cancelProductOrder: done on insert (a refused one is not stored); one per
 
 | Name | Kind | Definition |
 |---|---|---|
+| `cancel_product_order_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `cancel_product_order_cancellation_reason_check` | check | `CHECK ((length(cancellation_reason) > 0))` |
+| `cancel_product_order_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `cancel_product_order_pkey` | primary key | `PRIMARY KEY (id)` |
 | `cancel_product_order_product_order_id_key` | unique | `UNIQUE (product_order_id)` |
 

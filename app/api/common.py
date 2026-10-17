@@ -2,20 +2,23 @@
 references, and the helpers that turn database rows into response bodies."""
 
 import re
+from collections.abc import Callable
 from datetime import UTC, date, datetime, time
 from decimal import Decimal, InvalidOperation
 from typing import Any, ClassVar
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import psycopg
 from fastapi import Request
 from psycopg.types.range import Range
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, field_validator
 from pydantic.alias_generators import to_camel
 
-from app.api.errors import bad_request, not_found, unprocessable, validation_error
+from app.api.errors import bad_request, conflict, not_found, unprocessable, validation_error
 from app.api.tmfjson import TmfJSONResponse
 from app.config import settings
+from app.repository._sql import Row, select_by_id, update_by_id
 
 CENT = Decimal("0.01")
 # numeric(12,2): at most 10 digits before the decimal point
@@ -33,8 +36,8 @@ class TmfModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
 
     at_type: str | None = Field(default=None, alias="@type")
-    at_base_type: str | None = Field(default=None, alias="@baseType")
-    at_schema_location: str | None = Field(default=None, alias="@schemaLocation")
+    at_base_type: str | None = Field(default=None, alias="@baseType", min_length=1)
+    at_schema_location: str | None = Field(default=None, alias="@schemaLocation", min_length=1)
 
 
 class Ref(TmfModel):
@@ -257,3 +260,109 @@ def columns(data: BaseModel, *, exclude: frozenset[str] = frozenset()) -> dict[s
 
 def without_nulls(body: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in body.items() if value is not None}
+
+
+# --- nothing a client sends is dropped or rewritten (docs/decisions/tmf-api.md,
+# "Nothing dropped or rewritten") ---
+
+META_COLUMNS = {"at_base_type": "base_type", "at_schema_location": "schema_location"}
+
+
+def meta_columns(data: BaseModel) -> dict[str, str | None]:
+    """The `@baseType`/`@schemaLocation` a body carried, as column -> value (in a PATCH,
+    null removes)."""
+    return {
+        column: getattr(data, name)
+        for name, column in META_COLUMNS.items()
+        if name in data.model_fields_set
+    }
+
+
+def with_meta(conn: psycopg.Connection, table: str, row: Row, data: BaseModel) -> Row:
+    """Store the body's `@baseType`/`@schemaLocation` on the row just created or changed."""
+    values = meta_columns(data)
+    return update_by_id(conn, table, row["id"], values) if values else row
+
+
+def meta_body(row: Row) -> dict[str, Any]:
+    """`@baseType`/`@schemaLocation` as stored (absent when the client sent none)."""
+    return without_nulls(
+        {"@baseType": row.get("base_type"), "@schemaLocation": row.get("schema_location")}
+    )
+
+
+def take_id(body: dict[str, Any]) -> UUID | None:
+    """A client-chosen `id` on POST (the specs' Addressable_FVO has one). Ours are UUIDs,
+    so it must be one: our restriction of the spec's string."""
+    if "id" not in body:
+        return None
+    raw = body.pop("id")
+    try:
+        if not isinstance(raw, str):
+            raise ValueError
+        return UUID(raw)
+    except ValueError:
+        raise unprocessable("id must be a UUID (this server's ids are UUIDs)") from None
+
+
+def claim_id(conn: psycopg.Connection, table: str, uid: UUID | None) -> None:
+    """409 when a client-chosen id is in use. The lock serializes two requests for the
+    same id, so the second sees the first one's row instead of a key violation."""
+    if uid is None:
+        return
+    conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (f"{table}:{uid}",))
+    if select_by_id(conn, table, uid) is not None:
+        raise conflict(f"id {uid} is already in use")
+
+
+# Test instrumentation only (tests/tmf_gaps.py): called with the names each
+# take_server_set took, because a server-set attribute is compared whole and so cannot
+# be probed below its top level over HTTP. None in the app.
+on_server_set: Callable[[set[str]], None] | None = None
+
+
+def take_server_set(body: dict[str, Any], names: tuple[str, ...]) -> dict[str, Any]:
+    """Attributes the specs let a client send but the server sets (a job's status, an
+    account's balance, ...): taken out of the body before it is parsed, then compared
+    with what the server holds (`check_server_set`)."""
+    taken = {name: body.pop(name) for name in names if name in body}
+    if on_server_set is not None:
+        on_server_set(set(taken))
+    return taken
+
+
+def check_server_set(sent: dict[str, Any], actual: dict[str, Any]) -> None:
+    """422 unless every server-set attribute sent equals the resource's value: accepted,
+    never overridden. For a POST, `actual` is the new resource (the 422 rolls it back)."""
+    for name, value in sent.items():
+        if not same(value, actual.get(name)):
+            raise unprocessable(f"{name} is set by the server: send its current value or omit it")
+
+
+def same(sent: Any, actual: Any) -> bool:
+    """Whether a value from a request equals one of a response body. An object sent may
+    leave attributes out (a reference with only `id`); date-times compare as instants,
+    numbers as numbers."""
+    if isinstance(sent, dict):
+        return isinstance(actual, dict) and all(
+            key in actual and same(value, actual[key]) for key, value in sent.items()
+        )
+    if isinstance(sent, list):
+        return (
+            isinstance(actual, list) and len(sent) == len(actual) and all(map(same, sent, actual))
+        )
+    if isinstance(actual, datetime):
+        try:
+            parsed = datetime.fromisoformat(sent) if isinstance(sent, str) else None
+        except ValueError:
+            return False
+        return parsed is not None and parsed.tzinfo is not None and parsed == actual
+    if isinstance(actual, (int, Decimal)) and not isinstance(actual, bool):
+        return (
+            isinstance(sent, (int, Decimal))
+            and not isinstance(sent, bool)
+            and Decimal(sent) == Decimal(actual)
+        )
+    if isinstance(actual, UUID):
+        return sent == str(actual)
+    return sent == actual

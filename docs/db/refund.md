@@ -21,6 +21,8 @@ TMF676 recorded refund and its consumed credit.
 | `method_type` | `text` | yes |  | Payment method type as supplied. |
 | `description` | `text` | yes |  | Optional explanation. |
 | `payment_id` | `uuid` | yes |  | Optional payment restricting refundable sources. |
+| `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
+| `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 
 ## Foreign keys
 
@@ -34,7 +36,9 @@ TMF676 recorded refund and its consumed credit.
 | Name | Kind | Definition |
 |---|---|---|
 | `refund_amount_check` | check | `CHECK ((amount > (0)::numeric))` |
+| `refund_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `refund_check` | check | `CHECK (((method_name IS NOT NULL) OR (method_type IS NOT NULL)))` |
+| `refund_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `refund_status_check` | check | `CHECK ((status = 'done'::text))` |
 | `refund_pkey` | primary key | `PRIMARY KEY (id)` |
 | `credit_usage_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |

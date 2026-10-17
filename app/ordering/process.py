@@ -36,6 +36,9 @@ class ItemRequest:
     product_id: UUID | None = None
     # TMF allows an account per item; ours must equal the order's.
     billing_account_id: UUID | None = None
+    # An add item's new product, as a POST /product chose it: its id and TMF meta
+    # attributes (product.id, base_type, schema_location; None = not chosen).
+    new_product: products.NewProduct | None = None
 
 
 @dataclass(frozen=True)
@@ -45,6 +48,7 @@ class OrderRequest:
     # None = today (BILLING_TZ). The start date of `add` items and the termination date
     # of `delete` items (our interpretation: TMF has no per-item date).
     requested_start: date | None = None
+    order_id: UUID | None = None  # None: a new one (a client may choose it)
 
 
 @dataclass(frozen=True)
@@ -111,6 +115,7 @@ def place_order(
 
     order = orders.create_order(
         conn,
+        id=request.order_id,
         billing_account_id=account["id"],
         order_date=now,
         requested_start_date=start,
@@ -327,6 +332,7 @@ def _execute(
                 # a future start stays `created` until the stage 4 worker activates it;
                 # billing is driven by the dates, not by this status
                 status="active" if start <= today else "created",
+                new=item.new_product,
             )
             orders.set_order_item_product(conn, row["id"], product["id"])
             emit.product(conn, product["id"], "Create", at=now, today=today)

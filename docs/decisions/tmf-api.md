@@ -50,6 +50,51 @@ JSON-Patch-Query); (3) base paths `customer/v5`, `payment/v4`; (4) TMF632/629
 attributes; (5) TMF666; (6) TMF620; (7) taxes; (8) TMF622 (`modify` items, states);
 (9) TMF637 (suspension); (10) TMF676 (payment states and attributes).
 
+### Nothing dropped or rewritten (2026-10-17)
+
+Slice 1 of "Following TMF", the three choices approved by the human. Migration `0021`.
+126 lines left `tests/tmf-gaps.txt` (831 -> 705).
+
+- **`@baseType` and `@schemaLocation`** are stored as sent on every resource a client
+  creates (`base_type`, `schema_location` on 20 tables; empty is a 422), returned,
+  changed by PATCH (null removes) and selectable with `fields=` on every resource. The
+  billing account keeps its extension's fixed values. Resources only the server makes
+  (bills, ABRs, bill cycles) select them without a value. `@type` stays one the spec
+  names for the resource: client subclasses are not defined by the specs.
+- **A client may choose the `id`** on every POST whose spec schema has one
+  (Addressable_FVO): a UUID not in use (409 if taken, 422 if not a UUID - ours are
+  UUIDs, a restriction of the spec's string). `claim_id` serializes two requests for
+  the same id with an advisory lock. POST /product passes it to the product its order
+  creates.
+- **Server-set attributes** the specs let a client send (a job's status and dates, an
+  account's balance and relationships, `lastUpdate`, an order's state, totals and
+  messages, a product's derived references, a refund's date, a bill's run attributes,
+  a cancellation's state) are accepted when they equal the server's value and a 422
+  otherwise (`take_server_set` before parsing, `check_server_set` against the current
+  body on PATCH, against the new resource on POST - the 422 rolls it back). What a
+  client could really change but we do not yet (an offering's specification, a
+  price's amount, an order's items, a product's dates, an account's owner) stays a
+  400 read-only, for slices 4-9. The gap probe learns from `common.on_server_set`
+  (test instrumentation only) which attributes a request took this way.
+- **Payments keep `paymentMethod.name` and `@type` apart** (`payment_method_name`,
+  `payment_method_type`; one of them at least). Existing payments answer as before (the
+  one word in both). `payment_method` stays the UI's one-word label.
+- **Order items come back in the order sent** (`product_order_item.position`; existing
+  items numbered in their old text order of `item_id`) and **carry the order's
+  `billingAccount`** - it must equal the order's, so no column.
+- **A customer's `engagedParty` may change while it has no billing account** (409
+  otherwise: the accounts' financial accounts belong to the party); the customer is
+  locked FOR UPDATE, so an account created meanwhile waits. `id`/`href` in a customer
+  PATCH (Customer_MVO has them) and `href` on POST are accepted when unchanged.
+- An empty merge patch of a bill is a 200 no-op, as for every other resource.
+
+Tests: `tests/test_api_tmf_meta.py` (every client-created resource: meta round trip,
+chosen id), `test_0021_meta_payment_method_and_item_position`, and the updated
+read-only cases across the suite. Negative proofs: items ordered by `item_id` again,
+`check_server_set` inverted, and the engagedParty account check inverted each failed
+`tests/test_api_tmf_meta.py`. Rolling back `0021` needs `alembic downgrade 0020` by
+hand (drops the meta, method and position columns).
+
 ### Product writes through orders (2026-10-17)
 
 The last seven operations, approved by the human on 2026-10-17 ("reach 100%"), close
@@ -344,6 +389,9 @@ implemented; order processing lives in `app/ordering/`.
   references. `id` and `href` are server-managed (400 on POST and PATCH). `lastUpdate` is
   accepted and ignored on POST, because the spec's create schemas make clients send it;
   it is read-only on PATCH.
+- **Narrowed 2026-10-17** ([above](#nothing-dropped-or-rewritten-2026-10-17)): a POST
+  may choose the `id`, `@baseType`/`@schemaLocation` are stored, and server-set
+  attributes (`lastUpdate` on PATCH among them) may be repeated, never set (422).
 - **`@referredType` in a reference is checked, never rewritten** (`cloud/quality-1`,
   doc-findings #17). The vendored specs define it as "the actual type of the target
   instance when needed for disambiguation": optional, but when sent it must be the type
@@ -432,7 +480,7 @@ An individual is not reachable under `/organization` and vice versa (404).
 
 ### TMF676 (v4) mapping
 
-| payment | `billing_account_id` <-> `account` (AccountRef, `@referredType: BillingAccount`), `amount` + `currency` <-> `totalAmount` and `amount` (equal: no taxes), `received_at` <-> `paymentDate` and `statusDate` (the clock at POST), `status` (`done`), `payment_method` <-> `paymentMethod` (`{name, @type}`, both the stored word) | `account.id`, `status` |
+| payment | `billing_account_id` <-> `account` (AccountRef, `@referredType: BillingAccount`), `amount` + `currency` <-> `totalAmount` and `amount` (equal: no taxes), `received_at` <-> `paymentDate` and `statusDate` (the clock at POST), `status` (`done`), `payment_method` <-> `paymentMethod` (`{name, @type}`, both the stored word; since `0021` each as sent) | `account.id`, `status` |
 |---|---|---|
 
 POST records a received payment: `account`, `totalAmount` and `paymentMethod` (with a

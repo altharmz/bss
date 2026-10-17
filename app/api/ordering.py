@@ -27,14 +27,20 @@ from app.api.common import (
     ProductRef,
     Ref,
     TmfModel,
+    check_server_set,
     check_type,
+    claim_id,
     created,
     from_billing_date,
+    meta_body,
     parse,
     parse_id,
     ref,
+    take_id,
+    take_server_set,
     to_billing_date,
     utc,
+    with_meta,
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
@@ -68,19 +74,18 @@ ATTRIBUTES = (
     "priority",
     "externalId",
 )
-# Decided by processing (or the server): read-only on PATCH, as on POST.
-PROCESSED = (
+# Set by processing (or the server): a POST or PATCH may repeat them, never set them.
+SERVER_SET = (
     "state",
     "creationDate",
     "completionDate",
-    "requestedStartDate",
-    "billingAccount",
-    "productOrderItem",
     "productOrderErrorMessage",
     "orderTotalPrice",
     "cancellationDate",
     "cancellationReason",
 )
+# What the order was placed with: fixed once it is processed (synchronously, at POST).
+PLACED_WITH = ("requestedStartDate", "billingAccount", "productOrderItem")
 CANCEL_ATTRIBUTES = (
     "productOrder",
     "creationDate",
@@ -169,12 +174,14 @@ def _item_request(item: OrderItemIn) -> ItemRequest:
     )
 
 
-def _item_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+def _item_body(conn: psycopg.Connection, row: Row, account: Row) -> dict[str, Any]:
     body: dict[str, Any] = {
         "id": row["item_id"],
         "action": row["action"],
         "state": row["state"],
         "quantity": 1,
+        # an item's account must be the order's, so it is the order's
+        "billingAccount": account_ref(account),
     }
     if row["product_offering_id"] is not None:
         offering = catalog.get_product_offering(conn, row["product_offering_id"])
@@ -252,7 +259,7 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "completionDate": utc(completion) if completion else None,
             "requestedStartDate": from_billing_date(row["requested_start_date"]),
             "billingAccount": account_ref(account),
-            "productOrderItem": [_item_body(conn, item) for item in items],
+            "productOrderItem": [_item_body(conn, item, account) for item in items],
             "productOrderErrorMessage": errors or None,
             "orderTotalPrice": total,
             "cancellationDate": utc(row["cancellation_date"]) if row["cancellation_date"] else None,
@@ -263,7 +270,7 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "externalId": _external_body(row["external_id"]),
             "@type": "ProductOrder",
         }
-    )
+    ) | meta_body(row)
 
 
 @router.get("/productOrder")
@@ -301,19 +308,9 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
     check_type(body, "ProductOrder")
     if body.get("productOrderItem") == []:
         raise bad_request("an order needs at least one productOrderItem")
-    data = parse(
-        OrderIn,
-        body,
-        read_only=(
-            "state",
-            "creationDate",
-            "completionDate",
-            "productOrderErrorMessage",
-            "orderTotalPrice",
-            "cancellationDate",
-            "cancellationReason",
-        ),
-    )
+    uid = take_id(body)
+    server_set = take_server_set(body, SERVER_SET)
+    data = parse(OrderIn, body)
     for item in body.get("productOrderItem", []):
         check_type(item, "ProductOrderItem")
     requested = data.requested_start_date
@@ -321,8 +318,10 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
         billing_account_id=data.billing_account.id,
         items=tuple(_item_request(item) for item in data.product_order_item),
         requested_start=to_billing_date(requested) if requested else None,
+        order_id=uid,
     )
     with tx() as conn:
+        claim_id(conn, "product_order", uid)
         try:
             order_id = place_order(conn, order_request, now=clock.now(), today=clock.today())
         except OrderRefused as exc:
@@ -332,7 +331,8 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
             orders.set_attributes(conn, order_id, attributes)
         row = orders.get_order(conn, order_id)
         assert row is not None
-        new = order_body(conn, row)
+        new = order_body(conn, with_meta(conn, "product_order", row, data))
+        check_server_set(server_set, new)
         # processed at once: one Create carrying the final state (completed or rejected)
         emit.created(conn, API, "productOrder", new, at=clock.now())
     return created(listing.select_fields(new, fields))
@@ -345,19 +345,21 @@ def patch_order(
     """description, category, priority, externalId only (any order, any state)."""
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "ProductOrder")
-    data = parse(OrderPatch, body, read_only=PROCESSED)
+    server_set = take_server_set(body, SERVER_SET)
+    data = parse(OrderPatch, body, read_only=PLACED_WITH)
     with tx() as conn:
         uid = parse_id("productOrder", order_id)
         current = orders.lock_order(conn, uid)
         if current is None:
             raise not_found("productOrder", order_id)
-        before = orders.get_order(conn, uid)
-        old = emit.before(conn, API, "productOrder", lambda: order_body(conn, before))
+        before = order_body(conn, current)
+        check_server_set(server_set, before)
+        old = emit.before(conn, API, "productOrder", lambda: before)
         changes = descriptive(data)
         if changes:
             orders.set_attributes(conn, uid, changes)
         row = orders.get_order(conn, uid)
-        patched = order_body(conn, row)
+        patched = order_body(conn, with_meta(conn, "product_order", row, data))
         emit.changed(conn, API, "productOrder", old, patched, at=clock.now())
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
@@ -418,7 +420,7 @@ def cancel_body(row: Row) -> dict[str, Any]:
             "effectiveCancellationDate": utc(row["creation_date"]),
             "@type": "CancelProductOrder",
         }
-    )
+    ) | meta_body(row)
 
 
 @router.get("/cancelProductOrder")
@@ -450,11 +452,9 @@ def cancel_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
     """Takes effect now: `requestedCancellationDate` may only be today (BILLING_TZ)."""
     fields = listing.retrieve_fields(request, CANCEL_ATTRIBUTES)
     check_type(body, "CancelProductOrder")
-    data = parse(
-        CancelIn,
-        body,
-        read_only=("creationDate", "state", "effectiveCancellationDate"),
-    )
+    uid = take_id(body)
+    server_set = take_server_set(body, ("creationDate", "state", "effectiveCancellationDate"))
+    data = parse(CancelIn, body)
     requested = data.requested_cancellation_date
     today = clock.today()
     if requested is not None and to_billing_date(requested) != today:
@@ -463,6 +463,7 @@ def cancel_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
             " when it is requested"
         )
     with tx() as conn:
+        claim_id(conn, "cancel_product_order", uid)
         try:
             row = cancellation.cancel_order(
                 conn,
@@ -470,6 +471,7 @@ def cancel_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
                     order_id=data.product_order.id,
                     requested=requested,
                     reason=data.cancellation_reason,
+                    id=uid,
                 ),
                 now=clock.now(),
                 today=today,
@@ -478,7 +480,8 @@ def cancel_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
             raise unprocessable(str(exc)) from None
         except cancellation.CancelRefused as exc:
             raise conflict(str(exc)) from None
-        new = cancel_body(row)
+        new = cancel_body(with_meta(conn, "cancel_product_order", row, data))
+        check_server_set(server_set, new)
         emit.created(conn, API, "cancelProductOrder", new, at=row["creation_date"])
         order = orders.get_order(conn, row["product_order_id"])
         emit.emit(

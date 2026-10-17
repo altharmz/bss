@@ -1,6 +1,7 @@
 """Product inventory (TMF637). Products are only ever created or terminated by an order
 item - hence the mandatory `created_by_item_id` / `terminated_by_item_id`."""
 
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 from uuid import UUID
@@ -8,6 +9,15 @@ from uuid import UUID
 import psycopg
 
 from app.repository._sql import Row, fetch_all, fetch_one, returning, select_page
+
+
+@dataclass(frozen=True)
+class NewProduct:
+    """What a client chose for a product its POST /product creates."""
+
+    id: UUID | None = None
+    base_type: str | None = None
+    schema_location: str | None = None
 
 
 def create_product(
@@ -18,15 +28,28 @@ def create_product(
     created_by_item_id: UUID,
     start_date: date,
     status: str = "active",
+    new: NewProduct | None = None,
 ) -> Row:
+    new = new or NewProduct()
     return returning(
         conn,
         """
         INSERT INTO product
-            (billing_account_id, product_offering_id, status, start_date, created_by_item_id)
-        VALUES (%s, %s, %s, %s, %s) RETURNING *
+            (id, billing_account_id, product_offering_id, status, start_date,
+             created_by_item_id, base_type, schema_location)
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s)
+        RETURNING *
         """,
-        (billing_account_id, product_offering_id, status, start_date, created_by_item_id),
+        (
+            new.id,
+            billing_account_id,
+            product_offering_id,
+            status,
+            start_date,
+            created_by_item_id,
+            new.base_type,
+            new.schema_location,
+        ),
     )
 
 

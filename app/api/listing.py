@@ -20,6 +20,8 @@ MAX_LIMIT = 100
 
 # Always returned, whatever fields= says.
 ALWAYS = ("id", "href", "@type")
+# Selectable on every resource (TMF Extensible); present when the resource has a value.
+META = ("@baseType", "@schemaLocation")
 
 Converter = Callable[[str], Any]
 
@@ -66,7 +68,7 @@ def parse_fields(request: Request, attributes: Collection[str]) -> frozenset[str
     if raw is None:
         return None
     names = frozenset(name.strip() for name in raw.split(",") if name.strip())
-    unknown = sorted(names - set(attributes) - set(ALWAYS))
+    unknown = sorted(names - set(attributes) - set(ALWAYS) - set(META))
     if unknown:
         raise bad_request(f"fields: unknown attribute(s) {', '.join(unknown)}")
     return names

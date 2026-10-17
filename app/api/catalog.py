@@ -33,15 +33,19 @@ from app.api.common import (
     TmfModel,
     billing_tz,
     check_type,
+    claim_id,
     columns,
     created,
+    meta_body,
     money,
     not_null,
     parse,
     parse_id,
     ref,
+    take_id,
     time_period,
     utc,
+    with_meta,
     without_nulls,
 )
 from app.api.deletes import delete_row, refuse_if_referenced
@@ -137,7 +141,7 @@ def specification_body(row: Row) -> dict[str, Any]:
             "lastUpdate": utc(row["updated_at"]),
             "@type": "ProductSpecification",
         }
-    )
+    ) | meta_body(row)
 
 
 @router.get("/productSpecification")
@@ -173,9 +177,11 @@ def create_specification(
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, SPEC_ATTRIBUTES)
     check_type(body, "ProductSpecification")
+    uid = take_id(body)
     data = parse(SpecificationCreate, body)
     with tx() as conn:
-        new = specification_body(insert_specification(conn, data))
+        claim_id(conn, "product_specification", uid)
+        new = specification_body(insert_specification(conn, data, uid))
         emit.created(conn, API, "productSpecification", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
@@ -184,13 +190,14 @@ def insert_specification(
     conn: psycopg.Connection, data: SpecificationCreate, new_id: UUID | None = None
 ) -> Row:
     """POST's write; an import passes the source's id."""
-    return catalog.create_product_specification(
+    row = catalog.create_product_specification(
         conn,
         name=data.name,
         lifecycle_status=data.lifecycle_status,
         description=data.description,
         id=new_id,
     )
+    return with_meta(conn, "product_specification", row, data)
 
 
 @router.patch("/productSpecification/{spec_id}")
@@ -210,7 +217,8 @@ def patch_specification(
         if data.lifecycle_status is not None:
             _check_lifecycle("specification", current["lifecycle_status"], data.lifecycle_status)
         old = emit.before(conn, API, "productSpecification", lambda: specification_body(current))
-        new = specification_body(catalog.update_product_specification(conn, uid, changes))
+        row = catalog.update_product_specification(conn, uid, changes)
+        new = specification_body(with_meta(conn, "product_specification", row, data))
         emit.changed(
             conn, API, "productSpecification", old, new, at=clock.now(), state="lifecycleStatus"
         )
@@ -264,7 +272,7 @@ def price_body(row: Row) -> dict[str, Any]:
             "lastUpdate": utc(row["updated_at"]),
             "@type": "ProductOfferingPrice",
         }
-    )
+    ) | meta_body(row)
 
 
 @router.get("/productOfferingPrice")
@@ -299,9 +307,11 @@ def get_price(price_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_price(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, PRICE_ATTRIBUTES)
     check_type(body, "ProductOfferingPrice")
+    uid = take_id(body)
     data = parse(PriceCreate, body)
     with tx() as conn:
-        new = price_body(insert_price(conn, data, clock.now()))
+        claim_id(conn, "product_offering_price", uid)
+        new = price_body(insert_price(conn, data, clock.now(), uid))
         emit.created(conn, API, "productOfferingPrice", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
@@ -315,7 +325,7 @@ def insert_price(
         raise conflict(
             "validFor.startDateTime is in the past; a price can only take effect from now on"
         )
-    return catalog.create_product_offering_price(
+    row = catalog.create_product_offering_price(
         conn,
         product_offering_id=None,
         name=data.name,
@@ -327,6 +337,7 @@ def insert_price(
         valid_for=valid_for,
         id=new_id,
     )
+    return with_meta(conn, "product_offering_price", row, data)
 
 
 def _first_uncovered_day(end: datetime) -> date:
@@ -407,7 +418,7 @@ def patch_price(
             raise conflict(
                 "validFor overlaps another price of the same type and currency on the offering"
             ) from None
-        new = price_body(row)
+        new = price_body(with_meta(conn, "product_offering_price", row, data))
         emit.changed(
             conn, API, "productOfferingPrice", old, new, at=clock.now(), state="lifecycleStatus"
         )
@@ -491,7 +502,7 @@ def offering_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "lastUpdate": utc(row["updated_at"]),
             "@type": "ProductOffering",
         }
-    )
+    ) | meta_body(row)
 
 
 def _check_offering_period(old: Any, new: Any, now: datetime) -> None:
@@ -588,9 +599,11 @@ def get_offering(offering_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_offering(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, OFFERING_ATTRIBUTES)
     check_type(body, "ProductOffering")
+    uid = take_id(body)
     data = parse(OfferingCreate, body)
     with tx() as conn:
-        new = offering_body(conn, insert_offering(conn, data, clock.now()))
+        claim_id(conn, "product_offering", uid)
+        new = offering_body(conn, insert_offering(conn, data, clock.now(), uid))
         emit.created(conn, API, "productOffering", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
@@ -621,7 +634,7 @@ def insert_offering(
             raise conflict(f"productOffering {new_id} already exists") from None
         raise conflict(f"offering code {code} is already in use") from None
     _attach_prices(conn, row["id"], data.product_offering_price, now)
-    return row
+    return with_meta(conn, "product_offering", row, data)
 
 
 @router.patch("/productOffering/{offering_id}")
@@ -660,7 +673,7 @@ def patch_offering(
                 )
             _attach_prices(conn, uid, data.product_offering_price, clock.now())
         row = catalog.update_product_offering(conn, uid, changes)
-        patched = offering_body(conn, row)
+        patched = offering_body(conn, with_meta(conn, "product_offering", row, data))
         emit.changed(
             conn, API, "productOffering", old, patched, at=clock.now(), state="lifecycleStatus"
         )
