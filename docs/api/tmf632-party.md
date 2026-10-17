@@ -4,13 +4,15 @@
 
 - Base path here: `/tmf-api/partyManagement/v5`
 - Contract: [`spec/TMF632-Party_Management-v5.0.0.oas.yaml`](../../spec/TMF632-Party_Management-v5.0.0.oas.yaml) - Party Management version 5.0.0; the spec's server URL is `https://serverRoot/partyManagement/v5/`
-- Operations exposed: 10
+- Operations exposed: 12
 
 
 ## Operations
 
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
+| POST | `/tmf-api/partyManagement/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/party.py`](../../app/api/party.py) |
+| DELETE | `/tmf-api/partyManagement/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/party.py`](../../app/api/party.py) |
 | GET | `/tmf-api/partyManagement/v5/individual` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `familyName`, `givenName` | - | 200 `array of Individual` | [`app/api/party.py`](../../app/api/party.py) |
 | POST | `/tmf-api/partyManagement/v5/individual` | query: `fields`; body: `application/json` | `Individual_FVO` | 201 `Individual` | [`app/api/party.py`](../../app/api/party.py) |
 | DELETE | `/tmf-api/partyManagement/v5/individual/{party_id}` | path: `party_id` | - | 204 (no body) | [`app/api/party.py`](../../app/api/party.py) |
@@ -27,7 +29,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF632-P
 
 ## Coverage of the spec
 
-- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
+- Resources of the spec that are **not implemented**: `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
 ## Behaviour and deviations

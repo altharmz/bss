@@ -35,6 +35,7 @@ import psycopg
 from app.billing.adapter import bill_account, visible_before
 from app.billing.model import BillingError
 from app.clock import Clock
+from app.events import emit
 from app.repository import billing, parties, products
 from app.repository._sql import Row
 from app.worker.plan import retry_time
@@ -200,7 +201,7 @@ def bill_date(
         return started.run
     date_run = DateRun(conn, started.run, clock=clock, tz=tz, on_account=heartbeat)
     try:
-        flip_statuses(conn, run_date, tz)
+        flip_statuses(conn, run_date, tz, now=clock.now())
         while date_run.step():
             if checkpoint is not None and checkpoint():
                 raise Stopped(started.run)
@@ -213,12 +214,22 @@ def bill_date(
         ) from error
 
 
-def flip_statuses(conn: psycopg.Connection, run_date: date, tz: ZoneInfo) -> dict[str, int]:
+def flip_statuses(
+    conn: psycopg.Connection, run_date: date, tz: ZoneInfo, *, now: datetime | None = None
+) -> dict[str, int]:
     """The status flips at the start of the run of `run_date`, in one transaction, before
     billing (section 5): by dates, for what the run sees, blocked accounts included.
-    Cosmetic for money - billing is driven by dates - but visible in TMF637 and the UI."""
+    Cosmetic for money - billing is driven by dates - but visible in TMF637 and the UI,
+    and a ProductStateChangeEvent each (at `now`, the run's clock; default: its date)."""
+    flipped: list[UUID] = []
     with conn.transaction():
-        return products.flip_statuses(conn, run_date, visible_before=visible_before(run_date, tz))
+        counts = products.flip_statuses(
+            conn, run_date, visible_before=visible_before(run_date, tz), flipped=flipped
+        )
+        at = now or visible_before(run_date, tz)
+        for product_id in flipped:
+            emit.product(conn, product_id, "StateChange", at=at, today=run_date)
+    return counts
 
 
 def _mark_failed(conn: psycopg.Connection, run: Row, error: Exception, clock: Clock) -> bool:

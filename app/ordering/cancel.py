@@ -27,6 +27,7 @@ from uuid import UUID
 import psycopg
 
 from app.billing.core import cycle_period
+from app.events import emit
 from app.ordering.states import item_transition, order_transition
 from app.repository import orders, parties, products
 from app.repository._sql import Row
@@ -102,6 +103,7 @@ def cancel_order(
             products.restore(
                 conn, product["id"], "created" if product["start_date"] > today else "active"
             )
+        emit.product(conn, product["id"], "StateChange", at=now, today=today)
         orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "cancelled"))
     order_transition(order["state"], "cancelled")
     orders.set_cancelled(conn, order["id"], at=now, reason=request.reason)

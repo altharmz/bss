@@ -23,13 +23,15 @@ from app.api.common import (
     ref,
 )
 from app.api.deletes import delete_row, refuse_if_referenced
-from app.api.deps import JsonBody, MergePatchBody, Tx
+from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import not_found, unprocessable
 from app.api.party import party_href, party_name
 from app.api.tmfjson import TmfJSONResponse
+from app.events import emit
 from app.repository import parties
 from app.repository._sql import Row, count_references
 
+API = "TMF629"
 BASE = "/tmf-api/customerManagement/v5"
 router = APIRouter(prefix=BASE)
 
@@ -112,7 +114,7 @@ def get_customer(customer_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/customer")
-def create_customer(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+def create_customer(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Customer")
     data = parse(CustomerCreate, body)
@@ -126,12 +128,13 @@ def create_customer(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse
             conn, party_id=data.engaged_party.id, name=data.name, status=data.status
         )
         new = customer_body(conn, row)
+        emit.created(conn, API, "customer", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
 
 @router.patch("/customer/{customer_id}")
 def patch_customer(
-    customer_id: str, body: MergePatchBody, request: Request, tx: Tx
+    customer_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Customer")
@@ -139,22 +142,27 @@ def patch_customer(
     not_null(data, "name", "status")
     with tx() as conn:
         uid = parse_id("customer", customer_id)
-        if parties.get_customer(conn, uid) is None:
+        current = parties.get_customer(conn, uid)
+        if current is None:
             raise not_found("customer", customer_id)
+        old = emit.before(conn, API, "customer", lambda: customer_body(conn, current))
         row = parties.update_customer(conn, uid, columns(data))
         patched = customer_body(conn, row)
+        emit.changed(conn, API, "customer", old, patched, at=clock.now(), state="status")
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
 @router.delete("/customer/{customer_id}", status_code=204, response_class=Response)
-def delete_customer(customer_id: str, request: Request, tx: Tx) -> Response:
+def delete_customer(customer_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     """Only a customer without billing accounts (they take it FOR KEY SHARE on create)."""
     listing.no_query(request)
     with tx() as conn:
         uid = parse_id("customer", customer_id)
-        if parties.get_customer(conn, uid, "update") is None:
+        row = parties.get_customer(conn, uid, "update")
+        if row is None:
             raise not_found("customer", customer_id)
         counts = count_references(conn, uid, {"billingAccount": ("billing_account", "customer_id")})
         refuse_if_referenced("customer", uid, counts, "delete them first")
+        emit.deleted(conn, API, "customer", lambda: customer_body(conn, row), at=clock.now())
         delete_row(conn, "customer", uid)
     return Response(status_code=204)

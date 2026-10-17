@@ -1,5 +1,12 @@
 # TMF conformance gap analysis
 
+**Event notifications (2026-10-17).** `/hub` in all eight APIs (17 operations), with
+events stored transactionally and delivered by the worker with retries. Coverage:
+122/129 (94.6%). The seven left are excluded by decision: TMF637 product POST/PATCH/DELETE
+(orders alone create or end products), billingCycleSpecification POST/PATCH/DELETE (one
+fixed policy) and PATCH productOrder. `/listener/*` is the subscriber's side. See
+[the decision](decisions/events.md).
+
 **Order cancellation (2026-10-17).** cancelProductOrder (3 operations) undoes a completed
 order before any of it takes effect; DELETE productOrder removes rejected orders.
 Non-listener operation coverage: 105/129 (81.4%). TMF622 lacks PATCH productOrder and

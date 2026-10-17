@@ -20,12 +20,14 @@ from app.api.common import (
     without_nulls,
 )
 from app.api.deletes import delete_row, refuse_if_referenced
-from app.api.deps import JsonBody, MergePatchBody, Tx
+from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found
 from app.api.tmfjson import TmfJSONResponse
+from app.events import emit
 from app.repository import presentation as repo
 from app.repository._sql import count_references
 
+API = "TMF666"
 BASE = "/tmf-api/accountManagement/v5"
 router = APIRouter(prefix=BASE)
 ATTRIBUTES = ("name", "description")
@@ -93,12 +95,15 @@ def structure_body(conn, uid):
     return body
 
 
-def save(conn, data, table, resource, uid=None):
+def save(conn, data, table, resource, uid=None, *, at):
+    old = None
     if uid:
         row = repo.get(conn, table, uid)
         if row is None:
             raise not_found(resource, str(uid))
         not_null(data, "name")
+        current = row
+        old = emit.before(conn, API, resource, lambda: resource_body(current, resource))
     try:
         with conn.transaction():
             row = (
@@ -108,7 +113,12 @@ def save(conn, data, table, resource, uid=None):
             )
     except UniqueViolation:
         raise conflict("presentation name already exists") from None
-    return resource_body(row, resource)
+    new = resource_body(row, resource)
+    if uid:
+        emit.changed(conn, API, resource, old, new, at=at)
+    else:
+        emit.created(conn, API, resource, new, at=at)
+    return new
 
 
 @router.get("/billFormat")
@@ -134,28 +144,28 @@ def get_bill_format(format_id: str, request: Request, tx: Tx) -> TmfJSONResponse
 
 
 @router.post("/billFormat")
-def create_bill_format(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+def create_bill_format(
+    body: JsonBody, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "BillFormat")
     data = parse(FormatCreate, body)
     with tx() as conn:
-        return created(listing.select_fields(save(conn, data, "bill_format", "billFormat"), fields))
+        new = save(conn, data, "bill_format", "billFormat", at=clock.now())
+    return created(listing.select_fields(new, fields))
 
 
 @router.patch("/billFormat/{format_id}")
 def patch_bill_format(
-    format_id: str, body: MergePatchBody, request: Request, tx: Tx
+    format_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "BillFormat")
     data = parse(FormatPatch, body)
+    uid = parse_id("billFormat", format_id)
     with tx() as conn:
-        return TmfJSONResponse(
-            listing.select_fields(
-                save(conn, data, "bill_format", "billFormat", parse_id("billFormat", format_id)),
-                fields,
-            )
-        )
+        patched = save(conn, data, "bill_format", "billFormat", uid, at=clock.now())
+    return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
 @router.get("/billPresentationMedia")
@@ -189,67 +199,68 @@ def get_bill_media(media_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/billPresentationMedia")
-def create_bill_media(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+def create_bill_media(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "BillPresentationMedia")
     data = parse(MediaCreate, body)
     with tx() as conn:
-        return created(
-            listing.select_fields(
-                save(conn, data, "bill_presentation_media", "billPresentationMedia"), fields
-            )
-        )
+        new = save(conn, data, "bill_presentation_media", "billPresentationMedia", at=clock.now())
+    return created(listing.select_fields(new, fields))
 
 
 @router.patch("/billPresentationMedia/{media_id}")
 def patch_bill_media(
-    media_id: str, body: MergePatchBody, request: Request, tx: Tx
+    media_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "BillPresentationMedia")
     data = parse(MediaPatch, body)
+    uid = parse_id("billPresentationMedia", media_id)
     with tx() as conn:
-        return TmfJSONResponse(
-            listing.select_fields(
-                save(
-                    conn,
-                    data,
-                    "bill_presentation_media",
-                    "billPresentationMedia",
-                    parse_id("billPresentationMedia", media_id),
-                ),
-                fields,
-            )
+        patched = save(
+            conn, data, "bill_presentation_media", "billPresentationMedia", uid, at=clock.now()
         )
+    return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
 # --- deletes: only what no billing account prefers (issued bills keep a snapshot) ---
 
 
-def _delete(request: Request, tx: Tx, table: str, resource: str, raw_id: str, refs) -> Response:
+def _delete(
+    request: Request, tx: Tx, clock: ClockDep, table: str, resource: str, raw_id: str, refs
+) -> Response:
     listing.no_query(request)
     with tx() as conn:
         uid = parse_id(resource, raw_id)
-        if repo.get(conn, table, uid, "update") is None:
+        row = repo.get(conn, table, uid, "update")
+        if row is None:
             raise not_found(resource, raw_id)
         counts = count_references(conn, uid, {"billingAccount": refs})
         refuse_if_referenced(resource, uid, counts, "change their billStructure first")
+        emit.deleted(conn, API, resource, resource_body(row, resource), at=clock.now())
         delete_row(conn, table, uid)
     return Response(status_code=204)
 
 
 @router.delete("/billFormat/{format_id}", status_code=204, response_class=Response)
-def delete_bill_format(format_id: str, request: Request, tx: Tx) -> Response:
+def delete_bill_format(format_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     return _delete(
-        request, tx, "bill_format", "billFormat", format_id, ("billing_account", "bill_format_id")
+        request,
+        tx,
+        clock,
+        "bill_format",
+        "billFormat",
+        format_id,
+        ("billing_account", "bill_format_id"),
     )
 
 
 @router.delete("/billPresentationMedia/{media_id}", status_code=204, response_class=Response)
-def delete_bill_media(media_id: str, request: Request, tx: Tx) -> Response:
+def delete_bill_media(media_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     return _delete(
         request,
         tx,
+        clock,
         "bill_presentation_media",
         "billPresentationMedia",
         media_id,

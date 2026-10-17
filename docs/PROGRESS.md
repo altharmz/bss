@@ -11,10 +11,10 @@ records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 32 | 32/32 (100%) | 32/32 (100%) | unknown |
-| API | 121 | 121/121 (100%) | 121/121 (100%) | unknown |
+| Database | 35 | 35/35 (100%) | 35/35 (100%) | unknown |
+| API | 138 | 138/138 (100%) | 138/138 (100%) | unknown |
 | UI | 22 | 22/22 (100%) | 22/22 (100%) | unknown |
-| Worker | 14 | 14/14 (100%) | 14/14 (100%) | unknown |
+| Worker | 15 | 15/15 (100%) | 15/15 (100%) | unknown |
 
 ## Database
 
@@ -43,6 +43,9 @@ records the deployed commit.
 | `db.product_order_item` | 1 | Product order items (TMF622) | yes | yes | unknown |
 | `db.product_order_error_message` | 2 | Order rejection reasons (TMF622 productOrderErrorMessage) | yes | yes | unknown |
 | `db.cancel_product_order` | 5 | Order cancellations (TMF622 cancelProductOrder) | yes | yes | unknown |
+| `db.event_subscription` | 5 | Hub event subscriptions (every API) | yes | yes | unknown |
+| `db.event` | 5 | Events some hub wanted (outbox) | yes | yes | unknown |
+| `db.event_delivery` | 5 | Event deliveries to hub callbacks | yes | yes | unknown |
 | `db.product` | 1 | Products (TMF637) | yes | yes | unknown |
 | `db.applied_customer_billing_rate` | 1 | Charges and refunds - ABRs (TMF678) | yes | yes | unknown |
 | `db.customer_bill` | 1 | Customer bills (TMF678) | yes | yes | unknown |
@@ -106,6 +109,23 @@ records the deployed commit.
 | `api.tmf620.importJob.get` | 5 | Get an import job | yes | yes | unknown |
 | `api.tmf620.importJob.create` | 5 | Import a catalog document (all or nothing) | yes | yes | unknown |
 | `api.tmf620.importJob.delete` | 5 | Delete an import job | yes | yes | unknown |
+| `api.tmf620.hub.create` | 5 | Subscribe to TMF620 events | yes | yes | unknown |
+| `api.tmf620.hub.delete` | 5 | Unsubscribe from TMF620 events | yes | yes | unknown |
+| `api.tmf622.hub.create` | 5 | Subscribe to TMF622 events | yes | yes | unknown |
+| `api.tmf622.hub.delete` | 5 | Unsubscribe from TMF622 events | yes | yes | unknown |
+| `api.tmf629.hub.create` | 5 | Subscribe to TMF629 events | yes | yes | unknown |
+| `api.tmf629.hub.get` | 5 | Get a TMF629 subscription | yes | yes | unknown |
+| `api.tmf629.hub.delete` | 5 | Unsubscribe from TMF629 events | yes | yes | unknown |
+| `api.tmf632.hub.create` | 5 | Subscribe to TMF632 events | yes | yes | unknown |
+| `api.tmf632.hub.delete` | 5 | Unsubscribe from TMF632 events | yes | yes | unknown |
+| `api.tmf637.hub.create` | 5 | Subscribe to TMF637 events | yes | yes | unknown |
+| `api.tmf637.hub.delete` | 5 | Unsubscribe from TMF637 events | yes | yes | unknown |
+| `api.tmf666.hub.create` | 5 | Subscribe to TMF666 events | yes | yes | unknown |
+| `api.tmf666.hub.delete` | 5 | Unsubscribe from TMF666 events | yes | yes | unknown |
+| `api.tmf676.hub.create` | 5 | Subscribe to TMF676 events | yes | yes | unknown |
+| `api.tmf676.hub.delete` | 5 | Unsubscribe from TMF676 events | yes | yes | unknown |
+| `api.tmf678.hub.create` | 5 | Subscribe to TMF678 events | yes | yes | unknown |
+| `api.tmf678.hub.delete` | 5 | Unsubscribe from TMF678 events | yes | yes | unknown |
 | `api.tmf620.productSpecification.list` | 2 | List product specifications | yes | yes | unknown |
 | `api.tmf620.productSpecification.get` | 2 | Get a product specification | yes | yes | unknown |
 | `api.tmf620.productSpecification.create` | 2 | Create a product specification | yes | yes | unknown |
@@ -224,6 +244,7 @@ records the deployed commit.
 | `worker.signals` | 4 | SIGTERM finishes the current account; SIGKILL leaves nothing half-written | yes | yes | unknown |
 | `worker.billIssue` | 5 | The run validates and issues the bills it writes (new -> validated -> sent; credit notes and zero bills settled) | yes | yes | unknown |
 | `worker.billSettle` | 5 | Every run applies unused credit to open bills, oldest first | yes | yes | unknown |
+| `worker.eventDelivery` | 5 | Due events are POSTed to hub callbacks, retried with backoff | yes | yes | unknown |
 
 ## Unscoped
 

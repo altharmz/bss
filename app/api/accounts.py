@@ -39,13 +39,15 @@ from app.api.common import (
     without_nulls,
 )
 from app.api.deletes import delete_row, refuse_if_referenced
-from app.api.deps import JsonBody, MergePatchBody, Tx
+from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import not_found, unprocessable
 from app.api.party import party_href, party_name
 from app.api.tmfjson import TmfJSONResponse
+from app.events import emit
 from app.repository import accounts, parties
 from app.repository._sql import Row, count_references, select_by_id
 
+API = "TMF666"
 BASE = "/tmf-api/accountManagement/v5"
 router = APIRouter(prefix=BASE)
 
@@ -270,7 +272,9 @@ def get_financial_account(account_id: str, request: Request, tx: Tx) -> TmfJSONR
 
 
 @router.post("/financialAccount")
-def create_financial_account(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+def create_financial_account(
+    body: JsonBody, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "FinancialAccount")
     data = parse(FinancialCreate, body, read_only=("accountBalance", "accountRelationship"))
@@ -288,12 +292,13 @@ def create_financial_account(body: JsonBody, request: Request, tx: Tx) -> TmfJSO
             },
         )
         new = financial_body(conn, row)
+        emit.created(conn, API, "financialAccount", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
 
 @router.patch("/financialAccount/{account_id}")
 def patch_financial_account(
-    account_id: str, body: MergePatchBody, request: Request, tx: Tx
+    account_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "FinancialAccount")
@@ -305,23 +310,29 @@ def patch_financial_account(
     not_null(data, "name", "state")
     with tx() as conn:
         uid = parse_id("financialAccount", account_id)
-        if accounts.get_financial(conn, uid) is None:
+        current = accounts.get_financial(conn, uid)
+        if current is None:
             raise not_found("financialAccount", account_id)
+        old = emit.before(conn, API, "financialAccount", lambda: financial_body(conn, current))
         changes = columns(data, exclude=frozenset({"credit_limit"}))
         if "credit_limit" in data.model_fields_set:  # null removes it
             changes |= credit_limit_columns(data.credit_limit)
         row = accounts.update_financial(conn, uid, changes)
         patched = financial_body(conn, row)
+        emit.changed(conn, API, "financialAccount", old, patched, at=clock.now(), state="state")
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
 @router.delete("/financialAccount/{account_id}", status_code=204, response_class=Response)
-def delete_financial_account(account_id: str, request: Request, tx: Tx) -> Response:
+def delete_financial_account(
+    account_id: str, request: Request, tx: Tx, clock: ClockDep
+) -> Response:
     """Only while no account links to it; links take it FOR SHARE (`link_financial`)."""
     listing.no_query(request)
     with tx() as conn:
         uid = parse_id("financialAccount", account_id)
-        if select_by_id(conn, accounts.FINANCIAL, uid, "update") is None:
+        row = select_by_id(conn, accounts.FINANCIAL, uid, "update")
+        if row is None:
             raise not_found("financialAccount", account_id)
         counts = count_references(
             conn, uid, {"billingAccount": ("billing_account", "financial_account_id")}
@@ -329,6 +340,9 @@ def delete_financial_account(account_id: str, request: Request, tx: Tx) -> Respo
         for kind, n in accounts.count_party_accounts(conn, "financial_account_id", uid).items():
             counts[RESOURCE[kind]] = n
         refuse_if_referenced("financialAccount", uid, counts, "unlink those accounts first")
+        emit.deleted(
+            conn, API, "financialAccount", lambda: financial_body(conn, row), at=clock.now()
+        )
         delete_row(conn, accounts.FINANCIAL, uid)
     return Response(status_code=204)
 
@@ -389,7 +403,7 @@ def _get_party_account(account_id: str, request: Request, tx: Tx, kind: str) -> 
 
 
 def _create_party_account(
-    data: PartyAccountCreate, request: Request, tx: Tx, kind: str
+    data: PartyAccountCreate, request: Request, tx: Tx, clock: ClockDep, kind: str
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, PARTY_ATTRIBUTES)
     with tx() as conn:
@@ -413,11 +427,12 @@ def _create_party_account(
             },
         )
         new = party_account_body(conn, row)
+        emit.created(conn, API, RESOURCE[kind], new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
 
 def _patch_party_account(
-    account_id: str, data: PartyAccountPatch, request: Request, tx: Tx, kind: str
+    account_id: str, data: PartyAccountPatch, request: Request, tx: Tx, clock: ClockDep, kind: str
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, PARTY_ATTRIBUTES)
     not_null(data, "name", "state")
@@ -426,6 +441,7 @@ def _patch_party_account(
         current = accounts.get_party_account(conn, kind, uid)
         if current is None:
             raise not_found(RESOURCE[kind], account_id)
+        old = emit.before(conn, API, RESOURCE[kind], lambda: party_account_body(conn, current))
         changes = columns(data, exclude=frozenset({"credit_limit", "financial_account"}))
         if "credit_limit" in data.model_fields_set:  # null removes it
             changes |= credit_limit_columns(data.credit_limit)
@@ -442,16 +458,23 @@ def _patch_party_account(
             )
         row = accounts.update_party_account(conn, uid, changes)
         patched = party_account_body(conn, row)
+        emit.changed(conn, API, RESOURCE[kind], old, patched, at=clock.now(), state="state")
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
-def _delete_party_account(account_id: str, request: Request, tx: Tx, kind: str) -> Response:
+def _delete_party_account(
+    account_id: str, request: Request, tx: Tx, clock: ClockDep, kind: str
+) -> Response:
     """Nothing refers to a party or settlement account: records only, never billed."""
     listing.no_query(request)
     with tx() as conn:
         uid = parse_id(RESOURCE[kind], account_id)
-        if accounts.get_party_account(conn, kind, uid) is None:
+        row = accounts.get_party_account(conn, kind, uid)
+        if row is None:
             raise not_found(RESOURCE[kind], account_id)
+        emit.deleted(
+            conn, API, RESOURCE[kind], lambda: party_account_body(conn, row), at=clock.now()
+        )
         delete_row(conn, "party_account", uid)
     return Response(status_code=204)
 
@@ -470,24 +493,26 @@ def get_party_account(account_id: str, request: Request, tx: Tx) -> TmfJSONRespo
 
 
 @router.post("/partyAccount")
-def create_party_account(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+def create_party_account(
+    body: JsonBody, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
     check_type(body, "PartyAccount")
     data = parse(PartyAccountCreate, body, read_only=("accountBalance",))
-    return _create_party_account(data, request, tx, "PartyAccount")
+    return _create_party_account(data, request, tx, clock, "PartyAccount")
 
 
 @router.patch("/partyAccount/{account_id}")
 def patch_party_account(
-    account_id: str, body: MergePatchBody, request: Request, tx: Tx
+    account_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     check_type(body, "PartyAccount")
     data = parse(PartyAccountPatch, body, read_only=(*PARTY_READ_ONLY, "accountBalance"))
-    return _patch_party_account(account_id, data, request, tx, "PartyAccount")
+    return _patch_party_account(account_id, data, request, tx, clock, "PartyAccount")
 
 
 @router.delete("/partyAccount/{account_id}", status_code=204, response_class=Response)
-def delete_party_account(account_id: str, request: Request, tx: Tx) -> Response:
-    return _delete_party_account(account_id, request, tx, "PartyAccount")
+def delete_party_account(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
+    return _delete_party_account(account_id, request, tx, clock, "PartyAccount")
 
 
 @router.get("/settlementAccount")
@@ -501,21 +526,25 @@ def get_settlement_account(account_id: str, request: Request, tx: Tx) -> TmfJSON
 
 
 @router.post("/settlementAccount")
-def create_settlement_account(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+def create_settlement_account(
+    body: JsonBody, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
     check_type(body, "SettlementAccount")
     data = parse(PartyAccountCreate, body, read_only=("accountBalance",))
-    return _create_party_account(data, request, tx, "SettlementAccount")
+    return _create_party_account(data, request, tx, clock, "SettlementAccount")
 
 
 @router.patch("/settlementAccount/{account_id}")
 def patch_settlement_account(
-    account_id: str, body: MergePatchBody, request: Request, tx: Tx
+    account_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     check_type(body, "SettlementAccount")
     data = parse(PartyAccountPatch, body, read_only=(*PARTY_READ_ONLY, "accountBalance"))
-    return _patch_party_account(account_id, data, request, tx, "SettlementAccount")
+    return _patch_party_account(account_id, data, request, tx, clock, "SettlementAccount")
 
 
 @router.delete("/settlementAccount/{account_id}", status_code=204, response_class=Response)
-def delete_settlement_account(account_id: str, request: Request, tx: Tx) -> Response:
-    return _delete_party_account(account_id, request, tx, "SettlementAccount")
+def delete_settlement_account(
+    account_id: str, request: Request, tx: Tx, clock: ClockDep
+) -> Response:
+    return _delete_party_account(account_id, request, tx, clock, "SettlementAccount")

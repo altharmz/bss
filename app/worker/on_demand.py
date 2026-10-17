@@ -10,6 +10,7 @@ from app.billing.adapter import issue_bills, settle_account
 from app.billing.core import cycle_period
 from app.billing.model import BillingError
 from app.config import settings
+from app.events import emit
 from app.repository import billing
 from app.repository._sql import fetch_all, fetch_one
 
@@ -81,6 +82,7 @@ def process_demands(conn, *, clock, tz, checkpoint=None, heartbeat=None):
                         " description = 'Bill validation failed', updated_at = %s WHERE id = %s",
                         (now, demand["id"]),
                     )
+            emit.bill_demand(conn, demand["id"], at=now)  # done, rejected or failed
             done.append(demand["id"])
         if heartbeat is not None:
             heartbeat()

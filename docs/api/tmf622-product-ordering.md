@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/productOrderingManagement/v5`
 - Contract: [`spec/TMF622-ProductOrdering-v5.0.0.oas.yaml`](../../spec/TMF622-ProductOrdering-v5.0.0.oas.yaml) - ProductOrdering version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 7
+- Operations exposed: 9
 
 
 ## Operations
@@ -14,6 +14,8 @@
 | GET | `/tmf-api/productOrderingManagement/v5/cancelProductOrder` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `productOrder.id` | - | 200 `array of CancelProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
 | POST | `/tmf-api/productOrderingManagement/v5/cancelProductOrder` | query: `fields`; body: `application/json` | `CancelProductOrder_FVO` | 201 `CancelProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
 | GET | `/tmf-api/productOrderingManagement/v5/cancelProductOrder/{cancel_id}` | path: `cancel_id`; query: `fields` | - | 200 `CancelProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
+| POST | `/tmf-api/productOrderingManagement/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/ordering.py`](../../app/api/ordering.py) |
+| DELETE | `/tmf-api/productOrderingManagement/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/ordering.py`](../../app/api/ordering.py) |
 | GET | `/tmf-api/productOrderingManagement/v5/productOrder` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `state` | - | 200 `array of ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
 | POST | `/tmf-api/productOrderingManagement/v5/productOrder` | query: `fields`; body: `application/json` | `ProductOrder_FVO` | 201 `ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
 | DELETE | `/tmf-api/productOrderingManagement/v5/productOrder/{order_id}` | path: `order_id` | - | 204 (no body) | [`app/api/ordering.py`](../../app/api/ordering.py) |
@@ -25,7 +27,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF622-P
 ## Coverage of the spec
 
 - Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `PATCH /productOrder/{id}`.
-- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
+- Resources of the spec that are **not implemented**: `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
 ## Behaviour and deviations

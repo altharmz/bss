@@ -4,13 +4,15 @@
 
 - Base path here: `/tmf-api/productInventory/v5`
 - Contract: [`spec/TMF637-ProductInventory-v5.0.0.oas.yaml`](../../spec/TMF637-ProductInventory-v5.0.0.oas.yaml) - ProductInventory version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 2
+- Operations exposed: 4
 
 
 ## Operations
 
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
+| POST | `/tmf-api/productInventory/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/inventory.py`](../../app/api/inventory.py) |
+| DELETE | `/tmf-api/productInventory/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/inventory.py`](../../app/api/inventory.py) |
 | GET | `/tmf-api/productInventory/v5/product` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `status` | - | 200 `array of Product` | [`app/api/inventory.py`](../../app/api/inventory.py) |
 | GET | `/tmf-api/productInventory/v5/product/{product_id}` | path: `product_id`; query: `fields` | - | 200 `Product` | [`app/api/inventory.py`](../../app/api/inventory.py) |
 
@@ -20,7 +22,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF637-P
 ## Coverage of the spec
 
 - Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `POST /product`, `DELETE /product/{id}`, `PATCH /product/{id}`.
-- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
+- Resources of the spec that are **not implemented**: `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
 ## Behaviour and deviations

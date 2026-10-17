@@ -186,6 +186,17 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
+**Event notifications** (2026-10-17, approved plan: three slices, all 17 `/hub`
+operations, real delivery). Slice 1: hubs in every API, callbacks https-only to public
+addresses outside `APP_ENV` dev/test (the VPS runs `staging`), migration `0017`. Slice 2:
+transactional outbox (`0018`), events from every TMF write, orders, bills and the worker,
+each payload validated against its listener schema. Slice 3: the worker's step 6 POSTs
+due deliveries (retries 1 min ... 12 h, then failed), re-checks and pins the address
+before each send, purges after 30 days. Coverage 122/129 (94.6%). Decision:
+[events.md](docs/decisions/events.md). Not deployed: migrations `0009`-`0018` ship
+together; **the next deploy adds outbound HTTPS from the worker to hub callbacks** (none
+until a hub exists) - tell the human before `make verify`.
+
 **Another 10%: deletes and order cancellation** (2026-10-17, approved plan: two slices,
 13 operations, no `/hub`; cancel failures are a 409 with nothing stored; the UI gets an
 "Undo deactivation" for products pending termination). Slice 1 (9 operations, no
@@ -400,6 +411,7 @@ shipped).
 [tmf-api](docs/decisions/tmf-api.md) (conventions; TMF632/629/666/676/637/678/622) ·
 [catalog](docs/decisions/catalog.md) (TMF620, D-W18, D-W21) ·
 [accounts](docs/decisions/accounts.md) (TMF666 financial/party/settlement accounts) ·
+[events](docs/decisions/events.md) (TMF hubs, callbacks, event delivery) ·
 [billing-core](docs/decisions/billing-core.md) (stage 3, open questions) ·
 [worker](docs/decisions/worker.md) (stage 4) · [bills](docs/decisions/bills.md) (bill
 lifecycle) · [internal-api](docs/decisions/internal-api.md) · [mcp](docs/decisions/mcp.md) (MCP

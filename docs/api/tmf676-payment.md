@@ -4,13 +4,15 @@
 
 - Base path here: `/tmf-api/paymentManagement/v4`
 - Contract: [`spec/TMF676-Payment-v4.0.0.swagger.json`](../../spec/TMF676-Payment-v4.0.0.swagger.json) - Payment version 4.0.0; the spec's server URL is `/payment/v4/`
-- Operations exposed: 6
+- Operations exposed: 8
 
 
 ## Operations
 
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
+| POST | `/tmf-api/paymentManagement/v4/hub` | query: `fields`; body: `application/json` | `EventSubscriptionInput` | 201 `EventSubscription` | [`app/api/payment.py`](../../app/api/payment.py) |
+| DELETE | `/tmf-api/paymentManagement/v4/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/payment.py`](../../app/api/payment.py) |
 | GET | `/tmf-api/paymentManagement/v4/payment` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `account.id`, `status` | - | 200 `array of Payment` | [`app/api/payment.py`](../../app/api/payment.py) |
 | POST | `/tmf-api/paymentManagement/v4/payment` | query: `fields`; body: `application/json` | `Payment_Create` | 201 `Payment` | [`app/api/payment.py`](../../app/api/payment.py) |
 | GET | `/tmf-api/paymentManagement/v4/payment/{payment_id}` | path: `payment_id`; query: `fields` | - | 200 `Payment` | [`app/api/payment.py`](../../app/api/payment.py) |
@@ -23,7 +25,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF676-P
 
 ## Coverage of the spec
 
-- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
+- Resources of the spec that are **not implemented**: `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
 ## Behaviour and deviations

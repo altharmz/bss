@@ -2,15 +2,15 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 121,
-      "items": 121,
-      "tested": 121
+      "implemented": 138,
+      "items": 138,
+      "tested": 138
     },
     "db": {
       "deployed": null,
-      "implemented": 32,
-      "items": 32,
-      "tested": 32
+      "implemented": 35,
+      "items": 35,
+      "tested": 35
     },
     "ui": {
       "deployed": null,
@@ -20,9 +20,9 @@
     },
     "worker": {
       "deployed": null,
-      "implemented": 14,
-      "items": 14,
-      "tested": 14
+      "implemented": 15,
+      "items": 15,
+      "tested": 15
     }
   },
   "excluded": [
@@ -721,6 +721,186 @@
       "stage": 5,
       "tested": true,
       "title": "Order cancellations (TMF622 cancelProductOrder)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.event_subscription",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Hub event subscriptions (every API)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.event",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Events some hub wanted (outbox)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.event_delivery",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Event deliveries to hub callbacks"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.hub.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Subscribe to TMF620 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf620.hub.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Unsubscribe from TMF620 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf622.hub.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Subscribe to TMF622 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf622.hub.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Unsubscribe from TMF622 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf629.hub.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Subscribe to TMF629 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf629.hub.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Get a TMF629 subscription"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf629.hub.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Unsubscribe from TMF629 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf632.hub.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Subscribe to TMF632 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf632.hub.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Unsubscribe from TMF632 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf637.hub.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Subscribe to TMF637 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf637.hub.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Unsubscribe from TMF637 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.hub.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Subscribe to TMF666 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.hub.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Unsubscribe from TMF666 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf676.hub.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Subscribe to TMF676 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf676.hub.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Unsubscribe from TMF676 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf678.hub.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Subscribe to TMF678 events"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf678.hub.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Unsubscribe from TMF678 events"
     },
     {
       "area": "db",
@@ -1738,6 +1918,15 @@
       "stage": 5,
       "tested": true,
       "title": "Every run applies unused credit to open bills, oldest first"
+    },
+    {
+      "area": "worker",
+      "deployed": null,
+      "id": "worker.eventDelivery",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Due events are POSTed to hub callbacks, retried with backoff"
     }
   ],
   "unscoped": []

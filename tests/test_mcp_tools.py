@@ -21,6 +21,7 @@ import yaml
 
 import app.api
 import app.internal
+from app.api.hub import HUB_APIS
 from app.main import app as bss_app
 from bss_mcp import tools
 from bss_mcp.operations import EXCLUDED, OPERATIONS, Op
@@ -244,7 +245,11 @@ def world(api, db_conn) -> dict[str, Any]:
         "/tmf-api/productOrderingManagement/v5/cancelProductOrder",
         {"productOrder": {"id": later["id"]}},
     ).json()
+    hub = api.post(
+        "/tmf-api/customerManagement/v5/hub", {"callback": "http://listener.test/events"}
+    ).json()
     return {
+        "hub": hub,
         "cancellation": cancellation,
         "export_job": export_job,
         "import_job": import_job,
@@ -302,6 +307,7 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_rate": {"rate_id": world["rate"]["id"]},
         "get_order": {"order_id": world["order"]["id"]},
         "get_cancellation": {"cancel_id": world["cancellation"]["id"]},
+        "get_hub_customer": {"hub_id": world["hub"]["id"]},
         "first_charge": {
             "account_id": acc,
             "productOffering.id": offering,
@@ -522,6 +528,9 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
     call("catch_up", {"body": {"upTo": str(date(2026, 12, 2))}}, expected=(200, 202))
     # the run is not failed: the app refuses, but the tool reached it
     call("retry", {"run_id": str(world["run"]["id"])}, expected=(409,))
+    for _, short in HUB_APIS:
+        hub = call(f"create_hub_{short}", {"body": {"callback": "http://listener.test/x"}})
+        call(f"delete_hub_{short}", {"hub_id": hub["id"]}, expected=(204,))
 
     assert called == {n for n, t in generated().items() if not t.read_only}
     history = api.get(f"/internal/v1/customerBill/{world['bill']['id']}").json()["history"]

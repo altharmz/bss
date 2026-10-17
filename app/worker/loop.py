@@ -10,7 +10,9 @@ was down (the 03:00 reboot, a deploy):
 3. before a new scheduled date, the runs that failed because of accounts are retried
    once (D-W17) - the operator's retry is for immediacy;
 4. those dates, in order, with the scheduled trigger;
-5. the UI's queued requests.
+5. the UI's queued requests;
+6. the due event deliveries to hub callbacks (app/events/deliver.py), then the purge of
+   events delivered more than 30 days ago.
 
 A `checkpoint` (SIGTERM, liveness) is honoured between accounts and between requests;
 Stopped leaves the run in hand running for the next worker. The `heartbeat` (liveness
@@ -26,6 +28,7 @@ from zoneinfo import ZoneInfo
 import psycopg
 
 from app.clock import Clock
+from app.events import deliver
 from app.repository import billing
 from app.worker.plan import scheduled
 from app.worker.process import (
@@ -53,6 +56,7 @@ class Tick:
     retried: list[date] = field(default_factory=list)
     billed: list[date] = field(default_factory=list)
     requests: list[UUID] = field(default_factory=list)
+    deliveries: int = 0  # event POSTs tried (step 6)
     stopped: bool = False
 
 
@@ -115,6 +119,9 @@ def tick(
         result.requests = process_requests(
             conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
         )
+        sent = deliver.process(conn, clock=clock, checkpoint=checkpoint, heartbeat=heartbeat)
+        result.deliveries = len(sent.delivered) + len(sent.retrying) + len(sent.failed)
+        deliver.purge(conn, clock=clock)
     except Stopped as stopped:
         log.info("%s", stopped)
         result.stopped = True

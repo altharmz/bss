@@ -48,9 +48,11 @@ from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
+from app.events import emit
 from app.repository import catalog, classification
 from app.repository._sql import Row, count_references
 
+API = "TMF620"
 BASE = "/tmf-api/productCatalogManagement/v5"
 router = APIRouter(prefix=BASE)
 
@@ -166,13 +168,16 @@ def get_specification(spec_id: str, request: Request, tx: Tx) -> TmfJSONResponse
 
 
 @router.post("/productSpecification")
-def create_specification(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+def create_specification(
+    body: JsonBody, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, SPEC_ATTRIBUTES)
     check_type(body, "ProductSpecification")
     data = parse(SpecificationCreate, body)
     with tx() as conn:
-        row = insert_specification(conn, data)
-    return created(listing.select_fields(specification_body(row), fields))
+        new = specification_body(insert_specification(conn, data))
+        emit.created(conn, API, "productSpecification", new, at=clock.now())
+    return created(listing.select_fields(new, fields))
 
 
 def insert_specification(
@@ -190,7 +195,7 @@ def insert_specification(
 
 @router.patch("/productSpecification/{spec_id}")
 def patch_specification(
-    spec_id: str, body: MergePatchBody, request: Request, tx: Tx
+    spec_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, SPEC_ATTRIBUTES)
     check_type(body, "ProductSpecification")
@@ -204,8 +209,12 @@ def patch_specification(
             raise not_found("productSpecification", spec_id)
         if data.lifecycle_status is not None:
             _check_lifecycle("specification", current["lifecycle_status"], data.lifecycle_status)
-        row = catalog.update_product_specification(conn, uid, changes)
-    return TmfJSONResponse(listing.select_fields(specification_body(row), fields))
+        old = emit.before(conn, API, "productSpecification", lambda: specification_body(current))
+        new = specification_body(catalog.update_product_specification(conn, uid, changes))
+        emit.changed(
+            conn, API, "productSpecification", old, new, at=clock.now(), state="lifecycleStatus"
+        )
+    return TmfJSONResponse(listing.select_fields(new, fields))
 
 
 # --- productOfferingPrice ---
@@ -292,8 +301,9 @@ def create_price(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
     check_type(body, "ProductOfferingPrice")
     data = parse(PriceCreate, body)
     with tx() as conn:
-        row = insert_price(conn, data, clock.now())
-    return created(listing.select_fields(price_body(row), fields))
+        new = price_body(insert_price(conn, data, clock.now()))
+        emit.created(conn, API, "productOfferingPrice", new, at=clock.now())
+    return created(listing.select_fields(new, fields))
 
 
 def insert_price(
@@ -372,6 +382,7 @@ def patch_price(
             raise not_found("productOfferingPrice", price_id)
         if data.lifecycle_status is not None:
             _check_lifecycle("price", current["lifecycle_status"], data.lifecycle_status)
+        old = emit.before(conn, API, "productOfferingPrice", lambda: price_body(current))
         if data.valid_for is not None:
             new_range = data.valid_for.to_range()
             if new_range.lower != current["valid_for"].lower:
@@ -396,7 +407,11 @@ def patch_price(
             raise conflict(
                 "validFor overlaps another price of the same type and currency on the offering"
             ) from None
-    return TmfJSONResponse(listing.select_fields(price_body(row), fields))
+        new = price_body(row)
+        emit.changed(
+            conn, API, "productOfferingPrice", old, new, at=clock.now(), state="lifecycleStatus"
+        )
+    return TmfJSONResponse(listing.select_fields(new, fields))
 
 
 # --- productOffering ---
@@ -576,6 +591,7 @@ def create_offering(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -
     data = parse(OfferingCreate, body)
     with tx() as conn:
         new = offering_body(conn, insert_offering(conn, data, clock.now()))
+        emit.created(conn, API, "productOffering", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
 
@@ -630,6 +646,7 @@ def patch_offering(
             raise not_found("productOffering", offering_id)
         if data.lifecycle_status is not None:
             _check_lifecycle("offering", current["lifecycle_status"], data.lifecycle_status)
+        old = emit.before(conn, API, "productOffering", lambda: offering_body(conn, current))
         if "valid_for" in changes:
             _check_offering_period(current["valid_for"], changes["valid_for"], clock.now())
         if data.product_offering_price is not None:
@@ -644,6 +661,9 @@ def patch_offering(
             _attach_prices(conn, uid, data.product_offering_price, clock.now())
         row = catalog.update_product_offering(conn, uid, changes)
         patched = offering_body(conn, row)
+        emit.changed(
+            conn, API, "productOffering", old, patched, at=clock.now(), state="lifecycleStatus"
+        )
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
@@ -659,22 +679,24 @@ ORDERED = {
 
 
 @router.delete("/productSpecification/{spec_id}", status_code=204, response_class=Response)
-def delete_specification(spec_id: str, request: Request, tx: Tx) -> Response:
+def delete_specification(spec_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     listing.no_query(request)
     with tx() as conn:
         uid = parse_id("productSpecification", spec_id)
-        if catalog.lock_product_specification(conn, uid) is None:
+        row = catalog.lock_product_specification(conn, uid)
+        if row is None:
             raise not_found("productSpecification", spec_id)
         counts = count_references(
             conn, uid, {"productOffering": ("product_offering", "product_specification_id")}
         )
         refuse_if_referenced("productSpecification", uid, counts, "delete those offerings first")
+        emit.deleted(conn, API, "productSpecification", specification_body(row), at=clock.now())
         delete_row(conn, "product_specification", uid)
     return Response(status_code=204)
 
 
 @router.delete("/productOfferingPrice/{price_id}", status_code=204, response_class=Response)
-def delete_price(price_id: str, request: Request, tx: Tx) -> Response:
+def delete_price(price_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     listing.no_query(request)
     with tx() as conn:
         uid = parse_id("productOfferingPrice", price_id)
@@ -685,6 +707,7 @@ def delete_price(price_id: str, request: Request, tx: Tx) -> Response:
         if offering_id is None:
             if not catalog.delete_unattached_price(conn, uid):
                 raise conflict(f"productOfferingPrice {uid} was attached meanwhile; try again")
+            emit.deleted(conn, API, "productOfferingPrice", price_body(price), at=clock.now())
             return Response(status_code=204)
         # An attached price never moves. Lock its offering first, as price changes do;
         # orders hold it FOR SHARE, so none is in flight.
@@ -696,17 +719,19 @@ def delete_price(price_id: str, request: Request, tx: Tx) -> Response:
             {f"{label} of its offering": n for label, n in counts.items()},
             "a price of an ordered offering stays; end its validFor instead",
         )
+        emit.deleted(conn, API, "productOfferingPrice", price_body(price), at=clock.now())
         delete_row(conn, "product_offering_price", uid)
     return Response(status_code=204)
 
 
 @router.delete("/productOffering/{offering_id}", status_code=204, response_class=Response)
-def delete_offering(offering_id: str, request: Request, tx: Tx) -> Response:
+def delete_offering(offering_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     listing.no_query(request)
     with tx() as conn:
         uid = parse_id("productOffering", offering_id)
         classification.lock(conn)  # category memberships are written under it
-        if catalog.lock_offering(conn, uid) is None:
+        row = catalog.lock_offering(conn, uid)
+        if row is None:
             raise not_found("productOffering", offering_id)
         ordered = count_references(conn, uid, ORDERED)
         refuse_if_referenced(
@@ -716,6 +741,7 @@ def delete_offering(offering_id: str, request: Request, tx: Tx) -> Response:
             conn, uid, {"productOfferingPrice": ("product_offering_price", "product_offering_id")}
         )
         refuse_if_referenced("productOffering", uid, prices, "delete its prices first")
+        emit.deleted(conn, API, "productOffering", lambda: offering_body(conn, row), at=clock.now())
         classification.remove_memberships(conn, "offering", uid)
         delete_row(conn, "product_offering", uid)
     return Response(status_code=204)

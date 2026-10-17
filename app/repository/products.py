@@ -136,7 +136,11 @@ def lock_products(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[UUI
 
 
 def flip_statuses(
-    conn: psycopg.Connection, run_date: date, *, visible_before: datetime
+    conn: psycopg.Connection,
+    run_date: date,
+    *,
+    visible_before: datetime,
+    flipped: list[UUID] | None = None,
 ) -> dict[str, int]:
     """The status flips of the billing run of `run_date` (docs/stage4-design.md section
     5): created / pendingActive -> active once start_date <= run_date, pendingTerminate ->
@@ -148,7 +152,8 @@ def flip_statuses(
 
     The due products are locked in id order first, like lock_products (an order deleting
     several products locks them the same way), so the flips and an order cannot deadlock
-    (Q8). Idempotent: a second call flips nothing. Returns the count per new status."""
+    (Q8). Idempotent: a second call flips nothing. Returns the count per new status;
+    `flipped`, if given, receives the ids of the products flipped (for their events)."""
     params = {"day": run_date, "before": visible_before}
     due = fetch_all(
         conn,
@@ -179,13 +184,15 @@ def flip_statuses(
          WHERE id = ANY(%(ids)s)
            AND ((status IN ('created', 'pendingActive') AND start_date <= %(day)s)
                 OR (status = 'pendingTerminate' AND termination_date <= %(day)s))
-        RETURNING status
+        RETURNING id, status
         """,
         {**params, "ids": [row["id"] for row in due]},
     )
     counts: dict[str, int] = {}
     for row in rows:
         counts[row["status"]] = counts.get(row["status"], 0) + 1
+    if flipped is not None:
+        flipped.extend(sorted(row["id"] for row in rows))
     return counts
 
 

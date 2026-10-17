@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0016**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0018**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -38,6 +38,9 @@ PostgreSQL schema at Alembic head **0016**, read from `pg_catalog` of a throwawa
 | [`account_presentation_media`](account_presentation_media.md) | billing | Account bill delivery preferences; no external delivery is performed. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
 | [`worker_request`](worker_request.md) | worker | The admin UI's queue for the billing worker (ours): catch-up and retry requests. The API only inserts; the worker picks them up oldest first. |
+| [`event_subscription`](event_subscription.md) | events | TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their deliveries. |
+| [`event`](event.md) | events | TMF events some hub wanted, as sent; stored in the transaction of the change. |
+| [`event_delivery`](event_delivery.md) | events | One event to one subscription: pending until the worker delivers it or gives up. |
 
 ## Overview
 
@@ -89,6 +92,11 @@ flowchart LR
     billing_run_account[billing_run_account]
     worker_request[worker_request]
   end
+  subgraph area_events["Event notifications (TMF hubs)"]
+    event_subscription[event_subscription]
+    event[event]
+    event_delivery[event_delivery]
+  end
   account_presentation_media -->|"billing_account_id"| billing_account
   account_presentation_media -->|"media_id"| bill_presentation_media
   applied_customer_billing_rate -->|"billing_account_id"| billing_account
@@ -116,6 +124,8 @@ flowchart LR
   customer_bill_on_demand -->|"billing_account_id"| billing_account
   customer_bill_on_demand -->|"customer_bill_id"| customer_bill
   customer_bill_state_change -->|"customer_bill_id"| customer_bill
+  event_delivery -->|"event_id"| event
+  event_delivery -->|"subscription_id"| event_subscription
   financial_account -->|"party_id"| party
   offering_category -->|"category_id"| category
   offering_category -->|"offering_id"| product_offering
@@ -627,6 +637,47 @@ erDiagram
 
 Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`billing_run`](billing_run.md).
 
+## Event notifications (TMF hubs)
+
+```mermaid
+erDiagram
+  event_subscription {
+    uuid id PK
+    timestamptz created_at
+    text api
+    text callback
+    text query
+    text event_types
+    timestamptz subscribed_at
+    timestamptz deleted_at
+  }
+  event {
+    uuid id PK
+    bigint seq
+    timestamptz created_at
+    text api
+    text event_type
+    text resource
+    text resource_id
+    timestamptz occurred_at
+    jsonb payload
+  }
+  event_delivery {
+    uuid id PK
+    timestamptz created_at
+    uuid event_id FK
+    uuid subscription_id FK
+    event_delivery_state state
+    integer attempts
+    timestamptz next_attempt_at
+    timestamptz last_attempt_at
+    text last_error
+    timestamptz finished_at
+  }
+  event ||--o{ event_delivery : "event_id"
+  event_subscription ||--o{ event_delivery : "subscription_id"
+```
+
 ## Enums
 
 TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `tests/test_enum_lock.py`; the others are ours (migration comments say which).
@@ -647,6 +698,7 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 | `customer_bill_on_demand_state_type` | `inProgress`, `rejected`, `done`, `terminatedWithError` | [`customer_bill_on_demand.state`](customer_bill_on_demand.md) |
 | `customer_bill_state_type` | `new`, `onHold`, `validated`, `sent`, `settled`, `partiallyPaid` | [`customer_bill.state`](customer_bill.md), [`customer_bill_state_change.from_state`](customer_bill_state_change.md), [`customer_bill_state_change.to_state`](customer_bill_state_change.md) |
 | `customer_status` | `Created`, `Active`, `Inactive` | [`customer.status`](customer.md) |
+| `event_delivery_state` | `pending`, `delivered`, `failed`, `dropped` | [`event_delivery.state`](event_delivery.md) |
 | `item_action_type` | `add`, `modify`, `delete`, `noChange` | [`product_order_item.action`](product_order_item.md) |
 | `lifecycle_status` | `In Design`, `Active`, `Retired` | [`category.lifecycle_status`](category.md), [`product_catalog.lifecycle_status`](product_catalog.md), [`product_offering.lifecycle_status`](product_offering.md), [`product_offering_price.lifecycle_status`](product_offering_price.md), [`product_specification.lifecycle_status`](product_specification.md) |
 | `party_account_kind` | `PartyAccount`, `SettlementAccount` | [`party_account.kind`](party_account.md) |

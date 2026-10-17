@@ -38,6 +38,7 @@ from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.billing import settlement
 from app.billing.adapter import settle_account
+from app.events import emit
 from app.repository import billing, parties, payments
 from app.repository._sql import Row
 
@@ -237,4 +238,5 @@ def create_payment(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
             raise conflict("the payment's currency does not match the account's") from None
         _settle(conn, account["id"], row, data, now)
         new = payment_body(conn, row)
+        emit.created(conn, "TMF676", "payment", new, at=now)
     return created(listing.select_fields(new, fields))

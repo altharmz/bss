@@ -35,6 +35,7 @@ from app.api.catalog import (
 from app.api.catalog_jobs import ExportJobCreate, ImportJobCreate
 from app.api.classification import CatalogCreate, CatalogPatch, CategoryCreate, CategoryPatch
 from app.api.customer import CustomerCreate, CustomerPatch
+from app.api.hub import HUB_APIS, HubIn
 from app.api.on_demand import DemandCreate
 from app.api.ordering import CancelIn, OrderIn
 from app.api.party import IndividualCreate, IndividualPatch, OrganizationCreate, OrganizationPatch
@@ -363,6 +364,20 @@ OPERATIONS: dict[str, Op] = {
         body=CancelIn,
     ),
     "extension_schema": Op("The JSON Schema of BssBillingAccount (the TMF666 extension)."),
+    # --- TMF hubs: event subscriptions, one pair per API ---
+    **{
+        f"create_hub_{short}": Op(
+            f"Subscribe a callback to {api} events: callback (https, public host outside"
+            " dev), optional query eventType=<type>[,<type>]; events are POSTed to it.",
+            body=HubIn,
+        )
+        for api, short in HUB_APIS
+    },
+    **{
+        f"delete_hub_{short}": Op(f"Remove a {api} event subscription; nothing more is sent.")
+        for api, short in HUB_APIS
+    },
+    "get_hub_customer": Op("One TMF629 event subscription.", query=FIELDS),
     # --- internal ---
     "get_context": Op(
         "Business date, time zone, currency, billing run time, payment term, and the"

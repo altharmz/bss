@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/customerBillManagement/v5`
 - Contract: [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml) - CustomerBill version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 10
+- Operations exposed: 12
 
 
 ## Operations
@@ -21,13 +21,15 @@
 | GET | `/tmf-api/customerBillManagement/v5/customerBillOnDemand` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `state` | - | 200 `array of CustomerBillOnDemand` | [`app/api/on_demand.py`](../../app/api/on_demand.py) |
 | POST | `/tmf-api/customerBillManagement/v5/customerBillOnDemand` | query: `fields`; body: `application/json` | `CustomerBillOnDemand_FVO` | 201 `CustomerBillOnDemand` | [`app/api/on_demand.py`](../../app/api/on_demand.py) |
 | GET | `/tmf-api/customerBillManagement/v5/customerBillOnDemand/{demand_id}` | path: `demand_id`; query: `fields` | - | 200 `CustomerBillOnDemand` | [`app/api/on_demand.py`](../../app/api/on_demand.py) |
+| POST | `/tmf-api/customerBillManagement/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/bill.py`](../../app/api/bill.py) |
+| DELETE | `/tmf-api/customerBillManagement/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/bill.py`](../../app/api/bill.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 
 
 ## Coverage of the spec
 
-- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
+- Resources of the spec that are **not implemented**: `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
 ## Behaviour and deviations

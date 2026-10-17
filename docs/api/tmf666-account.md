@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/accountManagement/v5`
 - Contract: [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml) - Account Management version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 33
+- Operations exposed: 35
 
 
 ## Operations
@@ -33,6 +33,8 @@
 | DELETE | `/tmf-api/accountManagement/v5/financialAccount/{account_id}` | path: `account_id` | - | 204 (no body) | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/financialAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | PATCH | `/tmf-api/accountManagement/v5/financialAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `FinancialAccount_MVO` | 200 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| POST | `/tmf-api/accountManagement/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/account.py`](../../app/api/account.py) |
+| DELETE | `/tmf-api/accountManagement/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/partyAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `accountType`, `financialAccount.id`, `name`, `relatedParty.id`, `state` | - | 200 `array of PartyAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | POST | `/tmf-api/accountManagement/v5/partyAccount` | query: `fields`; body: `application/json` | `PartyAccount_FVO` | 201 `PartyAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | DELETE | `/tmf-api/accountManagement/v5/partyAccount/{account_id}` | path: `account_id` | - | 204 (no body) | [`app/api/account.py`](../../app/api/account.py) |
@@ -91,7 +93,7 @@ Every billingAccount body carries `@type: BssBillingAccount`, `@baseType: Billin
 ## Coverage of the spec
 
 - Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `POST /billingCycleSpecification`, `DELETE /billingCycleSpecification/{id}`, `PATCH /billingCycleSpecification/{id}`.
-- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
+- Resources of the spec that are **not implemented**: `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
 ## Behaviour and deviations

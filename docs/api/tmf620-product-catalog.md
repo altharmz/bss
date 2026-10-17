@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/productCatalogManagement/v5`
 - Contract: [`spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml`](../../spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml) - Product Catalog Management version 5.0.0; the spec's server URL is `https://serverRoot/productCatalogManagement/v5/`
-- Operations exposed: 33
+- Operations exposed: 35
 
 
 ## Operations
@@ -20,6 +20,8 @@
 | POST | `/tmf-api/productCatalogManagement/v5/exportJob` | query: `fields`; body: `application/json` | `ExportJob_FVO` | 201 `ExportJob` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | DELETE | `/tmf-api/productCatalogManagement/v5/exportJob/{job_id}` | path: `job_id` | - | 204 (no body) | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/exportJob/{job_id}` | path: `job_id`; query: `fields` | - | 200 `ExportJob` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| POST | `/tmf-api/productCatalogManagement/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/catalog.py`](../../app/api/catalog.py) |
+| DELETE | `/tmf-api/productCatalogManagement/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | GET | `/tmf-api/productCatalogManagement/v5/importJob` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `status` | - | 200 `array of ImportJob` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | POST | `/tmf-api/productCatalogManagement/v5/importJob` | query: `fields`; body: `application/json` | `ImportJob_FVO` | 201 `ImportJob` | [`app/api/catalog.py`](../../app/api/catalog.py) |
 | DELETE | `/tmf-api/productCatalogManagement/v5/importJob/{job_id}` | path: `job_id` | - | 204 (no body) | [`app/api/catalog.py`](../../app/api/catalog.py) |
@@ -50,7 +52,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF620-P
 
 ## Coverage of the spec
 
-- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
+- Resources of the spec that are **not implemented**: `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
 ## Behaviour and deviations

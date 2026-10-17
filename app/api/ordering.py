@@ -43,12 +43,14 @@ from app.api.inventory import ORDERING_BASE as BASE
 from app.api.inventory import order_href, product_href
 from app.api.prices import monthly_price
 from app.api.tmfjson import TmfJSONResponse
+from app.events import emit
 from app.ordering import cancel as cancellation
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
 from app.repository import catalog, orders, parties
 from app.repository._sql import Row
 
 router = APIRouter(prefix=BASE)
+API = "TMF622"
 
 ATTRIBUTES = (
     "state",
@@ -265,11 +267,13 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
         row = orders.get_order(conn, order_id)
         assert row is not None
         new = order_body(conn, row)
+        # processed at once: one Create carrying the final state (completed or rejected)
+        emit.created(conn, API, "productOrder", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
 
 @router.delete("/productOrder/{order_id}", status_code=204, response_class=Response)
-def delete_order(order_id: str, request: Request, tx: Tx) -> Response:
+def delete_order(order_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     """Only a rejected order: it never executed, so nothing refers to it. Any other order
     is the history of its products (409); a completed one can be cancelled instead."""
     listing.no_query(request)
@@ -283,6 +287,7 @@ def delete_order(order_id: str, request: Request, tx: Tx) -> Response:
                 f"productOrder {uid} is {row['state']}: only a rejected order can be deleted"
                 " (a completed one can be cancelled with cancelProductOrder)"
             )
+        emit.deleted(conn, API, "productOrder", lambda: order_body(conn, row), at=clock.now())
         orders.delete_rejected(conn, uid)
     return Response(status_code=204)
 
@@ -383,4 +388,15 @@ def cancel_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
             raise unprocessable(str(exc)) from None
         except cancellation.CancelRefused as exc:
             raise conflict(str(exc)) from None
-    return created(listing.select_fields(cancel_body(row), fields))
+        new = cancel_body(row)
+        emit.created(conn, API, "cancelProductOrder", new, at=row["creation_date"])
+        order = orders.get_order(conn, row["product_order_id"])
+        emit.emit(
+            conn,
+            API,
+            "productOrder",
+            "StateChange",
+            lambda: order_body(conn, order),
+            at=row["creation_date"],
+        )
+    return created(listing.select_fields(new, fields))

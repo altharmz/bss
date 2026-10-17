@@ -854,9 +854,11 @@ def record_bill_state(
     now: datetime,
     cause: str,
     operator: str | None = None,
+    notify: bool = True,
 ) -> None:
     """Move one bill from `change.from_state` to `change.to_state` and record it. Raises
-    LookupError if the bill is no longer in `from_state`."""
+    LookupError if the bill is no longer in `from_state`. `notify`: emit the TMF678
+    StateChange event (issuing emits one Create for its steps instead)."""
     row = fetch_one(
         conn,
         "UPDATE customer_bill SET state = %s WHERE id = %s AND state = %s RETURNING id",
@@ -872,6 +874,10 @@ def record_bill_state(
         """,
         (change.bill_id, change.from_state, change.to_state, now, cause, operator),
     )
+    if notify:
+        from app.events import emit  # the API bodies import this module
+
+        emit.bill(conn, change.bill_id, "StateChange", at=now)
 
 
 def record_bill_issue(conn: psycopg.Connection, bill_id: UUID, *, now: datetime) -> None:

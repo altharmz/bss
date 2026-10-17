@@ -245,7 +245,8 @@ implemented; order processing lives in `app/ordering/`.
   ([catalog.md](catalog.md#deleting-catalog-entries-2026-10-16)); everywhere else it is
   still a 405. **Narrowed again 2026-10-17:** the same rule for parties, customers and
   the TMF666 resources ([below](#deleting-parties-customers-and-accounts-2026-10-17)),
-  and for rejected orders; cancelProductOrder is exposed since the same day.
+  and for rejected orders; cancelProductOrder is exposed since the same day, and so is
+  `/hub` in every API ([events.md](events.md)).
 - **Errors:** every non-2xx body is the TMF `Error` (`@type`, `code`, `reason`, `message`,
   `status`), including unknown routes, FastAPI's own validation errors and unhandled
   exceptions (500 says "internal error", nothing more). 400 = malformed JSON, unknown

@@ -16,6 +16,7 @@ from app.billing import settlement
 from app.billing.core import add_month, compute, cycle_period
 from app.billing.model import Account, BillingResult, BillingState
 from app.config import settings
+from app.events import emit
 from app.repository import billing, presentation
 
 
@@ -75,7 +76,9 @@ def issue_bills(conn: psycopg.Connection, account: Account, *, now: datetime) ->
         settlement.validate(candidate, end)
         presentation.snapshot_bill(conn, candidate.id, now=now)
         for change in settlement.issue(candidate):
-            billing.record_bill_state(conn, change, now=now, cause="run")
+            billing.record_bill_state(conn, change, now=now, cause="run", notify=False)
+        # one event for the bill as issued: its new -> validated -> sent steps are internal
+        emit.bill(conn, candidate.id, "Create", at=now)
 
 
 def settle_account(

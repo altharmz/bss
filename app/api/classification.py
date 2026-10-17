@@ -9,6 +9,7 @@ from pydantic import Field
 
 from app.api import listing
 from app.api.catalog import (
+    API,
     BASE,
     LifecycleStatus,
     _check_lifecycle,
@@ -30,9 +31,10 @@ from app.api.common import (
     without_nulls,
 )
 from app.api.deletes import delete_row, refuse_if_referenced
-from app.api.deps import JsonBody, MergePatchBody, Tx
+from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
+from app.events import emit
 from app.repository import classification as repo
 from app.repository._sql import Row, count_references, select_page
 
@@ -237,26 +239,50 @@ def get_category(category_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
         return TmfJSONResponse(listing.select_fields(organization_body(conn, row, True), fields))
 
 
+def _resource(category: bool) -> tuple[str, str]:
+    return ("category", "category") if category else ("productCatalog", "product_catalog")
+
+
+def _created(conn: psycopg.Connection, data, category: bool, at) -> dict[str, Any]:
+    new = save(conn, data, category)
+    emit.created(conn, API, _resource(category)[0], new, at=at)
+    return new
+
+
+def _patched(conn: psycopg.Connection, data, category: bool, uid: UUID, at) -> dict[str, Any]:
+    resource, table = _resource(category)
+    current = repo.get(conn, table, uid)
+    old = (
+        None
+        if current is None  # save answers the 404
+        else emit.before(conn, API, resource, lambda: organization_body(conn, current, category))
+    )
+    new = save(conn, data, category, uid)
+    emit.changed(conn, API, resource, old, new, at=at, state="lifecycleStatus")
+    return new
+
+
 @router.post("/category")
-def create_category(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+def create_category(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, CATEGORY_ATTRIBUTES)
     check_type(body, "Category")
     data = parse(CategoryCreate, body, read_only=("subCategory",))
     with tx() as conn:
-        return created(listing.select_fields(save(conn, data, True), fields))
+        new = _created(conn, data, True, clock.now())
+    return created(listing.select_fields(new, fields))
 
 
 @router.patch("/category/{category_id}")
 def patch_category(
-    category_id: str, body: MergePatchBody, request: Request, tx: Tx
+    category_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, CATEGORY_ATTRIBUTES)
     check_type(body, "Category")
     data = parse(CategoryPatch, body, read_only=("lastUpdate", "subCategory"))
+    uid = parse_id("category", category_id)
     with tx() as conn:
-        return TmfJSONResponse(
-            listing.select_fields(save(conn, data, True, parse_id("category", category_id)), fields)
-        )
+        patched = _patched(conn, data, True, uid, clock.now())
+    return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
 @router.get("/productCatalog")
@@ -289,37 +315,37 @@ def get_catalog(catalog_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/productCatalog")
-def create_catalog(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+def create_catalog(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, CATALOG_ATTRIBUTES)
     check_type(body, "ProductCatalog")
     data = parse(CatalogCreate, body)
     with tx() as conn:
-        return created(listing.select_fields(save(conn, data, False), fields))
+        new = _created(conn, data, False, clock.now())
+    return created(listing.select_fields(new, fields))
 
 
 @router.patch("/productCatalog/{catalog_id}")
 def patch_catalog(
-    catalog_id: str, body: MergePatchBody, request: Request, tx: Tx
+    catalog_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, CATALOG_ATTRIBUTES)
     check_type(body, "ProductCatalog")
     data = parse(CatalogPatch, body, read_only=("lastUpdate",))
+    uid = parse_id("productCatalog", catalog_id)
     with tx() as conn:
-        return TmfJSONResponse(
-            listing.select_fields(
-                save(conn, data, False, parse_id("productCatalog", catalog_id)), fields
-            )
-        )
+        patched = _patched(conn, data, False, uid, clock.now())
+    return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
 @router.delete("/category/{category_id}", status_code=204, response_class=Response)
-def delete_category(category_id: str, request: Request, tx: Tx) -> Response:
+def delete_category(category_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     """Only an empty category: no subcategories, offerings or catalogs referring to it."""
     listing.no_query(request)
     with tx() as conn:
         uid = parse_id("category", category_id)
         repo.lock(conn)
-        if repo.get(conn, "category", uid) is None:
+        row = repo.get(conn, "category", uid)
+        if row is None:
             raise not_found("category", category_id)
         counts = count_references(
             conn,
@@ -331,19 +357,26 @@ def delete_category(category_id: str, request: Request, tx: Tx) -> Response:
             },
         )
         refuse_if_referenced("category", uid, counts, "remove them from it first")
+        emit.deleted(
+            conn, API, "category", lambda: organization_body(conn, row, True), at=clock.now()
+        )
         delete_row(conn, "category", uid)
     return Response(status_code=204)
 
 
 @router.delete("/productCatalog/{catalog_id}", status_code=204, response_class=Response)
-def delete_catalog(catalog_id: str, request: Request, tx: Tx) -> Response:
+def delete_catalog(catalog_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     """Nothing refers to a catalog; its root categories stay, only the membership goes."""
     listing.no_query(request)
     with tx() as conn:
         uid = parse_id("productCatalog", catalog_id)
         repo.lock(conn)
-        if repo.get(conn, "product_catalog", uid) is None:
+        row = repo.get(conn, "product_catalog", uid)
+        if row is None:
             raise not_found("productCatalog", catalog_id)
+        emit.deleted(
+            conn, API, "productCatalog", lambda: organization_body(conn, row, False), at=clock.now()
+        )
         repo.remove_memberships(conn, "catalog", uid)
         delete_row(conn, "product_catalog", uid)
     return Response(status_code=204)

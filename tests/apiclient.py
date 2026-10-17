@@ -64,6 +64,9 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
         },
     ),
 }
+# every API has a hub: Hub in v5, EventSubscription in TMF676 v4
+for _base, (_spec, _resources) in APIS.items():
+    _resources["hub"] = "EventSubscription" if _spec == "TMF676" else "Hub"
 # Our internal API (spec/internal/bss-internal.oas.yaml): spec path -> response schema
 # (of the items, for a list).
 INTERNAL_BASE = "/internal/v1"

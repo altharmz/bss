@@ -22,12 +22,14 @@ from app.api.common import (
     without_nulls,
 )
 from app.api.deletes import delete_row, refuse_if_referenced
-from app.api.deps import JsonBody, MergePatchBody, Tx
+from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import not_found
 from app.api.tmfjson import TmfJSONResponse
+from app.events import emit
 from app.repository import accounts, parties
 from app.repository._sql import Row, count_references
 
+API = "TMF632"
 BASE = "/tmf-api/partyManagement/v5"
 router = APIRouter(prefix=BASE)
 
@@ -63,7 +65,9 @@ def _get(conn: psycopg.Connection, party_type: str, resource: str, raw_id: str) 
     return row
 
 
-def _delete(request: Request, tx: Tx, party_type: str, resource: str, raw_id: str) -> Response:
+def _delete(
+    request: Request, tx: Tx, clock: ClockDep, party_type: str, resource: str, raw_id: str
+) -> Response:
     """Only a party nothing refers to: no customer engages it, it owns no account.
     Customers and accounts take the party FOR KEY SHARE when they refer to it."""
     listing.no_query(request)
@@ -83,6 +87,7 @@ def _delete(request: Request, tx: Tx, party_type: str, resource: str, raw_id: st
         for kind, n in accounts.count_party_accounts(conn, "party_id", uid).items():
             counts[kind[0].lower() + kind[1:]] = n
         refuse_if_referenced(resource, uid, counts, "delete those first")
+        emit.deleted(conn, API, resource, party_body(row), at=clock.now())
         delete_row(conn, "party", uid)
     return Response(status_code=204)
 
@@ -130,7 +135,7 @@ def get_individual(party_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 
 
 @router.post("/individual")
-def create_individual(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+def create_individual(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, INDIVIDUAL_ATTRIBUTES)
     check_type(body, "Individual")
     data = parse(IndividualCreate, body)
@@ -138,12 +143,14 @@ def create_individual(body: JsonBody, request: Request, tx: Tx) -> TmfJSONRespon
         row = parties.create_individual(
             conn, given_name=data.given_name, family_name=data.family_name
         )
-    return created(listing.select_fields(party_body(row), fields))
+        new = party_body(row)
+        emit.created(conn, API, "individual", new, at=clock.now())
+    return created(listing.select_fields(new, fields))
 
 
 @router.patch("/individual/{party_id}")
 def patch_individual(
-    party_id: str, body: MergePatchBody, request: Request, tx: Tx
+    party_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, INDIVIDUAL_ATTRIBUTES)
     check_type(body, "Individual")
@@ -151,13 +158,16 @@ def patch_individual(
     not_null(data, "given_name", "family_name")
     with tx() as conn:
         current = _get(conn, "Individual", "individual", party_id)
+        old = emit.before(conn, API, "individual", lambda: party_body(current))
         row = parties.update_party(conn, current["id"], columns(data))
-    return TmfJSONResponse(listing.select_fields(party_body(row), fields))
+        new = party_body(row)
+        emit.changed(conn, API, "individual", old, new, at=clock.now())
+    return TmfJSONResponse(listing.select_fields(new, fields))
 
 
 @router.delete("/individual/{party_id}", status_code=204, response_class=Response)
-def delete_individual(party_id: str, request: Request, tx: Tx) -> Response:
-    return _delete(request, tx, "Individual", "individual", party_id)
+def delete_individual(party_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
+    return _delete(request, tx, clock, "Individual", "individual", party_id)
 
 
 # --- organization ---
@@ -186,18 +196,22 @@ def get_organization(party_id: str, request: Request, tx: Tx) -> TmfJSONResponse
 
 
 @router.post("/organization")
-def create_organization(body: JsonBody, request: Request, tx: Tx) -> TmfJSONResponse:
+def create_organization(
+    body: JsonBody, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ORGANIZATION_ATTRIBUTES)
     check_type(body, "Organization")
     data = parse(OrganizationCreate, body)
     with tx() as conn:
         row = parties.create_organization(conn, name=data.name)
-    return created(listing.select_fields(party_body(row), fields))
+        new = party_body(row)
+        emit.created(conn, API, "organization", new, at=clock.now())
+    return created(listing.select_fields(new, fields))
 
 
 @router.patch("/organization/{party_id}")
 def patch_organization(
-    party_id: str, body: MergePatchBody, request: Request, tx: Tx
+    party_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ORGANIZATION_ATTRIBUTES)
     check_type(body, "Organization")
@@ -206,10 +220,13 @@ def patch_organization(
     changes = {"organization_name": data.name} if "name" in data.model_fields_set else {}
     with tx() as conn:
         current = _get(conn, "Organization", "organization", party_id)
+        old = emit.before(conn, API, "organization", lambda: party_body(current))
         row = parties.update_party(conn, current["id"], changes)
-    return TmfJSONResponse(listing.select_fields(party_body(row), fields))
+        new = party_body(row)
+        emit.changed(conn, API, "organization", old, new, at=clock.now())
+    return TmfJSONResponse(listing.select_fields(new, fields))
 
 
 @router.delete("/organization/{party_id}", status_code=204, response_class=Response)
-def delete_organization(party_id: str, request: Request, tx: Tx) -> Response:
-    return _delete(request, tx, "Organization", "organization", party_id)
+def delete_organization(party_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
+    return _delete(request, tx, clock, "Organization", "organization", party_id)

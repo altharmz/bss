@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 import psycopg
 
 from app.config import settings
+from app.events import emit
 from app.ordering.states import item_transition, order_transition
 from app.repository import catalog, orders, parties, products
 from app.repository._sql import Row
@@ -328,6 +329,7 @@ def _execute(
                 status="active" if start <= today else "created",
             )
             orders.set_order_item_product(conn, row["id"], product["id"])
+            emit.product(conn, product["id"], "Create", at=now, today=today)
         else:
             product = locked[item.product_id]
             if product["start_date"] > today:
@@ -349,6 +351,7 @@ def _execute(
                     # flips it on the date; billing is driven by termination_date
                     status="terminated" if start <= today else "pendingTerminate",
                 )
+            emit.product(conn, product["id"], "StateChange", at=now, today=today)
         orders.set_order_item_state(conn, row["id"], item_transition(progress, "completed"))
     orders.set_order_state(
         conn, order["id"], order_transition(state, "completed"), completion_date=now

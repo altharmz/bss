@@ -26,6 +26,7 @@ from pydantic import Field
 
 from app.api import listing, tmfjson
 from app.api.catalog import (
+    API,
     BASE,
     OfferingCreate,
     PriceCreate,
@@ -42,6 +43,7 @@ from app.api.common import TmfModel, check_type, created, parse, parse_id, utc, 
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import TmfError, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
+from app.events import emit
 from app.repository import catalog, catalog_jobs, classification
 from app.repository._sql import Row, fetch_all
 
@@ -410,7 +412,9 @@ def create_export_job(body: JsonBody, request: Request, tx: Tx, clock: ClockDep)
             )
         except ImportProblem as exc:
             row = _store(conn, "ExportJob", now, url=None, query=data.query or None, error=str(exc))
-    return created(listing.select_fields(job_body(row), fields))
+        new = job_body(row)
+        emit.created(conn, API, "exportJob", new, at=now)
+    return created(listing.select_fields(new, fields))
 
 
 @router.delete("/exportJob/{job_id}", status_code=204, response_class=Response)
@@ -444,7 +448,10 @@ def create_import_job(body: JsonBody, request: Request, tx: Tx, clock: ClockDep)
         except ImportProblem as exc:
             error = str(exc)
         row = _store(conn, "ImportJob", now, url=data.url, error=error)
-    return created(listing.select_fields(job_body(row), fields))
+        # one event for the job: the entries it imported emit no Create events of their own
+        new = job_body(row)
+        emit.created(conn, API, "importJob", new, at=now)
+    return created(listing.select_fields(new, fields))
 
 
 @router.delete("/importJob/{job_id}", status_code=204, response_class=Response)

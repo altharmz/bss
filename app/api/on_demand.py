@@ -23,6 +23,7 @@ from app.api.common import (
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
+from app.events import emit
 from app.repository import parties
 from app.repository._sql import fetch_one, returning, select_page
 
@@ -126,4 +127,6 @@ def create_bill_demand(
                 )
         except UniqueViolation:
             raise conflict("an on-demand request is already in progress for this account") from None
-        return created(listing.select_fields(demand_body(conn, row), fields))
+        new = demand_body(conn, row)
+        emit.created(conn, "TMF678", "customerBillOnDemand", new, at=now)
+    return created(listing.select_fields(new, fields))

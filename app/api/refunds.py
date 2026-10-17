@@ -25,6 +25,7 @@ from app.api.errors import conflict, not_found, unprocessable
 from app.api.payment import BASE, PaymentMethod
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.adapter import settle_account
+from app.events import emit
 from app.repository import billing, parties, refunds
 
 router = APIRouter(prefix=BASE)
@@ -168,4 +169,6 @@ def create_refund(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> 
             if left == 0:
                 break
         conn.execute("SET CONSTRAINTS credit_usage_bounds IMMEDIATE")
-    return created(listing.select_fields(refund_body(row), fields))
+        new = refund_body(row)
+        emit.created(conn, "TMF676", "refund", new, at=now)
+    return created(listing.select_fields(new, fields))

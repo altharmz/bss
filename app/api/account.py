@@ -51,9 +51,11 @@ from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.presentation import BillStructure, structure_body
 from app.api.tmfjson import TmfJSONResponse
+from app.events import emit
 from app.repository import accounts, billing, parties, presentation
 from app.repository._sql import Row, count_references
 
+API = "TMF666"
 BASE = "/tmf-api/accountManagement/v5"
 router = APIRouter(prefix=BASE)
 # Outside the TMF666 resource paths: it is ours, not part of that API.
@@ -346,12 +348,13 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
             presentation.set_preferences(conn, row["id"], data.bill_structure)
             row = parties.get_billing_account(conn, row["id"])
         new = account_body(conn, row)
+        emit.created(conn, API, "billingAccount", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
 
 @router.patch("/billingAccount/{account_id}")
 def patch_account(
-    account_id: str, body: MergePatchBody, request: Request, tx: Tx
+    account_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, EXTENSION_TYPE, "BillingAccount")
@@ -374,6 +377,7 @@ def patch_account(
         current = parties.get_billing_account(conn, uid, "update")
         if current is None:
             raise not_found("billingAccount", account_id)
+        old = emit.before(conn, API, "billingAccount", lambda: account_body(conn, current))
         changes = columns(
             data, exclude=frozenset({"credit_limit", "bill_structure", "financial_account"})
         )
@@ -395,11 +399,12 @@ def patch_account(
             presentation.set_preferences(conn, uid, data.bill_structure)
             row = parties.get_billing_account(conn, uid)
         patched = account_body(conn, row)
+        emit.changed(conn, API, "billingAccount", old, patched, at=clock.now(), state="state")
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
 @router.delete("/billingAccount/{account_id}", status_code=204, response_class=Response)
-def delete_account(account_id: str, request: Request, tx: Tx) -> Response:
+def delete_account(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     """Only an account without history: nothing ordered, charged, billed, paid, refunded
     or processed by a billing run (`parties.ACCOUNT_HISTORY`) - close it otherwise. Its
     presentation preferences go with it. Every writer that adds history takes the
@@ -408,10 +413,12 @@ def delete_account(account_id: str, request: Request, tx: Tx) -> Response:
     listing.no_query(request)
     with tx() as conn:
         uid = parse_id("billingAccount", account_id)
-        if parties.get_billing_account(conn, uid, "update") is None:
+        row = parties.get_billing_account(conn, uid, "update")
+        if row is None:
             raise not_found("billingAccount", account_id)
         counts = count_references(conn, uid, parties.ACCOUNT_HISTORY)
         refuse_if_referenced("billingAccount", uid, counts, "close it instead (state Closed)")
+        emit.deleted(conn, API, "billingAccount", lambda: account_body(conn, row), at=clock.now())
         presentation.remove_preferences(conn, uid)
         delete_row(conn, "billing_account", uid)
     return Response(status_code=204)

@@ -162,6 +162,7 @@ AREAS = {
         "bill_format", "bill_presentation_media", "account_presentation_media",
     ),
     "worker": ("billing_run_account", "worker_request"),
+    "events": ("event_subscription", "event", "event_delivery"),
 }
 AREA_TITLES = {
     "party": "Party, customer, account (TMF632, TMF629, TMF666)",
@@ -170,6 +171,7 @@ AREA_TITLES = {
     "inventory": "Inventory (TMF637)",
     "billing": "Billing and payments (TMF678, TMF676)",
     "worker": "Billing worker (ours)",
+    "events": "Event notifications (TMF hubs)",
 }
 SKIP_TABLES = {"alembic_version"}
 
@@ -348,7 +350,7 @@ def spec_status_text(api: Api, ops: list[dict], spec: dict | None) -> list[str]:
         lines.append(
             "- Resources of the spec that are **not implemented**: "
             + ", ".join(f"`/{r}`" for r in other_resources)
-            + " (`/hub` and `/listener/*`: no event notifications)."
+            + " (`/listener/*` is the client's side: hubs subscribe, this service sends)."
         )
     return lines
 

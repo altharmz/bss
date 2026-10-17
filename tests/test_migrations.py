@@ -336,7 +336,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 33  # 32 domain tables + alembic_version
+    assert tables == 36  # 35 domain tables + alembic_version
 
 
 def test_0016_order_cancellation_round_trip(temp_db_url):
@@ -387,6 +387,45 @@ def test_0016_order_cancellation_round_trip(temp_db_url):
         assert conn.execute(
             "SELECT state, cancellation_date IS NOT NULL FROM product_order"
         ).fetchone() == ("cancelled", True)
+
+
+def test_0017_0018_events_round_trip(temp_db_url):
+    """Hubs, events and deliveries; downgrading to 0016 drops them all and no other data."""
+    from tests import factories
+
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0018")
+    with psycopg.connect(temp_db_url) as conn:
+        factories.account(conn)
+        hub = conn.execute(
+            "INSERT INTO event_subscription (api, callback, subscribed_at)"
+            " VALUES ('TMF629', 'https://x.example/e', now()) RETURNING id"
+        ).fetchone()[0]
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute(
+                "INSERT INTO event_subscription (api, callback, query, subscribed_at)"
+                " VALUES ('TMF629', 'https://x.example/e', 'eventType=X', now())"
+            )  # a query needs its parsed event types
+        event = conn.execute(
+            "INSERT INTO event (api, event_type, resource, resource_id, occurred_at, payload)"
+            " VALUES ('TMF629', 'CustomerCreateEvent', 'customer', 'c1', now(), '{}')"
+            " RETURNING id"
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO event_delivery (event_id, subscription_id, next_attempt_at)"
+            " VALUES (%s, %s, now())",
+            (event, hub),
+        )
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE event_delivery SET state = 'delivered'")  # needs finished_at
+    command.downgrade(cfg, "0016")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT to_regclass('event_subscription'), to_regclass('event'),"
+            " to_regclass('event_delivery'), to_regtype('event_delivery_state')"
+        ).fetchone() == (None, None, None, None)
+        assert conn.execute("SELECT count(*) FROM billing_account").fetchone() == (1,)
+    command.upgrade(cfg, "0018")
 
 
 def test_0009_catalog_round_trip(temp_db_url):
