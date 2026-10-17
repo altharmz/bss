@@ -70,14 +70,62 @@ def test_cycle_policy_missing_ids_and_retrieve_queries(api):
     assert api.get(f"{BASE}/monthly?fields=unknown").status_code == 400
 
 
-def test_cycle_policy_and_account_reference_are_read_only(api):
-    assert api.post(BASE, {"name": "Weekly"}).status_code == 405
-    assert api.patch(f"{BASE}/monthly", {"frequency": "weekly"}).status_code == 405
-    assert api.request("DELETE", f"{BASE}/monthly").status_code == 405
+def test_the_built_in_specification_is_fixed(api):
+    assert api.patch(f"{BASE}/monthly", {"name": "Other"}).status_code == 409
+    assert api.request("DELETE", f"{BASE}/monthly").status_code == 409
+    assert api.get(f"{BASE}/monthly").json()["name"] == "Monthly billing"
+
+
+def test_a_stored_specification_names_the_same_monthly_policy(api):
+    response = api.post(BASE, {"@type": "BillingCycleSpecification", "name": "Business"})
+    assert response.status_code == 201, response.text
+    spec = response.json()
+    assert response.headers["location"] == spec["href"]
+    assert (spec["billingPeriod"], spec["frequency"], spec["billingDateShift"]) == (
+        "monthly",
+        "monthly",
+        0,
+    )
+    assert api.get(spec["href"]).json() == spec
+    assert [s["id"] for s in api.get(BASE).json()] == ["monthly", spec["id"]]
+    assert api.get(f"{BASE}?name=Business").json() == [spec]
+    patched = api.patch(spec["href"], {"description": "For companies"}).json()
+    assert patched["description"] == "For companies"
+    assert api.patch(spec["href"], {"name": None}).status_code == 422
+    assert api.get(f"{BASE}/{apidata.NIL}").status_code == 404
+    assert api.patch(f"{BASE}/{apidata.NIL}", {"name": "x"}).status_code == 404
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"name": "Weekly", "billingPeriod": "weekly"},
+        {"name": "Weekly", "frequency": "weekly"},
+        {"name": "Shifted", "billingDateShift": 5},
+        {"billingPeriod": "monthly"},
+    ],
+)
+def test_values_billing_cannot_honour_are_refused(api, body):
+    assert api.post(BASE, body).status_code == 422
+    assert len(api.get(BASE).json()) == 1
+
+
+def test_an_account_names_a_specification_and_it_stays_while_named(api):
+    spec = api.post(BASE, {"name": "Business"}).json()
     body = apidata.account_body(apidata.customer(api))
+    body["billStructure"] = {"cycleSpecification": {"id": spec["id"]}}
     account = api.post(apidata.ACCOUNT, body).json()
-    structure = {"@type": "BillStructure", "cycleSpecification": {"id": "weekly"}}
-    assert api.patch(account["href"], {"billStructure": structure}).status_code == 400
-    body["billStructure"] = structure
-    assert api.post(apidata.ACCOUNT, body).status_code == 400
-    assert api.get(account["href"]).json()["billStructure"] == account["billStructure"]
+    assert account["billStructure"]["cycleSpecification"]["id"] == spec["id"]
+    delete = api.request("DELETE", spec["href"])
+    assert delete.status_code == 409 and "1 billingAccount" in delete.json()["message"]
+    back = {"billStructure": {"cycleSpecification": {"id": "monthly"}}}
+    assert (
+        api.patch(account["href"], back).json()["billStructure"]["cycleSpecification"]["id"]
+        == "monthly"
+    )
+    assert api.request("DELETE", spec["href"]).status_code == 204
+    assert api.get(spec["href"]).status_code == 404
+    unknown = {"billStructure": {"cycleSpecification": {"id": "weekly"}}}
+    assert api.patch(account["href"], unknown).status_code == 422
+    nil = {"billStructure": {"cycleSpecification": {"id": apidata.NIL}}}
+    assert api.patch(account["href"], nil).status_code == 422

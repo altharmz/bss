@@ -37,7 +37,7 @@ from app.api.common import (
     utc,
     without_nulls,
 )
-from app.api.deps import ClockDep, JsonBody, Tx
+from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import bad_request, conflict, not_found, unprocessable
 from app.api.inventory import ORDERING_BASE as BASE
 from app.api.inventory import order_href, product_href
@@ -53,6 +53,23 @@ router = APIRouter(prefix=BASE)
 API = "TMF622"
 
 ATTRIBUTES = (
+    "state",
+    "creationDate",
+    "completionDate",
+    "requestedStartDate",
+    "billingAccount",
+    "productOrderItem",
+    "productOrderErrorMessage",
+    "orderTotalPrice",
+    "cancellationDate",
+    "cancellationReason",
+    "description",
+    "category",
+    "priority",
+    "externalId",
+)
+# Decided by processing (or the server): read-only on PATCH, as on POST.
+PROCESSED = (
     "state",
     "creationDate",
     "completionDate",
@@ -83,10 +100,52 @@ class OrderItemIn(TmfModel):
     billing_account: BillingAccountRef | None = None
 
 
+class ExternalId(TmfModel):
+    """TMF ExternalIdentifier: the order's id in another system."""
+
+    id: str = Field(min_length=1)
+    owner: str | None = Field(default=None, min_length=1)
+    external_identifier_type: str | None = Field(default=None, min_length=1)
+
+
+Priority = Literal["0", "1", "2", "3", "4"]
+
+
 class OrderIn(TmfModel):
     billing_account: BillingAccountRef
     product_order_item: list[OrderItemIn]
     requested_start_date: AwareDatetime | None = None
+    description: str | None = Field(default=None, min_length=1)
+    category: str | None = Field(default=None, min_length=1)
+    priority: Priority | None = None
+    external_id: list[ExternalId] | None = None
+
+
+class OrderPatch(TmfModel):
+    """Only what describes the order: processing is over (synchronous), so its state,
+    items, dates and account are read-only. null removes an attribute."""
+
+    description: str | None = Field(default=None, min_length=1)
+    category: str | None = Field(default=None, min_length=1)
+    priority: Priority | None = None
+    external_id: list[ExternalId] | None = None
+
+
+def descriptive(data: OrderIn | OrderPatch) -> dict[str, Any]:
+    """The descriptive columns the body sent (merge patch: null removes)."""
+    changes = {}
+    for name in orders.DESCRIPTIVE:
+        if name not in data.model_fields_set:
+            continue
+        value = getattr(data, name)
+        if name == "external_id":
+            value = [e.model_dump(by_alias=True, exclude_none=True) for e in value or []]
+        changes[name] = value
+    return changes
+
+
+def _external_body(entries: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+    return [{**e, "@type": "ExternalIdentifier"} for e in entries] or None
 
 
 def _item_request(item: OrderItemIn) -> ItemRequest:
@@ -198,6 +257,10 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "orderTotalPrice": total,
             "cancellationDate": utc(row["cancellation_date"]) if row["cancellation_date"] else None,
             "cancellationReason": row["cancellation_reason"],
+            "description": row["description"],
+            "category": row["category"],
+            "priority": row["priority"],
+            "externalId": _external_body(row["external_id"]),
             "@type": "ProductOrder",
         }
     )
@@ -264,12 +327,39 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
             order_id = place_order(conn, order_request, now=clock.now(), today=clock.today())
         except OrderRefused as exc:
             raise unprocessable(str(exc)) from None
+        attributes = descriptive(data)
+        if attributes:
+            orders.set_attributes(conn, order_id, attributes)
         row = orders.get_order(conn, order_id)
         assert row is not None
         new = order_body(conn, row)
         # processed at once: one Create carrying the final state (completed or rejected)
         emit.created(conn, API, "productOrder", new, at=clock.now())
     return created(listing.select_fields(new, fields))
+
+
+@router.patch("/productOrder/{order_id}")
+def patch_order(
+    order_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
+    """description, category, priority, externalId only (any order, any state)."""
+    fields = listing.retrieve_fields(request, ATTRIBUTES)
+    check_type(body, "ProductOrder")
+    data = parse(OrderPatch, body, read_only=PROCESSED)
+    with tx() as conn:
+        uid = parse_id("productOrder", order_id)
+        current = orders.lock_order(conn, uid)
+        if current is None:
+            raise not_found("productOrder", order_id)
+        before = orders.get_order(conn, uid)
+        old = emit.before(conn, API, "productOrder", lambda: order_body(conn, before))
+        changes = descriptive(data)
+        if changes:
+            orders.set_attributes(conn, uid, changes)
+        row = orders.get_order(conn, uid)
+        patched = order_body(conn, row)
+        emit.changed(conn, API, "productOrder", old, patched, at=clock.now())
+    return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
 @router.delete("/productOrder/{order_id}", status_code=204, response_class=Response)

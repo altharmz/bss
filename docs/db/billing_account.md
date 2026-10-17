@@ -22,6 +22,7 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | `opened_at` | `timestamp with time zone` | no |  | When the account was created, by the injected clock. A billing run for D covers the accounts opened before 00:00 of D (BILLING_TZ). Unlike created_at, which is the database's now(). |
 | `bill_format_id` | `uuid` | yes |  | Optional renderer choice for future bills; default JSON detailed. |
 | `financial_account_id` | `uuid` | yes |  | Optional TMF666 financialAccount; owned by the party of the account's customer. |
+| `cycle_specification_id` | `uuid` | yes |  | billStructure.cycleSpecification; NULL = the built-in monthly specification. |
 
 ## Foreign keys
 
@@ -29,6 +30,7 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 |---|---|---|
 | `bill_format_id` | [`bill_format`](bill_format.md) (id) | `billing_account_bill_format_id_fkey` |
 | `customer_id` | [`customer`](customer.md) (id) | `billing_account_customer_id_fkey` |
+| `cycle_specification_id` | [`billing_cycle_specification`](billing_cycle_specification.md) (id) | `billing_account_cycle_specification_id_fkey` |
 | `financial_account_id` | [`financial_account`](financial_account.md) (id) | `billing_account_financial_account_id_fkey` |
 
 ## Constraints
@@ -46,6 +48,7 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `billing_account_customer_id_idx` | `CREATE INDEX billing_account_customer_id_idx ON billing_account USING btree (customer_id)` | no |
+| `billing_account_cycle_specification_idx` | `CREATE INDEX billing_account_cycle_specification_idx ON billing_account USING btree (cycle_specification_id)` | no |
 | `billing_account_financial_account_idx` | `CREATE INDEX billing_account_financial_account_idx ON billing_account USING btree (financial_account_id)` | no |
 | `billing_account_id_currency_key` | `CREATE UNIQUE INDEX billing_account_id_currency_key ON billing_account USING btree (id, currency)` | yes |
 | `billing_account_pkey` | `CREATE UNIQUE INDEX billing_account_pkey ON billing_account USING btree (id)` | yes |

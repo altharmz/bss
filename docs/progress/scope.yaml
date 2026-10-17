@@ -93,6 +93,7 @@ items:
   - {id: db.product_order_error_message, area: db, stage: 2, table: product_order_error_message, title: "Order rejection reasons (TMF622 productOrderErrorMessage)"}
   - {id: db.cancel_product_order, area: db, stage: 5, table: cancel_product_order, title: "Order cancellations (TMF622 cancelProductOrder)"}
   - {id: db.event_subscription, area: db, stage: 5, table: event_subscription, title: "Hub event subscriptions (every API)"}
+  - {id: db.billing_cycle_specification, area: db, stage: 5, table: billing_cycle_specification, title: "Named billing cycle specifications (TMF666)"}
   - {id: db.event, area: db, stage: 5, table: event, title: "Events some hub wanted (outbox)"}
   - {id: db.event_delivery, area: db, stage: 5, table: event_delivery, title: "Event deliveries to hub callbacks"}
   # ---------------- api: hubs (event subscriptions), one pair per API ----------------
@@ -178,6 +179,13 @@ items:
   - {id: api.tmf622.productOrder.list, area: api, stage: 2, method: GET, path: /tmf-api/productOrderingManagement/v5/productOrder, title: "List product orders"}
   - {id: api.tmf622.productOrder.get, area: api, stage: 2, method: GET, path: "/tmf-api/productOrderingManagement/v5/productOrder/{order_id}", title: "Get a product order"}
   - {id: api.tmf622.productOrder.create, area: api, stage: 2, method: POST, path: /tmf-api/productOrderingManagement/v5/productOrder, title: "Place a product order (add / delete items)"}
+  - {id: api.tmf622.productOrder.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/productOrderingManagement/v5/productOrder/{order_id}", title: "Patch an order's description, category, priority, externalId"}
+  - {id: api.tmf637.product.create, area: api, stage: 5, method: POST, path: /tmf-api/productInventory/v5/product, title: "Add a product (through an add order)"}
+  - {id: api.tmf637.product.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/productInventory/v5/product/{product_id}", title: "Schedule a product's end (through a delete order)"}
+  - {id: api.tmf637.product.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productInventory/v5/product/{product_id}", title: "End a product today (through a delete order)"}
+  - {id: api.tmf666.billingCycleSpecification.create, area: api, stage: 5, method: POST, path: /tmf-api/accountManagement/v5/billingCycleSpecification, title: "Name a billing cycle specification"}
+  - {id: api.tmf666.billingCycleSpecification.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/accountManagement/v5/billingCycleSpecification/{specification_id}", title: "Patch a stored billing cycle specification"}
+  - {id: api.tmf666.billingCycleSpecification.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/accountManagement/v5/billingCycleSpecification/{specification_id}", title: "Delete an unused billing cycle specification"}
   - {id: api.tmf622.productOrder.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productOrderingManagement/v5/productOrder/{order_id}", title: "Delete a rejected order"}
   - {id: api.tmf622.cancelProductOrder.list, area: api, stage: 5, method: GET, path: /tmf-api/productOrderingManagement/v5/cancelProductOrder, title: "List order cancellations"}
   - {id: api.tmf622.cancelProductOrder.get, area: api, stage: 5, method: GET, path: "/tmf-api/productOrderingManagement/v5/cancelProductOrder/{cancel_id}", title: "Get an order cancellation"}

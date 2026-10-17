@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/productOrderingManagement/v5`
 - Contract: [`spec/TMF622-ProductOrdering-v5.0.0.oas.yaml`](../../spec/TMF622-ProductOrdering-v5.0.0.oas.yaml) - ProductOrdering version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 9
+- Operations exposed: 10
 
 
 ## Operations
@@ -20,13 +20,13 @@
 | POST | `/tmf-api/productOrderingManagement/v5/productOrder` | query: `fields`; body: `application/json` | `ProductOrder_FVO` | 201 `ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
 | DELETE | `/tmf-api/productOrderingManagement/v5/productOrder/{order_id}` | path: `order_id` | - | 204 (no body) | [`app/api/ordering.py`](../../app/api/ordering.py) |
 | GET | `/tmf-api/productOrderingManagement/v5/productOrder/{order_id}` | path: `order_id`; query: `fields` | - | 200 `ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
+| PATCH | `/tmf-api/productOrderingManagement/v5/productOrder/{order_id}` | path: `order_id`; query: `fields`; body: `application/merge-patch+json` | `ProductOrder_MVO` | 200 `ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF622-ProductOrdering-v5.0.0.oas.yaml`](../../spec/TMF622-ProductOrdering-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `PATCH /productOrder/{id}`.
 - Resources of the spec that are **not implemented**: `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
@@ -40,8 +40,9 @@ orders omit it. `tests/test_api_read_completeness.py` verifies exact totals and 
 
 Orders are the only way to create or terminate products. POST processes the order
 **synchronously, in the request's transaction** (`app/ordering/process.py`,
-`place_order`). There is no PATCH (405:
-`tests/test_api_ordering.py::test_orders_cannot_be_changed`). DELETE removes only a
+`place_order`). PATCH changes only `description`, `category`, `priority` (0..4) and
+`externalId[]` (POST accepts them too); everything processing decided is read-only
+(`tests/test_api_order_patch.py`). DELETE removes only a
 `rejected` order (204; any other state is a 409) -
 `tests/test_api_order_cancel.py::test_only_a_rejected_order_can_be_deleted`.
 

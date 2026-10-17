@@ -77,7 +77,9 @@ by decision (TMF637 product writes, billingCycleSpecification writes, PATCH prod
   - the worker: `ProductStateChangeEvent` for every status flip, and
     `CustomerBillOnDemandStateChangeEvent` when it finishes a request;
   - **not emitted:** the specs' InformationRequired, JeopardyAlert, Milestone,
-    ProductBatch, ErrorMessage and billingCycleSpecification events; the entries an
+    ProductBatch, ErrorMessage and billingCycleSpecification StateChange events
+    (billingCycleSpecification Create, AttributeValueChange and Delete are emitted since
+    its writes exist, 2026-10-17); the entries an
     importJob creates (only its `ImportJobCreateEvent`); changes made through the
     internal API's price change (it is not a TMF write); a billing account's
     `accountBalance` moving because of charges or payments (not a change of the account).

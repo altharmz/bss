@@ -1,5 +1,12 @@
 # TMF conformance gap analysis
 
+**Complete (2026-10-17).** The last seven operations - TMF637 product POST/PATCH/DELETE
+(as orders placed on the caller's behalf), TMF666 billingCycleSpecification
+POST/PATCH/DELETE (named instances of the one monthly policy) and TMF622 PATCH
+productOrder (descriptive attributes) - bring coverage to **129/129** of the vendored
+specs' non-listener operations. What remains is the subscriber's side (`/listener/*`)
+and the deviations recorded in [tmf-api.md](decisions/tmf-api.md).
+
 **Event notifications (2026-10-17).** `/hub` in all eight APIs (17 operations), with
 events stored transactionally and delivered by the worker with retries. Coverage:
 122/129 (94.6%). The seven left are excluded by decision: TMF637 product POST/PATCH/DELETE

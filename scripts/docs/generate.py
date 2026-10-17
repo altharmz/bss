@@ -160,6 +160,7 @@ AREAS = {
         "customer_bill_state_change",
         "refund", "refund_source", "customer_bill_on_demand",
         "bill_format", "bill_presentation_media", "account_presentation_media",
+        "billing_cycle_specification",
     ),
     "worker": ("billing_run_account", "worker_request"),
     "events": ("event_subscription", "event", "event_delivery"),

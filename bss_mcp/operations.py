@@ -16,7 +16,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from app.api.account import AccountCreate, AccountPatch
+from app.api.account import AccountCreate, AccountPatch, CycleCreate, CyclePatch
 from app.api.accounts import (
     FinancialCreate,
     FinancialPatch,
@@ -36,8 +36,9 @@ from app.api.catalog_jobs import ExportJobCreate, ImportJobCreate
 from app.api.classification import CatalogCreate, CatalogPatch, CategoryCreate, CategoryPatch
 from app.api.customer import CustomerCreate, CustomerPatch
 from app.api.hub import HUB_APIS, HubIn
+from app.api.inventory import ProductCreate, ProductPatch
 from app.api.on_demand import DemandCreate
-from app.api.ordering import CancelIn, OrderIn
+from app.api.ordering import CancelIn, OrderIn, OrderPatch
 from app.api.party import IndividualCreate, IndividualPatch, OrganizationCreate, OrganizationPatch
 from app.api.payment import PaymentCreate
 from app.api.presentation import FormatCreate, FormatPatch, MediaCreate, MediaPatch
@@ -223,7 +224,21 @@ OPERATIONS: dict[str, Op] = {
         "Delete a presentation medium no billing account prefers (409 otherwise)."
     ),
     "list_cycle_specifications": Op("Supported billing cycle specifications.", query=LIST),
-    "get_cycle_specification": Op("The monthly billing policy.", query=FIELDS),
+    "get_cycle_specification": Op(
+        "One billing cycle specification: monthly (built in) or a stored one.", query=FIELDS
+    ),
+    "create_cycle_specification": Op(
+        "Name a billing cycle specification: name, description; billingPeriod/frequency"
+        " monthly and billingDateShift 0 only - billing has one monthly policy.",
+        body=CycleCreate,
+    ),
+    "patch_cycle_specification": Op(
+        "Rename or describe a stored cycle specification (the built-in one is fixed).",
+        body=CyclePatch,
+    ),
+    "delete_cycle_specification": Op(
+        "Delete a stored cycle specification no billing account names (409 otherwise)."
+    ),
     "list_accounts": Op("Billing accounts, with their balance.", query=LIST),
     "get_account": Op(
         "One billing account; accountBalance is payments minus charges (positive = credit).",
@@ -314,6 +329,20 @@ OPERATIONS: dict[str, Op] = {
         query=LIST,
     ),
     "get_product": Op("One product.", query=FIELDS),
+    "create_product": Op(
+        "Add a product: places an add order (billingAccount, productOffering, optional"
+        " startDate). A rejection is a 409 with the reasons; nothing is stored.",
+        body=ProductCreate,
+    ),
+    "patch_product": Op(
+        "Schedule a product's end: terminationDate only (exclusive), through a delete"
+        " order. To take an end back, cancel that order (cancel_order).",
+        body=ProductPatch,
+    ),
+    "delete_product": Op(
+        "End a product today through a delete order (a product not started is"
+        " cancelled); it stays readable as history."
+    ),
     # --- TMF678 customer bill ---
     "list_bill_demands": Op("On-demand bill requests.", query=LIST),
     "get_bill_demand": Op("One on-demand bill request and its result.", query=FIELDS),
@@ -349,6 +378,11 @@ OPERATIONS: dict[str, Op] = {
         " state rejected with productOrderErrorMessage (still 201); a malformed order is a"
         " 4xx and stores nothing.",
         body=OrderIn,
+    ),
+    "patch_order": Op(
+        "Change what describes an order: description, category, priority (0 highest ..4),"
+        " externalId; null removes. State, items, dates and account are read-only.",
+        body=OrderPatch,
     ),
     "delete_order": Op(
         "Delete a rejected order (it never executed); any other order is a 409 - cancel a"

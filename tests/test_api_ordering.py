@@ -256,7 +256,7 @@ def _orders(db_conn) -> int:
         (lambda b: {k: v for k, v in b.items() if k != "productOrderItem"}, 422),
         (lambda b: {k: v for k, v in b.items() if k != "billingAccount"}, 422),
         (lambda b: b | {"billingAccount": {"id": NIL}}, 422),
-        (lambda b: b | {"description": "please"}, 400),
+        (lambda b: b | {"note": [{"text": "please"}]}, 400),  # not stored: unknown
         (lambda b: b | {"state": "completed"}, 400),
         (lambda b: b | {"requestedStartDate": "2026-10-02T00:00:00"}, 422),
         (lambda b: _items(b, lambda i: i | {"productOffering": {"id": NIL}}), 422),
@@ -334,9 +334,10 @@ def test_order_list_and_filters(api, shop):
     assert len(api.get(PRODUCT).json()) == 2
 
 
-@pytest.mark.parametrize("method", ["PATCH", "PUT"])
-def test_orders_cannot_be_changed(api, shop, method):
-    """DELETE (rejected orders only) and cancelProductOrder: tests/test_api_order_cancel.py."""
+@pytest.mark.parametrize("method", ["PUT"])
+def test_orders_cannot_be_replaced(api, shop, method):
+    """PATCH (descriptive attributes): tests/test_api_order_patch.py; DELETE (rejected
+    orders only) and cancelProductOrder: tests/test_api_order_cancel.py."""
     offering, acc = shop
     href = apidata.order(api, acc, apidata.add_item(offering))["href"]
     assert api.request(method, href, json={}).status_code == 405

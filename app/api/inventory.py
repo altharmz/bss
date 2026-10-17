@@ -1,23 +1,44 @@
-"""TMF637 Product Inventory v5: product. Read-only - products are created and terminated
-only by product orders (TMF622), and each product points back at the order items that
-did it."""
+"""TMF637 Product Inventory v5: product. Products are created and terminated only by
+product orders (TMF622), and each product points back at the order items that did it.
+
+The writes keep that rule by placing the order themselves, in the same transaction
+(docs/decisions/tmf-api.md#product-writes-through-orders-2026-10-17): POST /product an
+add order, PATCH terminationDate a delete order with that date, DELETE a delete order
+effective today. An order that would be rejected is a 409 naming its reasons, and
+nothing is stored. DELETE ends the product; it stays readable as billing history."""
 
 from datetime import date, timedelta
 from typing import Any
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
+from pydantic import AwareDatetime
 
 from app.api import listing
 from app.api.account import account_ref
 from app.api.catalog import BASE as CATALOG_BASE
-from app.api.common import from_billing_date, parse_id, ref, utc, without_nulls
-from app.api.deps import ClockDep, Tx
-from app.api.errors import not_found
+from app.api.common import (
+    BillingAccountRef,
+    ProductOfferingRef,
+    TmfModel,
+    check_type,
+    created,
+    from_billing_date,
+    parse,
+    parse_id,
+    ref,
+    to_billing_date,
+    utc,
+    without_nulls,
+)
+from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
+from app.api.errors import bad_request, conflict, not_found, unprocessable
 from app.api.prices import monthly_price
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.core import cycle_period
+from app.events import emit
+from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
 from app.repository import catalog, orders, parties, products
 from app.repository._sql import Row
 
@@ -175,3 +196,153 @@ def get_product(product_id: str, request: Request, tx: Tx, clock: ClockDep) -> T
             raise not_found("product", product_id)
         body = product_body(conn, row, clock.today())
     return TmfJSONResponse(listing.select_fields(body, fields))
+
+
+# --- writes: each one an order placed on the caller's behalf ---
+
+
+class ProductCreate(TmfModel):
+    billing_account: BillingAccountRef
+    product_offering: ProductOfferingRef
+    start_date: AwareDatetime | None = None
+
+
+class ProductPatch(TmfModel):
+    termination_date: AwareDatetime | None = None
+
+
+# What the order decides (or the server derives): never written through TMF637.
+PRODUCT_READ_ONLY = (
+    "status",
+    "terminationDate",
+    "creationDate",
+    "orderDate",
+    "productOrderItem",
+    "productPrice",
+    "productSpecification",
+    "relatedParty",
+    "name",
+)
+
+
+def _place(conn: psycopg.Connection, request: OrderRequest, *, now, today) -> Row:
+    """Place the order; the stored order, or a 409 with its reasons if it would be
+    rejected (then nothing is kept: the savepoint is rolled back)."""
+    try:
+        with conn.transaction():
+            order_id = place_order(conn, request, now=now, today=today)
+            order = orders.get_order(conn, order_id)
+            assert order is not None
+            if order["state"] == "rejected":
+                reasons = "; ".join(
+                    f"{m['code']}: {m['reason']}" for m in orders.error_messages(conn, order_id)
+                )
+                raise _Rejected(reasons)
+    except _Rejected as rejected:
+        raise conflict(f"the order for this change would be rejected - {rejected}") from None
+    except OrderRefused as exc:
+        raise unprocessable(str(exc)) from None
+    from app.api.ordering import order_body  # lazily: that module imports this one
+
+    emit.created(conn, "TMF622", "productOrder", lambda: order_body(conn, order), at=now)
+    return order
+
+
+class _Rejected(Exception):
+    pass
+
+
+def _end(conn, product_id: UUID, raw_id: str, ends: date | None, *, now, today) -> Row:
+    """A delete order for the product: on `ends`, or today."""
+    product = products.get_product(conn, product_id)
+    if product is None:
+        raise not_found("product", raw_id)
+    if product["termination_date"] is not None:
+        raise conflict(
+            f"product {product_id} already ends on {product['termination_date']}"
+            " (its status is " + product["status"] + "); cancel that order with"
+            " cancelProductOrder to change it"
+        )
+    _place(
+        conn,
+        OrderRequest(
+            billing_account_id=product["billing_account_id"],
+            items=(ItemRequest("1", "delete", product_id=product_id),),
+            requested_start=ends,
+        ),
+        now=now,
+        today=today,
+    )
+    ended = products.get_product(conn, product_id)
+    assert ended is not None
+    return ended
+
+
+@router.post("/product")
+def create_product(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+    """An add order for one product of the offering on the account, from startDate
+    (today if absent)."""
+    fields = listing.retrieve_fields(request, ATTRIBUTES)
+    check_type(body, "Product")
+    data = parse(ProductCreate, body, read_only=PRODUCT_READ_ONLY)
+    now, today = clock.now(), clock.today()
+    start = to_billing_date(data.start_date) if data.start_date else None
+    with tx() as conn:
+        order = _place(
+            conn,
+            OrderRequest(
+                billing_account_id=data.billing_account.id,
+                items=(ItemRequest("1", "add", product_offering_id=data.product_offering.id),),
+                requested_start=start,
+            ),
+            now=now,
+            today=today,
+        )
+        (item,) = order["items"]
+        new = product_body(conn, products.get_product(conn, item["product_id"]), today)
+    return created(listing.select_fields(new, fields))
+
+
+@router.patch("/product/{product_id}")
+def patch_product(
+    product_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
+    """terminationDate only: a delete order with that date (the product's last day is
+    the day before). Taking an end back is cancelProductOrder's job."""
+    fields = listing.retrieve_fields(request, ATTRIBUTES)
+    check_type(body, "Product")
+    read_only = tuple(name for name in PRODUCT_READ_ONLY if name != "terminationDate")
+    data = parse(
+        ProductPatch, body, read_only=(*read_only, "billingAccount", "productOffering", "startDate")
+    )
+    if "termination_date" not in data.model_fields_set:
+        raise bad_request("PATCH changes terminationDate only")
+    if data.termination_date is None:
+        raise unprocessable(
+            "terminationDate cannot be removed: cancel the order that set it (cancelProductOrder)"
+        )
+    now, today = clock.now(), clock.today()
+    with tx() as conn:
+        uid = parse_id("product", product_id)
+        ended = _end(
+            conn, uid, product_id, to_billing_date(data.termination_date), now=now, today=today
+        )
+        patched = product_body(conn, ended, today)
+    return TmfJSONResponse(listing.select_fields(patched, fields))
+
+
+@router.delete("/product/{product_id}", status_code=204, response_class=Response)
+def delete_product(product_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
+    """Ends the product today (one that has not started is cancelled): a delete order.
+    The product stays readable - it is billing history."""
+    listing.no_query(request)
+    with tx() as conn:
+        _end(
+            conn,
+            parse_id("product", product_id),
+            product_id,
+            None,
+            now=clock.now(),
+            today=clock.today(),
+        )
+    return Response(status_code=204)

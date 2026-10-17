@@ -7,8 +7,17 @@ from typing import Any
 from uuid import UUID
 
 import psycopg
+from psycopg.types.json import Jsonb
 
-from app.repository._sql import Row, fetch_all, fetch_one, money, returning, select_page
+from app.repository._sql import (
+    Row,
+    fetch_all,
+    fetch_one,
+    money,
+    returning,
+    select_page,
+    update_by_id,
+)
 
 
 @dataclass(frozen=True)
@@ -102,6 +111,16 @@ def set_order_state(
 def lock_order(conn: psycopg.Connection, order_id: UUID) -> Row | None:
     """The order row FOR UPDATE (a cancellation or delete of it), without items."""
     return fetch_one(conn, "SELECT * FROM product_order WHERE id = %s FOR UPDATE", (order_id,))
+
+
+DESCRIPTIVE = ("description", "category", "priority", "external_id")
+
+
+def set_attributes(conn: psycopg.Connection, order_id: UUID, changes: dict[str, Any]) -> Row:
+    """The descriptive attributes (migration 0020) - never anything processing decides."""
+    assert set(changes) <= set(DESCRIPTIVE), changes
+    values = {k: Jsonb(v) if k == "external_id" else v for k, v in changes.items()}
+    return update_by_id(conn, "product_order", order_id, values)
 
 
 def set_cancelled(

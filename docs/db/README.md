@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0018**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0020**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -36,6 +36,7 @@ PostgreSQL schema at Alembic head **0018**, read from `pg_catalog` of a throwawa
 | [`bill_format`](bill_format.md) | billing | TMF666 bill presentation configuration. |
 | [`bill_presentation_media`](bill_presentation_media.md) | billing | TMF666 bill presentation configuration. |
 | [`account_presentation_media`](account_presentation_media.md) | billing | Account bill delivery preferences; no external delivery is performed. |
+| [`billing_cycle_specification`](billing_cycle_specification.md) | billing | TMF666 billingCycleSpecification: named instances of the one monthly policy; billing never reads it. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
 | [`worker_request`](worker_request.md) | worker | The admin UI's queue for the billing worker (ours): catch-up and retry requests. The API only inserts; the worker picks them up oldest first. |
 | [`event_subscription`](event_subscription.md) | events | TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their deliveries. |
@@ -87,6 +88,7 @@ flowchart LR
     bill_format[bill_format]
     bill_presentation_media[bill_presentation_media]
     account_presentation_media[account_presentation_media]
+    billing_cycle_specification[billing_cycle_specification]
   end
   subgraph area_worker["Billing worker (ours)"]
     billing_run_account[billing_run_account]
@@ -110,6 +112,7 @@ flowchart LR
   bill_allocation -->|"payment_id, billing_account_id"| payment
   billing_account -->|"bill_format_id"| bill_format
   billing_account -->|"customer_id"| customer
+  billing_account -->|"cycle_specification_id"| billing_cycle_specification
   billing_account -->|"financial_account_id"| financial_account
   billing_run_account -->|"billing_account_id"| billing_account
   billing_run_account -->|"run_id"| billing_run
@@ -187,6 +190,7 @@ erDiagram
     timestamptz opened_at
     uuid bill_format_id FK
     uuid financial_account_id FK
+    uuid cycle_specification_id FK
   }
   financial_account {
     uuid id PK
@@ -217,7 +221,11 @@ erDiagram
   bill_format {
     uuid id PK
   }
+  billing_cycle_specification {
+    uuid id PK
+  }
   bill_format |o--o{ billing_account : "bill_format_id"
+  billing_cycle_specification |o--o{ billing_account : "cycle_specification_id"
   customer ||--o{ billing_account : "customer_id"
   financial_account |o--o{ billing_account : "financial_account_id"
   financial_account |o--o{ party_account : "financial_account_id, party_id"
@@ -226,7 +234,7 @@ erDiagram
   party ||--o{ party_account : "party_id"
 ```
 
-Tables from other areas are shown with their key only: [`bill_format`](bill_format.md).
+Tables from other areas are shown with their key only: [`bill_format`](bill_format.md), [`billing_cycle_specification`](billing_cycle_specification.md).
 
 ## Catalog (TMF620)
 
@@ -335,6 +343,10 @@ erDiagram
     timestamptz completion_date
     timestamptz cancellation_date
     text cancellation_reason
+    text description
+    text category
+    text priority
+    jsonb external_id
   }
   product_order_item {
     uuid id PK
@@ -563,6 +575,16 @@ erDiagram
     timestamptz created_at
     uuid billing_account_id FK
     uuid media_id FK
+  }
+  billing_cycle_specification {
+    uuid id PK
+    timestamptz created_at
+    timestamptz updated_at
+    text name
+    text description
+    text billing_period
+    text frequency
+    integer billing_date_shift
   }
   billing_account {
     uuid id PK

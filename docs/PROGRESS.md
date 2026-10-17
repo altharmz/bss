@@ -11,8 +11,8 @@ records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 35 | 35/35 (100%) | 35/35 (100%) | unknown |
-| API | 138 | 138/138 (100%) | 138/138 (100%) | unknown |
+| Database | 36 | 36/36 (100%) | 36/36 (100%) | unknown |
+| API | 145 | 145/145 (100%) | 145/145 (100%) | unknown |
 | UI | 22 | 22/22 (100%) | 22/22 (100%) | unknown |
 | Worker | 15 | 15/15 (100%) | 15/15 (100%) | unknown |
 
@@ -44,6 +44,7 @@ records the deployed commit.
 | `db.product_order_error_message` | 2 | Order rejection reasons (TMF622 productOrderErrorMessage) | yes | yes | unknown |
 | `db.cancel_product_order` | 5 | Order cancellations (TMF622 cancelProductOrder) | yes | yes | unknown |
 | `db.event_subscription` | 5 | Hub event subscriptions (every API) | yes | yes | unknown |
+| `db.billing_cycle_specification` | 5 | Named billing cycle specifications (TMF666) | yes | yes | unknown |
 | `db.event` | 5 | Events some hub wanted (outbox) | yes | yes | unknown |
 | `db.event_delivery` | 5 | Event deliveries to hub callbacks | yes | yes | unknown |
 | `db.product` | 1 | Products (TMF637) | yes | yes | unknown |
@@ -170,6 +171,13 @@ records the deployed commit.
 | `api.tmf622.productOrder.list` | 2 | List product orders | yes | yes | unknown |
 | `api.tmf622.productOrder.get` | 2 | Get a product order | yes | yes | unknown |
 | `api.tmf622.productOrder.create` | 2 | Place a product order (add / delete items) | yes | yes | unknown |
+| `api.tmf622.productOrder.patch` | 5 | Patch an order's description, category, priority, externalId | yes | yes | unknown |
+| `api.tmf637.product.create` | 5 | Add a product (through an add order) | yes | yes | unknown |
+| `api.tmf637.product.patch` | 5 | Schedule a product's end (through a delete order) | yes | yes | unknown |
+| `api.tmf637.product.delete` | 5 | End a product today (through a delete order) | yes | yes | unknown |
+| `api.tmf666.billingCycleSpecification.create` | 5 | Name a billing cycle specification | yes | yes | unknown |
+| `api.tmf666.billingCycleSpecification.patch` | 5 | Patch a stored billing cycle specification | yes | yes | unknown |
+| `api.tmf666.billingCycleSpecification.delete` | 5 | Delete an unused billing cycle specification | yes | yes | unknown |
 | `api.tmf622.productOrder.delete` | 5 | Delete a rejected order | yes | yes | unknown |
 | `api.tmf622.cancelProductOrder.list` | 5 | List order cancellations | yes | yes | unknown |
 | `api.tmf622.cancelProductOrder.get` | 5 | Get an order cancellation | yes | yes | unknown |

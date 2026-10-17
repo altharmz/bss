@@ -1,8 +1,10 @@
 ## Behaviour and deviations
 
-- **Read-only.** Products are only written by orders (TMF622); POST/PATCH/DELETE on
-  `/product` are 405 (`app/api/inventory.py`;
-  `tests/test_api_inventory_bill.py::test_products_are_not_written_through_tmf637`).
+- **Writes are orders.** Products are only written by orders (TMF622): POST `/product`
+  places an add order, PATCH `terminationDate` a delete order with that date, DELETE a
+  delete order effective today (the product stays readable, ended). An order that would
+  be rejected is a 409 with its reasons, nothing stored; `status` and the other derived
+  attributes are read-only (`app/api/inventory.py`; `tests/test_api_product_writes.py`).
 - `productOrderItem[]` holds the order items that created (`role: creation`) and
   terminated (`role: termination`) the product, as `RelatedOrderItem`
   (`::test_product_view`, `::test_terminated_product_points_at_both_order_items`).

@@ -4,7 +4,11 @@ Bill formats and presentation media expose list/retrieve/create/PATCH. Formats a
 JSON detailed (charges and totals) or JSON summary (totals). Names are unique.
 Account billStructure.format and presentationMedia reference configuration records;
 partial merge-patch preserves unspecified preferences. Format null restores the
-default; media []/null clears media. CycleSpecification remains read-only.
+default; media []/null clears media. cycleSpecification names `monthly` (null) or a
+stored billingCycleSpecification - named instances of the same monthly policy
+(billingPeriod/frequency monthly, billingDateShift 0; anything else 422); the built-in
+one is fixed, a stored one goes only while no account names it
+(`tests/test_api_cycle_specification.py`).
 Issued documents snapshot preferences; external delivery is not performed.
 The balance formula below is extended by subtracting completed cash refunds.
 See [billing completion](../decisions/billing-completion.md).

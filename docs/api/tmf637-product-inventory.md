@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/productInventory/v5`
 - Contract: [`spec/TMF637-ProductInventory-v5.0.0.oas.yaml`](../../spec/TMF637-ProductInventory-v5.0.0.oas.yaml) - ProductInventory version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 4
+- Operations exposed: 7
 
 
 ## Operations
@@ -14,22 +14,26 @@
 | POST | `/tmf-api/productInventory/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/inventory.py`](../../app/api/inventory.py) |
 | DELETE | `/tmf-api/productInventory/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/inventory.py`](../../app/api/inventory.py) |
 | GET | `/tmf-api/productInventory/v5/product` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `status` | - | 200 `array of Product` | [`app/api/inventory.py`](../../app/api/inventory.py) |
+| POST | `/tmf-api/productInventory/v5/product` | query: `fields`; body: `application/json` | `Product_FVO` | 201 `Product` | [`app/api/inventory.py`](../../app/api/inventory.py) |
+| DELETE | `/tmf-api/productInventory/v5/product/{product_id}` | path: `product_id` | - | 204 (no body) | [`app/api/inventory.py`](../../app/api/inventory.py) |
 | GET | `/tmf-api/productInventory/v5/product/{product_id}` | path: `product_id`; query: `fields` | - | 200 `Product` | [`app/api/inventory.py`](../../app/api/inventory.py) |
+| PATCH | `/tmf-api/productInventory/v5/product/{product_id}` | path: `product_id`; query: `fields`; body: `application/merge-patch+json` | `Product_MVO` | 200 `Product` | [`app/api/inventory.py`](../../app/api/inventory.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF637-ProductInventory-v5.0.0.oas.yaml`](../../spec/TMF637-ProductInventory-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `POST /product`, `DELETE /product/{id}`, `PATCH /product/{id}`.
 - Resources of the spec that are **not implemented**: `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
 ## Behaviour and deviations
 
-- **Read-only.** Products are only written by orders (TMF622); POST/PATCH/DELETE on
-  `/product` are 405 (`app/api/inventory.py`;
-  `tests/test_api_inventory_bill.py::test_products_are_not_written_through_tmf637`).
+- **Writes are orders.** Products are only written by orders (TMF622): POST `/product`
+  places an add order, PATCH `terminationDate` a delete order with that date, DELETE a
+  delete order effective today (the product stays readable, ended). An order that would
+  be rejected is a 409 with its reasons, nothing stored; `status` and the other derived
+  attributes are read-only (`app/api/inventory.py`; `tests/test_api_product_writes.py`).
 - `productOrderItem[]` holds the order items that created (`role: creation`) and
   terminated (`role: termination`) the product, as `RelatedOrderItem`
   (`::test_product_view`, `::test_terminated_product_points_at_both_order_items`).

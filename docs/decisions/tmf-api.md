@@ -14,6 +14,53 @@ mapping is in [catalog.md](catalog.md).
 
 ## TMF API conventions (stage 2)
 
+### Product writes through orders (2026-10-17)
+
+The last seven operations, approved by the human on 2026-10-17 ("reach 100%"), close
+coverage at 129/129. **TMF637 product writes keep "orders alone create or end
+products"**: each one places a TMF622 order on the caller's behalf, in the same
+transaction, through `place_order` - an ordinary order, visible in TMF622, with its
+events.
+
+- **`POST /product`** (`billingAccount`, `productOffering`, optional `startDate` - today
+  if absent): an add order. 201 with the product.
+- **`PATCH /product/{id}`**: `terminationDate` only - a delete order with that date
+  (exclusive, as everywhere). Everything else is read-only (400); `null` is a 422
+  (taking an end back is cancelProductOrder's job); a product that already ends is a
+  409 naming the way out.
+- **`DELETE /product/{id}`**: a delete order effective today - a started product ends
+  today, one that has not started is cancelled. 204. **Deviation from REST, chosen by the
+  human:** the product stays readable as `terminated`/`cancelled` - it is billing history.
+- **An order that would be rejected** is a 409 with its reasons (`code: reason`), and
+  nothing is stored: the order runs in a savepoint that is rolled back (a direct order
+  POST still stores rejected orders, as before). Reference problems are a 422.
+- Tests: `tests/test_api_product_writes.py`. Negative proof: without the savepoint
+  rollback a rejected add answers 500 instead of 409.
+
+### Billing cycle specification writes (2026-10-17)
+
+`POST`, `PATCH`, `DELETE /billingCycleSpecification`; migration `0019`
+`billing_cycle_specification` and `billing_account.cycle_specification_id`. **A stored
+specification is a named instance of the one policy** (the human's choice): billingPeriod
+and frequency `monthly`, billingDateShift `0` - anything else is a 422, and the table's
+CHECKs say the same. Billing never reads it. The built-in `monthly` is not stored and
+answers 409 to PATCH and DELETE. PATCH changes name and description. An account's
+`billStructure.cycleSpecification` is writable now (`monthly`, a stored id, or null =
+monthly; an unknown one is a 422), taking the specification FOR KEY SHARE; DELETE is a
+409 while an account names it. Events: BillingCycleSpecification Create,
+AttributeValueChange, Delete. Tests: `tests/test_api_cycle_specification.py`. Negative
+proof: without the account reference check the 409 loses its reason.
+
+### PATCH productOrder (2026-10-17)
+
+Migration `0020` adds `description`, `category`, `priority` (`0` highest .. `4`) and
+`externalId[]` (ExternalIdentifier: `id`, `owner`, `externalIdentifierType`) to
+`product_order`; POST accepts them, PATCH changes only them (null removes), on an order
+in any state. Everything processing decided - state, items, dates, account, totals,
+cancellation - is read-only (400). Emits ProductOrderAttributeValueChangeEvent. Tests:
+`tests/test_api_order_patch.py`. Negative proof: with null ignored, removing an attribute
+keeps it.
+
 ### Order cancellation and deleting rejected orders (2026-10-17)
 
 TMF622 `cancelProductOrder` (POST, GET list with `productOrder.id`, GET by id) and
@@ -246,7 +293,9 @@ implemented; order processing lives in `app/ordering/`.
   still a 405. **Narrowed again 2026-10-17:** the same rule for parties, customers and
   the TMF666 resources ([below](#deleting-parties-customers-and-accounts-2026-10-17)),
   and for rejected orders; cancelProductOrder is exposed since the same day, and so is
-  `/hub` in every API ([events.md](events.md)).
+  `/hub` in every API ([events.md](events.md)). **And on the same day the rest:**
+  POST/PATCH/DELETE on product as orders placed on the caller's behalf, writes of
+  billingCycleSpecification, PATCH productOrder ([above](#product-writes-through-orders-2026-10-17)).
 - **Errors:** every non-2xx body is the TMF `Error` (`@type`, `code`, `reason`, `message`,
   `status`), including unknown routes, FastAPI's own validation errors and unhandled
   exceptions (500 says "internal error", nothing more). 400 = malformed JSON, unknown

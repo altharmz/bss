@@ -23,6 +23,7 @@ financial account owned by its customer's engagedParty (app/api/accounts.py).
 """
 
 from typing import Any, Literal
+from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Request, Response
@@ -44,6 +45,7 @@ from app.api.common import (
     parse_id,
     ref,
     utc,
+    without_nulls,
 )
 from app.api.customer import customer_href
 from app.api.deletes import delete_row, refuse_if_referenced
@@ -52,7 +54,7 @@ from app.api.errors import conflict, not_found, unprocessable
 from app.api.presentation import BillStructure, structure_body
 from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
-from app.repository import accounts, billing, parties, presentation
+from app.repository import accounts, billing, cycles, parties, presentation
 from app.repository._sql import Row, count_references
 
 API = "TMF666"
@@ -135,8 +137,62 @@ def cycle_specification_body() -> dict[str, Any]:
     }
 
 
+# Stored specifications (migration 0019) are named instances of the same policy: the
+# values billing can honour only, so billing never reads them. The built-in one above
+# is not stored and cannot be changed or deleted.
+
+
+class CycleCreate(TmfModel):
+    name: str = Field(min_length=1)
+    description: str | None = None
+    billing_period: Literal["monthly"] = "monthly"
+    frequency: Literal["monthly"] = "monthly"
+    billing_date_shift: Literal[0] = 0
+
+
+class CyclePatch(TmfModel):
+    name: str | None = Field(default=None, min_length=1)
+    description: str | None = None
+    billing_period: Literal["monthly"] | None = None
+    frequency: Literal["monthly"] | None = None
+    billing_date_shift: Literal[0] | None = None
+
+
+def stored_cycle_body(row: Row) -> dict[str, Any]:
+    return without_nulls(
+        {
+            "id": str(row["id"]),
+            "href": f"{CYCLE_BASE}/{row['id']}",
+            "@type": "BillingCycleSpecification",
+            "name": row["name"],
+            "description": row["description"],
+            "billingPeriod": row["billing_period"],
+            "frequency": row["frequency"],
+            "billingDateShift": row["billing_date_shift"],
+        }
+    )
+
+
+def _stored_cycle(conn: psycopg.Connection, raw_id: str, lock=None) -> Row | None:
+    try:
+        uid = UUID(raw_id)
+    except ValueError:
+        return None
+    return cycles.get(conn, uid, lock)
+
+
+def cycle_ref(conn: psycopg.Connection, spec_id: Any) -> dict[str, Any]:
+    if spec_id is None:
+        return ref(
+            "BillingCycleSpecification", f"{CYCLE_BASE}/{CYCLE_ID}", CYCLE_ID, "Monthly billing"
+        )
+    row = cycles.get(conn, spec_id)
+    assert row is not None  # foreign key
+    return ref("BillingCycleSpecification", f"{CYCLE_BASE}/{row['id']}", row["id"], row["name"])
+
+
 @router.get("/billingCycleSpecification")
-def list_cycle_specifications(request: Request) -> TmfJSONResponse:
+def list_cycle_specifications(request: Request, tx: Tx) -> TmfJSONResponse:
     query = listing.parse_list_query(
         request,
         filters={
@@ -146,17 +202,87 @@ def list_cycle_specifications(request: Request) -> TmfJSONResponse:
         },
         attributes=CYCLE_ATTRIBUTES,
     )
-    policy = cycle_specification_body()
-    rows = [policy] if all(policy[key] == value for key, value in query.where.items()) else []
+    with tx() as conn:
+        bodies = [cycle_specification_body()] + [
+            stored_cycle_body(r) for r in cycles.all_rows(conn)
+        ]
+    rows = [b for b in bodies if all(b.get(key) == value for key, value in query.where.items())]
     return listing.list_response(rows[query.offset : query.offset + query.limit], len(rows), query)
 
 
 @router.get("/billingCycleSpecification/{specification_id}")
-def get_cycle_specification(specification_id: str, request: Request) -> TmfJSONResponse:
+def get_cycle_specification(specification_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, CYCLE_ATTRIBUTES)
-    if specification_id != CYCLE_ID:
-        raise not_found("billingCycleSpecification", specification_id)
-    return TmfJSONResponse(listing.select_fields(cycle_specification_body(), fields))
+    if specification_id == CYCLE_ID:
+        return TmfJSONResponse(listing.select_fields(cycle_specification_body(), fields))
+    with tx() as conn:
+        row = _stored_cycle(conn, specification_id)
+        if row is None:
+            raise not_found("billingCycleSpecification", specification_id)
+    return TmfJSONResponse(listing.select_fields(stored_cycle_body(row), fields))
+
+
+@router.post("/billingCycleSpecification")
+def create_cycle_specification(
+    body: JsonBody, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
+    """Values billing cannot honour (another period, a date shift) are a 422."""
+    fields = listing.retrieve_fields(request, CYCLE_ATTRIBUTES)
+    check_type(body, "BillingCycleSpecification")
+    data = parse(CycleCreate, body)
+    with tx() as conn:
+        row = cycles.create(conn, {"name": data.name, "description": data.description})
+        new = stored_cycle_body(row)
+        emit.created(conn, API, "billingCycleSpecification", new, at=clock.now())
+    return created(listing.select_fields(new, fields))
+
+
+@router.patch("/billingCycleSpecification/{specification_id}")
+def patch_cycle_specification(
+    specification_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
+) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, CYCLE_ATTRIBUTES)
+    check_type(body, "BillingCycleSpecification")
+    data = parse(CyclePatch, body)
+    not_null(data, "name")
+    if specification_id == CYCLE_ID:
+        raise conflict("the built-in monthly specification cannot be changed")
+    with tx() as conn:
+        current = _stored_cycle(conn, specification_id, "update")
+        if current is None:
+            raise not_found("billingCycleSpecification", specification_id)
+        old = emit.before(
+            conn, API, "billingCycleSpecification", lambda: stored_cycle_body(current)
+        )
+        changes = {k: v for k, v in columns(data).items() if k in ("name", "description")}
+        new = stored_cycle_body(cycles.update(conn, current["id"], changes))
+        emit.changed(conn, API, "billingCycleSpecification", old, new, at=clock.now())
+    return TmfJSONResponse(listing.select_fields(new, fields))
+
+
+@router.delete(
+    "/billingCycleSpecification/{specification_id}", status_code=204, response_class=Response
+)
+def delete_cycle_specification(
+    specification_id: str, request: Request, tx: Tx, clock: ClockDep
+) -> Response:
+    """Only a stored one no billing account names (accounts take it FOR KEY SHARE)."""
+    listing.no_query(request)
+    if specification_id == CYCLE_ID:
+        raise conflict("the built-in monthly specification cannot be deleted")
+    with tx() as conn:
+        row = _stored_cycle(conn, specification_id, "update")
+        if row is None:
+            raise not_found("billingCycleSpecification", specification_id)
+        counts = count_references(
+            conn, row["id"], {"billingAccount": ("billing_account", "cycle_specification_id")}
+        )
+        refuse_if_referenced(
+            "billingCycleSpecification", row["id"], counts, "change their billStructure first"
+        )
+        emit.deleted(conn, API, "billingCycleSpecification", stored_cycle_body(row), at=clock.now())
+        delete_row(conn, cycles.TABLE, row["id"])
+    return Response(status_code=204)
 
 
 class RelatedParty(TmfModel):
@@ -228,12 +354,7 @@ def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "billStructure": {
             **structure_body(conn, row["id"]),
             "@type": "BillStructure",
-            "cycleSpecification": ref(
-                "BillingCycleSpecification",
-                f"{CYCLE_BASE}/{CYCLE_ID}",
-                CYCLE_ID,
-                "Monthly billing",
-            ),
+            "cycleSpecification": cycle_ref(conn, row["cycle_specification_id"]),
         },
         "relatedParty": [
             {

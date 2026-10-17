@@ -2,15 +2,15 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 138,
-      "items": 138,
-      "tested": 138
+      "implemented": 145,
+      "items": 145,
+      "tested": 145
     },
     "db": {
       "deployed": null,
-      "implemented": 35,
-      "items": 35,
-      "tested": 35
+      "implemented": 36,
+      "items": 36,
+      "tested": 36
     },
     "ui": {
       "deployed": null,
@@ -734,6 +734,15 @@
     {
       "area": "db",
       "deployed": null,
+      "id": "db.billing_cycle_specification",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Named billing cycle specifications (TMF666)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
       "id": "db.event",
       "implemented": true,
       "stage": 5,
@@ -1378,6 +1387,69 @@
       "stage": 2,
       "tested": true,
       "title": "Place a product order (add / delete items)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf622.productOrder.patch",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Patch an order's description, category, priority, externalId"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf637.product.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Add a product (through an add order)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf637.product.patch",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Schedule a product's end (through a delete order)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf637.product.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "End a product today (through a delete order)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billingCycleSpecification.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Name a billing cycle specification"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billingCycleSpecification.patch",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Patch a stored billing cycle specification"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf666.billingCycleSpecification.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete an unused billing cycle specification"
     },
     {
       "area": "api",

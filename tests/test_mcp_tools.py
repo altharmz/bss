@@ -531,6 +531,25 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
     for _, short in HUB_APIS:
         hub = call(f"create_hub_{short}", {"body": {"callback": "http://listener.test/x"}})
         call(f"delete_hub_{short}", {"hub_id": hub["id"]}, expected=(204,))
+    # product writes are orders placed on the caller's behalf
+    product_ref = {
+        "billingAccount": {"id": account["id"]},
+        "productOffering": {"id": offering["id"]},
+    }
+    product = call("create_product", {"body": {**product_ref, "startDate": start}})
+    ends = iso(midnight(date(2027, 3, 1)))
+    # a started product can have its end scheduled (one not started can only be cancelled)
+    call("patch_product", {"product_id": world["product"]["id"], "body": {"terminationDate": ends}})
+    assert product["status"] == "created"
+    spare_product = call("create_product", {"body": {**product_ref, "startDate": start}})
+    call("delete_product", {"product_id": spare_product["id"]}, expected=(204,))
+    call("patch_order", {"order_id": future["id"], "body": {"priority": "1"}})
+    cycle = call("create_cycle_specification", {"body": {"name": "Business"}})
+    call(
+        "patch_cycle_specification",
+        {"specification_id": cycle["id"], "body": {"description": "B2B"}},
+    )
+    call("delete_cycle_specification", {"specification_id": cycle["id"]}, expected=(204,))
 
     assert called == {n for n, t in generated().items() if not t.read_only}
     history = api.get(f"/internal/v1/customerBill/{world['bill']['id']}").json()["history"]

@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/accountManagement/v5`
 - Contract: [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml) - Account Management version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 35
+- Operations exposed: 38
 
 
 ## Operations
@@ -27,7 +27,10 @@
 | GET | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | PATCH | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; query: `fields`; body: `application/merge-patch+json` | `BillingAccount_MVO` | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/billingCycleSpecification` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingPeriod`, `frequency`, `name` | - | 200 `array of BillingCycleSpecification` | [`app/api/account.py`](../../app/api/account.py) |
+| POST | `/tmf-api/accountManagement/v5/billingCycleSpecification` | query: `fields`; body: `application/json` | `BillingCycleSpecification_FVO` | 201 `BillingCycleSpecification` | [`app/api/account.py`](../../app/api/account.py) |
+| DELETE | `/tmf-api/accountManagement/v5/billingCycleSpecification/{specification_id}` | path: `specification_id` | - | 204 (no body) | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/billingCycleSpecification/{specification_id}` | path: `specification_id`; query: `fields` | - | 200 `BillingCycleSpecification` | [`app/api/account.py`](../../app/api/account.py) |
+| PATCH | `/tmf-api/accountManagement/v5/billingCycleSpecification/{specification_id}` | path: `specification_id`; query: `fields`; body: `application/merge-patch+json` | `BillingCycleSpecification_MVO` | 200 `BillingCycleSpecification` | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/financialAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `accountType`, `name`, `relatedParty.id`, `state` | - | 200 `array of FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | POST | `/tmf-api/accountManagement/v5/financialAccount` | query: `fields`; body: `application/json` | `FinancialAccount_FVO` | 201 `FinancialAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | DELETE | `/tmf-api/accountManagement/v5/financialAccount/{account_id}` | path: `account_id` | - | 204 (no body) | [`app/api/account.py`](../../app/api/account.py) |
@@ -92,7 +95,6 @@ Every billingAccount body carries `@type: BssBillingAccount`, `@baseType: Billin
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `POST /billingCycleSpecification`, `DELETE /billingCycleSpecification/{id}`, `PATCH /billingCycleSpecification/{id}`.
 - Resources of the spec that are **not implemented**: `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
@@ -102,7 +104,11 @@ Bill formats and presentation media expose list/retrieve/create/PATCH. Formats a
 JSON detailed (charges and totals) or JSON summary (totals). Names are unique.
 Account billStructure.format and presentationMedia reference configuration records;
 partial merge-patch preserves unspecified preferences. Format null restores the
-default; media []/null clears media. CycleSpecification remains read-only.
+default; media []/null clears media. cycleSpecification names `monthly` (null) or a
+stored billingCycleSpecification - named instances of the same monthly policy
+(billingPeriod/frequency monthly, billingDateShift 0; anything else 422); the built-in
+one is fixed, a stored one goes only while no account names it
+(`tests/test_api_cycle_specification.py`).
 Issued documents snapshot preferences; external delivery is not performed.
 The balance formula below is extended by subtracting completed cash refunds.
 See [billing completion](../decisions/billing-completion.md).

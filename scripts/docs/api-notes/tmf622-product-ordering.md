@@ -8,8 +8,9 @@ orders omit it. `tests/test_api_read_completeness.py` verifies exact totals and 
 
 Orders are the only way to create or terminate products. POST processes the order
 **synchronously, in the request's transaction** (`app/ordering/process.py`,
-`place_order`). There is no PATCH (405:
-`tests/test_api_ordering.py::test_orders_cannot_be_changed`). DELETE removes only a
+`place_order`). PATCH changes only `description`, `category`, `priority` (0..4) and
+`externalId[]` (POST accepts them too); everything processing decided is read-only
+(`tests/test_api_order_patch.py`). DELETE removes only a
 `rejected` order (204; any other state is a 409) -
 `tests/test_api_order_cancel.py::test_only_a_rejected_order_can_be_deleted`.
 

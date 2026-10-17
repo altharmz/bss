@@ -186,6 +186,14 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
+**100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders
+placed on the caller's behalf (a would-be rejection is a 409, nothing stored; DELETE ends
+today and the product stays readable), billingCycleSpecification writes (named monthly
+specifications only, migration `0019`, accounts may name one), PATCH productOrder
+(description, category, priority, externalId; migration `0020`). Coverage 129/129.
+Decision: [tmf-api.md](docs/decisions/tmf-api.md#product-writes-through-orders-2026-10-17).
+Not deployed: migrations `0009`-`0020` ship together with the next `make verify`.
+
 **Event notifications** (2026-10-17, approved plan: three slices, all 17 `/hub`
 operations, real delivery). Slice 1: hubs in every API, callbacks https-only to public
 addresses outside `APP_ENV` dev/test (the VPS runs `staging`), migration `0017`. Slice 2:

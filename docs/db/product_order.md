@@ -20,6 +20,10 @@ SID ProductOrder (TMF622 productOrder): the only way to create or terminate prod
 | `completion_date` | `timestamp with time zone` | yes |  | TMF622 completionDate (injected clock). A billing run for D sees the order's effects only if this is before 00:00 of D (BILLING_TZ). |
 | `cancellation_date` | `timestamp with time zone` | yes |  | TMF622 cancellationDate: when a cancelProductOrder cancelled it; set exactly when cancelled. |
 | `cancellation_reason` | `text` | yes |  | TMF622 cancellationReason, from the cancelProductOrder; optional. |
+| `description` | `text` | yes |  | TMF622 description; optional. |
+| `category` | `text` | yes |  | TMF622 category, e.g. residential or enterprise; optional, free text. |
+| `priority` | `text` | yes |  | TMF622 priority: 0 (highest) to 4 (lowest); optional. |
+| `external_id` | `jsonb` | no | `'[]'::jsonb` | TMF622 externalId[]: the order's identifiers in other systems (id, owner, type). |
 
 ## Foreign keys
 
@@ -33,7 +37,11 @@ SID ProductOrder (TMF622 productOrder): the only way to create or terminate prod
 |---|---|---|
 | `product_order_cancellation_reason_check` | check | `CHECK ((length(cancellation_reason) > 0))` |
 | `product_order_cancelled_has_date` | check | `CHECK (((state = 'cancelled'::product_order_state_type) = (cancellation_date IS NOT NULL)))` |
+| `product_order_category_check` | check | `CHECK ((length(category) > 0))` |
 | `product_order_check` | check | `CHECK ((completion_date >= order_date))` |
+| `product_order_description_check` | check | `CHECK ((length(description) > 0))` |
+| `product_order_external_id_check` | check | `CHECK ((jsonb_typeof(external_id) = 'array'::text))` |
+| `product_order_priority_check` | check | `CHECK ((priority = ANY (ARRAY['0'::text, '1'::text, '2'::text, '3'::text, '4'::text])))` |
 | `product_order_reason_when_cancelled` | check | `CHECK (((cancellation_reason IS NULL) OR (cancellation_date IS NOT NULL)))` |
 | `product_order_pkey` | primary key | `PRIMARY KEY (id)` |
 

@@ -1,6 +1,7 @@
 """TMF666 preferences and issued bill document rendering."""
 
 import base64
+from uuid import UUID
 
 from psycopg import sql
 
@@ -58,7 +59,22 @@ def preferences(conn, account_id):
 def set_preferences(conn, uid, data):
     from app.api.errors import unprocessable
 
-    # Referenced formats and media FOR KEY SHARE until commit: their delete waits for this
+    # Referenced formats, media and cycle specifications FOR KEY SHARE until commit: their
+    # delete waits for this
+    if "cycle_specification" in data.model_fields_set:
+        spec = data.cycle_specification
+        spec_id = None
+        if spec is not None and spec.id != "monthly":
+            try:
+                spec_id = UUID(spec.id)
+            except ValueError:
+                raise unprocessable("billStructure.cycleSpecification does not exist") from None
+            if get(conn, "billing_cycle_specification", spec_id, "key share") is None:
+                raise unprocessable("billStructure.cycleSpecification does not exist")
+        conn.execute(
+            "UPDATE billing_account SET cycle_specification_id = %s WHERE id = %s",
+            (spec_id, uid),
+        )
     if "format" in data.model_fields_set:
         if (
             data.format is not None

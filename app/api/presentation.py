@@ -41,9 +41,22 @@ class MediaRef(Ref):
     referred_type = "BillPresentationMedia"
 
 
+class CycleRef(TmfModel):
+    """A billingCycleSpecification: `monthly` (built in) or a stored one's id."""
+
+    id: str = Field(min_length=1)
+    href: str | None = None
+    name: str | None = None
+    at_referred_type: Literal["BillingCycleSpecification"] | None = Field(
+        default=None, alias="@referredType"
+    )
+
+
 class BillStructure(TmfModel):
     format: FormatRef | None = None
     presentation_media: list[MediaRef] | None = None
+    # null (or monthly) = the built-in specification
+    cycle_specification: CycleRef | None = None
 
 
 class MediaCreate(TmfModel):

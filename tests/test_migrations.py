@@ -336,7 +336,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 36  # 35 domain tables + alembic_version
+    assert tables == 37  # 36 domain tables + alembic_version
 
 
 def test_0016_order_cancellation_round_trip(temp_db_url):
@@ -426,6 +426,43 @@ def test_0017_0018_events_round_trip(temp_db_url):
         ).fetchone() == (None, None, None, None)
         assert conn.execute("SELECT count(*) FROM billing_account").fetchone() == (1,)
     command.upgrade(cfg, "0018")
+
+
+def test_0019_0020_round_trip(temp_db_url):
+    """Cycle specifications and the order's descriptive attributes: both CHECK what billing
+    and TMF allow; downgrading to 0018 drops them and keeps accounts and orders."""
+    from tests import factories
+
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0020")
+    with psycopg.connect(temp_db_url) as conn:
+        account = factories.account(conn)
+        spec = conn.execute(
+            "INSERT INTO billing_cycle_specification (name) VALUES ('Business') RETURNING id"
+        ).fetchone()[0]
+        conn.execute(
+            "UPDATE billing_account SET cycle_specification_id = %s WHERE id = %s",
+            (spec, account["id"]),
+        )
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute(
+                "INSERT INTO billing_cycle_specification (name, frequency) VALUES ('W', 'weekly')"
+            )
+        order = conn.execute(
+            "INSERT INTO product_order (billing_account_id, state, order_date, priority)"
+            " VALUES (%s, 'rejected', %s, '1') RETURNING id",
+            (account["id"], factories.NOW),
+        ).fetchone()[0]
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE product_order SET priority = '9' WHERE id = %s", (order,))
+    command.downgrade(cfg, "0018")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT to_regclass('billing_cycle_specification')").fetchone() == (
+            None,
+        )
+        assert conn.execute("SELECT count(*) FROM product_order").fetchone() == (1,)
+        assert conn.execute("SELECT count(*) FROM billing_account").fetchone() == (1,)
+    command.upgrade(cfg, "0020")
 
 
 def test_0009_catalog_round_trip(temp_db_url):
