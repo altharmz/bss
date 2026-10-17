@@ -18,6 +18,8 @@ SID ProductOrder (TMF622 productOrder): the only way to create or terminate prod
 | `order_date` | `timestamp with time zone` | no |  | TMF622 creationDate: the injected clock when the order was placed. |
 | `requested_start_date` | `date` | yes |  | TMF622 requestedStartDate as a business date in BILLING_TZ (today when omitted): the start date of add items and the termination date of delete items. |
 | `completion_date` | `timestamp with time zone` | yes |  | TMF622 completionDate (injected clock). A billing run for D sees the order's effects only if this is before 00:00 of D (BILLING_TZ). |
+| `cancellation_date` | `timestamp with time zone` | yes |  | TMF622 cancellationDate: when a cancelProductOrder cancelled it; set exactly when cancelled. |
+| `cancellation_reason` | `text` | yes |  | TMF622 cancellationReason, from the cancelProductOrder; optional. |
 
 ## Foreign keys
 
@@ -29,7 +31,10 @@ SID ProductOrder (TMF622 productOrder): the only way to create or terminate prod
 
 | Name | Kind | Definition |
 |---|---|---|
+| `product_order_cancellation_reason_check` | check | `CHECK ((length(cancellation_reason) > 0))` |
+| `product_order_cancelled_has_date` | check | `CHECK (((state = 'cancelled'::product_order_state_type) = (cancellation_date IS NOT NULL)))` |
 | `product_order_check` | check | `CHECK ((completion_date >= order_date))` |
+| `product_order_reason_when_cancelled` | check | `CHECK (((cancellation_reason IS NULL) OR (cancellation_date IS NOT NULL)))` |
 | `product_order_pkey` | primary key | `PRIMARY KEY (id)` |
 
 ## Indexes
@@ -45,4 +50,4 @@ SID ProductOrder (TMF622 productOrder): the only way to create or terminate prod
 
 ## Referenced by
 
-[`product_order_error_message`](product_order_error_message.md), [`product_order_item`](product_order_item.md)
+[`cancel_product_order`](cancel_product_order.md), [`product_order_error_message`](product_order_error_message.md), [`product_order_item`](product_order_item.md)

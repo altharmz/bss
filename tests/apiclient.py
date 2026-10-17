@@ -50,7 +50,10 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
     ),
     "/tmf-api/paymentManagement/v4": ("TMF676", {"payment": "Payment", "refund": "Refund"}),
     "/tmf-api/productInventory/v5": ("TMF637", {"product": "Product"}),
-    "/tmf-api/productOrderingManagement/v5": ("TMF622", {"productOrder": "ProductOrder"}),
+    "/tmf-api/productOrderingManagement/v5": (
+        "TMF622",
+        {"productOrder": "ProductOrder", "cancelProductOrder": "CancelProductOrder"},
+    ),
     "/tmf-api/customerBillManagement/v5": (
         "TMF678",
         {

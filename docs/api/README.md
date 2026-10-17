@@ -7,7 +7,7 @@ One page per API, generated from `app.openapi()` (what the app really serves) an
 | API | Version | Base path | Operations | Spec |
 |---|---|---|---|---|
 | [TMF620 Product Catalog Management](tmf620-product-catalog.md) | v5 | `/tmf-api/productCatalogManagement/v5` | 33 | [`spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml`](../../spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml) |
-| [TMF622 Product Ordering Management](tmf622-product-ordering.md) | v5 | `/tmf-api/productOrderingManagement/v5` | 3 | [`spec/TMF622-ProductOrdering-v5.0.0.oas.yaml`](../../spec/TMF622-ProductOrdering-v5.0.0.oas.yaml) |
+| [TMF622 Product Ordering Management](tmf622-product-ordering.md) | v5 | `/tmf-api/productOrderingManagement/v5` | 7 | [`spec/TMF622-ProductOrdering-v5.0.0.oas.yaml`](../../spec/TMF622-ProductOrdering-v5.0.0.oas.yaml) |
 | [TMF629 Customer Management](tmf629-customer.md) | v5 | `/tmf-api/customerManagement/v5` | 5 | [`spec/TMF629-Customer_Management-v5.0.1.oas.yaml`](../../spec/TMF629-Customer_Management-v5.0.1.oas.yaml) |
 | [TMF632 Party Management](tmf632-party.md) | v5 | `/tmf-api/partyManagement/v5` | 10 | [`spec/TMF632-Party_Management-v5.0.0.oas.yaml`](../../spec/TMF632-Party_Management-v5.0.0.oas.yaml) |
 | [TMF637 Product Inventory](tmf637-product-inventory.md) | v5 | `/tmf-api/productInventory/v5` | 2 | [`spec/TMF637-ProductInventory-v5.0.0.oas.yaml`](../../spec/TMF637-ProductInventory-v5.0.0.oas.yaml) |
@@ -17,7 +17,7 @@ One page per API, generated from `app.openapi()` (what the app really serves) an
 | [Internal API (admin UI)](internal.md) | v1 | `/internal/v1` | 13 | [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) |
 | [Service endpoints](service.md) | - | - | 3 | - |
 
-118 operations in total.
+122 operations in total.
 
 ## Conventions
 

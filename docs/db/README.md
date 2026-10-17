@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0015**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0016**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -22,6 +22,7 @@ PostgreSQL schema at Alembic head **0015**, read from `pg_catalog` of a throwawa
 | [`product_order`](product_order.md) | ordering | SID ProductOrder (TMF622 productOrder): the only way to create or terminate products. Processed synchronously; a rejected order is stored with its reasons. |
 | [`product_order_item`](product_order_item.md) | ordering | SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product. At most one open delete item per product (partial unique index). |
 | [`product_order_error_message`](product_order_error_message.md) | ordering | TMF622 productOrderErrorMessage: why an order was rejected - one row per reason, for the order as a whole or for one item. |
+| [`cancel_product_order`](cancel_product_order.md) | ordering | TMF622 cancelProductOrder: done on insert (a refused one is not stored); one per order. |
 | [`product`](product.md) | inventory | SID Product (TMF637 product): an instance of an offering on a billing account. Written only by orders; billable on start_date <= d < termination_date. |
 | [`billing_run`](billing_run.md) | billing | One daily billing run per date (ours, not TMF). Only a billing run writes ABRs and bills; the worker's bookkeeping lives here (trigger, attempt, failure_kind). |
 | [`applied_customer_billing_rate`](applied_customer_billing_rate.md) | billing | SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recurring charge for the billable days of one cycle period, or the one refund of such a charge. Written only by a billing run. |
@@ -65,6 +66,7 @@ flowchart LR
     product_order[product_order]
     product_order_item[product_order_item]
     product_order_error_message[product_order_error_message]
+    cancel_product_order[cancel_product_order]
   end
   subgraph area_inventory["Inventory (TMF637)"]
     product[product]
@@ -104,6 +106,7 @@ flowchart LR
   billing_run_account -->|"billing_account_id"| billing_account
   billing_run_account -->|"run_id"| billing_run
   billing_run_account -->|"waits_for_run_id"| billing_run
+  cancel_product_order -->|"product_order_id"| product_order
   catalog_category -->|"catalog_id"| product_catalog
   catalog_category -->|"category_id"| category
   category -->|"parent_id"| category
@@ -320,6 +323,8 @@ erDiagram
     timestamptz order_date
     date requested_start_date
     timestamptz completion_date
+    timestamptz cancellation_date
+    text cancellation_reason
   }
   product_order_item {
     uuid id PK
@@ -347,6 +352,14 @@ erDiagram
     text message
     timestamptz occurred_at
   }
+  cancel_product_order {
+    uuid id PK
+    timestamptz created_at
+    uuid product_order_id FK
+    timestamptz creation_date
+    timestamptz requested_cancellation_date
+    text cancellation_reason
+  }
   billing_account {
     uuid id PK
   }
@@ -363,6 +376,7 @@ erDiagram
   product |o--o{ product_order_item : "product_id"
   product_offering |o--o{ product_order_item : "product_offering_id"
   product_offering_price |o--o{ product_order_item : "quoted_price_id"
+  product_order ||--o{ cancel_product_order : "product_order_id"
   product_order ||--o{ product_order_error_message : "product_order_id"
   product_order ||--o{ product_order_item : "product_order_id"
   product_order_item |o--o{ product_order_error_message : "product_order_item_id"

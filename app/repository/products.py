@@ -60,6 +60,42 @@ def terminate_product(
     )
 
 
+def cancel_unstarted(conn: psycopg.Connection, product_id: UUID) -> Row:
+    """Undo an add item: the product never starts (zero billable days, as a delete of a
+    product that has not started). No terminating item - its creating order is cancelled."""
+    return returning(
+        conn,
+        "UPDATE product SET status = 'cancelled', termination_date = start_date"
+        " WHERE id = %s RETURNING *",
+        (product_id,),
+    )
+
+
+def restore(conn: psycopg.Connection, product_id: UUID, status: str) -> Row:
+    """Undo a delete item: the product is open-ended again, in `status`."""
+    return returning(
+        conn,
+        """
+        UPDATE product SET status = %s, termination_date = NULL, terminated_by_item_id = NULL
+        WHERE id = %s RETURNING *
+        """,
+        (status, product_id),
+    )
+
+
+def charged_from(conn: psycopg.Connection, product_id: UUID, day: date) -> bool:
+    """Whether billing wrote any ABR of the product for a period starting on `day` or
+    later (a charge's or refund's range starts inside its cycle period)."""
+    row = fetch_one(
+        conn,
+        "SELECT EXISTS (SELECT 1 FROM applied_customer_billing_rate"
+        " WHERE product_id = %s AND lower(period) >= %s) AS charged",
+        (product_id, day),
+    )
+    assert row is not None
+    return row["charged"]
+
+
 def list_active_products(conn: psycopg.Connection, billing_account_id: UUID, on: date) -> list[Row]:
     """Products of the account that are billable on `on`.
 

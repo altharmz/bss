@@ -194,8 +194,13 @@ financialAccount, partyAccount, settlementAccount, billFormat, billPresentationM
 for entries nothing references (a billing account: no history at all); writers take
 what they reference FOR KEY SHARE, the worker skips a deleted account. Coverage 101/129
 (78.3%). Decision: [tmf-api.md](docs/decisions/tmf-api.md#deleting-parties-customers-and-accounts-2026-10-17).
-API notes added with the human's OK. Slice 2:
-cancelProductOrder (3) + DELETE of rejected orders, migration `0016`, UI.
+API notes added with the human's OK. Committed and pushed (`656c7fc`). Slice 2 (4
+operations): cancelProductOrder undoes a completed order before any of it takes effect
+(409, nothing stored, otherwise), DELETE removes rejected orders, migration `0016`
+`cancel_product_order` + order cancellation columns, UI "Undo deactivation". Coverage
+105/129 (81.4%). Decision: [tmf-api.md](docs/decisions/tmf-api.md#order-cancellation-and-deleting-rejected-orders-2026-10-17).
+Not deployed: migrations `0009`-`0016` ship together with the next `make verify`
+(rolling back `0016` needs `alembic downgrade 0015` by hand).
 
 **TMF620 completion** (2026-10-16, approved plan: two slices, 13 operations, no `/hub`).
 Slice 1 (catalog deletes, 5 operations): DELETE on specification, offering, price,

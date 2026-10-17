@@ -7,6 +7,7 @@ import {
   loadSettlement,
   loadTransactions,
   orderDelete,
+  undoDeactivation,
   type Account,
   type AccountProduct,
   type AccountSettlement,
@@ -413,6 +414,19 @@ function ProductRow({
     }
   }
 
+  async function undo() {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await undoDeactivation(product.id);
+      onDone(`${name} stays active: the deactivation was cancelled`);
+    } catch (error) {
+      setProblem(explain(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const code = [product.productOffering.code, product.productSpecification.name]
     .filter(Boolean)
     .join(' · ');
@@ -450,7 +464,16 @@ function ProductRow({
                 <span className="bss-secondary">/ mo</span>
               </>
             ),
-          actions: ending ? null : confirming ? (
+          actions: ending ? (
+            <Button
+              small
+              disabled={busy}
+              data-ui="ui.subscriber.undoDeactivation"
+              onClick={() => void undo()}
+            >
+              Undo deactivation
+            </Button>
+          ) : confirming ? (
             <span className="bss-confirm">
               <span className="ask">Deactivate?</span>
               <Button variant="danger" small disabled={busy} onClick={() => void deactivate()}>

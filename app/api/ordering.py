@@ -1,17 +1,21 @@
-"""TMF622 Product Ordering Management v5: productOrder (GET list, GET by id, POST).
+"""TMF622 Product Ordering Management v5: productOrder (GET list, GET by id, POST, DELETE
+of a rejected order) and cancelProductOrder (GET list, GET by id, POST).
 
 POST processes the order synchronously in the request's transaction (app/ordering). A
 well-formed order that breaks a business rule is stored as `rejected` and answered with
 201, its reasons in productOrderErrorMessage[]; only a malformed request, or one that
-references something that does not exist, is a 4xx. No PATCH, DELETE or
-cancelProductOrder.
+references something that does not exist, is a 4xx. No PATCH.
+
+cancelProductOrder undoes a completed order before any of it takes effect
+(app/ordering/cancel.py); one that cannot be cancelled is a 409 and nothing is stored,
+so every stored cancellation is `done`.
 """
 
 from decimal import Decimal
 from typing import Any, Literal
 
 import psycopg
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import AwareDatetime, Field
 
 from app.api import listing
@@ -21,6 +25,7 @@ from app.api.common import (
     BillingAccountRef,
     ProductOfferingRef,
     ProductRef,
+    Ref,
     TmfModel,
     check_type,
     created,
@@ -33,11 +38,12 @@ from app.api.common import (
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, Tx
-from app.api.errors import bad_request, not_found, unprocessable
+from app.api.errors import bad_request, conflict, not_found, unprocessable
 from app.api.inventory import ORDERING_BASE as BASE
 from app.api.inventory import order_href, product_href
 from app.api.prices import monthly_price
 from app.api.tmfjson import TmfJSONResponse
+from app.ordering import cancel as cancellation
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
 from app.repository import catalog, orders, parties
 from app.repository._sql import Row
@@ -53,6 +59,16 @@ ATTRIBUTES = (
     "productOrderItem",
     "productOrderErrorMessage",
     "orderTotalPrice",
+    "cancellationDate",
+    "cancellationReason",
+)
+CANCEL_ATTRIBUTES = (
+    "productOrder",
+    "creationDate",
+    "requestedCancellationDate",
+    "cancellationReason",
+    "state",
+    "effectiveCancellationDate",
 )
 
 
@@ -178,6 +194,8 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "productOrderItem": [_item_body(conn, item) for item in items],
             "productOrderErrorMessage": errors or None,
             "orderTotalPrice": total,
+            "cancellationDate": utc(row["cancellation_date"]) if row["cancellation_date"] else None,
+            "cancellationReason": row["cancellation_reason"],
             "@type": "ProductOrder",
         }
     )
@@ -227,6 +245,8 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
             "completionDate",
             "productOrderErrorMessage",
             "orderTotalPrice",
+            "cancellationDate",
+            "cancellationReason",
         ),
     )
     for item in body.get("productOrderItem", []):
@@ -246,3 +266,121 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
         assert row is not None
         new = order_body(conn, row)
     return created(listing.select_fields(new, fields))
+
+
+@router.delete("/productOrder/{order_id}", status_code=204, response_class=Response)
+def delete_order(order_id: str, request: Request, tx: Tx) -> Response:
+    """Only a rejected order: it never executed, so nothing refers to it. Any other order
+    is the history of its products (409); a completed one can be cancelled instead."""
+    listing.no_query(request)
+    with tx() as conn:
+        uid = parse_id("productOrder", order_id)
+        row = orders.lock_order(conn, uid)
+        if row is None:
+            raise not_found("productOrder", order_id)
+        if row["state"] != "rejected":
+            raise conflict(
+                f"productOrder {uid} is {row['state']}: only a rejected order can be deleted"
+                " (a completed one can be cancelled with cancelProductOrder)"
+            )
+        orders.delete_rejected(conn, uid)
+    return Response(status_code=204)
+
+
+# --- cancelProductOrder ---
+
+
+class ProductOrderRef(Ref):
+    referred_type = "ProductOrder"
+
+
+class CancelIn(TmfModel):
+    product_order: ProductOrderRef
+    requested_cancellation_date: AwareDatetime | None = None
+    cancellation_reason: str | None = Field(default=None, min_length=1)
+
+
+def cancel_href(uid: Any) -> str:
+    return f"{BASE}/cancelProductOrder/{uid}"
+
+
+def cancel_body(row: Row) -> dict[str, Any]:
+    requested = row["requested_cancellation_date"]
+    return without_nulls(
+        {
+            "id": str(row["id"]),
+            "href": cancel_href(row["id"]),
+            "productOrder": ref(
+                "ProductOrder",
+                order_href(row["product_order_id"]),
+                row["product_order_id"],
+                ref_type="ProductOrderRef",
+            ),
+            "creationDate": utc(row["creation_date"]),
+            "requestedCancellationDate": utc(requested) if requested else None,
+            "cancellationReason": row["cancellation_reason"],
+            "state": "done",  # a refused cancellation is a 409, never stored
+            "effectiveCancellationDate": utc(row["creation_date"]),
+            "@type": "CancelProductOrder",
+        }
+    )
+
+
+@router.get("/cancelProductOrder")
+def list_cancellations(request: Request, tx: Tx) -> TmfJSONResponse:
+    query = listing.parse_list_query(
+        request,
+        filters={"productOrder.id": ("product_order_id", listing.as_uuid)},
+        attributes=CANCEL_ATTRIBUTES,
+    )
+    with tx() as conn:
+        rows, total = orders.list_cancellations(
+            conn, where=query.where, offset=query.offset, limit=query.limit
+        )
+    return listing.list_response([cancel_body(row) for row in rows], total, query)
+
+
+@router.get("/cancelProductOrder/{cancel_id}")
+def get_cancellation(cancel_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
+    fields = listing.retrieve_fields(request, CANCEL_ATTRIBUTES)
+    with tx() as conn:
+        row = orders.get_cancellation(conn, parse_id("cancelProductOrder", cancel_id))
+        if row is None:
+            raise not_found("cancelProductOrder", cancel_id)
+    return TmfJSONResponse(listing.select_fields(cancel_body(row), fields))
+
+
+@router.post("/cancelProductOrder")
+def cancel_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
+    """Takes effect now: `requestedCancellationDate` may only be today (BILLING_TZ)."""
+    fields = listing.retrieve_fields(request, CANCEL_ATTRIBUTES)
+    check_type(body, "CancelProductOrder")
+    data = parse(
+        CancelIn,
+        body,
+        read_only=("creationDate", "state", "effectiveCancellationDate"),
+    )
+    requested = data.requested_cancellation_date
+    today = clock.today()
+    if requested is not None and to_billing_date(requested) != today:
+        raise unprocessable(
+            f"requestedCancellationDate must be today ({today}): a cancellation takes effect"
+            " when it is requested"
+        )
+    with tx() as conn:
+        try:
+            row = cancellation.cancel_order(
+                conn,
+                cancellation.CancelRequest(
+                    order_id=data.product_order.id,
+                    requested=requested,
+                    reason=data.cancellation_reason,
+                ),
+                now=clock.now(),
+                today=today,
+            )
+        except LookupError as exc:
+            raise unprocessable(str(exc)) from None
+        except cancellation.CancelRefused as exc:
+            raise conflict(str(exc)) from None
+    return created(listing.select_fields(cancel_body(row), fields))

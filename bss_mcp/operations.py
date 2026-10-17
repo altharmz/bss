@@ -36,7 +36,7 @@ from app.api.catalog_jobs import ExportJobCreate, ImportJobCreate
 from app.api.classification import CatalogCreate, CatalogPatch, CategoryCreate, CategoryPatch
 from app.api.customer import CustomerCreate, CustomerPatch
 from app.api.on_demand import DemandCreate
-from app.api.ordering import OrderIn
+from app.api.ordering import CancelIn, OrderIn
 from app.api.party import IndividualCreate, IndividualPatch, OrganizationCreate, OrganizationPatch
 from app.api.payment import PaymentCreate
 from app.api.presentation import FormatCreate, FormatPatch, MediaCreate, MediaPatch
@@ -348,6 +348,19 @@ OPERATIONS: dict[str, Op] = {
         " state rejected with productOrderErrorMessage (still 201); a malformed order is a"
         " 4xx and stores nothing.",
         body=OrderIn,
+    ),
+    "delete_order": Op(
+        "Delete a rejected order (it never executed); any other order is a 409 - cancel a"
+        " completed one instead."
+    ),
+    "list_cancellations": Op("Order cancellations (cancelProductOrder), all done.", query=LIST),
+    "get_cancellation": Op("One order cancellation.", query=FIELDS),
+    "cancel_order": Op(
+        "Cancel a completed order before it takes effect: its new products have not started,"
+        " its terminations have not happened and billing has not charged those periods."
+        " New products are cancelled, ended ones open-ended again; 409 (nothing stored) if"
+        " any of it already took effect. requestedCancellationDate: omit or today.",
+        body=CancelIn,
     ),
     "extension_schema": Op("The JSON Schema of BssBillingAccount (the TMF666 extension)."),
     # --- internal ---

@@ -234,7 +234,18 @@ def world(api, db_conn) -> dict[str, Any]:
     import_job = api.post(
         f"{CATALOG}/importJob", {"@type": "ImportJob", "url": export_job["url"]}
     ).json()
+    later = apidata.order(
+        api,
+        apidata.account(api, name="Later"),
+        apidata.add_item(offering),
+        requestedStartDate=iso(midnight(date(2027, 1, 1))),
+    )
+    cancellation = api.post(
+        "/tmf-api/productOrderingManagement/v5/cancelProductOrder",
+        {"productOrder": {"id": later["id"]}},
+    ).json()
     return {
+        "cancellation": cancellation,
         "export_job": export_job,
         "import_job": import_job,
         "financial": financial,
@@ -290,6 +301,7 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_bill_cycle": {"cycle_id": str(world["run"]["id"])},
         "get_rate": {"rate_id": world["rate"]["id"]},
         "get_order": {"order_id": world["order"]["id"]},
+        "get_cancellation": {"cancel_id": world["cancellation"]["id"]},
         "first_charge": {
             "account_id": acc,
             "productOffering.id": offering,
@@ -473,10 +485,18 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
     ):
         call(name, {key: entry["id"]}, expected=(204,))
     call("create_bill_demand", {"body": {"billingAccount": {"id": account["id"]}}})
-    call(
+    early = call(
         "create_order",
         {"body": apidata.order_body(account, apidata.add_item(offering))},
     )
+    assert early["state"] == "rejected"  # the offering is valid from 2027 only
+    call("delete_order", {"order_id": early["id"]}, expected=(204,))
+    future = call(
+        "create_order",
+        {"body": apidata.order_body(account, apidata.add_item(offering), requestedStartDate=start)},
+    )
+    assert future["state"] == "completed", future
+    call("cancel_order", {"body": {"productOrder": {"id": future["id"]}}})
     call(
         "create_payment",
         {"body": money_as_strings(apidata.payment_body(account, "120.00"))},

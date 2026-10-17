@@ -336,7 +336,57 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 32  # 31 domain tables + alembic_version
+    assert tables == 33  # 32 domain tables + alembic_version
+
+
+def test_0016_order_cancellation_round_trip(temp_db_url):
+    """Existing orders stay as they are (no cancellation date); a cancelled order needs
+    one; downgrading to 0015 works with a cancellation stored and keeps the orders."""
+    from tests import factories
+
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0015")
+    with psycopg.connect(temp_db_url) as conn:
+        account = factories.account(conn)
+        order_id = conn.execute(
+            "INSERT INTO product_order (billing_account_id, state, order_date)"
+            " VALUES (%s, 'completed', %s) RETURNING id",
+            (account["id"], factories.NOW),
+        ).fetchone()[0]
+    command.upgrade(cfg, "0016")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT state, cancellation_date FROM product_order").fetchone() == (
+            "completed",
+            None,
+        )
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE product_order SET state = 'cancelled'")
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE product_order SET cancellation_reason = 'x'")
+        conn.execute(
+            "UPDATE product_order SET state = 'cancelled', cancellation_date = %s",
+            (factories.NOW,),
+        )
+        conn.execute(
+            "INSERT INTO cancel_product_order (product_order_id, creation_date) VALUES (%s, %s)",
+            (order_id, factories.NOW),
+        )
+        with pytest.raises(psycopg.errors.UniqueViolation), conn.transaction():
+            conn.execute(
+                "INSERT INTO cancel_product_order (product_order_id, creation_date)"
+                " VALUES (%s, %s)",
+                (order_id, factories.NOW),
+            )
+    command.downgrade(cfg, "0015")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT to_regclass('cancel_product_order')").fetchone() == (None,)
+        assert conn.execute("SELECT count(*) FROM product_order").fetchone() == (1,)
+    # upgrading again: the order cancelled before the downgrade gets a date back
+    command.upgrade(cfg, "0016")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT state, cancellation_date IS NOT NULL FROM product_order"
+        ).fetchone() == ("cancelled", True)
 
 
 def test_0009_catalog_round_trip(temp_db_url):

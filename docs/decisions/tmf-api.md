@@ -14,6 +14,69 @@ mapping is in [catalog.md](catalog.md).
 
 ## TMF API conventions (stage 2)
 
+### Order cancellation and deleting rejected orders (2026-10-17)
+
+TMF622 `cancelProductOrder` (POST, GET list with `productOrder.id`, GET by id) and
+`DELETE productOrder`. Migration `0016` adds `cancel_product_order` (one per order) and
+`product_order.cancellation_date` / `cancellation_reason` (TMF622 cancellationDate /
+cancellationReason; set exactly when the order is cancelled, CHECK-enforced).
+**Rollback:** `alembic downgrade 0015` drops the table and columns but keeps cancelled
+orders as `cancelled` (0015's code never acts on them); upgrading again gives them back a
+`cancellation_date` of their completion date, so the CHECK holds
+(`tests/test_migrations.py::test_0016_order_cancellation_round_trip`).
+
+**What a cancellation means here.** Orders complete synchronously, so there is never an
+order in progress to stop. A cancellation undoes a **completed** order whose every effect
+is still in the future (`app/ordering/cancel.py`):
+
+| Item | Cancellable while | Then |
+|---|---|---|
+| add | its product has not started (`created`/`pendingActive`, start after today) and no other order ended it | product `cancelled`, `termination_date = start_date` (zero billable days), no terminating item |
+| delete | the termination it set has not happened (after today) and is still the product's | product open-ended again: `active`, or `created` if the delete had cancelled a product that has not started; `terminated_by_item_id` cleared |
+| either | billing wrote no ABR of the product for the cycle period containing the item's date (start or termination) or a later one | - |
+
+The last rule exists because the billing core never charges more than it charged
+(`InconsistentState`): a termination already reflected in a partial charge cannot be
+taken back. Order and items go `completed -> cancelled` (the state machine gains exactly
+these two transitions; `completed` is no longer terminal). `requestedCancellationDate`
+must be absent or today (BILLING_TZ), else 422: a cancellation takes effect when it is
+requested. A missing order is a 422 (a reference in the body), an order that cannot be
+cancelled - not completed, or any item no longer reversible - a **409 naming every
+reason, with nothing stored** (the human's choice of 2026-10-17; CancelProductOrder has
+no field for reasons). So every stored cancellation is `done`, with
+`effectiveCancellationDate = creationDate`.
+
+**Billing replays.** The cancellation changes the product rows in place, so a retry of
+an earlier failed run made after it sees the product as it is now. That changes nothing
+billed: the rules above allow a cancellation only when billing never charged the periods
+involved, and a run that failed for the account wrote nothing.
+
+**Locks**, in the order billing and orders take them: the order `FOR UPDATE`, then the
+account `FOR UPDATE` (as `bill_account`: no run computes the account in between), then the
+products in id order (as orders and the status flips). A charge already written also holds
+its product through the ABR's foreign key; the account lock covers a run that has read the
+products but not written yet.
+
+**DELETE productOrder** removes a `rejected` order with its items and reasons (it never
+executed, nothing refers to it), 204; any other state is a 409 (a completed order is its
+products' history; it can be cancelled instead). That frees catalog entries only a
+rejected order referred to.
+
+**UI:** a product row pending termination offers "Undo deactivation"
+(`ui.subscriber.undoDeactivation`): it reads the product's `termination` order item from
+TMF637 and posts a cancelProductOrder with only `productOrder`; a 409's reason shows in the
+row. The UI's own Deactivate is effective today, so the button appears for terminations
+ordered for a later date (through the API or MCP).
+
+MCP gets `cancel_order` and `delete_order` (write) and `list_cancellations`,
+`get_cancellation` (read). Coverage: 105/129 non-listener operations (81.4%). Tests:
+`tests/test_api_order_cancel.py`, `tests/test_ui_requests.py::test_undo_deactivation_as_the_ui_sends_it`,
+SubscriberCard component tests. Negative proofs, each reverted: without the account lock
+the cancellation does not wait for a run holding the account; without the charge check a
+termination November's charge already reflects is taken back (201) - in the race test too;
+without the rejected-only check DELETE of a completed order is a 500 (foreign keys);
+with the marker renamed the component test fails.
+
 ### Deleting parties, customers and accounts (2026-10-17)
 
 The catalog's delete rule ([catalog.md](catalog.md#deleting-catalog-entries-2026-10-16))
@@ -181,7 +244,8 @@ implemented; order processing lives in `app/ordering/`.
   DELETE exists in TMF620 only, for catalog entries nothing references
   ([catalog.md](catalog.md#deleting-catalog-entries-2026-10-16)); everywhere else it is
   still a 405. **Narrowed again 2026-10-17:** the same rule for parties, customers and
-  the TMF666 resources ([below](#deleting-parties-customers-and-accounts-2026-10-17)).
+  the TMF666 resources ([below](#deleting-parties-customers-and-accounts-2026-10-17)),
+  and for rejected orders; cancelProductOrder is exposed since the same day.
 - **Errors:** every non-2xx body is the TMF `Error` (`@type`, `code`, `reason`, `message`,
   `status`), including unknown routes, FastAPI's own validation errors and unhandled
   exceptions (500 says "internal error", nothing more). 400 = malformed JSON, unknown
@@ -338,6 +402,8 @@ both read the same open bill; `test_two_payments_settle_one_after_the_other` fai
 |---|---|---|
 
 - **GET list, GET by id, POST only.** PATCH/DELETE are 405, cancelProductOrder is 404.
+  **Changed 2026-10-17:** DELETE removes a rejected order, and cancelProductOrder exists
+  ([below](#order-cancellation-and-deleting-rejected-orders-2026-10-17)); PATCH stays 405.
 - **Synchronous, one transaction** (`app/ordering/process.py`). States come from the pure
   function in `app/ordering/states.py`: order `acknowledged -> inProgress -> completed`
   or `acknowledged -> rejected`; items the same, plus `acknowledged -> cancelled`.

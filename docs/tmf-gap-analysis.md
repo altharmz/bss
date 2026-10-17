@@ -1,5 +1,10 @@
 # TMF conformance gap analysis
 
+**Order cancellation (2026-10-17).** cancelProductOrder (3 operations) undoes a completed
+order before any of it takes effect; DELETE productOrder removes rejected orders.
+Non-listener operation coverage: 105/129 (81.4%). TMF622 lacks PATCH productOrder and
+`/hub`. See [the decision](decisions/tmf-api.md#order-cancellation-and-deleting-rejected-orders-2026-10-17).
+
 **Party, customer and account deletes (2026-10-17).** DELETE on individual,
 organization, customer, billingAccount, financialAccount, partyAccount,
 settlementAccount, billFormat and billPresentationMedia, for entries nothing references

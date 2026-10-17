@@ -334,18 +334,12 @@ def test_order_list_and_filters(api, shop):
     assert len(api.get(PRODUCT).json()) == 2
 
 
-@pytest.mark.parametrize("method", ["PATCH", "DELETE", "PUT"])
+@pytest.mark.parametrize("method", ["PATCH", "PUT"])
 def test_orders_cannot_be_changed(api, shop, method):
+    """DELETE (rejected orders only) and cancelProductOrder: tests/test_api_order_cancel.py."""
     offering, acc = shop
     href = apidata.order(api, acc, apidata.add_item(offering))["href"]
     assert api.request(method, href, json={}).status_code == 405
-
-
-def test_cancel_product_order_is_not_exposed(api):
-    response = api.post(
-        "/tmf-api/productOrderingManagement/v5/cancelProductOrder", {"productOrder": {}}
-    )
-    assert response.status_code == 404
 
 
 def test_a_product_with_an_open_delete_elsewhere_is_rejected(api, shop, db_conn):

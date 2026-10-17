@@ -5,22 +5,27 @@ model. Orders are processed synchronously:
 
     acknowledged -> inProgress -> completed      (every item valid)
     acknowledged -> rejected                     (at least one reason to refuse)
+    completed -> cancelled                       (cancelProductOrder, before it takes effect)
 
 Items follow their order; when an order is rejected, the items that were fine are
-`cancelled` (never executed), the others `rejected`.
+`cancelled` (never executed), the others `rejected`. A cancelled order's items are all
+`cancelled` (app/ordering/cancel.py).
 """
 
 ORDER_TRANSITIONS: dict[str, frozenset[str]] = {
     "acknowledged": frozenset({"inProgress", "rejected"}),
     "inProgress": frozenset({"completed"}),
+    "completed": frozenset({"cancelled"}),
 }
 
 ITEM_TRANSITIONS: dict[str, frozenset[str]] = {
     "acknowledged": frozenset({"inProgress", "rejected", "cancelled"}),
     "inProgress": frozenset({"completed"}),
+    "completed": frozenset({"cancelled"}),
 }
 
-TERMINAL = frozenset({"completed", "rejected", "cancelled"})
+# completed is not terminal: a cancelProductOrder may still cancel it
+TERMINAL = frozenset({"rejected", "cancelled"})
 
 
 class InvalidTransition(ValueError):

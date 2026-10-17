@@ -2,21 +2,21 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 117,
-      "items": 117,
-      "tested": 117
+      "implemented": 121,
+      "items": 121,
+      "tested": 121
     },
     "db": {
       "deployed": null,
-      "implemented": 31,
-      "items": 31,
-      "tested": 31
+      "implemented": 32,
+      "items": 32,
+      "tested": 32
     },
     "ui": {
       "deployed": null,
-      "implemented": 21,
-      "items": 21,
-      "tested": 21
+      "implemented": 22,
+      "items": 22,
+      "tested": 22
     },
     "worker": {
       "deployed": null,
@@ -716,6 +716,15 @@
     {
       "area": "db",
       "deployed": null,
+      "id": "db.cancel_product_order",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Order cancellations (TMF622 cancelProductOrder)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
       "id": "db.product",
       "implemented": true,
       "stage": 1,
@@ -1193,6 +1202,42 @@
     {
       "area": "api",
       "deployed": null,
+      "id": "api.tmf622.productOrder.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Delete a rejected order"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf622.cancelProductOrder.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "List order cancellations"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf622.cancelProductOrder.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Get an order cancellation"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf622.cancelProductOrder.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Cancel a completed order before it takes effect"
+    },
+    {
+      "area": "api",
+      "deployed": null,
       "id": "api.tmf637.product.list",
       "implemented": true,
       "stage": 2,
@@ -1468,6 +1513,15 @@
       "stage": 5,
       "tested": true,
       "title": "Deactivate a product"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.undoDeactivation",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Undo a pending deactivation (cancel its order)"
     },
     {
       "area": "ui",

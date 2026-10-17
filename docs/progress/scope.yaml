@@ -91,6 +91,7 @@ items:
   - {id: db.product_order, area: db, stage: 1, table: product_order, title: "Product orders (TMF622)"}
   - {id: db.product_order_item, area: db, stage: 1, table: product_order_item, title: "Product order items (TMF622)"}
   - {id: db.product_order_error_message, area: db, stage: 2, table: product_order_error_message, title: "Order rejection reasons (TMF622 productOrderErrorMessage)"}
+  - {id: db.cancel_product_order, area: db, stage: 5, table: cancel_product_order, title: "Order cancellations (TMF622 cancelProductOrder)"}
   - {id: db.product, area: db, stage: 1, table: product, title: "Products (TMF637)"}
   - {id: db.applied_customer_billing_rate, area: db, stage: 1, table: applied_customer_billing_rate, title: "Charges and refunds - ABRs (TMF678)"}
   - {id: db.customer_bill, area: db, stage: 1, table: customer_bill, title: "Customer bills (TMF678)"}
@@ -156,6 +157,10 @@ items:
   - {id: api.tmf622.productOrder.list, area: api, stage: 2, method: GET, path: /tmf-api/productOrderingManagement/v5/productOrder, title: "List product orders"}
   - {id: api.tmf622.productOrder.get, area: api, stage: 2, method: GET, path: "/tmf-api/productOrderingManagement/v5/productOrder/{order_id}", title: "Get a product order"}
   - {id: api.tmf622.productOrder.create, area: api, stage: 2, method: POST, path: /tmf-api/productOrderingManagement/v5/productOrder, title: "Place a product order (add / delete items)"}
+  - {id: api.tmf622.productOrder.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productOrderingManagement/v5/productOrder/{order_id}", title: "Delete a rejected order"}
+  - {id: api.tmf622.cancelProductOrder.list, area: api, stage: 5, method: GET, path: /tmf-api/productOrderingManagement/v5/cancelProductOrder, title: "List order cancellations"}
+  - {id: api.tmf622.cancelProductOrder.get, area: api, stage: 5, method: GET, path: "/tmf-api/productOrderingManagement/v5/cancelProductOrder/{cancel_id}", title: "Get an order cancellation"}
+  - {id: api.tmf622.cancelProductOrder.create, area: api, stage: 5, method: POST, path: /tmf-api/productOrderingManagement/v5/cancelProductOrder, title: "Cancel a completed order before it takes effect"}
 
   # ---------------- api: TMF637 inventory ----------------
   - {id: api.tmf637.product.list, area: api, stage: 2, method: GET, path: /tmf-api/productInventory/v5/product, title: "List products"}
@@ -197,6 +202,7 @@ items:
   - {id: ui.subscriber.card, area: ui, stage: 5, title: "Subscriber card: account, products, charges, transactions"}
   - {id: ui.subscriber.addProduct, area: ui, stage: 5, title: "Add product, with first-charge preview"}
   - {id: ui.subscriber.deactivate, area: ui, stage: 5, title: "Deactivate a product"}
+  - {id: ui.subscriber.undoDeactivation, area: ui, stage: 5, title: "Undo a pending deactivation (cancel its order)"}
   - {id: ui.subscriber.bills, area: ui, stage: 5, title: "Bills panel on the subscriber card"}
   - {id: ui.subscriber.billDetail, area: ui, stage: 5, title: "Bill dialog: charges, payments, history"}
   - {id: ui.subscriber.billHold, area: ui, stage: 5, title: "Put a bill on hold / release it"}

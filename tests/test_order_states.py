@@ -16,12 +16,14 @@ ORDER_ALLOWED = [
     ("acknowledged", "inProgress"),
     ("acknowledged", "rejected"),
     ("inProgress", "completed"),
+    ("completed", "cancelled"),  # cancelProductOrder
 ]
 ITEM_ALLOWED = [
     ("acknowledged", "inProgress"),
     ("acknowledged", "rejected"),
     ("acknowledged", "cancelled"),
     ("inProgress", "completed"),
+    ("completed", "cancelled"),  # its order is cancelled
 ]
 
 
@@ -54,7 +56,9 @@ def test_allowed_item_transitions(current, target):
         ("rejected", "acknowledged"),
         ("rejected", "completed"),
         ("acknowledged", "acknowledged"),
-        ("acknowledged", "cancelled"),  # items may be cancelled, orders not (no cancel API)
+        ("acknowledged", "cancelled"),  # only a completed order is cancelled
+        ("rejected", "cancelled"),
+        ("cancelled", "completed"),
         ("acknowledged", "partial"),
         ("acknowledged", "nonsense"),
     ],
@@ -70,7 +74,7 @@ def test_forbidden_order_transitions(current, target):
         ("acknowledged", "completed"),
         ("inProgress", "cancelled"),
         ("inProgress", "rejected"),
-        ("completed", "cancelled"),
+        ("completed", "rejected"),
         ("cancelled", "inProgress"),
         ("rejected", "inProgress"),
         ("acknowledged", "held"),

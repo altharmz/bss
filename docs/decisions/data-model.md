@@ -42,7 +42,8 @@ proves nothing was lost in the move. Index: [README.md](README.md).
   only a bare `ON CONFLICT DO NOTHING` does.
 - **Out of scope for now:** taxes, `modify` items and cancelProductOrder. A `modify` item
   is still storable - order processing rejects it with a reason instead of the schema
-  raising an IntegrityError.
+  raising an IntegrityError. **cancelProductOrder came into scope on 2026-10-17**
+  ([tmf-api.md](tmf-api.md#order-cancellation-and-deleting-rejected-orders-2026-10-17)).
 - **Stage order:** 1. schema + repository (done) -> 2. TMF Open API backend (done) -> 3.
   billing core (done) -> 4. worker with the daily run (deployed with slice f, `dcbedeb`,
   2026-10-05; slice g, the Billing runs screen, built on `cloud/billing-runs-ui`, not yet

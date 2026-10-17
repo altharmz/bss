@@ -326,6 +326,59 @@ describe('subscriber card', () => {
     expect(screen.queryByRole('status')).toBeNull(); // no success toast
   });
 
+  const CANCEL = '/tmf-api/productOrderingManagement/v5/cancelProductOrder';
+  const ENDING_PRODUCT = {
+    id: P2,
+    status: 'pendingTerminate',
+    productOrderItem: [
+      { orderId: 'order-add', role: 'creation', orderItemAction: 'add' },
+      { orderId: 'order-end', role: 'termination', orderItemAction: 'delete' },
+    ],
+    '@type': 'Product',
+  };
+
+  it('undoes a pending deactivation by cancelling the order that ends the product', async () => {
+    const { fetchMock } = backend({
+      [`GET /tmf-api/productInventory/v5/product/${P2}`]: () => json(ENDING_PRODUCT),
+      [`POST ${CANCEL}`]: () =>
+        json({ id: 'k1', state: 'done', '@type': 'CancelProductOrder' }, { status: 201 }),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Fiber 100'));
+    const undo = within(row).getByRole('button', { name: 'Undo deactivation' });
+    expect(undo).toBe(expectUi('ui.subscriber.undoDeactivation'));
+    expect(
+      within(productRow('Mobile L')).queryByRole('button', { name: 'Undo deactivation' }),
+    ).toBeNull();
+    fireEvent.click(undo);
+
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Fiber 100 stays active: the deactivation was cancelled',
+    );
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(post?.[0]).toBe(CANCEL);
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+      '@type': 'CancelProductOrder',
+      productOrder: { id: 'order-end', '@type': 'ProductOrderRef' },
+    });
+  });
+
+  it('shows why a deactivation cannot be undone any more', async () => {
+    backend({
+      [`GET /tmf-api/productInventory/v5/product/${P2}`]: () => json(ENDING_PRODUCT),
+      [`POST ${CANCEL}`]: () => tmfError(409, 'billing already charged its product'),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Fiber 100'));
+    fireEvent.click(within(row).getByRole('button', { name: 'Undo deactivation' }));
+    expect(await within(row).findByRole('alert')).toHaveProperty(
+      'textContent',
+      expect.stringContaining('billing already charged its product'),
+    );
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('shows the charge history with periods, proration and signs', async () => {
     backend();
     await open();

@@ -99,6 +99,61 @@ def set_order_state(
     )
 
 
+def lock_order(conn: psycopg.Connection, order_id: UUID) -> Row | None:
+    """The order row FOR UPDATE (a cancellation or delete of it), without items."""
+    return fetch_one(conn, "SELECT * FROM product_order WHERE id = %s FOR UPDATE", (order_id,))
+
+
+def set_cancelled(
+    conn: psycopg.Connection, order_id: UUID, *, at: datetime, reason: str | None
+) -> Row:
+    return returning(
+        conn,
+        """
+        UPDATE product_order
+        SET state = 'cancelled', cancellation_date = %s, cancellation_reason = %s
+        WHERE id = %s RETURNING *
+        """,
+        (at, reason, order_id),
+    )
+
+
+def delete_rejected(conn: psycopg.Connection, order_id: UUID) -> None:
+    """Remove a rejected order with its items and reasons (it never executed)."""
+    conn.execute("DELETE FROM product_order_error_message WHERE product_order_id = %s", (order_id,))
+    conn.execute("DELETE FROM product_order_item WHERE product_order_id = %s", (order_id,))
+    conn.execute("DELETE FROM product_order WHERE id = %s AND state = 'rejected'", (order_id,))
+
+
+def insert_cancellation(
+    conn: psycopg.Connection,
+    *,
+    order_id: UUID,
+    at: datetime,
+    requested: datetime | None,
+    reason: str | None,
+) -> Row:
+    return returning(
+        conn,
+        """
+        INSERT INTO cancel_product_order
+            (product_order_id, creation_date, requested_cancellation_date, cancellation_reason)
+        VALUES (%s, %s, %s, %s) RETURNING *
+        """,
+        (order_id, at, requested, reason),
+    )
+
+
+def get_cancellation(conn: psycopg.Connection, uid: UUID) -> Row | None:
+    return fetch_one(conn, "SELECT * FROM cancel_product_order WHERE id = %s", (uid,))
+
+
+def list_cancellations(
+    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    return select_page(conn, "cancel_product_order", where=where, offset=offset, limit=limit)
+
+
 def set_order_item_state(conn: psycopg.Connection, order_item_id: UUID, state: str) -> Row:
     return returning(
         conn,

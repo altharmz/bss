@@ -35,6 +35,7 @@ export const PATHS = {
   offerings: '/tmf-api/productCatalogManagement/v5/productOffering',
   prices: '/tmf-api/productCatalogManagement/v5/productOfferingPrice',
   orders: '/tmf-api/productOrderingManagement/v5/productOrder',
+  cancellations: '/tmf-api/productOrderingManagement/v5/cancelProductOrder',
   internal: '/internal/v1/billingAccount',
   runs: '/internal/v1/billingRun',
 };
@@ -712,6 +713,23 @@ export async function orderDelete(accountId: string, productId: string): Promise
     ],
   });
   return outcome(order);
+}
+
+type ProductBody = T637['schemas']['Product'];
+
+/** Undo a pending deactivation: cancel (TMF622 cancelProductOrder) the order whose delete
+ * item will end the product. The backend refuses (409) once the termination happened or
+ * billing charged its period; the product is open-ended again otherwise. */
+export async function undoDeactivation(productId: string): Promise<void> {
+  const product = await getJson<ProductBody>(`${PATHS.products}/${productId}`);
+  const ending = (product.productOrderItem ?? []).find((item) => item.role === 'termination');
+  await postJson(PATHS.cancellations, {
+    '@type': 'CancelProductOrder',
+    productOrder: {
+      id: need(ending?.orderId, 'terminating order'),
+      '@type': 'ProductOrderRef',
+    },
+  });
 }
 
 // --- bills and payments (bill lifecycle, docs/bill-lifecycle-design.md section 6) ---

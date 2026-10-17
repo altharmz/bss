@@ -11,9 +11,9 @@ records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 31 | 31/31 (100%) | 31/31 (100%) | unknown |
-| API | 117 | 117/117 (100%) | 117/117 (100%) | unknown |
-| UI | 21 | 21/21 (100%) | 21/21 (100%) | unknown |
+| Database | 32 | 32/32 (100%) | 32/32 (100%) | unknown |
+| API | 121 | 121/121 (100%) | 121/121 (100%) | unknown |
+| UI | 22 | 22/22 (100%) | 22/22 (100%) | unknown |
 | Worker | 14 | 14/14 (100%) | 14/14 (100%) | unknown |
 
 ## Database
@@ -42,6 +42,7 @@ records the deployed commit.
 | `db.product_order` | 1 | Product orders (TMF622) | yes | yes | unknown |
 | `db.product_order_item` | 1 | Product order items (TMF622) | yes | yes | unknown |
 | `db.product_order_error_message` | 2 | Order rejection reasons (TMF622 productOrderErrorMessage) | yes | yes | unknown |
+| `db.cancel_product_order` | 5 | Order cancellations (TMF622 cancelProductOrder) | yes | yes | unknown |
 | `db.product` | 1 | Products (TMF637) | yes | yes | unknown |
 | `db.applied_customer_billing_rate` | 1 | Charges and refunds - ABRs (TMF678) | yes | yes | unknown |
 | `db.customer_bill` | 1 | Customer bills (TMF678) | yes | yes | unknown |
@@ -149,6 +150,10 @@ records the deployed commit.
 | `api.tmf622.productOrder.list` | 2 | List product orders | yes | yes | unknown |
 | `api.tmf622.productOrder.get` | 2 | Get a product order | yes | yes | unknown |
 | `api.tmf622.productOrder.create` | 2 | Place a product order (add / delete items) | yes | yes | unknown |
+| `api.tmf622.productOrder.delete` | 5 | Delete a rejected order | yes | yes | unknown |
+| `api.tmf622.cancelProductOrder.list` | 5 | List order cancellations | yes | yes | unknown |
+| `api.tmf622.cancelProductOrder.get` | 5 | Get an order cancellation | yes | yes | unknown |
+| `api.tmf622.cancelProductOrder.create` | 5 | Cancel a completed order before it takes effect | yes | yes | unknown |
 | `api.tmf637.product.list` | 2 | List products | yes | yes | unknown |
 | `api.tmf637.product.get` | 2 | Get a product | yes | yes | unknown |
 | `api.tmf678.billCycle.list` | 2 | List daily billing cycles | yes | yes | unknown |
@@ -187,6 +192,7 @@ records the deployed commit.
 | `ui.subscriber.card` | 5 | Subscriber card: account, products, charges, transactions | yes | yes | unknown |
 | `ui.subscriber.addProduct` | 5 | Add product, with first-charge preview | yes | yes | unknown |
 | `ui.subscriber.deactivate` | 5 | Deactivate a product | yes | yes | unknown |
+| `ui.subscriber.undoDeactivation` | 5 | Undo a pending deactivation (cancel its order) | yes | yes | unknown |
 | `ui.subscriber.bills` | 5 | Bills panel on the subscriber card | yes | yes | unknown |
 | `ui.subscriber.billDetail` | 5 | Bill dialog: charges, payments, history | yes | yes | unknown |
 | `ui.subscriber.billHold` | 5 | Put a bill on hold / release it | yes | yes | unknown |

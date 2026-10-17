@@ -151,6 +151,34 @@ def test_add_and_delete_orders_as_the_ui_sends_them(api):
     assert TZ.key == "Europe/Moscow"  # the offsets above assume it
 
 
+def test_undo_deactivation_as_the_ui_sends_it(api):
+    """undoDeactivation(): the product's termination order from TMF637, then a
+    cancelProductOrder with only productOrder."""
+    offering = apidata.sellable_offering(api)
+    account = apidata.account(api)
+    api.clock.set(api.clock.now().replace(day=2))
+    placed = apidata.order(api, account, apidata.add_item(offering))
+    product = apidata.product_of(api, placed)
+    apidata.order(
+        api,
+        account,
+        apidata.delete_item(product["id"]),
+        requestedStartDate=f"2026-10-20T12:00:00{OFFSET}",
+    )
+    ending = api.get(product["href"]).json()
+    assert ending["status"] == "pendingTerminate"
+    (termination,) = [i for i in ending["productOrderItem"] if i["role"] == "termination"]
+    cancelled = api.post(
+        "/tmf-api/productOrderingManagement/v5/cancelProductOrder",
+        {
+            "@type": "CancelProductOrder",
+            "productOrder": {"id": termination["orderId"], "@type": "ProductOrderRef"},
+        },
+    )
+    assert cancelled.status_code == 201, cancelled.text
+    assert api.get(product["href"]).json()["status"] == "active"
+
+
 def test_price_change_as_the_ui_sends_it(api):
     """changePrice(): the amount as a raw number token, the date as a business date."""
     offering = apidata.sellable_offering(api)

@@ -144,7 +144,12 @@ AREAS = {
         "product_specification", "product_offering", "product_offering_price",
         "category", "product_catalog", "catalog_category", "offering_category", "catalog_job",
     ),
-    "ordering": ("product_order", "product_order_item", "product_order_error_message"),
+    "ordering": (
+        "product_order",
+        "product_order_item",
+        "product_order_error_message",
+        "cancel_product_order",
+    ),
     "inventory": ("product",),
     "billing": (
         "billing_run",

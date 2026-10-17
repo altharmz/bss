@@ -4,15 +4,19 @@
 
 - Base path here: `/tmf-api/productOrderingManagement/v5`
 - Contract: [`spec/TMF622-ProductOrdering-v5.0.0.oas.yaml`](../../spec/TMF622-ProductOrdering-v5.0.0.oas.yaml) - ProductOrdering version 5.0.0; the spec's server URL is `https://serverRoot`
-- Operations exposed: 3
+- Operations exposed: 7
 
 
 ## Operations
 
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
+| GET | `/tmf-api/productOrderingManagement/v5/cancelProductOrder` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `productOrder.id` | - | 200 `array of CancelProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
+| POST | `/tmf-api/productOrderingManagement/v5/cancelProductOrder` | query: `fields`; body: `application/json` | `CancelProductOrder_FVO` | 201 `CancelProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
+| GET | `/tmf-api/productOrderingManagement/v5/cancelProductOrder/{cancel_id}` | path: `cancel_id`; query: `fields` | - | 200 `CancelProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
 | GET | `/tmf-api/productOrderingManagement/v5/productOrder` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `state` | - | 200 `array of ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
 | POST | `/tmf-api/productOrderingManagement/v5/productOrder` | query: `fields`; body: `application/json` | `ProductOrder_FVO` | 201 `ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
+| DELETE | `/tmf-api/productOrderingManagement/v5/productOrder/{order_id}` | path: `order_id` | - | 204 (no body) | [`app/api/ordering.py`](../../app/api/ordering.py) |
 | GET | `/tmf-api/productOrderingManagement/v5/productOrder/{order_id}` | path: `order_id`; query: `fields` | - | 200 `ProductOrder` | [`app/api/ordering.py`](../../app/api/ordering.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF622-ProductOrdering-v5.0.0.oas.yaml`](../../spec/TMF622-ProductOrdering-v5.0.0.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
@@ -20,8 +24,8 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF622-P
 
 ## Coverage of the spec
 
-- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `DELETE /productOrder/{id}`, `PATCH /productOrder/{id}`.
-- Resources of the spec that are **not implemented**: `/cancelProductOrder`, `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
+- Declared by the spec for the implemented resources but **not exposed** (an unsupported method on an exposed path answers 405; an unknown path 404): `PATCH /productOrder/{id}`.
+- Resources of the spec that are **not implemented**: `/hub`, `/listener` (`/hub` and `/listener/*`: no event notifications).
 
 
 ## Behaviour and deviations
@@ -34,9 +38,22 @@ orders omit it. `tests/test_api_read_completeness.py` verifies exact totals and 
 
 Orders are the only way to create or terminate products. POST processes the order
 **synchronously, in the request's transaction** (`app/ordering/process.py`,
-`place_order`). There is no PATCH, DELETE or cancelProductOrder (405 / 404:
-`tests/test_api_ordering.py::test_orders_cannot_be_changed`,
-`::test_cancel_product_order_is_not_exposed`).
+`place_order`). There is no PATCH (405:
+`tests/test_api_ordering.py::test_orders_cannot_be_changed`). DELETE removes only a
+`rejected` order (204; any other state is a 409) -
+`tests/test_api_order_cancel.py::test_only_a_rejected_order_can_be_deleted`.
+
+**cancelProductOrder** undoes a completed order before any of it takes effect: an add
+item's product has not started, a delete item's termination has not happened, and
+billing has not charged the cycle period containing that date or a later one. New
+products become `cancelled` (zero billable days), ended ones open-ended again; order and
+items `cancelled`, with `cancellationDate`/`cancellationReason` on the order.
+`requestedCancellationDate` may only be today (422 otherwise). Anything that already took
+effect is a 409 naming every reason, and nothing is stored, so every stored cancellation
+is `done` - `app/ordering/cancel.py`; `tests/test_api_order_cancel.py`
+(`::test_taking_back_a_termination_before_its_period_is_charged`,
+`::test_a_termination_billing_already_reflects_stays`,
+`::test_a_cancellation_waits_for_the_account_lock_billing_holds`).
 
 **4xx vs rejected.** A request that cannot even be stored is a 4xx and stores nothing:
 malformed JSON, an unknown attribute or an empty `productOrderItem[]` (400); a missing
@@ -67,7 +84,8 @@ rejection: the order is stored with state `rejected` and its reasons in
   delete item never collides with the one-open-delete index.
 - **States** come from the pure state machine `app/ordering/states.py`: order
   `acknowledged -> inProgress -> completed` or `acknowledged -> rejected`; items the same
-  plus `acknowledged -> cancelled` (`tests/test_order_states.py`).
+  plus `acknowledged -> cancelled`; both `completed -> cancelled` for a cancellation
+  (`tests/test_order_states.py`).
 - **`requestedStartDate`** (our interpretation; TMF has no per-item date) is the start
   date of add items and the termination date of delete items, converted to the date in
   BILLING_TZ; it defaults to today and may not be in the past.
