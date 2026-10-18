@@ -22,6 +22,12 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
+    # Starting takes >30 s at 0.5 CPU next to mcp (which imports the app too) and the
+    # worker: keep the image's probe at every 2 s for up to 3 minutes, so deploy.sh's wait
+    # sees "healthy" as soon as it answers (2026-10-18: with the image's 30 s the first
+    # probe after it came past the 90 s wait).
+    healthcheck:
+      start_period: 180s
     environment:
       APP_ENV: staging
       LOG_LEVEL: info

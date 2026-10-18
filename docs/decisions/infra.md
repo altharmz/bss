@@ -110,7 +110,11 @@ would attach the prod container to both `lab` and `shared`).
   - Both: interval 60 s, timeout 3 s, retries 3, start period 30 s with `start_interval`
     2 s (Engine 25+ / Compose 2.20.2+; the VPS and WSL run Engine 29.7.2, Compose
     v5.5.0). A container is healthy ~2 s after start; a failure shows as `unhealthy`
-    after 3 probes, ~3 min.
+    after 3 probes, ~3 min. On the VPS (`compose.prod.yaml`) the app's start period is
+    180 s and mcp's 120 s: both start slower than 30 s there (0.5 / 0.25 CPU, starting
+    together), and after the start period the next probe comes only 60 s later - past
+    deploy.sh's 90 s wait (2026-10-18: a deploy failed with the app "starting" and its
+    first passing probe just after the wait).
   - Proven locally (2026-10-05): the app server killed (port still listening) -> probe
     exit 142 (read timeout), `unhealthy` after 3 probes, healthy 2.7 s after a restart;
     `/healthz` returning 500 -> exit 1, `unhealthy`, healthy again at the next probe once
