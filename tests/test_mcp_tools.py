@@ -210,7 +210,7 @@ def world(api, db_conn) -> dict[str, Any]:
     refund_account = apidata.account(api)
     pay(api, refund_account, 100, date(2026, 12, 3))
     refund = api.post(
-        "/tmf-api/paymentManagement/v4/refund",
+        "/tmf-api/payment/v4/refund",
         {
             "account": {"id": refund_account["id"]},
             "totalAmount": {"unit": "RUB", "value": 10},
@@ -245,9 +245,7 @@ def world(api, db_conn) -> dict[str, Any]:
         "/tmf-api/productOrderingManagement/v5/cancelProductOrder",
         {"productOrder": {"id": later["id"]}},
     ).json()
-    hub = api.post(
-        "/tmf-api/customerManagement/v5/hub", {"callback": "http://listener.test/events"}
-    ).json()
+    hub = api.post("/tmf-api/customer/v5/hub", {"callback": "http://listener.test/events"}).json()
     return {
         "hub": hub,
         "cancellation": cancellation,

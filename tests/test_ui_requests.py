@@ -245,7 +245,7 @@ def test_catch_up_as_the_ui_sends_it(api, worker):
 
 # --- bills (frontend/src/screens/Bills.test.tsx pins the same bodies) ---
 
-PAYMENT = "/tmf-api/paymentManagement/v4/payment"
+PAYMENT = "/tmf-api/payment/v4/payment"
 BILL = "/tmf-api/customerBillManagement/v5/customerBill"
 
 
@@ -308,7 +308,7 @@ def test_hold_and_release_as_the_ui_sends_them(api, db_conn):
 # --- subscribers (frontend/src/screens/Subscribers.test.tsx, SubscriberCard.test.tsx) ---
 
 PARTY = "/tmf-api/partyManagement/v5"
-CUSTOMERS = "/tmf-api/customerManagement/v5/customer"
+CUSTOMERS = "/tmf-api/customer/v5/customer"
 ACCOUNTS = "/tmf-api/accountManagement/v5/billingAccount"
 
 

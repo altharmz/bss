@@ -16,7 +16,7 @@ const B2 = 'b2000002-0000-4000-8000-000000000002';
 const B3 = 'b3000003-0000-4000-8000-000000000003';
 const INTERNAL = `/internal/v1/billingAccount/${A}`;
 const BILL = '/tmf-api/customerBillManagement/v5/customerBill';
-const PAYMENT = '/tmf-api/paymentManagement/v4/payment';
+const PAYMENT = '/tmf-api/payment/v4/payment';
 const rub = (value: number) => ({ unit: 'RUB', value });
 
 // business date 2026-10-01: B1 (due Aug 31) is overdue, B2 (due Oct 1) is not yet
@@ -115,7 +115,7 @@ function backend(routes: Record<string, Handler> = {}) {
       json([], { total: 4 }),
     [`GET /tmf-api/accountManagement/v5/billingAccount/${A}`]: () =>
       json(accountBody(A, { id: C, name: 'Olga Kuznetsova' })),
-    [`GET /tmf-api/customerManagement/v5/customer/${C}`]: () =>
+    [`GET /tmf-api/customer/v5/customer/${C}`]: () =>
       json({ id: C, name: 'Olga Kuznetsova', status: 'Active', '@type': 'Customer' }),
     [`GET ${INTERNAL}/products`]: () => json([], { total: 0 }),
     [`GET ${INTERNAL}/charges?limit=20`]: () => json([], { total: 0 }),

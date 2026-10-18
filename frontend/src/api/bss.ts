@@ -30,7 +30,7 @@ import type { components as T678 } from './generated/tmf678';
 export const PATHS = {
   accounts: '/tmf-api/accountManagement/v5/billingAccount',
   financialAccounts: '/tmf-api/accountManagement/v5/financialAccount',
-  customers: '/tmf-api/customerManagement/v5/customer',
+  customers: '/tmf-api/customer/v5/customer',
   products: '/tmf-api/productInventory/v5/product',
   offerings: '/tmf-api/productCatalogManagement/v5/productOffering',
   prices: '/tmf-api/productCatalogManagement/v5/productOfferingPrice',
@@ -735,7 +735,7 @@ export async function undoDeactivation(productId: string): Promise<void> {
 // --- bills and payments (bill lifecycle, docs/bill-lifecycle-design.md section 6) ---
 
 export const BILLS = '/tmf-api/customerBillManagement/v5/customerBill';
-export const PAYMENTS = '/tmf-api/paymentManagement/v4/payment';
+export const PAYMENTS = '/tmf-api/payment/v4/payment';
 
 export type BillState = T678['schemas']['CustomerBillStateType'];
 export type AccountSettlement = Internal['schemas']['AccountSettlement'];

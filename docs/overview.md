@@ -58,11 +58,11 @@ payment processing (a payment is recorded as received).
 |---|---|---|---|
 | TMF620 Product Catalog | 5.0.0 | `/tmf-api/productCatalogManagement/v5` | `spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml` |
 | TMF622 Product Ordering | 5.0.0 | `/tmf-api/productOrderingManagement/v5` | `spec/TMF622-ProductOrdering-v5.0.0.oas.yaml` |
-| TMF629 Customer | 5.0.1 | `/tmf-api/customerManagement/v5` | `spec/TMF629-Customer_Management-v5.0.1.oas.yaml` |
+| TMF629 Customer | 5.0.1 | `/tmf-api/customer/v5` | `spec/TMF629-Customer_Management-v5.0.1.oas.yaml` |
 | TMF632 Party | 5.0.0 | `/tmf-api/partyManagement/v5` | `spec/TMF632-Party_Management-v5.0.0.oas.yaml` |
 | TMF637 Product Inventory | 5.0.0 | `/tmf-api/productInventory/v5` | `spec/TMF637-ProductInventory-v5.0.0.oas.yaml` |
 | TMF666 Account | 5.0.0 | `/tmf-api/accountManagement/v5` | `spec/TMF666-Account_Management-v5.0.0.oas.yaml` |
-| TMF676 Payment | **4.0.0** (no v5 exists) | `/tmf-api/paymentManagement/v4` | `spec/TMF676-Payment-v4.0.0.swagger.json` |
+| TMF676 Payment | **4.0.0** (no v5 exists) | `/tmf-api/payment/v4` | `spec/TMF676-Payment-v4.0.0.swagger.json` |
 | TMF678 Customer Bill | 5.0.0 | `/tmf-api/customerBillManagement/v5` | `spec/TMF678-CustomerBill-v5.0.0.oas.yaml` |
 | Internal (ours, for the UI) | v1 | `/internal/v1` | `spec/internal/bss-internal.oas.yaml` |
 

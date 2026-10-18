@@ -149,7 +149,7 @@ function backend(routes: Record<string, Handler> = {}, account: object = ACCOUNT
     'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
       json([], { total: 4 }),
     [`GET /tmf-api/accountManagement/v5/billingAccount/${A}`]: () => json(account),
-    [`GET /tmf-api/customerManagement/v5/customer/${C}`]: () =>
+    [`GET /tmf-api/customer/v5/customer/${C}`]: () =>
       json({ id: C, name: 'Olga Kuznetsova', status: 'Active', '@type': 'Customer' }),
     [`GET ${INTERNAL}/products`]: () => json(PRODUCTS, { total: PRODUCTS.length }),
     [`GET ${INTERNAL}/charges?limit=20`]: () => json(CHARGES, { total: 2 }),
@@ -580,7 +580,7 @@ describe('add product', () => {
 // are replayed against the real API by tests/test_ui_requests.py.
 const PARTY_ID = 'dddd4444-0000-4000-8000-000000000004';
 const PARTY_URL = `/tmf-api/partyManagement/v5/individual/${PARTY_ID}`;
-const CUSTOMER_URL = `/tmf-api/customerManagement/v5/customer/${C}`;
+const CUSTOMER_URL = `/tmf-api/customer/v5/customer/${C}`;
 const ACCOUNT_URL = `/tmf-api/accountManagement/v5/billingAccount/${A}`;
 
 function editBackend(routes: Record<string, Handler> = {}) {

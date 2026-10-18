@@ -309,7 +309,6 @@ TMF629 POST /customer refused relatedParty
 TMF629 POST /customer refused role
 TMF629 POST /customer refused statusReason
 TMF629 POST /customer refused validFor
-TMF629 base path .../customer/v5 (ours /tmf-api/customerManagement/v5)
 TMF632 GET /individual/{id} missing aristocraticTitle
 TMF632 GET /individual/{id} missing birthDate
 TMF632 GET /individual/{id} missing contactMedium
@@ -636,7 +635,6 @@ TMF676 POST /refund refused paymentMethod.status
 TMF676 POST /refund refused paymentMethod.statusDate
 TMF676 POST /refund refused paymentMethod.validFor
 TMF676 POST /refund refused requestor
-TMF676 base path .../payment/v4 (ours /tmf-api/paymentManagement/v4)
 TMF678 GET /appliedCustomerBillingRate/{id} missing appliedTax
 TMF678 GET /appliedCustomerBillingRate/{id} missing characteristic
 TMF678 GET /appliedCustomerBillingRate/{id} missing description

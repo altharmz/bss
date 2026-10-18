@@ -73,7 +73,7 @@ sends merge patches of **only what changed**, party, then customer, then account
 (`creditLimit` as an exact token, or `null` to remove it); a failure names what was
 already saved. The cycle day and the currency cannot be changed (the backend refuses).
 API: `POST/PATCH /tmf-api/partyManagement/v5/{individual|organization}`,
-`POST/PATCH /tmf-api/customerManagement/v5/customer`,
+`POST/PATCH /tmf-api/customer/v5/customer`,
 `POST/PATCH /tmf-api/accountManagement/v5/billingAccount`.
 
 ### Subscriber card (`ui.subscriber.card`) - `screens/SubscriberCard.tsx`
@@ -85,7 +85,7 @@ next cycle), credit limit, available incl. credit. Active products (offering, co
 specification, activated, next charge, price, status note for `created` /
 `pendingTerminate`), charge history (period, "N of M" days when prorated, amount) and
 transaction history (signed amount, balance after).
-API: `GET .../billingAccount/{id}`, `GET /tmf-api/customerManagement/v5/customer/{id}`,
+API: `GET .../billingAccount/{id}`, `GET /tmf-api/customer/v5/customer/{id}`,
 `GET /internal/v1/billingAccount/{id}/products`, `.../charges?limit=20`,
 `.../transactions?limit=20`.
 
@@ -120,7 +120,7 @@ it is kept as credit. The UI never allocates anything itself.
 API: `GET .../customerBill?billingAccount.id=` (TMF678, all pages),
 `GET /internal/v1/billingAccount/{id}/settlement`, `GET /internal/v1/customerBill/{id}`,
 `PATCH /tmf-api/customerBillManagement/v5/customerBill/{id}` (`{"state": ...}`, merge
-patch), `POST /tmf-api/paymentManagement/v4/payment` (`paymentItem[]` when lettered).
+patch), `POST /tmf-api/payment/v4/payment` (`paymentItem[]` when lettered).
 
 ### Add product (`ui.subscriber.addProduct`) - `screens/AddProduct.tsx`
 

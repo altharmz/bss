@@ -424,3 +424,19 @@ def test_the_client_fails_a_test_when_the_api_breaks_the_contract(api, monkeypat
     monkeypatch.setattr(catalog_api, "money", lambda amount, unit: {"unit": unit, "value": "x"})
     with pytest.raises(AssertionError, match="does not conform to TMF620 ProductOfferingPrice"):
         api.post_raw(PRICE, price_json("19.99"))
+
+
+def test_old_base_paths_are_gone(api):
+    """TMF629 and TMF676 live at their specs' servers/basePath, no aliases (decisions/
+    tmf-api.md, "Base paths")."""
+    customer = apidata.customer(api)
+    payment = apidata.payment(api, apidata.account(api, customer))
+    assert payment["href"] == f"/tmf-api/payment/v4/payment/{payment['id']}"
+    assert customer["href"] == f"/tmf-api/customer/v5/customer/{customer['id']}"
+    for href in (payment["href"], customer["href"]):
+        assert api.get(href).status_code == 200, href
+    for old in (
+        f"/tmf-api/paymentManagement/v4/payment/{payment['id']}",
+        f"/tmf-api/customerManagement/v5/customer/{customer['id']}",
+    ):
+        assert api.get(old).status_code == 404, old

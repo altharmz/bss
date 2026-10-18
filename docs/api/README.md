@@ -8,11 +8,11 @@ One page per API, generated from `app.openapi()` (what the app really serves) an
 |---|---|---|---|---|
 | [TMF620 Product Catalog Management](tmf620-product-catalog.md) | v5 | `/tmf-api/productCatalogManagement/v5` | 35 | [`spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml`](../../spec/TMF620-Product_Catalog_Management-v5.0.0.oas.yaml) |
 | [TMF622 Product Ordering Management](tmf622-product-ordering.md) | v5 | `/tmf-api/productOrderingManagement/v5` | 10 | [`spec/TMF622-ProductOrdering-v5.0.0.oas.yaml`](../../spec/TMF622-ProductOrdering-v5.0.0.oas.yaml) |
-| [TMF629 Customer Management](tmf629-customer.md) | v5 | `/tmf-api/customerManagement/v5` | 8 | [`spec/TMF629-Customer_Management-v5.0.1.oas.yaml`](../../spec/TMF629-Customer_Management-v5.0.1.oas.yaml) |
+| [TMF629 Customer Management](tmf629-customer.md) | v5 | `/tmf-api/customer/v5` | 8 | [`spec/TMF629-Customer_Management-v5.0.1.oas.yaml`](../../spec/TMF629-Customer_Management-v5.0.1.oas.yaml) |
 | [TMF632 Party Management](tmf632-party.md) | v5 | `/tmf-api/partyManagement/v5` | 12 | [`spec/TMF632-Party_Management-v5.0.0.oas.yaml`](../../spec/TMF632-Party_Management-v5.0.0.oas.yaml) |
 | [TMF637 Product Inventory](tmf637-product-inventory.md) | v5 | `/tmf-api/productInventory/v5` | 7 | [`spec/TMF637-ProductInventory-v5.0.0.oas.yaml`](../../spec/TMF637-ProductInventory-v5.0.0.oas.yaml) |
 | [TMF666 Account Management](tmf666-account.md) | v5 | `/tmf-api/accountManagement/v5` | 38 | [`spec/TMF666-Account_Management-v5.0.0.oas.yaml`](../../spec/TMF666-Account_Management-v5.0.0.oas.yaml) |
-| [TMF676 Payment Management](tmf676-payment.md) | v4 | `/tmf-api/paymentManagement/v4` | 8 | [`spec/TMF676-Payment-v4.0.0.swagger.json`](../../spec/TMF676-Payment-v4.0.0.swagger.json) |
+| [TMF676 Payment Management](tmf676-payment.md) | v4 | `/tmf-api/payment/v4` | 8 | [`spec/TMF676-Payment-v4.0.0.swagger.json`](../../spec/TMF676-Payment-v4.0.0.swagger.json) |
 | [TMF678 Customer Bill Management](tmf678-customer-bill.md) | v5 | `/tmf-api/customerBillManagement/v5` | 12 | [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml) |
 | [Internal API (admin UI)](internal.md) | v1 | `/internal/v1` | 13 | [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) |
 | [Service endpoints](service.md) | - | - | 3 | - |

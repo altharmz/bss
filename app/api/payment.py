@@ -45,7 +45,7 @@ from app.events import emit
 from app.repository import billing, parties, payments
 from app.repository._sql import Row
 
-BASE = "/tmf-api/paymentManagement/v4"
+BASE = "/tmf-api/payment/v4"
 router = APIRouter(prefix=BASE)
 
 ATTRIBUTES = (

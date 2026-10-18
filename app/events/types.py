@@ -9,11 +9,11 @@ remain valid names. tests/test_api_hub.py checks this table against spec/.
 BASES: dict[str, str] = {
     "TMF620": "/tmf-api/productCatalogManagement/v5",
     "TMF622": "/tmf-api/productOrderingManagement/v5",
-    "TMF629": "/tmf-api/customerManagement/v5",
+    "TMF629": "/tmf-api/customer/v5",
     "TMF632": "/tmf-api/partyManagement/v5",
     "TMF637": "/tmf-api/productInventory/v5",
     "TMF666": "/tmf-api/accountManagement/v5",
-    "TMF676": "/tmf-api/paymentManagement/v4",
+    "TMF676": "/tmf-api/payment/v4",
     "TMF678": "/tmf-api/customerBillManagement/v5",
 }
 

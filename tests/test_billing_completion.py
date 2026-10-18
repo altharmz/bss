@@ -22,7 +22,7 @@ from tests.test_api_bill_settlement import check_invariant, pay, summary
 from tests.test_billing_db import add, at, delete
 from tests.timeline import TZ
 
-REFUND = "/tmf-api/paymentManagement/v4/refund"
+REFUND = "/tmf-api/payment/v4/refund"
 DEMAND = "/tmf-api/customerBillManagement/v5/customerBillOnDemand"
 FORMAT = "/tmf-api/accountManagement/v5/billFormat"
 MEDIA = "/tmf-api/accountManagement/v5/billPresentationMedia"

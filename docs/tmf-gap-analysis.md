@@ -4,7 +4,8 @@
 rest skipped ([the decision](decisions/tmf-api.md#following-tmf-2026-10-17)). The
 attribute-level gaps are no longer tracked in this file: **`tests/tmf-gaps.txt` is the
 exact, test-locked list** (831 lines on 2026-10-17, 705 after slice 1, 651 after slice 2:
-[PATCH formats](decisions/tmf-api.md#patch-formats-2026-10-17), C4), produced by the
+[PATCH formats](decisions/tmf-api.md#patch-formats-2026-10-17), C4; 649 after slice 3:
+[base paths](decisions/tmf-api.md#base-paths-2026-10-18)), produced by the
 probe in `tests/tmf_gaps.py`. Sections 3 and 5 below are superseded by it. C3, C5, C7,
 C8, the client-chosen `id` and `@baseType`/`@schemaLocation` are closed
 ([slice 1](decisions/tmf-api.md#nothing-dropped-or-rewritten-2026-10-17)). What the probe
@@ -219,7 +220,10 @@ implemented (TMF620 12/35, TMF622 3/10, TMF629 4/8, TMF632 8/12, TMF637 2/7, TMF
 its `servers` says `/partyManagement/v5/`; TMF676 v4's `basePath` is `/payment/v4/`. Ours
 (decisions/tmf-api.md, "Paths") use `customerManagement`, `partyManagement` and
 `paymentManagement/v4`. A client generated from `servers`/`basePath` needs its base URL
-overridden for TMF629 and TMF676. Deviation by decision; low priority.
+overridden for TMF629 and TMF676. Deviation by decision; low priority. **Closed
+2026-10-18** (slice 3 of "Following TMF"): TMF629 is served at `/tmf-api/customer/v5`
+and TMF676 at `/tmf-api/payment/v4`, as their `servers`/`basePath` say; TMF632 keeps
+`partyManagement/v5`, its `servers`.
 
 ## 2. Resources not exposed
 

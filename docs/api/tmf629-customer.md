@@ -2,7 +2,7 @@
 
 # TMF629 Customer Management
 
-- Base path here: `/tmf-api/customerManagement/v5`
+- Base path here: `/tmf-api/customer/v5`
 - Contract: [`spec/TMF629-Customer_Management-v5.0.1.oas.yaml`](../../spec/TMF629-Customer_Management-v5.0.1.oas.yaml) - Customer Management version 5.0.1; the spec's server URL is `{apiRoot}/tmf-api/customer/v5/`
 - Operations exposed: 8
 
@@ -11,14 +11,14 @@
 
 | Method | Path | Parameters | Request schema | Success | Code |
 |---|---|---|---|---|---|
-| GET | `/tmf-api/customerManagement/v5/customer` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `engagedParty.id`, `name`, `status` | - | 200 `array of Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
-| POST | `/tmf-api/customerManagement/v5/customer` | query: `fields`; body: `application/json` | `Customer_FVO` | 201 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
-| DELETE | `/tmf-api/customerManagement/v5/customer/{customer_id}` | path: `customer_id` | - | 204 (no body) | [`app/api/customer.py`](../../app/api/customer.py) |
-| GET | `/tmf-api/customerManagement/v5/customer/{customer_id}` | path: `customer_id`; query: `fields` | - | 200 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
-| PATCH | `/tmf-api/customerManagement/v5/customer/{customer_id}` | path: `customer_id`; query: `fields`; body: `application/merge-patch+json` | `Customer_MVO` | 200 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
-| POST | `/tmf-api/customerManagement/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/customer.py`](../../app/api/customer.py) |
-| DELETE | `/tmf-api/customerManagement/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/customer.py`](../../app/api/customer.py) |
-| GET | `/tmf-api/customerManagement/v5/hub/{hub_id}` | path: `hub_id`; query: `fields` | - | 200 `Hub` | [`app/api/customer.py`](../../app/api/customer.py) |
+| GET | `/tmf-api/customer/v5/customer` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `engagedParty.id`, `name`, `status` | - | 200 `array of Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
+| POST | `/tmf-api/customer/v5/customer` | query: `fields`; body: `application/json` | `Customer_FVO` | 201 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
+| DELETE | `/tmf-api/customer/v5/customer/{customer_id}` | path: `customer_id` | - | 204 (no body) | [`app/api/customer.py`](../../app/api/customer.py) |
+| GET | `/tmf-api/customer/v5/customer/{customer_id}` | path: `customer_id`; query: `fields` | - | 200 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
+| PATCH | `/tmf-api/customer/v5/customer/{customer_id}` | path: `customer_id`; query: `fields`; body: `application/merge-patch+json` | `Customer_MVO` | 200 `Customer` | [`app/api/customer.py`](../../app/api/customer.py) |
+| POST | `/tmf-api/customer/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/customer.py`](../../app/api/customer.py) |
+| DELETE | `/tmf-api/customer/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/customer.py`](../../app/api/customer.py) |
+| GET | `/tmf-api/customer/v5/hub/{hub_id}` | path: `hub_id`; query: `fields` | - | 200 `Hub` | [`app/api/customer.py`](../../app/api/customer.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF629-Customer_Management-v5.0.1.oas.yaml`](../../spec/TMF629-Customer_Management-v5.0.1.oas.yaml). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 

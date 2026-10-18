@@ -8,9 +8,9 @@ from tests.timeline import iso
 
 CATALOG = "/tmf-api/productCatalogManagement/v5"
 PARTY = "/tmf-api/partyManagement/v5"
-CUSTOMER = "/tmf-api/customerManagement/v5/customer"
+CUSTOMER = "/tmf-api/customer/v5/customer"
 ACCOUNT = "/tmf-api/accountManagement/v5/billingAccount"
-PAYMENT = "/tmf-api/paymentManagement/v4/payment"
+PAYMENT = "/tmf-api/payment/v4/payment"
 PRODUCT = "/tmf-api/productInventory/v5/product"
 BILL = "/tmf-api/customerBillManagement/v5/customerBill"
 RATE = "/tmf-api/customerBillManagement/v5/appliedCustomerBillingRate"

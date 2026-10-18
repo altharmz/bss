@@ -62,9 +62,9 @@ DATE_ARG = {"type": "string", "pattern": r"^\d{4}-\d{2}-\d{2}$", "description": 
 FAMILIES = {
     "/tmf-api/productCatalogManagement/v5": "TMF620 Product Catalog",
     "/tmf-api/partyManagement/v5": "TMF632 Party",
-    "/tmf-api/customerManagement/v5": "TMF629 Customer",
+    "/tmf-api/customer/v5": "TMF629 Customer",
     "/tmf-api/accountManagement/v5": "TMF666 Account",
-    "/tmf-api/paymentManagement/v4": "TMF676 Payment (v4)",
+    "/tmf-api/payment/v4": "TMF676 Payment (v4)",
     "/tmf-api/productInventory/v5": "TMF637 Product Inventory (read-only)",
     "/tmf-api/customerBillManagement/v5": "TMF678 Customer Bill",
     "/tmf-api/productOrderingManagement/v5": "TMF622 Product Ordering",

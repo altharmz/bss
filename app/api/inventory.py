@@ -155,7 +155,7 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
                     "@type": "RelatedPartyRefOrPartyRoleRef",
                     "partyOrPartyRole": ref(
                         "Customer",
-                        f"/tmf-api/customerManagement/v5/customer/{customer['id']}",
+                        f"/tmf-api/customer/v5/customer/{customer['id']}",
                         customer["id"],
                         customer["name"],
                         ref_type="PartyRoleRef",

@@ -48,7 +48,7 @@ BASE = "/tmf-api/customerBillManagement/v5"
 router = APIRouter(prefix=BASE)
 
 # TMF676 lives in app/api/payment.py, which imports this module for its paymentItem.
-PAYMENT_BASE = "/tmf-api/paymentManagement/v4"
+PAYMENT_BASE = "/tmf-api/payment/v4"
 
 RATE_TYPE = {"recurring": "appliedBillingCharge", "refund": "appliedBillingCredit"}
 

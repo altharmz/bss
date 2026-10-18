@@ -193,16 +193,12 @@ locked by `tests/test_tmf_gaps.py` - each slice removes the lines it closes (`94
 Slice 1 (nothing dropped or rewritten; migration `0021`; 705 lines left) done locally,
 [decision](docs/decisions/tmf-api.md#nothing-dropped-or-rewritten-2026-10-17); pushed
 `4bd8baa`. Slice 2 (PATCH in all four spec formats, JSON Patch and JSON Patch Query;
-651 lines left) done locally, [decision](docs/decisions/tmf-api.md#patch-formats-2026-10-17).
-**To-do at the start of the next session (2026-10-17):** (1) slice 2 is NOT committed -
-working tree has it (`app/api/jsonpatch.py`, `deps.py`, tests, docs); `make lint`,
-`decisions-check` and `make test` x3 (1140) passed; ask the human for the commit OK
-(message proposed: "PATCH in the four formats of the specs: merge patch, JSON Patch,
-JSON Patch Query (slice 2)"), then push. (2) Slice 3 (base paths `customerManagement`
--> `customer/v5`, `paymentManagement/v4` -> `payment/v4`, ~30 files incl. UI, MCP,
-tests, docs) waits on two answers: may `scripts/docs/generate.py` (harness) be edited,
-and is a straight rename without alias paths OK.
-Next: slices 3-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
+651 lines left), [decision](docs/decisions/tmf-api.md#patch-formats-2026-10-17); pushed
+`a8b42e3`. Slice 3 (2026-10-18; base paths: TMF629 `/tmf-api/customer/v5`, TMF676
+`/tmf-api/payment/v4`, straight rename, no aliases; 649 lines left),
+[decision](docs/decisions/tmf-api.md#base-paths-2026-10-18); committed and pushed.
+**The next deploy moves both base paths** (the UI and MCP move with it).
+**Next session starts slice 4** (TMF632/629 attributes). Next: slices 4-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
 notes before taxes, `modify` items, suspension and payment states. Not deployed:
 migrations `0009`-`0021` ship together.
 
@@ -431,6 +427,9 @@ shipped).
   under `scripts/**` went through without a prompt there. Open: whether that is the
   cloud session's permission mode or the rule itself, and what replaces it in the cloud
   (a `"deny"` cannot depend on cloud mode; the guard sees only Bash, not the Edit tool).
+  **Also not prompted locally** (2026-10-18, auto mode): five Edits to
+  `scripts/docs/generate.py` went through without a prompt - the human had approved
+  slice 3 beforehand, but the rule did not ask.
 
 ## Where the decisions are
 

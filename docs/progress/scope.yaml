@@ -42,9 +42,9 @@ items:
   - {id: db.account_presentation_media, area: db, stage: 5, table: account_presentation_media, title: "Account presentation preferences"}
   - {id: worker.onDemand, area: worker, stage: 5, title: "Issue on-demand bills without moving monthly anchors"}
   - {id: worker.billDocument, area: worker, stage: 5, title: "Snapshot issued JSON documents with presentation preferences"}
-  - {id: api.tmf676.refund.list, area: api, stage: 5, method: GET, path: /tmf-api/paymentManagement/v4/refund, title: "List refunds"}
-  - {id: api.tmf676.refund.get, area: api, stage: 5, method: GET, path: "/tmf-api/paymentManagement/v4/refund/{refund_id}", title: "Get a refund"}
-  - {id: api.tmf676.refund.create, area: api, stage: 5, method: POST, path: /tmf-api/paymentManagement/v4/refund, title: "Record a completed refund"}
+  - {id: api.tmf676.refund.list, area: api, stage: 5, method: GET, path: /tmf-api/payment/v4/refund, title: "List refunds"}
+  - {id: api.tmf676.refund.get, area: api, stage: 5, method: GET, path: "/tmf-api/payment/v4/refund/{refund_id}", title: "Get a refund"}
+  - {id: api.tmf676.refund.create, area: api, stage: 5, method: POST, path: /tmf-api/payment/v4/refund, title: "Record a completed refund"}
   - {id: api.tmf678.customerBillOnDemand.list, area: api, stage: 5, method: GET, path: /tmf-api/customerBillManagement/v5/customerBillOnDemand, title: "List on-demand bill requests"}
   - {id: api.tmf678.customerBillOnDemand.get, area: api, stage: 5, method: GET, path: "/tmf-api/customerBillManagement/v5/customerBillOnDemand/{demand_id}", title: "Get an on-demand bill request"}
   - {id: api.tmf678.customerBillOnDemand.create, area: api, stage: 5, method: POST, path: /tmf-api/customerBillManagement/v5/customerBillOnDemand, title: "Request an off-cycle bill"}
@@ -101,17 +101,17 @@ items:
   - {id: api.tmf620.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productCatalogManagement/v5/hub/{hub_id}", title: "Unsubscribe from TMF620 events"}
   - {id: api.tmf622.hub.create, area: api, stage: 5, method: POST, path: /tmf-api/productOrderingManagement/v5/hub, title: "Subscribe to TMF622 events"}
   - {id: api.tmf622.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productOrderingManagement/v5/hub/{hub_id}", title: "Unsubscribe from TMF622 events"}
-  - {id: api.tmf629.hub.create, area: api, stage: 5, method: POST, path: /tmf-api/customerManagement/v5/hub, title: "Subscribe to TMF629 events"}
-  - {id: api.tmf629.hub.get, area: api, stage: 5, method: GET, path: "/tmf-api/customerManagement/v5/hub/{hub_id}", title: "Get a TMF629 subscription"}
-  - {id: api.tmf629.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/customerManagement/v5/hub/{hub_id}", title: "Unsubscribe from TMF629 events"}
+  - {id: api.tmf629.hub.create, area: api, stage: 5, method: POST, path: /tmf-api/customer/v5/hub, title: "Subscribe to TMF629 events"}
+  - {id: api.tmf629.hub.get, area: api, stage: 5, method: GET, path: "/tmf-api/customer/v5/hub/{hub_id}", title: "Get a TMF629 subscription"}
+  - {id: api.tmf629.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/customer/v5/hub/{hub_id}", title: "Unsubscribe from TMF629 events"}
   - {id: api.tmf632.hub.create, area: api, stage: 5, method: POST, path: /tmf-api/partyManagement/v5/hub, title: "Subscribe to TMF632 events"}
   - {id: api.tmf632.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/partyManagement/v5/hub/{hub_id}", title: "Unsubscribe from TMF632 events"}
   - {id: api.tmf637.hub.create, area: api, stage: 5, method: POST, path: /tmf-api/productInventory/v5/hub, title: "Subscribe to TMF637 events"}
   - {id: api.tmf637.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productInventory/v5/hub/{hub_id}", title: "Unsubscribe from TMF637 events"}
   - {id: api.tmf666.hub.create, area: api, stage: 5, method: POST, path: /tmf-api/accountManagement/v5/hub, title: "Subscribe to TMF666 events"}
   - {id: api.tmf666.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/accountManagement/v5/hub/{hub_id}", title: "Unsubscribe from TMF666 events"}
-  - {id: api.tmf676.hub.create, area: api, stage: 5, method: POST, path: /tmf-api/paymentManagement/v4/hub, title: "Subscribe to TMF676 events"}
-  - {id: api.tmf676.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/paymentManagement/v4/hub/{hub_id}", title: "Unsubscribe from TMF676 events"}
+  - {id: api.tmf676.hub.create, area: api, stage: 5, method: POST, path: /tmf-api/payment/v4/hub, title: "Subscribe to TMF676 events"}
+  - {id: api.tmf676.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/payment/v4/hub/{hub_id}", title: "Unsubscribe from TMF676 events"}
   - {id: api.tmf678.hub.create, area: api, stage: 5, method: POST, path: /tmf-api/customerBillManagement/v5/hub, title: "Subscribe to TMF678 events"}
   - {id: api.tmf678.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/customerBillManagement/v5/hub/{hub_id}", title: "Unsubscribe from TMF678 events"}
   - {id: db.product, area: db, stage: 1, table: product, title: "Products (TMF637)"}
@@ -154,11 +154,11 @@ items:
   - {id: api.tmf632.organization.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/partyManagement/v5/organization/{party_id}", title: "Delete an unreferenced organization"}
 
   # ---------------- api: TMF629 customer ----------------
-  - {id: api.tmf629.customer.list, area: api, stage: 2, method: GET, path: /tmf-api/customerManagement/v5/customer, title: "List customers"}
-  - {id: api.tmf629.customer.get, area: api, stage: 2, method: GET, path: "/tmf-api/customerManagement/v5/customer/{customer_id}", title: "Get a customer"}
-  - {id: api.tmf629.customer.create, area: api, stage: 2, method: POST, path: /tmf-api/customerManagement/v5/customer, title: "Create a customer"}
-  - {id: api.tmf629.customer.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/customerManagement/v5/customer/{customer_id}", title: "Patch a customer"}
-  - {id: api.tmf629.customer.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/customerManagement/v5/customer/{customer_id}", title: "Delete a customer without accounts"}
+  - {id: api.tmf629.customer.list, area: api, stage: 2, method: GET, path: /tmf-api/customer/v5/customer, title: "List customers"}
+  - {id: api.tmf629.customer.get, area: api, stage: 2, method: GET, path: "/tmf-api/customer/v5/customer/{customer_id}", title: "Get a customer"}
+  - {id: api.tmf629.customer.create, area: api, stage: 2, method: POST, path: /tmf-api/customer/v5/customer, title: "Create a customer"}
+  - {id: api.tmf629.customer.patch, area: api, stage: 2, method: PATCH, path: "/tmf-api/customer/v5/customer/{customer_id}", title: "Patch a customer"}
+  - {id: api.tmf629.customer.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/customer/v5/customer/{customer_id}", title: "Delete a customer without accounts"}
 
   # ---------------- api: TMF666 account ----------------
   - {id: api.tmf666.billingCycleSpecification.list, area: api, stage: 2, method: GET, path: /tmf-api/accountManagement/v5/billingCycleSpecification, title: "List billing cycle specifications"}
@@ -171,9 +171,9 @@ items:
   - {id: api.tmf666.extensionSchema.get, area: api, stage: 2, method: GET, path: /tmf-api/schema/BssBillingAccount.schema.json, title: "Serve the BssBillingAccount extension schema"}
 
   # ---------------- api: TMF676 payment (v4) ----------------
-  - {id: api.tmf676.payment.list, area: api, stage: 2, method: GET, path: /tmf-api/paymentManagement/v4/payment, title: "List payments"}
-  - {id: api.tmf676.payment.get, area: api, stage: 2, method: GET, path: "/tmf-api/paymentManagement/v4/payment/{payment_id}", title: "Get a payment"}
-  - {id: api.tmf676.payment.create, area: api, stage: 2, method: POST, path: /tmf-api/paymentManagement/v4/payment, title: "Record a payment"}
+  - {id: api.tmf676.payment.list, area: api, stage: 2, method: GET, path: /tmf-api/payment/v4/payment, title: "List payments"}
+  - {id: api.tmf676.payment.get, area: api, stage: 2, method: GET, path: "/tmf-api/payment/v4/payment/{payment_id}", title: "Get a payment"}
+  - {id: api.tmf676.payment.create, area: api, stage: 2, method: POST, path: /tmf-api/payment/v4/payment, title: "Record a payment"}
 
   # ---------------- api: TMF622 ordering ----------------
   - {id: api.tmf622.productOrder.list, area: api, stage: 2, method: GET, path: /tmf-api/productOrderingManagement/v5/productOrder, title: "List product orders"}

@@ -35,7 +35,7 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
         "TMF632",
         {"individual": "Individual", "organization": "Organization"},
     ),
-    "/tmf-api/customerManagement/v5": ("TMF629", {"customer": "Customer"}),
+    "/tmf-api/customer/v5": ("TMF629", {"customer": "Customer"}),
     "/tmf-api/accountManagement/v5": (
         "TMF666",
         {
@@ -48,7 +48,7 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
             "settlementAccount": "SettlementAccount",
         },
     ),
-    "/tmf-api/paymentManagement/v4": ("TMF676", {"payment": "Payment", "refund": "Refund"}),
+    "/tmf-api/payment/v4": ("TMF676", {"payment": "Payment", "refund": "Refund"}),
     "/tmf-api/productInventory/v5": ("TMF637", {"product": "Product"}),
     "/tmf-api/productOrderingManagement/v5": (
         "TMF622",

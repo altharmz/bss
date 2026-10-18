@@ -39,7 +39,7 @@ from app.repository import parties
 from app.repository._sql import Row, count_references
 
 API = "TMF629"
-BASE = "/tmf-api/customerManagement/v5"
+BASE = "/tmf-api/customer/v5"
 router = APIRouter(prefix=BASE)
 
 CustomerStatus = Literal["Created", "Active", "Inactive"]

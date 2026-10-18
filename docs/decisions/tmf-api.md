@@ -122,6 +122,31 @@ every PATCH takes them (`app/api/deps.py`, `merge_patch_body`):
 Tests: `tests/test_api_patch_formats.py`. Negative proofs: refusing `application/json`
 again, and skipping the `test` comparison, each failed it.
 
+### Base paths (2026-10-18)
+
+Slice 3 of "Following TMF". No migration. Two lines left `tests/tmf-gaps.txt` (651 ->
+649). Each API is served under the API name and version of its spec's `servers` URL
+(TMF676 v4: `basePath`): TMF629 moved from `/tmf-api/customerManagement/v5` to
+`/tmf-api/customer/v5`, TMF676 from `/tmf-api/paymentManagement/v4` to
+`/tmf-api/payment/v4`. The other six already matched. Where a spec's example hrefs
+disagree with its `servers` (TMF629's say `customerManagement`, TMF632's `party/v5`),
+`servers` wins: it is what a generated client uses.
+
+- **A straight rename, no aliases** (the human's OK, 2026-10-18). The deployed instance
+  still serves the old paths, but its only clients - the UI and the MCP connector - are
+  deployed with the app and move with it. The old paths are a 404. An outside client
+  of the demo instance (none known) would need the new base URL.
+- Stored data holds no paths (an `href` is built when a resource is answered), so no
+  migration rewrites anything; event payloads already in the outbox keep the `href` they
+  were made with.
+- Moved with it: the UI (`frontend/src/api/bss.ts` and its tests), the MCP tool families
+  (`bss_mcp/operations.py`; tool names do not contain the path), the event types'
+  bases, `docs/progress/scope.yaml` paths (ids unchanged), `docs/api/` (generated).
+
+Tests: the gap lock (`tests/test_tmf_gaps.py`) with the two `base path` lines removed,
+and `test_old_base_paths_are_gone` in `tests/test_api_conventions.py`. Negative proof:
+the old TMF629 base in `app/api/customer.py` failed the suite.
+
 ### Product writes through orders (2026-10-17)
 
 The last seven operations, approved by the human on 2026-10-17 ("reach 100%"), close
@@ -394,6 +419,8 @@ implemented; order processing lives in `app/ordering/`.
   `partyManagement`, `customerManagement`, `accountManagement`,
   `productOrderingManagement`, `productInventory`, `customerBillManagement`, and
   `paymentManagement/v4` (TMF676 only exists as v4). `href` is the absolute path, no host.
+  **Superseded 2026-10-18** ([base paths](#base-paths-2026-10-18)): TMF629 is
+  `customer/v5`, TMF676 `payment/v4`.
 - **Not exposed:** DELETE anywhere, POST/PATCH on product, cancelProductOrder, `/hub`, the
   billing run. An unsupported method on an exposed path is a 405. **Narrowed 2026-10-16:**
   DELETE exists in TMF620 only, for catalog entries nothing references
