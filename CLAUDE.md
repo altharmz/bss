@@ -212,7 +212,14 @@ migration `0024`; 161 lines left, none for TMF620):
 [decision](docs/decisions/catalog.md#catalog-attributes-2026-10-18) - documents
 (own-catalog references in them stored as sent), inline prices, a price's charge and an
 offering's specification changeable until the offering is ordered, the code one
-`externalIdentifier` entry, reference versions checked; done locally, not committed.
+`externalIdentifier` entry, reference versions checked; committed and pushed `f476baa`.
+**Pending from slice 6, needs the human's OK** (harness file):
+`scripts/docs/api-notes/tmf620-product-catalog.md` still says category membership is
+read-only on the offering, prices are by reference only, a price's charge is read-only,
+the code is set on POST only and the specification is mandatory, and names two renamed
+tests (now `test_the_code_changes_with_patch_and_stays_unique`,
+`test_an_offering_specification_is_optional_but_must_exist`); propose the diff, then
+`make docs`.
 **Next session starts slice 7** (taxes): a design note first (TMF defines the shape, not
 the rates; a price's `tax` is a record since slice 6). Next: slices 7-10 in
 [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design notes before
