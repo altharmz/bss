@@ -103,10 +103,21 @@ def code_identifier(code: str) -> list[dict[str, Any]]:
     return [{"id": code, "externalIdentifierType": "offeringCode", "@type": "ExternalIdentifier"}]
 
 
+def tax_item(category: str, rate, **over) -> dict[str, Any]:
+    """A TMF620 TaxItem: a category and a rate in percent."""
+    return {"@type": "TaxItem", "taxCategory": category, "taxRate": rate, **over}
+
+
 def sellable_offering(
-    api, value=600, unit="RUB", name="Fiber 100", code: str | None = None
+    api,
+    value=600,
+    unit="RUB",
+    name="Fiber 100",
+    code: str | None = None,
+    tax: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """A specification, a monthly recurring price and an Active offering carrying it."""
+    """A specification, a monthly recurring price (with `tax` items, if given) and an
+    Active offering carrying it."""
     spec = _post(
         api,
         f"{CATALOG}/productSpecification",
@@ -123,6 +134,7 @@ def sellable_offering(
             "recurringChargePeriodType": "monthly",
             "price": {"unit": unit, "value": value},
             "validFor": {"startDateTime": START},
+            **({} if tax is None else {"tax": tax}),
         },
     )
     return _post(

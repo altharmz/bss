@@ -23,6 +23,7 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 | `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
 | `payment_method_name` | `text` | yes |  | TMF676 paymentMethod.name as sent; null when only @type was sent. |
 | `payment_method_type` | `text` | yes |  | TMF676 paymentMethod.@type as sent; null when only name was sent. |
+| `tax_amount` | `numeric(12,2)` | no | `0` | Money. TMF676 taxAmount as sent (0: not sent); amount - tax_amount is TMF amount. |
 
 ## Foreign keys
 
@@ -41,6 +42,7 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 | `payment_payment_method_name_check` | check | `CHECK ((length(payment_method_name) > 0))` |
 | `payment_payment_method_type_check` | check | `CHECK ((length(payment_method_type) > 0))` |
 | `payment_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
+| `payment_tax_within_amount` | check | `CHECK (((tax_amount >= (0)::numeric) AND (tax_amount <= amount)))` |
 | `payment_pkey` | primary key | `PRIMARY KEY (id)` |
 | `payment_id_billing_account_id_key` | unique | `UNIQUE (id, billing_account_id)` |
 

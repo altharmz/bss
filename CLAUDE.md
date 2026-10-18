@@ -220,11 +220,17 @@ the code is set on POST only and the specification is mandatory, and names two r
 tests (now `test_the_code_changes_with_patch_and_stays_unique`,
 `test_an_offering_specification_is_optional_but_must_exist`); propose the diff, then
 `make docs`.
-**Next session starts slice 7** (taxes): a design note first (TMF defines the shape, not
-the rates; a price's `tax` is a record since slice 6). Next: slices 7-10 in
-[tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design notes before
-taxes, `modify` items, suspension and payment states. Not deployed: migrations
-`0009`-`0024` ship together.
+Slice 7 (2026-10-18; taxes, migration `0025`; 156 gaps left):
+[decision](docs/decisions/billing-core.md#taxes-2026-10-18) - the human: "decide based
+on TMF recommendations". A price's `tax[]` is applied per ABR (rate in percent, the
+specs' majority; half-even per line; refunds by diff at the charge's rate), part of the
+price's charge; a billing account's `taxExemption` exempts by `taxType` (full only);
+bills, balance, settlement and the internal views are tax-included; TMF676 `taxAmount`
+splits `totalAmount`. UI and seed unchanged. Not committed yet.
+**Next: slice 8** (TMF622: `modify` items, states): a design note first. Then slices
+9-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design notes
+before suspension and payment states. Not deployed: migrations `0009`-`0025` ship
+together (rolling back `0025` needs `alembic downgrade 0024` by hand).
 
 **100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders
 placed on the caller's behalf (a would-be rejection is a 409, nothing stored; DELETE ends

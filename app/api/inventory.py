@@ -41,12 +41,12 @@ from app.api.common import (
 )
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import bad_request, conflict, not_found, unprocessable
-from app.api.prices import monthly_price
+from app.api.prices import monthly_price, tax_on, total_rate
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.core import cycle_period
 from app.events import emit
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
-from app.repository import catalog, orders, parties, products
+from app.repository import billing, catalog, orders, parties, products
 from app.repository._sql import Row
 
 API = "TMF637"
@@ -122,6 +122,7 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
             at=from_billing_date(priced_on),
         )
         if price is not None:
+            taxes = billing.price_taxes(price["details"])
             prices = [
                 monthly_price(
                     price["amount"],
@@ -129,6 +130,8 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
                     resource_type="ProductPrice",
                     price_id=price["id"],
                     name=price["name"],
+                    tax=tax_on(price["amount"], taxes),
+                    tax_rate=total_rate(taxes),
                 )
             ]
     return without_nulls(

@@ -73,7 +73,7 @@ def _account(conn: psycopg.Connection, account_id: str) -> Row:
 
 
 def _core_account(row: Row) -> Account:
-    return Account(id=row["id"], currency=row["currency"], bill_cycle_day=row["bill_cycle_day"])
+    return billing.core_account(row)
 
 
 def _range(value: DateRange) -> dict[str, date]:
@@ -143,7 +143,7 @@ def first_charge(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> 
         balance = billing.account_balance(conn, row["id"])
     cycle = cycle_period(start, account.bill_cycle_day)
     run_date = max(start, today + timedelta(days=1))
-    after = balance - charge.amount
+    after = balance - charge.total
     limit = row["credit_limit"]
     return TmfJSONResponse(
         {
@@ -156,14 +156,14 @@ def first_charge(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> 
             "periodDays": cycle.days,
             "prorated": charge.period.days < cycle.days,
             "price": money(price.amount, price.currency),
-            "amount": money(charge.amount, charge.currency),
+            "amount": money(charge.total, charge.currency),
             "chargeRunDate": run_date,
             "billDate": _first_cycle_day_from(run_date, account.bill_cycle_day),
             "next": None
             if following is None
             else {
                 "start": following.period.start,
-                "amount": money(following.amount, following.currency),
+                "amount": money(following.total, following.currency),
             },
             "balance": money(balance, account.currency),
             "balanceAfter": money(after, account.currency),
@@ -285,7 +285,7 @@ def charges(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
                 "billableDays": covered.days,
                 "periodDays": cycle.days,
                 "prorated": covered.days < cycle.days,
-                "amount": money(a["amount"], a["currency"]),
+                "amount": money(billing.abr_total(a), a["currency"]),
                 "product": {"id": str(a["product_id"]), "href": product_href(a["product_id"])},
                 "productOffering": {"id": str(a["offering_id"]), "name": a["offering_name"]},
                 "bill": None

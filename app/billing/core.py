@@ -7,9 +7,15 @@ difference is emitted: a charge when nothing is stored, a refund (expected - cha
 the expected net dropped because a termination became known later. Pricing the unused
 days separately instead would let cent drift accumulate.
 
+Taxes (docs/decisions/billing-core.md#taxes-2026-10-18): a charge carries one line per
+tax item of its price, the net amount x rate / 100 rounded once, half-even, at rate 0
+where the account is exempt from that tax type at midnight of the charge's first day. A
+refund's line is the expected tax minus the charge's line, at the charge's rate - the
+same diff as the net, so the account's state at refund time never changes a past charge.
+
 Bills: a bill on cycle day D, for [D, next D), collects the unbilled ABRs whose run date is
 <= D. A run issues the bills for every cycle day after the last bill up to as_of, skipping
-those that would be empty.
+those that would be empty. A bill's amount due includes the taxes of its ABRs.
 """
 
 from collections import defaultdict
@@ -21,6 +27,7 @@ from zoneinfo import ZoneInfo
 from app.billing.model import (
     AbrKind,
     Account,
+    AppliedTax,
     BillingResult,
     BillingState,
     DateRange,
@@ -83,8 +90,36 @@ def prorate(amount: Decimal, days: int, period: DateRange) -> Decimal:
     return exact.quantize(CENT, rounding=ROUND_HALF_EVEN)
 
 
+def tax_of(amount: Decimal, rate: Decimal) -> Decimal:
+    """amount x rate / 100 (a rate in percent), rounded once, half-even, to cents."""
+    with localcontext(prec=50):
+        exact = amount * rate / 100
+    return exact.quantize(CENT, rounding=ROUND_HALF_EVEN)
+
+
 def midnight(day: date, tz: ZoneInfo) -> datetime:
     return datetime.combine(day, time(0), tzinfo=tz)
+
+
+def is_exempt(account: Account, category: str, day: date, tz: ZoneInfo) -> bool:
+    at = midnight(day, tz)
+    return any(
+        e.tax_type == category
+        and (e.valid_from is None or e.valid_from <= at)
+        and (e.valid_to is None or at < e.valid_to)
+        for e in account.exemptions
+    )
+
+
+def charge_taxes(
+    net: Decimal, price: Price, account: Account, day: date, tz: ZoneInfo
+) -> tuple[AppliedTax, ...]:
+    """The tax lines of a charge of `net` first billable on `day`."""
+    lines = []
+    for tax in price.taxes:
+        rate = Decimal(0) if is_exempt(account, tax.category, day, tz) else tax.rate
+        lines.append(AppliedTax(tax.category, rate, tax_of(net, rate)))
+    return tuple(lines)
 
 
 def price_at(
@@ -179,7 +214,9 @@ def _period_diff(
         if rng.is_empty or rng.start > as_of:
             return None
         price = price_at(product, rng.start, state.prices, account.currency, tz)
-        return _new_abr(product, "recurring", prorate(price.amount, rng.days, period), account, rng)
+        net = prorate(price.amount, rng.days, period)
+        taxes = charge_taxes(net, price, account, rng.start, tz)
+        return _new_abr(product, "recurring", net, account, rng, taxes=taxes)
 
     charge = charges[0]
     first_day = max(product.start_date, period.start)
@@ -190,6 +227,7 @@ def _period_diff(
         raise InconsistentState(
             f"charge {charge.id} of {charge.amount} does not match price {price.id}"
         )
+    _check_charge_taxes(charge, price)
     actual = charge.amount
     for refund in refunds:
         if refund.refunds_id != charge.id or not refund.period.within(charge.period):
@@ -199,6 +237,11 @@ def _period_diff(
     expected = Decimal("0.00") if rng.is_empty else prorate(price.amount, rng.days, period)
     diff = expected - actual
     if diff == 0:
+        for refund in refunds:
+            if refund.taxes != _refund_taxes(charge, expected):
+                raise InconsistentState(
+                    f"refund {refund.id}: taxes {refund.taxes} do not match charge {charge.id}"
+                )
         return None
     if diff > 0:
         raise InconsistentState(
@@ -209,7 +252,36 @@ def _period_diff(
     unbilled = charge.period if rng.is_empty else DateRange(rng.end, charge.period.end)
     if unbilled.is_empty or not unbilled.within(charge.period):
         raise InconsistentState(f"product {product.id}: refund range {unbilled} for {charge.id}")
-    return _new_abr(product, "refund", diff, account, unbilled, refunds_id=charge.id)
+    return _new_abr(
+        product,
+        "refund",
+        diff,
+        account,
+        unbilled,
+        refunds_id=charge.id,
+        taxes=_refund_taxes(charge, expected),
+    )
+
+
+def _check_charge_taxes(charge: StoredAbr, price: Price) -> None:
+    """A stored charge has one line per tax item of its price, in order, at the price's
+    rate or at 0 (the account was exempt when it was charged), each the tax of the
+    charge's amount at that rate."""
+    if [t.category for t in charge.taxes] != [t.category for t in price.taxes] or any(
+        line.rate not in (tax.rate, 0) or line.amount != tax_of(charge.amount, line.rate)
+        for line, tax in zip(charge.taxes, price.taxes, strict=True)
+    ):
+        raise InconsistentState(
+            f"charge {charge.id}: taxes {charge.taxes} do not match price {price.id}"
+        )
+
+
+def _refund_taxes(charge: StoredAbr, expected: Decimal) -> tuple[AppliedTax, ...]:
+    """Per tax line of the charge: the tax of the expected net minus the tax charged."""
+    return tuple(
+        AppliedTax(line.category, line.rate, tax_of(expected, line.rate) - line.amount)
+        for line in charge.taxes
+    )
 
 
 def _new_abr(
@@ -219,6 +291,7 @@ def _new_abr(
     account: Account,
     period: DateRange,
     refunds_id: UUID | None = None,
+    taxes: tuple[AppliedTax, ...] = (),
 ) -> NewAbr:
     return NewAbr(
         key=f"{kind}:{product.id}:{period.start.isoformat()}",
@@ -228,13 +301,14 @@ def _new_abr(
         currency=account.currency,
         period=period,
         refunds_id=refunds_id,
+        taxes=taxes,
     )
 
 
 def _bills(state: BillingState, as_of: date, new: tuple[NewAbr, ...]) -> tuple[NewBill, ...]:
     account = state.account
     last = max((b.bill_date for b in state.bills), default=None)
-    # (run date, stored id or new key, amount); the ABRs of this run have run date as_of
+    # (run date, stored id or new key, amount with taxes); this run's ABRs have run date as_of
     pending: list[tuple[date, UUID | str, Decimal]] = []
     for abr in state.abrs:
         if abr.bill_id is None:
@@ -242,8 +316,8 @@ def _bills(state: BillingState, as_of: date, new: tuple[NewAbr, ...]) -> tuple[N
                 raise InconsistentState(
                     f"ABR {abr.id} of run {abr.run_date} missed the bill of {last}"
                 )
-            pending.append((abr.run_date, abr.id, abr.amount))
-    pending.extend((as_of, abr.key, abr.amount) for abr in new)
+            pending.append((abr.run_date, abr.id, abr.total))
+    pending.extend((as_of, abr.key, abr.total) for abr in new)
     if not pending:
         return ()
 

@@ -28,9 +28,11 @@ proves nothing was lost in the move. Index: [README.md](README.md).
   not TMF" in the migration); casing: if the spec gives example values, use their exact
   spelling (`In Design`, `Active`), otherwise lowerCamel.
 - **No balance column.** Balance = payments (`done`) - sum of all ABRs; refunds are stored
-  negative, so they already count as credits.
+  negative, so they already count as credits. Since 2026-10-18 an ABR counts with its
+  taxes (`amount + tax_amount`).
 - **Money** is `numeric(12,2)` / `Decimal`, never float. One currency per billing account,
-  enforced by composite FKs to `billing_account (id, currency)`. Taxes are out of scope.
+  enforced by composite FKs to `billing_account (id, currency)`. Taxes: a price's tax
+  items, applied per ABR since 2026-10-18 ([billing-core.md](billing-core.md#taxes-2026-10-18)).
 - **Injected clock.** Nothing in `app/` may call `datetime.now()`, `date.today()`,
   `datetime.utcnow()` or `time.time()` except `app/clock.py` (a test greps for it).
   "Today" for billing is the date in `BILLING_TZ` (default `Europe/Moscow`). Repository
@@ -44,6 +46,7 @@ proves nothing was lost in the move. Index: [README.md](README.md).
   is still storable - order processing rejects it with a reason instead of the schema
   raising an IntegrityError. **cancelProductOrder came into scope on 2026-10-17**
   ([tmf-api.md](tmf-api.md#order-cancellation-and-deleting-rejected-orders-2026-10-17)).
+  **Taxes came into scope on 2026-10-18** ([billing-core.md](billing-core.md#taxes-2026-10-18)).
 - **Stage order:** 1. schema + repository (done) -> 2. TMF Open API backend (done) -> 3.
   billing core (done) -> 4. worker with the daily run (deployed with slice f, `dcbedeb`,
   2026-10-05; slice g, the Billing runs screen, built on `cloud/billing-runs-ui`, not yet

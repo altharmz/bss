@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0024**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0025**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -510,6 +510,8 @@ erDiagram
     uuid customer_bill_id FK
     uuid refunds_rate_id FK
     timestamptz applied_at
+    jsonb applied_tax
+    numeric tax_amount
   }
   customer_bill {
     uuid id PK
@@ -541,6 +543,7 @@ erDiagram
     text schema_location
     text payment_method_name
     text payment_method_type
+    numeric tax_amount
   }
   bill_allocation {
     uuid id PK
@@ -579,6 +582,7 @@ erDiagram
     uuid payment_id FK
     text base_type
     text schema_location
+    numeric tax_amount
   }
   refund_source {
     uuid id PK

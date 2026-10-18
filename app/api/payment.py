@@ -1,7 +1,9 @@
 """TMF676 Payment Management v4: payment. (TMF676 has no v5.)
 
 POST records a payment that has been received (`status: done`); there is no payment
-processing here. Taxes are out of scope, so `amount` always equals `totalAmount`.
+processing here. `totalAmount` is what was received and what settles bills (they are
+due with their taxes); `amount` and `taxAmount` are its split as the client states it
+(`tax_part`), stored and answered.
 
 The payment settles the account at once, under the billing account's row lock
 (docs/bill-lifecycle-design.md 6.4): first its `paymentItem[]` (explicit lettering to
@@ -52,6 +54,7 @@ ATTRIBUTES = (
     "account",
     "amount",
     "totalAmount",
+    "taxAmount",
     "paymentDate",
     "paymentMethod",
     "status",
@@ -60,8 +63,24 @@ ATTRIBUTES = (
 )
 
 
+def tax_part(total: Money, amount: Money | None, tax: Money | None, prefix: str = "") -> Decimal:
+    """TMF676: `amount` is net of taxes, `taxAmount` the tax, `totalAmount` both. Given
+    the total, the tax is `taxAmount`, else total - `amount`, else 0; with both sent,
+    amount + taxAmount must be the total. All in one currency, no part negative."""
+    for name, part in (("amount", amount), ("taxAmount", tax)):
+        if part is not None and part.unit != total.unit:
+            raise ValueError(f"{prefix}{name}.unit must be the totalAmount's {total.unit}")
+    if amount is not None and tax is not None and amount.value + tax.value != total.value:
+        raise ValueError(f"{prefix}amount + {prefix}taxAmount must equal {prefix}totalAmount")
+    value = tax.value if tax is not None else total.value - amount.value if amount else Decimal(0)
+    if not Decimal(0) <= value <= total.value:
+        raise ValueError(f"{prefix}taxAmount must be from 0 to {prefix}totalAmount")
+    return value
+
+
 class PaymentItem(TmfModel):
-    """Explicit lettering: this much of the payment pays that bill."""
+    """Explicit lettering: this much of the payment pays that bill - amount and taxAmount
+    together (bills are paid with their taxes)."""
 
     item: CustomerBillRef
     amount: Money
@@ -72,11 +91,16 @@ class PaymentItem(TmfModel):
     def _shape(self) -> "PaymentItem":
         if self.amount.value <= 0:
             raise ValueError("paymentItem.amount.value must be positive")
-        if self.total_amount is not None and self.total_amount != self.amount:
-            raise ValueError("paymentItem.totalAmount must equal its amount (no taxes)")
-        if self.tax_amount is not None and self.tax_amount.value != Decimal(0):
-            raise ValueError("paymentItem.taxAmount must be zero (taxes are out of scope)")
+        tax = self.tax_amount or Money(unit=self.amount.unit, value=Decimal(0))
+        total = Money(unit=self.amount.unit, value=self.amount.value + tax.value)
+        if self.total_amount is not None and self.total_amount != total:
+            raise ValueError("paymentItem.totalAmount must equal its amount + taxAmount")
+        tax_part(total, self.amount, tax, "paymentItem.")
         return self
+
+    @property
+    def allocated(self) -> Decimal:
+        return self.amount.value + (self.tax_amount.value if self.tax_amount else Decimal(0))
 
 
 class PaymentMethod(TmfModel):
@@ -100,20 +124,22 @@ class PaymentCreate(TmfModel):
     payment_item: list[PaymentItem] = []
 
     @model_validator(mode="after")
-    def _no_taxes(self) -> "PaymentCreate":
+    def _amounts(self) -> "PaymentCreate":
         if self.total_amount.value <= 0:
             raise ValueError("totalAmount.value must be positive")
-        if self.amount is not None and self.amount != self.total_amount:
-            raise ValueError("amount must equal totalAmount (taxes are out of scope)")
-        if self.tax_amount is not None and self.tax_amount.value != Decimal(0):
-            raise ValueError("taxAmount must be zero (taxes are out of scope)")
+        tax_part(self.total_amount, self.amount, self.tax_amount)
         return self
+
+    @property
+    def tax(self) -> Decimal:
+        return tax_part(self.total_amount, self.amount, self.tax_amount)
 
 
 def payment_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     account = parties.get_billing_account(conn, row["billing_account_id"])
     assert account is not None  # foreign key
-    amount = money(row["amount"], row["currency"])
+    total = money(row["amount"], row["currency"])
+    tax = row.get("tax_amount", Decimal("0.00"))
     return {
         "id": str(row["id"]),
         "href": f"{BASE}/payment/{row['id']}",
@@ -126,8 +152,9 @@ def payment_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "name": account["name"],
             "@referredType": "BillingAccount",
         },
-        "amount": amount,
-        "totalAmount": amount,
+        "amount": money(row["amount"] - tax, row["currency"]),
+        "taxAmount": money(tax, row["currency"]),
+        "totalAmount": total,
         "paymentMethod": without_nulls(
             {"name": row["payment_method_name"], "@type": row["payment_method_type"]}
         ),
@@ -164,7 +191,7 @@ def _settle(conn: psycopg.Connection, account_id: Any, row: Row, data: PaymentCr
                 f"paymentItem amount for bill {item.item.id} is in {item.amount.unit}, not"
                 f" in the account's currency {row['currency']}"
             )
-    explicit = tuple(settlement.ExplicitItem(i.item.id, i.amount.value) for i in data.payment_item)
+    explicit = tuple(settlement.ExplicitItem(i.item.id, i.allocated) for i in data.payment_item)
     try:
         settle_account(
             conn,
@@ -234,6 +261,7 @@ def create_payment(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
                 conn,
                 billing_account_id=account["id"],
                 amount=data.total_amount.value,
+                tax_amount=data.tax,
                 currency=data.total_amount.unit,
                 received_at=now,
                 payment_method=data.payment_method.name or data.payment_method.at_type,

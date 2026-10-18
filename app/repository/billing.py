@@ -11,18 +11,22 @@ from typing import Any
 from uuid import UUID
 
 import psycopg
+from psycopg.types.json import Jsonb
 from psycopg.types.range import Range
 
 from app.billing import settlement
 from app.billing.model import (
     Account,
+    AppliedTax,
     DateRange,
+    Exemption,
     NewAbr,
     NewBill,
     Price,
     Product,
     StoredAbr,
     StoredBill,
+    Tax,
 )
 from app.config import settings
 from app.repository._sql import Row, fetch_all, fetch_one, money, returning, select_page
@@ -217,11 +221,12 @@ def run_view(conn: psycopg.Connection, run_id: UUID, tz: str | None = None) -> R
 
 
 def run_charges(conn: psycopg.Connection, run_ids: list[UUID]) -> dict[UUID, list[Row]]:
-    """The ABRs each run wrote: count and sum per currency (refunds are negative)."""
+    """The ABRs each run wrote: count and sum with taxes per currency (refunds are
+    negative)."""
     rows = fetch_all(
         conn,
         """
-        SELECT billing_run_id, currency, count(*) AS n, sum(amount) AS amount
+        SELECT billing_run_id, currency, count(*) AS n, sum(amount + tax_amount) AS amount
           FROM applied_customer_billing_rate WHERE billing_run_id = ANY(%s)
          GROUP BY 1, 2 ORDER BY 1, 2
         """,
@@ -412,11 +417,13 @@ def insert_abr(
     applied_at: datetime,
     refunds_rate_id: UUID | None = None,
     customer_bill_id: UUID | None = None,
+    taxes: tuple[AppliedTax, ...] = (),
 ) -> Row:
     """Insert an applied customer billing rate; `applied_at` (TMF678 date) is the injected
     clock of the run's attempt. Overlaps are rejected by the database (EXCLUDE
-    constraint) - note that ON CONFLICT with a target cannot catch those."""
-    return returning(
+    constraint) - note that ON CONFLICT with a target cannot catch those. Tax lines are
+    written only when there are some (tests insert ABRs into schemas before 0025)."""
+    row = returning(
         conn,
         """
         INSERT INTO applied_customer_billing_rate
@@ -437,6 +444,42 @@ def insert_abr(
             customer_bill_id,
         ),
     )
+    if not taxes:
+        return row
+    return returning(
+        conn,
+        "UPDATE applied_customer_billing_rate SET applied_tax = %s, tax_amount = %s"
+        " WHERE id = %s RETURNING *",
+        (
+            _jsonb(
+                [
+                    {"taxCategory": t.category, "taxRate": t.rate, "taxAmount": t.amount}
+                    for t in taxes
+                ]
+            ),
+            money(sum((t.amount for t in taxes), Decimal("0.00"))),
+            row["id"],
+        ),
+    )
+
+
+def _jsonb(value: Any) -> Jsonb:
+    from app.api import tmfjson  # lazily: importing app.api loads every API module
+
+    return Jsonb(value, dumps=tmfjson.dumps)
+
+
+def applied_taxes(row: Row) -> tuple[AppliedTax, ...]:
+    """An ABR row's tax lines (none before 0025)."""
+    return tuple(
+        AppliedTax(t["taxCategory"], Decimal(t["taxRate"]), Decimal(t["taxAmount"]))
+        for t in row.get("applied_tax") or ()
+    )
+
+
+def abr_total(row: Row) -> Decimal:
+    """What an ABR row adds to the account's debt: its amount with its taxes."""
+    return row["amount"] + row.get("tax_amount", Decimal("0.00"))
 
 
 def list_abrs(
@@ -501,8 +544,9 @@ def insert_bill(
 
 
 def account_balance(conn: psycopg.Connection, billing_account_id: UUID) -> Decimal:
-    """Payments received minus everything charged. Refund ABRs are stored negative, so
-    subtracting the sum of all ABRs already credits them. Positive = customer in credit.
+    """Payments received minus everything charged, taxes included. Refund ABRs (and their
+    taxes) are stored negative, so subtracting the sum of all ABRs already credits them.
+    Positive = customer in credit.
 
     There is deliberately no balance column: it is always computed.
     """
@@ -512,7 +556,7 @@ def account_balance(conn: psycopg.Connection, billing_account_id: UUID) -> Decim
         SELECT
             (SELECT coalesce(sum(amount), 0) FROM payment
              WHERE billing_account_id = %(id)s AND status = 'done')
-          - (SELECT coalesce(sum(amount), 0) FROM applied_customer_billing_rate
+          - (SELECT coalesce(sum(amount + tax_amount), 0) FROM applied_customer_billing_rate
              WHERE billing_account_id = %(id)s)
           - (SELECT coalesce(sum(amount), 0) FROM refund
              WHERE billing_account_id = %(id)s) AS balance
@@ -582,12 +626,69 @@ def load_account(conn: psycopg.Connection, account_id: UUID) -> Account:
     concurrently would both see it unbilled."""
     row = fetch_one(
         conn,
-        "SELECT id, currency, bill_cycle_day FROM billing_account WHERE id = %s FOR UPDATE",
+        "SELECT id, currency, bill_cycle_day, details FROM billing_account"
+        " WHERE id = %s FOR UPDATE",
         (account_id,),
     )
     if row is None:
         raise LookupError(f"billing account {account_id} does not exist")
-    return Account(id=row["id"], currency=row["currency"], bill_cycle_day=row["bill_cycle_day"])
+    return core_account(row)
+
+
+def core_account(row: Row) -> Account:
+    """A billing_account row as the billing core sees it."""
+    return Account(
+        id=row["id"],
+        currency=row["currency"],
+        bill_cycle_day=row["bill_cycle_day"],
+        exemptions=exemptions(row["details"]),
+    )
+
+
+def price_taxes(details: dict[str, Any]) -> tuple[Tax, ...]:
+    """A price's tax items (TMF620 TaxItem, checked on every write: a category and a rate
+    in percent)."""
+    return tuple(Tax(t["taxCategory"], Decimal(t["taxRate"])) for t in details.get("tax") or ())
+
+
+def _instant(period: dict[str, Any] | None, end: str) -> datetime | None:
+    value = (period or {}).get(end)
+    return None if value is None else datetime.fromisoformat(value)
+
+
+def exemptions(details: dict[str, Any]) -> tuple[Exemption, ...]:
+    """The full exemptions of an account's taxExemption certificates: one per
+    taxDefinition with a taxType, valid where the certificate and the definition both
+    are. A certificate without a typed definition exempts from nothing."""
+    out = []
+    for certificate in details.get("taxExemption") or ():
+        for definition in certificate.get("taxDefinition") or ():
+            if not definition.get("taxType"):
+                continue
+            starts = [
+                s
+                for s in (
+                    _instant(certificate.get("validFor"), "startDateTime"),
+                    _instant(definition.get("validFor"), "startDateTime"),
+                )
+                if s is not None
+            ]
+            ends = [
+                e
+                for e in (
+                    _instant(certificate.get("validFor"), "endDateTime"),
+                    _instant(definition.get("validFor"), "endDateTime"),
+                )
+                if e is not None
+            ]
+            out.append(
+                Exemption(
+                    definition["taxType"],
+                    max(starts) if starts else None,
+                    min(ends) if ends else None,
+                )
+            )
+    return tuple(out)
 
 
 def load_products(
@@ -633,7 +734,7 @@ def load_recurring_prices(conn: psycopg.Connection, offering_ids: list[UUID]) ->
     rows = fetch_all(
         conn,
         """
-        SELECT id, product_offering_id, amount, currency, valid_for
+        SELECT id, product_offering_id, amount, currency, valid_for, details
         FROM product_offering_price
         WHERE product_offering_id = ANY(%s)
           AND price_type = 'recurring' AND recurring_period = 'monthly'
@@ -650,6 +751,7 @@ def load_recurring_prices(conn: psycopg.Connection, offering_ids: list[UUID]) ->
             currency=row["currency"],
             valid_from=row["valid_for"].lower,
             valid_to=row["valid_for"].upper,
+            taxes=price_taxes(row["details"]),
         )
         for row in rows
     )
@@ -677,6 +779,7 @@ def load_abrs(conn: psycopg.Connection, account_id: UUID) -> tuple[StoredAbr, ..
             refunds_id=row["refunds_rate_id"],
             bill_id=row["customer_bill_id"],
             run_date=row["run_date"],
+            taxes=applied_taxes(row),
         )
         for row in rows
     )
@@ -709,6 +812,7 @@ def write_abr(
         billing_run_id=run_id,
         applied_at=applied_at,
         refunds_rate_id=abr.refunds_id,
+        taxes=abr.taxes,
     )["id"]
 
 
@@ -901,7 +1005,7 @@ def load_issue_candidates(
         conn,
         """
         SELECT b.id, b.bill_date, b.bill_period, b.amount_due, b.state, b.run_type,
-               coalesce(sum(a.amount), 0) AS abr_total, count(a.id) AS abr_count
+               coalesce(sum(a.amount + a.tax_amount), 0) AS abr_total, count(a.id) AS abr_count
         FROM customer_bill b
         LEFT JOIN applied_customer_billing_rate a ON a.customer_bill_id = b.id
         WHERE b.billing_account_id = %s AND b.state IN ('new', 'validated')
@@ -1007,6 +1111,30 @@ def bill_charges(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
     )
 
 
+def bill_taxes(conn: psycopg.Connection, bill_id: UUID) -> tuple[Decimal, list[Row]]:
+    """A bill's amount before tax (the sum of its ABRs' amounts) and its tax items: the
+    ABRs' tax lines summed per category and rate (TMF678 taxItem), not rounded again."""
+    net = fetch_one(
+        conn,
+        "SELECT coalesce(sum(amount), 0) AS net FROM applied_customer_billing_rate"
+        " WHERE customer_bill_id = %s",
+        (bill_id,),
+    )
+    assert net is not None
+    lines = fetch_all(
+        conn,
+        """
+        SELECT t->>'taxCategory' AS category, (t->>'taxRate')::numeric AS rate,
+               sum((t->>'taxAmount')::numeric) AS amount
+        FROM applied_customer_billing_rate a, jsonb_array_elements(a.applied_tax) t
+        WHERE a.customer_bill_id = %s
+        GROUP BY 1, 2 ORDER BY 1, 2
+        """,
+        (bill_id,),
+    )
+    return net["net"], lines
+
+
 def settlement_summary(conn: psycopg.Connection, account_id: UUID, today: date) -> Row:
     """What the account owes on its bills and the credit it has not used yet. Overdue:
     due before `today` with something remaining (on hold included - shown apart)."""
@@ -1092,7 +1220,8 @@ def page_account_transactions(
 ) -> tuple[list[Row], int]:
     """Charges, refunds and payments as one ledger with the running balance after each
     entry, newest first. Signs as in accountBalance: positive = credit to the customer
-    (a charge is -amount, a refund - stored negative - is +|amount|, a payment +amount).
+    (a charge is -amount, a refund - stored negative - is +|amount|, a payment +amount;
+    an ABR's amount here includes its taxes).
 
     Order: by day (an ABR's run date, a payment's date in `tz`), then ABRs before
     payments on the same day - the run of D happens at the start of D - then by the
@@ -1105,7 +1234,8 @@ def page_account_transactions(
         WITH ledger AS (
             SELECT a.id, CASE a.charge_type WHEN 'recurring' THEN 'charge' ELSE 'refund' END
                        AS kind,
-                   -a.amount AS amount, r.run_date AS day, 0 AS rank, a.applied_at AS at,
+                   -(a.amount + a.tax_amount) AS amount, r.run_date AS day, 0 AS rank,
+                   a.applied_at AS at,
                    o.name AS note, a.period
             FROM applied_customer_billing_rate a
             JOIN billing_run r ON r.id = a.billing_run_id

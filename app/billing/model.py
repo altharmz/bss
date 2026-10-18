@@ -55,15 +55,45 @@ class DateRange:
 
 
 @dataclass(frozen=True)
+class Exemption:
+    """A full exemption from the taxes of one type (TMF666 taxExemption: a certificate's
+    taxDefinition[].taxType), valid in [valid_from, valid_to); None = unbounded."""
+
+    tax_type: str
+    valid_from: datetime | None
+    valid_to: datetime | None
+
+
+@dataclass(frozen=True)
 class Account:
     id: UUID
     currency: str
     bill_cycle_day: int
+    exemptions: tuple[Exemption, ...] = ()
+
+
+@dataclass(frozen=True)
+class Tax:
+    """One tax item of a price (TMF620 TaxItem): a category and a rate in percent."""
+
+    category: str
+    rate: Decimal
+
+
+@dataclass(frozen=True)
+class AppliedTax:
+    """One tax line of an ABR (TMF678 AppliedBillingTaxRate). `rate` is the rate applied
+    (0 when the account is exempt), `amount` the tax in the ABR's currency."""
+
+    category: str
+    rate: Decimal
+    amount: Decimal
 
 
 @dataclass(frozen=True)
 class Price:
-    """A recurring monthly price (length 1). `valid_to` is exclusive, None = open-ended."""
+    """A recurring monthly price (length 1). `valid_to` is exclusive, None = open-ended.
+    `amount` is before tax; `taxes` are applied on top of it."""
 
     id: UUID
     offering_id: UUID
@@ -71,6 +101,7 @@ class Price:
     currency: str
     valid_from: datetime
     valid_to: datetime | None
+    taxes: tuple[Tax, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -93,6 +124,12 @@ class StoredAbr:
     refunds_id: UUID | None
     bill_id: UUID | None
     run_date: date  # billing_run.run_date of the run that wrote it
+    taxes: tuple[AppliedTax, ...] = ()
+
+    @property
+    def total(self) -> Decimal:
+        """What the ABR adds to the account's debt: the amount with its taxes."""
+        return self.amount + sum((t.amount for t in self.taxes), Decimal("0.00"))
 
 
 @dataclass(frozen=True)
@@ -124,13 +161,18 @@ class NewAbr:
     currency: str
     period: DateRange
     refunds_id: UUID | None  # set on refunds: always a stored charge
+    taxes: tuple[AppliedTax, ...] = ()
+
+    @property
+    def total(self) -> Decimal:
+        return self.amount + sum((t.amount for t in self.taxes), Decimal("0.00"))
 
 
 @dataclass(frozen=True)
 class NewBill:
     period: DateRange
     bill_date: date
-    amount_due: Decimal
+    amount_due: Decimal  # with taxes
     currency: str
     abr_ids: tuple[UUID, ...]  # stored ABRs it collects
     abr_keys: tuple[str, ...]  # ABRs of this result it collects

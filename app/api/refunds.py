@@ -26,7 +26,7 @@ from app.api.common import (
 )
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
-from app.api.payment import BASE, PaymentMethod
+from app.api.payment import BASE, PaymentMethod, tax_part
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.adapter import settle_account
 from app.events import emit
@@ -38,6 +38,7 @@ ATTRIBUTES = (
     "payment",
     "amount",
     "totalAmount",
+    "taxAmount",
     "refundDate",
     "statusDate",
     "status",
@@ -63,13 +64,12 @@ class RefundCreate(TmfModel):
     def _amounts(self) -> "RefundCreate":
         if self.total_amount.value <= 0:
             raise ValueError("totalAmount.value must be positive")
-        if self.amount is not None and self.amount != self.total_amount:
-            raise ValueError("amount must equal totalAmount")
-        if self.tax_amount is not None and (
-            self.tax_amount.value != 0 or self.tax_amount.unit != self.total_amount.unit
-        ):
-            raise ValueError("taxAmount must be zero in the refund currency")
+        tax_part(self.total_amount, self.amount, self.tax_amount)
         return self
+
+    @property
+    def tax(self) -> Decimal:
+        return tax_part(self.total_amount, self.amount, self.tax_amount)
 
 
 def refund_body(row: dict) -> dict[str, Any]:
@@ -91,7 +91,8 @@ def refund_body(row: dict) -> dict[str, Any]:
             if row["payment_id"]
             else None,
             "totalAmount": money(row["amount"], row["currency"]),
-            "amount": money(row["amount"], row["currency"]),
+            "amount": money(row["amount"] - row.get("tax_amount", 0), row["currency"]),
+            "taxAmount": money(row.get("tax_amount", Decimal("0.00")), row["currency"]),
             "refundDate": utc(row["refunded_at"]),
             "statusDate": utc(row["refunded_at"]),
             "status": "done",

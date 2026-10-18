@@ -28,8 +28,9 @@ POST and PATCH and returned (`fields=` included). TMF620 has no gap lines left.
   version, externalIdentifier, unitOfMeasure, isBundle, percentage, popRelationship,
   bundledPopRelationship, prodSpecCharValueUse, productOfferingTerm, place, policy,
   pricingLogicAlgorithm and tax; a catalog's relatedParty. **Records only:** ordering
-  and billing ignore bundles, terms, `percentage`/`popRelationship` (discounts) and
-  `tax` - slice 7 (taxes) decides whether a bill reads a price's tax. The lists are
+  and billing ignore bundles, terms and `percentage`/`popRelationship` (discounts).
+  **`tax` is applied by billing since slice 7** and is part of a price's charge below
+  ([billing-core.md](billing-core.md#taxes-2026-10-18)). The lists are
   locked to the spec schemas (`test_every_spec_attribute_has_a_place`).
 - **References to our own catalog entries inside documents are stored as sent, not
   resolved** (question 1, decided by TMF: the spec defines their shape only, and its
@@ -45,7 +46,7 @@ POST and PATCH and returned (`fields=` included). TMF620 has no gap lines left.
   from ever seeing one. An offering's validFor removed by `null` counts as a start
   moved into the past (409) unless it had no start before.
 - **A price's charge** (`price`, `priceType`, `recurringChargePeriodType`,
-  `recurringChargePeriodLength`) **changes on PATCH while the price has priced
+  `recurringChargePeriodLength`, and since slice 7 `tax`) **changes on PATCH while the price has priced
   nothing** - unattached, or its offering never ordered (rejected orders count), the
   condition of DELETE (question 2, decided by TMF: the spec lets a client PATCH it; we
   refuse only where billing history is at stake). Otherwise a 409 "end its validFor

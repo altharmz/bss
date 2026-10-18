@@ -13,10 +13,12 @@ from app.billing.model import (
     BillingResult,
     BillingState,
     DateRange,
+    Exemption,
     Price,
     Product,
     StoredAbr,
     StoredBill,
+    Tax,
 )
 
 TZ = ZoneInfo("Europe/Moscow")
@@ -32,8 +34,12 @@ def midnight(day: date) -> datetime:
     return datetime.combine(day, time(0), tzinfo=TZ)
 
 
-def account(cycle_day: int = 1, currency: str = "EUR") -> Account:
-    return Account(id=uid("account"), currency=currency, bill_cycle_day=cycle_day)
+def account(
+    cycle_day: int = 1, currency: str = "EUR", exemptions: tuple[Exemption, ...] = ()
+) -> Account:
+    return Account(
+        id=uid("account"), currency=currency, bill_cycle_day=cycle_day, exemptions=exemptions
+    )
 
 
 def price(
@@ -43,17 +49,21 @@ def price(
     *,
     currency: str = "EUR",
     name: str | None = None,
+    taxes: tuple[tuple[str, str], ...] = (),
 ) -> Price:
+    """`taxes`: (category, rate in percent) per tax item."""
+
     def instant(value: date | datetime) -> datetime:
         return value if isinstance(value, datetime) else midnight(value)
 
     return Price(
-        id=uid(name or f"price:{amount}:{valid_from}:{currency}"),
+        id=uid(name or f"price:{amount}:{valid_from}:{currency}" + (f":{taxes}" if taxes else "")),
         offering_id=OFFERING,
         amount=Decimal(amount),
         currency=currency,
         valid_from=instant(valid_from),
         valid_to=None if valid_to is None else instant(valid_to),
+        taxes=tuple(Tax(category, Decimal(rate)) for category, rate in taxes),
     )
 
 
@@ -117,6 +127,7 @@ class Ledger:
                     refunds_id=new.refunds_id,
                     bill_id=None,
                     run_date=run_date,
+                    taxes=new.taxes,
                 )
             )
         for bill in result.bills:

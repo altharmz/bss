@@ -97,6 +97,91 @@ termination always visible, no account lock, no running-run guard).
   only (it puts every catch-up ABR on the bill after as_of);
 - call `bill_account` per account and record a failing account without stopping the run.
 
+## Taxes (2026-10-18)
+
+Slice 7 of ["Following TMF"](tmf-api.md#following-tmf-2026-10-17); retires D4 (taxes out
+of scope). The specs define the shape (TMF620 `TaxItem` on a price, TMF678
+`AppliedBillingTaxRate` on an ABR and `TaxItem` on a bill, TMF676 `taxAmount`, TMF666
+`TaxExemptionCertificate`), not the rates or the arithmetic; the three open choices were
+left to "what TMF recommends" by the human. Migration `0025`. Five lines removed from
+`tests/tmf-gaps.txt` (161 -> 156 gaps): ABR `appliedTax` and `taxIncludedAmount`, bill
+`taxItem`, payment and refund `taxAmount`.
+
+- **The rates come from the price.** A price's `tax[]` is what billing applies: no tax
+  engine, no jurisdiction table (neither is in the vendored specs). `price` stays the
+  amount before tax. Each item needs a `taxCategory` (once per price) and a `taxRate`
+  (`tax_problems`, 422 with the item's path, inline prices and imports included) - our
+  requirement, because billing cannot apply or group a tax without them. A `taxAmount`,
+  if sent, must be the tax of a full month (`price x rate / 100`, in the price's
+  currency); a new `price` must come with matching amounts. The items stay the stored
+  document of slice 6 (`product_offering_price.details.tax`), read by the adapter.
+- **`taxRate` is a percent, 0..100** (20 = 20%). The specs disagree: TMF620's examples
+  (all nine) and TMF637's say 20 and 15, TMF666's exemption text speaks of "0% ... 5% if
+  the actual rate was 10%", TMF678's examples say 0.2 and 0.25 in seven places and 20 in
+  one. Percent is the majority and the convention where rates are entered. A client
+  sending a fraction (0.2) gets 0.2%; nothing can tell the two apart.
+- **A tax is part of the charge** ([catalog.md](catalog.md#catalog-attributes-2026-10-18)):
+  it changes on PATCH only while the price has priced nothing (409 "end its validFor and
+  attach a new price" otherwise). So the core's check that a stored charge matches its
+  price covers its tax lines too, and a rate change is a new price from a future instant,
+  like any price change.
+- **Arithmetic.** Per ABR and tax item: the prorated net x rate / 100, rounded once,
+  half-even, to cents (`core.tax_of`) - the rate of the price valid at the charge's first
+  billable day. A refund's line is `tax_of(expected net, the charge's rate)` minus the
+  charge's line: the same expected-vs-actual diff as the net, so cents never drift and
+  nothing that changed after the charge (an exemption, a rate) reaches it. A stored
+  charge's lines must be the price's items in order, each at the price's rate or 0, each
+  `tax_of` the charge's amount; a refund's must be the diff - else `InconsistentState`.
+- **Exemptions are applied** (TMF666: certificates "that can be applied when
+  calculating charges levied to the account", "per tax type"). A billing account's
+  `taxExemption[].taxDefinition[].taxType` equal to an item's `taxCategory` makes that
+  line rate 0 / amount 0 - still listed, as the spec's "0% would be a full exemption" -
+  when the certificate's and the definition's `validFor` (absent: unbounded) both cover
+  midnight of the charge's first billable day. `TaxDefinition` has no rate attribute,
+  so a partial exemption cannot be expressed and is not implemented; a certificate
+  without a typed definition exempts nothing. A party's or customer's
+  `taxExemptionCertificate` stays a record (only the account's are "levied to the
+  account").
+- **What carries tax.** ABR: `appliedTax[]` (`taxCategory`, `taxRate`, `taxAmount`,
+  `@type: AppliedBillingTaxRate`), `taxExcludedAmount` (the stored `amount`),
+  `taxIncludedAmount`. Stored as `applied_tax` jsonb + `tax_amount` (their sum). Bill:
+  `amountDue` = `taxIncludedAmount` = the sum of its ABRs with tax (as written by the
+  run or the on-demand bill), `taxExcludedAmount` = their nets, `taxItem[]` = their lines
+  summed per category and rate, not rounded again (`billing.bill_taxes`; no new bill
+  column). The bill document (detailed/summary JSON) gains `taxExcludedAmount`,
+  `taxItem`, and per charge `taxIncludedAmount`.
+- **Debt is tax-included everywhere**: the account balance, the issue check (bill = its
+  ABRs), settlement, the ledger, a run's totals and the internal views (`Charge.amount`,
+  the first-charge preview's `amount`/`balanceAfter`; the preview applies the account's
+  exemptions). Existing ABRs have no lines (`[]`, 0), so nothing already stored changes
+  its value.
+- **Price views (TMF622/637).** `Price.dutyFreeAmount` is the monthly price,
+  `taxIncludedAmount` adds each item's `tax_of` a full month, `taxRate` is the sum of the
+  rates. They show the catalog's taxes, not the account's exemptions (the ABRs show what
+  was applied). An order total over items with different rates has no `taxRate`.
+- **TMF676.** `amount` is net, `taxAmount` the tax, `totalAmount` both: either part gives
+  the other, both must add up, the same currency, `0 <= taxAmount <= totalAmount` (422
+  otherwise); none sent = no tax. Stored as `tax_amount` next to `amount` (the total,
+  which is what settles bills, as before). A `paymentItem` allocates `amount + taxAmount`
+  (`totalAmount`, if sent, must equal it); an item in a response still answers the
+  allocation as `amount` and `totalAmount` (allocations have no tax split). Refunds the
+  same; a refund is immutable, so `tax_amount` is in its INSERT.
+- **Migration `0025`** refuses to run if a stored price tax would fail the rules above or
+  an offering already charged has a taxed price (its charges would not match): both can
+  exist only where `0024` ran, which is not deployed. Rolling back needs `alembic
+  downgrade 0024` by hand (drops the tax columns; ABR tax lines are lost).
+- Not in this slice (no TMF behaviour behind it, or another slice): the UI and the seed
+  (the UI shows `amountDue`, now with tax), TMF622 `TaxDefinition` on order items.
+
+Tests: `tests/test_api_taxes.py` (ABR and bill lines, settlement and balance, two items
+per price, refund, exemptions and their validity, price views, the price rules, payment
+items and refunds), the tax cases in `tests/test_billing_core.py`,
+`test_amount_and_tax_amount_split_the_total` and the refused splits in
+`tests/test_api_payment.py`, `test_0025_taxes`. Negative proofs: exemptions ignored,
+a refund taking back the whole tax, bills due without their taxes, a tax change not
+counted as a charge change, and a payment item allocating its `amount` alone each failed
+them (the last one only after the item test was made to exceed the bill).
+
 ## Open questions
 
 - **Changing `billCycleDay`.** PATCH is a 409 today. Not settled in stage 3: a change has

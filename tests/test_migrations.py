@@ -854,3 +854,65 @@ def test_0024_catalog_details_and_optional_attributes(temp_db_url):
         assert conn.execute("SELECT count(*) FROM product_offering").fetchone() == (2,)
         assert conn.execute("SELECT count(*) FROM product_offering_price").fetchone() == (1,)
     command.upgrade(cfg, "head")
+
+
+def test_0025_taxes(temp_db_url):
+    """Existing ABRs, payments and refunds have no tax. The upgrade refuses a stored price
+    tax billing could not apply, and a taxed price on an offering already charged (its
+    charges would not match it). Downgrading to 0024 keeps every row."""
+    from datetime import date
+    from decimal import Decimal
+
+    from app.repository import payments
+    from tests import factories
+
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0024")
+    with psycopg.connect(temp_db_url) as conn:
+        w = factories.world(conn)
+        factories.charge(conn, w, factories.days(date(2026, 1, 1), date(2026, 2, 1)))
+        payments.insert_payment(
+            conn,
+            billing_account_id=w.account["id"],
+            amount=Decimal("100.00"),
+            currency="RUB",
+            received_at=w.run["started_at"],
+            payment_method="cash",
+        )
+        price = (
+            "INSERT INTO product_offering_price (product_offering_id, name, lifecycle_status,"
+            " price_type, recurring_period, amount, currency, valid_for, details)"
+            " VALUES (%s, 'Taxed', 'Active', 'recurring', 'monthly', 10, 'RUB',"
+            " tstzrange(now(), NULL), %s)"
+        )
+        vat = '{"tax": [{"@type": "TaxItem", "taxCategory": "VAT", "taxRate": 20}]}'
+        conn.execute(price, (w.offering["id"], vat))
+    with pytest.raises(RuntimeError, match="already charged"):
+        command.upgrade(cfg, "0025")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute("UPDATE product_offering_price SET product_offering_id = NULL")
+        conn.execute(
+            'UPDATE product_offering_price SET details = \'{"tax": [{"taxCategory": "VAT"}]}\''
+        )
+    with pytest.raises(RuntimeError, match="without taxRate"):
+        command.upgrade(cfg, "0025")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute("UPDATE product_offering_price SET details = %s", (vat,))
+    command.upgrade(cfg, "0025")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT applied_tax, tax_amount FROM applied_customer_billing_rate"
+        ).fetchall() == [([], Decimal("0.00"))]
+        assert conn.execute("SELECT tax_amount FROM payment").fetchall() == [(Decimal("0.00"),)]
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE applied_customer_billing_rate SET tax_amount = 1")
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE payment SET tax_amount = amount + 1")
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE payment SET tax_amount = -1")
+    command.downgrade(cfg, "0024")
+    with psycopg.connect(temp_db_url) as conn:
+        for table in ("applied_customer_billing_rate", "payment", "product_offering_price"):
+            select = sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(table))
+            assert conn.execute(select).fetchone() == (1,), table
+    command.upgrade(cfg, "head")

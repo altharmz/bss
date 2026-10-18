@@ -119,6 +119,7 @@ def snapshot_bill(conn, bill_id, *, now):
         return
     pref = preferences(conn, row["billing_account_id"])
     fmt = pref["format"]
+    net, tax_lines = billing.bill_taxes(conn, bill_id)
     document = {
         "id": str(row["id"]),
         "billingAccountId": str(row["billing_account_id"]),
@@ -127,6 +128,15 @@ def snapshot_bill(conn, bill_id, *, now):
         "billingPeriod": {"start": row["bill_period"].lower, "end": row["bill_period"].upper},
         "paymentDueDate": row["payment_due_date"],
         "amountDue": {"unit": row["currency"], "value": row["amount_due"]},
+        "taxExcludedAmount": {"unit": row["currency"], "value": net},
+        "taxItem": [
+            {
+                "taxCategory": t["category"],
+                "taxRate": t["rate"],
+                "taxAmount": {"unit": row["currency"], "value": t["amount"]},
+            }
+            for t in tax_lines
+        ],
         "format": {"name": fmt["name"], "description": fmt["description"]}
         if fmt
         else {"name": "JSON detailed"},
@@ -140,6 +150,7 @@ def snapshot_bill(conn, bill_id, *, now):
                 "id": str(a["id"]),
                 "name": a["offering_name"],
                 "amount": {"unit": a["currency"], "value": a["amount"]},
+                "taxIncludedAmount": {"unit": a["currency"], "value": billing.abr_total(a)},
                 "period": {"start": a["period"].lower, "end": a["period"].upper},
             }
             for a in billing.bill_charges(conn, bill_id)

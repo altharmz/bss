@@ -23,6 +23,8 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `customer_bill_id` | `uuid` | yes |  | The bill that collected it; NULL = not yet billed (TMF678 isBilled false). |
 | `refunds_rate_id` | `uuid` | yes |  | On a refund: the charge it refunds (same product; one refund per charge). |
 | `applied_at` | `timestamp with time zone` | no |  | TMF678 date: when the ABR was written - the injected clock of the billing run's attempt that wrote it (the instant that run issues its bills at), not the database's now(). |
+| `applied_tax` | `jsonb` | no | `'[]'::jsonb` | TMF678 appliedTax: [{taxCategory, taxRate (percent; 0 = exempt), taxAmount}], one per tax item of the price, in its order. |
+| `tax_amount` | `numeric(12,2)` | no | `0` | Money. The sum of applied_tax amounts; amount + tax_amount = taxIncludedAmount. |
 
 ## Foreign keys
 
@@ -40,7 +42,9 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 |---|---|---|
 | `abr_recurring_amount` | check | `CHECK (((charge_type <> 'recurring'::charge_type) OR ((amount >= (0)::numeric) AND (refunds_rate_id IS NULL))))` |
 | `abr_refund_amount` | check | `CHECK (((charge_type <> 'refund'::charge_type) OR ((amount < (0)::numeric) AND (refunds_rate_id IS NOT NULL))))` |
+| `applied_customer_billing_rate_applied_tax_check` | check | `CHECK ((jsonb_typeof(applied_tax) = 'array'::text))` |
 | `applied_customer_billing_rate_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
+| `applied_customer_billing_rate_no_lines_no_tax` | check | `CHECK (((applied_tax <> '[]'::jsonb) OR (tax_amount = (0)::numeric)))` |
 | `applied_customer_billing_rate_period_check` | check | `CHECK (((NOT isempty(period)) AND (NOT lower_inf(period)) AND (NOT upper_inf(period))))` |
 | `applied_customer_billing_rate_pkey` | primary key | `PRIMARY KEY (id)` |
 | `applied_customer_billing_rate_id_product_id_key` | unique | `UNIQUE (id, product_id)` |

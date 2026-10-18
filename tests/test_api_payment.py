@@ -43,18 +43,51 @@ def test_payment_is_recorded_as_done(api, db_conn):
     assert api.get(body["href"]).json() == body
 
 
-def test_amount_may_repeat_total_but_taxes_are_out_of_scope(api, db_conn):
+def rub(value) -> dict:
+    return {"unit": "RUB", "value": value}
+
+
+def test_amount_and_tax_amount_split_the_total(api, db_conn):
+    """TMF676: amount is net of taxes, totalAmount includes them. Either part gives the
+    other; both must add up; none sent is a payment with no tax."""
     acc = apidata.account(api)
-    same = {"unit": "RUB", "value": 1500}
-    assert api.post(PAYMENT, apidata.payment_body(acc, amount=same)).status_code == 201
-    zero_tax = {"unit": "RUB", "value": 0}
-    assert api.post(PAYMENT, apidata.payment_body(acc, taxAmount=zero_tax)).status_code == 201
     for extra in (
-        {"amount": {"unit": "RUB", "value": 1400}},
-        {"taxAmount": {"unit": "RUB", "value": 100}},
+        {"amount": rub(1400)},
+        {"taxAmount": rub(100)},
+        {"amount": rub(1400), "taxAmount": rub(100)},
     ):
-        assert api.post(PAYMENT, apidata.payment_body(acc, **extra)).status_code == 422, extra
-    assert len(stored(db_conn)) == 2
+        created = api.post(PAYMENT, apidata.payment_body(acc, **extra))
+        assert created.status_code == 201, extra
+        body = created.json()
+        assert (body["amount"], body["taxAmount"], body["totalAmount"]) == (
+            rub(1400),
+            rub(100),
+            rub(1500),
+        )
+        assert api.get(f"{body['href']}?fields=taxAmount").json()["taxAmount"] == rub(100)
+    plain = api.post(PAYMENT, apidata.payment_body(acc)).json()
+    assert (plain["amount"], plain["taxAmount"]) == (rub(1500), rub(0))
+    assert (
+        sorted(db_conn.execute("SELECT amount, tax_amount FROM payment").fetchall())
+        == [(Decimal("1500.00"), Decimal("0.00"))] + [(Decimal("1500.00"), Decimal("100.00"))] * 3
+    )
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"amount": rub(1400), "taxAmount": rub(50)},  # does not add up
+        {"taxAmount": {"unit": "EUR", "value": 100}},
+        {"amount": {"unit": "EUR", "value": 1400}},
+        {"taxAmount": rub(1600)},  # more than the total
+        {"taxAmount": rub(-1)},
+        {"amount": rub(1600)},  # a negative tax
+    ],
+)
+def test_a_tax_split_that_does_not_fit_the_total_is_refused(api, db_conn, extra):
+    acc = apidata.account(api)
+    assert api.post(PAYMENT, apidata.payment_body(acc, **extra)).status_code == 422
+    assert stored(db_conn) == []
 
 
 def test_payment_method_is_mandatory(api, db_conn):

@@ -21,12 +21,15 @@ def insert_payment(
     status: str = "done",
     method_name: str | None = None,
     method_type: str | None = None,
+    tax_amount: Decimal = Decimal(0),
 ) -> Row:
     """`payment_method` is the one-word label; `method_name`/`method_type` the TMF
-    paymentMethod's name and @type as sent (neither given: the label is the name)."""
+    paymentMethod's name and @type as sent (neither given: the label is the name).
+    `amount` is the total received, `tax_amount` the part of it the client called tax
+    (written only when not 0: tests insert payments into schemas before 0025)."""
     if method_name is None and method_type is None:
         method_name = payment_method
-    return returning(
+    row = returning(
         conn,
         """
         INSERT INTO payment
@@ -44,6 +47,13 @@ def insert_payment(
             method_name,
             method_type,
         ),
+    )
+    if not tax_amount:
+        return row
+    return returning(
+        conn,
+        "UPDATE payment SET tax_amount = %s WHERE id = %s RETURNING *",
+        (money(tax_amount), row["id"]),
     )
 
 

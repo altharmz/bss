@@ -12,17 +12,20 @@ def page(conn, **kwargs):
 
 
 def insert(conn, account_id, data, now):
+    """`amount` is the total paid out, `tax_amount` the part of it the client called tax
+    (a refund is immutable once written, so both go into the INSERT)."""
     return returning(
         conn,
         """
-        INSERT INTO refund (billing_account_id, currency, amount, refunded_at,
+        INSERT INTO refund (billing_account_id, currency, amount, tax_amount, refunded_at,
                             method_name, method_type, description, payment_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *
     """,
         (
             account_id,
             data.total_amount.unit,
             data.total_amount.value,
+            data.tax,
             now,
             data.payment_method.name,
             data.payment_method.at_type,

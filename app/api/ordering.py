@@ -47,12 +47,13 @@ from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import bad_request, conflict, not_found, unprocessable
 from app.api.inventory import ORDERING_BASE as BASE
 from app.api.inventory import order_href, product_href
-from app.api.prices import monthly_price
+from app.api.prices import monthly_price, tax_on, total_rate
 from app.api.tmfjson import TmfJSONResponse
+from app.billing.model import Tax
 from app.events import emit
 from app.ordering import cancel as cancellation
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
-from app.repository import catalog, orders, parties
+from app.repository import billing, catalog, orders, parties
 from app.repository._sql import Row
 
 router = APIRouter(prefix=BASE)
@@ -174,6 +175,14 @@ def _item_request(item: OrderItemIn) -> ItemRequest:
     )
 
 
+def _quoted_taxes(conn: psycopg.Connection, item: Row) -> tuple[Tax, ...]:
+    """The tax items of the price an item was quoted at: they cannot change once the
+    offering is ordered (a price's tax is part of its charge)."""
+    price = catalog.get_product_offering_price(conn, item["quoted_price_id"])
+    assert price is not None  # foreign key
+    return billing.price_taxes(price["details"])
+
+
 def _item_body(conn: psycopg.Connection, row: Row, account: Row) -> dict[str, Any]:
     body: dict[str, Any] = {
         "id": row["item_id"],
@@ -196,12 +205,15 @@ def _item_body(conn: psycopg.Connection, row: Row, account: Row) -> dict[str, An
         body["product"] = ref("Product", product_href(row["product_id"]), row["product_id"])
     body["@type"] = "ProductOrderItem"
     if row["quoted_price_id"] is not None:
+        taxes = _quoted_taxes(conn, row)
         price = monthly_price(
             row["quoted_amount"],
             row["quoted_currency"],
             resource_type="OrderPrice",
             price_id=row["quoted_price_id"],
             name=row["quoted_price_name"],
+            tax=tax_on(row["quoted_amount"], taxes),
+            tax_rate=total_rate(taxes),
         )
         body["itemPrice"] = [price]
         body["itemTotalPrice"] = [price]  # quantity is always 1
@@ -242,12 +254,19 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     adds = [item for item in items if item["action"] == "add"]
     total = None
     if row["state"] == "completed" and adds and all(i["quoted_price_id"] for i in adds):
+        taxes = [_quoted_taxes(conn, i) for i in adds]
+        rates = {total_rate(t) for t in taxes}
         total = [
             monthly_price(
                 sum((i["quoted_amount"] for i in adds), Decimal("0.00")),
                 account["currency"],
                 resource_type="OrderPrice",
                 name="New subscriptions monthly total",
+                tax=sum(
+                    (tax_on(i["quoted_amount"], t) for i, t in zip(adds, taxes, strict=True)),
+                    Decimal("0.00"),
+                ),
+                tax_rate=rates.pop() if len(rates) == 1 else None,
             )
         ]
     return without_nulls(

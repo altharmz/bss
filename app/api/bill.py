@@ -69,6 +69,7 @@ BILL_ATTRIBUTES = (
     "nextBillDate",
     "taxExcludedAmount",
     "taxIncludedAmount",
+    "taxItem",
     "billDocument",
 )
 # Every other attribute of the spec's CustomerBill: present, but not changed by a PATCH.
@@ -96,6 +97,8 @@ RATE_ATTRIBUTES = (
     "date",
     "appliedBillingRateType",
     "taxExcludedAmount",
+    "taxIncludedAmount",
+    "appliedTax",
     "periodCoverage",
     "isBilled",
     "bill",
@@ -126,6 +129,7 @@ def bill_no(bill_id: Any) -> str:
 def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     currency = row["currency"]
     allocated = billing.bill_allocated(conn, row["id"])
+    net, tax_lines = billing.bill_taxes(conn, row["id"])
     return {
         "id": str(row["id"]),
         "href": bill_href(row["id"]),
@@ -134,8 +138,17 @@ def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "billingPeriod": date_period(row["bill_period"]),
         "paymentDueDate": from_billing_date(row["payment_due_date"]),
         "amountDue": money(row["amount_due"], currency),
-        "taxExcludedAmount": money(row["amount_due"], currency),
+        "taxExcludedAmount": money(net, currency),
         "taxIncludedAmount": money(row["amount_due"], currency),
+        "taxItem": [
+            {
+                "taxCategory": t["category"],
+                "taxRate": t["rate"],
+                "taxAmount": money(t["amount"], currency),
+                "@type": "TaxItem",
+            }
+            for t in tax_lines
+        ],
         "billCycle": ref("BillCycle", cycle_href(row["billing_run_id"]), row["billing_run_id"]),
         # the bill's own period ends on the next cycle day, whatever the account says today
         "nextBillDate": from_billing_date(row["bill_period"].upper),
@@ -180,6 +193,16 @@ def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "date": utc(row["applied_at"]),
             "appliedBillingRateType": RATE_TYPE[row["charge_type"]],
             "taxExcludedAmount": money(row["amount"], row["currency"]),
+            "taxIncludedAmount": money(billing.abr_total(row), row["currency"]),
+            "appliedTax": [
+                {
+                    "taxCategory": t.category,
+                    "taxRate": t.rate,
+                    "taxAmount": money(t.amount, row["currency"]),
+                    "@type": "AppliedBillingTaxRate",
+                }
+                for t in billing.applied_taxes(row)
+            ],
             "periodCoverage": date_period(row["period"]),
             "isBilled": bill_id is not None,
             "bill": ref("CustomerBill", bill_href(bill_id), bill_id) if bill_id else None,

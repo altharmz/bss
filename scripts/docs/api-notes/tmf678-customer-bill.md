@@ -19,9 +19,12 @@
   `/billCycle/{cycle_id}` with standard fields/paging and a `billingDate` filter.
   A cycle's `billingPeriod` is an ISO date string; the account's monthly date range
   stays on the bill. `nextBillDate` is the next account cycle day after this bill's
-  own date, unaffected by today's clock. Tax-included/excluded amounts equal the
-  issued `amountDue` (no taxes), including negative credit notes.
-  `tests/test_api_read_completeness.py` checks links, dates, fields and MCP tools.
+  own date, unaffected by today's clock. `tests/test_api_read_completeness.py` checks
+  links, dates, fields and MCP tools.
+- Taxes: `taxIncludedAmount` = `amountDue`; `taxExcludedAmount` is the charges before
+  tax; `taxItem[]` sums the charges' tax lines per category and rate. An ABR carries
+  `appliedTax[]` and `taxIncludedAmount` (`tests/test_api_taxes.py`,
+  [taxes](../decisions/billing-core.md#taxes-2026-10-18)).
 - /customerBillOnDemand exposes list/retrieve/create of durable requests. The worker
   waits for a successful account run that sees orders completed on the request day,
   then issues one offCycle bill from posted unbilled ABRs, or rejects if none remain.

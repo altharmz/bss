@@ -114,13 +114,11 @@ TMF676 GET /payment/{id} missing correlatorId
 TMF676 GET /payment/{id} missing description
 TMF676 GET /payment/{id} missing name
 TMF676 GET /payment/{id} missing payer
-TMF676 GET /payment/{id} missing taxAmount
 TMF676 GET /refund/{id} missing authorizationCode
 TMF676 GET /refund/{id} missing channel
 TMF676 GET /refund/{id} missing correlatorId
 TMF676 GET /refund/{id} missing name
 TMF676 GET /refund/{id} missing requestor
-TMF676 GET /refund/{id} missing taxAmount
 TMF676 POST /payment refused account.description
 TMF676 POST /payment refused authorizationCode
 TMF676 POST /payment refused channel
@@ -148,11 +146,9 @@ TMF676 POST /refund refused paymentMethod.status
 TMF676 POST /refund refused paymentMethod.statusDate
 TMF676 POST /refund refused paymentMethod.validFor
 TMF676 POST /refund refused requestor
-TMF678 GET /appliedCustomerBillingRate/{id} missing appliedTax
 TMF678 GET /appliedCustomerBillingRate/{id} missing characteristic
 TMF678 GET /appliedCustomerBillingRate/{id} missing description
 TMF678 GET /appliedCustomerBillingRate/{id} missing name
-TMF678 GET /appliedCustomerBillingRate/{id} missing taxIncludedAmount
 TMF678 GET /billCycle/{id} missing BillCycleSpecification
 TMF678 GET /billCycle/{id} missing chargeDate
 TMF678 GET /billCycle/{id} missing creditDate
@@ -161,6 +157,5 @@ TMF678 GET /billCycle/{id} missing paymentDueDate
 TMF678 GET /customerBill/{id} missing financialAccount
 TMF678 GET /customerBill/{id} missing paymentMethod
 TMF678 GET /customerBill/{id} missing relatedParty
-TMF678 GET /customerBill/{id} missing taxItem
 TMF678 GET /customerBillOnDemand/{id} missing relatedParty
 TMF678 POST /customerBillOnDemand refused relatedParty

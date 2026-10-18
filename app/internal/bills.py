@@ -44,7 +44,7 @@ def bill_detail(bill_id: str, request: Request, tx: Tx, clock: ClockDep) -> TmfJ
                 "href": f"{tmf_bill.BASE}/appliedCustomerBillingRate/{a['id']}",
                 "kind": "charge" if a["charge_type"] == "recurring" else "refund",
                 "period": {"start": a["period"].lower, "end": a["period"].upper},
-                "amount": money(a["amount"], currency),
+                "amount": money(billing.abr_total(a), currency),
                 "product": {"id": str(a["product_id"]), "href": product_href(a["product_id"])},
                 "productOffering": {"id": str(a["offering_id"]), "name": a["offering_name"]},
             }

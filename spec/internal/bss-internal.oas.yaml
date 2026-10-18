@@ -542,8 +542,12 @@ components:
         billableDays: {type: integer, minimum: 1}
         periodDays: {type: integer, minimum: 28, maximum: 31}
         prorated: {type: boolean}
-        price: {$ref: '#/components/schemas/Money'}
-        amount: {$ref: '#/components/schemas/Money'}
+        price:
+          description: The monthly price before tax.
+          allOf: [{$ref: '#/components/schemas/Money'}]
+        amount:
+          description: The first charge with its taxes (the account's exemptions applied).
+          allOf: [{$ref: '#/components/schemas/Money'}]
         chargeRunDate: {$ref: '#/components/schemas/BusinessDate'}
         billDate: {$ref: '#/components/schemas/BusinessDate'}
         next:
@@ -602,7 +606,7 @@ components:
         periodDays: {type: integer, minimum: 28, maximum: 31}
         prorated: {type: boolean}
         amount:
-          description: As stored - a refund is negative.
+          description: With its taxes (the ABR's taxIncludedAmount) - a refund is negative.
           allOf: [{$ref: '#/components/schemas/Money'}]
         product: {$ref: '#/components/schemas/Link'}
         productOffering: {$ref: '#/components/schemas/Named'}

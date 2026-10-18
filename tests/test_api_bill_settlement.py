@@ -77,7 +77,7 @@ def check_invariant(api, account: dict) -> None:
     (balance,) = decimals(api.get(f"{ACCOUNT}/{account['id']}"))["accountBalance"]
     unbilled = sum(
         (
-            r["taxExcludedAmount"]["value"]
+            r["taxIncludedAmount"]["value"]
             for r in decimals(api.get(f"{RATE}?billingAccount.id={account['id']}&isBilled=false"))
         ),
         D("0"),
@@ -191,7 +191,17 @@ def test_explicit_items_pay_the_named_bill_first(api, db_conn, offering):
         (lambda b, other: [item(b, 400)], 409),  # more than it owes, and than the payment
         (lambda b, other: [{**item(b, 10), "amount": {"unit": "EUR", "value": 10}}], 422),
         (lambda b, other: [{**item(b, 10), "item": {"id": b, "@referredType": "Product"}}], 422),
-        (lambda b, other: [{**item(b, 10), "taxAmount": {"unit": "RUB", "value": 1}}], 422),
+        (
+            lambda b, other: [
+                {
+                    **item(b, 10),
+                    "taxAmount": {"unit": "RUB", "value": 1},
+                    "totalAmount": {"unit": "RUB", "value": 10},  # not amount + taxAmount
+                }
+            ],
+            422,
+        ),
+        (lambda b, other: [{**item(b, 10), "taxAmount": {"unit": "EUR", "value": 1}}], 422),
         (lambda b, other: [{**item(b, 10), "colour": "red"}], 400),
     ],
 )

@@ -6,8 +6,8 @@ from decimal import Decimal
 import pytest
 
 from app.billing.core import cycle_period, prorate
-from app.billing.model import DateRange, InconsistentState, MissingPrice
-from tests.billing_sim import Ledger, account, price, product, rng
+from app.billing.model import DateRange, Exemption, InconsistentState, MissingPrice
+from tests.billing_sim import Ledger, account, midnight, price, product, rng
 
 D = Decimal
 P300 = price("300.00")
@@ -281,4 +281,73 @@ def test_expected_above_charged_raises():
     book = ledger()
     book.run([product(date(2026, 10, 1), date(2026, 10, 20))], date(2026, 10, 1))
     with pytest.raises(InconsistentState, match="expected"):
+        book.compute([product(date(2026, 10, 1))], date(2026, 10, 2))
+
+
+# --- taxes (docs/decisions/billing-core.md#taxes-2026-10-18) ---
+
+VAT20 = price("300.00", taxes=(("VAT", "20"),))
+
+
+def taxes(abr) -> list[tuple[str, Decimal, Decimal]]:
+    return [(t.category, t.rate, t.amount) for t in abr.taxes]
+
+
+def test_a_charge_is_taxed_on_its_prorated_net_and_the_bill_includes_the_tax():
+    result = ledger(VAT20).run([product(date(2026, 10, 15))], date(2026, 10, 15))
+    [charge] = result.abrs
+    # net 164.52; 164.52 x 20% = 32.904
+    assert (charge.amount, taxes(charge)) == (D("164.52"), [("VAT", D("20"), D("32.90"))])
+    [bill] = ledger(VAT20).run([product(date(2026, 10, 15))], date(2026, 11, 1)).bills
+    assert bill.amount_due == D("164.52") + D("32.90") + D("300.00") + D("60.00")
+
+
+def test_each_tax_item_is_a_line_rounded_once_half_even():
+    two = price("3.25", taxes=(("VAT", "25"), ("city", "12.5")))
+    [charge] = ledger(two).run([product(date(2026, 11, 16))], date(2026, 11, 16)).abrs
+    # net 1.62: 0.405 -> 0.40 and 0.2025 -> 0.20 (half-even)
+    assert taxes(charge) == [("VAT", D("25"), D("0.40")), ("city", D("12.5"), D("0.20"))]
+
+
+def test_a_refund_takes_back_the_tax_line_by_line():
+    book = ledger(VAT20)
+    book.run([product(date(2026, 10, 1))], date(2026, 10, 1))
+    [charge] = book.charges()
+    [refund] = book.run([product(date(2026, 10, 1), date(2026, 10, 20))], date(2026, 10, 20)).abrs
+    # expected 183.87, its tax 36.774 -> 36.77; refund 36.77 - 60.00
+    assert (refund.amount, taxes(refund)) == (D("-116.13"), [("VAT", D("20"), D("-23.23"))])
+    assert charge.total + refund.total == D("183.87") + D("36.77")
+    rerun = book.run([product(date(2026, 10, 1), date(2026, 10, 20))], date(2026, 10, 21))
+    assert rerun.is_empty
+
+
+def test_an_exempt_tax_type_is_a_line_at_rate_zero_from_the_exemption_on():
+    exempt = Exemption("VAT", midnight(date(2026, 11, 1)), None)
+    book = Ledger(account(exemptions=(exempt,)), (VAT20,))
+    october, november = (
+        book.run([product(date(2026, 10, 1))], day)
+        for day in (date(2026, 10, 1), date(2026, 11, 1))
+    )
+    assert taxes(october.abrs[0]) == [("VAT", D("20"), D("60.00"))]
+    assert taxes(november.abrs[0]) == [("VAT", D("0"), D("0.00"))]
+    other = Ledger(account(exemptions=(Exemption("city", None, None),)), (VAT20,))
+    assert taxes(other.run([product(date(2026, 10, 1))], date(2026, 10, 1)).abrs[0]) == [
+        ("VAT", D("20"), D("60.00"))
+    ]
+
+
+def test_an_exemption_granted_later_never_changes_a_charge_or_its_refund():
+    book = ledger(VAT20)
+    book.run([product(date(2026, 10, 1))], date(2026, 10, 1))
+    book.account = account(exemptions=(Exemption("VAT", None, None),))
+    [refund] = book.run([product(date(2026, 10, 1), date(2026, 10, 20))], date(2026, 10, 20)).abrs
+    assert taxes(refund) == [("VAT", D("20"), D("-23.23"))]  # at the charge's rate
+
+
+def test_a_stored_charge_whose_taxes_no_longer_match_its_price_raises():
+    book = ledger()
+    book.run([product(date(2026, 10, 1))], date(2026, 10, 1))
+    # the price that made the charge, now with a tax item
+    book.prices = (price("300.00", name="price:300.00:2020-01-01:EUR", taxes=(("VAT", "20"),)),)
+    with pytest.raises(InconsistentState, match="taxes"):
         book.compute([product(date(2026, 10, 1))], date(2026, 10, 2))

@@ -625,7 +625,10 @@ An individual is not reachable under `/organization` and vice versa (404).
 
 POST records a received payment: `account`, `totalAmount` and `paymentMethod` (with a
 `name` or an `@type`) are mandatory, as in the spec. `amount`, if sent, must equal
-`totalAmount`; `taxAmount`, if sent, must be zero. `totalAmount.unit` must be the
+`totalAmount`; `taxAmount`, if sent, must be zero. **Since 2026-10-18 (taxes)**:
+`amount` is net and `taxAmount` the tax of `totalAmount`; either gives the other, both
+must add up, `tax_amount` is stored and both are answered
+([billing-core.md](billing-core.md#taxes-2026-10-18)). `totalAmount.unit` must be the
 account's currency (422); the composite FK behind it maps to 409 if it ever fires.
 Payments are never changed or deleted (405).
 
@@ -643,6 +646,10 @@ Responses carry `paymentItem[]` = every allocation from the payment summed per b
 takes a key-share lock on the account row, which waits on a run's `FOR UPDATE` but not
 on another payment's key share (proven: without the explicit lock two overlapping POSTs
 both read the same open bill; `test_two_payments_settle_one_after_the_other` fails).
+
+**Since 2026-10-18 (taxes)** an item's `taxAmount` is no longer zero-only: the item
+allocates `amount + taxAmount`, which `totalAmount` (if sent) must equal
+([billing-core.md](billing-core.md#taxes-2026-10-18)).
 
 ### TMF637 and TMF678 mapping
 

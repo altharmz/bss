@@ -12,9 +12,11 @@ An offering may carry a code: the externalIdentifier entry with externalIdentifi
 "offeringCode" (owner "bss"). The code is unique (409) and upper case
 (^[A-Z0-9][A-Z0-9_-]{0,31}$).
 
-The attributes with no behaviour here (brand, version, attachment, terms, a price's tax
-or popRelationship, ...) are documents: checked against the spec and stored as sent
-(docs/decisions/catalog.md, "Catalog attributes").
+The attributes with no behaviour here (brand, version, attachment, terms, a price's
+popRelationship, ...) are documents: checked against the spec and stored as sent
+(docs/decisions/catalog.md, "Catalog attributes"). A price's tax is one too, stored as
+sent, but billing applies it: `tax_problems` holds it to billing's rules, and it is part
+of the charge (docs/decisions/billing-core.md, "Taxes").
 
 DELETE removes only what nothing references (see "deletes" below and in
 app/api/classification.py).
@@ -75,6 +77,7 @@ from app.api.errors import (
     validation_problems,
 )
 from app.api.tmfjson import TmfJSONResponse
+from app.billing.core import tax_of
 from app.events import emit
 from app.repository import catalog, classification
 from app.repository._sql import Row, count_references
@@ -163,8 +166,8 @@ OFFERING_ATTRIBUTES = (
 )
 CODE_TYPE = "offeringCode"
 CODE_OWNER = "bss"
-# A price's tax, percentage and popRelationship are records: billing charges `price`
-# (slice 7 decides about taxes).
+# A price's percentage and popRelationship are records: billing charges `price`, and
+# adds `tax` on top of it (tax_problems).
 PRICE_DOCUMENTS = (
     "bundledPopRelationship",
     "description",
@@ -412,6 +415,44 @@ def _check_charge(price_type: str, period: str | None, price: Money | None) -> N
         raise ValueError("price.value must not be negative")
 
 
+def tax_problems(tax: list[dict[str, Any]] | None, price: Money | None) -> list[Problem]:
+    """A price's tax items, as billing applies them (docs/decisions/billing-core.md#taxes-
+    2026-10-18): each names a taxCategory (once) and a taxRate in percent, 0..100; a
+    taxAmount, if sent, is the tax of a full month, price x rate / 100, in its currency.
+    Shape and types are the spec's (checked before)."""
+    problems: list[Problem] = []
+    seen: set[str] = set()
+    for n, item in enumerate(tax or ()):
+        path = f"tax.{n}"
+        category, rate = item.get("taxCategory"), item.get("taxRate")
+        if not category:
+            problems.append((f"{path}.taxCategory", "required (billing groups taxes by it)", False))
+        elif category in seen:
+            problems.append((f"{path}.taxCategory", f"{category} twice on one price", False))
+        else:
+            seen.add(category)
+        if rate is None:
+            problems.append((f"{path}.taxRate", "required (a rate in percent)", False))
+            continue
+        if not 0 <= rate <= 100:
+            problems.append((f"{path}.taxRate", "must be a percent from 0 to 100", False))
+            continue
+        sent = item.get("taxAmount")
+        if sent is None:
+            continue
+        if price is None:
+            problems.append((f"{path}.taxAmount", "needs the price it is the tax of", False))
+        elif sent.get("unit") != price.unit or sent.get("value") != tax_of(price.value, rate):
+            problems.append(
+                (
+                    f"{path}.taxAmount",
+                    f"must be {tax_of(price.value, rate)} {price.unit} (price x taxRate / 100)",
+                    False,
+                )
+            )
+    return problems
+
+
 class PriceCreate(PriceDocuments):
     name: str = Field(min_length=1)
     lifecycle_status: LifecycleStatus
@@ -511,6 +552,9 @@ def insert_price(
     new_id: UUID | None = None,
 ) -> Row:
     """POST's rule and write; an import passes the source's id."""
+    problems = tax_problems(documents.get("tax"), data.price)
+    if problems:
+        raise problems_error(problems)
     valid_for = Range(now, None, "[)") if data.valid_for is None else data.valid_for.to_range()
     if valid_for.lower < now:
         raise conflict(
@@ -569,12 +613,26 @@ def _no_gap(conn: psycopg.Connection, price: Row, new_end: datetime) -> None:
         )
 
 
-def _charge_changes(conn: psycopg.Connection, current: Row, data: PricePatch) -> dict[str, Any]:
-    """The columns a PATCH of the charge (price, priceType, recurring period) sets. Only
-    while the price has priced nothing - unattached, or its offering never ordered - the
-    same condition as DELETE: billing needs the historical charge (409 otherwise)."""
+def _stored_money(row: Row) -> Money | None:
+    return None if row["amount"] is None else Money(unit=row["currency"], value=row["amount"])
+
+
+def _charge_changes(
+    conn: psycopg.Connection, current: Row, data: PricePatch, documents: dict[str, Any]
+) -> dict[str, Any]:
+    """The columns a PATCH of the charge (price, priceType, recurring period, tax) sets.
+    Only while the price has priced nothing - unattached, or its offering never ordered -
+    the same condition as DELETE: billing needs the historical charge (409 otherwise). The
+    tax itself is a document (written by the caller); here it only counts as a change."""
     sent = set(PRICE_CHARGE) & data.model_fields_set
-    if not sent:
+    tax_changed = "tax" in documents and documents["tax"] != current["details"].get("tax")
+    if "price" in sent or "tax" in documents:
+        price = data.price if "price" in sent else _stored_money(current)
+        tax = documents["tax"] if "tax" in documents else current["details"].get("tax")
+        problems = tax_problems(tax, price)
+        if problems:
+            raise problems_error(problems)
+    if not sent and not tax_changed:
         return {}
     not_null(data, "price_type")
     price_type = data.price_type if "price_type" in sent else current["price_type"]
@@ -594,7 +652,7 @@ def _charge_changes(conn: psycopg.Connection, current: Row, data: PricePatch) ->
         _check_charge(price_type, period, data.price)
     except ValueError as exc:
         raise unprocessable(str(exc)) from None
-    if all(current[column] == value for column, value in changes.items()):
+    if not tax_changed and all(current[column] == value for column, value in changes.items()):
         return {}  # the current charge repeated (a merge patch may repeat values)
     offering_id = current["product_offering_id"]
     if offering_id is not None:
@@ -629,7 +687,7 @@ def patch_price(
         if data.lifecycle_status is not None:
             _check_lifecycle("price", current["lifecycle_status"], data.lifecycle_status)
         old = emit.before(conn, API, "productOfferingPrice", lambda: price_body(current))
-        changes |= _charge_changes(conn, current, data)
+        changes |= _charge_changes(conn, current, data, documents)
         if documents:
             changes["details"] = merge_documents(current["details"], documents)
         if data.valid_for is not None:
@@ -760,6 +818,7 @@ def price_entries(body: dict[str, Any]) -> tuple[list[PriceEntry], list[Problem]
                 (f"{path}.price", "required for a price attached to an offering", False)
             )
         if data is not None:
+            problems += _prefixed(tax_problems(documents.get("tax"), data.price), path)
             entries.append(NewPrice(data, documents, new_id, path))
     return entries, problems
 

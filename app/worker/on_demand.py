@@ -98,7 +98,7 @@ def _fulfill(conn, account, demand, run, abrs, now):
         bill_period=Range(day, cycle_period(day, account.bill_cycle_day).end, "[)"),
         bill_date=day,
         state="new",
-        amount_due=sum((a["amount"] for a in abrs), Decimal(0)),
+        amount_due=sum((billing.abr_total(a) for a in abrs), Decimal(0)),
         billing_run_id=run["id"],
         payment_due_date=day + timedelta(days=settings.bill_payment_term_days),
         run_type="offCycle",

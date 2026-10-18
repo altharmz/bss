@@ -140,7 +140,8 @@ is taken on POST and PATCH and returned; TMF666 has no gap lines left. The three
   `contact` and `taxExemption` (financial accounts), and a cycle specification's
   `validFor` - stored as sent in a `details` jsonb, checked against the spec at every
   depth (`app/api/specschema.py`), merge patch replaces one whole and `null` removes it.
-  Billing reads none of them; `taxExemption` waits for slice 7 (taxes) to mean anything.
+  Billing reads none of them except a billing account's `taxExemption`: since slice 7
+  its certificates exempt the account from a tax type ([billing-core.md](billing-core.md#taxes-2026-10-18)).
   A billing account's `description` and `accountType` are columns, as on the other
   accounts (`accountType` is a list filter).
 - **`paymentStatus` is a record**, not derived: both `_FVO` and `_MVO` let a client write

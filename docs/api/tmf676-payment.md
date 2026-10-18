@@ -36,8 +36,9 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF676-P
   processing (`app/api/payment.py`; `tests/test_api_payment.py::test_payment_is_recorded_as_done`).
 - Mandatory: `account`, `totalAmount`, `paymentMethod` (with a `name` or an `@type`; the
   one word is stored and returned as both) - `::test_payment_method_is_mandatory`.
-- Taxes are out of scope: `amount`, if sent, must equal `totalAmount`; `taxAmount`, if
-  sent, must be zero (`::test_amount_may_repeat_total_but_taxes_are_out_of_scope`).
+- `amount` (net) and `taxAmount` split `totalAmount`: either gives the other, both must
+  add up (`::test_amount_and_tax_amount_split_the_total`); a `paymentItem` allocates
+  `amount + taxAmount` ([taxes](../decisions/billing-core.md#taxes-2026-10-18)).
   `totalAmount.value` must be positive.
 - `totalAmount.unit` must be the account's currency (422,
   `::test_currency_must_match_the_account`); the composite foreign key behind it maps to a
