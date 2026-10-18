@@ -15,8 +15,8 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 | `updated_at` | `timestamp with time zone` | no | `now()` | Last change: the database's now(), maintained by the set_updated_at trigger. |
 | `product_order_id` | `uuid` | no |  |  |
 | `item_id` | `text` | no |  | TMF622 productOrderItem.id: the client's id, unique within the order. |
-| `action` | `item_action_type` (enum, see [README](README.md#enums)) | no |  | TMF622 action: add or delete are executed; modify and noChange are rejected. |
-| `state` | `product_order_item_state_type` (enum, see [README](README.md#enums)) | no |  | TMF622 item state: completed, rejected or cancelled once processed. |
+| `action` | `item_action_type` (enum, see [README](README.md#enums)) | no |  | TMF622 action: add, delete and noChange are executed; modify is rejected. |
+| `state` | `product_order_item_state_type` (enum, see [README](README.md#enums)) | yes |  | TMF622 item state: completed, rejected or cancelled once processed; NULL while the order is a draft. |
 | `product_offering_id` | `uuid` | yes |  | TMF622 productOffering; required for add items. |
 | `product_id` | `uuid` | yes |  | TMF622 product: the product created (add) or the one deleted (delete). |
 | `quoted_price_id` | `uuid` | yes |  | Monthly catalog price selected at the order's requested start; NULL for legacy or rejected orders. |
@@ -24,11 +24,14 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 | `quoted_amount` | `numeric(12,2)` | yes |  | Quoted full monthly fee (not the prorated first charge), exact cents. |
 | `quoted_currency` | `text` | yes |  | ISO currency of the monthly quote, the order account's currency. |
 | `position` | `integer` | no |  | Where the client put the item in productOrderItem[] (1 = first). |
+| `details` | `jsonb` | no | `'{}'::jsonb` | TMF622 descriptive item attributes as sent, validated against the spec; processing never reads them. |
+| `parent_id` | `uuid` | yes |  | TMF622 nested productOrderItem: the item this one is nested in (same order). |
 
 ## Foreign keys
 
 | Columns | References | Name |
 |---|---|---|
+| `parent_id`, `product_order_id` | [`product_order_item`](product_order_item.md) (id, product_order_id) | `product_order_item_parent_fkey` |
 | `product_id` | [`product`](product.md) (id) | `product_order_item_product_id_fkey` |
 | `product_offering_id` | [`product_offering`](product_offering.md) (id) | `product_order_item_product_offering_id_fkey` |
 | `product_order_id` | [`product_order`](product_order.md) (id) | `product_order_item_product_order_id_fkey` |
@@ -40,8 +43,10 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 |---|---|---|
 | `product_order_item_add_has_offering` | check | `CHECK (((action <> 'add'::item_action_type) OR (product_offering_id IS NOT NULL)))` |
 | `product_order_item_delete_has_product` | check | `CHECK (((action <> 'delete'::item_action_type) OR (product_id IS NOT NULL)))` |
+| `product_order_item_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `product_order_item_quote` | check | `CHECK ((((quoted_price_id IS NULL) AND (quoted_price_name IS NULL) AND (quoted_amount IS NULL) AND (quoted_currency IS NULL)) OR ((action = 'add'::item_action_type) AND (quoted_price_id IS NOT NULL) AND (quoted_price_name IS NOT NULL) AND (quoted_amount IS NOT NULL) AND (quoted_amount >= (0)::numeric) AND (quoted_currency IS NOT NULL) AND (quoted_currency ~ '^[A-Z]{3}$'::text))))` |
 | `product_order_item_pkey` | primary key | `PRIMARY KEY (id)` |
+| `product_order_item_id_order_key` | unique | `UNIQUE (id, product_order_id)` |
 | `product_order_item_position_unique` | unique | `UNIQUE (product_order_id, "position")` |
 | `product_order_item_product_order_id_item_id_key` | unique | `UNIQUE (product_order_id, item_id)` |
 
@@ -49,7 +54,9 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `product_order_item_id_order_key` | `CREATE UNIQUE INDEX product_order_item_id_order_key ON product_order_item USING btree (id, product_order_id)` | yes |
 | `product_order_item_one_open_delete` | `CREATE UNIQUE INDEX product_order_item_one_open_delete ON product_order_item USING btree (product_id) WHERE ((action = 'delete'::item_action_type) AND (state <> ALL (ARRAY['completed'::product_order_item_state_type, 'cancelled'::product_order_item_state_type, 'rejected'::product_order_item_state_type, 'failed'::product_order_item_state_type])))` | no |
+| `product_order_item_parent_id_idx` | `CREATE INDEX product_order_item_parent_id_idx ON product_order_item USING btree (parent_id)` | no |
 | `product_order_item_pkey` | `CREATE UNIQUE INDEX product_order_item_pkey ON product_order_item USING btree (id)` | yes |
 | `product_order_item_position_unique` | `CREATE UNIQUE INDEX product_order_item_position_unique ON product_order_item USING btree (product_order_id, "position")` | yes |
 | `product_order_item_product_id_idx` | `CREATE INDEX product_order_item_product_id_idx ON product_order_item USING btree (product_id)` | no |

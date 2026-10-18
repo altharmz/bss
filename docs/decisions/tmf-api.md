@@ -231,6 +231,66 @@ stored as sent), inline prices, a price's charge and an offering's specification
 changeable until the offering is ordered, the code one `externalIdentifier` entry,
 reference versions checked, `productSpecification`/`validFor`/`price` optional.
 
+### Order attributes and drafts (2026-10-18)
+
+Slice 8a of "Following TMF" (TMF622), migration `0026`. 105 lines left `tests/tmf-gaps.txt`
+(161 -> 105 lines, 156 -> 100 gaps; none for TMF622). The human's answer to the four open
+choices was "decide based on TMF"; what TMF defines is implemented, what it leaves open
+is ours, as below. `modify` items come in slice 8b (below, when done).
+
+- **Documents.** The order's agreement, channel, note, notificationContact,
+  orderRelationship, payment, productOfferingQualification, quote, relatedParty,
+  requestedCompletionDate, productOrderMilestone, productOrderJeopardyAlert (POST and
+  PATCH) and expectedCompletionDate (PATCH only: ProductOrder_FVO lacks it), and an
+  item's appointment, itemTerm, note, payment, productOfferingQualificationItem,
+  quoteItem, qualification, productOrderItemRelationship are slice 4's documents
+  (`product_order.details`, `product_order_item.details`, checked against `spec/`).
+  Processing never reads them; an order's are changed by PATCH (null removes), an
+  item's are replaced with the item. A relationship's `id` must be another item of the
+  same order (the spec says so; 422).
+- **Server-set on an item:** `state`, `itemPrice`, `itemTotalPrice` may be repeated on
+  POST (and on a draft's items), compared with the result (slice 1's rule; 422 if they
+  differ).
+- **The billing account is optional** (TMF622 does not require it): the order's, else
+  the first item's `billingAccount`, else the account of the first product a
+  delete/noChange item names. An order where none gives one is a 422 (nothing stored);
+  billing needs one account per order. Items naming another account are rejected as
+  before (`billingAccountMismatch`, `productOfOtherAccount`).
+- **noChange** items are executed: the item names a product (`product` required,
+  `productOffering` not allowed, like delete) of the order's account that has not ended
+  (`productOfOtherAccount`, `productAlreadyEnded`); it completes and changes nothing.
+  cancelProductOrder has nothing of it to undo. A product may be named by one item of an
+  order only.
+- **Nested items** (`productOrderItem.productOrderItem`, any depth) are items like any
+  other: processed with the same rules, all or nothing over the tree, ids unique across
+  it, answered nested as sent (`product_order_item.parent_id`, in the same order by a
+  composite foreign key).
+- **Drafts** (`requestedInitialState: draft`; the default `acknowledged` is stored and
+  answered on every order): stored without processing - only what the database needs
+  is checked (ids, that what it references exists, one account) - with state `draft`
+  and items without a state. PATCH changes anything of a draft (its account, items and
+  start date replaced whole); PATCH `state: acknowledged` processes it as an order placed
+  at that moment (its id, `creationDate` and documents kept; the start date, if none,
+  today; completed or rejected, 200). A draft is deleted with DELETE or cancelled with
+  cancelProductOrder (`draft -> cancelled`, items `cancelled`, nothing to undo). Once
+  processed, the account, items and start date may only be repeated (409 otherwise, was
+  a 400 read-only); any other `state` in a PATCH is a 422.
+- **States never reached:** pending, held, failed, partial, assessingCancellation,
+  pendingCancellation and inProgress.accepted describe asynchronous fulfilment. Orders
+  here are processed synchronously and all or nothing, which TMF allows, so they are
+  not reached (`app/ordering/states.py`).
+- **MCP:** the recursive item model is inlined once in the tool schema; below that, a
+  nested item is "an object of the same shape" (`bss_mcp/schema.py`).
+
+Tests: `tests/test_api_order_attributes.py` (documents, spec checks, relationships,
+server-set items, derived account, noChange, nested items, drafts),
+`test_0026_order_details_drafts_and_nested_items`, the updated cases in
+`test_api_ordering.py`, `test_api_order_patch.py`, `test_order_states.py`, and the gap
+lock. Negative proofs: without the relationship check, without the item server-set
+comparison, with drafts processed at once, and without noChange's account check, the
+tests above failed. Rolling back `0026` needs `alembic downgrade 0025` by hand; it
+fails while a draft exists (delete it first) and flattens nested items.
+
 ### Product writes through orders (2026-10-17)
 
 The last seven operations, approved by the human on 2026-10-17 ("reach 100%"), close

@@ -13,6 +13,8 @@ from app.ordering.states import (
 from tests.test_enum_lock import _spec_enum
 
 ORDER_ALLOWED = [
+    ("draft", "acknowledged"),  # PATCH state: submitted
+    ("draft", "cancelled"),  # cancelProductOrder: thrown away
     ("acknowledged", "inProgress"),
     ("acknowledged", "rejected"),
     ("inProgress", "completed"),

@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0025**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0026**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -144,6 +144,7 @@ flowchart LR
   product_order -->|"billing_account_id"| billing_account
   product_order_error_message -->|"product_order_id"| product_order
   product_order_error_message -->|"product_order_item_id"| product_order_item
+  product_order_item -->|"parent_id, product_order_id"| product_order_item
   product_order_item -->|"product_id"| product
   product_order_item -->|"product_offering_id"| product_offering
   product_order_item -->|"product_order_id"| product_order
@@ -381,6 +382,8 @@ erDiagram
     jsonb external_id
     text base_type
     text schema_location
+    jsonb details
+    text requested_initial_state
   }
   product_order_item {
     uuid id PK
@@ -397,6 +400,8 @@ erDiagram
     numeric quoted_amount
     text quoted_currency
     integer position
+    jsonb details
+    uuid parent_id FK
   }
   product_order_error_message {
     uuid id PK
@@ -431,7 +436,7 @@ erDiagram
   product_offering_price {
     uuid id PK
   }
-  billing_account ||--o{ product_order : "billing_account_id"
+  billing_account |o--o{ product_order : "billing_account_id"
   product |o--o{ product_order_item : "product_id"
   product_offering |o--o{ product_order_item : "product_offering_id"
   product_offering_price |o--o{ product_order_item : "quoted_price_id"
@@ -439,6 +444,7 @@ erDiagram
   product_order ||--o{ product_order_error_message : "product_order_id"
   product_order ||--o{ product_order_item : "product_order_id"
   product_order_item |o--o{ product_order_error_message : "product_order_item_id"
+  product_order_item |o--o{ product_order_item : "parent_id, product_order_id"
 ```
 
 Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product`](product.md), [`product_offering`](product_offering.md), [`product_offering_price`](product_offering_price.md).

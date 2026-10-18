@@ -216,7 +216,7 @@ def test_only_a_rejected_order_can_be_deleted(api, shop):
     completed = apidata.order(api, acc, apidata.add_item(offering))
     response = api.delete(completed["href"])
     assert response.status_code == 409
-    assert "only a rejected order can be deleted" in response.json()["message"]
+    assert "only a rejected or draft order can be deleted" in response.json()["message"]
     rejected = apidata.order(api, acc, apidata.add_item(spare))
     assert rejected["state"] == "rejected"
     assert api.delete(spare["href"]).status_code == 409  # its order item refers to it

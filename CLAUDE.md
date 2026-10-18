@@ -228,13 +228,20 @@ price's charge; a billing account's `taxExemption` exempts by `taxType` (full on
 bills, balance, settlement and the internal views are tax-included; TMF676 `taxAmount`
 splits `totalAmount`. UI and seed unchanged. API notes for TMF676/678 updated with the
 human's OK. Committed and pushed `381795d`.
-**Next session starts slice 8** (TMF622: `modify` items, states): a design note first -
-TMF defines the shape, not the behaviour (`modify` proration, which order/item state
-transitions); read the TMF622 lines in `tests/tmf-gaps.txt` and the TMF622 section of
-[the gap analysis](docs/tmf-gap-analysis.md), then ask the open choices. Then slices
-9-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design notes
-before suspension and payment states. Not deployed: migrations `0009`-`0025` ship
-together (rolling back `0025` needs `alembic downgrade 0024` by hand).
+Slice 8 (TMF622; the human: "decide based on TMF" for all four open choices) is split.
+Slice 8a (2026-10-18; order/item documents, optional derived `billingAccount`,
+`noChange` executed, nested items, drafts with PATCH submit, migration `0026`; 100 gaps
+left, none for TMF622): [decision](docs/decisions/tmf-api.md#order-attributes-and-drafts-2026-10-18);
+done locally, not committed. API notes for TMF622 updated with the human's OK (make
+docs). **Slice 8b next**: `modify` items, decided: the offering changes from
+`requestedStartDate`, **billed prorated** (old offering until the date, new from it -
+TMF678 ABRs carry their own periodCoverage; a mid-period *price* change still applies
+from the next period). Needs a product offering history and a billing core with
+several charges per period; design note first. Then slices 9-10 in
+[tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design notes before
+suspension and payment states. Not deployed: migrations `0009`-`0026` ship together
+(rolling back `0026` needs `alembic downgrade 0025` by hand; it fails while a draft
+exists).
 
 **100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders
 placed on the caller's behalf (a would-be rejection is a 409, nothing stored; DELETE ends

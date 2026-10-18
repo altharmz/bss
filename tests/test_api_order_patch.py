@@ -55,10 +55,13 @@ def test_patch_changes_and_removes_them_only(api, placed):
     "body,status",
     [
         ({"state": "cancelled"}, 422),  # the server's: repeated, never set
-        ({"productOrderItem": []}, 400),
-        ({"requestedStartDate": "2026-12-01T00:00:00Z"}, 400),
-        ({"billingAccount": {"id": apidata.NIL}}, 400),
-        ({"note": [{"text": "x"}]}, 400),
+        ({"state": "acknowledged"}, 422),  # only a draft is submitted
+        ({"productOrderItem": []}, 422),
+        # what the order was placed with: a draft's to change, fixed once processed
+        ({"requestedStartDate": "2026-12-01T00:00:00Z"}, 409),
+        ({"billingAccount": {"id": apidata.NIL}}, 409),
+        ({"note": [{"text": "x"}]}, 422),  # a Note needs its @type (the spec's schema)
+        ({"zzUnknown": 1}, 400),
         ({"priority": "5"}, 422),
         ({"priority": 1}, 422),
         ({"description": ""}, 422),

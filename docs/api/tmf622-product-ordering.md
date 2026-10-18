@@ -40,17 +40,25 @@ orders omit it. `tests/test_api_read_completeness.py` verifies exact totals and 
 
 Orders are the only way to create or terminate products. POST processes the order
 **synchronously, in the request's transaction** (`app/ordering/process.py`,
-`place_order`). PATCH changes only `description`, `category`, `priority` (0..4) and
-`externalId[]` (POST accepts them too); everything processing decided is read-only
-(`tests/test_api_order_patch.py`). DELETE removes only a
-`rejected` order (204; any other state is a 409) -
+`place_order`). PATCH changes `description`, `category`, `priority` (0..4),
+`externalId[]` and the documents (note, relatedParty, channel, quote, ...; POST accepts
+them too) of any order; once processed, its account, items and start date may only be
+repeated (409) (`tests/test_api_order_patch.py`). DELETE removes only a `rejected` or
+`draft` order (204; any other state is a 409) -
 `tests/test_api_order_cancel.py::test_only_a_rejected_order_can_be_deleted`.
+
+**Drafts** (`requestedInitialState: draft`) are stored without being processed: state
+`draft`, items without a state, only what the database needs checked. PATCH changes
+anything of a draft (account, items, start date replaced whole) and `state:
+acknowledged` processes it as an order placed at that moment (its id, `creationDate` and
+documents kept) - `tests/test_api_order_attributes.py::test_a_draft_changes_and_is_submitted_by_patch`.
 
 **cancelProductOrder** undoes a completed order before any of it takes effect: an add
 item's product has not started, a delete item's termination has not happened, and
 billing has not charged the cycle period containing that date or a later one. New
 products become `cancelled` (zero billable days), ended ones open-ended again; order and
-items `cancelled`, with `cancellationDate`/`cancellationReason` on the order.
+items `cancelled`, with `cancellationDate`/`cancellationReason` on the order. A draft is
+cancelled with nothing to undo (`::test_a_draft_is_deleted_or_cancelled`).
 `requestedCancellationDate` may only be today (422 otherwise). Anything that already took
 effect is a 409 naming every reason, and nothing is stored, so every stored cancellation
 is `done` - `app/ordering/cancel.py`; `tests/test_api_order_cancel.py`
@@ -61,25 +69,27 @@ is `done` - `app/ordering/cancel.py`; `tests/test_api_order_cancel.py`
 **4xx vs rejected.** A request that cannot even be stored is a 4xx and stores nothing:
 malformed JSON, an unknown attribute or an empty `productOrderItem[]` (400); a missing
 mandatory field, a reference to a billing account, offering or product that does not
-exist, duplicate item ids, a product in two delete items, `quantity` other than 1, an add
-item without `productOffering` (or with a `product`), a delete item without `product` (or
-with a `productOffering`) (422) - `app/api/ordering.py` (`_item_request`),
-`place_order` (`OrderRefused`); `::test_malformed_orders_are_4xx_and_not_stored`,
-`::test_malformed_delete_items`. Everything else that is wrong is a **business
-rejection: the order is stored with state `rejected` and its reasons in
-`productOrderErrorMessage[]`, and the answer is 201**.
+exist, duplicate item ids (nested ones included), a product in two items, `quantity`
+other than 1, an add item without `productOffering` (or with a `product`), a delete or
+noChange item without `product` (or with a `productOffering`), an order with no account
+to bill (none sent, none derivable), a document the spec's schema refuses, an item
+relationship to an item not in the order (422) - `app/api/ordering.py`
+(`_item_request`), `place_order` (`OrderRefused`);
+`::test_malformed_orders_are_4xx_and_not_stored`, `::test_malformed_delete_items`.
+Everything else that is wrong is a **business rejection: the order is stored with state
+`rejected` and its reasons in `productOrderErrorMessage[]`, and the answer is 201**.
 
 | Rejection code (ours) | Level | When | Proven by |
 |---|---|---|---|
 | `accountNotActive` | order | the billing account is not `Active` | `::test_account_must_be_active_and_start_not_in_the_past` |
 | `requestedStartDateInPast` | order | requested date before today (BILLING_TZ) | same |
-| `actionNotSupported` | item | `modify` or `noChange` | `::test_modify_and_no_change_are_stored_as_rejected` |
+| `actionNotSupported` | item | `modify` | `::test_modify_is_stored_as_rejected` |
 | `billingAccountMismatch` | item | the item's `billingAccount` differs from the order's | `tests/test_api_ordering.py::test_delete_rules` (a delete item; `_item_problems` checks it before the action) |
 | `offeringNotSellable` | item | offering not `isSellable` or not `Active` | `::test_offering_must_be_sellable_and_priced` |
 | `offeringNotValid` | item | offering `validFor` does not cover midnight of the start date | `::test_offering_and_price_must_be_valid_at_the_start_date` |
 | `noRecurringPrice` | item | no recurring price in the account currency at that midnight | `::test_offering_must_be_sellable_and_priced` |
 | `priceEnds` | item | from the start date, the recurring prices do not form a gapless chain ending open-ended (D-W20) | `tests/test_order_price_chain.py` |
-| `productOfOtherAccount`, `productAlreadyEnded`, `openDeleteItem`, `productNotStarted` | item | delete rules | `tests/test_api_ordering.py::test_delete_rules`, `::test_a_product_with_an_open_delete_elsewhere_is_rejected` |
+| `productOfOtherAccount`, `productAlreadyEnded`, `openDeleteItem`, `productNotStarted` | item | delete rules (the first two also for noChange) | `tests/test_api_ordering.py::test_delete_rules`, `::test_a_product_with_an_open_delete_elsewhere_is_rejected`, `tests/test_api_order_attributes.py::test_a_no_change_item_needs_a_live_product_of_the_account` |
 
 - **All or nothing:** one reason anywhere rejects the whole order; failing items are
   `rejected`, the others `cancelled`, nothing is executed (`tests/test_api_ordering.py::test_one_bad_item_rejects_the_whole_order`).
@@ -87,8 +97,10 @@ rejection: the order is stored with state `rejected` and its reasons in
   delete item never collides with the one-open-delete index.
 - **States** come from the pure state machine `app/ordering/states.py`: order
   `acknowledged -> inProgress -> completed` or `acknowledged -> rejected`; items the same
-  plus `acknowledged -> cancelled`; both `completed -> cancelled` for a cancellation
-  (`tests/test_order_states.py`).
+  plus `acknowledged -> cancelled`; both `completed -> cancelled` for a cancellation;
+  `draft -> acknowledged` (submitted) and `draft -> cancelled`
+  (`tests/test_order_states.py`). The asynchronous states (pending, held, failed,
+  partial, ...) are never reached.
 - **`requestedStartDate`** (our interpretation; TMF has no per-item date) is the start
   date of add items and the termination date of delete items, converted to the date in
   BILLING_TZ; it defaults to today and may not be in the past.
@@ -100,10 +112,16 @@ rejection: the order is stored with state `rejected` and its reasons in
   started yet cancels it** (`cancelled`, `terminationDate = startDate`, 0 billable days);
   a requested date after its start date is `productNotStarted`
   (`::test_delete_of_a_future_product_cancels_it_with_zero_billable_days`).
-- **Row lock:** the products of delete items are locked `FOR UPDATE` in id order before
-  anything about them is read; a concurrent second delete waits, then is rejected
-  `productAlreadyEnded` (`tests/test_order_concurrency.py`).
-- **Deviation:** `billingAccount` is mandatory on the order (ours).
+- **noChange** names a live product of the account and changes nothing
+  (`tests/test_api_order_attributes.py::test_a_no_change_item_completes_and_changes_nothing`).
+- **Nested items** are processed like the others and answered nested
+  (`::test_nested_items_are_processed_and_kept_nested`).
+- **Row lock:** the products of delete and noChange items are locked `FOR UPDATE` in id
+  order before anything about them is read; a concurrent second delete waits, then is
+  rejected `productAlreadyEnded` (`tests/test_order_concurrency.py`).
+- **The billing account** is optional, as in the spec: the order's, else an item's, else
+  that of a product a delete or noChange item names
+  (`tests/test_api_order_attributes.py::test_the_account_comes_from_an_item_or_a_product`).
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf622-product-ordering.md`](../../scripts/docs/api-notes/tmf622-product-ordering.md).
 

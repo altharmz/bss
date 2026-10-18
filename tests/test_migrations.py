@@ -916,3 +916,47 @@ def test_0025_taxes(temp_db_url):
             select = sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(table))
             assert conn.execute(select).fetchone() == (1,), table
     command.upgrade(cfg, "head")
+
+
+def test_0026_order_details_drafts_and_nested_items(temp_db_url):
+    """Existing orders were acknowledged, with no documents, top-level items and an
+    account. Afterwards only a draft (or a cancelled order) may lack an account, and a
+    nested item's parent is in its own order. Downgrading to 0025 refuses a draft."""
+    from tests import factories
+
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0025")
+    with psycopg.connect(temp_db_url) as conn:
+        w = factories.world(conn)
+        other = factories.add_order(conn, w.account["id"], w.offering["id"])
+    command.upgrade(cfg, "0026")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT DISTINCT requested_initial_state, details FROM product_order"
+        ).fetchall() == [("acknowledged", {})]
+        assert conn.execute(
+            "SELECT DISTINCT parent_id, details FROM product_order_item"
+        ).fetchall() == [(None, {})]
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE product_order SET billing_account_id = NULL")
+        (item,) = conn.execute(
+            "SELECT id FROM product_order_item WHERE product_order_id = %s", (other["id"],)
+        ).fetchone()
+        with pytest.raises(psycopg.errors.ForeignKeyViolation), conn.transaction():
+            conn.execute(
+                "UPDATE product_order_item SET parent_id = %s WHERE product_order_id <> %s",
+                (item, other["id"]),
+            )
+        conn.execute(
+            "UPDATE product_order SET state = 'draft', billing_account_id = NULL WHERE id = %s",
+            (other["id"],),
+        )
+    with pytest.raises(Exception, match="null value"):
+        command.downgrade(cfg, "0025")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute("DELETE FROM product_order_item WHERE product_order_id = %s", (other["id"],))
+        conn.execute("DELETE FROM product_order WHERE id = %s", (other["id"],))
+    command.downgrade(cfg, "0025")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT count(*) FROM product_order").fetchone() == (1,)
+    command.upgrade(cfg, "head")

@@ -1,4 +1,5 @@
-"""TMF622 cancelProductOrder: undo a completed order before any of it takes effect.
+"""TMF622 cancelProductOrder: undo a completed order before any of it takes effect, or
+throw a draft away (it was never processed: nothing to undo).
 
 Orders are processed synchronously (app/ordering/process.py), so there is never an
 order in progress to stop. A cancellation instead undoes a completed order whose every
@@ -50,6 +51,8 @@ class CancelRequest:
 def _item_problem(
     conn: psycopg.Connection, item: Row, product: Row, today: date, cycle_day: int
 ) -> str | None:
+    if item["action"] == "noChange":
+        return None  # it changed nothing, so there is nothing to undo
     if item["action"] == "add":
         if product["termination_date"] is not None:
             return "another order already ended its product"
@@ -77,10 +80,12 @@ def cancel_order(
     order = orders.lock_order(conn, request.order_id)
     if order is None:
         raise LookupError(f"productOrder {request.order_id} does not exist")
+    if order["state"] == "draft":
+        return _cancel_draft(conn, order, request, now)
     if order["state"] != "completed":
         raise CancelRefused(
-            f"productOrder {order['id']} is {order['state']}: only a completed order can be"
-            " cancelled"
+            f"productOrder {order['id']} is {order['state']}: only a completed order or a"
+            " draft can be cancelled"
         )
     account = parties.get_billing_account(conn, order["billing_account_id"], "update")
     assert account is not None  # foreign key, and the order is locked
@@ -98,14 +103,28 @@ def cancel_order(
         )
     for item in items:
         product = locked[item["product_id"]]
-        if item["action"] == "add":
-            products.cancel_unstarted(conn, product["id"])
-        else:
-            products.restore(
-                conn, product["id"], "created" if product["start_date"] > today else "active"
-            )
-        emit.product(conn, product["id"], "StateChange", at=now, today=today)
+        if item["action"] != "noChange":
+            if item["action"] == "add":
+                products.cancel_unstarted(conn, product["id"])
+            else:
+                products.restore(
+                    conn, product["id"], "created" if product["start_date"] > today else "active"
+                )
+            emit.product(conn, product["id"], "StateChange", at=now, today=today)
         orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "cancelled"))
+    return _cancelled(conn, order, request, now)
+
+
+def _cancel_draft(
+    conn: psycopg.Connection, order: Row, request: CancelRequest, now: datetime
+) -> Row:
+    """A draft was never processed: nothing to undo. Its items get their first state."""
+    for item in orders.items_of(conn, order["id"]):
+        orders.set_order_item_state(conn, item["id"], "cancelled")
+    return _cancelled(conn, order, request, now)
+
+
+def _cancelled(conn: psycopg.Connection, order: Row, request: CancelRequest, now: datetime) -> Row:
     order_transition(order["state"], "cancelled")
     orders.set_cancelled(conn, order["id"], at=now, reason=request.reason)
     return orders.insert_cancellation(

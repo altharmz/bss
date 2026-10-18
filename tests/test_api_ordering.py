@@ -151,10 +151,10 @@ def _uuid(value: str):
 # --- rejections: stored, 201 ---
 
 
-def test_modify_and_no_change_are_stored_as_rejected(api, shop, db_conn):
+def test_modify_is_stored_as_rejected(api, shop, db_conn):
     offering, acc = shop
     product = apidata.product_of(api, apidata.order(api, acc, apidata.add_item(offering)))
-    for action in ("modify", "noChange"):
+    for action in ("modify",):
         item = {
             "@type": "ProductOrderItem",
             "id": "1",
@@ -256,7 +256,7 @@ def _orders(db_conn) -> int:
         (lambda b: {k: v for k, v in b.items() if k != "productOrderItem"}, 422),
         (lambda b: {k: v for k, v in b.items() if k != "billingAccount"}, 422),
         (lambda b: b | {"billingAccount": {"id": NIL}}, 422),
-        (lambda b: b | {"note": [{"text": "please"}]}, 400),  # not stored: unknown
+        (lambda b: b | {"zzUnknown": "please"}, 400),  # not stored: unknown
         (lambda b: b | {"state": "acknowledged"}, 422),  # the server's: never set
         (lambda b: b | {"requestedStartDate": "2026-10-02T00:00:00"}, 422),
         (lambda b: _items(b, lambda i: i | {"productOffering": {"id": NIL}}), 422),
@@ -268,7 +268,9 @@ def _orders(db_conn) -> int:
         (lambda b: _items(b, lambda i: i | {"quantity": 2}), 422),
         (lambda b: _items(b, lambda i: i | {"action": "suspend"}), 422),
         (lambda b: _items(b, lambda i: i | {"product": {"id": NIL}}), 422),
-        (lambda b: _items(b, lambda i: i | {"itemPrice": []}), 400),
+        (lambda b: _items(b, lambda i: i | {"zzUnknown": []}), 400),
+        (lambda b: _items(b, lambda i: i | {"itemPrice": []}), 422),  # the server's
+        (lambda b: _items(b, lambda i: i | {"state": "completed", "note": [{}]}), 422),
         (lambda b: b | {"productOrderItem": b["productOrderItem"] * 2}, 422),
     ],
     ids=[
@@ -286,6 +288,8 @@ def _orders(db_conn) -> int:
         "unknown action",
         "add with a product",
         "unknown item attribute",
+        "item price is the server's",
+        "item note without its type",
         "duplicate item ids",
     ],
 )

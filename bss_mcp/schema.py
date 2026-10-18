@@ -31,7 +31,13 @@ def model_schema(model: type[BaseModel]) -> dict[str, Any]:
     (Money.value, an internal amount) as a decimal string."""
     raw = model.model_json_schema(by_alias=True, mode="validation")
     defs = copy.deepcopy(raw.pop("$defs", {}))
-    return _inline(raw, defs, depth=0)
+    return _inline(raw, defs, depth=0, within=())
+
+
+def _recursion(name: str) -> dict[str, Any]:
+    """Where a model contains itself (TMF622's nested productOrderItem): inlined once,
+    below that an object of the same shape, described rather than repeated."""
+    return {"type": "object", "description": f"A nested {name}: the same attributes as its parent."}
 
 
 def _is_pydantic_decimal(node: dict[str, Any]) -> bool:
@@ -43,15 +49,18 @@ def _is_pydantic_decimal(node: dict[str, Any]) -> bool:
     return types == ["number", "string"]
 
 
-def _inline(node: Any, defs: dict[str, Any], depth: int) -> Any:
+def _inline(node: Any, defs: dict[str, Any], depth: int, within: tuple[str, ...]) -> Any:
     if depth > 32:
-        raise ValueError("schema nests too deep (a recursive model?)")
+        raise ValueError("schema nests too deep")
     if isinstance(node, list):
-        return [_inline(item, defs, depth) for item in node]
+        return [_inline(item, defs, depth, within) for item in node]
     if not isinstance(node, dict):
         return node
     if "$ref" in node:
-        return _inline(defs[node["$ref"].rsplit("/", 1)[-1]], defs, depth + 1)
+        name = node["$ref"].rsplit("/", 1)[-1]
+        if name in within:
+            return _recursion(name)
+        return _inline(defs[name], defs, depth + 1, (*within, name))
     if _is_pydantic_decimal(node):
         return dict(MONEY_VALUE)
     out: dict[str, Any] = {}
@@ -59,9 +68,9 @@ def _inline(node: Any, defs: dict[str, Any], depth: int) -> Any:
         if key == "title":
             continue  # an annotation, noise in a tool schema
         if key == "properties":  # names here are attributes, never keywords
-            out[key] = {name: _inline(sub, defs, depth) for name, sub in value.items()}
+            out[key] = {name: _inline(sub, defs, depth, within) for name, sub in value.items()}
         else:
-            out[key] = _inline(value, defs, depth)
+            out[key] = _inline(value, defs, depth, within)
     return out
 
 

@@ -1,16 +1,20 @@
-"""TMF622 Product Ordering Management v5: productOrder (GET list, GET by id, POST, DELETE
-of a rejected order) and cancelProductOrder (GET list, GET by id, POST).
+"""TMF622 Product Ordering Management v5: productOrder (GET list, GET by id, POST, PATCH,
+DELETE of a rejected or draft order) and cancelProductOrder (GET list, GET by id, POST).
 
 POST processes the order synchronously in the request's transaction (app/ordering). A
 well-formed order that breaks a business rule is stored as `rejected` and answered with
 201, its reasons in productOrderErrorMessage[]; only a malformed request, or one that
-references something that does not exist, is a 4xx. No PATCH.
+references something that does not exist, is a 4xx. With `requestedInitialState: draft`
+the order is stored unprocessed: PATCH changes anything of it, and PATCH `state:
+acknowledged` processes it as an order placed at that moment.
 
 cancelProductOrder undoes a completed order before any of it takes effect
-(app/ordering/cancel.py); one that cannot be cancelled is a 409 and nothing is stored,
-so every stored cancellation is `done`.
+(app/ordering/cancel.py), or throws a draft away; one that cannot be cancelled is a 409
+and nothing is stored, so every stored cancellation is `done`.
 """
 
+import copy
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Literal
 
@@ -18,7 +22,7 @@ import psycopg
 from fastapi import APIRouter, Request, Response
 from pydantic import AwareDatetime, Field
 
-from app.api import listing
+from app.api import listing, specschema
 from app.api.account import account_ref
 from app.api.catalog import BASE as CATALOG_BASE
 from app.api.common import (
@@ -31,11 +35,15 @@ from app.api.common import (
     check_type,
     claim_id,
     created,
+    documents_model,
     from_billing_date,
+    merge_documents,
     meta_body,
     parse,
+    parse_documented,
     parse_id,
     ref,
+    same,
     take_id,
     take_server_set,
     to_billing_date,
@@ -44,7 +52,7 @@ from app.api.common import (
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
-from app.api.errors import bad_request, conflict, not_found, unprocessable
+from app.api.errors import Problem, bad_request, conflict, not_found, unprocessable
 from app.api.inventory import ORDERING_BASE as BASE
 from app.api.inventory import order_href, product_href
 from app.api.prices import monthly_price, tax_on, total_rate
@@ -52,6 +60,7 @@ from app.api.tmfjson import TmfJSONResponse
 from app.billing.model import Tax
 from app.events import emit
 from app.ordering import cancel as cancellation
+from app.ordering import process
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
 from app.repository import billing, catalog, orders, parties
 from app.repository._sql import Row
@@ -59,11 +68,42 @@ from app.repository._sql import Row
 router = APIRouter(prefix=BASE)
 API = "TMF622"
 
+# Documents to us (stored as sent, checked against the spec, never read by processing).
+ORDER_DOCUMENTS = (
+    "agreement",
+    "channel",
+    "note",
+    "notificationContact",
+    "orderRelationship",
+    "payment",
+    "productOfferingQualification",
+    "quote",
+    "relatedParty",
+    "requestedCompletionDate",
+    "productOrderMilestone",
+    "productOrderJeopardyAlert",
+)
+# ProductOrder_MVO also has expectedCompletionDate (not ProductOrder_FVO): PATCH only.
+PATCH_DOCUMENTS = (*ORDER_DOCUMENTS, "expectedCompletionDate")
+ITEM_DOCUMENTS = (
+    "appointment",
+    "itemTerm",
+    "note",
+    "payment",
+    "productOfferingQualificationItem",
+    "quoteItem",
+    "qualification",
+    "productOrderItemRelationship",
+)
+# Set by processing: an item sent may repeat them, never set them.
+ITEM_SERVER_SET = ("state", "itemPrice", "itemTotalPrice")
+
 ATTRIBUTES = (
     "state",
     "creationDate",
     "completionDate",
     "requestedStartDate",
+    "requestedInitialState",
     "billingAccount",
     "productOrderItem",
     "productOrderErrorMessage",
@@ -74,6 +114,7 @@ ATTRIBUTES = (
     "category",
     "priority",
     "externalId",
+    *PATCH_DOCUMENTS,
 )
 # Set by processing (or the server): a POST or PATCH may repeat them, never set them.
 SERVER_SET = (
@@ -85,7 +126,9 @@ SERVER_SET = (
     "cancellationDate",
     "cancellationReason",
 )
-# What the order was placed with: fixed once it is processed (synchronously, at POST).
+# On PATCH, `state` submits a draft (to acknowledged); otherwise it is set by processing.
+PATCH_SERVER_SET = tuple(name for name in SERVER_SET if name != "state")
+# What the order is placed with: changeable while it is a draft, fixed once processed.
 PLACED_WITH = ("requestedStartDate", "billingAccount", "productOrderItem")
 CANCEL_ATTRIBUTES = (
     "productOrder",
@@ -96,14 +139,21 @@ CANCEL_ATTRIBUTES = (
     "effectiveCancellationDate",
 )
 
+ItemDocuments = documents_model("ProductOrderItemDocuments", API, ITEM_DOCUMENTS)
 
-class OrderItemIn(TmfModel):
+
+class OrderItemIn(ItemDocuments):  # type: ignore[misc,valid-type]
     id: str = Field(min_length=1)
     action: Literal["add", "modify", "delete", "noChange"]
     quantity: Literal[1] = 1
     product_offering: ProductOfferingRef | None = None
     product: ProductRef | None = None
     billing_account: RatedBillingAccountRef | None = None
+    # nested items: processed like the others, listed after their parent
+    product_order_item: list["OrderItemIn"] | None = None
+
+
+OrderItemIn.model_rebuild()
 
 
 class ExternalId(TmfModel):
@@ -115,26 +165,33 @@ class ExternalId(TmfModel):
 
 
 Priority = Literal["0", "1", "2", "3", "4"]
+OrderDocuments = documents_model("ProductOrderDocuments", API, ORDER_DOCUMENTS)
+PatchDocuments = documents_model("ProductOrderPatchDocuments", API, PATCH_DOCUMENTS)
 
 
-class OrderIn(TmfModel):
-    billing_account: RatedBillingAccountRef
+class OrderIn(OrderDocuments):  # type: ignore[misc,valid-type]
+    # optional, as in the spec: derived from the items when absent (app/ordering/process.py)
+    billing_account: RatedBillingAccountRef | None = None
     product_order_item: list[OrderItemIn]
     requested_start_date: AwareDatetime | None = None
+    requested_initial_state: Literal["acknowledged", "draft"] = "acknowledged"
     description: str | None = Field(default=None, min_length=1)
     category: str | None = Field(default=None, min_length=1)
     priority: Priority | None = None
     external_id: list[ExternalId] | None = None
 
 
-class OrderPatch(TmfModel):
-    """Only what describes the order: processing is over (synchronous), so its state,
-    items, dates and account are read-only. null removes an attribute."""
+class OrderPatch(PatchDocuments):  # type: ignore[misc,valid-type]
+    """What describes the order, any time; while it is a draft also what it is placed
+    with (account, items, start date). null removes an attribute."""
 
     description: str | None = Field(default=None, min_length=1)
     category: str | None = Field(default=None, min_length=1)
     priority: Priority | None = None
     external_id: list[ExternalId] | None = None
+    billing_account: RatedBillingAccountRef | None = None
+    product_order_item: list[OrderItemIn] | None = Field(default=None, min_length=1)
+    requested_start_date: AwareDatetime | None = None
 
 
 def descriptive(data: OrderIn | OrderPatch) -> dict[str, Any]:
@@ -154,25 +211,129 @@ def _external_body(entries: list[dict[str, Any]]) -> list[dict[str, Any]] | None
     return [{**e, "@type": "ExternalIdentifier"} for e in entries] or None
 
 
-def _item_request(item: OrderItemIn) -> ItemRequest:
+@dataclass(frozen=True)
+class ItemSent:
+    """What an item of the body carried besides what the model takes: its server-set
+    attributes (compared with the result) and its documents (checked, normalized)."""
+
+    id: Any
+    server_set: dict[str, Any]
+    documents: dict[str, Any]
+
+
+def take_items(body: dict[str, Any], schema: str) -> tuple[list[ItemSent], list[Problem]]:
+    """Every item of productOrderItem[], nested ones after their parent (as processing
+    lists them): its server-set attributes taken out of the body, its documents checked
+    against `schema` (ProductOrderItem_FVO or _MVO). Problems under their path."""
+    sent: list[ItemSent] = []
+    problems: list[Problem] = []
+
+    def walk(items: Any, path: str) -> None:
+        if not isinstance(items, list):
+            return  # the model reports it
+        for index, item in enumerate(items):
+            where = f"{path}.{index}"
+            if not isinstance(item, dict):
+                continue
+            check_type(item, "ProductOrderItem")
+            server_set = {name: item.pop(name) for name in ITEM_SERVER_SET if name in item}
+            documents = {
+                name: item[name]
+                for name in ITEM_DOCUMENTS
+                if name in item and item[name] is not None
+            }
+            values, found = specschema.check(API, schema, documents)
+            problems.extend((f"{where}.{loc}", message, unknown) for loc, message, unknown in found)
+            sent.append(ItemSent(item.get("id"), server_set, values))
+            walk(item.get("productOrderItem"), f"{where}.productOrderItem")
+
+    walk(body.get("productOrderItem"), "productOrderItem")
+    return sent, problems
+
+
+def _flatten(
+    items: list[OrderItemIn], parent: str | None = None
+) -> list[tuple[OrderItemIn, str | None]]:
+    flat = []
+    for item in items:
+        flat.append((item, parent))
+        flat += _flatten(item.product_order_item or [], item.id)
+    return flat
+
+
+def _item_requests(items: list[OrderItemIn], sent: list[ItemSent]) -> tuple[ItemRequest, ...]:
+    flat = _flatten(items)
+    assert len(flat) == len(sent)  # both walk the body in the same order
+    return tuple(
+        _item_request(item, parent, extra.documents)
+        for (item, parent), extra in zip(flat, sent, strict=True)
+    )
+
+
+def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, Any]) -> ItemRequest:
     if item.action == "add":
         if item.product_offering is None:
             raise unprocessable(f"item {item.id}: an add item needs productOffering")
         if item.product is not None:
             raise unprocessable(f"item {item.id}: an add item cannot carry a product")
-    elif item.action == "delete":
+    elif item.action in ("delete", "noChange"):
         if item.product is None:
-            raise unprocessable(f"item {item.id}: a delete item needs product")
+            raise unprocessable(f"item {item.id}: a {item.action} item needs product")
         if item.product_offering is not None:
-            raise unprocessable(f"item {item.id}: a delete item cannot carry productOffering")
+            raise unprocessable(
+                f"item {item.id}: a {item.action} item cannot carry productOffering"
+            )
     return ItemRequest(
         item_id=item.id,
         action=item.action,
         product_offering_id=item.product_offering.id if item.product_offering else None,
-        # modify/noChange items keep no product: they are rejected anyway
-        product_id=item.product.id if item.product and item.action == "delete" else None,
+        # modify items keep no product: they are rejected anyway
+        product_id=item.product.id if item.product and item.action != "modify" else None,
         billing_account_id=item.billing_account.id if item.billing_account else None,
+        parent_item_id=parent,
+        details=documents or None,
     )
+
+
+def _stored_request(conn: psycopg.Connection, order: Row) -> OrderRequest:
+    """What a draft holds, as a request."""
+    items = orders.items_of(conn, order["id"])
+    item_ids = {item["id"]: item["item_id"] for item in items}
+    return OrderRequest(
+        billing_account_id=order["billing_account_id"],
+        items=tuple(
+            ItemRequest(
+                item_id=item["item_id"],
+                action=item["action"],
+                product_offering_id=item["product_offering_id"],
+                product_id=item["product_id"],
+                parent_item_id=item_ids.get(item["parent_id"]),
+                details=item["details"] or None,
+            )
+            for item in items
+        ),
+        requested_start=order["requested_start_date"],
+    )
+
+
+def _check_items_server_set(sent: list[ItemSent], body: dict[str, Any]) -> None:
+    """422 unless every server-set attribute an item sent equals the item's value."""
+    answered: dict[Any, dict[str, Any]] = {}
+
+    def walk(items: list[dict[str, Any]]) -> None:
+        for item in items:
+            answered[item["id"]] = item
+            walk(item.get("productOrderItem", []))
+
+    walk(body.get("productOrderItem", []))
+    for item in sent:
+        actual = answered.get(item.id, {})
+        for name, value in item.server_set.items():
+            if not same(value, actual.get(name)):
+                raise unprocessable(
+                    f"productOrderItem {item.id}: {name} is set by the server: send its"
+                    " current value or omit it"
+                )
 
 
 def _quoted_taxes(conn: psycopg.Connection, item: Row) -> tuple[Tax, ...]:
@@ -183,15 +344,19 @@ def _quoted_taxes(conn: psycopg.Connection, item: Row) -> tuple[Tax, ...]:
     return billing.price_taxes(price["details"])
 
 
-def _item_body(conn: psycopg.Connection, row: Row, account: Row) -> dict[str, Any]:
+def _item_body(
+    conn: psycopg.Connection, row: Row, account: Row | None, children: dict[Any, list[Row]]
+) -> dict[str, Any]:
     body: dict[str, Any] = {
         "id": row["item_id"],
         "action": row["action"],
-        "state": row["state"],
         "quantity": 1,
-        # an item's account must be the order's, so it is the order's
-        "billingAccount": account_ref(account),
     }
+    if row["state"] is not None:  # None: an item of a draft, not processed yet
+        body["state"] = row["state"]
+    if account is not None:
+        # an item's account must be the order's, so it is the order's
+        body["billingAccount"] = account_ref(account)
     if row["product_offering_id"] is not None:
         offering = catalog.get_product_offering(conn, row["product_offering_id"])
         assert offering is not None  # foreign key
@@ -203,6 +368,10 @@ def _item_body(conn: psycopg.Connection, row: Row, account: Row) -> dict[str, An
         )
     if row["product_id"] is not None:
         body["product"] = ref("Product", product_href(row["product_id"]), row["product_id"])
+    body |= row["details"]
+    nested = children.get(row["id"], [])
+    if nested:
+        body["productOrderItem"] = [_item_body(conn, item, account, children) for item in nested]
     body["@type"] = "ProductOrderItem"
     if row["quoted_price_id"] is not None:
         taxes = _quoted_taxes(conn, row)
@@ -242,10 +411,15 @@ def _error_body(message: Row, items_by_id: dict[Any, Row], order_id: Any) -> dic
 
 
 def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
-    account = parties.get_billing_account(conn, row["billing_account_id"])
-    assert account is not None  # foreign key
+    account = None
+    if row["billing_account_id"] is not None:  # None: a draft that names none yet
+        account = parties.get_billing_account(conn, row["billing_account_id"])
+        assert account is not None  # foreign key
     items = orders.items_of(conn, row["id"])
     items_by_id = {item["id"]: item for item in items}
+    children: dict[Any, list[Row]] = {}
+    for item in items:
+        children.setdefault(item["parent_id"], []).append(item)
     errors = [
         _error_body(message, items_by_id, row["id"])
         for message in orders.error_messages(conn, row["id"])
@@ -254,6 +428,7 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     adds = [item for item in items if item["action"] == "add"]
     total = None
     if row["state"] == "completed" and adds and all(i["quoted_price_id"] for i in adds):
+        assert account is not None  # a processed order has one
         taxes = [_quoted_taxes(conn, i) for i in adds]
         rates = {total_rate(t) for t in taxes}
         total = [
@@ -269,6 +444,7 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                 tax_rate=rates.pop() if len(rates) == 1 else None,
             )
         ]
+    start = row["requested_start_date"]
     return without_nulls(
         {
             "id": str(row["id"]),
@@ -276,9 +452,12 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "state": row["state"],
             "creationDate": utc(row["order_date"]),
             "completionDate": utc(completion) if completion else None,
-            "requestedStartDate": from_billing_date(row["requested_start_date"]),
-            "billingAccount": account_ref(account),
-            "productOrderItem": [_item_body(conn, item, account) for item in items],
+            "requestedStartDate": from_billing_date(start) if start else None,
+            "requestedInitialState": row["requested_initial_state"],
+            "billingAccount": account_ref(account) if account else None,
+            "productOrderItem": [
+                _item_body(conn, item, account, children) for item in children.get(None, [])
+            ],
             "productOrderErrorMessage": errors or None,
             "orderTotalPrice": total,
             "cancellationDate": utc(row["cancellation_date"]) if row["cancellation_date"] else None,
@@ -287,6 +466,7 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "category": row["category"],
             "priority": row["priority"],
             "externalId": _external_body(row["external_id"]),
+            **row["details"],
             "@type": "ProductOrder",
         }
     ) | meta_body(row)
@@ -329,15 +509,18 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
         raise bad_request("an order needs at least one productOrderItem")
     uid = take_id(body)
     server_set = take_server_set(body, SERVER_SET)
-    data = parse(OrderIn, body)
-    for item in body.get("productOrderItem", []):
-        check_type(item, "ProductOrderItem")
+    sent, found = take_items(body, "ProductOrderItem_FVO")
+    data, documents = parse_documented(
+        OrderIn, body, ORDER_DOCUMENTS, API, "ProductOrder_FVO", found
+    )
     requested = data.requested_start_date
     order_request = OrderRequest(
-        billing_account_id=data.billing_account.id,
-        items=tuple(_item_request(item) for item in data.product_order_item),
+        billing_account_id=data.billing_account.id if data.billing_account else None,
+        items=_item_requests(data.product_order_item, sent),
         requested_start=to_billing_date(requested) if requested else None,
         order_id=uid,
+        draft=data.requested_initial_state == "draft",
+        details=merge_documents({}, documents) or None,
     )
     with tx() as conn:
         claim_id(conn, "product_order", uid)
@@ -352,6 +535,7 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
         assert row is not None
         new = order_body(conn, with_meta(conn, "product_order", row, data))
         check_server_set(server_set, new)
+        _check_items_server_set(sent, new)
         # processed at once: one Create carrying the final state (completed or rejected)
         emit.created(conn, API, "productOrder", new, at=clock.now())
     return created(listing.select_fields(new, fields))
@@ -361,11 +545,18 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
 def patch_order(
     order_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
-    """description, category, priority, externalId only (any order, any state)."""
+    """The descriptive attributes and documents of any order. A draft's account, items
+    and start date too (each replaced whole), and `state: acknowledged` processes it.
+    Once processed, those may only be repeated (409 otherwise)."""
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "ProductOrder")
-    server_set = take_server_set(body, SERVER_SET)
-    data = parse(OrderPatch, body, read_only=PLACED_WITH)
+    server_set = take_server_set(body, PATCH_SERVER_SET)
+    state = body.pop("state", None)
+    placed = {name: copy.deepcopy(body[name]) for name in PLACED_WITH if name in body}
+    sent, found = take_items(body, "ProductOrderItem_MVO")
+    data, documents = parse_documented(
+        OrderPatch, body, PATCH_DOCUMENTS, API, "ProductOrder_MVO", found
+    )
     with tx() as conn:
         uid = parse_id("productOrder", order_id)
         current = orders.lock_order(conn, uid)
@@ -374,32 +565,89 @@ def patch_order(
         before = order_body(conn, current)
         check_server_set(server_set, before)
         old = emit.before(conn, API, "productOrder", lambda: before)
+        draft = current["state"] == "draft"
+        if draft and placed:
+            _replace_draft(conn, current, data, sent)
+        for name, value in placed.items():
+            if not draft and not same(value, before.get(name)):
+                raise conflict(
+                    f"{name} cannot change: productOrder {uid} is {current['state']} (only"
+                    " a draft's account, items and start date change)"
+                )
         changes = descriptive(data)
+        if documents:
+            changes["details"] = merge_documents(current["details"], documents)
         if changes:
             orders.set_attributes(conn, uid, changes)
+        if state is not None and state != current["state"]:
+            if not draft or state != "acknowledged":
+                raise unprocessable(
+                    "state is set by processing: a draft is submitted with acknowledged,"
+                    " an order is cancelled with cancelProductOrder"
+                )
+            _submit(conn, uid, now=clock.now(), today=clock.today())
         row = orders.get_order(conn, uid)
         patched = order_body(conn, with_meta(conn, "product_order", row, data))
-        emit.changed(conn, API, "productOrder", old, patched, at=clock.now())
+        if draft and placed:
+            _check_items_server_set(sent, patched)
+        emit.changed(conn, API, "productOrder", old, patched, at=clock.now(), state="state")
     return TmfJSONResponse(listing.select_fields(patched, fields))
+
+
+def _replace_draft(
+    conn: psycopg.Connection, current: Row, data: OrderPatch, sent: list[ItemSent]
+) -> None:
+    held = _stored_request(conn, current)
+    given = data.model_fields_set
+    requested = data.requested_start_date
+    request = OrderRequest(
+        billing_account_id=(data.billing_account.id if data.billing_account else None)
+        if "billing_account" in given
+        else held.billing_account_id,
+        items=_item_requests(data.product_order_item, sent)
+        if data.product_order_item is not None
+        else held.items,
+        requested_start=(to_billing_date(requested) if requested else None)
+        if "requested_start_date" in given
+        else held.requested_start,
+    )
+    if "product_order_item" in given and data.product_order_item is None:
+        raise unprocessable("productOrderItem cannot be null: an order needs at least one item")
+    try:
+        process.replace_draft(
+            conn, current["id"], request, items=data.product_order_item is not None
+        )
+    except OrderRefused as exc:
+        raise unprocessable(str(exc)) from None
+
+
+def _submit(conn: psycopg.Connection, uid: Any, *, now: Any, today: Any) -> None:
+    row = orders.get_order(conn, uid)
+    assert row is not None  # locked
+    try:
+        process.submit_draft(conn, uid, _stored_request(conn, row), now=now, today=today)
+    except OrderRefused as exc:
+        raise unprocessable(str(exc)) from None
 
 
 @router.delete("/productOrder/{order_id}", status_code=204, response_class=Response)
 def delete_order(order_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
-    """Only a rejected order: it never executed, so nothing refers to it. Any other order
-    is the history of its products (409); a completed one can be cancelled instead."""
+    """Only a rejected or draft order: it never executed, so nothing refers to it. Any
+    other order is the history of its products (409); a completed one can be cancelled
+    instead."""
     listing.no_query(request)
     with tx() as conn:
         uid = parse_id("productOrder", order_id)
         row = orders.lock_order(conn, uid)
         if row is None:
             raise not_found("productOrder", order_id)
-        if row["state"] != "rejected":
+        if row["state"] not in ("rejected", "draft"):
             raise conflict(
-                f"productOrder {uid} is {row['state']}: only a rejected order can be deleted"
-                " (a completed one can be cancelled with cancelProductOrder)"
+                f"productOrder {uid} is {row['state']}: only a rejected or draft order can be"
+                " deleted (a completed one can be cancelled with cancelProductOrder)"
             )
         emit.deleted(conn, API, "productOrder", lambda: order_body(conn, row), at=clock.now())
-        orders.delete_rejected(conn, uid)
+        orders.delete_unexecuted(conn, uid)
     return Response(status_code=204)
 
 

@@ -8,11 +8,22 @@ Two kinds of "no":
   state `rejected` and its reasons (productOrderErrorMessage), and the API answers 201.
 
 All-or-nothing: if any item is refused, nothing is executed. Failing items become
-`rejected`, the others `cancelled`.
+`rejected`, the others `cancelled`. Nested items (TMF622 productOrderItem.productOrderItem)
+are items like any other, listed after their parent.
+
+A draft (requestedInitialState `draft`) is stored without being processed: only what
+the database needs is checked (the ids, what the order references exists). It is
+processed by `submit_draft`, exactly as an order placed at that moment.
+
+The billing account (optional in TMF622) is the order's, else the first item's that names
+one, else the account of the first product a delete/noChange item names; an
+order with none of them is refused. Items that name another account are rejected
+(`billingAccountMismatch`, `productOfOtherAccount`), as before.
 """
 
 from dataclasses import dataclass
 from datetime import date, datetime, time
+from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -39,16 +50,30 @@ class ItemRequest:
     # An add item's new product, as a POST /product chose it: its id and TMF meta
     # attributes (product.id, base_type, schema_location; None = not chosen).
     new_product: products.NewProduct | None = None
+    parent_item_id: str | None = None  # nested in that item (listed before this one)
+    details: dict[str, Any] | None = None  # documents, stored as sent
+
+    @property
+    def related_ids(self) -> list[Any]:
+        """The item ids its productOrderItemRelationship[] names."""
+        return [r.get("id") for r in (self.details or {}).get("productOrderItemRelationship", [])]
 
 
 @dataclass(frozen=True)
 class OrderRequest:
-    billing_account_id: UUID
+    billing_account_id: UUID | None  # None: derived from the items
     items: tuple[ItemRequest, ...]
     # None = today (BILLING_TZ). The start date of `add` items and the termination date
     # of `delete` items (our interpretation: TMF has no per-item date).
     requested_start: date | None = None
     order_id: UUID | None = None  # None: a new one (a client may choose it)
+    draft: bool = False  # requestedInitialState draft: stored, not processed
+    details: dict[str, Any] | None = None  # documents, stored as sent
+
+
+# Actions whose item names an existing product (a modify item is rejected before it
+# would matter: actionNotSupported).
+ON_PRODUCT = frozenset({"delete", "noChange"})
 
 
 @dataclass(frozen=True)
@@ -66,19 +91,159 @@ def _midnight(day: date) -> datetime:
     return datetime.combine(day, time.min, tzinfo=ZoneInfo(settings.billing_tz))
 
 
-def place_order(
-    conn: psycopg.Connection, request: OrderRequest, *, now: datetime, today: date
-) -> UUID:
-    """Store the order and process it. Returns its id."""
+def _check_structure(request: OrderRequest) -> None:
     if not request.items:
         raise OrderRefused("an order needs at least one item")
     ids = [item.item_id for item in request.items]
     if len(set(ids)) != len(ids):
         raise OrderRefused("productOrderItem ids must be unique within the order")
+    for item in request.items:
+        for related in item.related_ids:
+            if related == item.item_id or related not in ids:
+                raise OrderRefused(
+                    f"item {item.item_id}: productOrderItemRelationship names {related!r},"
+                    " which is not another item of this order"
+                )
+    # a product can only be ended (or changed) by one item: two would collide on the
+    # one-open-delete index, which would abort the transaction and lose a rejected order
+    named = [item.product_id for item in request.items if item.product_id is not None]
+    if len(set(named)) != len(named):
+        raise OrderRefused("a product can only be named by one item of the order")
+
+
+def _derived_account(conn: psycopg.Connection, request: OrderRequest) -> UUID | None:
+    """The order's account: sent, else the first an item names, else the account of the
+    first product an item names (a product's account never changes). None: none of them.
+    Existence is checked by the caller."""
+    if request.billing_account_id is not None:
+        return request.billing_account_id
+    for item in request.items:
+        if item.billing_account_id is not None:
+            return item.billing_account_id
+    for item in request.items:
+        if item.product_id is not None:
+            product = products.get_product(conn, item.product_id)
+            if product is not None:
+                return product["billing_account_id"]
+    return None
+
+
+def place_order(
+    conn: psycopg.Connection, request: OrderRequest, *, now: datetime, today: date
+) -> UUID:
+    """Store the order and process it (a draft: only store it). Returns its id."""
+    _check_structure(request)
+    if not request.draft:
+        return _process(conn, request, _derived_account(conn, request), now=now, today=today)
+    account_id = _draft_account(conn, request)
+    order = orders.create_order(
+        conn,
+        id=request.order_id,
+        billing_account_id=account_id,
+        order_date=now,
+        requested_start_date=request.requested_start,
+        state="draft",
+        requested_initial_state="draft",
+        details=request.details,
+        items=[_new_item(item, None) for item in request.items],
+    )
+    return order["id"]
+
+
+def replace_draft(
+    conn: psycopg.Connection, order_id: UUID, request: OrderRequest, *, items: bool
+) -> None:
+    """A draft's account, start date and (`items`: they changed) items as PATCH left
+    them, merged with what it holds by the caller; checked as a draft is on POST."""
+    _check_structure(request)
+    orders.replace_draft(
+        conn,
+        order_id,
+        billing_account_id=_draft_account(conn, request),
+        requested_start_date=request.requested_start,
+        items=[_new_item(item, None) for item in request.items] if items else None,
+    )
+
+
+def _draft_account(conn: psycopg.Connection, request: OrderRequest) -> UUID | None:
+    """A draft's account (None: none yet), after checking that what it references
+    exists. An item's own account is not stored (it must be the order's), so a draft
+    item that names another one is refused rather than forgotten."""
+    account_id = _derived_account(conn, request)
+    if account_id is not None and parties.get_billing_account(conn, account_id) is None:
+        raise OrderRefused(f"billingAccount {account_id} does not exist")
+    for item in request.items:
+        if item.billing_account_id not in (None, account_id):
+            raise OrderRefused(
+                f"item {item.item_id}: its billingAccount differs from the order's (an order"
+                " has one account)"
+            )
+    _check_references(conn, request)
+    return account_id
+
+
+def submit_draft(
+    conn: psycopg.Connection, order_id: UUID, request: OrderRequest, *, now: datetime, today: date
+) -> None:
+    """Process a draft (locked by the caller) as an order placed now: it keeps its id,
+    creation date and documents; `request` is what it holds."""
+    _check_structure(request)
+    _process(
+        conn,
+        request,
+        _derived_account(conn, request),
+        now=now,
+        today=today,
+        draft_id=order_id,
+    )
+
+
+def _check_references(conn: psycopg.Connection, request: OrderRequest) -> None:
+    """What a draft's items reference exists (the foreign keys), without locks."""
+    for item in request.items:
+        offering_id = item.product_offering_id
+        if offering_id and catalog.get_product_offering(conn, offering_id) is None:
+            raise OrderRefused(f"item {item.item_id}: productOffering {offering_id} does not exist")
+        if item.product_id and products.get_product(conn, item.product_id) is None:
+            raise OrderRefused(f"item {item.item_id}: product {item.product_id} does not exist")
+
+
+def _new_item(
+    item: ItemRequest, state: str | None, quote: Row | None = None
+) -> orders.NewOrderItem:
+    return orders.NewOrderItem(
+        item_id=item.item_id,
+        action=item.action,
+        product_offering_id=item.product_offering_id,
+        product_id=item.product_id,
+        state=state,
+        quoted_price_id=quote["id"] if quote else None,
+        quoted_price_name=quote["name"] if quote else None,
+        quoted_amount=quote["amount"] if quote else None,
+        quoted_currency=quote["currency"] if quote else None,
+        parent_item_id=item.parent_item_id,
+        details=item.details,
+    )
+
+
+def _process(
+    conn: psycopg.Connection,
+    request: OrderRequest,
+    account_id: UUID | None,
+    *,
+    now: datetime,
+    today: date,
+    draft_id: UUID | None = None,
+) -> UUID:
+    if account_id is None:
+        raise OrderRefused(
+            "an order needs a billingAccount: on the order, on an item, or through the"
+            " product of a delete or noChange item"
+        )
     # FOR KEY SHARE until commit: a concurrent delete of the account waits for this order
-    account = parties.get_billing_account(conn, request.billing_account_id, "key share")
+    account = parties.get_billing_account(conn, account_id, "key share")
     if account is None:
-        raise OrderRefused(f"billingAccount {request.billing_account_id} does not exist")
+        raise OrderRefused(f"billingAccount {account_id} does not exist")
     for item in request.items:
         offering_id = item.product_offering_id
         # FOR SHARE until commit: a concurrent price or offering delete waits for this
@@ -86,16 +251,14 @@ def place_order(
         if offering_id and catalog.lock_offering(conn, offering_id, share=True) is None:
             raise OrderRefused(f"item {item.item_id}: productOffering {offering_id} does not exist")
 
-    # Lock the products of delete items before reading anything about them: a concurrent
+    # Lock the products of the items before reading anything about them: a concurrent
     # order for the same product waits here and then sees this order's outcome, instead
     # of both validating against the same state (or colliding on the one-open-delete
     # index, which would abort the transaction and lose the rejected order).
-    deleted = [item.product_id for item in request.items if item.action == "delete"]
-    if len(set(deleted)) != len(deleted):
-        raise OrderRefused("a product can only be deleted by one item of the order")
-    locked = products.lock_products(conn, [pid for pid in deleted if pid is not None])
+    named = [item.product_id for item in request.items if item.product_id is not None]
+    locked = products.lock_products(conn, named)
     for item in request.items:
-        if item.action == "delete" and item.product_id not in locked:
+        if item.action in ON_PRODUCT and item.product_id not in locked:
             raise OrderRefused(f"item {item.item_id}: product {item.product_id} does not exist")
 
     start = request.requested_start or today
@@ -113,35 +276,29 @@ def place_order(
             "acknowledged", "rejected" if item.item_id in failing else "cancelled"
         )
 
-    order = orders.create_order(
-        conn,
-        id=request.order_id,
-        billing_account_id=account["id"],
-        order_date=now,
-        requested_start_date=start,
-        items=[
-            orders.NewOrderItem(
-                item_id=item.item_id,
-                action=item.action,
-                product_offering_id=item.product_offering_id,
-                product_id=item.product_id,
-                state=initial(item),
-                quoted_price_id=quotes[item.item_id]["id"]
-                if not problems and item.item_id in quotes
-                else None,
-                quoted_price_name=quotes[item.item_id]["name"]
-                if not problems and item.item_id in quotes
-                else None,
-                quoted_amount=quotes[item.item_id]["amount"]
-                if not problems and item.item_id in quotes
-                else None,
-                quoted_currency=quotes[item.item_id]["currency"]
-                if not problems and item.item_id in quotes
-                else None,
-            )
-            for item in request.items
-        ],
-    )
+    items = [
+        _new_item(item, initial(item), None if problems else quotes.get(item.item_id))
+        for item in request.items
+    ]
+    if draft_id is None:
+        order = orders.create_order(
+            conn,
+            id=request.order_id,
+            billing_account_id=account["id"],
+            order_date=now,
+            requested_start_date=start,
+            details=request.details,
+            items=items,
+        )
+    else:
+        order_transition("draft", "acknowledged")
+        order = orders.submit_draft(
+            conn,
+            draft_id,
+            billing_account_id=account["id"],
+            requested_start_date=start,
+            items=items,
+        )
     rows = {row["item_id"]: row for row in order["items"]}
     if problems:
         _reject(conn, order, rows, problems, now)
@@ -185,11 +342,26 @@ def _item_problems(
 ) -> list[tuple[str, str]]:
     if item.billing_account_id not in (None, account["id"]):
         return [("billingAccountMismatch", "the item's billingAccount differs from the order's")]
-    if item.action in ("modify", "noChange"):
+    if item.action == "modify":
         return [("actionNotSupported", f"action {item.action} is not supported")]
     if item.action == "add":
         return _add_problems(conn, item, account, start, quotes)
+    if item.action == "noChange":
+        return _unchanged_problems(item, account, locked)
     return _delete_problems(conn, item, account, start, today, locked)
+
+
+def _unchanged_problems(
+    item: ItemRequest, account: Row, locked: dict[UUID, Row]
+) -> list[tuple[str, str]]:
+    """A noChange item names a product of the order's account that has not ended (the
+    context of the other items, e.g. a bundle's member that stays)."""
+    product = locked[item.product_id]
+    if product["billing_account_id"] != account["id"]:
+        return [("productOfOtherAccount", "the product belongs to another billing account")]
+    if product["status"] in ENDED:
+        return [("productAlreadyEnded", f"the product is already {product['status']}")]
+    return []
 
 
 def _add_problems(
@@ -336,6 +508,8 @@ def _execute(
             )
             orders.set_order_item_product(conn, row["id"], product["id"])
             emit.product(conn, product["id"], "Create", at=now, today=today)
+        elif item.action == "noChange":
+            pass  # nothing to do: the product stays as it is
         else:
             product = locked[item.product_id]
             if product["start_date"] > today:
