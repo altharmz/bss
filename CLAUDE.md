@@ -199,11 +199,12 @@ Slice 1 (nothing dropped or rewritten; migration `0021`; 705 lines left) done lo
 [decision](docs/decisions/tmf-api.md#base-paths-2026-10-18); committed and pushed.
 **The next deploy moves both base paths** (the UI and MCP move with it).
 Slice 4 (2026-10-18; TMF632/629 attributes, migration `0022`; 476 lines left, none for
-TMF632/629) done locally, not committed:
-[decision](docs/decisions/tmf-api.md#party-and-customer-attributes-2026-10-18). Descriptive
-attributes are jsonb documents checked against `spec/` at runtime
-(`app/api/specschema.py`, reusable for slices 5-10); **the runtime image now ships
-`spec/`** (Dockerfile). Next: slices 5-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
+TMF632/629): [decision](docs/decisions/tmf-api.md#party-and-customer-attributes-2026-10-18);
+committed and pushed `6743dc6`. Descriptive attributes are jsonb documents checked
+against `spec/` at runtime; **the runtime image now ships `spec/`** (Dockerfile).
+**Next session starts slice 5** (TMF666): reuse `common.documents_model` +
+`parse_documented` (`app/api/specschema.py`) for nested attributes instead of new
+Pydantic models. Next: slices 5-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
 notes before taxes, `modify` items, suspension and payment states. Not deployed:
 migrations `0009`-`0022` ship together.
 
