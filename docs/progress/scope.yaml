@@ -115,6 +115,7 @@ items:
   - {id: api.tmf678.hub.create, area: api, stage: 5, method: POST, path: /tmf-api/customerBillManagement/v5/hub, title: "Subscribe to TMF678 events"}
   - {id: api.tmf678.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/customerBillManagement/v5/hub/{hub_id}", title: "Unsubscribe from TMF678 events"}
   - {id: db.product, area: db, stage: 1, table: product, title: "Products (TMF637)"}
+  - {id: db.product_offering_change, area: db, stage: 5, table: product_offering_change, title: "Offering changes (TMF622 modify items)"}
   - {id: db.applied_customer_billing_rate, area: db, stage: 1, table: applied_customer_billing_rate, title: "Charges and refunds - ABRs (TMF678)"}
   - {id: db.customer_bill, area: db, stage: 1, table: customer_bill, title: "Customer bills (TMF678)"}
   - {id: db.billing_run, area: db, stage: 1, table: billing_run, title: "Billing runs, one per date"}
@@ -178,7 +179,7 @@ items:
   # ---------------- api: TMF622 ordering ----------------
   - {id: api.tmf622.productOrder.list, area: api, stage: 2, method: GET, path: /tmf-api/productOrderingManagement/v5/productOrder, title: "List product orders"}
   - {id: api.tmf622.productOrder.get, area: api, stage: 2, method: GET, path: "/tmf-api/productOrderingManagement/v5/productOrder/{order_id}", title: "Get a product order"}
-  - {id: api.tmf622.productOrder.create, area: api, stage: 2, method: POST, path: /tmf-api/productOrderingManagement/v5/productOrder, title: "Place a product order (add / delete items)"}
+  - {id: api.tmf622.productOrder.create, area: api, stage: 2, method: POST, path: /tmf-api/productOrderingManagement/v5/productOrder, title: "Place a product order (add / modify / delete / noChange items)"}
   - {id: api.tmf622.productOrder.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/productOrderingManagement/v5/productOrder/{order_id}", title: "Patch an order's description, category, priority, externalId"}
   - {id: api.tmf637.product.create, area: api, stage: 5, method: POST, path: /tmf-api/productInventory/v5/product, title: "Add a product (through an add order)"}
   - {id: api.tmf637.product.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/productInventory/v5/product/{product_id}", title: "Schedule a product's end (through a delete order)"}

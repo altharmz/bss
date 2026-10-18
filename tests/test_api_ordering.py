@@ -151,38 +151,31 @@ def _uuid(value: str):
 # --- rejections: stored, 201 ---
 
 
-def test_modify_is_stored_as_rejected(api, shop, db_conn):
+def test_a_rejected_order_is_stored_with_its_reason(api, shop, db_conn):
     offering, acc = shop
-    product = apidata.product_of(api, apidata.order(api, acc, apidata.add_item(offering)))
-    for action in ("modify",):
-        item = {
-            "@type": "ProductOrderItem",
-            "id": "1",
-            "action": action,
-            "product": {"id": product["id"], "@type": "ProductRef"},
-        }
-        response = api.post(ORDER, apidata.order_body(acc, item))
-        assert response.status_code == 201
-        order = response.json()
-        assert order["state"] == "rejected"
-        assert order["productOrderItem"][0]["state"] == "rejected"
-        (message,) = order["productOrderErrorMessage"]
-        assert message["code"] == "actionNotSupported"
-        assert message["reason"] == f"action {action} is not supported"
-        assert message["timestamp"] == z(OPEN)
-        assert api.get(order["href"]).json() == order
+    apidata.order(api, acc, apidata.add_item(offering))
+    response = api.post(ORDER, apidata.order_body(acc, apidata.rejected_item(api, offering)))
+    assert response.status_code == 201
+    order = response.json()
+    assert order["state"] == "rejected"
+    assert order["productOrderItem"][0]["state"] == "rejected"
+    (message,) = order["productOrderErrorMessage"]
+    assert message["code"] == "billingAccountMismatch"
+    assert message["reason"] == "the item's billingAccount differs from the order's"
+    assert message["timestamp"] == z(OPEN)
+    assert api.get(order["href"]).json() == order
     assert product_count(db_conn) == 1
 
 
 def test_one_bad_item_rejects_the_whole_order(api, shop, db_conn):
     offering, acc = shop
     good = apidata.add_item(offering, "1")
-    bad = {**apidata.add_item(offering, "2"), "action": "modify"}
+    bad = apidata.rejected_item(api, offering, "2")
     order = apidata.order(api, acc, good, bad)
     assert order["state"] == "rejected"
     states = {i["id"]: i["state"] for i in order["productOrderItem"]}
     assert states == {"1": "cancelled", "2": "rejected"}
-    assert errors_of(order) == [("actionNotSupported", ["2"])]
+    assert errors_of(order) == [("billingAccountMismatch", ["2"])]
     assert product_count(db_conn) == 0
 
 
@@ -328,7 +321,7 @@ def test_order_list_and_filters(api, shop):
     offering, acc = shop
     other = apidata.account(api, name="Other")
     apidata.order(api, acc, apidata.add_item(offering))
-    apidata.order(api, acc, {**apidata.add_item(offering), "action": "modify"})
+    apidata.order(api, acc, apidata.rejected_item(api, offering))
     apidata.order(api, other, apidata.add_item(offering))
     listed = api.get(f"{ORDER}?billingAccount.id={acc['id']}")
     assert listed.headers["X-Total-Count"] == "2"

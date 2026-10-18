@@ -14,6 +14,8 @@ effect is still in the future, in one transaction:
   contains the item's date (its start, or its termination) or any later period: the
   core never charges more than it charged (`InconsistentState`), so a termination
   already reflected in a charge cannot be undone.
+- modify item: its offering change has not taken effect (change day after today) and
+  billing does not reflect it yet (`_modify_problem`); its change row is deleted.
 
 Anything else refuses the whole cancellation (CancelRefused -> 409) and nothing is
 stored. Locks, in the order billing and orders take them: the order, then the account
@@ -53,9 +55,13 @@ def _item_problem(
 ) -> str | None:
     if item["action"] == "noChange":
         return None  # it changed nothing, so there is nothing to undo
+    if item["action"] == "modify":
+        return _modify_problem(conn, item, product, today, cycle_day)
     if item["action"] == "add":
         if product["termination_date"] is not None:
             return "another order already ended its product"
+        if products.change_items(conn, product["id"]):
+            return "another order changes its product's offering"
         if product["status"] not in NOT_STARTED or product["start_date"] <= today:
             return f"its product started on {product['start_date']}"
         day = product["start_date"]
@@ -69,6 +75,32 @@ def _item_problem(
     period = cycle_period(day, cycle_day)
     if products.charged_from(conn, product["id"], period.start):
         return f"billing already charged its product for the period from {period.start}"
+    return None
+
+
+def _modify_problem(
+    conn: psycopg.Connection, item: Row, product: Row, today: date, cycle_day: int
+) -> str | None:
+    """A change can be undone before its day, until billing reflects it: an ABR from the
+    change day on (the new offering's charge, the old one's refund, later periods), or the
+    old offering's charge cut short at the change day inside a period. A full charge of
+    the old offering not yet refunded is still right without the change."""
+    change = next(
+        (
+            c
+            for c in products.changes_of(conn, product["id"])
+            if c["changed_by_item_id"] == item["id"]
+        ),
+        None,
+    )
+    if change is None:
+        return "its offering change is no longer the product's"
+    day = change["change_date"]
+    if day <= today:
+        return f"the offering change took effect on {day}"
+    mid_period = cycle_period(day, cycle_day).start != day
+    if products.change_billed(conn, product["id"], day, mid_period=mid_period):
+        return f"billing already reflects the offering change on {day}"
     return None
 
 
@@ -103,7 +135,10 @@ def cancel_order(
         )
     for item in items:
         product = locked[item["product_id"]]
-        if item["action"] != "noChange":
+        if item["action"] == "modify":
+            products.undo_change(conn, item["id"])
+            emit.product(conn, product["id"], "AttributeValueChange", at=now, today=today)
+        elif item["action"] != "noChange":
             if item["action"] == "add":
                 products.cancel_unstarted(conn, product["id"])
             else:

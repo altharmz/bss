@@ -22,6 +22,7 @@ from app.billing.model import (
     Exemption,
     NewAbr,
     NewBill,
+    OfferingChange,
     Price,
     Product,
     StoredAbr,
@@ -418,32 +419,49 @@ def insert_abr(
     refunds_rate_id: UUID | None = None,
     customer_bill_id: UUID | None = None,
     taxes: tuple[AppliedTax, ...] = (),
+    product_offering_id: UUID | None = None,
 ) -> Row:
     """Insert an applied customer billing rate; `applied_at` (TMF678 date) is the injected
     clock of the run's attempt. Overlaps are rejected by the database (EXCLUDE
     constraint) - note that ON CONFLICT with a target cannot catch those. Tax lines are
-    written only when there are some (tests insert ABRs into schemas before 0025)."""
-    row = returning(
-        conn,
-        """
-        INSERT INTO applied_customer_billing_rate
-            (product_id, billing_account_id, charge_type, amount, currency, period,
-             billing_run_id, applied_at, refunds_rate_id, customer_bill_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
-        """,
-        (
-            product_id,
-            billing_account_id,
-            charge_type,
-            money(amount),
-            currency,
-            period,
-            billing_run_id,
-            applied_at,
-            refunds_rate_id,
-            customer_bill_id,
-        ),
+    written only when there are some (tests insert ABRs into schemas before 0025), the
+    offering only when given (else, from 0027, a trigger takes the product's on the
+    period's first day)."""
+    values = (
+        product_id,
+        billing_account_id,
+        charge_type,
+        money(amount),
+        currency,
+        period,
+        billing_run_id,
+        applied_at,
+        refunds_rate_id,
+        customer_bill_id,
     )
+    if product_offering_id is None:
+        row = returning(
+            conn,
+            """
+            INSERT INTO applied_customer_billing_rate
+                (product_id, billing_account_id, charge_type, amount, currency, period,
+                 billing_run_id, applied_at, refunds_rate_id, customer_bill_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
+            """,
+            values,
+        )
+    else:
+        row = returning(
+            conn,
+            """
+            INSERT INTO applied_customer_billing_rate
+                (product_id, billing_account_id, charge_type, amount, currency, period,
+                 billing_run_id, applied_at, refunds_rate_id, customer_bill_id,
+                 product_offering_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
+            """,
+            (*values, product_offering_id),
+        )
     if not taxes:
         return row
     return returning(
@@ -713,6 +731,7 @@ def load_products(
         """,
         {"account": account_id, "before": visible_before},
     )
+    changes = offering_changes(conn, [row["id"] for row in rows], visible_before=visible_before)
     return tuple(
         Product(
             id=row["id"],
@@ -722,8 +741,47 @@ def load_products(
             else STATUS_BEFORE_TERMINATION.get(row["status"], row["status"]),
             start_date=row["start_date"],
             termination_date=row["termination_date"] if row["termination_known"] else None,
+            changes=changes.get(row["id"], ()),
         )
         for row in rows
+    )
+
+
+def offering_changes(
+    conn: psycopg.Connection, product_ids: list[UUID], *, visible_before: datetime | None = None
+) -> dict[UUID, tuple[OfferingChange, ...]]:
+    """The products' offering changes by day; with `visible_before`, only those whose
+    order completed before that instant (what a billing run sees)."""
+    rows = fetch_all(
+        conn,
+        """
+        SELECT c.product_id, c.change_date, c.product_offering_id
+        FROM product_offering_change c
+        JOIN product_order_item i ON i.id = c.changed_by_item_id
+        JOIN product_order o ON o.id = i.product_order_id
+        WHERE c.product_id = ANY(%(ids)s)
+          AND (%(before)s::timestamptz IS NULL OR o.completion_date < %(before)s)
+        ORDER BY c.product_id, c.change_date
+        """,
+        {"ids": product_ids, "before": visible_before},
+    )
+    out: dict[UUID, tuple[OfferingChange, ...]] = {}
+    for row in rows:
+        change = OfferingChange(row["change_date"], row["product_offering_id"])
+        out[row["product_id"]] = (*out.get(row["product_id"], ()), change)
+    return out
+
+
+def core_product(row: Row, changes: tuple[OfferingChange, ...] = ()) -> Product:
+    """A product row as the core sees it, termination included (not for billing runs:
+    they see only what was known before their date, load_products)."""
+    return Product(
+        id=row["id"],
+        offering_id=row["product_offering_id"],
+        status=row["status"],
+        start_date=row["start_date"],
+        termination_date=row["termination_date"],
+        changes=changes,
     )
 
 
@@ -780,6 +838,7 @@ def load_abrs(conn: psycopg.Connection, account_id: UUID) -> tuple[StoredAbr, ..
             bill_id=row["customer_bill_id"],
             run_date=row["run_date"],
             taxes=applied_taxes(row),
+            offering_id=row["product_offering_id"],
         )
         for row in rows
     )
@@ -813,6 +872,7 @@ def write_abr(
         applied_at=applied_at,
         refunds_rate_id=abr.refunds_id,
         taxes=abr.taxes,
+        product_offering_id=abr.offering_id,
     )["id"]
 
 
@@ -1102,8 +1162,7 @@ def bill_charges(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
         """
         SELECT a.*, o.id AS offering_id, o.name AS offering_name
         FROM applied_customer_billing_rate a
-        JOIN product p ON p.id = a.product_id
-        JOIN product_offering o ON o.id = p.product_offering_id
+        JOIN product_offering o ON o.id = a.product_offering_id
         WHERE a.customer_bill_id = %s
         ORDER BY lower(a.period), a.charge_type, a.id
         """,
@@ -1198,8 +1257,7 @@ def page_account_charges(
         SELECT a.*, r.run_date, o.id AS offering_id, o.name AS offering_name
         FROM applied_customer_billing_rate a
         JOIN billing_run r ON r.id = a.billing_run_id
-        JOIN product p ON p.id = a.product_id
-        JOIN product_offering o ON o.id = p.product_offering_id
+        JOIN product_offering o ON o.id = a.product_offering_id
         WHERE a.billing_account_id = %s
         ORDER BY r.run_date DESC, lower(a.period) DESC, a.charge_type, a.id DESC
         OFFSET %s LIMIT %s
@@ -1239,8 +1297,7 @@ def page_account_transactions(
                    o.name AS note, a.period
             FROM applied_customer_billing_rate a
             JOIN billing_run r ON r.id = a.billing_run_id
-            JOIN product p ON p.id = a.product_id
-            JOIN product_offering o ON o.id = p.product_offering_id
+            JOIN product_offering o ON o.id = a.product_offering_id
             WHERE a.billing_account_id = %(account)s
             UNION ALL
             SELECT id, 'payment', amount, (received_at AT TIME ZONE %(tz)s)::date, 1,

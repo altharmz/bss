@@ -14,7 +14,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `created_at` | `timestamp with time zone` | no | `now()` | When the row was inserted: the database's now(), not the injected clock. Never used for billing decisions. |
 | `updated_at` | `timestamp with time zone` | no | `now()` | Last change: the database's now(), maintained by the set_updated_at trigger. |
 | `billing_account_id` | `uuid` | no |  |  |
-| `product_offering_id` | `uuid` | no |  |  |
+| `product_offering_id` | `uuid` | no |  | The offering the product was created with; later ones in product_offering_change. |
 | `status` | `product_status_type` (enum, see [README](README.md#enums)) | no |  | TMF637 status. Cosmetic for money (billing is driven by dates); flipped by the worker: created -> active, pendingTerminate -> terminated. cancelled and aborted are never billed. |
 | `start_date` | `date` | no |  | TMF637 startDate: the first billable day (a business date in BILLING_TZ). |
 | `termination_date` | `date` | yes |  | TMF637 terminationDate, exclusive: the first day no longer billed. NULL = open-ended. Immutable once set (a product is deleted once). |
@@ -61,4 +61,4 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`product_order_item`](product_order_item.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`product_offering_change`](product_offering_change.md), [`product_order_item`](product_order_item.md)

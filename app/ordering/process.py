@@ -15,8 +15,11 @@ A draft (requestedInitialState `draft`) is stored without being processed: only 
 the database needs is checked (the ids, what the order references exists). It is
 processed by `submit_draft`, exactly as an order placed at that moment.
 
+A modify item changes its product's offering from requestedStartDate on, billed prorated
+(docs/decisions/billing-core.md#offering-changes-2026-10-18).
+
 The billing account (optional in TMF622) is the order's, else the first item's that names
-one, else the account of the first product a delete/noChange item names; an
+one, else the account of the first product a modify/delete/noChange item names; an
 order with none of them is refused. Items that name another account are rejected
 (`billingAccountMismatch`, `productOfOtherAccount`), as before.
 """
@@ -71,9 +74,8 @@ class OrderRequest:
     details: dict[str, Any] | None = None  # documents, stored as sent
 
 
-# Actions whose item names an existing product (a modify item is rejected before it
-# would matter: actionNotSupported).
-ON_PRODUCT = frozenset({"delete", "noChange"})
+# Actions whose item names an existing product.
+ON_PRODUCT = frozenset({"modify", "delete", "noChange"})
 
 
 @dataclass(frozen=True)
@@ -238,7 +240,7 @@ def _process(
     if account_id is None:
         raise OrderRefused(
             "an order needs a billingAccount: on the order, on an item, or through the"
-            " product of a delete or noChange item"
+            " product of a modify, delete or noChange item"
         )
     # FOR KEY SHARE until commit: a concurrent delete of the account waits for this order
     account = parties.get_billing_account(conn, account_id, "key share")
@@ -343,7 +345,7 @@ def _item_problems(
     if item.billing_account_id not in (None, account["id"]):
         return [("billingAccountMismatch", "the item's billingAccount differs from the order's")]
     if item.action == "modify":
-        return [("actionNotSupported", f"action {item.action} is not supported")]
+        return _modify_problems(conn, item, account, start, today, locked, quotes)
     if item.action == "add":
         return _add_problems(conn, item, account, start, quotes)
     if item.action == "noChange":
@@ -362,6 +364,49 @@ def _unchanged_problems(
     if product["status"] in ENDED:
         return [("productAlreadyEnded", f"the product is already {product['status']}")]
     return []
+
+
+def _modify_problems(
+    conn: psycopg.Connection,
+    item: ItemRequest,
+    account: Row,
+    start: date,
+    today: date,
+    locked: dict[UUID, Row],
+    quotes: dict[str, Row],
+) -> list[tuple[str, str]]:
+    """A modify item changes the product's offering from `start` (the change day D) on
+    (docs/decisions/tmf-api.md#modify-items-2026-10-18). At most one change per product
+    waits to take effect, and it must come before any known termination: together with
+    the delete rule (openModifyItem) a charge is never cut short twice."""
+    product = locked[item.product_id]
+    if product["billing_account_id"] != account["id"]:
+        return [("productOfOtherAccount", "the product belongs to another billing account")]
+    ends = product["termination_date"]
+    if product["status"] in ENDED or (ends is not None and ends <= start):
+        return [
+            (
+                "productAlreadyEnded",
+                f"the product is {product['status']}"
+                + (f" and ends on {ends}, on or before {start}" if ends else ""),
+            )
+        ]
+    if start < product["start_date"]:
+        return [
+            (
+                "productNotStarted",
+                f"the product starts on {product['start_date']}; its offering can change"
+                " from that day on",
+            )
+        ]
+    pending = products.pending_change(conn, product["id"], today)
+    last = products.last_change(conn, product["id"])
+    if pending is not None or (last is not None and last["change_date"] >= start):
+        day = (pending or last)["change_date"]
+        return [("openModifyItem", f"another order already changes its offering on {day}")]
+    if products.offering_on(conn, product["id"], start) == item.product_offering_id:
+        return [("offeringUnchanged", f"the product is on this offering on {start} already")]
+    return _add_problems(conn, item, account, start, quotes)
 
 
 def _add_problems(
@@ -445,6 +490,15 @@ def _delete_problems(
         return [("productAlreadyEnded", f"the product is already {product['status']}")]
     if orders.open_delete_items(conn, product["id"]):
         return [("openDeleteItem", "another order is already deleting this product")]
+    pending = products.pending_change(conn, product["id"], today)
+    if pending is not None and start <= pending["change_date"]:
+        return [
+            (
+                "openModifyItem",
+                f"an order changes its offering on {pending['change_date']}: cancel that order"
+                " to end the product on or before that day",
+            )
+        ]
     if product["start_date"] > today and start > product["start_date"]:
         # Not started yet: a delete cancels it. Terminating it later would be an order
         # for a start date and an end date at once - not what a delete means.
@@ -510,6 +564,18 @@ def _execute(
             emit.product(conn, product["id"], "Create", at=now, today=today)
         elif item.action == "noChange":
             pass  # nothing to do: the product stays as it is
+        elif item.action == "modify":
+            products.change_offering(
+                conn,
+                item.product_id,
+                change_date=start,
+                product_offering_id=item.product_offering_id,
+                changed_by_item_id=row["id"],
+                # in effect today: announced now; else by the worker's run of the day
+                announced_at=now if start <= today else None,
+            )
+            if start <= today:
+                emit.product(conn, item.product_id, "AttributeValueChange", at=now, today=today)
         else:
             product = locked[item.product_id]
             if product["start_date"] > today:

@@ -15,7 +15,7 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 | `updated_at` | `timestamp with time zone` | no | `now()` | Last change: the database's now(), maintained by the set_updated_at trigger. |
 | `product_order_id` | `uuid` | no |  |  |
 | `item_id` | `text` | no |  | TMF622 productOrderItem.id: the client's id, unique within the order. |
-| `action` | `item_action_type` (enum, see [README](README.md#enums)) | no |  | TMF622 action: add, delete and noChange are executed; modify is rejected. |
+| `action` | `item_action_type` (enum, see [README](README.md#enums)) | no |  | TMF622 action: add, modify (an offering change), delete and noChange. |
 | `state` | `product_order_item_state_type` (enum, see [README](README.md#enums)) | yes |  | TMF622 item state: completed, rejected or cancelled once processed; NULL while the order is a draft. |
 | `product_offering_id` | `uuid` | yes |  | TMF622 productOffering; required for add items. |
 | `product_id` | `uuid` | yes |  | TMF622 product: the product created (add) or the one deleted (delete). |
@@ -44,7 +44,8 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 | `product_order_item_add_has_offering` | check | `CHECK (((action <> 'add'::item_action_type) OR (product_offering_id IS NOT NULL)))` |
 | `product_order_item_delete_has_product` | check | `CHECK (((action <> 'delete'::item_action_type) OR (product_id IS NOT NULL)))` |
 | `product_order_item_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
-| `product_order_item_quote` | check | `CHECK ((((quoted_price_id IS NULL) AND (quoted_price_name IS NULL) AND (quoted_amount IS NULL) AND (quoted_currency IS NULL)) OR ((action = 'add'::item_action_type) AND (quoted_price_id IS NOT NULL) AND (quoted_price_name IS NOT NULL) AND (quoted_amount IS NOT NULL) AND (quoted_amount >= (0)::numeric) AND (quoted_currency IS NOT NULL) AND (quoted_currency ~ '^[A-Z]{3}$'::text))))` |
+| `product_order_item_modify_has_product_and_offering` | check | `CHECK (((action <> 'modify'::item_action_type) OR (state = 'rejected'::product_order_item_state_type) OR ((product_id IS NOT NULL) AND (product_offering_id IS NOT NULL))))` |
+| `product_order_item_quote` | check | `CHECK ((((quoted_price_id IS NULL) AND (quoted_price_name IS NULL) AND (quoted_amount IS NULL) AND (quoted_currency IS NULL)) OR ((action = ANY (ARRAY['add'::item_action_type, 'modify'::item_action_type])) AND (quoted_price_id IS NOT NULL) AND (quoted_price_name IS NOT NULL) AND (quoted_amount IS NOT NULL) AND (quoted_amount >= (0)::numeric) AND (quoted_currency IS NOT NULL) AND (quoted_currency ~ '^[A-Z]{3}$'::text))))` |
 | `product_order_item_pkey` | primary key | `PRIMARY KEY (id)` |
 | `product_order_item_id_order_key` | unique | `UNIQUE (id, product_order_id)` |
 | `product_order_item_position_unique` | unique | `UNIQUE (product_order_id, "position")` |
@@ -68,4 +69,4 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 
 ## Referenced by
 
-[`product`](product.md), [`product_order_error_message`](product_order_error_message.md)
+[`product`](product.md), [`product_offering_change`](product_offering_change.md), [`product_order_error_message`](product_order_error_message.md)

@@ -25,6 +25,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `applied_at` | `timestamp with time zone` | no |  | TMF678 date: when the ABR was written - the injected clock of the billing run's attempt that wrote it (the instant that run issues its bills at), not the database's now(). |
 | `applied_tax` | `jsonb` | no | `'[]'::jsonb` | TMF678 appliedTax: [{taxCategory, taxRate (percent; 0 = exempt), taxAmount}], one per tax item of the price, in its order. |
 | `tax_amount` | `numeric(12,2)` | no | `0` | Money. The sum of applied_tax amounts; amount + tax_amount = taxIncludedAmount. |
+| `product_offering_id` | `uuid` | no |  | The offering the ABR bills (a refund: its charge's). Billing sets it; an insert without one gets the product's offering on the first day of period. |
 
 ## Foreign keys
 
@@ -34,6 +35,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `billing_run_id` | [`billing_run`](billing_run.md) (id) | `applied_customer_billing_rate_billing_run_id_fkey` |
 | `customer_bill_id`, `billing_account_id` | [`customer_bill`](customer_bill.md) (id, billing_account_id) | `applied_customer_billing_rate_customer_bill_id_billing_acc_fkey` |
 | `product_id`, `billing_account_id` | [`product`](product.md) (id, billing_account_id) | `applied_customer_billing_rate_product_id_billing_account_i_fkey` |
+| `product_offering_id` | [`product_offering`](product_offering.md) (id) | `applied_customer_billing_rate_product_offering_id_fkey` |
 | `refunds_rate_id`, `product_id` | [`applied_customer_billing_rate`](applied_customer_billing_rate.md) (id, product_id) | `applied_customer_billing_rate_refunds_rate_id_product_id_fkey` |
 
 ## Constraints
@@ -49,20 +51,21 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `applied_customer_billing_rate_pkey` | primary key | `PRIMARY KEY (id)` |
 | `applied_customer_billing_rate_id_product_id_key` | unique | `UNIQUE (id, product_id)` |
 | `applied_customer_billing_rate_refunds_rate_id_key` | unique | `UNIQUE (refunds_rate_id)` |
-| `abr_no_overlap` | exclusion | `EXCLUDE USING gist (product_id WITH =, charge_type WITH =, period WITH &&)` |
 
 ## Indexes
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
-| `abr_no_overlap` | `CREATE INDEX abr_no_overlap ON applied_customer_billing_rate USING gist (product_id, charge_type, period)` | yes |
+| `abr_one_per_start` | `CREATE UNIQUE INDEX abr_one_per_start ON applied_customer_billing_rate USING btree (product_id, charge_type, lower(period))` | no |
 | `applied_customer_billing_rate_billing_account_id_idx` | `CREATE INDEX applied_customer_billing_rate_billing_account_id_idx ON applied_customer_billing_rate USING btree (billing_account_id)` | no |
 | `applied_customer_billing_rate_billing_run_id_idx` | `CREATE INDEX applied_customer_billing_rate_billing_run_id_idx ON applied_customer_billing_rate USING btree (billing_run_id)` | no |
 | `applied_customer_billing_rate_customer_bill_id_idx` | `CREATE INDEX applied_customer_billing_rate_customer_bill_id_idx ON applied_customer_billing_rate USING btree (customer_bill_id)` | no |
 | `applied_customer_billing_rate_id_product_id_key` | `CREATE UNIQUE INDEX applied_customer_billing_rate_id_product_id_key ON applied_customer_billing_rate USING btree (id, product_id)` | yes |
 | `applied_customer_billing_rate_pkey` | `CREATE UNIQUE INDEX applied_customer_billing_rate_pkey ON applied_customer_billing_rate USING btree (id)` | yes |
+| `applied_customer_billing_rate_product_offering_id_idx` | `CREATE INDEX applied_customer_billing_rate_product_offering_id_idx ON applied_customer_billing_rate USING btree (product_offering_id)` | no |
 | `applied_customer_billing_rate_refunds_rate_id_key` | `CREATE UNIQUE INDEX applied_customer_billing_rate_refunds_rate_id_key ON applied_customer_billing_rate USING btree (refunds_rate_id)` | yes |
 
 ## Triggers
 
+- `abr_default_offering`: `CREATE TRIGGER abr_default_offering BEFORE INSERT ON applied_customer_billing_rate FOR EACH ROW EXECUTE FUNCTION abr_default_offering()`
 - `applied_customer_billing_rate_set_updated_at`: `CREATE TRIGGER applied_customer_billing_rate_set_updated_at BEFORE UPDATE ON applied_customer_billing_rate FOR EACH ROW EXECUTE FUNCTION set_updated_at()`

@@ -7,6 +7,12 @@ difference is emitted: a charge when nothing is stored, a refund (expected - cha
 the expected net dropped because a termination became known later. Pricing the unused
 days separately instead would let cent drift accumulate.
 
+Offering changes (docs/decisions/billing-core.md#offering-changes-2026-10-18): the change
+days inside a period cut its billable range into segments, each billed like a period -
+charged once its first day is <= as_of, at its own offering's price on that day, rounded
+once - and matched to its stored charge by that first day. A change seen after the
+period was charged refunds the old offering's charge from the change day on.
+
 Taxes (docs/decisions/billing-core.md#taxes-2026-10-18): a charge carries one line per
 tax item of its price, the net amount x rate / 100 rounded once, half-even, at rate 0
 where the account is exempt from that tax type at midnight of the charge's first day. A
@@ -125,12 +131,14 @@ def charge_taxes(
 def price_at(
     product: Product, day: date, prices: tuple[Price, ...], currency: str, tz: ZoneInfo
 ) -> Price:
-    """The offering's recurring price in `currency` valid at midnight (tz) of `day`."""
+    """The recurring price in `currency` of the product's offering on `day`, valid at
+    midnight (tz) of `day`."""
     at = midnight(day, tz)
+    offering_id = product.offering_on(day)
     found = [
         p
         for p in prices
-        if p.offering_id == product.offering_id
+        if p.offering_id == offering_id
         and p.currency == currency
         and p.valid_from <= at
         and (p.valid_to is None or at < p.valid_to)
@@ -184,15 +192,20 @@ def _product_abrs(state: BillingState, product: Product, as_of: date, tz: ZoneIn
     period = cycle_period(product.start_date, account.bill_cycle_day)
     while period.start <= as_of:
         stored = by_period.pop(period.start, [])
-        abr = _period_diff(state, product, period, stored, as_of, tz)
-        if abr is not None:
-            out.append(abr)
+        out += _period_diff(state, product, period, stored, as_of, tz)
         period = DateRange(period.end, add_month(period.end))
     if by_period:
         raise InconsistentState(
             f"product {product.id}: stored ABRs in periods {sorted(by_period)} it is not billed for"
         )
     return out
+
+
+def segment_starts(product: Product, period: DateRange) -> list[date]:
+    """The first days of the period's segments: the product's first day in it, then each
+    offering change day inside the period. Each segment is billed on its own."""
+    first_day = max(product.start_date, period.start)
+    return [first_day, *(c.day for c in product.changes if first_day < c.day < period.end)]
 
 
 def _period_diff(
@@ -202,26 +215,82 @@ def _period_diff(
     stored: list[StoredAbr],
     as_of: date,
     tz: ZoneInfo,
-) -> NewAbr | None:
-    account = state.account
+) -> list[NewAbr]:
+    """The period's billable range cut at the offering change days into segments, each
+    billed like a whole period: its charge is matched by its first day."""
     rng = billable_range(product, period)
-    charges = [a for a in stored if a.kind == "recurring"]
-    refunds = [a for a in stored if a.kind == "refund"]
-    if len(charges) > 1 or len(refunds) > 1 or (refunds and not charges):
-        raise InconsistentState(f"product {product.id}: ABRs of period {period} are {stored}")
+    charges: dict[date, StoredAbr] = {}
+    for charge in (a for a in stored if a.kind == "recurring"):
+        if charge.period.start in charges:
+            raise InconsistentState(f"product {product.id}: ABRs of period {period} are {stored}")
+        charges[charge.period.start] = charge
+    refunds: dict[UUID, list[StoredAbr]] = defaultdict(list)
+    charge_ids = {c.id for c in charges.values()}
+    for refund in (a for a in stored if a.kind == "refund"):
+        if refund.refunds_id not in charge_ids:
+            raise InconsistentState(
+                f"refund {refund.id} does not belong to a charge of period {period}"
+            )
+        refunds[refund.refunds_id].append(refund)
+    starts = segment_starts(product, period)
+    if stray := sorted(set(charges) - set(starts)):
+        raise InconsistentState(
+            f"product {product.id}: charges start {stray}, not on a segment's first day {starts}"
+        )
+    out = []
+    for i, start in enumerate(starts):
+        end = starts[i + 1] if i + 1 < len(starts) else period.end
+        if rng.is_empty or rng.end <= start:
+            seg = DateRange(start, start)
+        else:
+            seg = DateRange(start, min(end, rng.end))
+        charge = charges.get(start)
+        abr = _segment_diff(
+            state,
+            product,
+            period,
+            start,
+            seg,
+            charge,
+            refunds.get(charge.id, []) if charge else [],
+            as_of,
+            tz,
+        )
+        if abr is not None:
+            out.append(abr)
+    return out
 
-    if not charges:
+
+def _segment_diff(
+    state: BillingState,
+    product: Product,
+    period: DateRange,
+    start: date,
+    rng: DateRange,
+    charge: StoredAbr | None,
+    refunds: list[StoredAbr],
+    as_of: date,
+    tz: ZoneInfo,
+) -> NewAbr | None:
+    """One segment from `start`, billable on `rng` (empty: nothing billable any more)."""
+    account = state.account
+    offering_id = product.offering_on(start)
+    if len(refunds) > 1:
+        raise InconsistentState(f"product {product.id}: ABRs of period {period} are {refunds}")
+
+    if charge is None:
         if rng.is_empty or rng.start > as_of:
             return None
         price = price_at(product, rng.start, state.prices, account.currency, tz)
         net = prorate(price.amount, rng.days, period)
         taxes = charge_taxes(net, price, account, rng.start, tz)
-        return _new_abr(product, "recurring", net, account, rng, taxes=taxes)
+        return _new_abr(product, "recurring", net, account, rng, offering_id, taxes=taxes)
 
-    charge = charges[0]
-    first_day = max(product.start_date, period.start)
-    if charge.period.start != first_day:
-        raise InconsistentState(f"charge {charge.id} starts {charge.period.start}, not {first_day}")
+    if charge.offering_id is not None and charge.offering_id != offering_id:
+        raise InconsistentState(
+            f"charge {charge.id} bills offering {charge.offering_id}, the product is on"
+            f" {offering_id} from {start}"
+        )
     price = price_at(product, charge.period.start, state.prices, account.currency, tz)
     if charge.amount != prorate(price.amount, charge.period.days, period):
         raise InconsistentState(
@@ -230,7 +299,11 @@ def _period_diff(
     _check_charge_taxes(charge, price)
     actual = charge.amount
     for refund in refunds:
-        if refund.refunds_id != charge.id or not refund.period.within(charge.period):
+        if (
+            refund.refunds_id != charge.id
+            or not refund.period.within(charge.period)
+            or refund.offering_id not in (None, offering_id)
+        ):
             raise InconsistentState(f"refund {refund.id} does not belong to charge {charge.id}")
         actual += refund.amount
 
@@ -258,6 +331,7 @@ def _period_diff(
         diff,
         account,
         unbilled,
+        offering_id,
         refunds_id=charge.id,
         taxes=_refund_taxes(charge, expected),
     )
@@ -290,6 +364,7 @@ def _new_abr(
     amount: Decimal,
     account: Account,
     period: DateRange,
+    offering_id: UUID,
     refunds_id: UUID | None = None,
     taxes: tuple[AppliedTax, ...] = (),
 ) -> NewAbr:
@@ -302,6 +377,7 @@ def _new_abr(
         period=period,
         refunds_id=refunds_id,
         taxes=taxes,
+        offering_id=offering_id,
     )
 
 

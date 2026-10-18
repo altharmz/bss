@@ -150,7 +150,7 @@ AREAS = {
         "product_order_error_message",
         "cancel_product_order",
     ),
-    "inventory": ("product",),
+    "inventory": ("product", "product_offering_change"),
     "billing": (
         "billing_run",
         "applied_customer_billing_rate",

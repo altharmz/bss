@@ -1,3 +1,5 @@
+from datetime import date
+
 import psycopg
 import pytest
 from alembic.config import Config
@@ -337,7 +339,51 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 37  # 36 domain tables + alembic_version
+    assert tables == 38  # 37 domain tables + alembic_version
+
+
+def test_0027_offering_changes(temp_db_url):
+    """Existing ABRs bill their product's offering; afterwards an ABR without one gets the
+    offering on its first day, ranges may overlap but first days are unique, and a modify
+    item may be quoted. Downgrading to 0026 refuses while a change exists."""
+    from tests import factories
+
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0026")
+    with psycopg.connect(temp_db_url) as conn:
+        w = factories.world(conn)
+        old = factories.charge(conn, w, factories.days(date(2026, 1, 1), date(2026, 2, 1)))
+        other = factories.offering(conn)
+    command.upgrade(cfg, "0027")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT product_offering_id FROM applied_customer_billing_rate WHERE id = %s",
+            (old["id"],),
+        ).fetchone() == (w.offering["id"],)
+        item = factories.add_order(conn, w.account["id"], other["id"])["items"][0]
+        conn.execute(
+            "INSERT INTO product_offering_change"
+            " (product_id, change_date, product_offering_id, changed_by_item_id)"
+            " VALUES (%s, '2026-01-10', %s, %s)",
+            (w.product["id"], other["id"], item["id"]),
+        )
+        for day, offering in (("2026-01-09", w.offering), ("2026-01-10", other)):
+            assert conn.execute(
+                "SELECT product_offering_on(%s, %s)", (w.product["id"], day)
+            ).fetchone() == (offering["id"],)
+        new = factories.charge(conn, w, factories.days(date(2026, 1, 10), date(2026, 2, 1)))
+        assert new["product_offering_id"] == other["id"]  # overlapping, another first day
+        with pytest.raises(psycopg.errors.UniqueViolation), conn.transaction():
+            factories.charge(conn, w, factories.days(date(2026, 1, 10), date(2026, 1, 20)))
+    with pytest.raises(Exception, match="offering changes exist"):
+        command.downgrade(cfg, "0026")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute("DELETE FROM product_offering_change")
+        conn.execute("DELETE FROM applied_customer_billing_rate WHERE id = %s", (new["id"],))
+    command.downgrade(cfg, "0026")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT count(*) FROM applied_customer_billing_rate").fetchone() == (1,)
+    command.upgrade(cfg, "head")
 
 
 def test_0016_order_cancellation_round_trip(temp_db_url):

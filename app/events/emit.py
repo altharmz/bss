@@ -90,7 +90,8 @@ def bill(conn: psycopg.Connection, bill_id: Any, kind: str, *, at: datetime) -> 
 
 
 def product(conn: psycopg.Connection, product_id: Any, kind: str, *, at: datetime, today) -> None:
-    """Product Create or StateChange (orders, cancellations, the worker's flips)."""
+    """Product Create, StateChange (orders, cancellations, the worker's flips) or
+    AttributeValueChange (an offering change taking effect)."""
 
     def build() -> Body:
         from app.api.inventory import product_body

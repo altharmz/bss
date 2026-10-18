@@ -35,7 +35,9 @@ def load_state(
     return BillingState(
         account=account,
         products=products,
-        prices=billing.load_recurring_prices(conn, [p.offering_id for p in products]),
+        prices=billing.load_recurring_prices(
+            conn, [offering for p in products for offering in p.offering_ids]
+        ),
         abrs=billing.load_abrs(conn, account_id),
         bills=billing.load_bills(conn, account_id),
     )

@@ -244,7 +244,7 @@ def test_a_nested_item_is_an_item_of_the_whole_order(api, shop, db_conn):
     offering, acc = shop
     duplicate = apidata.add_item(offering, "1", productOrderItem=[apidata.add_item(offering, "1")])
     assert api.post(ORDER, apidata.order_body(acc, duplicate)).status_code == 422
-    bad_child = {**apidata.add_item(offering, "1.1"), "action": "modify"}
+    bad_child = apidata.rejected_item(api, offering, "1.1")
     rejected = apidata.order(
         api, acc, apidata.add_item(offering, "1", productOrderItem=[bad_child])
     )

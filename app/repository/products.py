@@ -224,19 +224,134 @@ def flip_statuses(
 OPEN_STATUSES = ("created", "pendingActive", "active", "pendingTerminate", "suspended")
 
 
-def list_open_products(conn: psycopg.Connection, billing_account_id: UUID) -> list[Row]:
-    """The account's open products with their offering (name, code) and specification
-    (name), oldest start first."""
+def list_open_products(conn: psycopg.Connection, billing_account_id: UUID, on: date) -> list[Row]:
+    """The account's open products with their offering on `on` (on the start date for a
+    product that starts later: `offering_id`, name, code) and its specification (name),
+    oldest start first."""
     return fetch_all(
         conn,
         """
-        SELECT p.*, o.name AS offering_name, o.code AS offering_code,
+        SELECT p.*, o.id AS offering_id, o.name AS offering_name, o.code AS offering_code,
                s.id AS specification_id, s.name AS specification_name
         FROM product p
-        JOIN product_offering o ON o.id = p.product_offering_id
+        JOIN product_offering o
+          ON o.id = product_offering_on(p.id, greatest(p.start_date, %s::date))
         LEFT JOIN product_specification s ON s.id = o.product_specification_id
         WHERE p.billing_account_id = %s AND p.status = ANY(%s)
         ORDER BY p.start_date, p.created_at, p.id
         """,
-        (billing_account_id, list(OPEN_STATUSES)),
+        (on, billing_account_id, list(OPEN_STATUSES)),
     )
+
+
+def changes_of(conn: psycopg.Connection, product_id: UUID) -> list[Row]:
+    """The product's offering changes, by change day."""
+    return fetch_all(
+        conn,
+        "SELECT * FROM product_offering_change WHERE product_id = %s ORDER BY change_date",
+        (product_id,),
+    )
+
+
+def change_items(conn: psycopg.Connection, product_id: UUID) -> list[UUID]:
+    """The modify items that changed the product's offering, by change day."""
+    return [row["changed_by_item_id"] for row in changes_of(conn, product_id)]
+
+
+def change_billed(
+    conn: psycopg.Connection, product_id: UUID, day: date, *, mid_period: bool
+) -> bool:
+    """Whether billing reflects an offering change on `day`: an ABR of the product from
+    that day on, or (`mid_period`: the day is not a cycle day) a charge ending on it."""
+    row = fetch_one(
+        conn,
+        """
+        SELECT EXISTS (
+            SELECT 1 FROM applied_customer_billing_rate
+            WHERE product_id = %(product)s
+              AND (lower(period) >= %(day)s
+                   OR (%(mid)s AND charge_type = 'recurring' AND upper(period) = %(day)s))
+        ) AS billed
+        """,
+        {"product": product_id, "day": day, "mid": mid_period},
+    )
+    assert row is not None
+    return row["billed"]
+
+
+def pending_change(conn: psycopg.Connection, product_id: UUID, today: date) -> Row | None:
+    """The product's offering change that has not taken effect (after `today`), if any."""
+    return fetch_one(
+        conn,
+        "SELECT * FROM product_offering_change WHERE product_id = %s AND change_date > %s",
+        (product_id, today),
+    )
+
+
+def last_change(conn: psycopg.Connection, product_id: UUID) -> Row | None:
+    return fetch_one(
+        conn,
+        "SELECT * FROM product_offering_change WHERE product_id = %s"
+        " ORDER BY change_date DESC LIMIT 1",
+        (product_id,),
+    )
+
+
+def change_offering(
+    conn: psycopg.Connection,
+    product_id: UUID,
+    *,
+    change_date: date,
+    product_offering_id: UUID,
+    changed_by_item_id: UUID,
+    announced_at: datetime | None = None,
+) -> Row:
+    """The product is on `product_offering_id` from `change_date` on (a modify item).
+    `announced_at`: the change takes effect now and its event was emitted."""
+    return returning(
+        conn,
+        """
+        INSERT INTO product_offering_change
+            (product_id, change_date, product_offering_id, changed_by_item_id,
+             effect_announced_at)
+        VALUES (%s, %s, %s, %s, %s) RETURNING *
+        """,
+        (product_id, change_date, product_offering_id, changed_by_item_id, announced_at),
+    )
+
+
+def announce_changes(
+    conn: psycopg.Connection, run_date: date, *, visible_before: datetime, at: datetime
+) -> list[UUID]:
+    """Mark the offering changes in effect on `run_date` whose event is still due - those
+    the run sees (their order completed before `visible_before`) - and return their
+    products. Idempotent: a retried run marks nothing twice."""
+    rows = fetch_all(
+        conn,
+        """
+        UPDATE product_offering_change c SET effect_announced_at = %(at)s
+        FROM product_order_item i JOIN product_order o ON o.id = i.product_order_id
+        WHERE i.id = c.changed_by_item_id AND c.effect_announced_at IS NULL
+          AND c.change_date <= %(day)s AND o.completion_date < %(before)s
+        RETURNING c.product_id
+        """,
+        {"at": at, "day": run_date, "before": visible_before},
+    )
+    return sorted({row["product_id"] for row in rows})
+
+
+def undo_change(conn: psycopg.Connection, changed_by_item_id: UUID) -> Row:
+    """Undo a modify item's change (its order is cancelled before the change day)."""
+    return returning(
+        conn,
+        "DELETE FROM product_offering_change WHERE changed_by_item_id = %s RETURNING *",
+        (changed_by_item_id,),
+    )
+
+
+def offering_on(conn: psycopg.Connection, product_id: UUID, day: date) -> UUID:
+    """The product's offering on `day` (the latest change on or before it, else the
+    initial one)."""
+    row = fetch_one(conn, "SELECT product_offering_on(%s, %s) AS id", (product_id, day))
+    assert row is not None and row["id"] is not None
+    return row["id"]

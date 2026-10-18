@@ -162,6 +162,15 @@ def add_item(offering: dict[str, Any], item_id: str = "1", **over) -> dict[str, 
     }
 
 
+def rejected_item(api, offering: dict[str, Any], item_id: str = "1") -> dict[str, Any]:
+    """An add item that is always rejected (billingAccountMismatch: it names another
+    account than the order's) - for tests that need a rejected item or order."""
+    elsewhere = account(api, name="Elsewhere")
+    return add_item(
+        offering, item_id, billingAccount={"id": elsewhere["id"], "@type": "BillingAccountRef"}
+    )
+
+
 def delete_item(product_id: str, item_id: str = "1", **over) -> dict[str, Any]:
     return {
         "@type": "ProductOrderItem",

@@ -197,13 +197,13 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
     with tx() as conn:
         row = _account(conn, account_id)
         account = _core_account(row)
-        rows = products.list_open_products(conn, row["id"])
-        prices = billing.load_recurring_prices(conn, [p["product_offering_id"] for p in rows])
+        rows = products.list_open_products(conn, row["id"], today)
+        prices = billing.load_recurring_prices(conn, [p["offering_id"] for p in rows])
     items = []
     for p in rows:
         core = Product(
             id=p["id"],
-            offering_id=p["product_offering_id"],
+            offering_id=p["offering_id"],  # the offering on the day priced
             status=p["status"],
             start_date=p["start_date"],
             termination_date=p["termination_date"],
@@ -220,7 +220,7 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                 "startDate": p["start_date"],
                 "terminationDate": p["termination_date"],
                 "productOffering": {
-                    "id": str(p["product_offering_id"]),
+                    "id": str(p["offering_id"]),
                     "name": p["offering_name"],
                     "code": p["offering_code"],
                 },

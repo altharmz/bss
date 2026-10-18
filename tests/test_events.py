@@ -230,7 +230,7 @@ def test_order_product_payment_and_bill_events(api, db_conn, everything, worker)
         f"{BASES['TMF622']}/cancelProductOrder", {"productOrder": {"id": order["orderId"]}}
     )
     assert cancelled.status_code == 201, cancelled.text
-    refused = apidata.order(api, acc, {**apidata.add_item(offering), "action": "modify"})
+    refused = apidata.order(api, acc, apidata.rejected_item(api, offering))
     assert api.delete(refused["href"]).status_code == 204
     api.post(f"{BASES['TMF678']}/customerBillOnDemand", {"billingAccount": {"id": acc["id"]}})
     api.post(

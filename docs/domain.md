@@ -159,20 +159,23 @@ Synchronous, in the request's transaction (`app/ordering/process.py`, `place_ord
    order: it is stored `rejected` with one `productOrderErrorMessage` per reason, failing
    items `rejected`, the others `cancelled`, nothing executed - and the answer is
    **201**, not a 4xx (`tests/test_api_ordering.py::test_one_bad_item_rejects_the_whole_order`,
-   `::test_modify_and_no_change_are_stored_as_rejected`). Rejection codes:
-   `accountNotActive`, `requestedStartDateInPast` (order level); `actionNotSupported`,
+   `::test_a_rejected_order_is_stored_with_its_reason`). Rejection codes:
+   `accountNotActive`, `requestedStartDateInPast` (order level);
    `billingAccountMismatch`, `offeringNotSellable`, `offeringNotValid`,
    `noRecurringPrice`, `priceEnds`, `productOfOtherAccount`, `productAlreadyEnded`,
-   `openDeleteItem`, `productNotStarted` (item level) - see
+   `openDeleteItem`, `productNotStarted`, `openModifyItem`, `offeringUnchanged` (item
+   level) - see
    [api/tmf622-product-ordering.md](api/tmf622-product-ordering.md).
 4. Otherwise executed: `add` creates a product starting on the requested date (today
    when omitted; never in the past), `delete` sets its exclusive termination date (or
-   cancels a product that has not started). The order is `completed` with a
-   `completion_date` from the clock.
+   cancels a product that has not started), `modify` changes the product's offering from
+   the requested date on (billed prorated: the old offering until the day before), and
+   `noChange` changes nothing. The order is `completed` with a `completion_date` from
+   the clock.
 
 The requested date is our interpretation: TMF has no per-item date, so
-`requestedStartDate` is the start date of add items and the termination date of delete
-items. Orders are never changed afterwards (no PATCH, DELETE or cancel).
+`requestedStartDate` is the start date of add items, the termination date of delete
+items and the change day of modify items. Orders are never changed afterwards (no PATCH, DELETE or cancel).
 
 ## Billing
 

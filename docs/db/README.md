@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0026**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0027**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -24,6 +24,7 @@ PostgreSQL schema at Alembic head **0026**, read from `pg_catalog` of a throwawa
 | [`product_order_error_message`](product_order_error_message.md) | ordering | TMF622 productOrderErrorMessage: why an order was rejected - one row per reason, for the order as a whole or for one item. |
 | [`cancel_product_order`](cancel_product_order.md) | ordering | TMF622 cancelProductOrder: done on insert (a refused one is not stored); one per order. |
 | [`product`](product.md) | inventory | SID Product (TMF637 product): an instance of an offering on a billing account. Written only by orders; billable on start_date <= d < termination_date. |
+| [`product_offering_change`](product_offering_change.md) | inventory | TMF622 modify items: the product's offering from change_date on (billed prorated). The offering on day d is the latest change on or before d, else product.product_offering_id. |
 | [`billing_run`](billing_run.md) | billing | One daily billing run per date (ours, not TMF). Only a billing run writes ABRs and bills; the worker's bookkeeping lives here (trigger, attempt, failure_kind). |
 | [`applied_customer_billing_rate`](applied_customer_billing_rate.md) | billing | SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recurring charge for the billable days of one cycle period, or the one refund of such a charge. Written only by a billing run. |
 | [`customer_bill`](customer_bill.md) | billing | SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every unbilled ABR of the account whose run date is <= the bill date. Bills of one account never overlap. |
@@ -74,6 +75,7 @@ flowchart LR
   end
   subgraph area_inventory["Inventory (TMF637)"]
     product[product]
+    product_offering_change[product_offering_change]
   end
   subgraph area_billing["Billing and payments (TMF678, TMF676)"]
     billing_run[billing_run]
@@ -105,6 +107,7 @@ flowchart LR
   applied_customer_billing_rate -->|"billing_run_id"| billing_run
   applied_customer_billing_rate -->|"customer_bill_id, billing_account_id"| customer_bill
   applied_customer_billing_rate -->|"product_id, billing_account_id"| product
+  applied_customer_billing_rate -->|"product_offering_id"| product_offering
   applied_customer_billing_rate -->|"refunds_rate_id, product_id"| applied_customer_billing_rate
   bill_allocation -->|"billing_account_id"| billing_account
   bill_allocation -->|"credit_bill_id, billing_account_id"| customer_bill
@@ -140,6 +143,9 @@ flowchart LR
   product -->|"product_offering_id"| product_offering
   product -->|"terminated_by_item_id"| product_order_item
   product_offering -->|"product_specification_id"| product_specification
+  product_offering_change -->|"changed_by_item_id"| product_order_item
+  product_offering_change -->|"product_id"| product
+  product_offering_change -->|"product_offering_id"| product_offering
   product_offering_price -->|"product_offering_id"| product_offering
   product_order -->|"billing_account_id"| billing_account
   product_order_error_message -->|"product_order_id"| product_order
@@ -467,6 +473,16 @@ erDiagram
     text base_type
     text schema_location
   }
+  product_offering_change {
+    uuid id PK
+    timestamptz created_at
+    timestamptz updated_at
+    uuid product_id FK
+    date change_date
+    uuid product_offering_id FK
+    uuid changed_by_item_id FK
+    timestamptz effect_announced_at
+  }
   billing_account {
     uuid id PK
   }
@@ -477,9 +493,12 @@ erDiagram
     uuid id PK
   }
   billing_account ||--o{ product : "billing_account_id"
+  product ||--o{ product_offering_change : "product_id"
   product_offering ||--o{ product : "product_offering_id"
+  product_offering ||--o{ product_offering_change : "product_offering_id"
   product_order_item |o--o{ product : "terminated_by_item_id"
   product_order_item ||--o{ product : "created_by_item_id"
+  product_order_item ||--o{ product_offering_change : "changed_by_item_id"
 ```
 
 Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product_order_item`](product_order_item.md), [`product_offering`](product_offering.md).
@@ -518,6 +537,7 @@ erDiagram
     timestamptz applied_at
     jsonb applied_tax
     numeric tax_amount
+    uuid product_offering_id FK
   }
   customer_bill {
     uuid id PK
@@ -656,6 +676,9 @@ erDiagram
   product {
     uuid id PK
   }
+  product_offering {
+    uuid id PK
+  }
   applied_customer_billing_rate |o--o{ applied_customer_billing_rate : "refunds_rate_id, product_id"
   bill_presentation_media ||--o{ account_presentation_media : "media_id"
   billing_account ||--o{ account_presentation_media : "billing_account_id"
@@ -677,10 +700,11 @@ erDiagram
   payment |o--o{ refund : "payment_id, billing_account_id"
   payment |o--o{ refund_source : "payment_id, billing_account_id"
   product ||--o{ applied_customer_billing_rate : "product_id, billing_account_id"
+  product_offering ||--o{ applied_customer_billing_rate : "product_offering_id"
   refund ||--o{ refund_source : "refund_id, billing_account_id"
 ```
 
-Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product`](product.md).
+Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product`](product.md), [`product_offering`](product_offering.md).
 
 ## Billing worker (ours)
 

@@ -182,6 +182,90 @@ a refund taking back the whole tax, bills due without their taxes, a tax change 
 counted as a charge change, and a payment item allocating its `amount` alone each failed
 them (the last one only after the item test was made to exceed the bill).
 
+## Offering changes (2026-10-18)
+
+Slice 8b of ["Following TMF"](tmf-api.md#following-tmf-2026-10-17), design approved by
+the human on 2026-10-18; the ordering side is in
+[tmf-api.md](tmf-api.md#modify-items-2026-10-18). The human's decision: a `modify` item
+changes a product's offering from `requestedStartDate`, **billed prorated** - the old
+offering until the day before, the new one from that day. Migration `0027`.
+
+- **History.** New table `product_offering_change` (`product_id`, `change_date`,
+  `product_offering_id`, `changed_by_item_id` UNIQUE -> the modify item,
+  `effect_announced_at`; UNIQUE `(product_id, change_date)`). `product.product_offering_id`
+  stays the offering the product was created with and never changes. The offering on
+  day d is the one from the latest change with `change_date <= d`, else the initial one
+  (SQL: `product_offering_on(product, day)`). **Visibility** is the same as for
+  terminations: the adapter passes a change only if the order that set it completed
+  before 00:00 of the run date, so a replay sees what the daily run saw.
+- **Core input.** `Product.changes: tuple[OfferingChange(day, offering_id), ...]`
+  (sorted by day, default `()`, so existing callers keep working) and
+  `offering_on(day)`. Prices are loaded for every offering a product has had.
+- **Segments.** The change days inside a period cut its billable range into segments.
+  Each segment is billed the way a whole period is billed today: charged in advance once
+  its first day is <= as_of, at the price of *its* offering valid at midnight of *its*
+  first day, `round_half_even(price x segment days / period days)`, rounded once per
+  segment. A segment has its own price lookup, so a price change of the new offering
+  that starts before the change day applies from the change day on. A price change
+  within one offering still applies from the next period, as before.
+- **Stored ABRs are matched to segments by start day.** A charge must start on a
+  segment's first day (else `InconsistentState`), at most one per segment, and its
+  offering (new ABR column, below) must be the segment's. The current diff then runs
+  per segment: expected minus (charge + refunds); a refund covers
+  `[segment end, charge end)`. Examples (cycle day 1, change to B on the 10th):
+  - A was charged for the whole month on the 1st, and the change is first seen by a
+    later run: a refund of A for `[10th, 1st)` and a charge of B for `[10th, 1st)` (on
+    the run of the 10th, or the first run after that day if the change is seen later).
+  - The change is known before the month is charged: a charge of A for `[1st, 10th)` on
+    the 1st, and a charge of B for `[10th, 1st)` on the 10th.
+  - Change on the cycle day: a plain split by period, no proration at all.
+- **One refund per charge still holds.** A charge's expected net drops once: when a
+  later change or a termination cuts its segment short. The ordering rules prevent a
+  second cut: at most one change per product that has not taken effect yet; a delete
+  may not end a product on or before a pending change's day; a change must come before
+  a known termination. A second reduction is still `InconsistentState`;
+  `refunds_rate_id UNIQUE` stays.
+- **`abr_no_overlap` is replaced by `abr_one_per_start`** (the human's choice,
+  2026-10-18, after the property tests found the approved design's gap): a charge is
+  refunded, never shortened, so after a mid-period change the old offering's charge
+  `[1st, 1st)` and the new one's `[10th, 1st)` overlap, and so can refunds of two
+  segments. The unique index on `(product_id, charge_type, lower(period))` allows one
+  charge and one refund per product and first day: it still catches a run writing the
+  same ABR twice (the concurrency test's collision without the account lock happens
+  there now). The core keeps the rest: charges start on segment days, a refund lies
+  inside its charge, one refund per charge, the net per segment is exact. A refund that
+  rounds to zero is not written (as before), so a charge's net range may also overlap.
+- **ABRs store their offering.** `applied_customer_billing_rate.product_offering_id`
+  (NOT NULL, foreign key), back-filled from the product: until now every product has
+  had exactly one offering. The core sets it (a refund: its charge's offering) and
+  checks a stored charge's against its segment; an insert without one (tests' factories,
+  older code paths) gets `product_offering_on(product, first day)` from the trigger
+  `abr_default_offering`. Bill charge lists, the account ledger, account charges and the
+  TMF678 ABR's product name show the ABR's offering instead of the product's initial
+  one, which would name the old offering on the new one's charges.
+- **Bills, settlement and taxes are unchanged.** Every segment's charge gets the tax
+  lines of its own price, and its refunds work by diff, as in
+  [Taxes](#taxes-2026-10-18).
+- **Migration `0027`**: the table, `product_offering_on`, the ABR column (added,
+  back-filled, then NOT NULL) with its trigger and index, `abr_one_per_start`, and the
+  order item checks of [tmf-api.md](tmf-api.md#modify-items-2026-10-18). Rolling back
+  needs `alembic downgrade 0026` by hand; it refuses while a change exists (its charges
+  would no longer match a single offering) or a modify item that was not rejected.
+
+Tests: the offering-change cases in `tests/test_billing_core.py` (the three examples
+above, a change plus a termination in one period, two changes in one period, a change on
+the start day, the new offering priced on the change day, one rounding per segment, a
+charge of another offering or off a segment day raising); `tests/test_billing_properties.py`
+now gives a product one random change under the ordering rules (the oracle splits each
+period by offering day by day and rounds once per segment): idempotence, net per
+segment = one rounding, lifetime without drift, daily vs one catch-up run, replay,
+unique first days; `tests/test_api_order_modify.py` for the adapter and API side;
+`test_0027_offering_changes`; `test_one_charge_per_first_day_overlaps_are_allowed`.
+Negative proofs: pricing every segment at the period's first day failed eight core and
+property tests; a change visible a day early failed
+`test_a_change_placed_on_a_day_is_first_seen_by_the_next_days_run`; the TMF678 ABR
+naming the product's initial offering failed the prorated-billing API test.
+
 ## Open questions
 
 - **Changing `billCycleDay`.** PATCH is a 409 today. Not settled in stage 3: a change has

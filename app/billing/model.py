@@ -105,12 +105,40 @@ class Price:
 
 
 @dataclass(frozen=True)
+class OfferingChange:
+    """A modify item's offering change: the product is on `offering_id` from `day` on."""
+
+    day: date
+    offering_id: UUID
+
+
+@dataclass(frozen=True)
 class Product:
     id: UUID
-    offering_id: UUID
+    offering_id: UUID  # the offering it was created with
     status: str
     start_date: date
     termination_date: date | None  # exclusive: the first day not billed
+    changes: tuple[OfferingChange, ...] = ()  # sorted by day, each day once
+
+    def __post_init__(self) -> None:
+        days = [c.day for c in self.changes]
+        if days != sorted(set(days)):
+            raise ValueError(f"product {self.id}: offering changes not sorted by distinct day")
+
+    def offering_on(self, day: date) -> UUID:
+        """The offering on `day`: the latest change on or before it, else the initial one."""
+        offering = self.offering_id
+        for change in self.changes:
+            if change.day > day:
+                break
+            offering = change.offering_id
+        return offering
+
+    @property
+    def offering_ids(self) -> tuple[UUID, ...]:
+        """Every offering the product has had or will have."""
+        return (self.offering_id, *(c.offering_id for c in self.changes))
 
 
 @dataclass(frozen=True)
@@ -125,6 +153,7 @@ class StoredAbr:
     bill_id: UUID | None
     run_date: date  # billing_run.run_date of the run that wrote it
     taxes: tuple[AppliedTax, ...] = ()
+    offering_id: UUID | None = None  # the offering it bills; None: not checked
 
     @property
     def total(self) -> Decimal:
@@ -162,6 +191,7 @@ class NewAbr:
     period: DateRange
     refunds_id: UUID | None  # set on refunds: always a stored charge
     taxes: tuple[AppliedTax, ...] = ()
+    offering_id: UUID | None = None  # the offering it bills (a refund: its charge's)
 
     @property
     def total(self) -> Decimal:

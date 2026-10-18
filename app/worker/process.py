@@ -220,15 +220,18 @@ def flip_statuses(
     """The status flips at the start of the run of `run_date`, in one transaction, before
     billing (section 5): by dates, for what the run sees, blocked accounts included.
     Cosmetic for money - billing is driven by dates - but visible in TMF637 and the UI,
-    and a ProductStateChangeEvent each (at `now`, the run's clock; default: its date)."""
+    and a ProductStateChangeEvent each (at `now`, the run's clock; default: its date).
+    Offering changes in effect on the date get their ProductAttributeValueChangeEvent
+    here too, once (docs/decisions/tmf-api.md#modify-items-2026-10-18)."""
     flipped: list[UUID] = []
     with conn.transaction():
-        counts = products.flip_statuses(
-            conn, run_date, visible_before=visible_before(run_date, tz), flipped=flipped
-        )
-        at = now or visible_before(run_date, tz)
+        before = visible_before(run_date, tz)
+        counts = products.flip_statuses(conn, run_date, visible_before=before, flipped=flipped)
+        at = now or before
         for product_id in flipped:
             emit.product(conn, product_id, "StateChange", at=at, today=run_date)
+        for product_id in products.announce_changes(conn, run_date, visible_before=before, at=at):
+            emit.product(conn, product_id, "AttributeValueChange", at=at, today=run_date)
     return counts
 
 

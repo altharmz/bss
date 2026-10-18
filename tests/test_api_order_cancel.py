@@ -196,7 +196,7 @@ def test_cancellation_request_validation(api, shop):
     )
     assert api.post(CANCEL, {**cancel_body(order), "priority": "1"}).status_code == 400
     assert api.post(CANCEL, {"@type": "CancelProductOrder"}).status_code == 422
-    rejected = apidata.order(api, acc, {**apidata.add_item(offering), "action": "modify"})
+    rejected = apidata.order(api, acc, apidata.rejected_item(api, offering))
     refused(api, rejected, "is rejected")
     assert api.get(order["href"]).json()["state"] == "completed"
     today = iso(at(OCT20, 15))

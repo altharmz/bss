@@ -70,17 +70,18 @@ def test_closed_upper_bound_is_rejected(db_conn):
 def test_duplicate_abr_is_rejected(db_conn):
     w = world(db_conn)
     charge(db_conn, w, days(date(2026, 1, 1), date(2026, 2, 1)))
-    with rejected(db_conn, errors.ExclusionViolation):
+    with rejected(db_conn, errors.UniqueViolation):
         charge(db_conn, w, days(date(2026, 1, 1), date(2026, 2, 1)))
 
 
-def test_overlapping_abr_is_rejected_adjacent_is_accepted(db_conn):
+def test_one_charge_per_first_day_overlaps_are_allowed(db_conn):
+    """Since 0027 (offering changes) a charge is refunded, never shortened, so the old
+    offering's charge overlaps the new one's; what stays unique is the first day."""
     w = world(db_conn)
-    charge(db_conn, w, days(date(2026, 1, 1), date(2026, 1, 31)))
-    charge(db_conn, w, days(date(2026, 1, 31), date(2026, 2, 28)))  # adjacent
-    with rejected(db_conn, errors.ExclusionViolation):
-        # unequal but overlapping: a UNIQUE on the range would have let this through
-        charge(db_conn, w, days(date(2026, 1, 2), date(2026, 1, 31)))
+    charge(db_conn, w, days(date(2026, 1, 1), date(2026, 2, 1)))
+    charge(db_conn, w, days(date(2026, 1, 10), date(2026, 2, 1)))  # from a change day
+    with rejected(db_conn, errors.UniqueViolation):
+        charge(db_conn, w, days(date(2026, 1, 10), date(2026, 1, 20)))
 
 
 def _refund(conn, w, amount, refunds_rate_id, product_id=None):
@@ -201,17 +202,25 @@ def test_delete_item_without_product_is_rejected(db_conn):
         )
 
 
-def test_modify_item_is_storable(db_conn):
-    # Unsupported actions must be recorded and rejected by order processing (stage 4),
-    # not turned into an IntegrityError by the schema.
+def test_a_modify_item_names_its_product_and_offering_unless_rejected(db_conn):
     w = world(db_conn)
-    order = orders.create_order(
-        db_conn,
-        billing_account_id=w.account["id"],
-        order_date=NOW,
-        items=[orders.NewOrderItem(item_id="1", action="modify", product_id=w.product["id"])],
-    )
-    assert order["items"][0]["action"] == "modify"
+
+    def modify(state: str, offering_id) -> dict:
+        item = orders.NewOrderItem(
+            item_id="1",
+            action="modify",
+            product_id=w.product["id"],
+            product_offering_id=offering_id,
+            state=state,
+        )
+        return orders.create_order(
+            db_conn, billing_account_id=w.account["id"], order_date=NOW, items=[item]
+        )
+
+    assert modify("acknowledged", w.offering["id"])["items"][0]["action"] == "modify"
+    assert modify("rejected", None)["items"][0]["state"] == "rejected"
+    with rejected(db_conn, errors.CheckViolation):
+        modify("acknowledged", None)
 
 
 def test_second_open_delete_for_the_same_product_is_rejected(db_conn):

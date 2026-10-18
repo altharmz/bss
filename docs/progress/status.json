@@ -8,9 +8,9 @@
     },
     "db": {
       "deployed": null,
-      "implemented": 36,
-      "items": 36,
-      "tested": 36
+      "implemented": 37,
+      "items": 37,
+      "tested": 37
     },
     "ui": {
       "deployed": null,
@@ -923,6 +923,15 @@
     {
       "area": "db",
       "deployed": null,
+      "id": "db.product_offering_change",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Offering changes (TMF622 modify items)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
       "id": "db.applied_customer_billing_rate",
       "implemented": true,
       "stage": 1,
@@ -1386,7 +1395,7 @@
       "implemented": true,
       "stage": 2,
       "tested": true,
-      "title": "Place a product order (add / delete items)"
+      "title": "Place a product order (add / modify / delete / noChange items)"
     },
     {
       "area": "api",

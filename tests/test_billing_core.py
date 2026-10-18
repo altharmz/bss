@@ -7,7 +7,17 @@ import pytest
 
 from app.billing.core import cycle_period, prorate
 from app.billing.model import DateRange, Exemption, InconsistentState, MissingPrice
-from tests.billing_sim import Ledger, account, midnight, price, product, rng
+from tests.billing_sim import (
+    OFFERING,
+    OFFERING_B,
+    OFFERING_C,
+    Ledger,
+    account,
+    midnight,
+    price,
+    product,
+    rng,
+)
 
 D = Decimal
 P300 = price("300.00")
@@ -351,3 +361,133 @@ def test_a_stored_charge_whose_taxes_no_longer_match_its_price_raises():
     book.prices = (price("300.00", name="price:300.00:2020-01-01:EUR", taxes=(("VAT", "20"),)),)
     with pytest.raises(InconsistentState, match="taxes"):
         book.compute([product(date(2026, 10, 1))], date(2026, 10, 2))
+
+
+# --- offering changes (docs/decisions/billing-core.md#offering-changes-2026-10-18) ---
+
+OCT1, OCT10, OCT20, NOV1 = (
+    date(2026, 10, 1),
+    date(2026, 10, 10),
+    date(2026, 10, 20),
+    date(2026, 11, 1),
+)
+B620 = price("620.00", offering=OFFERING_B)  # 20.00 a day in October
+C310 = price("310.00", offering=OFFERING_C)  # 10.00 a day in October
+
+
+def changed(*changes, start=OCT1, termination=None):
+    return product(start, termination, changes=changes)
+
+
+def offerings(result) -> list:
+    return [a.offering_id for a in result.abrs]
+
+
+def test_a_change_seen_after_the_month_was_charged_refunds_the_old_and_charges_the_new():
+    book = ledger(P300, B620)
+    book.run([changed()], OCT1)
+    to_b = changed((OCT10, OFFERING_B))
+    early = book.run([to_b], date(2026, 10, 5))
+    # A keeps 300 x 9/31 = 87.10; the new offering waits for its first day
+    assert amounts(early) == [("refund", D("-212.90"), rng(OCT10, NOV1))]
+    assert offerings(early) == [OFFERING]
+    on_the_day = book.run([to_b], OCT10)
+    assert amounts(on_the_day) == [("recurring", D("440.00"), rng(OCT10, NOV1))]  # 620 x 22/31
+    assert offerings(on_the_day) == [OFFERING_B]
+    assert book.run([to_b], date(2026, 10, 11)).is_empty
+
+
+def test_a_change_first_seen_after_its_day_writes_refund_and_charge_in_one_run():
+    book = ledger(P300, B620)
+    book.run([changed()], OCT1)
+    result = book.run([changed((OCT10, OFFERING_B))], date(2026, 10, 12))
+    assert amounts(result) == [
+        ("refund", D("-212.90"), rng(OCT10, NOV1)),
+        ("recurring", D("440.00"), rng(OCT10, NOV1)),
+    ]
+
+
+def test_a_change_known_before_the_month_is_charged_gives_two_reduced_charges():
+    book = ledger(P300, B620)
+    to_b = changed((OCT10, OFFERING_B))
+    assert amounts(book.run([to_b], OCT1)) == [("recurring", D("87.10"), rng(OCT1, OCT10))]
+    assert amounts(book.run([to_b], OCT10)) == [("recurring", D("440.00"), rng(OCT10, NOV1))]
+    assert book.refunds() == []
+
+
+def test_a_change_on_the_cycle_day_is_a_plain_split_by_period():
+    book = ledger(P300, B620)
+    to_b = changed((NOV1, OFFERING_B))
+    assert amounts(book.run([to_b], date(2026, 11, 3))) == [
+        ("recurring", D("300.00"), rng(OCT1, NOV1)),
+        ("recurring", D("620.00"), rng(NOV1, date(2026, 12, 1))),
+    ]
+
+
+def test_a_termination_after_a_change_cuts_the_new_offering_only():
+    book = ledger(P300, B620)
+    both = changed((OCT10, OFFERING_B), termination=OCT20)
+    assert amounts(book.run([both], OCT10)) == [
+        ("recurring", D("87.10"), rng(OCT1, OCT10)),
+        ("recurring", D("200.00"), rng(OCT10, OCT20)),
+    ]
+    later = ledger(P300, B620)
+    later.run([changed((OCT10, OFFERING_B))], OCT10)
+    result = later.run([both], date(2026, 10, 15))
+    assert amounts(result) == [("refund", D("-240.00"), rng(OCT20, NOV1))]
+    assert offerings(result) == [OFFERING_B]
+
+
+def test_two_changes_in_one_period_are_three_segments():
+    book = ledger(P300, B620, C310)
+    twice = changed((OCT10, OFFERING_B), (OCT20, OFFERING_C))
+    result = book.run([twice], OCT20)
+    assert amounts(result) == [
+        ("recurring", D("87.10"), rng(OCT1, OCT10)),
+        ("recurring", D("200.00"), rng(OCT10, OCT20)),
+        ("recurring", D("120.00"), rng(OCT20, NOV1)),  # 310 x 12/31
+    ]
+    assert offerings(result) == [OFFERING, OFFERING_B, OFFERING_C]
+
+
+def test_a_change_on_the_start_day_replaces_the_initial_offering():
+    oct15 = date(2026, 10, 15)
+    result = ledger(B620).run([changed((oct15, OFFERING_B), start=oct15)], oct15)
+    assert amounts(result) == [("recurring", D("340.00"), rng(oct15, NOV1))]  # 620 x 17/31
+    assert offerings(result) == [OFFERING_B]
+
+
+def test_the_new_offering_is_priced_on_the_change_day():
+    raised = price("930.00", date(2026, 10, 5), offering=OFFERING_B)
+    book = ledger(P300, price("620.00", valid_to=date(2026, 10, 5), offering=OFFERING_B), raised)
+    result = book.run([changed((OCT10, OFFERING_B))], OCT10)
+    assert amounts(result)[1] == ("recurring", D("660.00"), rng(OCT10, NOV1))  # 930 x 22/31
+
+
+def test_each_segment_is_rounded_once():
+    # 0.02 x 9/31 = 0.0058 -> 0.01 and 0.02 x 22/31 = 0.0142 -> 0.01: two segments are two
+    # charges, each one rounding of its own days, never a share of the month's rounding
+    book = ledger(price("0.02"), price("0.02", offering=OFFERING_B))
+    result = book.run([changed((OCT10, OFFERING_B))], OCT10)
+    assert [a.amount for a in result.abrs] == [D("0.01"), D("0.01")]
+
+
+def test_a_charge_of_another_offering_than_its_segment_raises():
+    book = ledger(P300, B620)
+    book.run([changed()], OCT1)
+    with pytest.raises(InconsistentState, match="bills offering"):
+        book.compute([changed((OCT1, OFFERING_B))], date(2026, 10, 2))
+
+
+def test_a_charge_not_starting_on_a_segment_raises():
+    book = ledger(P300, B620)
+    book.run([changed((OCT10, OFFERING_B))], OCT10)
+    with pytest.raises(InconsistentState, match="segment"):
+        book.compute([changed()], date(2026, 10, 11))
+
+
+def test_offering_changes_must_be_sorted_by_distinct_days():
+    with pytest.raises(ValueError, match="sorted"):
+        changed((OCT20, OFFERING_B), (OCT10, OFFERING_C))
+    with pytest.raises(ValueError, match="sorted"):
+        changed((OCT10, OFFERING_B), (OCT10, OFFERING_C))

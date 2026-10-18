@@ -233,24 +233,20 @@ Slice 8a (2026-10-18; order/item documents, optional derived `billingAccount`,
 `noChange` executed, nested items, drafts with PATCH submit, migration `0026`; 100 gaps
 left, none for TMF622): [decision](docs/decisions/tmf-api.md#order-attributes-and-drafts-2026-10-18);
 API notes for TMF622 updated with the human's OK; committed and pushed `e5db5a5`.
-**Next session starts slice 8b**: `modify` items (today still rejected
-`actionNotSupported`; `ON_PRODUCT` in `app/ordering/process.py` and `_item_request` in
-`app/api/ordering.py` drop a modify item's product). Decided (the human: "decide based
-on TMF"): a modify item names `product` and the new `productOffering`; the offering
-changes from `requestedStartDate`, **billed prorated** - the old offering until the
-date, the new one from it (TMF678 ABRs carry their own periodCoverage; a mid-period
-*price* change still applies from the next period, billing-core.md). Needs a product
-offering history (TMF637 `productOffering` = the one valid today), a billing core with
-several charges per period (`_period_diff` assumes one charge and one refund per
-period), cancelProductOrder undoing a modify before it takes effect, and one open
-modify per product. **Write the design note first** (billing-core.md + tmf-api.md:
-segments, refund of an already-charged period, the core's consistency checks, the
-migration), show it, then implement. Tests that use `modify` as a quick rejection
-(`test_api_ordering.py`, `test_events.py`, `test_full_flow.py`, `test_api_order_cancel.py`,
-`test_api_order_patch.py`) need another rejection trigger then. Then slices 9-10 in
+Slice 8b (2026-10-18; `modify` items, migration `0027`; 100 gaps left, none new):
+design approved, then implemented locally -
+[ordering](docs/decisions/tmf-api.md#modify-items-2026-10-18),
+[billing](docs/decisions/billing-core.md#offering-changes-2026-10-18). A modify item
+changes a product's offering from `requestedStartDate`, billed prorated per segment;
+offering history in `product_offering_change`; ABRs carry their offering;
+**`abr_no_overlap` replaced by `abr_one_per_start`** (the human's choice: a charge is
+refunded, never shortened, so charges overlap after a mid-period change); API notes for
+TMF622 and `scripts/docs/generate.py` updated with the human's OK. **Not committed yet**
+(diff to be shown). Then slices 9-10 in
 [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design notes before
-suspension and payment states. Not deployed: migrations `0009`-`0026` ship together
-(rolling back `0026` needs `alembic downgrade 0025` by hand; it fails while a draft
+suspension and payment states. Not deployed: migrations `0009`-`0027` ship together
+(rolling back `0027` needs `alembic downgrade 0026` by hand; it refuses while an
+offering change or a non-rejected modify item exists; `0026` fails while a draft
 exists).
 
 **100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders

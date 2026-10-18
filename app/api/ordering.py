@@ -283,12 +283,16 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
             raise unprocessable(
                 f"item {item.id}: a {item.action} item cannot carry productOffering"
             )
+    elif item.product is None or item.product_offering is None:
+        raise unprocessable(
+            f"item {item.id}: a modify item needs product and productOffering (the offering"
+            " it changes to)"
+        )
     return ItemRequest(
         item_id=item.id,
         action=item.action,
         product_offering_id=item.product_offering.id if item.product_offering else None,
-        # modify items keep no product: they are rejected anyway
-        product_id=item.product.id if item.product and item.action != "modify" else None,
+        product_id=item.product.id if item.product else None,
         billing_account_id=item.billing_account.id if item.billing_account else None,
         parent_item_id=parent,
         details=documents or None,

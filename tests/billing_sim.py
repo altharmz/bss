@@ -14,6 +14,7 @@ from app.billing.model import (
     BillingState,
     DateRange,
     Exemption,
+    OfferingChange,
     Price,
     Product,
     StoredAbr,
@@ -24,6 +25,8 @@ from app.billing.model import (
 TZ = ZoneInfo("Europe/Moscow")
 NS = uuid.UUID("6c1d1c55-0000-4000-8000-000000000000")
 OFFERING = uuid.uuid5(NS, "offering")
+OFFERING_B = uuid.uuid5(NS, "offering-b")  # what a modify item changes to
+OFFERING_C = uuid.uuid5(NS, "offering-c")
 
 
 def uid(name: str) -> uuid.UUID:
@@ -50,6 +53,7 @@ def price(
     currency: str = "EUR",
     name: str | None = None,
     taxes: tuple[tuple[str, str], ...] = (),
+    offering: uuid.UUID = OFFERING,
 ) -> Price:
     """`taxes`: (category, rate in percent) per tax item."""
 
@@ -57,8 +61,13 @@ def price(
         return value if isinstance(value, datetime) else midnight(value)
 
     return Price(
-        id=uid(name or f"price:{amount}:{valid_from}:{currency}" + (f":{taxes}" if taxes else "")),
-        offering_id=OFFERING,
+        id=uid(
+            name
+            or f"price:{amount}:{valid_from}:{currency}"
+            + (f":{taxes}" if taxes else "")
+            + ("" if offering == OFFERING else f":{offering}")
+        ),
+        offering_id=offering,
         amount=Decimal(amount),
         currency=currency,
         valid_from=instant(valid_from),
@@ -73,13 +82,16 @@ def product(
     *,
     status: str = "active",
     name: str = "p1",
+    changes: tuple[tuple[date, uuid.UUID], ...] = (),
 ) -> Product:
+    """`changes`: (day, offering) per offering change (a modify item), by day."""
     return Product(
         id=uid(name),
         offering_id=OFFERING,
         status=status,
         start_date=start,
         termination_date=termination,
+        changes=tuple(OfferingChange(day, offering) for day, offering in changes),
     )
 
 
@@ -128,6 +140,7 @@ class Ledger:
                     bill_id=None,
                     run_date=run_date,
                     taxes=new.taxes,
+                    offering_id=new.offering_id,
                 )
             )
         for bill in result.bills:

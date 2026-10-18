@@ -15,7 +15,7 @@ from hypothesis import event, given
 from hypothesis import strategies as st
 
 from app.billing.model import Price, Product
-from tests.billing_sim import Ledger, account, midnight, price, product
+from tests.billing_sim import OFFERING_B, Ledger, account, midnight, price, product
 
 BASE = date(2027, 11, 1)  # the horizon covers Feb 2028 (leap year)
 HORIZON = 300
@@ -28,13 +28,16 @@ SHORT_OR_LONG = st.one_of(st.integers(0, 5), st.integers(0, 45))
 @dataclass(frozen=True)
 class ProductSpec:
     """A product over time: ordered on `created_on`; its termination (or, before the
-    start, cancellation) becomes known on `term_known_on`."""
+    start, cancellation) becomes known on `term_known_on`; its offering changes to
+    OFFERING_B from `change_day` on, known from `change_known_on` (a modify item)."""
 
     name: str
     created_on: date
     start: date
     term_known_on: date | None
     termination: date | None
+    change_known_on: date | None = None
+    change_day: date | None = None
 
     @property
     def cancelled(self) -> bool:
@@ -43,10 +46,15 @@ class ProductSpec:
     def visible(self, day: date) -> Product | None:
         if day < self.created_on:
             return None
+        changes = ()
+        if self.change_known_on is not None and self.change_known_on <= day:
+            changes = ((self.change_day, OFFERING_B),)
         if self.term_known_on is not None and self.term_known_on <= day:
             status = "cancelled" if self.cancelled else "terminated"
-            return product(self.start, self.termination, status=status, name=self.name)
-        return product(self.start, name=self.name)
+            return product(
+                self.start, self.termination, status=status, name=self.name, changes=changes
+            )
+        return product(self.start, name=self.name, changes=changes)
 
 
 @dataclass(frozen=True)
@@ -79,12 +87,23 @@ def product_specs(draw, index: int) -> ProductSpec:
         # deleting a product that has not started cancels it: termination = start.
         # Otherwise the termination date is never in the past when it becomes known.
         termination = start if known < start else known + draw(SHORT_OR_LONG)
+    change_known = change = None
+    if draw(st.booleans()):  # an offering change, under the ordering rules
+        change_known = created + draw(st.integers(0, 60))
+        change = max(start, change_known) + draw(SHORT_OR_LONG)
+        # a change comes before a known termination, and a delete may not end the product
+        # on or before a pending change: either way the termination is after the change
+        # (a cancellation, termination = start, is then impossible: no change)
+        if termination is not None and termination <= change:
+            change_known = change = None
     return ProductSpec(
         name=f"p{index}",
         created_on=day(created),
         start=day(start),
         term_known_on=None if known is None else day(known),
         termination=None if termination is None else day(termination),
+        change_known_on=None if change_known is None else day(change_known),
+        change_day=None if change is None else day(change),
     )
 
 
@@ -105,6 +124,20 @@ def scenarios(draw) -> Scenario:
         for i, c in enumerate(cents)
     ]
     prices.append(price("1.00", currency="USD", name="usd"))  # another currency, never used
+    # the offering products change to: its own price, changing once at a random day
+    b_cents = draw(st.lists(st.integers(0, 100_000), min_size=2, max_size=2))
+    b_change = day(draw(st.integers(1, HORIZON)))
+    b_bounds = [BASE - timedelta(days=400), b_change, None]
+    for i, c in enumerate(b_cents):
+        prices.append(
+            price(
+                (Decimal(c) / 100).quantize(CENT),
+                b_bounds[i],
+                b_bounds[i + 1],
+                name=f"b{i}",
+                offering=OFFERING_B,
+            )
+        )
     n = draw(st.integers(1, 3))
     specs = tuple(draw(product_specs(i)) for i in range(n))
     # a walk: steps of 0 repeat a run, small steps are daily-ish, large ones are gaps
@@ -138,19 +171,27 @@ def next_period(start: date) -> date:
     )
 
 
-def oracle_price(prices: tuple[Price, ...], d: date) -> Decimal:
+def oracle_price(prices: tuple[Price, ...], offering, d: date) -> Decimal:
     at = midnight(d)
     [p] = [
         p
         for p in prices
-        if p.currency == "EUR" and p.valid_from <= at and (p.valid_to is None or at < p.valid_to)
+        if p.currency == "EUR"
+        and p.offering_id == offering
+        and p.valid_from <= at
+        and (p.valid_to is None or at < p.valid_to)
     ]
     return p.amount
 
 
+def oracle_offering(p: Product, d: date):
+    return next((c.offering_id for c in reversed(p.changes) if c.day <= d), p.offering_id)
+
+
 def expected_nets(sc: Scenario, as_of: date) -> dict[tuple[str, date], Decimal]:
-    """(product id, period start) -> net for every period whose first billable day <= as_of,
-    with the facts known at as_of."""
+    """(product id, segment's first day) -> net for every segment - a period's run of
+    billable days on one offering - whose first day <= as_of, with the facts known at
+    as_of."""
     out = {}
     for p in sc.products(as_of):
         start = period_start(p.start_date, sc.cycle_day)
@@ -163,19 +204,29 @@ def expected_nets(sc: Scenario, as_of: date) -> dict[tuple[str, date], Decimal]:
                 and p.start_date <= start + timedelta(days=i)
                 and (p.termination_date is None or start + timedelta(days=i) < p.termination_date)
             ]
-            if days and days[0] <= as_of:
-                amount = oracle_price(sc.prices, days[0]) * len(days) / (end - start).days
-                out[(str(p.id), start)] = amount.quantize(CENT, rounding=ROUND_HALF_EVEN)
+            segments: list[list[date]] = []
+            for d in days:
+                if segments and oracle_offering(p, d) == oracle_offering(p, segments[-1][0]):
+                    segments[-1].append(d)
+                else:
+                    segments.append([d])
+            for seg in segments:
+                if seg[0] <= as_of:
+                    offering = oracle_offering(p, seg[0])
+                    amount = oracle_price(sc.prices, offering, seg[0]) * len(seg)
+                    amount /= (end - start).days
+                    out[(str(p.id), seg[0])] = amount.quantize(CENT, rounding=ROUND_HALF_EVEN)
             start = end
     return out
 
 
 def stored_nets(book: Ledger) -> dict[tuple[str, date], Decimal]:
+    """(product id, charge's first day) -> the charge plus its refunds."""
+    by_id = {a.id: a for a in book.abrs}
     nets: dict[tuple[str, date], Decimal] = defaultdict(lambda: Decimal("0.00"))
     for abr in book.abrs:
-        nets[
-            (str(abr.product_id), period_start(abr.period.start, book.account.bill_cycle_day))
-        ] += abr.amount
+        charge = abr if abr.refunds_id is None else by_id[abr.refunds_id]
+        nets[(str(abr.product_id), charge.period.start)] += abr.amount
     return dict(nets)
 
 
@@ -207,6 +258,9 @@ def test_net_per_period_matches_one_rounding_and_lifetime_has_no_drift(sc):
     event(f"bills: {min(len(book.bills), 3)}")
     event(f"cancelled: {any(s.cancelled for s in sc.specs)}")
     event(f"prices used: {len({a.amount for a in book.charges() if a.period.days > 27})}")
+    event(f"offering changes: {sum(s.change_day is not None for s in sc.specs)}")
+    event(f"new offering charged: {any(a.offering_id == OFFERING_B for a in book.charges())}")
+    event(f"old offering refunded: {any(a.offering_id != OFFERING_B for a in book.refunds())}")
     last = sc.runs[-1]
     expected = expected_nets(sc, last)
     nets = stored_nets(book)
@@ -263,11 +317,12 @@ def test_refunds_overlap_precision_currency(sc):
         assert charge.kind == "recurring" and charge.product_id == refund.product_id
         assert refund.amount < 0 and -refund.amount <= charge.amount
         assert refund.period.within(charge.period) and not refund.period.is_empty
+    # abr_one_per_start. Ranges may overlap since offering changes: the old offering's
+    # charge is refunded from the change day, unless that refund rounds to zero (and the
+    # nets per segment are exact either way: test_net_per_period_...)
     for kind in ("recurring", "refund"):
-        rows = [a for a in book.abrs if a.kind == kind]
-        for i, a in enumerate(rows):
-            for b in rows[i + 1 :]:
-                assert not (a.product_id == b.product_id and a.period.overlaps(b.period)), (a, b)
+        starts = [(a.product_id, a.period.start) for a in book.abrs if a.kind == kind]
+        assert len(starts) == len(set(starts))
     for abr in book.abrs:
         assert abr.amount == abr.amount.quantize(CENT) and abr.amount.as_tuple().exponent == -2
         assert abr.currency == "EUR"

@@ -291,6 +291,71 @@ comparison, with drafts processed at once, and without noChange's account check,
 tests above failed. Rolling back `0026` needs `alembic downgrade 0025` by hand; it
 fails while a draft exists (delete it first) and flattens nested items.
 
+### Modify items (2026-10-18)
+
+Slice 8b, design approved by the human on 2026-10-18 (billing in
+[billing-core.md](billing-core.md#offering-changes-2026-10-18)), migration `0027`. The
+human: "decide based on TMF". TMF622 only defines the `modify` action. What it changes
+and when is up to us, and decided here. `actionNotSupported` is no longer produced:
+every action is executed.
+
+- **Shape.** A modify item names `product` (the product to change, as a delete item
+  does) and `productOffering` (the offering it changes to). Both are required: a 422
+  otherwise, nothing stored. `requestedStartDate` (today if absent) is the **change day
+  D**: the old offering is billed until D-1, the new one from D. A modify item changes
+  nothing else.
+- **Rejections** (business rules, 201 with the order `rejected`): `productOfOtherAccount`;
+  `productAlreadyEnded` (the product has ended, or its known termination is on or
+  before D); `productNotStarted` (D before the product's start date; D on the start
+  date replaces the initial offering, with nothing billed for it); `openModifyItem`
+  (the product already has a change that has not taken effect, or a change on D);
+  `offeringUnchanged` (the product is already on that offering on D; that is what
+  noChange is for); plus add's checks on the new offering at D: `offeringNotSellable`,
+  `offeringNotValid`, `noRecurringPrice`, `priceEnds`. **A delete gains
+  `openModifyItem`**: it may not end a product on or before the day of a change that
+  has not taken effect (cancel that order first). These rules keep "one refund per
+  charge" true.
+- **Execution.** Inserts the `product_offering_change` row. The product's status does
+  not change. The item references the product, and its quote (`itemPrice`) is the new
+  offering's recurring price at D, as an add item's is (the `product_order_item_quote`
+  check now allows it on modify items; a new check requires a modify item that was not
+  rejected to name its product and offering). `ON_PRODUCT` includes `modify`, and
+  `_item_request` keeps a modify item's product. A product may still be named by one
+  item of an order only.
+- **TMF637.** `productOffering` (and `name`) is the offering valid today (on the start
+  date for a product that has not started). `productPrice` is the price of the segment
+  that bills today. `productOrderItem[]` lists each modify item with role
+  `modification`, between creation and termination. The internal open-products view
+  uses the same offering; the first-charge and price-change previews concern an offering,
+  not a product, and are unchanged.
+- **Events.** ProductAttributeValueChangeEvent: at order time when D is today, else from
+  the worker's run of D (at the status flips, with their visibility).
+  `product_offering_change.effect_announced_at` records it, so a retried run emits it
+  once. The order's own events are as before.
+- **cancelProductOrder** undoes a modify item before it takes effect (D after today) by
+  deleting its change row (ProductAttributeValueChangeEvent: its `productOrderItem[]`
+  changed). It is refused (409, nothing stored) once billing has reflected the change:
+  any ABR of the product starting on or after D, or a charge ending on D when D is not a
+  cycle day (the reduced charge of the old offering). A full charge of the old offering
+  that has not been refunded yet does not block it. Cancelling an add order is refused
+  while another order changes its product's offering.
+- **Catalog.** An offering named by a change counts as ordered, which already holds
+  because the modify item names it; the same reference makes deleting it a 409.
+- **Not in this slice:** a "change offering" action in the UI, and the seed. The probe
+  sees no gap here (`modify` was already accepted by the schema), so `tests/tmf-gaps.txt`
+  is unchanged (100 gaps). Tests that used `modify` as a quick rejection now use
+  `apidata.rejected_item` (an add item naming another account: `billingAccountMismatch`);
+  `test_full_flow.py` modifies its ended product (`productAlreadyEnded`).
+
+Tests: `tests/test_api_order_modify.py` (the shape 422s, every rejection, the delete
+rule, a change placed on a day first seen by the next day's run, billing through the
+API - a mid-period change after the month was charged and one known beforehand -
+TMF637 and the TMF678 product names before and after D, the open-products view, events
+from the order and from the worker, cancellation allowed and refused);
+`test_0027_offering_changes`. Negative proofs: without the delete rule, without the
+cancellation's billing check, and with the worker announcing a change again on a retried
+run, the tests above failed.
+
 ### Product writes through orders (2026-10-17)
 
 The last seven operations, approved by the human on 2026-10-17 ("reach 100%"), close

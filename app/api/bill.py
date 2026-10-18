@@ -41,7 +41,7 @@ from app.api.inventory import product_href
 from app.api.tmfjson import TmfJSONResponse
 from app.billing import settlement
 from app.billing.adapter import settle_account
-from app.repository import billing, catalog, parties, products
+from app.repository import billing, catalog, parties
 from app.repository._sql import IS_NULL, NOT_NULL, Row, select_page
 
 BASE = "/tmf-api/customerBillManagement/v5"
@@ -181,9 +181,7 @@ def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
 
 
 def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
-    product = products.get_product(conn, row["product_id"])
-    assert product is not None  # foreign key
-    offering = catalog.get_product_offering(conn, product["product_offering_id"])
+    offering = catalog.get_product_offering(conn, row["product_offering_id"])
     assert offering is not None  # foreign key
     bill_id = row["customer_bill_id"]
     return without_nulls(
@@ -207,7 +205,9 @@ def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "isBilled": bill_id is not None,
             "bill": ref("CustomerBill", bill_href(bill_id), bill_id) if bill_id else None,
             "billingAccount": _account_ref(conn, row["billing_account_id"]),
-            "product": ref("Product", product_href(product["id"]), product["id"], offering["name"]),
+            "product": ref(
+                "Product", product_href(row["product_id"]), row["product_id"], offering["name"]
+            ),
             "@type": "AppliedCustomerBillingRate",
         }
     )

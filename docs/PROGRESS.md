@@ -11,7 +11,7 @@ records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 36 | 36/36 (100%) | 36/36 (100%) | unknown |
+| Database | 37 | 37/37 (100%) | 37/37 (100%) | unknown |
 | API | 145 | 145/145 (100%) | 145/145 (100%) | unknown |
 | UI | 22 | 22/22 (100%) | 22/22 (100%) | unknown |
 | Worker | 15 | 15/15 (100%) | 15/15 (100%) | unknown |
@@ -48,6 +48,7 @@ records the deployed commit.
 | `db.event` | 5 | Events some hub wanted (outbox) | yes | yes | unknown |
 | `db.event_delivery` | 5 | Event deliveries to hub callbacks | yes | yes | unknown |
 | `db.product` | 1 | Products (TMF637) | yes | yes | unknown |
+| `db.product_offering_change` | 5 | Offering changes (TMF622 modify items) | yes | yes | unknown |
 | `db.applied_customer_billing_rate` | 1 | Charges and refunds - ABRs (TMF678) | yes | yes | unknown |
 | `db.customer_bill` | 1 | Customer bills (TMF678) | yes | yes | unknown |
 | `db.billing_run` | 1 | Billing runs, one per date | yes | yes | unknown |
@@ -170,7 +171,7 @@ records the deployed commit.
 | `api.tmf676.payment.create` | 2 | Record a payment | yes | yes | unknown |
 | `api.tmf622.productOrder.list` | 2 | List product orders | yes | yes | unknown |
 | `api.tmf622.productOrder.get` | 2 | Get a product order | yes | yes | unknown |
-| `api.tmf622.productOrder.create` | 2 | Place a product order (add / delete items) | yes | yes | unknown |
+| `api.tmf622.productOrder.create` | 2 | Place a product order (add / modify / delete / noChange items) | yes | yes | unknown |
 | `api.tmf622.productOrder.patch` | 5 | Patch an order's description, category, priority, externalId | yes | yes | unknown |
 | `api.tmf637.product.create` | 5 | Add a product (through an add order) | yes | yes | unknown |
 | `api.tmf637.product.patch` | 5 | Schedule a product's end (through a delete order) | yes | yes | unknown |

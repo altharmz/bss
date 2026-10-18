@@ -78,6 +78,10 @@ def order_href(order_id: Any) -> str:
     return f"{ORDERING_BASE}/productOrder/{order_id}"
 
 
+# RelatedOrderItem.role per item action: what the item did to the product
+ROLES = {"add": "creation", "modify": "modification", "delete": "termination"}
+
+
 def _related_order_item(conn: psycopg.Connection, item_id: UUID) -> dict[str, Any]:
     item = orders.get_order_item(conn, item_id)
     assert item is not None  # foreign key
@@ -86,7 +90,7 @@ def _related_order_item(conn: psycopg.Connection, item_id: UUID) -> dict[str, An
         "orderHref": order_href(item["product_order_id"]),
         "orderItemId": item["item_id"],
         "orderItemAction": item["action"],
-        "role": "creation" if item["action"] == "add" else "termination",
+        "role": ROLES[item["action"]],
         "@type": "RelatedOrderItem",
         "@referredType": "ProductOrder",
     }
@@ -94,9 +98,16 @@ def _related_order_item(conn: psycopg.Connection, item_id: UUID) -> dict[str, An
 
 def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, Any]:
     account = parties.get_billing_account(conn, row["billing_account_id"])
-    offering = catalog.get_product_offering(conn, row["product_offering_id"])
+    # the offering valid today (on the start date for a product that starts later)
+    changes = billing.offering_changes(conn, [row["id"]]).get(row["id"], ())
+    core = billing.core_product(row, changes)
+    offering = catalog.get_product_offering(conn, core.offering_on(max(today, row["start_date"])))
     assert account is not None and offering is not None  # foreign keys
-    item_ids = [row["created_by_item_id"], row["terminated_by_item_id"]]
+    item_ids = [
+        row["created_by_item_id"],
+        *products.change_items(conn, row["id"]),
+        row["terminated_by_item_id"],
+    ]
     terminated = row["termination_date"]
     # creationDate: the creating order's order_date - the injected clock of the request
     # that wrote the product (products are written only by orders), not created_at
@@ -113,10 +124,15 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
         terminated is None or terminated > row["start_date"]
     ):
         day = min(today, terminated - timedelta(days=1)) if terminated else today
-        priced_on = max(row["start_date"], cycle_period(day, account["bill_cycle_day"]).start)
+        # the first day of the segment that bills `day` (billing-core.md)
+        priced_on = max(
+            row["start_date"],
+            cycle_period(day, account["bill_cycle_day"]).start,
+            *(c.day for c in changes if c.day <= day),
+        )
         price = catalog.price_at(
             conn,
-            product_offering_id=offering["id"],
+            product_offering_id=core.offering_on(priced_on),
             price_type="recurring",
             currency=account["currency"],
             at=from_billing_date(priced_on),

@@ -76,14 +76,8 @@ def test_patch_refuses_what_processing_decided_and_bad_values(api, placed, body,
 def test_patch_of_a_missing_order_and_of_a_rejected_one(api, placed):
     assert api.patch(f"{apidata.ORDER}/{apidata.NIL}", {"priority": "1"}).status_code == 404
     account = apidata.account(api, name="Other")
-    rejected = apidata.order(
-        api,
-        account,
-        {
-            **apidata.add_item({"id": placed["productOrderItem"][0]["productOffering"]["id"]}),
-            "action": "modify",
-        },
-    )
+    offering = {"id": placed["productOrderItem"][0]["productOffering"]["id"]}
+    rejected = apidata.order(api, account, apidata.rejected_item(api, offering))
     assert rejected["state"] == "rejected"
     assert api.patch(rejected["href"], {"description": "kept for the record"}).status_code == 200
 

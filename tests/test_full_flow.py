@@ -1,6 +1,7 @@
 """The whole stage 2 surface, end to end, through the API only: catalog, party, customer,
 account, an order that adds a product, one that deletes it, a payment reflected in the
-balance, and a modify order stored as rejected. Every response is contract-checked."""
+balance, and a modify order of the ended product stored as rejected. Every response is
+contract-checked."""
 
 from datetime import timedelta
 from decimal import Decimal
@@ -74,13 +75,17 @@ def test_full_flow(api):
     assert balance["amount"] == {"unit": "RUB", "value": Decimal("1000.00")}
     assert api.get(RATE).json() == []  # stage 2 never writes an ABR
 
-    # a modify order is stored as rejected, with its reason
-    modify = {**apidata.delete_item(product["id"]), "action": "modify"}
+    # a modify order of the ended product is stored as rejected, with its reason
+    modify = {
+        **apidata.delete_item(product["id"]),
+        "action": "modify",
+        "productOffering": {"id": product["productOffering"]["id"], "@type": "ProductOfferingRef"},
+    }
     response = api.post(ORDER, apidata.order_body(account, modify))
     assert response.status_code == 201
     rejected = response.json()
     assert rejected["state"] == "rejected"
-    assert rejected["productOrderErrorMessage"][0]["code"] == "actionNotSupported"
+    assert rejected["productOrderErrorMessage"][0]["code"] == "productAlreadyEnded"
     assert api.get(rejected["href"]).json() == rejected
 
     states = [o["state"] for o in api.get(f"{ORDER}?billingAccount.id={account['id']}").json()]

@@ -184,7 +184,7 @@ def test_example_8_catch_up_in_one_call(api, db_conn, offering):
 # --- the database's constraints are in play ---
 
 
-def test_a_stale_result_applied_twice_hits_the_exclusion_constraint(api, db_conn, offering):
+def test_a_stale_result_applied_twice_hits_the_one_per_start_index(api, db_conn, offering):
     account = apidata.account(api)
     add(api, account, offering, date(2026, 12, 1), on=at(date(2026, 11, 20)))
     run = run_row(db_conn, date(2026, 12, 1))
@@ -193,7 +193,7 @@ def test_a_stale_result_applied_twice_hits_the_exclusion_constraint(api, db_conn
     with db_conn.transaction():
         apply_result(db_conn, state.account, run["id"], result, issued_at=run["started_at"])
     # what two concurrent runs computing from the same state would do without the lock
-    with pytest.raises(psycopg.errors.ExclusionViolation), db_conn.transaction():
+    with pytest.raises(psycopg.errors.UniqueViolation), db_conn.transaction():
         apply_result(db_conn, state.account, run["id"], result, issued_at=run["started_at"])
     assert count(db_conn, "applied_customer_billing_rate") == 1
 
@@ -203,7 +203,7 @@ def test_two_concurrent_bill_account_calls_serialize_on_the_account(
 ):
     """The first call holds the account row lock until it commits; the second waits,
     then sees the first one's ABRs and writes nothing - instead of computing from the
-    same state and colliding on the exclusion constraint."""
+    same state and colliding on abr_one_per_start (abr_no_overlap before 0027)."""
     account = apidata.account(api)
     add(api, account, offering, date(2026, 12, 1), on=at(date(2026, 11, 20)))
     run = run_row(db_conn, date(2026, 12, 1))
