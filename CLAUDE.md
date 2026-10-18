@@ -241,10 +241,18 @@ changes a product's offering from `requestedStartDate`, billed prorated per segm
 offering history in `product_offering_change`; ABRs carry their offering;
 **`abr_no_overlap` replaced by `abr_one_per_start`** (the human's choice: a charge is
 refunded, never shortened, so charges overlap after a mid-period change); API notes for
-TMF622 and `scripts/docs/generate.py` updated with the human's OK. **Not committed yet**
-(diff to be shown). Then slices 9-10 in
-[tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design notes before
-suspension and payment states. Not deployed: migrations `0009`-`0027` ship together
+TMF622 and `scripts/docs/generate.py` updated with the human's OK. Committed and
+pushed `eaa1a7b`.
+**Next session: the last gaps, one slice** (replaces slices 9-10; the human: close every
+remaining gap, each open choice "decided based on TMF"). The plan is
+[The last gaps](docs/decisions/tmf-api.md#the-last-gaps-2026-10-18): step 0 extends the
+probe to nested response attributes; TMF637 descriptive attributes, own `name`, PATCH
+`productOffering`/`status` as orders, suspension as modify items with `product.status`
+(billed as before: no spec says otherwise), C9 fixed; POST's `billingAccount` and
+`productOffering` kept as recorded deviations; TMF676 documents (payment states: none
+defined); TMF678 derived attributes; priceType discount/allowance/penalty as records.
+**Start by re-reading that section and confirming it with the human**, then implement
+per the slice workflow. Not deployed: migrations `0009`-`0027` ship together
 (rolling back `0027` needs `alembic downgrade 0026` by hand; it refuses while an
 offering change or a non-rejected modify item exists; `0026` fails while a draft
 exists).

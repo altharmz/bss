@@ -356,6 +356,104 @@ from the order and from the worker, cancellation allowed and refused);
 cancellation's billing check, and with the worker announcing a change again on a retried
 run, the tests above failed.
 
+### The last gaps (2026-10-18)
+
+**Plan, prepared for the next session; the human confirms it before implementation.**
+The human asked to close every remaining gap in one slice (replacing slices 9 and 10)
+and left each open choice to "TMF" ("follow TMF recommendations", "decide based on
+TMF"). The rule ([Following TMF](#following-tmf-2026-10-17)) decides them: what a spec
+defines is implemented; behaviour it leaves undefined is not invented; our own
+requirements stay only where billing cannot work without them, with the reason
+recorded. Starting point: `tests/tmf-gaps.txt` has 100 gaps (TMF637 49, TMF676 39,
+TMF678 12), plus the behaviour gaps of [the gap analysis](../tmf-gap-analysis.md).
+
+**Step 0 - nested response attributes** (the human: "decide based on TMF": the specs
+define them, so they are in). Extend `tests/tmf_gaps.py` one level into responses
+(the attributes of each object/array attribute of every resource schema, through
+`fields=` where it can address them, else from a full GET of a seeded resource), lock
+the new lines in `tests/tmf-gaps.txt`, and close them in this slice. If they come to
+more than about 150 lines, split by API (9a: TMF637/TMF676/TMF678 below, 9b: the nested
+lines) and say so before going on.
+
+**TMF637 (49 lines).**
+
+- **Descriptive attributes** (POST and PATCH; slice 4's documents, checked against
+  `spec/`, stored in a new `product.details`): `agreementItem`, `intent`, `place`,
+  `productCharacteristic`, `productRelationship`, `productTerm`, `realizingResource`,
+  `realizingService`, `product` (a bundle's member products as references or values -
+  records, no inventory of their own); plain columns or document keys: `description`,
+  `productSerialNumber`, `isBundle`, `isCustomerVisible`. PATCH changes them directly
+  (they neither create nor end a product, so "orders alone create or end products"
+  holds); ProductAttributeValueChangeEvent.
+- **`name`** becomes the product's own (POST and PATCH; default: the offering's name at
+  creation, as today's answer).
+- **PATCH `productOffering`** places a modify order effective today (slice 8b's rules;
+  a rejection is a 409, nothing stored, as product writes do). **PATCH `status`**
+  `suspended` / `active` places the suspension or resumption order below. **PATCH
+  `billingAccount`, `startDate`** may only repeat the stored value (409 otherwise,
+  naming the way out: a product's account never changes - billing; a start date moves
+  by cancelling the order and placing a new one) - slice 8a's pattern for processed
+  orders.
+- **POST `terminationDate`** places the add order and a delete order with that date in
+  the same transaction (two ordinary orders); **POST `name`** as above; **POST
+  `productOffering.version`** checked like slice 6's reference versions.
+- **POST requires `billingAccount`, `productOffering`: kept as recorded deviations**
+  (billing cannot charge a product without an account and an offering; the rule allows
+  exactly this). `tests/tmf-gaps.txt` gets a section `# accepted deviations` the probe
+  output is compared with as well, holding these two lines with their reason; the lock
+  stays exact.
+- **Suspension** (the human: "follow TMF recommendations"). TMF622 changes a product's
+  state with a `modify` item carrying `product.status` - TMF637 has no suspend
+  operation. So: a modify item with `product.status: suspended` (from `active`) or
+  `active` (from `suspended`) and no `productOffering`, effective `requestedStartDate`;
+  `pendingSuspend`-like statuses do not exist in the spec, so a future suspension leaves
+  the status as it is until the worker's run of the date flips it (as `created` ->
+  `active` and `pendingTerminate` -> `terminated`); cancelProductOrder undoes it before
+  the date. **Billing does not change**: no spec defines what a suspension does to
+  charges, so a suspended product is billed by its dates as today (the open question in
+  billing-core.md is closed that way; a business rule to stop charges would be ours and
+  needs the human). One item changes either the offering or the status, not both.
+- **C9**: a delete or a suspension/resumption order on a `Suspended`/`Closed` billing
+  account is executed (TMF666's account states forbid nothing); add and offering
+  changes still need an `Active` account (`accountNotActive`).
+- **`pendingActive`, `aborted`**: describe asynchronous provisioning; orders here
+  complete synchronously, so never reached - recorded, like the order states of slice
+  8a.
+
+**TMF676 (39 lines).** `name`, `description`, `authorizationCode`, `correlatorId`
+(text), `channel`, `payer` (payment), `requestor` (refund) as documents; `account` and
+`paymentMethod` keep the extra attributes sent (`account.description`,
+`paymentMethod.description`, `isPreferred`, `relatedParty`, `status`, `statusDate`,
+`validFor`, `account`) as stored documents beside the references they resolve to.
+**Payment states**: TMF676 v4 `status` is free text with no states or transitions, so
+there is nothing to implement beyond what exists (`done`); recorded, and the "payment
+states other than done" gap is closed as "not defined by the spec".
+
+**TMF678 (12 lines).**
+
+- appliedCustomerBillingRate: `name` = the ABR's offering name, `description` = what
+  it bills (`<offering>, <period>`; a refund: "refund of ..."), `characteristic` = `[]`
+  (billing sets none; the attribute is answered).
+- billCycle: `BillCycleSpecification` = the account's cycle specification reference
+  (or the built-in `monthly`), `chargeDate` = `mailingDate` = `creditDate` = the bill
+  date (the run charges, issues and applies credit on the cycle day), `paymentDueDate`
+  = bill date + `BILL_PAYMENT_TERM_DAYS` (the term in force).
+- customerBill: `financialAccount` (the billing account's, if linked), `paymentMethod`
+  (the account's default payment method document, if any), `relatedParty` (the
+  account's customer, role `customer`).
+- customerBillOnDemand: `relatedParty` accepted on POST (document) and answered.
+
+**priceType `discount`, `allowance`, `penalty`** (the human: "decide based on TMF"):
+TMF620 names them only as examples in a free-text description, with no arithmetic, so
+they are accepted on prices as records (stored, served, imported/exported) and never
+billed; billing keeps using `recurring`. Recorded in catalog.md.
+
+**Also:** the gap analysis' "party `status`" item is stale (writable since slice 4) and
+is removed; every behaviour gap of its list ends closed or recorded as not defined by
+the specs. Migration `0028` (product details/name, payment and refund documents,
+on-demand relatedParty, suspension items). Tests per area, negative proofs, `make
+progress`, API notes for TMF637/676/678 (harness files: diff first, the human's OK).
+
 ### Product writes through orders (2026-10-17)
 
 The last seven operations, approved by the human on 2026-10-17 ("reach 100%"), close
