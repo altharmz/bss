@@ -22,6 +22,7 @@ TMF666 financial accounts: a party's receivables across its billing accounts.
 | `credit_limit_currency` | `character(3)` | yes |  | Currency of credit_limit; set exactly when it is. |
 | `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
 | `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
+| `details` | `jsonb` | no | `'{}'::jsonb` | TMF666 descriptive attributes (contact, taxExemption, relatedParty as sent), validated against the spec. |
 
 ## Foreign keys
 
@@ -38,6 +39,7 @@ TMF666 financial accounts: a party's receivables across its billing accounts.
 | `financial_account_credit_limit_check` | check | `CHECK ((credit_limit >= (0)::numeric))` |
 | `financial_account_credit_limit_currency_check` | check | `CHECK ((credit_limit_currency ~ '^[A-Z]{3}$'::text))` |
 | `financial_account_credit_limit_has_currency` | check | `CHECK (((credit_limit IS NULL) = (credit_limit_currency IS NULL)))` |
+| `financial_account_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `financial_account_name_check` | check | `CHECK ((length(name) > 0))` |
 | `financial_account_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `financial_account_pkey` | primary key | `PRIMARY KEY (id)` |

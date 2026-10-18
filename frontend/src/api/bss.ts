@@ -74,7 +74,11 @@ export interface Account {
 }
 
 export function toAccount(body: BillingAccountBody): Account {
-  const customer = need(body.relatedParty?.[0]?.partyOrPartyRole, 'relatedParty customer');
+  // relatedParty may hold other roles too (bill receiver, contact): find the customer
+  const customer = need(
+    body.relatedParty?.find((party) => party.role === 'customer')?.partyOrPartyRole,
+    'relatedParty customer',
+  );
   const balance = need(body.accountBalance?.[0]?.amount?.value, 'accountBalance');
   const limit = body.creditLimit?.value;
   const financial = body.financialAccount;
@@ -118,7 +122,10 @@ export interface FinancialAccount {
 }
 
 export function toFinancialAccount(body: T666['schemas']['FinancialAccount']): FinancialAccount {
-  const owner = need(body.relatedParty?.[0]?.partyOrPartyRole, 'relatedParty owner');
+  const owner = need(
+    body.relatedParty?.find((party) => party.role === 'owner')?.partyOrPartyRole,
+    'relatedParty owner',
+  );
   return {
     id: need(body.id, 'id'),
     name: need(body.name, 'name'),

@@ -6,8 +6,16 @@ the TMF extension pattern (`@type` names the subclass, `@baseType` the TMF class
 
 - `billCycleDay` (1..28): the day of month on which the account's billing period starts.
   The closest spec attribute, billStructure.cycleSpecification.billingDateShift, is an
-  offset of the bill date *from* the period start - a different thing.
-- `currency`: the account's single currency. Immutable.
+  offset of the bill date *from* the period start - a different thing. Optional on POST
+  (the spec requires only name and relatedParty): the creation day, 29-31 as 28.
+- `currency`: the account's single currency. Immutable. Optional on POST: the
+  creditLimit's unit, else UI_CURRENCY.
+
+`relatedParty` holds parties in any role; exactly one has role `customer` - the owning
+customer, which changes only while the account has no history (app/api/accounts.py).
+`ratingType` is always `postpaid`: billing has no prepaid mode, so another value is a
+422. contact, taxExemption, paymentPlan, paymentStatus, ... are documents: stored as
+sent, checked against the spec.
 
 `billCycleDay` is fixed after creation for now (PATCH is a 409): how a change treats the
 current billing period is an open question for stage 3.
@@ -30,7 +38,17 @@ from fastapi import APIRouter, Request, Response
 from pydantic import Field
 
 from app.api import listing
-from app.api.accounts import FinancialAccountRef, financial_ref, link_financial
+from app.api.accounts import (
+    FinancialAccountRef,
+    details_body,
+    document_columns,
+    financial_ref,
+    keep_link,
+    link_financial,
+    related_body,
+    related_parties,
+    related_party_field,
+)
 from app.api.common import (
     CENT,
     CustomerRef,
@@ -41,10 +59,12 @@ from app.api.common import (
     claim_id,
     columns,
     created,
+    documents_model,
+    merge_documents,
     meta_body,
     money,
     not_null,
-    parse,
+    parse_documented,
     parse_id,
     ref,
     take_id,
@@ -56,9 +76,10 @@ from app.api.common import (
 from app.api.customer import customer_href
 from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
-from app.api.errors import conflict, not_found, unprocessable
+from app.api.errors import bad_request, conflict, not_found, unprocessable
 from app.api.presentation import BillStructure, structure_body
 from app.api.tmfjson import TmfJSONResponse
+from app.config import settings
 from app.events import emit
 from app.repository import accounts, billing, cycles, parties, presentation
 from app.repository._sql import Row, count_references
@@ -99,8 +120,24 @@ EXTENSION_SCHEMA: dict[str, Any] = {
 }
 
 AccountState = Literal["Active", "Suspended", "Closed"]
+# Billing has no prepaid mode (docs/decisions/accounts.md, "Account attributes")
+RatingType = Literal["postpaid"]
+RATING_TYPE = "postpaid"
+# Documents to us: stored as sent (checked against the spec), no behaviour.
+DOCUMENTS = (
+    "accountRelationship",
+    "contact",
+    "defaultPaymentMethod",
+    "paymentPlan",
+    "paymentStatus",
+    "taxExemption",
+)
 ATTRIBUTES = (
     "name",
+    "description",
+    "accountType",
+    "ratingType",
+    *DOCUMENTS,
     "billStructure",
     "state",
     "relatedParty",
@@ -123,7 +160,31 @@ CUSTOMER_ROLE = "customer"
 # account's billCycleDay extension, not TMF's billingDateShift (an offset).
 CYCLE_ID = "monthly"
 CYCLE_BASE = f"{BASE}/billingCycleSpecification"
-CYCLE_ATTRIBUTES = ("name", "description", "billingPeriod", "frequency", "billingDateShift")
+CYCLE_DOCUMENTS = ("validFor",)
+CYCLE_ATTRIBUTES = (
+    "name",
+    "description",
+    "billingPeriod",
+    "frequency",
+    "billingDateShift",
+    "chargeDateOffset",
+    "creditDateOffset",
+    "mailingDateOffset",
+    "paymentDueDateOffset",
+    *CYCLE_DOCUMENTS,
+)
+
+
+def policy_offsets() -> dict[str, int]:
+    """The policy's offsets from the period start (= the bill date): a bill of D collects
+    the charges and credits of runs up to D (billing-core.md, "Bills"), is issued on D,
+    and is due BILL_PAYMENT_TERM_DAYS later."""
+    return {
+        "chargeDateOffset": 0,
+        "creditDateOffset": 0,
+        "mailingDateOffset": 0,
+        "paymentDueDateOffset": settings.bill_payment_term_days,
+    }
 
 
 def cycle_specification_body() -> dict[str, Any]:
@@ -140,28 +201,48 @@ def cycle_specification_body() -> dict[str, Any]:
         "billingPeriod": "monthly",
         "frequency": "monthly",
         "billingDateShift": 0,
+        **policy_offsets(),
     }
 
 
 # Stored specifications (migration 0019) are named instances of the same policy: the
 # values billing can honour only, so billing never reads them. The built-in one above
-# is not stored and cannot be changed or deleted.
+# is not stored and cannot be changed or deleted. validFor is a record only.
+
+CycleDocuments = documents_model("CycleDocuments", API, CYCLE_DOCUMENTS)
 
 
-class CycleCreate(TmfModel):
-    name: str = Field(min_length=1)
-    description: str | None = None
-    billing_period: Literal["monthly"] = "monthly"
-    frequency: Literal["monthly"] = "monthly"
-    billing_date_shift: Literal[0] = 0
+class CyclePolicy(CycleDocuments):
+    """The policy's values: accepted when sent equal to them, a 422 otherwise."""
 
-
-class CyclePatch(TmfModel):
-    name: str | None = Field(default=None, min_length=1)
-    description: str | None = None
     billing_period: Literal["monthly"] | None = None
     frequency: Literal["monthly"] | None = None
     billing_date_shift: Literal[0] | None = None
+    charge_date_offset: Literal[0] | None = None
+    credit_date_offset: Literal[0] | None = None
+    mailing_date_offset: Literal[0] | None = None
+    payment_due_date_offset: int | None = Field(
+        default=None, description="BILL_PAYMENT_TERM_DAYS of this server (GET monthly)"
+    )
+
+
+class CycleCreate(CyclePolicy):
+    name: str = Field(min_length=1)
+    description: str | None = None
+
+
+class CyclePatch(CyclePolicy):
+    name: str | None = Field(default=None, min_length=1)
+    description: str | None = None
+
+
+def check_payment_term(data: CyclePolicy) -> None:
+    term = settings.bill_payment_term_days
+    if data.payment_due_date_offset not in (None, term):
+        raise unprocessable(
+            f"paymentDueDateOffset must be {term}: bills are due BILL_PAYMENT_TERM_DAYS"
+            " after their date"
+        )
 
 
 def stored_cycle_body(row: Row) -> dict[str, Any]:
@@ -175,6 +256,8 @@ def stored_cycle_body(row: Row) -> dict[str, Any]:
             "billingPeriod": row["billing_period"],
             "frequency": row["frequency"],
             "billingDateShift": row["billing_date_shift"],
+            **policy_offsets(),
+            **row["details"],
         }
     ) | meta_body(row)
 
@@ -236,11 +319,16 @@ def create_cycle_specification(
     fields = listing.retrieve_fields(request, CYCLE_ATTRIBUTES)
     check_type(body, "BillingCycleSpecification")
     uid = take_id(body)
-    data = parse(CycleCreate, body)
+    data, documents = parse_documented(
+        CycleCreate, body, CYCLE_DOCUMENTS, API, "BillingCycleSpecification_FVO"
+    )
+    check_payment_term(data)
     with tx() as conn:
         claim_id(conn, cycles.TABLE, uid)
         values = {"name": data.name, "description": data.description}
         row = cycles.create(conn, values if uid is None else {"id": uid, **values})
+        if documents:
+            row = cycles.update(conn, row["id"], {"details": merge_documents({}, documents)})
         new = stored_cycle_body(with_meta(conn, cycles.TABLE, row, data))
         emit.created(conn, API, "billingCycleSpecification", new, at=clock.now())
     return created(listing.select_fields(new, fields))
@@ -252,8 +340,11 @@ def patch_cycle_specification(
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, CYCLE_ATTRIBUTES)
     check_type(body, "BillingCycleSpecification")
-    data = parse(CyclePatch, body)
+    data, documents = parse_documented(
+        CyclePatch, body, CYCLE_DOCUMENTS, API, "BillingCycleSpecification_MVO"
+    )
     not_null(data, "name")
+    check_payment_term(data)
     if specification_id == CYCLE_ID:
         raise conflict("the built-in monthly specification cannot be changed")
     with tx() as conn:
@@ -264,6 +355,8 @@ def patch_cycle_specification(
             conn, API, "billingCycleSpecification", lambda: stored_cycle_body(current)
         )
         changes = {k: v for k, v in columns(data).items() if k in ("name", "description")}
+        if documents:
+            changes["details"] = merge_documents(current["details"], documents)
         row = cycles.update(conn, current["id"], changes)
         new = stored_cycle_body(with_meta(conn, cycles.TABLE, row, data))
         emit.changed(conn, API, "billingCycleSpecification", old, new, at=clock.now())
@@ -295,16 +388,24 @@ def delete_cycle_specification(
     return Response(status_code=204)
 
 
-class RelatedParty(TmfModel):
-    role: str | None = None
+class CustomerParty(TmfModel):
+    """The relatedParty entry with role `customer`."""
+
+    role: Literal["customer"]
     party_or_party_role: CustomerRef
 
 
-class AccountCreate(TmfModel):
+AccountDocuments = documents_model("AccountDocuments", API, DOCUMENTS)
+
+
+class AccountCreate(AccountDocuments):
     name: str = Field(min_length=1)
-    related_party: list[RelatedParty] = Field(min_length=1, max_length=1)
-    bill_cycle_day: int = Field(ge=1, le=28, strict=True)
-    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    related_party: list[Any] = related_party_field(CUSTOMER_ROLE, required=True)
+    bill_cycle_day: int | None = Field(default=None, ge=1, le=28, strict=True)
+    currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    description: str | None = None
+    account_type: str | None = Field(default=None, min_length=1)
+    rating_type: RatingType | None = None
     state: AccountState = "Active"
     credit_limit: Money | None = None
     last_update: Any = None
@@ -312,8 +413,12 @@ class AccountCreate(TmfModel):
     financial_account: FinancialAccountRef | None = None
 
 
-class AccountPatch(TmfModel):
+class AccountPatch(AccountDocuments):
     name: str | None = Field(default=None, min_length=1)
+    related_party: list[Any] | None = related_party_field(CUSTOMER_ROLE, required=False)
+    description: str | None = None
+    account_type: str | None = Field(default=None, min_length=1)
+    rating_type: RatingType | None = None
     state: AccountState | None = None
     credit_limit: Money | None = None
     bill_structure: BillStructure | None = None
@@ -340,6 +445,28 @@ def _owner_of(conn: psycopg.Connection, row: Row) -> Any:
     return customer["party_id"]
 
 
+def _change_customer(conn: psycopg.Connection, current: Row, party: CustomerParty) -> Row:
+    """The customer a PATCH's relatedParty names: the current one, or - while the account
+    has no history (what DELETE asks) - another existing customer. Writers that add
+    history lock the account first, as this PATCH does."""
+    customer_id = party.party_or_party_role.id
+    if customer_id == current["customer_id"]:
+        customer = parties.get_customer(conn, customer_id)
+        assert customer is not None  # foreign key
+        return customer
+    counts = count_references(conn, current["id"], parties.ACCOUNT_HISTORY)
+    if any(counts.values()):
+        raise conflict(
+            "relatedParty: the customer cannot change once the account has history"
+            " (orders, charges, bills, payments or billing runs)"
+        )
+    # FOR KEY SHARE until commit, as on POST
+    customer = parties.get_customer(conn, customer_id, "key share")
+    if customer is None:
+        raise unprocessable(f"relatedParty: customer {customer_id} does not exist")
+    return customer
+
+
 def account_href(account_id: Any) -> str:
     return f"{BASE}/billingAccount/{account_id}"
 
@@ -356,29 +483,31 @@ def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         if row["financial_account_id"] is None
         else accounts.get_financial(conn, row["financial_account_id"])
     )
+    anchor = {
+        "role": CUSTOMER_ROLE,
+        "partyOrPartyRole": ref(
+            "Customer",
+            customer_href(customer["id"]),
+            customer["id"],
+            customer["name"],
+            ref_type="PartyRoleRef",
+        ),
+        "@type": "RelatedPartyRefOrPartyRoleRef",
+    }
     return {
         "id": str(row["id"]),
         "href": account_href(row["id"]),
         "name": row["name"],
+        **without_nulls({"description": row["description"], "accountType": row["account_type"]}),
+        "ratingType": RATING_TYPE,
         "state": row["state"],
         "billStructure": {
             **structure_body(conn, row["id"]),
             "@type": "BillStructure",
             "cycleSpecification": cycle_ref(conn, row["cycle_specification_id"]),
         },
-        "relatedParty": [
-            {
-                "role": CUSTOMER_ROLE,
-                "partyOrPartyRole": ref(
-                    "Customer",
-                    customer_href(customer["id"]),
-                    customer["id"],
-                    customer["name"],
-                    ref_type="PartyRoleRef",
-                ),
-                "@type": "RelatedPartyRefOrPartyRoleRef",
-            }
-        ],
+        "relatedParty": related_body(row, CUSTOMER_ROLE, anchor),
+        **details_body(row),
         "accountBalance": [
             {
                 "balanceType": BALANCE_TYPE,
@@ -415,6 +544,7 @@ def list_accounts(request: Request, tx: Tx) -> TmfJSONResponse:
         filters={
             "name": ("name", listing.as_str),
             "state": ("state", listing.as_str),
+            "accountType": ("account_type", listing.as_str),
             "relatedParty.id": ("customer_id", listing.as_uuid),
             "financialAccount.id": ("financial_account_id", listing.as_uuid),
         },
@@ -445,14 +575,19 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
     check_type(body, EXTENSION_TYPE, "BillingAccount")
     uid = take_id(body)
     server_set = take_server_set(body, ("accountBalance",))
-    data = parse(AccountCreate, body)
-    (party,) = data.related_party
-    if party.role != CUSTOMER_ROLE:
-        sent = "no role" if party.role is None else f"role {party.role!r}"
-        raise unprocessable(
-            f'relatedParty: exactly one party with role "{CUSTOMER_ROLE}" is required, not {sent}'
-        )
+    party, related, found = related_parties(
+        body, CUSTOMER_ROLE, CustomerParty, "BillingAccount_FVO"
+    )
+    data, documents = parse_documented(
+        AccountCreate, body, DOCUMENTS, API, "BillingAccount_FVO", found
+    )
+    assert party is not None and related is not None  # else found a problem
     customer_id = party.party_or_party_role.id
+    currency = data.currency or (
+        data.credit_limit.unit if data.credit_limit is not None else settings.ui_currency
+    )
+    # the creation day: an account opened on the 31st starts its periods on the 28th
+    bill_cycle_day = data.bill_cycle_day or min(clock.today().day, 28)
     with tx() as conn:
         # FOR KEY SHARE until commit: a concurrent delete of the customer waits for this
         customer = parties.get_customer(conn, customer_id, "key share")
@@ -468,17 +603,23 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
             conn,
             customer_id=customer_id,
             name=data.name,
-            currency=data.currency,
-            bill_cycle_day=data.bill_cycle_day,
+            currency=currency,
+            bill_cycle_day=bill_cycle_day,
             state=data.state,
-            credit_limit=_credit_limit(data.credit_limit, data.currency),
+            credit_limit=_credit_limit(data.credit_limit, currency),
             opened_at=clock.now(),
             id=uid,
         )
-        if financial_id is not None:
-            row = parties.update_billing_account(
-                conn, row["id"], {"financial_account_id": financial_id}
-            )
+        row = parties.update_billing_account(
+            conn,
+            row["id"],
+            {
+                "financial_account_id": financial_id,
+                "description": data.description,
+                "account_type": data.account_type,
+                "details": merge_documents({"relatedParty": related}, documents),
+            },
+        )
         if data.bill_structure is not None:
             presentation.set_preferences(conn, row["id"], data.bill_structure)
             row = parties.get_billing_account(conn, row["id"])
@@ -501,12 +642,19 @@ def patch_account(
             " period is not decided"
         )
     server_set = take_server_set(body, ("accountBalance", "lastUpdate"))
-    data = parse(AccountPatch, body, read_only=("currency", "relatedParty"))
-    not_null(data, "name", "state", "bill_structure")
+    if "currency" in body:
+        raise bad_request("currency is read-only")
+    party, related, found = related_parties(
+        body, CUSTOMER_ROLE, CustomerParty, "BillingAccount_MVO"
+    )
+    data, documents = parse_documented(
+        AccountPatch, body, DOCUMENTS, API, "BillingAccount_MVO", found
+    )
+    not_null(data, "name", "state", "bill_structure", "related_party", "rating_type")
     with tx() as conn:
         uid = parse_id("billingAccount", account_id)
         # FOR UPDATE, as billing locks it: a concurrent delete either went first (404)
-        # or waits for this change
+        # or waits for this change; so do the writers that add history
         current = parties.get_billing_account(conn, uid, "update")
         if current is None:
             raise not_found("billingAccount", account_id)
@@ -514,21 +662,30 @@ def patch_account(
         check_server_set(server_set, before)
         old = emit.before(conn, API, "billingAccount", lambda: before)
         changes = columns(
-            data, exclude=frozenset({"credit_limit", "bill_structure", "financial_account"})
+            data,
+            exclude=document_columns(DOCUMENTS)
+            | {"credit_limit", "bill_structure", "financial_account", "rating_type"},
         )
         if "credit_limit" in data.model_fields_set:  # null removes it
             changes["credit_limit"] = _credit_limit(data.credit_limit, current["currency"])
+        owner = _owner_of(conn, current)
+        if party is not None and related is not None:
+            customer = _change_customer(conn, current, party)
+            changes["customer_id"] = customer["id"]
+            owner = customer["party_id"]
+            documents["relatedParty"] = related
         if "financial_account" in data.model_fields_set:  # null unlinks
             changes["financial_account_id"] = (
                 None
                 if data.financial_account is None
                 else link_financial(
-                    conn,
-                    data.financial_account,
-                    _owner_of(conn, current),
-                    current["financial_account_id"],
+                    conn, data.financial_account, owner, current["financial_account_id"]
                 )
             )
+        elif owner != _owner_of(conn, current):
+            keep_link(conn, current["financial_account_id"], owner)
+        if documents:
+            changes["details"] = merge_documents(current["details"], documents)
         row = parties.update_billing_account(conn, uid, changes)
         if data.bill_structure is not None:
             presentation.set_preferences(conn, uid, data.bill_structure)

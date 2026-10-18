@@ -191,13 +191,13 @@ def test_balance_is_payments_minus_charges_positive_means_credit(api):
         ({"billCycleDay": 0}, 422),
         ({"billCycleDay": "5"}, 422),
         ({"billCycleDay": 5.0}, 422),
-        ({"billCycleDay": None}, 422),
         ({"currency": "rub"}, 422),
-        ({"currency": None}, 422),
         ({"state": "Open"}, 422),
         ({"relatedParty": []}, 422),
         ({"accountBalance": []}, 422),  # the server's: a new account has a zero balance
-        ({"paymentStatus": "due"}, 400),  # a TMF666 attribute we do not support
+        ({"ratingType": "prepaid"}, 422),  # billing has no prepaid mode
+        ({"contact": [{"@type": "Contact"}]}, 422),  # Contact_FVO requires contactType
+        ({"paymentPlan": [{"@type": "PaymentPlan", "fee": 1}]}, 400),
     ],
 )
 def test_billing_account_validation(api, override, status):
@@ -237,19 +237,21 @@ def test_billing_account_needs_one_existing_customer(api):
 
 @pytest.mark.parametrize("role", [None, "owner", "Customer", "customer ", ""])
 def test_billing_account_party_role_must_be_customer(api, role):
-    """doc-findings #3: the one related party must carry role "customer" - a missing or
+    """doc-findings #3: one related party must carry role "customer" - a missing or
     other role is a 422 and nothing is stored, never answered back as "customer"."""
     body = apidata.account_body(apidata.customer(api))
     if role is None:
         del body["relatedParty"][0]["role"]
-        sent = "no role"
+        problems = "relatedParty.0.role: Field required; "  # RelatedPartyRef..._FVO
+        sent = "0"
     else:
         body["relatedParty"][0]["role"] = role
-        sent = f"role {role!r}"
+        problems = ""
+        sent = f"0 (other roles: {role!r})"
     response = api.post(ACCOUNT, body)
     assert response.status_code == 422, response.text
     assert response.json()["message"] == (
-        f'relatedParty: exactly one party with role "customer" is required, not {sent}'
+        f'{problems}relatedParty: exactly one party with role "customer" is required, not {sent}'
     )
     assert api.get(ACCOUNT).json() == []
 
@@ -270,10 +272,10 @@ def test_billing_account_patch(api):
         assert response.status_code == 409, day
         assert "billCycleDay cannot be changed yet" in response.json()["message"]
     assert api.get(acc["href"]).json()["billCycleDay"] == 1
-    for read_only in ("currency", "relatedParty"):
-        response = api.patch(acc["href"], {read_only: "x"})
-        assert response.status_code == 400, read_only
-        assert f"{read_only} is read-only" in response.json()["message"]
+    response = api.patch(acc["href"], {"currency": "x"})
+    assert response.status_code == 400
+    assert "currency is read-only" in response.json()["message"]
+    assert api.patch(acc["href"], {"relatedParty": "x"}).status_code == 422
     for server_set in ("accountBalance", "lastUpdate"):  # repeated, never set
         response = api.patch(acc["href"], {server_set: "x"})
         assert response.status_code == 422, server_set

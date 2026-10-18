@@ -24,6 +24,7 @@ TMF666 party and settlement accounts: records only, no ledger, never billed.
 | `financial_account_id` | `uuid` | yes |  | Optional TMF666 financialAccount with the same owner. |
 | `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
 | `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
+| `details` | `jsonb` | no | `'{}'::jsonb` | TMF666 descriptive attributes (contact, billStructure, relatedParty as sent, ...), validated against the spec. |
 
 ## Foreign keys
 
@@ -41,6 +42,7 @@ TMF666 party and settlement accounts: records only, no ledger, never billed.
 | `party_account_credit_limit_check` | check | `CHECK ((credit_limit >= (0)::numeric))` |
 | `party_account_credit_limit_currency_check` | check | `CHECK ((credit_limit_currency ~ '^[A-Z]{3}$'::text))` |
 | `party_account_credit_limit_has_currency` | check | `CHECK (((credit_limit IS NULL) = (credit_limit_currency IS NULL)))` |
+| `party_account_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `party_account_name_check` | check | `CHECK ((length(name) > 0))` |
 | `party_account_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `party_account_pkey` | primary key | `PRIMARY KEY (id)` |

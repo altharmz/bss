@@ -19,8 +19,8 @@ from app.api import listing
 from app.api.account import account_ref
 from app.api.catalog import BASE as CATALOG_BASE
 from app.api.common import (
-    BillingAccountRef,
     ProductOfferingRef,
+    RatedBillingAccountRef,
     TmfModel,
     check_server_set,
     check_type,
@@ -210,7 +210,7 @@ def get_product(product_id: str, request: Request, tx: Tx, clock: ClockDep) -> T
 
 
 class ProductCreate(TmfModel):
-    billing_account: BillingAccountRef
+    billing_account: RatedBillingAccountRef
     product_offering: ProductOfferingRef
     start_date: AwareDatetime | None = None
 

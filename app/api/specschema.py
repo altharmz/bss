@@ -205,3 +205,13 @@ def check(
         name: _check(api, props[name], value, name, out) for name, value in attributes.items()
     }
     return values, out
+
+
+def check_element(
+    api: str, schema_name: str, attribute: str, value: Any, path: str
+) -> tuple[Any, list[Problem]]:
+    """Validate one element of an array attribute (e.g. one of an account's relatedParty),
+    reporting problems under `path`."""
+    out: list[Problem] = []
+    result = _check(api, properties(api, schema_name)[attribute]["items"], value, path, out)
+    return result, out

@@ -21,7 +21,7 @@
 | DELETE | `/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}` | path: `media_id` | - | 204 (no body) | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | GET | `/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}` | path: `media_id`; query: `fields` | - | 200 `BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
 | PATCH | `/tmf-api/accountManagement/v5/billPresentationMedia/{media_id}` | path: `media_id`; query: `fields`; body: `application/merge-patch+json` | `BillPresentationMedia_MVO` | 200 `BillPresentationMedia` | [`app/api/presentation.py`](../../app/api/presentation.py) |
-| GET | `/tmf-api/accountManagement/v5/billingAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `financialAccount.id`, `name`, `relatedParty.id`, `state` | - | 200 `array of BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
+| GET | `/tmf-api/accountManagement/v5/billingAccount` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `accountType`, `financialAccount.id`, `name`, `relatedParty.id`, `state` | - | 200 `array of BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | POST | `/tmf-api/accountManagement/v5/billingAccount` | query: `fields`; body: `application/json` | `BillingAccount_FVO` | 201 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |
 | DELETE | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id` | - | 204 (no body) | [`app/api/account.py`](../../app/api/account.py) |
 | GET | `/tmf-api/accountManagement/v5/billingAccount/{account_id}` | path: `account_id`; query: `fields` | - | 200 `BillingAccount` | [`app/api/account.py`](../../app/api/account.py) |

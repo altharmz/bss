@@ -179,8 +179,8 @@ def test_owner_must_be_one_existing_party_with_role_owner(api):
         # server-set: accepted only as the server sets them (a new account has neither)
         ({"accountBalance": [{"balanceType": "currentBalance"}]}, 422),
         ({"accountRelationship": [{"relationshipType": "contains"}]}, 422),
-        ({"contact": []}, 400),
-        ({"paymentStatus": "In Arrears"}, 400),
+        ({"contact": [{"contactName": "x"}]}, 422),  # requires @type and contactType
+        ({"paymentStatus": "In Arrears"}, 400),  # not a FinancialAccount attribute
         ({"@type": "BillingAccount"}, 400),
         ({"id": "not-a-uuid"}, 422),
     ],
@@ -231,12 +231,14 @@ def test_patch_and_credit_limit(api):
         ({"accountType": ""}, 422),
         ({"creditLimit": {"unit": "RUB", "value": -1}}, 422),
         ({"creditLimit": {"unit": "RUB", "value": 0.001}}, 422),
-        ({"relatedParty": [owner(org)]}, 400),
+        ({"relatedParty": []}, 422),
+        ({"relatedParty": None}, 422),
         ({"accountBalance": [{"balanceType": "currentBalance"}]}, 422),
         ({"accountRelationship": [{"relationshipType": "contains"}]}, 422),
         ({"lastUpdate": "2026-01-01T00:00:00Z"}, 422),
         ({"@type": "PartyAccount"}, 400),
-        ({"taxExemption": []}, 400),
+        ({"taxExemption": "none"}, 422),
+        ({"paymentStatus": "due"}, 400),  # not a FinancialAccount attribute
         # repeating what the server holds changes nothing
         ({"accountBalance": [], "accountRelationship": []}, 200),
         ({"lastUpdate": cleared["lastUpdate"]}, 200),

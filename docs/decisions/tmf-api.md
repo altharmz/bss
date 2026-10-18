@@ -214,6 +214,14 @@ opened and the 400 cases fail; without the discriminator selection the round tri
 with `null` ignored in a document patch the removal test fails. Rolling back `0022`
 needs `alembic downgrade 0021` by hand (drops `status` and both `details`).
 
+### Account attributes (2026-10-18)
+
+Slice 5 of "Following TMF" (TMF666), migration `0023`, 375 lines left: recorded with the
+accounts, [accounts.md, "Account attributes"](accounts.md#account-attributes-2026-10-18).
+`relatedParty` holds parties in any role around one resolved anchor (customer / owner),
+the descriptive attributes are slice 4's documents, `paymentStatus` is a record,
+`ratingType` always `postpaid`, `billCycleDay`/`currency` optional.
+
 ### Product writes through orders (2026-10-17)
 
 The last seven operations, approved by the human on 2026-10-17 ("reach 100%"), close

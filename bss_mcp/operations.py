@@ -263,13 +263,17 @@ OPERATIONS: dict[str, Op] = {
         query=FIELDS,
     ),
     "create_account": Op(
-        "Create a billing account for a customer: exactly one relatedParty (role customer),"
-        " billCycleDay 1..28 and currency are required; @type BssBillingAccount.",
+        "Create a billing account for a customer: relatedParty needs exactly one party with"
+        " role customer (others, e.g. bill receiver, are stored as sent); billCycleDay"
+        " (1..28, default today's day) and currency (default creditLimit's unit or the"
+        " server's) are optional; ratingType is always postpaid; @type BssBillingAccount.",
         body=AccountCreate,
     ),
     "patch_account": Op(
-        "Change an account's name, state (Active, Suspended, Closed), creditLimit or"
-        " financialAccount (null unlinks); currency and billCycleDay are fixed.",
+        "Change an account's name, state (Active, Suspended, Closed), creditLimit,"
+        " financialAccount (null unlinks), documents (contact, paymentPlan, ...) or"
+        " relatedParty (the customer only while the account has no history: 409);"
+        " currency and billCycleDay are fixed.",
         body=AccountPatch,
     ),
     "delete_account": Op(
@@ -291,8 +295,9 @@ OPERATIONS: dict[str, Op] = {
         body=FinancialCreate,
     ),
     "patch_financial_account": Op(
-        "Change a financial account's name, description, accountType, state or"
-        " creditLimit; the owner is fixed.",
+        "Change a financial account's name, description, accountType, state, creditLimit,"
+        " contact, taxExemption or relatedParty (the owner only while no account links"
+        " to it: 409).",
         body=FinancialPatch,
     ),
     "delete_financial_account": Op(
@@ -308,7 +313,8 @@ OPERATIONS: dict[str, Op] = {
         body=PartyAccountCreate,
     ),
     "patch_party_account": Op(
-        "Change a party account; financialAccount null unlinks; the owner is fixed.",
+        "Change a party account; financialAccount null unlinks; a new owner needs the"
+        " link unlinked or to one of its own financial accounts.",
         body=PartyAccountPatch,
     ),
     "delete_party_account": Op("Delete a party account (nothing refers to one)."),
@@ -322,7 +328,8 @@ OPERATIONS: dict[str, Op] = {
         body=PartyAccountCreate,
     ),
     "patch_settlement_account": Op(
-        "Change a settlement account; financialAccount null unlinks; the owner is fixed.",
+        "Change a settlement account; financialAccount null unlinks; a new owner needs the"
+        " link unlinked or to one of its own financial accounts.",
         body=PartyAccountPatch,
     ),
     "delete_settlement_account": Op("Delete a settlement account (nothing refers to one)."),

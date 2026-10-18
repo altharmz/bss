@@ -8,6 +8,7 @@ import psycopg
 from psycopg import sql
 
 from app.repository._sql import Lock, Row, fetch_all, returning, select_by_id, update_by_id
+from app.repository.parties import with_details
 
 TABLE = "billing_cycle_specification"
 
@@ -39,4 +40,4 @@ def account_count(conn: psycopg.Connection, uid: UUID) -> int:
 
 
 def update(conn: psycopg.Connection, uid: UUID, changes: dict[str, Any]) -> Row:
-    return update_by_id(conn, TABLE, uid, changes)
+    return update_by_id(conn, TABLE, uid, with_details(changes))

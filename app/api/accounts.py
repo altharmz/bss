@@ -1,26 +1,34 @@
 """TMF666 Account Management v5: financialAccount, partyAccount, settlementAccount.
 
-A financial account is owned by a party (Individual or Organization: `relatedParty`, role
-`owner`, fixed at creation) and aggregates the billing accounts of that party's customers
-and the party's own party and settlement accounts. The link is set on the contained
-account (`financialAccount`); here it is the derived, read-only `accountRelationship[]`
+A financial account is owned by a party (Individual or Organization: the `relatedParty`
+with role `owner`) and aggregates the billing accounts of that party's customers and the
+party's own party and settlement accounts. The link is set on the contained account
+(`financialAccount`); here it is the derived, read-only `accountRelationship[]`
 (`contains`). `accountBalance[]` is one `currentBalance` entry per currency of the linked
 billing accounts - their balances summed, positive = in credit - and empty without
-them: party and settlement accounts have no ledger. Billing never looks at any of these.
+them: party and settlement accounts have no ledger (their `accountBalance` is always
+empty). Billing never looks at any of these.
+
+`relatedParty` is a list of parties in any role, as the spec's examples have it (owner,
+bill receiver, contact, ...): exactly one has the account's anchor role (`owner` here,
+`customer` on a billing account) and is resolved to our party; the others are stored as
+sent, checked against the spec. The owner changes only while nothing depends on it.
+Every other attribute without behaviour here (contact, taxExemption, paymentPlan,
+paymentStatus, ...) is a document: stored as sent, checked against the spec.
 
 Party and settlement accounts share one table and one shape; each has its own path and
 `@type`, and neither list contains the other (no polymorphic lists).
 docs/decisions/accounts.md.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Request, Response
-from pydantic import Field
+from pydantic import BaseModel, Field, ValidationError
 
-from app.api import listing
+from app.api import listing, specschema
 from app.api.common import (
     CENT,
     Money,
@@ -32,10 +40,13 @@ from app.api.common import (
     claim_id,
     columns,
     created,
+    documents_field,
+    documents_model,
+    merge_documents,
     meta_body,
     money,
     not_null,
-    parse,
+    parse_documented,
     parse_id,
     ref,
     take_id,
@@ -46,7 +57,7 @@ from app.api.common import (
 )
 from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
-from app.api.errors import not_found, unprocessable
+from app.api.errors import Problem, conflict, not_found, unprocessable, validation_problems
 from app.api.party import party_href, party_name
 from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
@@ -60,6 +71,18 @@ router = APIRouter(prefix=BASE)
 AccountState = Literal["Active", "Suspended", "Closed"]
 OWNER_ROLE = "owner"
 BALANCE_TYPE = "currentBalance"
+# Documents to us: stored as sent (checked against the spec), no behaviour.
+# docs/decisions/accounts.md, "Account attributes".
+FINANCIAL_DOCUMENTS = ("contact", "taxExemption")
+PARTY_DOCUMENTS = (
+    "accountRelationship",
+    "billStructure",
+    "contact",
+    "defaultPaymentMethod",
+    "paymentPlan",
+    "paymentStatus",
+    "taxExemption",
+)
 ATTRIBUTES = (
     "name",
     "description",
@@ -70,6 +93,7 @@ ATTRIBUTES = (
     "accountBalance",
     "accountRelationship",
     "lastUpdate",
+    *FINANCIAL_DOCUMENTS,
 )
 
 
@@ -81,7 +105,9 @@ PARTY_ATTRIBUTES = (
     "relatedParty",
     "creditLimit",
     "financialAccount",
+    "accountBalance",
     "lastUpdate",
+    *PARTY_DOCUMENTS,
 )
 # @type (and party_account.kind) -> resource path segment
 RESOURCE = {
@@ -96,70 +122,113 @@ class FinancialAccountRef(Ref):
 
 
 class OwnerParty(TmfModel):
-    role: str | None = None
+    """The relatedParty entry with role `owner`."""
+
+    role: Literal["owner"]
     party_or_party_role: Ref  # Individual or Organization: checked against the party
 
 
-class FinancialCreate(TmfModel):
-    name: str = Field(min_length=1)
-    related_party: list[OwnerParty] = Field(min_length=1, max_length=1)
-    description: str | None = None
-    account_type: str | None = Field(default=None, min_length=1)
-    state: AccountState = "Active"
-    credit_limit: Money | None = None
-    last_update: Any = None
+def related_party_field(role: str, *, required: bool) -> Any:
+    description = (
+        f'TMF666 relatedParty: exactly one party with role "{role}" (resolved, it must'
+        " exist); parties in other roles are stored as sent"
+    )
+    if required:
+        return Field(min_length=1, description=description)
+    return Field(default=None, description=description)
 
 
-class FinancialPatch(TmfModel):
-    name: str | None = Field(default=None, min_length=1)
-    description: str | None = None
-    account_type: str | None = Field(default=None, min_length=1)
-    state: AccountState | None = None
-    credit_limit: Money | None = None
-
-
-class PartyAccountCreate(FinancialCreate):
-    financial_account: FinancialAccountRef | None = None
-
-
-class PartyAccountPatch(FinancialPatch):
-    financial_account: FinancialAccountRef | None = None
-
-
-def owner_party(conn: psycopg.Connection, related: list[OwnerParty]) -> Row:
-    """The one owner: role exactly `owner`, an existing Individual or Organization."""
-    (party,) = related
-    if party.role != OWNER_ROLE:
-        sent = "no role" if party.role is None else f"role {party.role!r}"
-        raise unprocessable(
-            f'relatedParty: exactly one party with role "{OWNER_ROLE}" is required, not {sent}'
+def related_parties[A: BaseModel](
+    body: dict[str, Any], role: str, anchor: type[A], schema: str
+) -> tuple[A | None, list[Any] | None, list[Problem]]:
+    """The anchor entry of a body's relatedParty (the one with `role`, validated by
+    `anchor`), the list to store (the others normalized as the spec's `schema` checks
+    them), and the problems found. Nothing when the body has no list: the request model
+    reports that."""
+    sent = body.get("relatedParty")
+    if not isinstance(sent, list):
+        return None, None, []
+    found: list[Problem] = []
+    anchors: list[A] = []
+    stored: list[Any] = []
+    for i, entry in enumerate(sent):
+        path = f"relatedParty.{i}"
+        if isinstance(entry, dict) and entry.get("role") == role:
+            try:
+                anchors.append(anchor.model_validate(entry))
+            except ValidationError as exc:
+                errors = exc.errors(include_url=False, include_context=False)
+                found += [
+                    (f"{path}.{where}", message, unknown)
+                    for where, message, unknown in validation_problems(errors)
+                ]
+            stored.append(entry)
+            continue
+        value, problems = specschema.check_element(API, schema, "relatedParty", entry, path)
+        found += problems
+        stored.append(value)
+    roles = [entry.get("role") if isinstance(entry, dict) else None for entry in sent]
+    if roles.count(role) != 1:
+        others = sorted({repr(r) for r in roles if isinstance(r, str) and r != role})
+        counted = f"{roles.count(role)}" + (
+            f" (other roles: {', '.join(others)})" if others else ""
         )
+        found.append(
+            (
+                "relatedParty",
+                f'exactly one party with role "{role}" is required, not {counted}',
+                False,
+            )
+        )
+    return (anchors[0] if roles.count(role) == 1 and anchors else None), stored, found
+
+
+def related_body(row: Row, role: str, anchor: dict[str, Any]) -> list[dict[str, Any]]:
+    """relatedParty as stored, the anchor entry answered as the resource it resolves to;
+    an account stored before 0023 has only its anchor."""
+    stored = row["details"].get("relatedParty")
+    if stored is None:
+        return [anchor]
+    return [anchor if entry.get("role") == role else entry for entry in stored]
+
+
+def details_body(row: Row) -> dict[str, Any]:
+    """The documents stored, relatedParty aside (`related_body` answers it)."""
+    return {name: value for name, value in row["details"].items() if name != "relatedParty"}
+
+
+def document_columns(documents: tuple[str, ...]) -> frozenset[str]:
+    """Model fields that are not columns: the documents and the relatedParty list."""
+    return frozenset({"related_party", *map(documents_field, documents)})
+
+
+def owner_party(conn: psycopg.Connection, owner: OwnerParty) -> Row:
+    """The owner: an existing Individual or Organization."""
     # FOR KEY SHARE until commit: a concurrent delete of the party waits for this account
-    row = parties.get_party(conn, party.party_or_party_role.id, "key share")
+    row = parties.get_party(conn, owner.party_or_party_role.id, "key share")
     if row is None:
-        raise unprocessable(f"relatedParty: party {party.party_or_party_role.id} does not exist")
+        raise unprocessable(f"relatedParty: party {owner.party_or_party_role.id} does not exist")
     check_referred_type(
-        party.party_or_party_role, row["party_type"], "relatedParty.partyOrPartyRole"
+        owner.party_or_party_role, row["party_type"], "relatedParty.partyOrPartyRole"
     )
     return row
 
 
-def owner_body(conn: psycopg.Connection, party_id: UUID) -> list[dict[str, Any]]:
-    party = parties.get_party(conn, party_id)
+def owner_body(conn: psycopg.Connection, row: Row) -> list[dict[str, Any]]:
+    party = parties.get_party(conn, row["party_id"])
     assert party is not None  # foreign key
-    return [
-        {
-            "role": OWNER_ROLE,
-            "partyOrPartyRole": ref(
-                party["party_type"],
-                party_href(party),
-                party["id"],
-                party_name(party),
-                ref_type="PartyRef",
-            ),
-            "@type": "RelatedPartyRefOrPartyRoleRef",
-        }
-    ]
+    anchor = {
+        "role": OWNER_ROLE,
+        "partyOrPartyRole": ref(
+            party["party_type"],
+            party_href(party),
+            party["id"],
+            party_name(party),
+            ref_type="PartyRef",
+        ),
+        "@type": "RelatedPartyRefOrPartyRoleRef",
+    }
+    return related_body(row, OWNER_ROLE, anchor)
 
 
 def credit_limit_columns(limit: Money | None) -> dict[str, Any]:
@@ -204,6 +273,20 @@ def link_financial(
     return row["id"]
 
 
+def keep_link(conn: psycopg.Connection, financial_id: UUID | None, party_id: UUID) -> None:
+    """After an owner change, a link the request did not change must still be to a
+    financial account of the new owner (unlink it in the same request otherwise)."""
+    if financial_id is None:
+        return
+    row = accounts.get_financial(conn, financial_id, lock=True)
+    assert row is not None  # foreign key
+    if row["party_id"] != party_id:
+        raise unprocessable(
+            "financialAccount: must be owned by the same party as this account - unlink it"
+            " (financialAccount null) or link one of the new owner's"
+        )
+
+
 def relationship(resource_type: str, resource: str, row: Row) -> dict[str, Any]:
     return {
         "relationshipType": "contains",
@@ -218,6 +301,45 @@ def relationship(resource_type: str, resource: str, row: Row) -> dict[str, Any]:
     }
 
 
+FinancialDocuments = documents_model("FinancialDocuments", API, FINANCIAL_DOCUMENTS)
+PartyDocuments = documents_model("PartyDocuments", API, PARTY_DOCUMENTS)
+
+
+class AccountFields(TmfModel):
+    name: str = Field(min_length=1)
+    description: str | None = None
+    account_type: str | None = Field(default=None, min_length=1)
+    state: AccountState = "Active"
+    credit_limit: Money | None = None
+    last_update: Any = None
+
+
+class AccountPatchFields(TmfModel):
+    name: str | None = Field(default=None, min_length=1)
+    description: str | None = None
+    account_type: str | None = Field(default=None, min_length=1)
+    state: AccountState | None = None
+    credit_limit: Money | None = None
+    related_party: list[Any] | None = related_party_field(OWNER_ROLE, required=False)
+
+
+class FinancialCreate(AccountFields, FinancialDocuments):
+    related_party: list[Any] = related_party_field(OWNER_ROLE, required=True)
+
+
+class FinancialPatch(AccountPatchFields, FinancialDocuments):
+    pass
+
+
+class PartyAccountCreate(AccountFields, PartyDocuments):
+    related_party: list[Any] = related_party_field(OWNER_ROLE, required=True)
+    financial_account: FinancialAccountRef | None = None
+
+
+class PartyAccountPatch(AccountPatchFields, PartyDocuments):
+    financial_account: FinancialAccountRef | None = None
+
+
 def financial_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     body = {
         "id": str(row["id"]),
@@ -226,7 +348,7 @@ def financial_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "description": row["description"],
         "accountType": row["account_type"],
         "state": row["state"],
-        "relatedParty": owner_body(conn, row["party_id"]),
+        "relatedParty": owner_body(conn, row),
         "creditLimit": credit_limit_body(row),
         "accountBalance": [
             {
@@ -240,6 +362,7 @@ def financial_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             relationship(account["kind"], RESOURCE[account["kind"]], account)
             for account in accounts.linked_accounts(conn, row["id"])
         ],
+        **details_body(row),
         "lastUpdate": utc(row["updated_at"]),
         "@type": "FinancialAccount",
     }
@@ -285,9 +408,13 @@ def create_financial_account(
     check_type(body, "FinancialAccount")
     uid = take_id(body)
     server_set = take_server_set(body, ("accountBalance", "accountRelationship"))
-    data = parse(FinancialCreate, body)
+    owner, related, found = related_parties(body, OWNER_ROLE, OwnerParty, "FinancialAccount_FVO")
+    data, documents = parse_documented(
+        FinancialCreate, body, FINANCIAL_DOCUMENTS, API, "FinancialAccount_FVO", found
+    )
+    assert owner is not None and related is not None  # else found a problem
     with tx() as conn:
-        party = owner_party(conn, data.related_party)
+        party = owner_party(conn, owner)
         claim_id(conn, accounts.FINANCIAL, uid)
         row = accounts.create_financial(
             conn,
@@ -299,6 +426,7 @@ def create_financial_account(
                 "account_type": data.account_type,
                 "state": data.state,
                 **credit_limit_columns(data.credit_limit),
+                "details": merge_documents({"relatedParty": related}, documents),
             },
         )
         new = financial_body(conn, with_meta(conn, accounts.FINANCIAL, row, data))
@@ -314,19 +442,36 @@ def patch_financial_account(
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "FinancialAccount")
     server_set = take_server_set(body, ("accountBalance", "accountRelationship", "lastUpdate"))
-    data = parse(FinancialPatch, body, read_only=("relatedParty",))
-    not_null(data, "name", "state")
+    owner, related, found = related_parties(body, OWNER_ROLE, OwnerParty, "FinancialAccount_MVO")
+    data, documents = parse_documented(
+        FinancialPatch, body, FINANCIAL_DOCUMENTS, API, "FinancialAccount_MVO", found
+    )
+    not_null(data, "name", "state", "related_party")
     with tx() as conn:
         uid = parse_id("financialAccount", account_id)
-        current = accounts.get_financial(conn, uid)
+        # FOR UPDATE: a link made meanwhile (it takes the account FOR SHARE) waits, so
+        # the owner check below cannot miss it
+        current = select_by_id(conn, accounts.FINANCIAL, uid, "update")
         if current is None:
             raise not_found("financialAccount", account_id)
         before = financial_body(conn, current)
         check_server_set(server_set, before)
         old = emit.before(conn, API, "financialAccount", lambda: before)
-        changes = columns(data, exclude=frozenset({"credit_limit"}))
+        changes = columns(data, exclude=document_columns(FINANCIAL_DOCUMENTS) | {"credit_limit"})
         if "credit_limit" in data.model_fields_set:  # null removes it
             changes |= credit_limit_columns(data.credit_limit)
+        if owner is not None and related is not None:
+            party = owner_party(conn, owner)
+            if party["id"] != current["party_id"]:
+                if accounts.linked_accounts(conn, uid):
+                    raise conflict(
+                        "relatedParty: the owner cannot change while accounts link to this"
+                        " financial account (they belong to the owner) - unlink them first"
+                    )
+                changes["party_id"] = party["id"]
+            documents["relatedParty"] = related
+        if documents:
+            changes["details"] = merge_documents(current["details"], documents)
         row = accounts.update_financial(conn, uid, changes)
         patched = financial_body(conn, with_meta(conn, accounts.FINANCIAL, row, data))
         emit.changed(conn, API, "financialAccount", old, patched, at=clock.now(), state="state")
@@ -373,9 +518,12 @@ def party_account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "description": row["description"],
         "accountType": row["account_type"],
         "state": row["state"],
-        "relatedParty": owner_body(conn, row["party_id"]),
+        "relatedParty": owner_body(conn, row),
         "creditLimit": credit_limit_body(row),
         "financialAccount": None if financial is None else financial_ref(financial),
+        # no ledger: never a balance
+        "accountBalance": [],
+        **details_body(row),
         "lastUpdate": utc(row["updated_at"]),
         "@type": row["kind"],
     }
@@ -416,18 +564,38 @@ CREATE_SERVER_SET = ("accountBalance",)
 PATCH_SERVER_SET = ("accountBalance", "lastUpdate")
 
 
+class Sent[M: BaseModel](NamedTuple):
+    """A party/settlement account POST or PATCH as its handler parsed it."""
+
+    data: M
+    documents: dict[str, Any]
+    owner: OwnerParty | None
+    related: list[Any] | None
+    server_set: dict[str, Any]
+
+
+def _take(body: dict[str, Any], kind: str, names: tuple[str, ...], schema: str):
+    """The attributes taken out before the model parses the rest: server-set ones and
+    relatedParty (checked here, its problems reported with the model's)."""
+    check_type(body, kind)
+    server_set = take_server_set(body, names)
+    owner, related, found = related_parties(body, OWNER_ROLE, OwnerParty, schema)
+    return server_set, owner, related, found
+
+
 def _create_party_account(
-    data: PartyAccountCreate,
+    sent: Sent[PartyAccountCreate],
     uid: UUID | None,
-    server_set: dict[str, Any],
     request: Request,
     tx: Tx,
     clock: ClockDep,
     kind: str,
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, PARTY_ATTRIBUTES)
+    data, documents, owner, related, server_set = sent
+    assert owner is not None and related is not None  # else parsing found a problem
     with tx() as conn:
-        party = owner_party(conn, data.related_party)
+        party = owner_party(conn, owner)
         financial_id = (
             None
             if data.financial_account is None
@@ -446,47 +614,58 @@ def _create_party_account(
                 "state": data.state,
                 "financial_account_id": financial_id,
                 **credit_limit_columns(data.credit_limit),
+                "details": merge_documents({"relatedParty": related}, documents),
             },
         )
         new = party_account_body(conn, with_meta(conn, "party_account", row, data))
         check_server_set(server_set, new)
         emit.created(conn, API, RESOURCE[kind], new, at=clock.now())
+
     return created(listing.select_fields(new, fields))
 
 
 def _patch_party_account(
     account_id: str,
-    data: PartyAccountPatch,
-    server_set: dict[str, Any],
+    sent: Sent[PartyAccountPatch],
     request: Request,
     tx: Tx,
     clock: ClockDep,
     kind: str,
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, PARTY_ATTRIBUTES)
-    not_null(data, "name", "state")
+    data, documents, owner, related, server_set = sent
+    not_null(data, "name", "state", "related_party")
     with tx() as conn:
         uid = parse_id(RESOURCE[kind], account_id)
-        current = accounts.get_party_account(conn, kind, uid)
+        current = accounts.get_party_account(conn, kind, uid, lock=True)
         if current is None:
             raise not_found(RESOURCE[kind], account_id)
         before = party_account_body(conn, current)
         check_server_set(server_set, before)
         old = emit.before(conn, API, RESOURCE[kind], lambda: before)
-        changes = columns(data, exclude=frozenset({"credit_limit", "financial_account"}))
+        changes = columns(
+            data,
+            exclude=document_columns(PARTY_DOCUMENTS) | {"credit_limit", "financial_account"},
+        )
         if "credit_limit" in data.model_fields_set:  # null removes it
             changes |= credit_limit_columns(data.credit_limit)
+        party_id = current["party_id"]
+        if owner is not None and related is not None:
+            party_id = owner_party(conn, owner)["id"]
+            changes["party_id"] = party_id
+            documents["relatedParty"] = related
         if "financial_account" in data.model_fields_set:  # null unlinks
             changes["financial_account_id"] = (
                 None
                 if data.financial_account is None
                 else link_financial(
-                    conn,
-                    data.financial_account,
-                    current["party_id"],
-                    current["financial_account_id"],
+                    conn, data.financial_account, party_id, current["financial_account_id"]
                 )
             )
+        elif party_id != current["party_id"]:
+            keep_link(conn, current["financial_account_id"], party_id)
+        if documents:
+            changes["details"] = merge_documents(current["details"], documents)
         row = accounts.update_party_account(conn, uid, changes)
         patched = party_account_body(conn, with_meta(conn, "party_account", row, data))
         emit.changed(conn, API, RESOURCE[kind], old, patched, at=clock.now(), state="state")
@@ -524,20 +703,29 @@ def get_party_account(account_id: str, request: Request, tx: Tx) -> TmfJSONRespo
 def create_party_account(
     body: JsonBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
-    check_type(body, "PartyAccount")
-    uid, server_set = take_id(body), take_server_set(body, CREATE_SERVER_SET)
-    data = parse(PartyAccountCreate, body)
-    return _create_party_account(data, uid, server_set, request, tx, clock, "PartyAccount")
+    uid = take_id(body)
+    server_set, owner, related, found = _take(
+        body, "PartyAccount", CREATE_SERVER_SET, "PartyAccount_FVO"
+    )
+    data, documents = parse_documented(
+        PartyAccountCreate, body, PARTY_DOCUMENTS, API, "PartyAccount_FVO", found
+    )
+    sent = Sent(data, documents, owner, related, server_set)
+    return _create_party_account(sent, uid, request, tx, clock, "PartyAccount")
 
 
 @router.patch("/partyAccount/{account_id}")
 def patch_party_account(
     account_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
-    check_type(body, "PartyAccount")
-    server_set = take_server_set(body, PATCH_SERVER_SET)
-    data = parse(PartyAccountPatch, body, read_only=("relatedParty",))
-    return _patch_party_account(account_id, data, server_set, request, tx, clock, "PartyAccount")
+    server_set, owner, related, found = _take(
+        body, "PartyAccount", PATCH_SERVER_SET, "PartyAccount_MVO"
+    )
+    data, documents = parse_documented(
+        PartyAccountPatch, body, PARTY_DOCUMENTS, API, "PartyAccount_MVO", found
+    )
+    sent = Sent(data, documents, owner, related, server_set)
+    return _patch_party_account(account_id, sent, request, tx, clock, "PartyAccount")
 
 
 @router.delete("/partyAccount/{account_id}", status_code=204, response_class=Response)
@@ -559,22 +747,29 @@ def get_settlement_account(account_id: str, request: Request, tx: Tx) -> TmfJSON
 def create_settlement_account(
     body: JsonBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
-    check_type(body, "SettlementAccount")
-    uid, server_set = take_id(body), take_server_set(body, CREATE_SERVER_SET)
-    data = parse(PartyAccountCreate, body)
-    return _create_party_account(data, uid, server_set, request, tx, clock, "SettlementAccount")
+    uid = take_id(body)
+    server_set, owner, related, found = _take(
+        body, "SettlementAccount", CREATE_SERVER_SET, "SettlementAccount_FVO"
+    )
+    data, documents = parse_documented(
+        PartyAccountCreate, body, PARTY_DOCUMENTS, API, "SettlementAccount_FVO", found
+    )
+    sent = Sent(data, documents, owner, related, server_set)
+    return _create_party_account(sent, uid, request, tx, clock, "SettlementAccount")
 
 
 @router.patch("/settlementAccount/{account_id}")
 def patch_settlement_account(
     account_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
-    check_type(body, "SettlementAccount")
-    server_set = take_server_set(body, PATCH_SERVER_SET)
-    data = parse(PartyAccountPatch, body, read_only=("relatedParty",))
-    return _patch_party_account(
-        account_id, data, server_set, request, tx, clock, "SettlementAccount"
+    server_set, owner, related, found = _take(
+        body, "SettlementAccount", PATCH_SERVER_SET, "SettlementAccount_MVO"
     )
+    data, documents = parse_documented(
+        PartyAccountPatch, body, PARTY_DOCUMENTS, API, "SettlementAccount_MVO", found
+    )
+    sent = Sent(data, documents, owner, related, server_set)
+    return _patch_party_account(account_id, sent, request, tx, clock, "SettlementAccount")
 
 
 @router.delete("/settlementAccount/{account_id}", status_code=204, response_class=Response)

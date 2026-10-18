@@ -22,9 +22,9 @@ from app.api import listing
 from app.api.account import account_ref
 from app.api.catalog import BASE as CATALOG_BASE
 from app.api.common import (
-    BillingAccountRef,
     ProductOfferingRef,
     ProductRef,
+    RatedBillingAccountRef,
     Ref,
     TmfModel,
     check_server_set,
@@ -102,7 +102,7 @@ class OrderItemIn(TmfModel):
     quantity: Literal[1] = 1
     product_offering: ProductOfferingRef | None = None
     product: ProductRef | None = None
-    billing_account: BillingAccountRef | None = None
+    billing_account: RatedBillingAccountRef | None = None
 
 
 class ExternalId(TmfModel):
@@ -117,7 +117,7 @@ Priority = Literal["0", "1", "2", "3", "4"]
 
 
 class OrderIn(TmfModel):
-    billing_account: BillingAccountRef
+    billing_account: RatedBillingAccountRef
     product_order_item: list[OrderItemIn]
     requested_start_date: AwareDatetime | None = None
     description: str | None = Field(default=None, min_length=1)

@@ -53,6 +53,7 @@ def test_round_trip(api, resource, typ):
             }
         ],
         "creditLimit": {"unit": "EUR", "value": 1000},
+        "accountBalance": [],  # no ledger
         "lastUpdate": acc["lastUpdate"],
         "@type": typ,
     }
@@ -143,11 +144,13 @@ def test_validation(api, resource, typ):
     ]:
         assert api.post(url, {"name": "x", "relatedParty": related}).status_code == status
     for extra, status in [
-        ({"accountBalance": []}, 422),  # the server's, and these accounts have none
-        ({"billStructure": {}}, 400),
-        ({"paymentStatus": "In Arrears"}, 400),
-        ({"defaultPaymentMethod": {"id": "1"}}, 400),
-        ({"accountRelationship": []}, 400),
+        # the server's, and these accounts have none
+        ({"accountBalance": [{"balanceType": "currentBalance"}]}, 422),
+        ({"billStructure": {"@type": "BillStructure", "dueDate": "x"}}, 400),
+        ({"paymentStatus": 5}, 422),
+        ({"defaultPaymentMethod": {"@type": "PaymentMethodRef"}}, 422),  # id required
+        # an unknown attribute and the required ones missing
+        ({"accountRelationship": [{"@type": "AccountRelationship", "x": 1}]}, 422),
         ({"name": ""}, 422),
         ({"state": "Open"}, 422),
         ({"creditLimit": {"unit": "RUB", "value": -5}}, 422),
@@ -165,10 +168,10 @@ def test_validation(api, resource, typ):
     for body, status in [
         ({"name": None}, 422),
         ({"state": None}, 422),
-        ({"relatedParty": [owner(person)]}, 400),
+        ({"relatedParty": []}, 422),
         ({"lastUpdate": "2026-01-01T00:00:00Z"}, 422),
-        ({"accountBalance": []}, 422),
-        ({"contact": []}, 400),
+        ({"accountBalance": [{"balanceType": "currentBalance"}]}, 422),
+        ({"contact": "x"}, 422),
     ]:
         assert api.patch(acc["href"], body).status_code == status, body
     assert api.get(f"{url}?relatedParty.id={person['id']}").headers["X-Total-Count"] == "1"

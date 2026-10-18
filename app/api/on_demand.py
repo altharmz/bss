@@ -9,7 +9,7 @@ from app.api import listing
 from app.api.account import account_ref
 from app.api.bill import BASE, bill_href
 from app.api.common import (
-    BillingAccountRef,
+    RatedBillingAccountRef,
     TmfModel,
     check_server_set,
     check_type,
@@ -38,7 +38,7 @@ ATTRIBUTES = ("billingAccount", "customerBill", "state", "name", "description", 
 
 
 class DemandCreate(TmfModel):
-    billing_account: BillingAccountRef
+    billing_account: RatedBillingAccountRef
     name: str | None = None
     description: str | None = None
 

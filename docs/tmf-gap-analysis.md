@@ -7,8 +7,9 @@ exact, test-locked list** (831 lines on 2026-10-17, 705 after slice 1, 651 after
 [PATCH formats](decisions/tmf-api.md#patch-formats-2026-10-17), C4; 649 after slice 3:
 [base paths](decisions/tmf-api.md#base-paths-2026-10-18); 476 after slice 4:
 [party and customer attributes](decisions/tmf-api.md#party-and-customer-attributes-2026-10-18),
-B7 and the TMF632/629 sub-resources of section 2 - TMF632 and TMF629 have none left),
-produced by the
+B7 and the TMF632/629 sub-resources of section 2 - TMF632 and TMF629 have none left;
+375 after slice 5: [account attributes](decisions/accounts.md#account-attributes-2026-10-18),
+the TMF666 sub-resources of section 2 - TMF666 has none left), produced by the
 probe in `tests/tmf_gaps.py`. Sections 3 and 5 below are superseded by it. C3, C5, C7,
 C8, the client-chosen `id` and `@baseType`/`@schemaLocation` are closed
 ([slice 1](decisions/tmf-api.md#nothing-dropped-or-rewritten-2026-10-17)). What the probe
@@ -321,6 +322,11 @@ server-set. The table is the state before it.
 | Refused | `description`, `role`, `validFor`, `statusReason`, `contactMedium`, `characteristic`, `account`, `agreement`, `paymentMethod`, `creditProfile`, `relatedParty`, `partyRoleSpecification` |
 
 ### TMF666 billingAccount (`account.py`, `account_body` line 147)
+
+**Closed 2026-10-18** (slice 5, [account attributes](decisions/accounts.md#account-attributes-2026-10-18)):
+every attribute is taken and returned; `billCycleDay` and `currency` are optional;
+`paymentStatus` is a record, `ratingType` always `postpaid`. The table is the state
+before it.
 
 | | Finding |
 |---|---|

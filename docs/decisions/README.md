@@ -8,7 +8,7 @@ and record a new decision in it.
 
 | File | Sections (headings kept from the old CLAUDE.md) |
 |---|---|
-| [accounts.md](accounts.md) | TMF666 financial, party and settlement accounts: owner, links, per-currency balance (2026-10-16) |
+| [accounts.md](accounts.md) | TMF666 financial, party and settlement accounts: owner, links, per-currency balance (2026-10-16); every account attribute, relatedParty roles (2026-10-18) |
 | [events.md](events.md) | Event notifications: TMF hubs, callback rules, events and their delivery (2026-10-17) |
 | [billing-completion.md](billing-completion.md) | Refund payouts, on-demand bills, presentation preferences and issued JSON documents (2026-10-16) |
 | [data-model.md](data-model.md) | Domain model & decisions (SID/TMF, orders, half-open ranges, enums, money, injected clock, cycle day, exclusion constraints, scope, stage order, rounding, billable days) |

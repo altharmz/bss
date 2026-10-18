@@ -1,6 +1,7 @@
 import psycopg
 import pytest
 from alembic.config import Config
+from psycopg import sql
 from sqlalchemy.exc import IntegrityError
 
 from alembic import command
@@ -725,3 +726,58 @@ def test_0022_party_status_and_details(temp_db_url):
         assert conn.execute("SELECT count(*) FROM party").fetchone() == (2,)
         assert conn.execute("SELECT count(*) FROM customer").fetchone() == (2,)
     command.upgrade(cfg, "0022")
+
+
+def test_0023_account_details(temp_db_url):
+    """Existing accounts and cycle specifications get no description, type or documents
+    (an account then answers its anchor party alone); details must be an object;
+    downgrading to 0022 keeps every row."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0022")
+    with psycopg.connect(temp_db_url) as conn:
+        party = conn.execute(
+            "INSERT INTO party (party_type, organization_name)"
+            " VALUES ('Organization', 'Romashka') RETURNING id"
+        ).fetchone()[0]
+        conn.execute(
+            "INSERT INTO customer (party_id, name, status) VALUES (%s, 'R', 'Active')", (party,)
+        )
+        conn.execute(
+            "INSERT INTO billing_account"
+            " (customer_id, name, state, currency, bill_cycle_day, opened_at)"
+            " SELECT id, 'Main', 'Active', 'RUB', 1, now() FROM customer"
+        )
+        conn.execute(
+            "INSERT INTO financial_account (party_id, name) VALUES (%s, 'Group')", (party,)
+        )
+        conn.execute(
+            "INSERT INTO party_account (kind, party_id, name) VALUES ('PartyAccount', %s, 'P')",
+            (party,),
+        )
+        conn.execute("INSERT INTO billing_cycle_specification (name) VALUES ('Business')")
+    command.upgrade(cfg, "0023")
+    tables = (
+        "billing_account",
+        "financial_account",
+        "party_account",
+        "billing_cycle_specification",
+    )
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT description, account_type, details FROM billing_account"
+        ).fetchall() == [(None, None, {})]
+        for table in tables:
+            name = sql.Identifier(table)
+            select = sql.SQL("SELECT details FROM {}").format(name)
+            assert conn.execute(select).fetchall() == [({},)], table
+            with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+                conn.execute(sql.SQL("UPDATE {} SET details = '[]'").format(name))
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE billing_account SET account_type = ''")
+        conn.execute('UPDATE billing_account SET details = \'{"paymentStatus": "due"}\'')
+    command.downgrade(cfg, "0022")
+    with psycopg.connect(temp_db_url) as conn:
+        for table in tables:
+            count = sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(table))
+            assert conn.execute(count).fetchone() == (1,), table
+    command.upgrade(cfg, "head")

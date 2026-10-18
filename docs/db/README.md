@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0022**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0023**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -198,6 +198,9 @@ erDiagram
     uuid bill_format_id FK
     uuid financial_account_id FK
     uuid cycle_specification_id FK
+    text description
+    text account_type
+    jsonb details
   }
   financial_account {
     uuid id PK
@@ -212,6 +215,7 @@ erDiagram
     char credit_limit_currency
     text base_type
     text schema_location
+    jsonb details
   }
   party_account {
     uuid id PK
@@ -228,6 +232,7 @@ erDiagram
     uuid financial_account_id FK
     text base_type
     text schema_location
+    jsonb details
   }
   bill_format {
     uuid id PK
@@ -629,6 +634,7 @@ erDiagram
     integer billing_date_shift
     text base_type
     text schema_location
+    jsonb details
   }
   billing_account {
     uuid id PK

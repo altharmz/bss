@@ -23,6 +23,9 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | `bill_format_id` | `uuid` | yes |  | Optional renderer choice for future bills; default JSON detailed. |
 | `financial_account_id` | `uuid` | yes |  | Optional TMF666 financialAccount; owned by the party of the account's customer. |
 | `cycle_specification_id` | `uuid` | yes |  | billStructure.cycleSpecification; NULL = the built-in monthly specification. |
+| `description` | `text` | yes |  | TMF666 description. |
+| `account_type` | `text` | yes |  | TMF666 accountType, a record only. |
+| `details` | `jsonb` | no | `'{}'::jsonb` | TMF666 descriptive attributes (contact, paymentPlan, relatedParty as sent, ...), validated against the spec; billing never reads them. |
 
 ## Foreign keys
 
@@ -37,9 +40,11 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 
 | Name | Kind | Definition |
 |---|---|---|
+| `billing_account_account_type_check` | check | `CHECK ((account_type <> ''::text))` |
 | `billing_account_bill_cycle_day_check` | check | `CHECK (((bill_cycle_day >= 1) AND (bill_cycle_day <= 28)))` |
 | `billing_account_credit_limit_not_negative` | check | `CHECK ((credit_limit >= (0)::numeric))` |
 | `billing_account_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
+| `billing_account_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `billing_account_pkey` | primary key | `PRIMARY KEY (id)` |
 | `billing_account_id_currency_key` | unique | `UNIQUE (id, currency)` |
 

@@ -55,7 +55,15 @@ const EMPTY = {
   href: `/tmf-api/accountManagement/v5/financialAccount/${F2}`,
   name: 'Personal',
   state: 'Suspended',
-  relatedParty: owner('Ivan Ivanov', 'Individual'),
+  // parties in other roles may come first: the owner is found by its role
+  relatedParty: [
+    {
+      role: 'contact',
+      partyOrPartyRole: { id: '6666', name: 'John Doe', '@type': 'PartyRef' },
+      '@type': 'RelatedPartyRefOrPartyRoleRef',
+    },
+    ...owner('Ivan Ivanov', 'Individual'),
+  ],
   accountBalance: [],
   accountRelationship: [],
   '@type': 'FinancialAccount',
@@ -104,6 +112,8 @@ describe('financial accounts', () => {
     expect(within(group).getByText('(settlement)')).toBeTruthy();
     expect(within(group).getAllByRole('link')).toHaveLength(1);
     const empty = rowOf('Personal');
+    expect(within(empty).getByText(/Ivan Ivanov/)).toBeTruthy();
+    expect(within(empty).queryByText(/John Doe/)).toBeNull();
     expect(within(empty).getByText('nothing linked')).toBeTruthy();
     expect(within(empty).getByText('—')).toBeTruthy();
     expect(within(empty).getByText('Suspended')).toBeTruthy();

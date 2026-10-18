@@ -20,6 +20,7 @@ TMF666 billingCycleSpecification: named instances of the one monthly policy; bil
 | `billing_date_shift` | `integer` | no | `0` | TMF billingDateShift: 0 - bills on the period start. |
 | `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
 | `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
+| `details` | `jsonb` | no | `'{}'::jsonb` | TMF666 validFor, a record only. |
 
 ## Constraints
 
@@ -28,6 +29,7 @@ TMF666 billingCycleSpecification: named instances of the one monthly policy; bil
 | `billing_cycle_specification_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `billing_cycle_specification_billing_date_shift_check` | check | `CHECK ((billing_date_shift = 0))` |
 | `billing_cycle_specification_billing_period_check` | check | `CHECK ((billing_period = 'monthly'::text))` |
+| `billing_cycle_specification_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `billing_cycle_specification_frequency_check` | check | `CHECK ((frequency = 'monthly'::text))` |
 | `billing_cycle_specification_name_check` | check | `CHECK ((length(name) > 0))` |
 | `billing_cycle_specification_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |

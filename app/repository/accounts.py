@@ -10,6 +10,7 @@ from psycopg import sql
 
 from app.repository import billing
 from app.repository._sql import Row, fetch_all, fetch_one, returning, select_page, update_by_id
+from app.repository.parties import with_details
 
 FINANCIAL = "financial_account"
 
@@ -39,15 +40,19 @@ def _insert(conn: psycopg.Connection, table: str, values: dict[str, Any]) -> Row
 
 
 def create_financial(conn: psycopg.Connection, values: dict[str, Any]) -> Row:
-    return _insert(conn, FINANCIAL, values)
+    return _insert(conn, FINANCIAL, with_details(values))
 
 
 def update_financial(conn: psycopg.Connection, uid: UUID, changes: dict[str, Any]) -> Row:
-    return update_by_id(conn, FINANCIAL, uid, changes)
+    return update_by_id(conn, FINANCIAL, uid, with_details(changes))
 
 
-def get_party_account(conn: psycopg.Connection, kind: str, uid: UUID) -> Row | None:
-    return fetch_one(conn, "SELECT * FROM party_account WHERE id = %s AND kind = %s", (uid, kind))
+def get_party_account(
+    conn: psycopg.Connection, kind: str, uid: UUID, *, lock: bool = False
+) -> Row | None:
+    """`lock`: FOR UPDATE, so two changes of the owner and the link do not interleave."""
+    query = "SELECT * FROM party_account WHERE id = %s AND kind = %s"
+    return fetch_one(conn, query + " FOR UPDATE" if lock else query, (uid, kind))
 
 
 def page_party_accounts(
@@ -59,11 +64,11 @@ def page_party_accounts(
 
 
 def create_party_account(conn: psycopg.Connection, values: dict[str, Any]) -> Row:
-    return _insert(conn, "party_account", values)
+    return _insert(conn, "party_account", with_details(values))
 
 
 def update_party_account(conn: psycopg.Connection, uid: UUID, changes: dict[str, Any]) -> Row:
-    return update_by_id(conn, "party_account", uid, changes)
+    return update_by_id(conn, "party_account", uid, with_details(changes))
 
 
 def count_party_accounts(conn: psycopg.Connection, column: str, uid: UUID) -> dict[str, int]:

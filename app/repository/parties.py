@@ -71,7 +71,7 @@ def create_organization(
 
 def _set_given(conn: psycopg.Connection, table: str, row: Row, **values: Any) -> Row:
     changes = {column: value for column, value in values.items() if value}
-    return update_by_id(conn, table, row["id"], _with_details(changes)) if changes else row
+    return update_by_id(conn, table, row["id"], with_details(changes)) if changes else row
 
 
 def get_party(conn: psycopg.Connection, party_id: UUID, lock: Lock = None) -> Row | None:
@@ -164,10 +164,11 @@ def list_parties(
 
 
 def update_party(conn: psycopg.Connection, party_id: UUID, changes: dict[str, Any]) -> Row:
-    return update_by_id(conn, "party", party_id, _with_details(changes))
+    return update_by_id(conn, "party", party_id, with_details(changes))
 
 
-def _with_details(changes: dict[str, Any]) -> dict[str, Any]:
+def with_details(changes: dict[str, Any]) -> dict[str, Any]:
+    """Changes with a `details` document made a jsonb parameter (exact numbers)."""
     if "details" not in changes:
         return changes
     return {**changes, "details": _jsonb(changes["details"])}
@@ -180,7 +181,7 @@ def list_customers(
 
 
 def update_customer(conn: psycopg.Connection, customer_id: UUID, changes: dict[str, Any]) -> Row:
-    return update_by_id(conn, "customer", customer_id, _with_details(changes))
+    return update_by_id(conn, "customer", customer_id, with_details(changes))
 
 
 def accounts_of_customer(conn: psycopg.Connection, customer_id: UUID) -> list[Row]:
@@ -201,4 +202,4 @@ def list_billing_accounts(
 def update_billing_account(
     conn: psycopg.Connection, account_id: UUID, changes: dict[str, Any]
 ) -> Row:
-    return update_by_id(conn, "billing_account", account_id, changes)
+    return update_by_id(conn, "billing_account", account_id, with_details(changes))

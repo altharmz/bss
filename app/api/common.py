@@ -5,7 +5,7 @@ import re
 from collections.abc import Callable
 from datetime import UTC, date, datetime, time
 from decimal import Decimal, InvalidOperation
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -25,6 +25,7 @@ from pydantic.alias_generators import to_camel
 
 from app.api import specschema
 from app.api.errors import (
+    Problem,
     bad_request,
     conflict,
     not_found,
@@ -84,6 +85,13 @@ class Ref(TmfModel):
 
 class BillingAccountRef(Ref):
     referred_type = "BillingAccount"
+
+
+class RatedBillingAccountRef(BillingAccountRef):
+    """The v5 specs' BillingAccountRef also states the account's ratingType: every
+    account here is postpaid (docs/decisions/accounts.md), so another one is a 422."""
+
+    rating_type: Literal["postpaid"] | None = None
 
 
 class CustomerRef(Ref):
@@ -194,11 +202,17 @@ def documents_field(document: str) -> str:
 
 
 def parse_documented[M: BaseModel](
-    model: type[M], body: dict[str, Any], documents: tuple[str, ...], api: str, schema: str
+    model: type[M],
+    body: dict[str, Any],
+    documents: tuple[str, ...],
+    api: str,
+    schema: str,
+    found: list[Problem] | None = None,
 ) -> tuple[M, dict[str, Any]]:
     """`parse`, for a model with document fields (`documents_model`): those are checked
     against the spec schema that declares them (e.g. Individual_FVO), everything else by
-    the model, and every problem of both is in the one error. Returns the model and the
+    the model, and every problem of both is in the one error (with `found`: problems the
+    handler found in attributes it took out of the body first). Returns the model and the
     documents sent, normalized (date-times in UTC); a null stays None (in a merge patch:
     remove it)."""
     for name in SERVER_MANAGED:
@@ -208,11 +222,12 @@ def parse_documented[M: BaseModel](
     values, problems = specschema.check(
         api, schema, {name: value for name, value in sent.items() if value is not None}
     )
+    problems = [*(found or ()), *problems]
     try:
         data = model.model_validate(body)
     except ValidationError as exc:
-        found = validation_problems(exc.errors(include_url=False, include_context=False))
-        raise problems_error(found + problems) from exc
+        invalid = validation_problems(exc.errors(include_url=False, include_context=False))
+        raise problems_error(invalid + problems) from exc
     if problems:
         raise problems_error(problems)
     return data, {name: values.get(name) for name in sent}

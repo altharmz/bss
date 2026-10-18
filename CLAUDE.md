@@ -202,11 +202,17 @@ Slice 4 (2026-10-18; TMF632/629 attributes, migration `0022`; 476 lines left, no
 TMF632/629): [decision](docs/decisions/tmf-api.md#party-and-customer-attributes-2026-10-18);
 committed and pushed `6743dc6`. Descriptive attributes are jsonb documents checked
 against `spec/` at runtime; **the runtime image now ships `spec/`** (Dockerfile).
-**Next session starts slice 5** (TMF666): reuse `common.documents_model` +
-`parse_documented` (`app/api/specschema.py`) for nested attributes instead of new
-Pydantic models. Next: slices 5-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
-notes before taxes, `modify` items, suspension and payment states. Not deployed:
-migrations `0009`-`0022` ship together.
+Slice 5 (2026-10-18; TMF666 attributes, migration `0023`; 375 lines left, none for
+TMF666): [decision](docs/decisions/accounts.md#account-attributes-2026-10-18) - `relatedParty`
+in any role around one resolved anchor (customer/owner, changeable while nothing depends
+on it), documents in `details`, `paymentStatus` a record, `ratingType` always
+`postpaid`, `billCycleDay`/`currency` optional (`UI_CURRENCY` is now also the default
+currency). Done locally, not committed. **Next session starts slice 6** (TMF620): reuse
+`documents_model` + `parse_documented`, and `accounts.related_parties` for
+`relatedParty` lists with an anchor. Next: slices 6-10 in
+[tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design notes before
+taxes, `modify` items, suspension and payment states. Not deployed: migrations
+`0009`-`0023` ship together.
 
 **100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders
 placed on the caller's behalf (a would-be rejection is a 409, nothing stored; DELETE ends
