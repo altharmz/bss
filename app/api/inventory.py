@@ -104,9 +104,10 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
     assert creating_item is not None  # foreign key
     creating_order = orders.get_order(conn, creating_item["product_order_id"])
     assert creating_order is not None  # foreign key
-    specification = catalog.get_product_specification(conn, offering["product_specification_id"])
+    spec_id = offering["product_specification_id"]  # None: an offering without one
+    specification = None if spec_id is None else catalog.get_product_specification(conn, spec_id)
     customer = parties.get_customer(conn, account["customer_id"])
-    assert specification is not None and customer is not None
+    assert customer is not None
     prices = []
     if row["status"] not in ("cancelled", "aborted") and (
         terminated is None or terminated > row["start_date"]
@@ -143,7 +144,9 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
             "terminationDate": from_billing_date(terminated) if terminated else None,
             "billingAccount": account_ref(account),
             "productPrice": prices,
-            "productSpecification": ref(
+            "productSpecification": None
+            if specification is None
+            else ref(
                 "ProductSpecification",
                 f"{CATALOG_BASE}/productSpecification/{specification['id']}",
                 specification["id"],

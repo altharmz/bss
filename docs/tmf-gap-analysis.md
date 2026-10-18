@@ -9,7 +9,9 @@ exact, test-locked list** (831 lines on 2026-10-17, 705 after slice 1, 651 after
 [party and customer attributes](decisions/tmf-api.md#party-and-customer-attributes-2026-10-18),
 B7 and the TMF632/629 sub-resources of section 2 - TMF632 and TMF629 have none left;
 375 after slice 5: [account attributes](decisions/accounts.md#account-attributes-2026-10-18),
-the TMF666 sub-resources of section 2 - TMF666 has none left), produced by the
+the TMF666 sub-resources of section 2 - TMF666 has none left;
+161 after slice 6: [catalog attributes](decisions/catalog.md#catalog-attributes-2026-10-18),
+B9 and the TMF620 sub-resources of section 2 - TMF620 has none left), produced by the
 probe in `tests/tmf_gaps.py`. Sections 3 and 5 below are superseded by it. C3, C5, C7,
 C8, the client-chosen `id` and `@baseType`/`@schemaLocation` are closed
 ([slice 1](decisions/tmf-api.md#nothing-dropped-or-rewritten-2026-10-17)). What the probe

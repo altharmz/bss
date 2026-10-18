@@ -1,19 +1,22 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
+import { offeringCode } from '../api/bss';
 import { App } from '../app/App';
+import { validity } from './Catalog';
 import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
 const CAT = '/tmf-api/productCatalogManagement/v5';
 const rub = (value: number) => ({ unit: 'RUB', value });
 const ids = (n: number) => `0000000${n}-0000-4000-8000-00000000000${n}`;
+const code = (id: string) => [{ id, externalIdentifierType: 'offeringCode' }];
 
 const OFFERINGS = [
   {
     id: ids(1),
     name: 'Mobile L',
     lifecycleStatus: 'Active',
-    externalIdentifier: [{ id: 'MOB-L' }],
+    externalIdentifier: code('MOB-L'),
     productSpecification: { name: 'Mobile Voice & Data' },
     validFor: { startDateTime: '2026-06-01T21:00:00Z' },
     productOfferingPrice: [{ id: 'pr1' }],
@@ -22,7 +25,7 @@ const OFFERINGS = [
     id: ids(2),
     name: 'Fiber 100',
     lifecycleStatus: 'Active',
-    externalIdentifier: [{ id: 'NET-100' }],
+    externalIdentifier: code('NET-100'),
     productSpecification: { name: 'Home Internet' },
     validFor: { startDateTime: '2026-06-01T21:00:00Z', endDateTime: '2026-12-31T21:00:00Z' },
     productOfferingPrice: [{ id: 'pr2' }, { id: 'pr3' }],
@@ -31,7 +34,7 @@ const OFFERINGS = [
     id: ids(3),
     name: 'TV Basic',
     lifecycleStatus: 'In Design',
-    externalIdentifier: [{ id: 'TV-BASE' }],
+    externalIdentifier: code('TV-BASE'),
     productSpecification: { name: 'TV' },
     validFor: { startDateTime: '2026-10-04T21:00:00Z' },
     productOfferingPrice: [{ id: 'pr4' }],
@@ -483,5 +486,32 @@ describe('change price', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+});
+
+describe('offering attributes TMF620 makes optional', () => {
+  it('shows an offering without validFor as valid at any time', () => {
+    const offering = {
+      id: ids(9),
+      name: 'Any time',
+      code: null,
+      status: 'Active' as const,
+      specification: '',
+      validFrom: null,
+      validTo: null,
+      prices: [],
+    };
+    expect(validity(offering, 'Europe/Moscow')).toBe('any time – open-ended');
+  });
+
+  it('takes the code from the offeringCode entry, not the first identifier', () => {
+    const entry = (id: string, externalIdentifierType: string) => ({
+      '@type': 'ExternalIdentifier',
+      id,
+      externalIdentifierType,
+    });
+    const externalIdentifier = [entry('SKU-1', 'sku'), entry('MOB-L', 'offeringCode')];
+    expect(offeringCode({ externalIdentifier })).toBe('MOB-L');
+    expect(offeringCode({ externalIdentifier: [entry('SKU-1', 'sku')] })).toBeNull();
   });
 });

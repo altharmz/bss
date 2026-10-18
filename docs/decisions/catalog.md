@@ -7,6 +7,98 @@ conventions: [tmf-api.md](tmf-api.md).
 
 ## TMF620 mapping
 
+### Catalog attributes (2026-10-18)
+
+Slice 6 of "Following TMF" ([tmf-api.md](tmf-api.md#following-tmf-2026-10-17)), the plan
+approved by the human (2026-10-18, "go"; the two open questions "decided on TMF
+standards"). Migration `0024`. 214 lines left `tests/tmf-gaps.txt` (375 -> 161): every
+attribute TMF620 defines for specifications, offerings, prices and catalogs is taken on
+POST and PATCH and returned (`fields=` included). TMF620 has no gap lines left.
+
+- **Documents** (slice 4's mechanism: `details` jsonb on `product_specification`,
+  `product_offering`, `product_offering_price`, `product_catalog`; checked against the
+  `_FVO`/`_MVO` schema at every depth; a merge patch replaces one whole, `null` removes
+  it). A specification's brand, productNumber, isBundle, version, validFor, relatedParty,
+  characteristics, service/resource specifications, bundled specifications and
+  relationships, attachment, policy, targetProductSchema, intentSpecification,
+  externalIdentifier and category; an offering's version, statusReason, isBundle,
+  place, channel, marketSegment, SLA, service/resource candidate, productOfferingTerm,
+  agreement, bundled (group) offerings, relationships, characteristics,
+  prodSpecCharValueUse, attachment, policy, allowedAction; a price's description,
+  version, externalIdentifier, unitOfMeasure, isBundle, percentage, popRelationship,
+  bundledPopRelationship, prodSpecCharValueUse, productOfferingTerm, place, policy,
+  pricingLogicAlgorithm and tax; a catalog's relatedParty. **Records only:** ordering
+  and billing ignore bundles, terms, `percentage`/`popRelationship` (discounts) and
+  `tax` - slice 7 (taxes) decides whether a bill reads a price's tax. The lists are
+  locked to the spec schemas (`test_every_spec_attribute_has_a_place`).
+- **References to our own catalog entries inside documents are stored as sent, not
+  resolved** (question 1, decided by TMF: the spec defines their shape only, and its
+  own examples - `bundledProductSpecification` ids `15`, `64` - must round-trip):
+  bundled and related specifications and offerings, a specification's `category`,
+  `popRelationship`, `bundledPopRelationship`. Nothing makes a DELETE search jsonb.
+- **Optional, as in the spec:** an offering's `productSpecification` (its products then
+  have none; the internal products view answers `productSpecification: null`) and
+  `validFor` (absent: orderable at any time; `valid_for` NULL); a price's `validFor`
+  (absent: from now on) and `price` (`amount`/`currency` NULL together). **A price
+  without an amount prices no offering**: attaching one is a 409, an inline one is a
+  422, and a CHECK (`product_offering_id IS NULL OR amount IS NOT NULL`) keeps billing
+  from ever seeing one. An offering's validFor removed by `null` counts as a start
+  moved into the past (409) unless it had no start before.
+- **A price's charge** (`price`, `priceType`, `recurringChargePeriodType`,
+  `recurringChargePeriodLength`) **changes on PATCH while the price has priced
+  nothing** - unattached, or its offering never ordered (rejected orders count), the
+  condition of DELETE (question 2, decided by TMF: the spec lets a client PATCH it; we
+  refuse only where billing history is at stake). Otherwise a 409 "end its validFor
+  and attach a new price"; repeating the current charge is no change. Monthly with
+  length 1 stays the only period (billing needs it). Retires the read-only charge of
+  "Specifications, offerings and prices" below.
+- **An offering's `productSpecification` changes on PATCH until the offering is
+  ordered** (409 after: a product's productSpecification is its offering's); `null`
+  removes it. **Its `category[]` is writable on POST and PATCH** - the same membership
+  the category's `productOffering[]` writes, under the `(620, 9)` lock taken before
+  the offering row (as DELETE takes them); duplicates and unknown categories are a 422.
+- **`externalIdentifier` is a list of any identifiers** on offerings, specifications
+  and prices. On an offering, the entry with `externalIdentifierType: offeringCode` (at
+  most one; owner `bss`, filled in when absent; the old pattern) is the code: unique
+  (409), changeable on PATCH (nothing in billing reads it), the `externalIdentifier.id`
+  filter and the UI's code. The other entries are stored as sent. `@type` is required in
+  each entry, as ExternalIdentifier_FVO says. Migration `0024` copies existing codes
+  into the list as the entry they were answered as.
+- **Inline prices** (`ProductOfferingPriceRefOrValue`): an entry of an offering's
+  `productOfferingPrice[]` with `@type: ProductOfferingPrice`, or with neither `@type`
+  nor `id`, is a new price - created under price POST's rules (never in the past, an
+  amount required), attached in the same transaction, with its own
+  `ProductOfferingPriceCreateEvent` (an import emits only its job's). An entry with
+  `@type: ProductOfferingPriceRef`, or with an `id` and no `@type`, is a reference, as
+  before. Problems are reported under `productOfferingPrice.<index>`. Retires the
+  "only references" deviation below. TMF620's own offering example types its price
+  reference `ProductOfferingPrice`, which its discriminator maps to a value: the schema
+  wins, the example is sent as a reference in the tests.
+- **A reference's `version`** (category `parent`/`productOffering`, catalog `category`,
+  an offering's `productSpecification` with its `targetProductSchema`, a price
+  reference) must be the referred entry's current one (422 otherwise; no versions are
+  kept). References in responses carry the version when the entry has one.
+- **The spec's examples disagree with its schemas in places** (an AttachmentRef with
+  `mimeType`, a number characteristic value `"8"`, a ProductSpecificationRelationship
+  `role`, a PricingLogicAlgorithm `href`, a ProductOfferingPriceRelationship `validFor`):
+  the schemas win, as everywhere; the tests send the examples corrected
+  (`tests/test_api_catalog_attributes.py`, `example`).
+- UI: the code is the `offeringCode` entry (not the first identifier); an offering
+  without validFor shows "any time"; a product without a specification shows its code
+  alone. MCP: the request models carry the documents (`documents_model`).
+
+Tests: `tests/test_api_catalog_attributes.py` (the spec's three create examples round
+trip, nested problems, documents patched and removed, versions, inline prices and their
+event, prices without an amount, the charge rule, the specification rule, an offering
+without validFor/specification ordered and shown, categories from the offering side, a
+catalog's relatedParty), `test_0024_catalog_details_and_optional_attributes`, the
+updated code and catalog cases, and the gap lock. Negative proofs: without the
+"ordered" check the charge test fails; without the inline amount check the inline test
+fails (the CHECK still stops the attach, as a 409 instead of the 422); with the version
+check a no-op the version test fails. Rolling back `0024` needs `alembic downgrade
+0023` by hand; it fails while an offering has no specification or validFor, or a price
+no amount (delete or complete them first).
+
 ### Import and export jobs (2026-10-16)
 
 `importJob` and `exportJob` (list, retrieve, create, delete: eight operations) move the
@@ -149,7 +241,7 @@ the required `scripts/docs/` registry and notes edits. No commit or deployment m
 | Resource | DB column <-> TMF attribute | Filters |
 |---|---|---|
 | productSpecification | `name`, `description`, `lifecycle_status` <-> `lifecycleStatus`, `updated_at` <-> `lastUpdate` | `name`, `lifecycleStatus` |
-| productOffering | `name`, `description`, `lifecycle_status`, `is_sellable` <-> `isSellable`, `valid_for` <-> `validFor`, `product_specification_id` <-> `productSpecification` (ref, mandatory - ours), attached prices <-> `productOfferingPrice[]` (refs), `code` <-> `externalIdentifier[]` (0003; see below) | `name`, `lifecycleStatus`, `isSellable`, `productSpecification.id`, `externalIdentifier.id` |
+| productOffering | `name`, `description`, `lifecycle_status`, `is_sellable` <-> `isSellable`, `valid_for` <-> `validFor`, `product_specification_id` <-> `productSpecification` (ref, optional since 0024), attached prices <-> `productOfferingPrice[]` (refs; inline values create prices), `code` <-> the `offeringCode` entry of `externalIdentifier[]` (0003, 0024; see below), the rest <-> `details` (0024) | `name`, `lifecycleStatus`, `isSellable`, `productSpecification.id`, `externalIdentifier.id` |
 | productOfferingPrice | `name`, `lifecycle_status`, `price_type` <-> `priceType` (`recurring`/`oneTime`), `recurring_period` <-> `recurringChargePeriodType` (`monthly`), `recurring_period_length` <-> `recurringChargePeriodLength` (1), `amount` + `currency` <-> `price`, `valid_for` <-> `validFor` | `name`, `priceType`, `lifecycleStatus` |
 
 - **An offering's lifecycle only moves forward**: PATCH `lifecycleStatus` allows In Design
@@ -164,13 +256,15 @@ the required `scripts/docs/` registry and notes edits. No commit or deployment m
   `offeringNotValid`), so ending an offering cannot leave a live product without a price.
 - **Prices attach through the offering**, as in the spec: a price is created on its own
   (`product_offering_id` NULL) and attached by `productOfferingPrice[]` on POST/PATCH of
-  the offering; only references are accepted there, not inline prices. A price belongs to
-  at most one offering (409) and may not overlap a price of the same type and currency on
-  it (409, the exclusion constraint).
-- **Prices are never detached or re-priced.** A PATCH that drops a price from
-  `productOfferingPrice[]` is a 409; `price`, `priceType` and the recurring period are
-  read-only (400); `validFor.startDateTime` cannot move (409). Changing a price = end its
-  `validFor` and attach a new one - stage 3 billing needs the historical price.
+  the offering, or sent inline there and created with it (since 2026-10-18, "Catalog
+  attributes" above). A price belongs to at most one offering (409) and may not overlap
+  a price of the same type and currency on it (409, the exclusion constraint).
+- **Prices are never detached; once their offering was ordered, never re-priced.** A
+  PATCH that drops a price from `productOfferingPrice[]` is a 409; `price`, `priceType`
+  and the recurring period change only while the offering was never ordered (409
+  otherwise, "Catalog attributes" above); `validFor.startDateTime` cannot move (409).
+  Changing a price = end its `validFor` and attach a new one - stage 3 billing needs the
+  historical price.
 - **A price never starts in the past.** A price created or attached with
   `validFor.startDateTime` < now is a 409. Stage 3 catch-up billing charges past days at
   the price valid then, so a past-starting price would back-charge them.
@@ -204,16 +298,15 @@ the required `scripts/docs/` registry and notes edits. No commit or deployment m
   a price already starts on or after `validFrom`. Existing products pick up the new price
   from their first billing period starting on or after `validFrom` (the core prices each
   period at its first billable day); new orders from `validFrom`.
-- **Offering code (migration 0003):** the spec's `externalIdentifier[]` with exactly one
-  entry `{id: <code>, externalIdentifierType: "offeringCode", owner: "bss", @type:
-  ExternalIdentifier}`. `owner` may be omitted on POST (any other value is a 422). The
-  code matches `^[A-Z0-9][A-Z0-9_-]{0,31}$` (upper case, so uniqueness never depends on
-  case), is unique (409 "offering code X is already in use"), optional, set on POST only
-  and read-only after (400). Offerings without one carry no `externalIdentifier`.
-- **Deviation: only references in `productOfferingPrice[]`.** The spec's
-  `ProductOfferingPriceRefOrValue` also allows an inline price; we accept references only
-  (an entry without `id` is a 422). Create the price first, then reference it.
-- `productSpecification` of an offering is read-only on PATCH.
+- **Offering code (migration 0003; 0024):** the `externalIdentifier[]` entry `{id:
+  <code>, externalIdentifierType: "offeringCode", owner: "bss", @type:
+  ExternalIdentifier}`, at most one among any other identifiers. `owner` may be omitted
+  (any other value is a 422). The code matches `^[A-Z0-9][A-Z0-9_-]{0,31}$` (upper case,
+  so uniqueness never depends on case), is unique (409 "offering code X is already in
+  use"), optional, and changeable on PATCH since 2026-10-18 ("Catalog attributes"
+  above). Offerings without any identifier carry no `externalIdentifier`.
+- An offering's `productSpecification` changes on PATCH until the offering is ordered
+  (2026-10-18; read-only before).
 - **Migration 0002** adds what the API needs and 0001 had no place for. Its NOT NULL
   columns have no default on purpose: if the tables are not empty the migration fails
   and the deploy stops before the app starts.

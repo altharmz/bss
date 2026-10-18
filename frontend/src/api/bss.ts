@@ -459,6 +459,14 @@ function displayPrice(
   return null;
 }
 
+/** The offering code: the externalIdentifier entry of type offeringCode. */
+export function offeringCode(offering: Pick<OfferingBody, 'externalIdentifier'>): string | null {
+  const entry = (offering.externalIdentifier ?? []).find(
+    (e) => e.externalIdentifierType === 'offeringCode',
+  );
+  return entry?.id ?? null;
+}
+
 export async function loadSellableOfferings(
   now: string,
   currency: string,
@@ -472,7 +480,7 @@ export async function loadSellableOfferings(
   return offerings.map((offering) => ({
     id: need(offering.id, 'offering id'),
     name: need(offering.name, 'offering name'),
-    code: offering.externalIdentifier?.[0]?.id ?? null,
+    code: offeringCode(offering),
     specification: offering.productSpecification?.name ?? '',
     priceCents: displayPrice(offering, byId, now, currency),
   }));
@@ -497,7 +505,7 @@ export interface CatalogOffering {
   code: string | null;
   status: Lifecycle;
   specification: string;
-  validFrom: string; // instant
+  validFrom: string | null; // instant; null = no validFor (valid at any time)
   validTo: string | null; // instant, exclusive
   prices: CatalogPrice[]; // recurring, attached to this offering
 }
@@ -527,10 +535,10 @@ export async function loadCatalog(signal: AbortSignal): Promise<Catalog> {
     offerings: offerings.map((offering) => ({
       id: need(offering.id, 'offering id'),
       name: need(offering.name, 'offering name'),
-      code: offering.externalIdentifier?.[0]?.id ?? null,
+      code: offeringCode(offering),
       status: need(offering.lifecycleStatus, 'lifecycleStatus') as Lifecycle,
       specification: offering.productSpecification?.name ?? '',
-      validFrom: need(offering.validFor?.startDateTime, 'validFor.startDateTime'),
+      validFrom: offering.validFor?.startDateTime ?? null,
       validTo: offering.validFor?.endDateTime ?? null,
       prices: (offering.productOfferingPrice ?? []).flatMap((ref) => {
         const price = ref.id === undefined ? undefined : priceById.get(ref.id);

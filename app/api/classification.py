@@ -11,11 +11,14 @@ from app.api import listing
 from app.api.catalog import (
     API,
     BASE,
+    CategoryRef,
     LifecycleStatus,
+    OfferingRef,
     _check_lifecycle,
+    check_version,
+    versioned,
 )
 from app.api.common import (
-    ProductOfferingRef,
     Ref,
     TimePeriod,
     TmfModel,
@@ -24,9 +27,12 @@ from app.api.common import (
     claim_id,
     columns,
     created,
+    documents_model,
+    merge_documents,
     meta_body,
     not_null,
     parse,
+    parse_documented,
     parse_id,
     ref,
     take_id,
@@ -43,12 +49,13 @@ from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
 from app.repository import classification as repo
 from app.repository._sql import Row, count_references, select_page
+from app.repository.parties import with_details
 
 router = APIRouter(prefix=BASE)
 
-
-class CategoryRef(Ref):
-    referred_type = "Category"
+# A catalog's relatedParty: a document, stored as sent (not resolved), as a customer's.
+CATALOG_DOCUMENTS = ("relatedParty",)
+CatalogDocuments = documents_model("CatalogDocuments", API, CATALOG_DOCUMENTS)
 
 
 class CatalogEntityCreate(TmfModel):
@@ -71,33 +78,42 @@ class CatalogEntityPatch(TmfModel):
 class CategoryCreate(CatalogEntityCreate):
     parent: CategoryRef | None = None
     is_root: bool | None = None
-    product_offering: list[ProductOfferingRef] = []
+    product_offering: list[OfferingRef] = []
 
 
 class CategoryPatch(CatalogEntityPatch):
     parent: CategoryRef | None = None
     is_root: bool | None = None
-    product_offering: list[ProductOfferingRef] | None = None
+    product_offering: list[OfferingRef] | None = None
 
 
-class CatalogCreate(CatalogEntityCreate):
+class CatalogCreate(CatalogEntityCreate, CatalogDocuments):
     category: list[CategoryRef] = []
     catalog_type: str | None = None
 
 
-class CatalogPatch(CatalogEntityPatch):
+class CatalogPatch(CatalogEntityPatch, CatalogDocuments):
     category: list[CategoryRef] | None = None
     catalog_type: str | None = None
 
 
 COMMON = ("name", "description", "lifecycleStatus", "validFor", "version", "lastUpdate")
 CATEGORY_ATTRIBUTES = (*COMMON, "parent", "isRoot", "subCategory", "productOffering")
-CATALOG_ATTRIBUTES = (*COMMON, "catalogType", "category")
+CATALOG_ATTRIBUTES = (*COMMON, "catalogType", "category", *CATALOG_DOCUMENTS)
 
 
 def references(resource: str, rows: list[Row]) -> list[dict[str, Any]]:
+    """References with the referred entry's version, when it has one."""
     return [
-        ref(resource[0].upper() + resource[1:], f"{BASE}/{resource}/{r['id']}", r["id"], r["name"])
+        versioned(
+            ref(
+                resource[0].upper() + resource[1:],
+                f"{BASE}/{resource}/{r['id']}",
+                r["id"],
+                r["name"],
+            ),
+            r,
+        )  # fmt: skip
         for r in rows
     ]
 
@@ -133,19 +149,27 @@ def organization_body(conn: psycopg.Connection, row: Row, category: bool) -> dic
         body["category"] = references("category", repo.memberships(conn, "catalog", row["id"]))
         if row["catalog_type"] is not None:
             body["catalogType"] = row["catalog_type"]
+        body |= row["details"]
     return body
 
 
 def validate_refs(
-    conn: psycopg.Connection, refs: list[Ref], table: repo.Table, *, roots: bool = False
+    conn: psycopg.Connection,
+    refs: list[Ref],
+    table: repo.Table,
+    name: str,
+    *,
+    roots: bool = False,
 ) -> list[UUID]:
+    """Existing entries, each once, at their current version (`name`: the attribute)."""
     ids = [r.id for r in refs]
     if len(set(ids)) != len(ids):
         raise unprocessable("duplicate references are not allowed")
-    for uid in ids:
-        row = repo.get(conn, table, uid)
+    for reference in refs:
+        row = repo.get(conn, table, reference.id)
         if row is None:
-            raise unprocessable(f"{table} {uid} does not exist")
+            raise unprocessable(f"{table} {reference.id} does not exist")
+        check_version(reference, row, name)
         if roots and row["parent_id"] is not None:
             raise conflict("a product catalog may reference only root categories")
     return ids
@@ -157,9 +181,11 @@ def save(
     category: bool,
     uid: UUID | None = None,
     new_id: UUID | None = None,
+    documents: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Validate against serialized state, then replace scalar fields and memberships.
-    `uid`: the entry to PATCH; `new_id`: the id of a new one (an import's source id)."""
+    `uid`: the entry to PATCH; `new_id`: the id of a new one (an import's source id);
+    `documents`: a catalog's relatedParty, as sent."""
     repo.lock(conn)
     table = "category" if category else "product_catalog"
     current = repo.get(conn, table, uid) if uid else None
@@ -178,9 +204,20 @@ def save(
     values = columns(
         data,
         exclude=frozenset(
-            {"last_update", "valid_for", "parent", "is_root", "product_offering", "category"}
+            {
+                "last_update",
+                "valid_for",
+                "parent",
+                "is_root",
+                "product_offering",
+                "category",
+                "related_party",
+            }
         ),
     )
+    if documents:
+        merged = merge_documents(current["details"] if current else {}, documents)
+        values |= with_details({"details": merged})
     if "valid_for" in data.model_fields_set:
         values["valid_for"] = data.valid_for.to_range() if data.valid_for else None
     if category:
@@ -188,7 +225,7 @@ def save(
         if "parent" in data.model_fields_set:
             parent_id = data.parent.id if data.parent else None
             if parent_id:
-                validate_refs(conn, [data.parent], "category")
+                validate_refs(conn, [data.parent], "category", "parent")
                 if uid and uid in {r["id"] for r in repo.ancestors(conn, parent_id)}:
                     raise conflict("category hierarchy cannot contain a cycle")
             if parent_id and uid and repo.memberships(conn, "catalog", uid, reverse=True):
@@ -201,10 +238,18 @@ def save(
             )
         values["parent_id"] = parent_id
         refs = data.product_offering
-        ids = validate_refs(conn, refs, "product_offering") if refs is not None else None
+        ids = (
+            validate_refs(conn, refs, "product_offering", "productOffering")
+            if refs is not None
+            else None
+        )
     else:
         refs = data.category
-        ids = validate_refs(conn, refs, "category", roots=True) if refs is not None else None
+        ids = (
+            validate_refs(conn, refs, "category", "category", roots=True)
+            if refs is not None
+            else None
+        )
     if current and ids is not None and not values:
         # Membership is part of this resource: fire its lastUpdate trigger too.
         values["name"] = current["name"]
@@ -251,17 +296,29 @@ def _resource(category: bool) -> tuple[str, str]:
 
 
 def _created(
-    conn: psycopg.Connection, data, category: bool, at, new_id: UUID | None, server_set
+    conn: psycopg.Connection,
+    data,
+    category: bool,
+    at,
+    new_id: UUID | None,
+    server_set,
+    documents: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     claim_id(conn, _resource(category)[1], new_id)
-    new = save(conn, data, category, new_id=new_id)
+    new = save(conn, data, category, new_id=new_id, documents=documents)
     check_server_set(server_set, new)
     emit.created(conn, API, _resource(category)[0], new, at=at)
     return new
 
 
 def _patched(
-    conn: psycopg.Connection, data, category: bool, uid: UUID, at, server_set
+    conn: psycopg.Connection,
+    data,
+    category: bool,
+    uid: UUID,
+    at,
+    server_set,
+    documents: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     resource, table = _resource(category)
     current = repo.get(conn, table, uid)
@@ -270,7 +327,7 @@ def _patched(
         before = organization_body(conn, current, category)
         check_server_set(server_set, before)
         old = emit.before(conn, API, resource, lambda: before)
-    new = save(conn, data, category, uid)
+    new = save(conn, data, category, uid, documents=documents)
     emit.changed(conn, API, resource, old, new, at=at, state="lifecycleStatus")
     return new
 
@@ -335,9 +392,11 @@ def create_catalog(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
     fields = listing.retrieve_fields(request, CATALOG_ATTRIBUTES)
     check_type(body, "ProductCatalog")
     uid = take_id(body)
-    data = parse(CatalogCreate, body)
+    data, documents = parse_documented(
+        CatalogCreate, body, CATALOG_DOCUMENTS, API, "ProductCatalog_FVO"
+    )
     with tx() as conn:
-        new = _created(conn, data, False, clock.now(), uid, {})
+        new = _created(conn, data, False, clock.now(), uid, {}, documents)
     return created(listing.select_fields(new, fields))
 
 
@@ -348,10 +407,12 @@ def patch_catalog(
     fields = listing.retrieve_fields(request, CATALOG_ATTRIBUTES)
     check_type(body, "ProductCatalog")
     server_set = take_server_set(body, ("lastUpdate",))
-    data = parse(CatalogPatch, body)
+    data, documents = parse_documented(
+        CatalogPatch, body, CATALOG_DOCUMENTS, API, "ProductCatalog_MVO"
+    )
     uid = parse_id("productCatalog", catalog_id)
     with tx() as conn:
-        patched = _patched(conn, data, False, uid, clock.now(), server_set)
+        patched = _patched(conn, data, False, uid, clock.now(), server_set, documents)
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 

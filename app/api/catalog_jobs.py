@@ -28,6 +28,9 @@ from app.api import listing, tmfjson
 from app.api.catalog import (
     API,
     BASE,
+    OFFERING_DOCUMENTS,
+    PRICE_DOCUMENTS,
+    SPEC_DOCUMENTS,
     OfferingCreate,
     PriceCreate,
     SpecificationCreate,
@@ -36,9 +39,16 @@ from app.api.catalog import (
     insert_specification,
     offering_body,
     price_body,
+    price_entries,
     specification_body,
 )
-from app.api.classification import CatalogCreate, CategoryCreate, organization_body, save
+from app.api.classification import (
+    CATALOG_DOCUMENTS,
+    CatalogCreate,
+    CategoryCreate,
+    organization_body,
+    save,
+)
 from app.api.common import (
     TmfModel,
     check_server_set,
@@ -47,6 +57,7 @@ from app.api.common import (
     created,
     meta_body,
     parse,
+    parse_documented,
     parse_id,
     take_id,
     take_server_set,
@@ -237,7 +248,7 @@ def export_document(conn: psycopg.Connection, catalog_id: UUID | None) -> dict[s
         specs = _rows(
             conn,
             "SELECT * FROM product_specification WHERE id = ANY(%s) ORDER BY created_at, id",
-            list({o["product_specification_id"] for o in offerings}),
+            list({o["product_specification_id"] for o in offerings} - {None}),
         )
         prices = _rows(
             conn,
@@ -305,15 +316,28 @@ def _create(
 ) -> None:
     """POST's validation and write, under the source's id."""
     if kind == "productSpecification":
-        insert_specification(conn, parse(SpecificationCreate, body), uid)
+        data, documents = parse_documented(
+            SpecificationCreate, body, SPEC_DOCUMENTS, API, "ProductSpecification_FVO"
+        )
+        insert_specification(conn, data, documents, uid)
     elif kind == "productOfferingPrice":
-        insert_price(conn, parse(PriceCreate, body), now, uid)
+        data, documents = parse_documented(
+            PriceCreate, body, PRICE_DOCUMENTS, API, "ProductOfferingPrice_FVO"
+        )
+        insert_price(conn, data, documents, now, uid)
     elif kind == "productOffering":
-        insert_offering(conn, parse(OfferingCreate, body), now, uid)
+        entries, found = price_entries(body)
+        data, documents = parse_documented(
+            OfferingCreate, body, OFFERING_DOCUMENTS, API, "ProductOffering_FVO", found
+        )
+        insert_offering(conn, data, documents, entries, now, uid, events=False)
     elif kind == "category":
         save(conn, parse(CategoryCreate, body), True, new_id=uid)
     else:
-        save(conn, parse(CatalogCreate, body), False, new_id=uid)
+        data, documents = parse_documented(
+            CatalogCreate, body, CATALOG_DOCUMENTS, API, "ProductCatalog_FVO"
+        )
+        save(conn, data, False, new_id=uid, documents=documents)
 
 
 def _entries(document: dict[str, Any], kind: str) -> list[tuple[UUID, dict[str, Any]]]:

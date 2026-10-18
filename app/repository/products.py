@@ -234,7 +234,7 @@ def list_open_products(conn: psycopg.Connection, billing_account_id: UUID) -> li
                s.id AS specification_id, s.name AS specification_name
         FROM product p
         JOIN product_offering o ON o.id = p.product_offering_id
-        JOIN product_specification s ON s.id = o.product_specification_id
+        LEFT JOIN product_specification s ON s.id = o.product_specification_id
         WHERE p.billing_account_id = %s AND p.status = ANY(%s)
         ORDER BY p.start_date, p.created_at, p.id
         """,

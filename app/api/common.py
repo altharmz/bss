@@ -218,19 +218,40 @@ def parse_documented[M: BaseModel](
     for name in SERVER_MANAGED:
         if name in body:
             raise bad_request(f"{name} is read-only")
+    data, documents, invalid, problems = check_documented(model, body, documents, api, schema)
+    problems = [*invalid, *(found or ()), *problems]
+    if problems or data is None:
+        raise problems_error(problems)
+    return data, documents
+
+
+def check_documented[M: BaseModel](
+    model: type[M],
+    body: dict[str, Any],
+    documents: tuple[str, ...],
+    api: str,
+    schema: str,
+    path: str = "",
+) -> tuple[M | None, dict[str, Any], list[Problem], list[Problem]]:
+    """`parse_documented`'s checks without raising, for a body inside another (an
+    offering's inline price): the model (None if invalid), the documents sent, and the
+    model's and the spec's problems, reported under `path`."""
     sent = {name: body[name] for name in documents if name in body}
     values, problems = specschema.check(
         api, schema, {name: value for name, value in sent.items() if value is not None}
     )
-    problems = [*(found or ()), *problems]
     try:
-        data = model.model_validate(body)
+        data: M | None = model.model_validate(body)
+        invalid: list[Problem] = []
     except ValidationError as exc:
+        data = None
         invalid = validation_problems(exc.errors(include_url=False, include_context=False))
-        raise problems_error(invalid + problems) from exc
-    if problems:
-        raise problems_error(problems)
-    return data, {name: values.get(name) for name in sent}
+    if path:
+        invalid, problems = (
+            [(f"{path}.{loc}" if loc else path, msg, unknown) for loc, msg, unknown in found]
+            for found in (invalid, problems)
+        )
+    return data, {name: values.get(name) for name in sent}, invalid, problems
 
 
 def merge_documents(current: dict[str, Any], sent: dict[str, Any]) -> dict[str, Any]:

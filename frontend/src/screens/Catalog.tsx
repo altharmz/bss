@@ -48,7 +48,8 @@ function lastValidDay(endExclusive: string, timeZone: string): string {
 }
 
 export function validity(offering: CatalogOffering, timeZone: string): string {
-  const from = businessDate(offering.validFrom, timeZone);
+  const from =
+    offering.validFrom === null ? 'any time' : businessDate(offering.validFrom, timeZone);
   const to = offering.validTo === null ? 'open-ended' : lastValidDay(offering.validTo, timeZone);
   return `${from} – ${to}`;
 }

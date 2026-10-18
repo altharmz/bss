@@ -224,10 +224,9 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                     "name": p["offering_name"],
                     "code": p["offering_code"],
                 },
-                "productSpecification": {
-                    "id": str(p["specification_id"]),
-                    "name": p["specification_name"],
-                },
+                "productSpecification": None  # an offering without a specification
+                if p["specification_id"] is None
+                else {"id": str(p["specification_id"]), "name": p["specification_name"]},
                 "price": None if price is None else money(price.amount, price.currency),
                 "nextChargeDate": _next_charge(p, today, account.bill_cycle_day),
             }

@@ -194,7 +194,10 @@ def test_membership_replacement_and_filters(api):
     assert api.get(f"{CATEGORY}?lifecycleStatus=Retired").json() == []
     assert api.get(f"{CATALOG}?catalogType=Product").json()[0]["id"] == first["id"]
     assert api.get(f"{CATALOG}?catalogType=Other").json() == []
-    assert api.patch(offering["href"], {"category": []}).status_code == 400
+    # the offering's side of the same membership is writable too (an empty list clears it)
+    assert api.patch(offering["href"], {"category": []}).status_code == 200
+    assert api.get(offering["href"]).json()["category"] == []
+    assert api.get(root["href"]).json()["productOffering"] == []
 
 
 @pytest.mark.parametrize("path", [CATEGORY, CATALOG])

@@ -149,7 +149,8 @@ OPERATIONS: dict[str, Op] = {
     ),
     "patch_price": Op(
         "Change a price: lifecycle, name, or end it (validFor.endDateTime, not in the past)."
-        " The amount and type are read-only - to change a live price use price_change.",
+        " The charge (price, priceType, period) changes only while its offering was never"
+        " ordered - to change a live price use price_change.",
         body=PricePatch,
     ),
     "delete_price": Op(
@@ -159,13 +160,14 @@ OPERATIONS: dict[str, Op] = {
     "list_offerings": Op("Product offerings (what can be ordered).", query=LIST),
     "get_offering": Op("One product offering.", query=FIELDS),
     "create_offering": Op(
-        "Create an offering: productSpecification is mandatory; prices are attached by"
-        " reference; an optional offering code in externalIdentifier.",
+        "Create an offering: prices attached by reference or sent inline (new prices);"
+        " an optional offering code as the externalIdentifier of type offeringCode.",
         body=OfferingCreate,
     ),
     "patch_offering": Op(
         "Change an offering: attach prices, move lifecycleStatus forward, set validFor (not"
-        " in the past). Prices are never detached.",
+        " in the past), categories, its specification (while never ordered). Prices are"
+        " never detached.",
         body=OfferingPatch,
     ),
     "delete_offering": Op(

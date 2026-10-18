@@ -248,9 +248,9 @@ def test_meta_attributes_are_accepted_unknown_business_attributes_are_not(api):
         spec_body(**{"@baseType": "Entity", "@schemaLocation": "https://example.org/s.json"}),
     )
     assert accepted.status_code == 201
-    rejected = api.post(SPEC, spec_body(brand="Acme"))
+    rejected = api.post(SPEC, spec_body(colour="red"))  # not in the spec
     assert rejected.status_code == 400
-    assert "brand: unknown attribute" in rejected.json()["message"]
+    assert "colour: unknown attribute" in rejected.json()["message"]
     assert len(api.get(SPEC).json()) == 1
 
 
@@ -311,7 +311,7 @@ def test_patch_rejects_read_only_attributes(api):
     # repeating the unchanged @type is fine: the spec's _MVO schema even requires it
     assert api.patch(href, {"@type": "ProductSpecification", "name": "X"}).status_code == 200
     assert api.patch(href, {"name": None}).status_code == 422
-    assert api.patch(href, {"brand": "Acme"}).status_code == 400
+    assert api.patch(href, {"colour": "red"}).status_code == 400  # not in the spec
 
 
 # --- errors ---

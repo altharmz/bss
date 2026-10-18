@@ -17,6 +17,17 @@ from app.repository._sql import (
     select_page,
     update_by_id,
 )
+from app.repository.parties import with_details
+
+
+def _with_details(
+    conn: psycopg.Connection, table: str, row: Row, details: dict[str, Any] | None
+) -> Row:
+    """`details` (the TMF620 attributes that are documents to us, app/api/catalog.py):
+    written only when given, so the tests' factories also work on a schema before 0024."""
+    if not details:
+        return row
+    return update_by_id(conn, table, row["id"], with_details({"details": details}))
 
 
 def create_product_specification(
@@ -25,10 +36,11 @@ def create_product_specification(
     name: str,
     lifecycle_status: str,
     description: str | None = None,
+    details: dict[str, Any] | None = None,
     id: UUID | None = None,
 ) -> Row:
     """`id` None: a new one (an import passes the source's)."""
-    return returning(
+    row = returning(
         conn,
         """
         INSERT INTO product_specification (id, name, description, lifecycle_status)
@@ -36,6 +48,7 @@ def create_product_specification(
         """,
         (id, name, description, lifecycle_status),
     )
+    return _with_details(conn, "product_specification", row, details)
 
 
 def get_product_specification(conn: psycopg.Connection, spec_id: UUID) -> Row | None:
@@ -45,18 +58,19 @@ def get_product_specification(conn: psycopg.Connection, spec_id: UUID) -> Row | 
 def create_product_offering(
     conn: psycopg.Connection,
     *,
-    product_specification_id: UUID,
+    product_specification_id: UUID | None,
     name: str,
     lifecycle_status: str,
-    valid_for: Range,
+    valid_for: Range | None,
     is_sellable: bool = True,
     description: str | None = None,
     code: str | None = None,
+    details: dict[str, Any] | None = None,
     id: UUID | None = None,
 ) -> Row:
     """`code` is unique: a duplicate raises psycopg.errors.UniqueViolation. `id` None: a
-    new one (an import passes the source's)."""
-    return returning(
+    new one (an import passes the source's). `valid_for` None: valid at any time."""
+    row = returning(
         conn,
         """
         INSERT INTO product_offering
@@ -76,6 +90,7 @@ def create_product_offering(
             code,
         ),
     )
+    return _with_details(conn, "product_offering", row, details)
 
 
 def get_product_offering(conn: psycopg.Connection, offering_id: UUID) -> Row | None:
@@ -87,17 +102,19 @@ def create_product_offering_price(
     *,
     product_offering_id: UUID | None,
     price_type: str,
-    amount: Decimal,
-    currency: str,
+    amount: Decimal | None,
+    currency: str | None,
     valid_for: Range,
     recurring_period: str | None = None,
     name: str | None = None,
     lifecycle_status: str = "Active",
+    details: dict[str, Any] | None = None,
     id: UUID | None = None,
 ) -> Row:
-    """`product_offering_id=None` creates an unattached price (see `attach_price`). `id`
-    None: a new one (an import passes the source's)."""
-    return returning(
+    """`product_offering_id=None` creates an unattached price (see `attach_price`); only
+    an unattached one may have no amount. `id` None: a new one (an import passes the
+    source's)."""
+    row = returning(
         conn,
         """
         INSERT INTO product_offering_price
@@ -113,11 +130,12 @@ def create_product_offering_price(
             lifecycle_status,
             price_type,
             recurring_period,
-            money(amount),
+            None if amount is None else money(amount),
             currency,
             valid_for,
         ),
     )
+    return _with_details(conn, "product_offering_price", row, details)
 
 
 def get_product_offering_price(conn: psycopg.Connection, price_id: UUID) -> Row | None:
@@ -298,16 +316,16 @@ def list_product_offering_prices(
 def update_product_specification(
     conn: psycopg.Connection, spec_id: UUID, changes: dict[str, Any]
 ) -> Row:
-    return update_by_id(conn, "product_specification", spec_id, changes)
+    return update_by_id(conn, "product_specification", spec_id, with_details(changes))
 
 
 def update_product_offering(
     conn: psycopg.Connection, offering_id: UUID, changes: dict[str, Any]
 ) -> Row:
-    return update_by_id(conn, "product_offering", offering_id, changes)
+    return update_by_id(conn, "product_offering", offering_id, with_details(changes))
 
 
 def update_product_offering_price(
     conn: psycopg.Connection, price_id: UUID, changes: dict[str, Any]
 ) -> Row:
-    return update_by_id(conn, "product_offering_price", price_id, changes)
+    return update_by_id(conn, "product_offering_price", price_id, with_details(changes))

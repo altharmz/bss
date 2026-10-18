@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0023**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0024**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -265,6 +265,7 @@ erDiagram
     lifecycle_status lifecycle_status
     text base_type
     text schema_location
+    jsonb details
   }
   product_offering {
     uuid id PK
@@ -279,6 +280,7 @@ erDiagram
     text code
     text base_type
     text schema_location
+    jsonb details
   }
   product_offering_price {
     uuid id PK
@@ -295,6 +297,7 @@ erDiagram
     lifecycle_status lifecycle_status
     text base_type
     text schema_location
+    jsonb details
   }
   category {
     uuid id PK
@@ -321,6 +324,7 @@ erDiagram
     text catalog_type
     text base_type
     text schema_location
+    jsonb details
   }
   catalog_category {
     uuid catalog_id PK,FK
@@ -353,7 +357,7 @@ erDiagram
   product_catalog ||--o{ catalog_category : "catalog_id"
   product_offering |o--o{ product_offering_price : "product_offering_id"
   product_offering ||--o{ offering_category : "offering_id"
-  product_specification ||--o{ product_offering : "product_specification_id"
+  product_specification |o--o{ product_offering : "product_specification_id"
 ```
 
 ## Ordering (TMF622)

@@ -222,6 +222,15 @@ accounts, [accounts.md, "Account attributes"](accounts.md#account-attributes-202
 the descriptive attributes are slice 4's documents, `paymentStatus` is a record,
 `ratingType` always `postpaid`, `billCycleDay`/`currency` optional.
 
+### Catalog attributes (2026-10-18)
+
+Slice 6 of "Following TMF" (TMF620), migration `0024`, 161 lines left: recorded with the
+catalog, [catalog.md, "Catalog attributes"](catalog.md#catalog-attributes-2026-10-18).
+The descriptive attributes are slice 4's documents (own-catalog references in them
+stored as sent), inline prices, a price's charge and an offering's specification
+changeable until the offering is ordered, the code one `externalIdentifier` entry,
+reference versions checked, `productSpecification`/`validFor`/`price` optional.
+
 ### Product writes through orders (2026-10-17)
 
 The last seven operations, approved by the human on 2026-10-17 ("reach 100%"), close

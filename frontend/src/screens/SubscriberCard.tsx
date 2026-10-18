@@ -427,7 +427,7 @@ function ProductRow({
     }
   }
 
-  const code = [product.productOffering.code, product.productSpecification.name]
+  const code = [product.productOffering.code, product.productSpecification?.name]
     .filter(Boolean)
     .join(' · ');
   return (

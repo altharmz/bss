@@ -107,17 +107,24 @@ def test_an_offering_without_a_code_has_no_external_identifier(api, spec):
     assert "externalIdentifier" not in created
 
 
+def _identifier(**attributes) -> dict:
+    return {"@type": "ExternalIdentifier", **attributes}
+
+
+CODE = "offeringCode"
+
+
 @pytest.mark.parametrize(
     ("identifiers", "status"),
     [
-        ([{"id": "mob-l", "externalIdentifierType": "offeringCode"}], 422),  # upper case only
-        ([{"id": "", "externalIdentifierType": "offeringCode"}], 422),
-        ([{"id": "A" * 33, "externalIdentifierType": "offeringCode"}], 422),
-        ([{"id": "MOB-L", "externalIdentifierType": "sku"}], 422),
-        ([{"id": "MOB-L", "externalIdentifierType": "offeringCode", "owner": "crm"}], 422),
-        ([{"id": "MOB-L"}], 422),
+        ([_identifier(id="mob-l", externalIdentifierType=CODE)], 422),  # upper case only
+        ([_identifier(id="", externalIdentifierType=CODE)], 422),
+        ([_identifier(id="A" * 33, externalIdentifierType=CODE)], 422),
+        ([_identifier(id="MOB-L", externalIdentifierType=CODE, owner="crm")], 422),
         (apidata.code_identifier("A") + apidata.code_identifier("B"), 422),  # one code only
-        ([{"id": "MOB-L", "externalIdentifierType": "offeringCode", "extra": 1}], 400),
+        ([_identifier(id="MOB-L", externalIdentifierType=CODE, extra=1)], 400),
+        ([{"id": "MOB-L", "externalIdentifierType": CODE}], 422),  # the spec requires @type
+        ([_identifier(externalIdentifierType=CODE)], 422),  # and id
     ],
 )
 def test_invalid_codes(api, spec, identifiers, status):
@@ -125,8 +132,36 @@ def test_invalid_codes(api, spec, identifiers, status):
     assert response.status_code == status, response.text
 
 
-def test_the_code_is_read_only_after_creation(api, spec):
+def test_other_external_identifiers_are_kept_and_are_no_code(api, spec):
+    identifiers = [
+        _identifier(id="SKU-1", externalIdentifierType="sku", owner="erp"),
+        _identifier(id="lower-case is fine here"),
+        *apidata.code_identifier("MOB-L"),
+    ]
+    created = api.post(OFFERING, offering_body(spec, externalIdentifier=identifiers))
+    assert created.status_code == 201, created.text
+    assert created.json()["externalIdentifier"] == [
+        *identifiers[:2],
+        {**identifiers[2], "owner": "bss"},  # the code's owner, filled in
+    ]
+    found = api.get(f"{OFFERING}?externalIdentifier.id=MOB-L").json()
+    assert [o["id"] for o in found] == [created.json()["id"]]
+    assert api.get(f"{OFFERING}?externalIdentifier.id=SKU-1").json() == []  # only the code
+
+
+def test_the_code_changes_with_patch_and_stays_unique(api, spec):
     created = api.post(OFFERING, offering_body(spec)).json()
+    other = api.post(
+        OFFERING, offering_body(spec, externalIdentifier=apidata.code_identifier("TAKEN"))
+    ).json()
     response = api.patch(created["href"], {"externalIdentifier": apidata.code_identifier("NEW")})
-    assert response.status_code == 400
-    assert response.json()["message"] == "externalIdentifier is read-only"
+    assert response.status_code == 200, response.text
+    assert response.json()["externalIdentifier"][0]["id"] == "NEW"
+    taken = api.patch(created["href"], {"externalIdentifier": apidata.code_identifier("TAKEN")})
+    assert taken.status_code == 409
+    assert taken.json()["message"] == "offering code TAKEN is already in use"
+    removed = api.patch(other["href"], {"externalIdentifier": None})
+    assert removed.status_code == 200 and "externalIdentifier" not in removed.json()
+    # the code is free again
+    reused = api.patch(created["href"], {"externalIdentifier": apidata.code_identifier("TAKEN")})
+    assert reused.status_code == 200, reused.text

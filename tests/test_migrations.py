@@ -781,3 +781,76 @@ def test_0023_account_details(temp_db_url):
             count = sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(table))
             assert conn.execute(count).fetchone() == (1,), table
     command.upgrade(cfg, "head")
+
+
+def test_0024_catalog_details_and_optional_attributes(temp_db_url):
+    """An existing offering code becomes the externalIdentifier it was answered as;
+    other entries get empty documents. Afterwards an offering may lack a specification
+    and validFor, and only an unattached price may lack an amount (with its currency).
+    Downgrading to 0023 keeps the rows that fit the old schema."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0023")
+    with psycopg.connect(temp_db_url) as conn:
+        spec = conn.execute(
+            "INSERT INTO product_specification (name, lifecycle_status)"
+            " VALUES ('Fiber', 'Active') RETURNING id"
+        ).fetchone()[0]
+        for code in ("MOB-L", None):
+            conn.execute(
+                "INSERT INTO product_offering"
+                " (product_specification_id, name, lifecycle_status, valid_for, code)"
+                " VALUES (%s, 'O', 'Active', tstzrange(now(), NULL), %s)",
+                (spec, code),
+            )
+        offering = conn.execute("SELECT id FROM product_offering LIMIT 1").fetchone()[0]
+        conn.execute(
+            "INSERT INTO product_offering_price (product_offering_id, name, lifecycle_status,"
+            " price_type, recurring_period, amount, currency, valid_for)"
+            " VALUES (%s, 'P', 'Active', 'recurring', 'monthly', 5, 'RUB', tstzrange(now(), NULL))",
+            (offering,),
+        )
+        conn.execute("INSERT INTO product_catalog (name) VALUES ('Main')")
+    command.upgrade(cfg, "0024")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT code, details FROM product_offering ORDER BY code"
+        ).fetchall() == [
+            (
+                "MOB-L",
+                {
+                    "externalIdentifier": [
+                        {
+                            "id": "MOB-L",
+                            "externalIdentifierType": "offeringCode",
+                            "owner": "bss",
+                            "@type": "ExternalIdentifier",
+                        }
+                    ]
+                },
+            ),
+            (None, {}),
+        ]
+        for table in ("product_specification", "product_offering_price", "product_catalog"):
+            select = sql.SQL("SELECT details FROM {}").format(sql.Identifier(table))
+            assert conn.execute(select).fetchall() == [({},)], table
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE product_offering_price SET amount = NULL, currency = NULL")
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute(
+                "UPDATE product_offering_price SET product_offering_id = NULL, amount = NULL"
+            )
+        with conn.transaction():  # unattached, no amount: fine; the offering needs nothing
+            conn.execute(
+                "INSERT INTO product_offering_price (name, lifecycle_status, price_type,"
+                " valid_for) VALUES ('D', 'Active', 'oneTime', tstzrange(now(), NULL))"
+            )
+            conn.execute(
+                "INSERT INTO product_offering (name, lifecycle_status) VALUES ('Bare', 'Active')"
+            )
+            conn.execute("DELETE FROM product_offering WHERE name = 'Bare'")
+            conn.execute("DELETE FROM product_offering_price WHERE name = 'D'")
+    command.downgrade(cfg, "0023")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT count(*) FROM product_offering").fetchone() == (2,)
+        assert conn.execute("SELECT count(*) FROM product_offering_price").fetchone() == (1,)
+    command.upgrade(cfg, "head")

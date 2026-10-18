@@ -343,6 +343,15 @@ components:
       properties:
         id: {type: string, format: uuid}
         name: {type: string}
+    NullableNamed:
+      description: Named or null (an offering's specification, when it has one).
+      type: object
+      nullable: true
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
     Error:
       description: The TMF630 Error body, as on the TMF surface.
       type: object
@@ -575,7 +584,7 @@ components:
             id: {type: string, format: uuid}
             name: {type: string}
             code: {type: string, nullable: true}
-        productSpecification: {$ref: '#/components/schemas/Named'}
+        productSpecification: {$ref: '#/components/schemas/NullableNamed'}
         price: {$ref: '#/components/schemas/NullableMoney'}
         nextChargeDate: {$ref: '#/components/schemas/NullableBusinessDate'}
     Charge:

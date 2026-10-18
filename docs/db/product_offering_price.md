@@ -18,12 +18,13 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | `price_type` | `price_type` (enum, see [README](README.md#enums)) | no |  | TMF620 priceType: recurring or oneTime. Billing uses recurring only. |
 | `recurring_period` | `recurring_charge_period_type` (enum, see [README](README.md#enums)) | yes |  | TMF620 recurringChargePeriodType (monthly); set iff recurring. |
 | `recurring_period_length` | `smallint` | no | `1` | TMF620 recurringChargePeriodLength; always 1. |
-| `amount` | `numeric(12,2)` | no |  | numeric(12,2), exact (never float); the price for one whole period, never negative. Immutable. |
-| `currency` | `character(3)` | no |  | ISO 4217 code, three upper-case letters. Immutable. |
+| `amount` | `numeric(12,2)` | yes |  | numeric(12,2), exact (never float); the price for one whole period, never negative. Immutable. |
+| `currency` | `character(3)` | yes |  | ISO 4217 code, three upper-case letters. Immutable. |
 | `valid_for` | `tstzrange` | no |  | TMF620 validFor as a half-open tstzrange [start, end); NULL upper = open-ended. The start never lies in the past and never moves; the end is only set or moved to now or later, and never so that a product is left without a price. |
 | `lifecycle_status` | `lifecycle_status` (enum, see [README](README.md#enums)) | no |  | TMF620 lifecycleStatus (ours). |
 | `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
 | `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
+| `details` | `jsonb` | no | `'{}'::jsonb` | TMF620 descriptive attributes as sent, validated against the spec; ordering and billing never read them. |
 
 ## Foreign keys
 
@@ -36,8 +37,11 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | Name | Kind | Definition |
 |---|---|---|
 | `product_offering_price_amount_check` | check | `CHECK ((amount >= (0)::numeric))` |
+| `product_offering_price_amount_with_currency` | check | `CHECK (((amount IS NULL) = (currency IS NULL)))` |
+| `product_offering_price_attached_has_amount` | check | `CHECK (((product_offering_id IS NULL) OR (amount IS NOT NULL)))` |
 | `product_offering_price_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `product_offering_price_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
+| `product_offering_price_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `product_offering_price_recurring_has_period` | check | `CHECK (((price_type = 'recurring'::price_type) = (recurring_period IS NOT NULL)))` |
 | `product_offering_price_recurring_period_length_check` | check | `CHECK ((recurring_period_length = 1))` |
 | `product_offering_price_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |

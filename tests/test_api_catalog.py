@@ -84,11 +84,13 @@ def test_offering_references_its_specification(api):
     assert api.get(offering["href"]).json() == offering
 
 
-def test_offering_needs_an_existing_specification(api):
+def test_an_offering_specification_is_optional_but_must_exist(api):
     spec = make_spec(api)
     body = offering_body(spec)
     del body["productSpecification"]
-    assert api.post(OFFERING, body).status_code == 422
+    without = api.post(OFFERING, body)
+    assert without.status_code == 201, without.text  # optional in the spec
+    assert "productSpecification" not in without.json()
     unknown = api.post(OFFERING, offering_body({"id": NIL, "href": "/x", "name": "x"}))
     assert unknown.status_code == 422
     assert "does not exist" in unknown.json()["message"]
@@ -202,16 +204,8 @@ def test_changing_a_price_means_ending_it_and_attaching_a_new_one(api):
     old = make_price(api)
     offering = make_offering(api, productOfferingPrice=price_refs(old))
     switch = iso(timeline.START + timedelta(days=31))
-
-    for attribute, value in (
-        ("price", {"unit": "RUB", "value": 600}),
-        ("priceType", "oneTime"),
-        ("recurringChargePeriodType", "monthly"),
-        ("recurringChargePeriodLength", 1),
-    ):
-        response = api.patch(old["href"], {attribute: value})
-        assert response.status_code == 400, attribute
-        assert f"{attribute} is read-only" in response.json()["message"]
+    # (the charge itself is fixed once the offering is ordered:
+    # tests/test_api_catalog_attributes.py)
     moved = api.patch(old["href"], {"validFor": {"startDateTime": switch}})
     assert moved.status_code == 409
 
@@ -236,7 +230,7 @@ def test_offering_patch(api):
     ).json()
     assert patched["isSellable"] is False and patched["lifecycleStatus"] == "Retired"
     assert "description" not in patched
-    assert api.patch(offering["href"], {"productSpecification": {"id": NIL}}).status_code == 400
+    assert api.patch(offering["href"], {"productSpecification": {"id": NIL}}).status_code == 422
     assert api.patch(offering["href"], {"isSellable": None}).status_code == 422
     assert api.patch(offering["href"], {"validFor": {}}).status_code == 422
     assert api.patch(f"{OFFERING}/{NIL}", {"name": "x"}).status_code == 404

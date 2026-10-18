@@ -205,7 +205,7 @@ def _add_problems(
     if not offering["is_sellable"] or offering["lifecycle_status"] != "Active":
         return [("offeringNotSellable", f"productOffering {offering['name']} is not for sale")]
     problems = []
-    if at not in offering["valid_for"]:
+    if offering["valid_for"] is not None and at not in offering["valid_for"]:  # None: always
         problems.append(("offeringNotValid", f"productOffering is not valid on {start}"))
     price = catalog.price_at(
         conn,

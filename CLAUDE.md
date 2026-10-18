@@ -207,14 +207,17 @@ TMF666): [decision](docs/decisions/accounts.md#account-attributes-2026-10-18) - 
 in any role around one resolved anchor (customer/owner, changeable while nothing depends
 on it), documents in `details`, `paymentStatus` a record, `ratingType` always
 `postpaid`, `billCycleDay`/`currency` optional (`UI_CURRENCY` is now also the default
-currency). Committed and pushed `9941a9f`. **Next session starts slice 6** (TMF620; 214
-gap lines): plan first (the human answers "follow TMF" - read the spec's `_FVO`/`_MVO`
-and its examples, then propose), reuse
-`documents_model` + `parse_documented`, and `accounts.related_parties` for
-`relatedParty` lists with an anchor. Next: slices 6-10 in
+currency). Committed and pushed `9941a9f`. Slice 6 (2026-10-18; TMF620 attributes,
+migration `0024`; 161 lines left, none for TMF620):
+[decision](docs/decisions/catalog.md#catalog-attributes-2026-10-18) - documents
+(own-catalog references in them stored as sent), inline prices, a price's charge and an
+offering's specification changeable until the offering is ordered, the code one
+`externalIdentifier` entry, reference versions checked; done locally, not committed.
+**Next session starts slice 7** (taxes): a design note first (TMF defines the shape, not
+the rates; a price's `tax` is a record since slice 6). Next: slices 7-10 in
 [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design notes before
 taxes, `modify` items, suspension and payment states. Not deployed: migrations
-`0009`-`0023` ship together.
+`0009`-`0024` ship together.
 
 **100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders
 placed on the caller's behalf (a would-be rejection is a 409, nothing stored; DELETE ends

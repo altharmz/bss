@@ -415,14 +415,14 @@ describe('add product', () => {
     {
       id: O1,
       name: 'Mobile L',
-      externalIdentifier: [{ id: 'MOB-L' }],
+      externalIdentifier: [{ id: 'MOB-L', externalIdentifierType: 'offeringCode' }],
       productSpecification: { name: 'Mobile Voice & Data' },
       productOfferingPrice: [{ id: 'pr1' }],
     },
     {
       id: O2,
       name: 'Fiber 100',
-      externalIdentifier: [{ id: 'NET-100' }],
+      externalIdentifier: [{ id: 'NET-100', externalIdentifierType: 'offeringCode' }],
       productSpecification: { name: 'Home Internet' },
       productOfferingPrice: [{ id: 'pr2' }],
     },
