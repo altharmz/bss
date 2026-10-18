@@ -232,12 +232,22 @@ Slice 8 (TMF622; the human: "decide based on TMF" for all four open choices) is 
 Slice 8a (2026-10-18; order/item documents, optional derived `billingAccount`,
 `noChange` executed, nested items, drafts with PATCH submit, migration `0026`; 100 gaps
 left, none for TMF622): [decision](docs/decisions/tmf-api.md#order-attributes-and-drafts-2026-10-18);
-done locally, not committed. API notes for TMF622 updated with the human's OK (make
-docs). **Slice 8b next**: `modify` items, decided: the offering changes from
-`requestedStartDate`, **billed prorated** (old offering until the date, new from it -
-TMF678 ABRs carry their own periodCoverage; a mid-period *price* change still applies
-from the next period). Needs a product offering history and a billing core with
-several charges per period; design note first. Then slices 9-10 in
+API notes for TMF622 updated with the human's OK; committed and pushed `e5db5a5`.
+**Next session starts slice 8b**: `modify` items (today still rejected
+`actionNotSupported`; `ON_PRODUCT` in `app/ordering/process.py` and `_item_request` in
+`app/api/ordering.py` drop a modify item's product). Decided (the human: "decide based
+on TMF"): a modify item names `product` and the new `productOffering`; the offering
+changes from `requestedStartDate`, **billed prorated** - the old offering until the
+date, the new one from it (TMF678 ABRs carry their own periodCoverage; a mid-period
+*price* change still applies from the next period, billing-core.md). Needs a product
+offering history (TMF637 `productOffering` = the one valid today), a billing core with
+several charges per period (`_period_diff` assumes one charge and one refund per
+period), cancelProductOrder undoing a modify before it takes effect, and one open
+modify per product. **Write the design note first** (billing-core.md + tmf-api.md:
+segments, refund of an already-charged period, the core's consistency checks, the
+migration), show it, then implement. Tests that use `modify` as a quick rejection
+(`test_api_ordering.py`, `test_events.py`, `test_full_flow.py`, `test_api_order_cancel.py`,
+`test_api_order_patch.py`) need another rejection trigger then. Then slices 9-10 in
 [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design notes before
 suspension and payment states. Not deployed: migrations `0009`-`0026` ship together
 (rolling back `0026` needs `alembic downgrade 0025` by hand; it fails while a draft
