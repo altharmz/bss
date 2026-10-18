@@ -54,21 +54,36 @@ def error_response(
 def describe_validation(errors: list[dict]) -> tuple[int, str]:
     """Status and message for Pydantic errors: an unknown attribute is a 400, anything
     else (missing, wrong type, bad value) a 422."""
-    parts = []
-    only_unknown = True
+    return _describe(validation_problems(errors))
+
+
+# (where, message, unknown): one problem of a request body
+Problem = tuple[str, str, bool]
+
+
+def validation_problems(errors: list[dict]) -> list[Problem]:
+    problems = []
     for err in errors:
         loc = ".".join(str(p) for p in err["loc"] if p != "body")
         if err["type"] == "extra_forbidden":
-            parts.append(f"{loc}: unknown attribute")
+            problems.append((loc, "unknown attribute", True))
         else:
-            only_unknown = False
-            parts.append(f"{loc}: {err['msg']}" if loc else err["msg"])
-    return (400 if only_unknown else 422), "; ".join(parts)
+            problems.append((loc, err["msg"], False))
+    return problems
+
+
+def _describe(problems: list[Problem]) -> tuple[int, str]:
+    status = 400 if all(unknown for _, _, unknown in problems) else 422
+    return status, "; ".join(f"{loc}: {msg}" if loc else msg for loc, msg, _ in problems)
+
+
+def problems_error(problems: list[Problem]) -> TmfError:
+    """One error for every problem: 400 when all are unknown attributes, else 422."""
+    return TmfError(*_describe(problems))
 
 
 def validation_error(exc: ValidationError) -> TmfError:
-    status, message = describe_validation(exc.errors(include_url=False, include_context=False))
-    return TmfError(status, message)
+    return problems_error(validation_problems(exc.errors(include_url=False, include_context=False)))
 
 
 def install(app: FastAPI) -> None:

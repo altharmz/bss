@@ -147,6 +147,73 @@ Tests: the gap lock (`tests/test_tmf_gaps.py`) with the two `base path` lines re
 and `test_old_base_paths_are_gone` in `tests/test_api_conventions.py`. Negative proof:
 the old TMF629 base in `app/api/customer.py` failed the suite.
 
+### Party and customer attributes (2026-10-18)
+
+Slice 4 of "Following TMF", the plan approved by the human (2026-10-18, "go"). Migration
+`0022`. 173 lines left `tests/tmf-gaps.txt` (649 -> 476): every attribute of
+`Individual`, `Organization` and `Customer` is taken on POST and PATCH and returned
+(`fields=` included). TMF632 and TMF629 have no gap lines left.
+
+- **Documents.** Attributes with no behaviour here - a party's `contactMedium`,
+  `birthDate`, `partyCharacteristic`, `tradingName`, ...; a customer's `description`,
+  `role`, `validFor`, `statusReason`, `contactMedium`, `characteristic`, `agreement`,
+  `paymentMethod`, `creditProfile`, `relatedParty`, `partyRoleSpecification` - are
+  stored as sent in one jsonb column (`party.details`, `customer.details`; the human
+  chose one column over ~35 typed ones) and returned as stored. Billing never reads them.
+  The lists in `app/api/party.py` / `customer.py` are locked to the spec schemas
+  (`test_every_spec_attribute_has_a_place`).
+- **Checked against the vendored spec itself** (`app/api/specschema.py`), not restated
+  as Pydantic models - the nested schemas are many and polymorphic: `$ref`, `allOf`,
+  `required` (a nested object's `@type` too, where the `_FVO`/`_MVO` schema requires
+  it), `type`, `enum`, date-time with a time zone. **Unknown attributes are a 400 at
+  any depth** (`contactMedium.0.fax: unknown attribute`), so the gap probe sees the
+  level below too. POST checks the `_FVO` schema, PATCH the `_MVO`. Date-times are
+  stored and returned in UTC, numbers as exact decimals (jsonb read back with
+  `parse_float=Decimal`, `app/db.py`). An object schema that declares no properties
+  (an ObjectCharacteristic's `value`) takes anything.
+- **Subclasses.** A `discriminator` selects the schema its mapping names for the
+  `@type` sent (an `EmailContactMedium` knows `emailAddress`, a `PhoneContactMedium`
+  does not). A `@type` the mapping does not name is read as the base schema, as plain
+  JSON Schema reads the `allOf` (`tests/contract.py` does the same): the specs' own
+  examples use such names (TMF629's Customer_Create_example sends `relatedParty` as
+  `RelatedPartyRefOrPartyRoleRef`), and the base still refuses what it does not
+  declare. A `oneOf` has no base: its `@type` must be one it maps (422).
+- **The spec ships in the image** (`Dockerfile`: `COPY spec/*.yaml spec/*.json`,
+  ~2.5 MB; `PyYAML` pinned in `requirements.txt`, it was already in `constraints.txt`).
+  The human chose this over a generated extract under `app/`. Slices 5-10 reuse the
+  checker for the nested attributes of TMF666, TMF620, TMF622, ...
+- **Merge patch of a document** replaces it whole; `null` removes it. On POST a `null`
+  is nothing sent. JSON Patch reaches inside a document as usual (slice 2: applied to
+  the GET body).
+- **Party `status`** is a column (`party.status`, CHECK: `initialized`/`validated`/
+  `deceased` for an individual, `initialized`/`validated`/`closed` for an organization),
+  optional - existing and new parties have none unless sent. **A record only** (the
+  human's choice): any transition, and `deceased`/`closed` block nothing (customers,
+  orders, billing). A change emits the `...StateChangeEvent`; a list may filter by it.
+- **References inside documents are stored as sent, not resolved** (the human's
+  choice): `relatedParty`, `agreement`, `paymentMethod`, `partyRoleSpecification`, ...
+  mostly point to APIs not vendored here (TMF651, TMF670, TMF669, TMF673), and resolving
+  the ones to our own parties would make every party DELETE search jsonb.
+  `engagedParty` stays checked as before.
+- **Customer `account`** is the customer's billing accounts, linked from the account's
+  side (`relatedParty` customer): server-set as in slice 1 - accepted on POST and PATCH
+  when it equals what we answer (empty on POST), a 422 otherwise.
+- **Customer `validFor`** is a record only: it stops neither orders nor billing.
+  An individual's `name` and `formattedName` are stored as sent; references to the
+  party (`engagedParty.name`, ...) keep "given family".
+- **MCP:** the request models carry the documents as untyped fields
+  (`common.documents_model`), so the tools list them; `parse_documented` checks them.
+  A JSON float stays refused by the connector (a decimal characteristic value needs the
+  API directly).
+
+Tests: `tests/test_api_party_attributes.py` (round trips, the spec's own customer
+example, subclasses, unknown/required/type/enum/format problems, merge and JSON patch,
+exact numbers, status events), `test_0022_party_status_and_details`, and the gap lock.
+Negative proofs: without the nested unknown check the lock fails with `unprobed` lines
+opened and the 400 cases fail; without the discriminator selection the round trips fail;
+with `null` ignored in a document patch the removal test fails. Rolling back `0022`
+needs `alembic downgrade 0021` by hand (drops `status` and both `details`).
+
 ### Product writes through orders (2026-10-17)
 
 The last seven operations, approved by the human on 2026-10-17 ("reach 100%"), close

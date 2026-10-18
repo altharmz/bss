@@ -690,3 +690,38 @@ def test_0021_meta_payment_method_and_item_position(temp_db_url):
             " AND c.relnamespace = 'public'::regnamespace"
         ).fetchone() == (0,)
     command.upgrade(cfg, "0021")
+
+
+def test_0022_party_status_and_details(temp_db_url):
+    """Existing parties get no status and no documents; a status must be one of its
+    party type's; downgrading to 0021 keeps every row."""
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0021")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute(
+            "INSERT INTO party (party_type, given_name, family_name) VALUES"
+            " ('Individual', 'Ivan', 'Ivanov')"
+        )
+        conn.execute(
+            "INSERT INTO party (party_type, organization_name) VALUES ('Organization', 'R')"
+        )
+        conn.execute(
+            "INSERT INTO customer (party_id, name, status) SELECT id, 'C', 'Created' FROM party"
+        )
+    command.upgrade(cfg, "0022")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT DISTINCT status, details FROM party").fetchall() == [(None, {})]
+        assert conn.execute("SELECT DISTINCT details FROM customer").fetchall() == [({},)]
+        for party_type, wrong in (("Individual", "closed"), ("Organization", "deceased")):
+            with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+                conn.execute(
+                    "UPDATE party SET status = %s WHERE party_type = %s", (wrong, party_type)
+                )
+        conn.execute("UPDATE party SET status = 'validated'")
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute("UPDATE customer SET details = '[]'")
+    command.downgrade(cfg, "0021")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT count(*) FROM party").fetchone() == (2,)
+        assert conn.execute("SELECT count(*) FROM customer").fetchone() == (2,)
+    command.upgrade(cfg, "0022")

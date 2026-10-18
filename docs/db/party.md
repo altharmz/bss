@@ -19,15 +19,19 @@ SID Party (TMF632 individual / organization): a person or an organization, told 
 | `organization_name` | `text` | yes |  | TMF632 Organization.name; required for an Organization. |
 | `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
 | `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
+| `status` | `text` | yes |  | TMF632 status: initialized, validated, deceased (individual) or closed (organization); optional, a record only. |
+| `details` | `jsonb` | no | `'{}'::jsonb` | TMF632 descriptive attributes (contactMedium, birthDate, tradingName, ...) as sent, validated against the spec; billing never reads them. |
 
 ## Constraints
 
 | Name | Kind | Definition |
 |---|---|---|
 | `party_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
+| `party_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `party_individual_has_family_name` | check | `CHECK (((party_type <> 'Individual'::party_type) OR (family_name IS NOT NULL)))` |
 | `party_organization_has_name` | check | `CHECK (((party_type <> 'Organization'::party_type) OR (organization_name IS NOT NULL)))` |
 | `party_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
+| `party_status_of_its_type` | check | `CHECK (((status IS NULL) OR ((party_type = 'Individual'::party_type) AND (status = ANY (ARRAY['initialized'::text, 'validated'::text, 'deceased'::text]))) OR ((party_type = 'Organization'::party_type) AND (status = ANY (ARRAY['initialized'::text, 'validated'::text, 'closed'::text])))))` |
 | `party_pkey` | primary key | `PRIMARY KEY (id)` |
 
 ## Indexes

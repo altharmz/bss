@@ -198,9 +198,14 @@ Slice 1 (nothing dropped or rewritten; migration `0021`; 705 lines left) done lo
 `/tmf-api/payment/v4`, straight rename, no aliases; 649 lines left),
 [decision](docs/decisions/tmf-api.md#base-paths-2026-10-18); committed and pushed.
 **The next deploy moves both base paths** (the UI and MCP move with it).
-**Next session starts slice 4** (TMF632/629 attributes). Next: slices 4-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
+Slice 4 (2026-10-18; TMF632/629 attributes, migration `0022`; 476 lines left, none for
+TMF632/629) done locally, not committed:
+[decision](docs/decisions/tmf-api.md#party-and-customer-attributes-2026-10-18). Descriptive
+attributes are jsonb documents checked against `spec/` at runtime
+(`app/api/specschema.py`, reusable for slices 5-10); **the runtime image now ships
+`spec/`** (Dockerfile). Next: slices 5-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
 notes before taxes, `modify` items, suspension and payment states. Not deployed:
-migrations `0009`-`0021` ship together.
+migrations `0009`-`0022` ship together.
 
 **100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders
 placed on the caller's behalf (a would-be rejection is a 409, nothing stored; DELETE ends

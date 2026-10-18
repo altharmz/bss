@@ -11,3 +11,6 @@ alembic==1.20.0
 # bss_mcp implements the SDK's provider protocol (mcp.server.auth.provider) and uses
 # its low-level server, both internals that move between versions.
 mcp==2.3.0
+# The vendored TMF specs, read at runtime by app/api/specschema.py (libyaml's CSafeLoader;
+# already in constraints.txt through mcp).
+PyYAML==6.0.3

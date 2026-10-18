@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from app.repository._sql import (
     Lock,
@@ -19,15 +20,26 @@ from app.repository._sql import (
 )
 
 
+def _jsonb(value: dict[str, Any]) -> Jsonb:
+    # tmfjson: numbers in a document stay exact decimals, never floats
+    from app.api import tmfjson  # lazily: importing app.api loads every API module
+
+    return Jsonb(value, dumps=tmfjson.dumps)
+
+
 def create_individual(
     conn: psycopg.Connection,
     *,
     family_name: str,
     given_name: str | None = None,
+    status: str | None = None,
+    details: dict[str, Any] | None = None,
     id: UUID | None = None,
 ) -> Row:
-    """`id` None: a new one (a client may choose it)."""
-    return returning(
+    """`id` None: a new one (a client may choose it). `status`, `details` (the TMF632
+    attributes that are documents to us, app/api/party.py): written only when given, so
+    the tests' factories also work on a schema before 0022."""
+    row = returning(
         conn,
         """
         INSERT INTO party (id, party_type, given_name, family_name)
@@ -35,10 +47,18 @@ def create_individual(
         """,
         (id, given_name, family_name),
     )
+    return _set_given(conn, "party", row, status=status, details=details)
 
 
-def create_organization(conn: psycopg.Connection, *, name: str, id: UUID | None = None) -> Row:
-    return returning(
+def create_organization(
+    conn: psycopg.Connection,
+    *,
+    name: str,
+    status: str | None = None,
+    details: dict[str, Any] | None = None,
+    id: UUID | None = None,
+) -> Row:
+    row = returning(
         conn,
         """
         INSERT INTO party (id, party_type, organization_name)
@@ -46,6 +66,12 @@ def create_organization(conn: psycopg.Connection, *, name: str, id: UUID | None 
         """,
         (id, name),
     )
+    return _set_given(conn, "party", row, status=status, details=details)
+
+
+def _set_given(conn: psycopg.Connection, table: str, row: Row, **values: Any) -> Row:
+    changes = {column: value for column, value in values.items() if value}
+    return update_by_id(conn, table, row["id"], _with_details(changes)) if changes else row
 
 
 def get_party(conn: psycopg.Connection, party_id: UUID, lock: Lock = None) -> Row | None:
@@ -58,14 +84,18 @@ def create_customer(
     party_id: UUID,
     name: str,
     status: str = "Created",
+    details: dict[str, Any] | None = None,
     id: UUID | None = None,
 ) -> Row:
-    return returning(
+    """`details`: the TMF629 attributes that are documents to us (app/api/customer.py),
+    written only when given (as for a party)."""
+    row = returning(
         conn,
         "INSERT INTO customer (id, party_id, name, status)"
         " VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s) RETURNING *",
         (id, party_id, name, status),
     )
+    return _set_given(conn, "customer", row, details=details)
 
 
 def get_customer(conn: psycopg.Connection, customer_id: UUID, lock: Lock = None) -> Row | None:
@@ -134,7 +164,13 @@ def list_parties(
 
 
 def update_party(conn: psycopg.Connection, party_id: UUID, changes: dict[str, Any]) -> Row:
-    return update_by_id(conn, "party", party_id, changes)
+    return update_by_id(conn, "party", party_id, _with_details(changes))
+
+
+def _with_details(changes: dict[str, Any]) -> dict[str, Any]:
+    if "details" not in changes:
+        return changes
+    return {**changes, "details": _jsonb(changes["details"])}
 
 
 def list_customers(
@@ -144,7 +180,7 @@ def list_customers(
 
 
 def update_customer(conn: psycopg.Connection, customer_id: UUID, changes: dict[str, Any]) -> Row:
-    return update_by_id(conn, "customer", customer_id, changes)
+    return update_by_id(conn, "customer", customer_id, _with_details(changes))
 
 
 def accounts_of_customer(conn: psycopg.Connection, customer_id: UUID) -> list[Row]:

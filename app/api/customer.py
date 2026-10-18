@@ -13,16 +13,16 @@ from pydantic import Field
 from app.api import listing
 from app.api.common import (
     Ref,
-    TmfModel,
     check_referred_type,
     check_server_set,
     check_type,
     claim_id,
-    columns,
     created,
+    documents_model,
+    merge_documents,
     meta_body,
     not_null,
-    parse,
+    parse_documented,
     parse_id,
     ref,
     take_id,
@@ -43,23 +43,43 @@ BASE = "/tmf-api/customer/v5"
 router = APIRouter(prefix=BASE)
 
 CustomerStatus = Literal["Created", "Active", "Inactive"]
-ATTRIBUTES = ("name", "status", "engagedParty", "account")
+# Documents to us: stored as sent (checked against the spec), no behaviour - a customer's
+# validFor does not stop orders or billing (docs/decisions/tmf-api.md, "Party and customer
+# attributes").
+DOCUMENTS = (
+    "agreement",
+    "characteristic",
+    "contactMedium",
+    "creditProfile",
+    "description",
+    "partyRoleSpecification",
+    "paymentMethod",
+    "relatedParty",
+    "role",
+    "statusReason",
+    "validFor",
+)
+ATTRIBUTES = ("name", "status", "engagedParty", "account", *DOCUMENTS)
+
+CustomerDocuments = documents_model("CustomerDocuments", API, DOCUMENTS)
 
 
-class CustomerCreate(TmfModel):
+class CustomerCreate(CustomerDocuments):
     name: str = Field(min_length=1)
     engaged_party: Ref  # Individual or Organization: checked against the party in POST
     status: CustomerStatus = "Created"
 
 
-class CustomerPatch(TmfModel):
+class CustomerPatch(CustomerDocuments):
     name: str | None = Field(default=None, min_length=1)
     status: CustomerStatus | None = None
     engaged_party: Ref | None = None
 
 
-# Customer_FVO and Customer_MVO carry the identity too: accepted when unchanged.
-IDENTITY = ("id", "href")
+# `account` is the customer's billing accounts, linked from the account's side
+# (relatedParty customer): accepted when it is the list we answer, as the identity
+# Customer_FVO and Customer_MVO carry.
+SERVER_SET = ("id", "href", "account")
 
 
 def customer_href(customer_id: Any) -> str:
@@ -91,6 +111,7 @@ def customer_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             )
             for a in parties.accounts_of_customer(conn, row["id"])
         ],
+        **row["details"],
         "@type": "Customer",
         **meta_body(row),
     }
@@ -131,16 +152,21 @@ def create_customer(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Customer")
     uid = take_id(body)
-    href = take_server_set(body, ("href",))
-    data = parse(CustomerCreate, body)
+    server_set = take_server_set(body, ("href", "account"))
+    data, documents = parse_documented(CustomerCreate, body, DOCUMENTS, API, "Customer_FVO")
     with tx() as conn:
         _engaged_party(conn, data.engaged_party)
         claim_id(conn, "customer", uid)
         row = parties.create_customer(
-            conn, party_id=data.engaged_party.id, name=data.name, status=data.status, id=uid
+            conn,
+            party_id=data.engaged_party.id,
+            name=data.name,
+            status=data.status,
+            details=merge_documents({}, documents),
+            id=uid,
         )
         new = customer_body(conn, with_meta(conn, "customer", row, data))
-        check_server_set(href, new)
+        check_server_set(server_set, new)
         emit.created(conn, API, "customer", new, at=clock.now())
     return created(listing.select_fields(new, fields))
 
@@ -159,8 +185,8 @@ def patch_customer(
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Customer")
-    identity = take_server_set(body, IDENTITY)
-    data = parse(CustomerPatch, body)
+    server_set = take_server_set(body, SERVER_SET)
+    data, documents = parse_documented(CustomerPatch, body, DOCUMENTS, API, "Customer_MVO")
     not_null(data, "name", "status", "engaged_party")
     with tx() as conn:
         uid = parse_id("customer", customer_id)
@@ -170,8 +196,10 @@ def patch_customer(
         if current is None:
             raise not_found("customer", customer_id)
         before = customer_body(conn, current)
-        check_server_set(identity, before)
-        changes = columns(data, exclude=frozenset({"engaged_party"}))
+        check_server_set(server_set, before)
+        changes = {n: getattr(data, n) for n in ("name", "status") if n in data.model_fields_set}
+        if documents:
+            changes["details"] = merge_documents(current["details"], documents)
         if data.engaged_party is not None and data.engaged_party.id != current["party_id"]:
             if parties.accounts_of_customer(conn, uid):
                 raise conflict(

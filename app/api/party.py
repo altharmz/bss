@@ -4,22 +4,22 @@ Both live in the `party` table; `@type` comes from `party_type`. An individual i
 reachable under /organization and vice versa.
 """
 
-from typing import Any
+from typing import Any, Literal
 
 import psycopg
 from fastapi import APIRouter, Request, Response
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from app.api import listing
 from app.api.common import (
-    TmfModel,
     check_type,
     claim_id,
-    columns,
     created,
+    documents_model,
+    merge_documents,
     meta_body,
     not_null,
-    parse,
+    parse_documented,
     parse_id,
     take_id,
     with_meta,
@@ -29,6 +29,7 @@ from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import not_found
 from app.api.tmfjson import TmfJSONResponse
+from app.clock import Clock
 from app.events import emit
 from app.repository import accounts, parties
 from app.repository._sql import Row, count_references
@@ -37,8 +38,61 @@ API = "TMF632"
 BASE = "/tmf-api/partyManagement/v5"
 router = APIRouter(prefix=BASE)
 
-INDIVIDUAL_ATTRIBUTES = ("givenName", "familyName")
-ORGANIZATION_ATTRIBUTES = ("name",)
+# Every other attribute the spec defines is a document to us: stored as sent (checked
+# against the spec), no behaviour (docs/decisions/tmf-api.md, "Party and customer
+# attributes"). The same in both specs' schemas of a party.
+PARTY_DOCUMENTS = (
+    "contactMedium",
+    "creditRating",
+    "externalReference",
+    "partyCharacteristic",
+    "relatedParty",
+    "taxExemptionCertificate",
+)
+INDIVIDUAL_DOCUMENTS = (
+    *PARTY_DOCUMENTS,
+    "aristocraticTitle",
+    "birthDate",
+    "countryOfBirth",
+    "deathDate",
+    "disability",
+    "familyNamePrefix",
+    "formattedName",
+    "gender",
+    "generation",
+    "individualIdentification",
+    "languageAbility",
+    "legalName",
+    "location",
+    "maritalStatus",
+    "middleName",
+    "name",
+    "nationality",
+    "otherName",
+    "placeOfBirth",
+    "preferredGivenName",
+    "skill",
+    "title",
+)
+ORGANIZATION_DOCUMENTS = (
+    *PARTY_DOCUMENTS,
+    "existsDuring",
+    "isHeadOffice",
+    "isLegalEntity",
+    "nameType",
+    "organizationChildRelationship",
+    "organizationIdentification",
+    "organizationParentRelationship",
+    "organizationType",
+    "otherName",
+    "tradingName",
+)
+INDIVIDUAL_ATTRIBUTES = ("givenName", "familyName", "status", *INDIVIDUAL_DOCUMENTS)
+ORGANIZATION_ATTRIBUTES = ("name", "status", *ORGANIZATION_DOCUMENTS)
+
+# TMF632 IndividualStateType / OrganizationStateType: a record only, nothing depends on it
+IndividualStatus = Literal["initialized", "validated", "deceased"]
+OrganizationStatus = Literal["initialized", "validated", "closed"]
 
 
 def party_href(row: Row) -> str:
@@ -58,7 +112,7 @@ def party_body(row: Row) -> dict[str, Any]:
         body |= {"givenName": row["given_name"], "familyName": row["family_name"]}
     else:
         body |= {"name": row["organization_name"]}
-    body["@type"] = row["party_type"]
+    body |= {"status": row["status"], **row["details"], "@type": row["party_type"]}
     return without_nulls(body) | meta_body(row)
 
 
@@ -111,14 +165,19 @@ def _list(request: Request, tx: Tx, party_type: str, filters, attributes) -> Tmf
 # --- individual ---
 
 
-class IndividualCreate(TmfModel):
+IndividualDocuments = documents_model("IndividualDocuments", API, INDIVIDUAL_DOCUMENTS)
+
+
+class IndividualCreate(IndividualDocuments):
     given_name: str = Field(min_length=1)
     family_name: str = Field(min_length=1)
+    status: IndividualStatus | None = None
 
 
-class IndividualPatch(TmfModel):
+class IndividualPatch(IndividualDocuments):
     given_name: str | None = Field(default=None, min_length=1)
     family_name: str | None = Field(default=None, min_length=1)
+    status: IndividualStatus | None = None
 
 
 @router.get("/individual")
@@ -126,6 +185,7 @@ def list_individuals(request: Request, tx: Tx) -> TmfJSONResponse:
     filters = {
         "givenName": ("given_name", listing.as_str),
         "familyName": ("family_name", listing.as_str),
+        "status": ("status", listing.as_str),
     }
     return _list(request, tx, "Individual", filters, INDIVIDUAL_ATTRIBUTES)
 
@@ -143,11 +203,18 @@ def create_individual(body: JsonBody, request: Request, tx: Tx, clock: ClockDep)
     fields = listing.retrieve_fields(request, INDIVIDUAL_ATTRIBUTES)
     check_type(body, "Individual")
     uid = take_id(body)
-    data = parse(IndividualCreate, body)
+    data, documents = parse_documented(
+        IndividualCreate, body, INDIVIDUAL_DOCUMENTS, API, "Individual_FVO"
+    )
     with tx() as conn:
         claim_id(conn, "party", uid)
         row = parties.create_individual(
-            conn, given_name=data.given_name, family_name=data.family_name, id=uid
+            conn,
+            given_name=data.given_name,
+            family_name=data.family_name,
+            status=data.status,
+            details=merge_documents({}, documents),
+            id=uid,
         )
         new = party_body(with_meta(conn, "party", row, data))
         emit.created(conn, API, "individual", new, at=clock.now())
@@ -160,15 +227,37 @@ def patch_individual(
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, INDIVIDUAL_ATTRIBUTES)
     check_type(body, "Individual")
-    data = parse(IndividualPatch, body)
+    data, documents = parse_documented(
+        IndividualPatch, body, INDIVIDUAL_DOCUMENTS, API, "Individual_MVO"
+    )
     not_null(data, "given_name", "family_name")
+    changes = _changes(data, ("given_name", "family_name", "status"))
     with tx() as conn:
         current = _get(conn, "Individual", "individual", party_id)
-        old = emit.before(conn, API, "individual", lambda: party_body(current))
-        row = parties.update_party(conn, current["id"], columns(data))
-        new = party_body(with_meta(conn, "party", row, data))
-        emit.changed(conn, API, "individual", old, new, at=clock.now())
+        new = _patch(conn, "individual", current, changes, documents, data, clock)
     return TmfJSONResponse(listing.select_fields(new, fields))
+
+
+def _changes(data: BaseModel, names: tuple[str, ...]) -> dict[str, Any]:
+    return {name: getattr(data, name) for name in names if name in data.model_fields_set}
+
+
+def _patch(
+    conn: psycopg.Connection,
+    resource: str,
+    current: Row,
+    changes: dict[str, Any],
+    documents: dict[str, Any],
+    data: BaseModel,
+    clock: Clock,
+) -> dict[str, Any]:
+    old = emit.before(conn, API, resource, lambda: party_body(current))
+    if documents:
+        changes["details"] = merge_documents(current["details"], documents)
+    row = parties.update_party(conn, current["id"], changes)
+    new = party_body(with_meta(conn, "party", row, data))
+    emit.changed(conn, API, resource, old, new, at=clock.now(), state="status")
+    return new
 
 
 @router.delete("/individual/{party_id}", status_code=204, response_class=Response)
@@ -179,17 +268,25 @@ def delete_individual(party_id: str, request: Request, tx: Tx, clock: ClockDep) 
 # --- organization ---
 
 
-class OrganizationCreate(TmfModel):
+OrganizationDocuments = documents_model("OrganizationDocuments", API, ORGANIZATION_DOCUMENTS)
+
+
+class OrganizationCreate(OrganizationDocuments):
     name: str = Field(min_length=1)
+    status: OrganizationStatus | None = None
 
 
-class OrganizationPatch(TmfModel):
+class OrganizationPatch(OrganizationDocuments):
     name: str | None = Field(default=None, min_length=1)
+    status: OrganizationStatus | None = None
 
 
 @router.get("/organization")
 def list_organizations(request: Request, tx: Tx) -> TmfJSONResponse:
-    filters = {"name": ("organization_name", listing.as_str)}
+    filters = {
+        "name": ("organization_name", listing.as_str),
+        "status": ("status", listing.as_str),
+    }
     return _list(request, tx, "Organization", filters, ORGANIZATION_ATTRIBUTES)
 
 
@@ -208,10 +305,18 @@ def create_organization(
     fields = listing.retrieve_fields(request, ORGANIZATION_ATTRIBUTES)
     check_type(body, "Organization")
     uid = take_id(body)
-    data = parse(OrganizationCreate, body)
+    data, documents = parse_documented(
+        OrganizationCreate, body, ORGANIZATION_DOCUMENTS, API, "Organization_FVO"
+    )
     with tx() as conn:
         claim_id(conn, "party", uid)
-        row = parties.create_organization(conn, name=data.name, id=uid)
+        row = parties.create_organization(
+            conn,
+            name=data.name,
+            status=data.status,
+            details=merge_documents({}, documents),
+            id=uid,
+        )
         new = party_body(with_meta(conn, "party", row, data))
         emit.created(conn, API, "organization", new, at=clock.now())
     return created(listing.select_fields(new, fields))
@@ -223,15 +328,16 @@ def patch_organization(
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ORGANIZATION_ATTRIBUTES)
     check_type(body, "Organization")
-    data = parse(OrganizationPatch, body)
+    data, documents = parse_documented(
+        OrganizationPatch, body, ORGANIZATION_DOCUMENTS, API, "Organization_MVO"
+    )
     not_null(data, "name")
-    changes = {"organization_name": data.name} if "name" in data.model_fields_set else {}
+    changes = _changes(data, ("status",))
+    if "name" in data.model_fields_set:
+        changes["organization_name"] = data.name
     with tx() as conn:
         current = _get(conn, "Organization", "organization", party_id)
-        old = emit.before(conn, API, "organization", lambda: party_body(current))
-        row = parties.update_party(conn, current["id"], changes)
-        new = party_body(with_meta(conn, "party", row, data))
-        emit.changed(conn, API, "organization", old, new, at=clock.now())
+        new = _patch(conn, "organization", current, changes, documents, data, clock)
     return TmfJSONResponse(listing.select_fields(new, fields))
 
 

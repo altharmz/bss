@@ -13,12 +13,12 @@
 |---|---|---|---|---|---|
 | POST | `/tmf-api/partyManagement/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/party.py`](../../app/api/party.py) |
 | DELETE | `/tmf-api/partyManagement/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/party.py`](../../app/api/party.py) |
-| GET | `/tmf-api/partyManagement/v5/individual` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `familyName`, `givenName` | - | 200 `array of Individual` | [`app/api/party.py`](../../app/api/party.py) |
+| GET | `/tmf-api/partyManagement/v5/individual` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `familyName`, `givenName`, `status` | - | 200 `array of Individual` | [`app/api/party.py`](../../app/api/party.py) |
 | POST | `/tmf-api/partyManagement/v5/individual` | query: `fields`; body: `application/json` | `Individual_FVO` | 201 `Individual` | [`app/api/party.py`](../../app/api/party.py) |
 | DELETE | `/tmf-api/partyManagement/v5/individual/{party_id}` | path: `party_id` | - | 204 (no body) | [`app/api/party.py`](../../app/api/party.py) |
 | GET | `/tmf-api/partyManagement/v5/individual/{party_id}` | path: `party_id`; query: `fields` | - | 200 `Individual` | [`app/api/party.py`](../../app/api/party.py) |
 | PATCH | `/tmf-api/partyManagement/v5/individual/{party_id}` | path: `party_id`; query: `fields`; body: `application/merge-patch+json` | `Individual_MVO` | 200 `Individual` | [`app/api/party.py`](../../app/api/party.py) |
-| GET | `/tmf-api/partyManagement/v5/organization` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `name` | - | 200 `array of Organization` | [`app/api/party.py`](../../app/api/party.py) |
+| GET | `/tmf-api/partyManagement/v5/organization` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `name`, `status` | - | 200 `array of Organization` | [`app/api/party.py`](../../app/api/party.py) |
 | POST | `/tmf-api/partyManagement/v5/organization` | query: `fields`; body: `application/json` | `Organization_FVO` | 201 `Organization` | [`app/api/party.py`](../../app/api/party.py) |
 | DELETE | `/tmf-api/partyManagement/v5/organization/{party_id}` | path: `party_id` | - | 204 (no body) | [`app/api/party.py`](../../app/api/party.py) |
 | GET | `/tmf-api/partyManagement/v5/organization/{party_id}` | path: `party_id`; query: `fields` | - | 200 `Organization` | [`app/api/party.py`](../../app/api/party.py) |

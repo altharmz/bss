@@ -12,10 +12,27 @@ from zoneinfo import ZoneInfo
 import psycopg
 from fastapi import Request
 from psycopg.types.range import Range
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    create_model,
+    field_validator,
+)
 from pydantic.alias_generators import to_camel
 
-from app.api.errors import bad_request, conflict, not_found, unprocessable, validation_error
+from app.api import specschema
+from app.api.errors import (
+    bad_request,
+    conflict,
+    not_found,
+    problems_error,
+    unprocessable,
+    validation_error,
+    validation_problems,
+)
 from app.api.tmfjson import TmfJSONResponse
 from app.config import settings
 from app.repository._sql import Row, select_by_id, update_by_id
@@ -151,6 +168,61 @@ def parse[M: BaseModel](
         return model.model_validate(body)
     except ValidationError as exc:
         raise validation_error(exc) from exc
+
+
+def documents_model(name: str, api: str, documents: tuple[str, ...]) -> type[TmfModel]:
+    """A base model whose fields are attributes that are documents to us - stored as
+    sent, no behaviour (a party's contact media, ...). Typed Any: `parse_documented`
+    checks them against the spec. Being fields, they appear in the model's JSON schema
+    (the MCP tools are built from it)."""
+    fields: dict[str, Any] = {
+        documents_field(document): (
+            Any,
+            Field(
+                default=None,
+                alias=document,
+                description=f"{api} {document}, as the spec defines it",
+            ),
+        )
+        for document in documents
+    }
+    return create_model(name, __base__=TmfModel, **fields)
+
+
+def documents_field(document: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", document).lower()
+
+
+def parse_documented[M: BaseModel](
+    model: type[M], body: dict[str, Any], documents: tuple[str, ...], api: str, schema: str
+) -> tuple[M, dict[str, Any]]:
+    """`parse`, for a model with document fields (`documents_model`): those are checked
+    against the spec schema that declares them (e.g. Individual_FVO), everything else by
+    the model, and every problem of both is in the one error. Returns the model and the
+    documents sent, normalized (date-times in UTC); a null stays None (in a merge patch:
+    remove it)."""
+    for name in SERVER_MANAGED:
+        if name in body:
+            raise bad_request(f"{name} is read-only")
+    sent = {name: body[name] for name in documents if name in body}
+    values, problems = specschema.check(
+        api, schema, {name: value for name, value in sent.items() if value is not None}
+    )
+    try:
+        data = model.model_validate(body)
+    except ValidationError as exc:
+        found = validation_problems(exc.errors(include_url=False, include_context=False))
+        raise problems_error(found + problems) from exc
+    if problems:
+        raise problems_error(problems)
+    return data, {name: values.get(name) for name in sent}
+
+
+def merge_documents(current: dict[str, Any], sent: dict[str, Any]) -> dict[str, Any]:
+    """A merge patch of the stored documents: an attribute sent replaces the stored one
+    whole, null removes it."""
+    merged = current | sent
+    return {name: value for name, value in merged.items() if value is not None}
 
 
 def check_type(body: dict[str, Any], *resource_types: str) -> None:

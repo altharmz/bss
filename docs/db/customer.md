@@ -18,6 +18,7 @@ SID Customer (TMF629 customer): the role a party plays towards us. The party is 
 | `name` | `text` | no |  |  |
 | `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
 | `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
+| `details` | `jsonb` | no | `'{}'::jsonb` | TMF629 descriptive attributes (description, contactMedium, creditProfile, ...) as sent, validated against the spec; billing never reads them. |
 
 ## Foreign keys
 
@@ -30,6 +31,7 @@ SID Customer (TMF629 customer): the role a party plays towards us. The party is 
 | Name | Kind | Definition |
 |---|---|---|
 | `customer_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
+| `customer_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `customer_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `customer_pkey` | primary key | `PRIMARY KEY (id)` |
 

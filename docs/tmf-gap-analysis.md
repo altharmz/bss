@@ -5,7 +5,10 @@ rest skipped ([the decision](decisions/tmf-api.md#following-tmf-2026-10-17)). Th
 attribute-level gaps are no longer tracked in this file: **`tests/tmf-gaps.txt` is the
 exact, test-locked list** (831 lines on 2026-10-17, 705 after slice 1, 651 after slice 2:
 [PATCH formats](decisions/tmf-api.md#patch-formats-2026-10-17), C4; 649 after slice 3:
-[base paths](decisions/tmf-api.md#base-paths-2026-10-18)), produced by the
+[base paths](decisions/tmf-api.md#base-paths-2026-10-18); 476 after slice 4:
+[party and customer attributes](decisions/tmf-api.md#party-and-customer-attributes-2026-10-18),
+B7 and the TMF632/629 sub-resources of section 2 - TMF632 and TMF629 have none left),
+produced by the
 probe in `tests/tmf_gaps.py`. Sections 3 and 5 below are superseded by it. C3, C5, C7,
 C8, the client-chosen `id` and `@baseType`/`@schemaLocation` are closed
 ([slice 1](decisions/tmf-api.md#nothing-dropped-or-rewritten-2026-10-17)). What the probe
@@ -292,6 +295,9 @@ Cross-cutting, true for every resource below:
 
 ### TMF632 individual / organization (`party.py`, `party_body` line 48)
 
+**Closed 2026-10-18** (slice 4, [party and customer attributes](decisions/tmf-api.md#party-and-customer-attributes-2026-10-18)):
+every attribute is taken and returned; the table is the state before it.
+
 | | Finding |
 |---|---|
 | (a) | Spec `Individual_FVO` requires `@type`, `givenName`, `familyName`; `Organization_FVO` requires `@type`, `name`. We require the business attributes, not `@type`. |
@@ -301,6 +307,9 @@ Cross-cutting, true for every resource below:
 | Refused | everything else of the 30+ optional attributes, notably `contactMedium` (email, phone, address), `status` (`IndividualStateType`/`OrganizationStateType`), `externalReference`, `partyCharacteristic`, `birthDate`, `tradingName`, `isLegalEntity` |
 
 ### TMF629 customer (`customer.py`, `customer_body` line 54)
+
+**Closed 2026-10-18** (slice 4): every attribute is taken and returned; `account` is
+server-set. The table is the state before it.
 
 | | Finding |
 |---|---|
@@ -478,7 +487,7 @@ they are given from general knowledge and not verified here.
 | B4 | Event notifications: hub + bill/payment/product/order events | high (live demo) but excluded (D1, D5) | L |
 | B5 | TMF676 `refund`: pay out a credit balance | medium | M-L (balance semantics, settlement) |
 | B6 | `cancelProductOrder` | medium; excluded (D1, D4) | M |
-| B7 | Party `contactMedium` (email/phone) | medium (bill notices, UI) | M (new table) |
+| B7 | Party `contactMedium` (email/phone) - **closed 2026-10-18** (slice 4; stored, no bill notices) | medium (bill notices, UI) | M (new table) |
 | B8 | `customerBillOnDemand` (an off-cycle bill, e.g. a final bill) | medium | L (must go through the run, D3) |
 | B9 | TMF620 `category` / `productCatalog` | low for billing | M |
 | B10 | Usage (TMF635 †) | high, but a new billing capability | L |

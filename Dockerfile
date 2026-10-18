@@ -47,6 +47,9 @@ COPY --chown=appuser:appuser app ./app
 COPY --chown=appuser:appuser bss_mcp ./bss_mcp
 COPY --chown=appuser:appuser alembic ./alembic
 COPY --chown=appuser:appuser alembic.ini ./alembic.ini
+# The vendored TMF specs: app/api/specschema.py checks the attributes that are documents
+# to us against them (docs/decisions/tmf-api.md, "Party and customer attributes").
+COPY --chown=appuser:appuser spec/*.yaml spec/*.json ./spec/
 USER appuser
 EXPOSE 8080
 # No curl in the image on purpose, and no Python start per probe (1 vCPU on the VPS): bash's

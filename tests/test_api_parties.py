@@ -33,7 +33,7 @@ def test_individual_validation(api):
     url = f"{PARTY}/individual"
     assert api.post(url, {"@type": "Individual", "familyName": "Ivanov"}).status_code == 422
     assert api.post(url, {"givenName": "I", "familyName": ""}).status_code == 422
-    assert api.post(url, {"givenName": "I", "familyName": "X", "gender": "m"}).status_code == 400
+    assert api.post(url, {"givenName": "I", "familyName": "X", "shoeSize": 9}).status_code == 400
     href = apidata.individual(api)["href"]
     assert api.patch(href, {"familyName": None}).status_code == 422
     assert api.patch(href, {"@type": "Organization"}).status_code == 400
@@ -43,7 +43,7 @@ def test_organization_round_trip(api):
     org = apidata.organization(api)
     assert org["name"] == "Romashka LLC" and org["@type"] == "Organization"
     assert api.patch(org["href"], {"name": "Romashka JSC"}).json()["name"] == "Romashka JSC"
-    assert api.post(f"{PARTY}/organization", {"tradingName": "x", "name": "y"}).status_code == 400
+    assert api.post(f"{PARTY}/organization", {"motto": "x", "name": "y"}).status_code == 400
 
 
 def test_party_types_are_separate_resources(api):
@@ -94,7 +94,7 @@ def test_customer_validation(api):
     assert api.post(CUSTOMER, {**body, "status": "Gold"}).status_code == 422
     unknown = apidata.customer_body({**person, "id": NIL})
     assert api.post(CUSTOMER, unknown).status_code == 422
-    assert api.post(CUSTOMER, {**body, "creditProfile": []}).status_code == 400
+    assert api.post(CUSTOMER, {**body, "loyaltyTier": "gold"}).status_code == 400
     href = apidata.customer(api, person)["href"]
     other = apidata.individual(api, "Anna", "Petrova")
     # without billing accounts the engaged party may change (tests/test_api_tmf_meta.py)

@@ -176,17 +176,32 @@ OPERATIONS: dict[str, Op] = {
     "list_individuals": Op("Individuals (people).", query=LIST),
     "get_individual": Op("One individual.", query=FIELDS),
     "create_individual": Op(
-        "Create an individual: givenName and familyName.", body=IndividualCreate
+        "Create an individual: givenName and familyName; optional status (initialized,"
+        " validated, deceased) and every other TMF632 attribute (contactMedium, birthDate,"
+        " ...), checked against the spec - nested objects need their @type.",
+        body=IndividualCreate,
     ),
-    "patch_individual": Op("Change an individual's name.", body=IndividualPatch),
+    "patch_individual": Op(
+        "Change an individual's attributes; an attribute sent replaces it whole, null removes it.",
+        body=IndividualPatch,
+    ),
     "delete_individual": Op(
         "Delete an individual nothing refers to: 409 while a customer engages it or it owns"
         " an account."
     ),
     "list_organizations": Op("Organizations.", query=LIST),
     "get_organization": Op("One organization.", query=FIELDS),
-    "create_organization": Op("Create an organization: name.", body=OrganizationCreate),
-    "patch_organization": Op("Change an organization's name.", body=OrganizationPatch),
+    "create_organization": Op(
+        "Create an organization: name; optional status (initialized, validated, closed) and"
+        " every other TMF632 attribute (tradingName, contactMedium, ...), checked against"
+        " the spec.",
+        body=OrganizationCreate,
+    ),
+    "patch_organization": Op(
+        "Change an organization's attributes; an attribute sent replaces it whole, null"
+        " removes it.",
+        body=OrganizationPatch,
+    ),
     "delete_organization": Op(
         "Delete an organization nothing refers to: 409 while a customer engages it or it"
         " owns an account."
@@ -196,11 +211,14 @@ OPERATIONS: dict[str, Op] = {
     "get_customer": Op("One customer.", query=FIELDS),
     "create_customer": Op(
         "Create a customer for an existing party: name, engagedParty (an Individual or"
-        " Organization); status Created, Active or Inactive.",
+        " Organization); status Created, Active or Inactive; optional TMF629 attributes"
+        " (description, contactMedium, creditProfile, ...) checked against the spec.",
         body=CustomerCreate,
     ),
     "patch_customer": Op(
-        "Change a customer's name or status; engagedParty is read-only.", body=CustomerPatch
+        "Change a customer's name, status or other attributes; engagedParty only while"
+        " the customer has no billing account; account is the billing accounts' list.",
+        body=CustomerPatch,
     ),
     "delete_customer": Op("Delete a customer without billing accounts (409 otherwise)."),
     # --- TMF666 account ---

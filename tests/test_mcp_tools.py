@@ -78,13 +78,13 @@ def _handlers() -> dict[str, Any]:
 
 
 def _parsed_models(handler: Any) -> list[str]:
-    """The model names a handler passes to parse(Model, body)."""
+    """The model names a handler passes to parse(Model, body) or parse_documented."""
     tree = ast.parse(textwrap.dedent(inspect.getsource(handler)))
     return [
         node.args[0].id
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
-        and getattr(node.func, "id", None) == "parse"
+        and getattr(node.func, "id", None) in ("parse", "parse_documented")
         and node.args
         and isinstance(node.args[0], ast.Name)
     ]
