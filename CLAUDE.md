@@ -207,7 +207,9 @@ TMF666): [decision](docs/decisions/accounts.md#account-attributes-2026-10-18) - 
 in any role around one resolved anchor (customer/owner, changeable while nothing depends
 on it), documents in `details`, `paymentStatus` a record, `ratingType` always
 `postpaid`, `billCycleDay`/`currency` optional (`UI_CURRENCY` is now also the default
-currency). Done locally, not committed. **Next session starts slice 6** (TMF620): reuse
+currency). Committed and pushed `9941a9f`. **Next session starts slice 6** (TMF620; 214
+gap lines): plan first (the human answers "follow TMF" - read the spec's `_FVO`/`_MVO`
+and its examples, then propose), reuse
 `documents_model` + `parse_documented`, and `accounts.related_parties` for
 `relatedParty` lists with an anchor. Next: slices 6-10 in
 [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design notes before
