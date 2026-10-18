@@ -3,7 +3,8 @@
 **Following TMF (2026-10-17).** Rule: what the vendored specs define is implemented, the
 rest skipped ([the decision](decisions/tmf-api.md#following-tmf-2026-10-17)). The
 attribute-level gaps are no longer tracked in this file: **`tests/tmf-gaps.txt` is the
-exact, test-locked list** (831 lines on 2026-10-17, 705 after slice 1), produced by the
+exact, test-locked list** (831 lines on 2026-10-17, 705 after slice 1, 651 after slice 2:
+[PATCH formats](decisions/tmf-api.md#patch-formats-2026-10-17), C4), produced by the
 probe in `tests/tmf_gaps.py`. Sections 3 and 5 below are superseded by it. C3, C5, C7,
 C8, the client-chosen `id` and `@baseType`/`@schemaLocation` are closed
 ([slice 1](decisions/tmf-api.md#nothing-dropped-or-rewritten-2026-10-17)). What the probe

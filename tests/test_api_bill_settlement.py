@@ -294,7 +294,7 @@ def test_a_held_partly_paid_bill_is_released_as_partially_paid(api, db_conn, off
         ('{"billCycle": {"id": "x"}}', "application/merge-patch+json", 422),
         ('{"state": "onHold", "colour": 1}', "application/merge-patch+json", 400),
         ('{"state": "onHold", "@type": "Product"}', "application/merge-patch+json", 400),
-        ('{"state": "onHold"}', "application/json", 415),
+        ('{"state": "onHold"}', "text/plain", 415),
         ('{"state": null}', "application/merge-patch+json", 422),
         ("{}", "application/merge-patch+json", 200),  # an empty merge patch changes nothing
     ],

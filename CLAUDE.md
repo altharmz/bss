@@ -191,8 +191,18 @@ implemented, the rest skipped; "proceed with development"). Slice 0 done locally
 exact gap list `tests/tmf-gaps.txt` (831 lines), probed by `tests/tmf_gaps.py` and
 locked by `tests/test_tmf_gaps.py` - each slice removes the lines it closes (`94b6ff2`).
 Slice 1 (nothing dropped or rewritten; migration `0021`; 705 lines left) done locally,
-[decision](docs/decisions/tmf-api.md#nothing-dropped-or-rewritten-2026-10-17). Next:
-slices 2-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
+[decision](docs/decisions/tmf-api.md#nothing-dropped-or-rewritten-2026-10-17); pushed
+`4bd8baa`. Slice 2 (PATCH in all four spec formats, JSON Patch and JSON Patch Query;
+651 lines left) done locally, [decision](docs/decisions/tmf-api.md#patch-formats-2026-10-17).
+**To-do at the start of the next session (2026-10-17):** (1) slice 2 is NOT committed -
+working tree has it (`app/api/jsonpatch.py`, `deps.py`, tests, docs); `make lint`,
+`decisions-check` and `make test` x3 (1140) passed; ask the human for the commit OK
+(message proposed: "PATCH in the four formats of the specs: merge patch, JSON Patch,
+JSON Patch Query (slice 2)"), then push. (2) Slice 3 (base paths `customerManagement`
+-> `customer/v5`, `paymentManagement/v4` -> `payment/v4`, ~30 files incl. UI, MCP,
+tests, docs) waits on two answers: may `scripts/docs/generate.py` (harness) be edited,
+and is a straight rename without alias paths OK.
+Next: slices 3-10 in [tmf-api.md](docs/decisions/tmf-api.md#following-tmf-2026-10-17); design
 notes before taxes, `modify` items, suspension and payment states. Not deployed:
 migrations `0009`-`0021` ship together.
 

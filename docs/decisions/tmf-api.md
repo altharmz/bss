@@ -95,6 +95,33 @@ read-only cases across the suite. Negative proofs: items ordered by `item_id` ag
 `tests/test_api_tmf_meta.py`. Rolling back `0021` needs `alembic downgrade 0020` by
 hand (drops the meta, method and position columns).
 
+### PATCH formats (2026-10-17)
+
+Slice 2 of "Following TMF"; retires D6 (merge patch only). No migration. 54 lines left
+`tests/tmf-gaps.txt` (705 -> 651). Every v5 spec lists four PATCH content types, and
+every PATCH takes them (`app/api/deps.py`, `merge_patch_body`):
+
+- `application/json` and `application/merge-patch+json`: a merge patch, as before.
+- `application/json-patch+json` (RFC 6902: add, remove, replace, move, copy, test) and
+  `application/json-patch-query+json` (TMF630: a path may end in `?attr=value[&...]`,
+  selecting the elements of the first array on it, e.g.
+  `/externalId/owner?owner=Shop`): applied to the resource as its own GET answers it
+  (an in-process GET through the app), and the top-level attributes that changed go
+  to the handler as a merge patch. So read-only, server-set, unknown and invalid
+  values are refused exactly as in a merge patch; a nested change sends that
+  attribute's whole new value. `app/api/jsonpatch.py`.
+- Errors: not an array of operations, an unknown op, a path that is not a pointer, a
+  missing value/from, a malformed query - 400; a path that leads nowhere, an index out
+  of range, a query that selects nothing, a result that is no longer an object - 422;
+  a failed `test` - 409. Nothing is stored on any error. In plain JSON Patch `?` is
+  part of a key, as RFC 6901 says.
+- The GET and the PATCH run in separate transactions: a concurrent change of the same
+  attribute in between is overwritten, as with a merge patch sent after a GET.
+  `test` operations check what was read.
+
+Tests: `tests/test_api_patch_formats.py`. Negative proofs: refusing `application/json`
+again, and skipping the `test` comparison, each failed it.
+
 ### Product writes through orders (2026-10-17)
 
 The last seven operations, approved by the human on 2026-10-17 ("reach 100%"), close
@@ -428,6 +455,8 @@ implemented; order processing lives in `app/ordering/`.
 - **POST** returns 201 with `Location`. **PATCH** accepts `application/merge-patch+json`
   only (415 otherwise); `null` removes an optional attribute and is a 422 on a mandatory
   one; `@type` may be repeated but not changed.
+- **Superseded 2026-10-17** ([PATCH formats](#patch-formats-2026-10-17)): PATCH accepts
+  the four formats the specs list; 415 only for anything else.
 - **Transactions:** one per request (`app/api/deps.py`, `Tx`), committed when the handler's
   block ends, rolled back if it raises.
 - **Clock:** the `get_clock` dependency; tests override it with `FixedClock`.

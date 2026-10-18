@@ -287,12 +287,18 @@ def test_patch_is_a_merge_patch(api):
     assert api.get(href).json() == body
 
 
-def test_patch_accepts_only_merge_patch_json(api):
+def test_patch_accepts_the_four_formats_of_the_specs(api):
+    """Formats in full: tests/test_api_patch_formats.py."""
     href = api.post(SPEC, spec_body()).json()["href"]
-    for content_type in ("application/json", "application/json-patch+json", "text/plain"):
+    for content_type in ("text/plain", "application/xml"):
         response = api.patch(href, {"name": "x"}, content_type=content_type)
         assert response.status_code == 415, content_type
     assert api.get(href).json()["name"] == "Fiber"
+    assert api.patch(href, {"name": "A"}, content_type="application/json").status_code == 200
+    replace = [{"op": "replace", "path": "/name", "value": "B"}]
+    assert (
+        api.patch(href, replace, content_type="application/json-patch+json").json()["name"] == "B"
+    )
 
 
 def test_patch_rejects_read_only_attributes(api):
