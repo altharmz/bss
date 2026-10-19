@@ -309,6 +309,8 @@ every action is executed.
   before D); `productNotStarted` (D before the product's start date; D on the start
   date replaces the initial offering, with nothing billed for it); `openModifyItem`
   (the product already has a change that has not taken effect, or a change on D);
+  `terminationInPeriod` (2026-10-19, below: the product's known termination falls
+  before the end of D's billing period);
   `offeringUnchanged` (the product is already on that offering on D; that is what
   noChange is for); plus add's checks on the new offering at D: `offeringNotSellable`,
   `offeringNotValid`, `noRecurringPrice`, `priceEnds`. **A delete gains

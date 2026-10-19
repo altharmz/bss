@@ -37,6 +37,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
+from app.billing.core import cycle_period
 from app.config import settings
 from app.events import emit
 from app.ordering.states import item_transition, order_transition
@@ -393,8 +394,9 @@ def _modify_problems(
 ) -> list[tuple[str, str]]:
     """A modify item changes the product's offering from `start` (the change day D) on
     (docs/decisions/tmf-api.md#modify-items-2026-10-18). At most one change per product
-    waits to take effect, and it must come before any known termination: together with
-    the delete rule (openModifyItem) a charge is never cut short twice."""
+    waits to take effect, it must come before any known termination, and not into the
+    billing period that termination cuts short: together with the delete rule
+    (openModifyItem) a charge is never cut short twice."""
     product = locked[item.product_id]
     if product["billing_account_id"] != account["id"]:
         return [("productOfOtherAccount", "the product belongs to another billing account")]
@@ -405,6 +407,16 @@ def _modify_problems(
                 "productAlreadyEnded",
                 f"the product is {product['status']}"
                 + (f" and ends on {ends}, on or before {start}" if ends else ""),
+            )
+        ]
+    # The termination may already have refunded part of D's period; the change would cut
+    # the same charge again (one refund per charge, billing-core.md#offering-changes-2026-10-18)
+    if ends is not None and ends < cycle_period(start, account["bill_cycle_day"]).end:
+        return [
+            (
+                "terminationInPeriod",
+                f"the product ends on {ends}, in the billing period of {start}; cancel the"
+                " order that ends it first, or change the offering in an earlier period",
             )
         ]
     if start < product["start_date"]:

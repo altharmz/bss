@@ -163,8 +163,8 @@ Synchronous, in the request's transaction (`app/ordering/process.py`, `place_ord
    `accountNotActive`, `requestedStartDateInPast` (order level);
    `billingAccountMismatch`, `offeringNotSellable`, `offeringNotValid`,
    `noRecurringPrice`, `priceEnds`, `productOfOtherAccount`, `productAlreadyEnded`,
-   `openDeleteItem`, `productNotStarted`, `openModifyItem`, `offeringUnchanged` (item
-   level) - see
+   `openDeleteItem`, `productNotStarted`, `openModifyItem`, `offeringUnchanged`,
+   `terminationInPeriod` (item level) - see
    [api/tmf622-product-ordering.md](api/tmf622-product-ordering.md).
 4. Otherwise executed: `add` creates a product starting on the requested date (today
    when omitted; never in the past), `delete` sets its exclusive termination date (or

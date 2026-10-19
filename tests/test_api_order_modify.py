@@ -100,10 +100,38 @@ def test_a_change_must_come_before_the_termination(api, shop):
     product = started(api, shop)
     delete(api, acc, product, NOV11, on=at(OCT20))
     assert errors_of(modify(api, acc, product, b, NOV11, on=at(OCT20))) == ["productAlreadyEnded"]
-    assert modify(api, acc, product, b, NOV5, on=at(OCT20))["state"] == "completed"
+    # not into the period the termination cuts short: November's charge would be refunded
+    # twice, from the 11th and from the 5th (one refund per charge)
+    placed = modify(api, acc, product, b, NOV5, on=at(OCT20))
+    assert errors_of(placed) == ["terminationInPeriod"]
+    assert "cancel the order that ends it first" in placed["productOrderErrorMessage"][0]["reason"]
+    assert modify(api, acc, product, b, date(2026, 10, 25), on=at(OCT20))["state"] == "completed"
     ended = add(api, acc, a, OCT20, on=at(OCT20))
     delete(api, acc, ended, None, on=at(OCT20))
     assert errors_of(modify(api, acc, ended, b, None, on=at(OCT20))) == ["productAlreadyEnded"]
+
+
+def test_a_termination_on_the_next_cycle_day_leaves_the_period_whole(api, shop):
+    a, b, acc = shop
+    product = started(api, shop)
+    delete(api, acc, product, DEC1, on=at(OCT20))
+    assert modify(api, acc, product, b, NOV5, on=at(OCT20))["state"] == "completed"
+
+
+def test_a_change_after_a_termination_refund_is_rejected_and_billing_goes_on(api, shop, worker):
+    """The sequence the property tests found: November charged, a termination on the 11th
+    refunded by the run of the 6th, then a change from the 8th would refund it again."""
+    a, b, acc = shop
+    product = started(api, shop)
+    run(worker, api, NOV1)
+    delete(api, acc, product, NOV11, on=at(NOV5))
+    run(worker, api, NOV6)  # A keeps 10 days: 100.00 of 300.00
+    november = [(z(midnight(NOV1)), Decimal("300.00")), (z(midnight(NOV11)), Decimal("-200.00"))]
+    assert [r for r in rates(api, product) if r[0] >= z(midnight(NOV1))] == november
+    placed = modify(api, acc, product, b, date(2026, 11, 8), on=at(NOV6))
+    assert errors_of(placed) == ["terminationInPeriod"]
+    run(worker, api, date(2026, 11, 8))
+    assert [r for r in rates(api, product) if r[0] >= z(midnight(NOV1))] == november
 
 
 def test_a_delete_may_not_end_the_product_on_or_before_a_pending_change(api, shop):

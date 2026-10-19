@@ -225,6 +225,19 @@ offering until the day before, the new one from that day. Migration `0027`.
   may not end a product on or before a pending change's day; a change must come before
   a known termination. A second reduction is still `InconsistentState`;
   `refunds_rate_id UNIQUE` stays.
+  **Gap found 2026-10-19** (`make verify`'s `ci` profile,
+  `test_refunds_overlap_precision_currency`): those rules let a change through after a
+  termination in the same period was already refunded - charge for the month, delete
+  for the 17th (refunded `[17th, 1st)`), then a change from the 13th: a second refund of
+  the same charge, `InconsistentState`, the account's billing stopped. Reachable through
+  the API since slice 8b (deployed with `d499338`), with any amount. **The human's
+  choice: an ordering rule, not a second refund.** A modify item is rejected
+  (`terminationInPeriod`) when the product's known termination is before the end of
+  D's billing period (a termination on the next cycle day cuts nothing and is allowed);
+  cancel the delete order first. The property generator follows the rule
+  (`product_specs` takes the cycle day); `tests/test_api_order_modify.py` has the
+  sequence end to end with the worker. Negative proof: without the rule both API tests
+  fail (`[] == ['terminationInPeriod']`).
 - **`abr_no_overlap` is replaced by `abr_one_per_start`** (the human's choice,
   2026-10-18, after the property tests found the approved design's gap): a charge is
   refunded, never shortened, so after a mid-period change the old offering's charge

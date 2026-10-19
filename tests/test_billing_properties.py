@@ -76,7 +76,7 @@ def day(offset: int) -> date:
 
 
 @st.composite
-def product_specs(draw, index: int) -> ProductSpec:
+def product_specs(draw, index: int, cycle_day: int) -> ProductSpec:
     created = draw(st.integers(0, 120))
     start = created + draw(st.integers(0, 40))
     known = termination = None
@@ -95,6 +95,14 @@ def product_specs(draw, index: int) -> ProductSpec:
         # on or before a pending change: either way the termination is after the change
         # (a cancellation, termination = start, is then impossible: no change)
         if termination is not None and termination <= change:
+            change_known = change = None
+        # and a change placed while the termination is known may not fall into the period
+        # that termination cuts short (terminationInPeriod: one refund per charge)
+        elif (
+            known is not None
+            and known <= change_known
+            and day(termination) < next_period(period_start(day(change), cycle_day))
+        ):
             change_known = change = None
     return ProductSpec(
         name=f"p{index}",
@@ -139,7 +147,7 @@ def scenarios(draw) -> Scenario:
             )
         )
     n = draw(st.integers(1, 3))
-    specs = tuple(draw(product_specs(i)) for i in range(n))
+    specs = tuple(draw(product_specs(i, cycle_day)) for i in range(n))
     # a walk: steps of 0 repeat a run, small steps are daily-ish, large ones are gaps
     runs = [draw(st.integers(0, 60))]
     for step in draw(st.lists(SHORT_OR_LONG, min_size=8, max_size=30)):

@@ -272,8 +272,15 @@ Slice 3 wiring committed and pushed (2026-10-19, the human's OK):
 [users.md](docs/decisions/users.md#deployment-wiring-slice-3-2026-10-19) -
 `BSS_SERVICE_SECRET`/`BSS_SMOKE_SECRET` from `.env.prod` in `compose.prod.yaml`, the
 smoke secret also in `.env.smoke` for `web-smoke.sh`, `make web-e2e` with disposable
-fixture users. **Next: `make verify`** (the human's approval) - it restores production
-MCP; then the vps-infra change request removing Caddy's basic auth (U11).
+fixture users. The first admin exists on the VPS (the human, 2026-10-19). `make verify`
+(2026-10-19) stopped at `make test`: the `ci` profile found a billing gap live since
+`d499338` (a modify after a same-period termination refund = a second refund, the
+account's billing stops); fixed with the human's choice, the `terminationInPeriod`
+ordering rule ([billing-core.md](docs/decisions/billing-core.md#offering-changes-2026-10-18)).
+**Pending, needs the human's OK** (harness file): `terminationInPeriod` in
+`scripts/docs/api-notes/tmf622-product-ordering.md`, then `make docs`. Next: `make
+verify` - it restores production MCP; then the vps-infra change request removing Caddy's
+basic auth (U11).
 Bootstrap CLI: `python -m app.users create NAME --role admin`.
 
 **The last gaps** (2026-10-19; plan confirmed by the human, billing unchanged by
