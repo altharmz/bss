@@ -97,6 +97,15 @@ SMOKE_BASIC_AUTH="$(sed -n 's/^SMOKE_BASIC_AUTH=//p' "${SMOKE_ENV}" | tail -n 1)
   || fail "SMOKE_BASIC_AUTH=smoke:<password> is missing in ${SMOKE_ENV}"
 ! grep -q '^SMOKE_BASIC_AUTH=' .env.prod \
   || fail ".env.prod contains SMOKE_BASIC_AUTH: remove it - .env.prod is shipped to the VPS, the smoke credential belongs in .env.smoke only"
+# The app's read-only smoke credential (docs/decisions/users.md): the app gets it from
+# .env.prod, the web smoke from .env.smoke - the same value; a mismatch fails the smoke.
+BSS_SMOKE_SECRET="$(sed -n 's/^BSS_SMOKE_SECRET=//p' "${SMOKE_ENV}" | tail -n 1)"
+[[ -n "${BSS_SMOKE_SECRET}" ]] \
+  || fail "BSS_SMOKE_SECRET is missing in ${SMOKE_ENV} (the same value as in .env.prod; see .env.example)"
+grep -q '^BSS_SERVICE_SECRET=.' .env.prod \
+  || fail "BSS_SERVICE_SECRET is empty or missing in .env.prod (see .env.example)"
+grep -q '^BSS_SMOKE_SECRET=.' .env.prod \
+  || fail "BSS_SMOKE_SECRET is empty or missing in .env.prod (see .env.example)"
 
 # The MCP login needs at least one user; checked here, before any network step (the value
 # is never printed). compose would refuse too, but only after the migration.
@@ -272,7 +281,8 @@ rssh "mkdir -p ${REMOTE_DIR}/web"
 ship_web "${REMOTE}:${REMOTE_DIR}"
 
 log "Web smoke test through Caddy (${WEB_URL})"
-SMOKE_BASIC_AUTH="${SMOKE_BASIC_AUTH}" ./scripts/web-smoke.sh "${WEB_URL}" "${TAG}" \
+SMOKE_BASIC_AUTH="${SMOKE_BASIC_AUTH}" BSS_SMOKE_SECRET="${BSS_SMOKE_SECRET}" \
+  ./scripts/web-smoke.sh "${WEB_URL}" "${TAG}" \
   || fail "web smoke test failed (see above). The app itself is deployed and healthy; check the vps-infra Caddy routes and the files in ~/${REMOTE_DIR}/web"
 
 log "MCP smoke test through Caddy (${MCP_URL})"

@@ -196,3 +196,29 @@ type/lint/format checks and the decision-link check passed. Verified again befor
 commit (2026-10-19): `make test` 1,346 passed, `make web-test` 250 in both zones,
 `make progress` regenerated. `make web-e2e` cannot run through make until the fixture
 is wired (a compose mount for `/e2e` and a Makefile prepare/cleanup step).
+
+### Deployment wiring (slice 3, 2026-10-19)
+
+Applied with the human's OK. `1c9f216` had gone live before this wiring existed, so
+production MCP answered 401 and the web smoke could not pass.
+
+- **Secrets** come from `.env.prod`, never from a committed file: `compose.prod.yaml`
+  passes `BSS_SERVICE_SECRET` to `app` and `mcp` and `BSS_SMOKE_SECRET` to `app`, each
+  `${VAR:?...}`, so a missing one stops the deploy. `.env.example` documents both
+  (`openssl rand -hex 32`, two different values). A first draft by hand put literal
+  values into `compose.prod.yaml`; they were replaced before any commit and regenerated.
+- **Web smoke** (`scripts/web-smoke.sh`): Caddy's basic auth stays until the vps-infra
+  change (U11), so the smoke sends both the basic-auth login and `X-Bss-Service` with the
+  smoke secret. New check: Caddy's login alone gets a 401 from the app. The operator
+  check keeps comparing with the basic-auth user name: the app names the smoke principal
+  `smoke`, the same name. `deploy.sh` reads `BSS_SMOKE_SECRET` from `.env.smoke` (the same
+  value as in `.env.prod`) and refuses to start when it or either `.env.prod` secret is
+  missing.
+- **Browser tests**: `make web-e2e` runs `tests/e2e_users.py` in the `app` service with
+  `frontend/.e2e` bind-mounted as `/e2e` (both containers run as UID 1000; no compose
+  change). A cleanup before `prepare` clears an interrupted run; the cleanup after the
+  run disables the users and removes the file whatever the tests' result, and its own
+  failure fails the target. Proven: 4 browser tests passed, the file was gone, every
+  `e2e-*` user disabled and none with a session.
+- **First admin on the VPS**: by the human, `python -m app.users create NAME --role
+  admin` through `make remote` (password on stdin).

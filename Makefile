@@ -114,10 +114,19 @@ web-types: ## Regenerate the UI's TypeScript types from spec/
 web-fmt: ## Format the UI sources (prettier --write)
 	$(WEB) sh -c '$(WEB_DEPS) && npm run format'
 
-web-e2e: ## e2e smoke (Playwright) on the built UI and the seeded local stack; read-only
+# Disposable local sign-in users for the browser tests (tests/e2e_users.py): credentials in
+# the gitignored frontend/.e2e/, which the e2e service sees as /web/.e2e. A cleanup first
+# clears what an interrupted run left; the one after the run disables the users and removes
+# the file whether the tests passed or not.
+E2E_USERS = docker compose run --rm -v $(CURDIR)/frontend/.e2e:/e2e app python -m tests.e2e_users
+
+web-e2e: ## e2e smoke (Playwright) on the built UI and the seeded local stack; billing data read-only
 	@$(MAKE) --no-print-directory seed
 	@$(MAKE) --no-print-directory web-build
-	docker compose run --rm e2e; rc=$$?; docker compose rm -sf web-preview >/dev/null 2>&1; exit $$rc
+	mkdir -p frontend/.e2e
+	$(E2E_USERS) cleanup
+	$(E2E_USERS) prepare
+	docker compose run --rm e2e; rc=$$?; $(E2E_USERS) cleanup || rc=1; docker compose rm -sf web-preview >/dev/null 2>&1; exit $$rc
 
 spec-verify-upstream: ## Re-fetch the spec blob SHAs from GitHub and compare with spec/README.md (network; not in make test)
 	python3 scripts/spec-verify-upstream.py

@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 # The admin UI and its API routes through the shared Caddy, as a browser sees them.
-# Usage: SMOKE_BASIC_AUTH=smoke:<password> scripts/web-smoke.sh <base url> <expected build>
+# Usage: SMOKE_BASIC_AUTH=smoke:<password> BSS_SMOKE_SECRET=<hex> \
+#          scripts/web-smoke.sh <base url> <expected build>
 #   e.g. scripts/web-smoke.sh https://vpn2811.duckdns.org:8445 1a02efa
 #
 # The credentials are read from the environment and handed to curl as a config file on a
 # file descriptor - never on the command line (ps) and never printed. The `smoke` user is
-# GET-only in Caddy; check 6 proves that.
+# GET-only in Caddy; check 6 proves that. Behind Caddy the app authenticates too
+# (docs/decisions/users.md): the smoke secret goes to it as X-Bss-Service, read-only there.
 set -euo pipefail
 
 BASE="${1:?usage: web-smoke.sh <base url> <expected build>}"
 BUILD="${2:?usage: web-smoke.sh <base url> <expected build>}"
 : "${SMOKE_BASIC_AUTH:?SMOKE_BASIC_AUTH (smoke:<password>) must be set}"
+: "${BSS_SMOKE_SECRET:?BSS_SMOKE_SECRET must be set}"
 OUT="$(mktemp)"
 HEADERS="$(mktemp)"
 trap 'rm -f "${OUT}" "${HEADERS}"' EXIT
@@ -28,8 +31,12 @@ output = \"${OUT}\"
 dump-header = \"${HEADERS}\"
 write-out = \"%{http_code}\"
 request = \"${method}\""
-  if [[ "${who}" == auth ]]; then
+  # basic: Caddy's login only; auth: also the app's smoke credential
+  if [[ "${who}" == auth || "${who}" == basic ]]; then
     config+=$'\n'"user = \"${SMOKE_BASIC_AUTH}\""
+  fi
+  if [[ "${who}" == auth ]]; then
+    config+=$'\n'"header = \"X-Bss-Service: ${BSS_SMOKE_SECRET}\""
   fi
   if [[ "${method}" != GET ]]; then
     config+=$'\n'"header = \"Content-Type: application/json\""$'\n'"data = \"{}\""
@@ -63,8 +70,12 @@ code="$(get auth GET "${asset}")"
 [[ "${code}" == 200 ]] || fail "GET ${asset} answered ${code}"
 ok "GET ${asset} -> 200 (cache-control: $(header Cache-Control))"
 
-# 4. /internal goes to the app: JSON, not the index.html fallback; the operator header is
-#    set by Caddy from the basic-auth user
+# 4. /internal goes to the app: JSON, not the index.html fallback. Caddy's login alone is
+#    not enough - the app answers 401 - and with the smoke credential the app names the
+#    operator `smoke`, the same name as the basic-auth user
+code="$(get basic GET /internal/v1/context)"
+[[ "${code}" == 401 ]] || fail "GET /internal/v1/context with Caddy's login only answered ${code}, expected 401 from the app"
+ok "GET /internal/v1/context without the app's credential -> 401"
 code="$(get auth GET /internal/v1/context)"
 [[ "${code}" == 200 ]] || fail "GET /internal/v1/context answered ${code}"
 [[ "$(header Content-Type)" == application/json* ]] \
@@ -72,7 +83,7 @@ code="$(get auth GET /internal/v1/context)"
 is_json || fail "GET /internal/v1/context body is not JSON"
 operator="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("operator"))' "${OUT}")"
 [[ "${operator}" == "${SMOKE_BASIC_AUTH%%:*}" ]] \
-  || fail "operator is ${operator}, expected ${SMOKE_BASIC_AUTH%%:*} - X-Remote-User not set by Caddy?"
+  || fail "operator is ${operator}, expected ${SMOKE_BASIC_AUTH%%:*} - smoke credential not recognised by the app?"
 ok "GET /internal/v1/context -> 200 JSON, operator ${operator}"
 
 # 5. /tmf-api goes to the app

@@ -37,6 +37,10 @@ services:
       # /internal/v1/context and the account card report it; the worker writes it as
       # paymentDueDate - same value in both services
       BILL_PAYMENT_TERM_DAYS: "30"
+      # the app authenticates every request (docs/decisions/users.md): mcp sends the
+      # service secret, the web smoke the read-only smoke secret, both as X-Bss-Service
+      BSS_SERVICE_SECRET: ${BSS_SERVICE_SECRET:?BSS_SERVICE_SECRET is required - see .env.example}
+      BSS_SMOKE_SECRET: ${BSS_SMOKE_SECRET:?BSS_SMOKE_SECRET is required - see .env.example}
     networks:
       shared:
         # Every app on the shared network calls its service `app`, so that name is
@@ -131,6 +135,8 @@ services:
       # behind Caddy: the client IP is the last X-Forwarded-For entry (Caddy sets it)
       MCP_TRUST_FORWARDED: "true"
       MCP_USERS: ${MCP_USERS:?MCP_USERS is required - see .env.example}
+      # same value as the app's: without it every tool call is a 401
+      BSS_SERVICE_SECRET: ${BSS_SERVICE_SECRET:?BSS_SERVICE_SECRET is required - see .env.example}
     volumes:
       - mcp-data:/data
     networks:

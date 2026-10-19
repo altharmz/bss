@@ -268,11 +268,12 @@ UI slice 2 committed and pushed (2026-10-19, the human's OK): session gate, `/si
 forced password change, operator menu, admin `/users`, pinned request/component tests
 and browser sign-in. 250 frontend tests passed in UTC and New York; `make test` 1,346
 passed. CSRF and UI role-check negative proofs failed as expected and were reverted.
-**`make web-e2e` (and so `make check`/`make verify`) fails until its wiring lands**: the
-fixture `tests/e2e_users.py` writes `/e2e/credentials.json`, but no compose mount or
-Makefile step runs it (harness files, the human's OK); see [users.md](docs/decisions/users.md#ui-implementation-slice-2-2026-10-19).
-Slice 3 next: that wiring, the secrets in `compose.prod.yaml`, the smoke credential in
-`web-smoke.sh`/`deploy.sh`, then `make verify`.
+Slice 3 wiring committed and pushed (2026-10-19, the human's OK):
+[users.md](docs/decisions/users.md#deployment-wiring-slice-3-2026-10-19) -
+`BSS_SERVICE_SECRET`/`BSS_SMOKE_SECRET` from `.env.prod` in `compose.prod.yaml`, the
+smoke secret also in `.env.smoke` for `web-smoke.sh`, `make web-e2e` with disposable
+fixture users. **Next: `make verify`** (the human's approval) - it restores production
+MCP; then the vps-infra change request removing Caddy's basic auth (U11).
 Bootstrap CLI: `python -m app.users create NAME --role admin`.
 
 **The last gaps** (2026-10-19; plan confirmed by the human, billing unchanged by
