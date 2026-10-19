@@ -126,13 +126,6 @@ def test_delete_of_a_future_product_cancels_it_with_zero_billable_days(api, shop
     product = apidata.product_of(api, placed)
     assert product["status"] == "created"
 
-    later = apidata.delete_item(product["id"])
-    rejected = apidata.order(
-        api, acc, later, requestedStartDate=iso(midnight(start + timedelta(days=1)))
-    )
-    assert rejected["state"] == "rejected"
-    assert errors_of(rejected) == [("productNotStarted", ["1"])]
-
     order = apidata.order(api, acc, apidata.delete_item(product["id"]))  # today
     assert order["state"] == "completed"
     cancelled = api.get(product["href"]).json()

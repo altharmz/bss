@@ -114,11 +114,14 @@ separates user and password), so **an operator with `:` always comes from MCP**
 ## Tools
 
 **One tool per API operation**: every operation of `app.openapi()` except those
-`docs/progress/scope.yaml` excludes (today only `GET /`, the template's status root) - 59
-tools, 37 of them read-only (the TMF APIs, the internal API, `/healthz`,
+`docs/progress/scope.yaml` excludes (today only `GET /`, the template's status root),
+and interactive authentication/user-management operations - 145
+tools, 66 of them read-only (the TMF APIs, the internal API, `/healthz`,
 `/billing-status`). The tool's name is the operationId, which is the handler's function
 name (`create_payment`, `list_bills`, `catch_up`, ...). GET tools are annotated
-`readOnlyHint`, the others `destructiveHint`. `tools/list` is about 60 KB.
+`readOnlyHint`, the others `destructiveHint`. If your client lists fewer tools, search
+by API family: TMF620 catalog, TMF632 party, TMF629 customer, TMF666 accounts,
+TMF676 payments, TMF637 inventory, TMF678 bills, TMF622 orders, or internal operations.
 
 They are **generated at startup** (`bss_mcp/tools.py`) from `app.openapi()` and a small
 registry (`bss_mcp/operations.py`) that adds what the OpenAPI document does not carry:
@@ -130,10 +133,17 @@ registry (`bss_mcp/operations.py`) that adds what the OpenAPI document does not 
   `productOffering.id` and `startDate`, `run_accounts` its `status`; for a write `body`,
   whose schema is the request model the handler parses, `$ref`s inlined. Arguments are
   checked against the schema before the app is called; anything extra is refused.
+  The registry also describes attributes consumed before model parsing:
+  `patch_order.body.state: "acknowledged"` submits a draft. List filters can carry
+  formats: `list_bill_cycles.filters.billingDate` is a date-time with offset for local
+  midnight of the billing day in `BILLING_TZ`, such as `2026-10-12T21:00:00Z`.
 - **Descriptions**: the summary, the API (TMF number and name, or the internal API), a
   one-line note condensed from the API notes (`docs/api/`), the handler's docstring if
   it has one, then the list filters, "JSON merge patch" for PATCH, "Changes data (write
   scope)" for writes, and the decimal-string rule where a body carries amounts.
+  Passthrough documents name their vendored FVO schema, array/object shape and required
+  keys without inlining the full polymorphic schema. TMF622 `externalId` keeps its
+  existing lenient model.
 
 **Drift check** (`tests/test_mcp_tools.py`, in `make test` and so in `make check`): the
 tool set equals the API operations minus `scope.yaml`'s exclusions; the registry's copy

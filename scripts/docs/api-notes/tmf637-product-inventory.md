@@ -1,5 +1,14 @@
 ## Behaviour and deviations
 
+- **Review update (2026-10-19):** a future product accepts an exclusive
+  `terminationDate` after its start, including on POST. It remains `created` until
+  start, then `pendingTerminate`, then `terminated`; catching up past both dates
+  moves directly to `terminated`. A delete on or before a future start cancels it
+  with zero billable days. See `tests/test_api_product_writes.py::test_future_delete_dates`.
+- A same-day suspension/resumption can be undone through TMF622 `cancelProductOrder`;
+  its previous status is restored and a ProductStateChangeEvent emitted. An older
+  change remains a 409. See `tests/test_api_suspension.py::test_same_day_status_change_can_be_undone`.
+
 - **Writes are orders.** Products are only created, changed and ended by orders (TMF622):
   POST `/product` places an add order (with `terminationDate`, a delete order after it,
   in the same transaction), PATCH `terminationDate` a delete order with that date, PATCH

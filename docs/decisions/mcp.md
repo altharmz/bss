@@ -2,6 +2,35 @@
 
 User-facing description: [docs/mcp.md](../mcp.md).
 
+## Review slice A: tool schemas (2026-10-19)
+
+The MCP end-to-end review found schema gaps, without requiring an API or billing
+policy change. The registry now carries body attributes consumed before model parsing
+and per-filter schema overrides. `patch_order` exposes nullable `state`, with the
+non-null value `acknowledged` to submit a draft; its description distinguishes draft
+edits from processed orders. Repeated submission retains the API's existing 422;
+changing a processed order's start date is 409 (the review had expected both as 409).
+A source-based test checks literal `body.pop` keys in exposed write handlers against
+the generated schema. Removing the body-attribute merge made it fail on `state`;
+the negative-proof mutation was reverted.
+
+The filter sweep found one date/time equality filter, bill cycles' `billingDate`.
+It now declares `format: date-time`, an offset-bearing example and the `BILLING_TZ`
+midnight requirement. Unknown registry filter overrides stop generation with
+`DriftError`; accepted filter names still come from the handler probe.
+
+Passthrough fields marked "as the spec defines it" gain compact descriptions from
+the vendored FVO schemas, including referenced type, array/object shape and inherited
+required keys. Shared attribute names can name alternative FVO shapes; these are hints,
+and runtime spec validation remains authoritative. Full polymorphic schemas are not
+inlined. TMF622's lenient `externalId` model is unchanged.
+
+Server instructions name the 145 write-scope tools (66 read tools), the API families,
+and searching by family when a client's discovery layer shows fewer. The inventory
+family no longer says read-only. Counts are checked against generated tools in tests.
+The human subsequently approved same-day status undo and future-product termination
+(slices B/C); their decisions are recorded in `tmf-api.md` and `worker.md`.
+
 ## Slice 1: server, static tokens, scopes (2026-10-11)
 
 Decisions as taken (plan D1-D6 agreed with the human):

@@ -390,9 +390,8 @@ reason. What the implementation decided beyond the plan:
 - **TMF637 PATCH:** one order per PATCH (terminationDate, productOffering or status;
   422 otherwise); name and documents change directly with a
   ProductAttributeValueChangeEvent; repeating `billingAccount`/`startDate` is a 200
-  no-op. **POST terminationDate** must be after the start (422); for a product that
-  starts later the delete order is rejected (`productNotStarted`, a 409) - before its
-  start a product can only be cancelled, as for any delete.
+  no-op. **POST terminationDate** must be after the start (422); a future product
+  accepts a later scheduled termination (review C, 2026-10-19, human approved).
 - **The product's name is its own:** after an offering change it keeps the name it was
   created with (until PATCHed); `productOffering.name` names the offering.
 
@@ -522,9 +521,14 @@ step. Tests: `tests/test_api_suspension.py`.
   `pendingTerminate` until its date (the coming end wins over `suspended` in the status).
   Cancelling that delete gives the product back the status its changes left it in
   (`suspended`).
-- **cancelProductOrder** undoes a status change that has not taken effect (the row is
-  deleted, no event); one in effect is a 409. An add item cannot be undone once another
-  order changed the product's status.
+- **cancelProductOrder** undoes a future status change (the row is deleted, no event)
+  or, since review B (2026-10-19, human approved), one dated today even after it took
+  effect. An effective change's row is deleted, the latest applied status restored
+  (default active), and ProductStateChangeEvent emitted. Future changes remain scheduled;
+  an older change is a 409. If another order set an end, cancel that order first.
+  An add item cannot be undone once another order changed the product's status.
+  Negative proof (review B): restoring the old date/applied check makes both same-day
+  undo tests fail with 409; reverted. Worker-applied changes are covered too.
 - **Billing does not change**: no spec defines what a suspension does to charges, so a
   suspended product is billed by its dates (decisions/billing-core.md, open question
   closed). A rule that stops charges would be ours and needs the human.
@@ -1032,5 +1036,16 @@ allocates `amount + taxAmount`, which `totalAmount` (if sent) must equal
 - **delete** of a started product sets `termination_date` (exclusive),
   `terminated_by_item_id` and status `terminated` (termination today) or
   `pendingTerminate` (termination in the future; flipped by the worker, as above).
-  **delete of a product that has not started** cancels it: status `cancelled`, `termination_date = start_date` (0 billable days); a
-  requested date after its start date is rejected (`productNotStarted`).
+  **delete of a product that has not started** cancels it when dated on or before its
+  start: status `cancelled`, `termination_date = start_date` (0 billable days); a
+  requested date after its start schedules termination: `created` until start, then
+  `pendingTerminate`, then `terminated`. A worker catching up past both dates moves
+  straight to `terminated`, respecting the terminating order's visibility cutoff.
+  Cancelling that delete restores `created` before start or the applied status after
+  start, subject to the existing billing checks. An add order with such a delete
+  cannot be cancelled until that delete is undone. Modify and status rules with an
+  end set remain as before (including `terminationInPeriod`). Tests:
+  `tests/test_api_product_writes.py::test_future_delete_dates`,
+  `::test_post_future_product_with_end_and_cancel`.
+  Negative proof (review C): restoring unconditional cancellation of unstarted products
+  makes the after-start delete case fail (`cancelled` instead of `created`); reverted.

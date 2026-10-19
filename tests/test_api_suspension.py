@@ -182,7 +182,64 @@ def test_cancelling_a_future_status_change(api, shop, worker):
     run(worker, api, NOV5)
     assert status_of(api, product) == "active"
     today = change(api, acc, product, "suspended", None, on=at(NOV5, 12))
+    api.clock.set(at(NOV11))
     refused(api, today, "took effect")
+
+
+@pytest.mark.parametrize("resume", [False, True])
+def test_same_day_status_change_can_be_undone(api, shop, db_conn, resume):
+    _, acc = shop
+    product = started(api, shop)
+    if resume:
+        change(api, acc, product, "suspended", None, on=at(OCT20))
+    subscribe(api, "TMF637", "ProductStateChangeEvent")
+    placed = change(api, acc, product, "active" if resume else "suspended", None, on=at(NOV1))
+    assert placed["state"] == "completed"
+    blocked = api.patch(product["href"], {"status": "suspended" if resume else "active"})
+    assert blocked.status_code == 409 and "cancelProductOrder" in blocked.json()["message"]
+    response = api.post(CANCEL, cancel_body(placed))
+    assert response.status_code == 201, response.text
+    assert status_of(api, product) == ("suspended" if resume else "active")
+    assert api.get(placed["href"]).json()["state"] == "cancelled"
+    assert types(db_conn, "TMF637") == ["ProductStateChangeEvent"] * 2
+    assert db_conn.execute(
+        "SELECT count(*) FROM product_status_change WHERE product_id = %s", (product["id"],)
+    ).fetchone()[0] == int(resume)
+
+
+def test_undo_today_preserves_a_future_status_change(api, shop, worker):
+    _, acc = shop
+    product = started(api, shop)
+    placed = change(api, acc, product, "suspended", None, on=at(OCT20))
+    change(api, acc, product, "active", NOV5, on=at(OCT20))
+    assert api.post(CANCEL, cancel_body(placed)).status_code == 201
+    assert status_of(api, product) == "active"
+    run(worker, api, NOV5)
+    assert status_of(api, product) == "active"
+
+
+def test_a_status_change_applied_by_the_worker_can_be_undone_that_day(api, shop, worker):
+    _, acc = shop
+    product = started(api, shop)
+    placed = change(api, acc, product, "suspended", NOV5, on=at(OCT20))
+    run(worker, api, NOV5)
+    assert status_of(api, product) == "suspended"
+    assert api.post(CANCEL, cancel_body(placed)).status_code == 201
+    assert status_of(api, product) == "active"
+
+
+def test_same_day_undo_waits_for_a_later_termination_to_be_cancelled(api, shop):
+    _, acc = shop
+    product = started(api, shop)
+    placed = change(api, acc, product, "suspended", None, on=at(OCT20))
+    ending = apidata.order(
+        api, acc, apidata.delete_item(product["id"]), requestedStartDate=iso(midnight(NOV11))
+    )
+    refused(api, placed, "cancel that order first")
+    assert status_of(api, product) == "pendingTerminate"
+    assert api.post(CANCEL, cancel_body(ending)).status_code == 201
+    assert api.post(CANCEL, cancel_body(placed)).status_code == 201
+    assert status_of(api, product) == "active"
 
 
 def test_an_inactive_account_takes_ends_suspensions_and_resumptions(api, shop):

@@ -6,15 +6,18 @@ are orders too, visible in TMF622. An order that would be rejected is a 409 with
 reasons and nothing is stored.
 """
 
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal
 
 import pytest
 
 from tests import apidata
+from tests.test_api_order_cancel import CANCEL, cancel_body, rates, run, worker
 from tests.test_billing_db import at
 from tests.timeline import iso, midnight, z
 
 PRODUCT = apidata.PRODUCT
+__all__ = ["worker"]
 OCT20, NOV1 = date(2026, 10, 20), date(2026, 11, 1)
 
 
@@ -53,6 +56,63 @@ def test_post_places_an_add_order(api, shop):
     assert creation["role"] == "creation" and creation["orderId"] == order["id"]
     later = api.post(PRODUCT, product_body(account, offering, startDate=iso(midnight(NOV1)))).json()
     assert later["status"] == "created"
+
+
+@pytest.mark.parametrize("offset", [0, 1, 2])
+def test_future_delete_dates(api, shop, worker, offset):
+    offering, account = shop
+    start = OCT20 + timedelta(days=1)
+    end = OCT20 + timedelta(days=offset)
+    product = api.post(
+        PRODUCT, product_body(account, offering, startDate=iso(midnight(start)))
+    ).json()
+    placed = apidata.order(
+        api, account, apidata.delete_item(product["id"]), requestedStartDate=iso(midnight(end))
+    )
+    assert placed["state"] == "completed"
+    saved = api.get(product["href"]).json()
+    assert saved["status"] == ("cancelled" if end <= start else "created")
+    assert saved["terminationDate"] == timeline_z(max(start, end))
+    if end > start:
+        blocked = api.patch(product["href"], {"status": "suspended"})
+        assert blocked.status_code == 409 and "productAlreadyEnded" in blocked.json()["message"]
+    run(worker, api, start)
+    assert api.get(product["href"]).json()["status"] == (
+        "cancelled" if end <= start else "pendingTerminate"
+    )
+    run(worker, api, start + timedelta(days=1))
+    assert api.get(product["href"]).json()["status"] == (
+        "cancelled" if end <= start else "terminated"
+    )
+    assert sum((amount for _, amount in rates(api, product)), Decimal(0)) == (
+        Decimal(0) if end <= start else Decimal("9.68")
+    )
+
+
+@pytest.mark.parametrize("catch_up", [False, True])
+def test_post_future_product_with_end_and_cancel(api, shop, worker, catch_up):
+    offering, account = shop
+    end = NOV1 + timedelta(days=1)
+    response = api.post(
+        PRODUCT,
+        product_body(
+            account, offering, startDate=iso(midnight(NOV1)), terminationDate=iso(midnight(end))
+        ),
+    )
+    assert response.status_code == 201, response.text
+    product = response.json()
+    assert product["status"] == "created" and product["terminationDate"] == timeline_z(end)
+    if catch_up:
+        run(worker, api, end)
+        assert api.get(product["href"]).json()["status"] == "terminated"
+    else:
+        termination = next(r for r in product["productOrderItem"] if r["role"] == "termination")
+        cancel = api.post(CANCEL, cancel_body({"id": termination["orderId"]}))
+        assert cancel.status_code == 201, cancel.text
+        restored = api.get(product["href"]).json()
+        assert restored["status"] == "created" and "terminationDate" not in restored
+        run(worker, api, NOV1)
+        assert api.get(product["href"]).json()["status"] == "active"
 
 
 def timeline_z(day: date) -> str:

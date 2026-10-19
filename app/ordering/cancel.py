@@ -16,8 +16,8 @@ effect is still in the future, in one transaction:
   already reflected in a charge cannot be undone.
 - modify item: its offering change has not taken effect (change day after today) and
   billing does not reflect it yet (`_modify_problem`); its change row is deleted. A
-  status change (suspension, resumption) only has to be still to come: billing does not
-  read it.
+  status change (suspension, resumption) can also be undone on its effective day:
+  billing does not read it. A later termination must be cancelled first.
 
 A product whose termination is undone gets back the status its status changes left it
 in (`active`, or `suspended`).
@@ -124,8 +124,10 @@ def _status_problem(conn: psycopg.Connection, item: Row, product: Row, today: da
     )
     if change is None:
         return "its status change is no longer the product's"
-    if change["applied_at"] is not None or change["change_date"] <= today:
+    if change["change_date"] < today:
         return f"the status change took effect on {change['change_date']}"
+    if product["termination_date"] is not None:
+        return "another order ended its product: cancel that order first"
     return None
 
 
@@ -161,7 +163,10 @@ def cancel_order(
     for item in items:
         product = locked[item["product_id"]]
         if item["action"] == "modify" and item["product_status"] is not None:
-            products.undo_status_change(conn, item["id"])  # never in effect: no event
+            change = products.undo_status_change(conn, item["id"])
+            if change["applied_at"] is not None:
+                products.restore_applied_status(conn, product["id"])
+                emit.product(conn, product["id"], "StateChange", at=now, today=today)
         elif item["action"] == "modify":
             products.undo_change(conn, item["id"])
             emit.product(conn, product["id"], "AttributeValueChange", at=now, today=today)

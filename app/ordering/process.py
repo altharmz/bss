@@ -472,7 +472,13 @@ def _status_problems(
     changes = products.status_changes_of(conn, product["id"])
     if pending is not None or (changes and changes[-1]["change_date"] >= start):
         day = (pending or changes[-1])["change_date"]
-        return [("openModifyItem", f"another order already changes its status on {day}")]
+        return [
+            (
+                "openModifyItem",
+                f"another order already changes its status on {day};"
+                " use cancelProductOrder to undo a change dated today or later",
+            )
+        ]
     if products.status_after_changes(conn, product["id"]) == item.product_status:
         return [("statusUnchanged", f"the product is {item.product_status} already")]
     return []
@@ -577,16 +583,6 @@ def _delete_problems(
                 " to end the product on or before that day",
             )
         ]
-    if product["start_date"] > today and start > product["start_date"]:
-        # Not started yet: a delete cancels it. Terminating it later would be an order
-        # for a start date and an end date at once - not what a delete means.
-        return [
-            (
-                "productNotStarted",
-                f"the product starts on {product['start_date']}; before that it can only be"
-                " cancelled (requestedStartDate on or before its start date)",
-            )
-        ]
     return []
 
 
@@ -668,7 +664,7 @@ def _execute(
                 emit.product(conn, item.product_id, "AttributeValueChange", at=now, today=today)
         else:
             product = locked[item.product_id]
-            if product["start_date"] > today:
+            if product["start_date"] > today and start <= product["start_date"]:
                 # never activated: cancelled, with zero billable days
                 products.terminate_product(
                     conn,
@@ -685,7 +681,13 @@ def _execute(
                     terminated_by_item_id=row["id"],
                     # mirrors `created`: a future end is pending until the stage 4 worker
                     # flips it on the date; billing is driven by termination_date
-                    status="terminated" if start <= today else "pendingTerminate",
+                    status=(
+                        "created"
+                        if product["start_date"] > today
+                        else "terminated"
+                        if start <= today
+                        else "pendingTerminate"
+                    ),
                 )
             emit.product(conn, product["id"], "StateChange", at=now, today=today)
         orders.set_order_item_state(conn, row["id"], item_transition(progress, "completed"))

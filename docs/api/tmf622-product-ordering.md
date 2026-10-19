@@ -53,7 +53,9 @@ anything of a draft (account, items, start date replaced whole) and `state:
 acknowledged` processes it as an order placed at that moment (its id, `creationDate` and
 documents kept) - `tests/test_api_order_attributes.py::test_a_draft_changes_and_is_submitted_by_patch`.
 
-**cancelProductOrder** undoes a completed order before any of it takes effect: an add
+**cancelProductOrder** undoes a completed order before its effects, except a status
+change may also be undone on its effective day (restoring the previous status and
+emitting ProductStateChangeEvent; an older change is a 409). An add
 item's product has not started, a delete item's termination has not happened, and
 billing has not charged the cycle period containing that date or a later one. New
 products become `cancelled` (zero billable days), ended ones open-ended again; order and
@@ -115,9 +117,11 @@ Everything else that is wrong is a **business rejection: the order is stored wit
 - **delete** of a started product sets the exclusive `terminationDate`: `terminated`
   for today, `pendingTerminate` for a future date (`::test_delete_terminates_a_started_product`,
   `::test_delete_with_a_future_date_is_pending_until_then`). **delete of a product not
-  started yet cancels it** (`cancelled`, `terminationDate = startDate`, 0 billable days);
-  a requested date after its start date is `productNotStarted`
-  (`::test_delete_of_a_future_product_cancels_it_with_zero_billable_days`).
+  started yet** cancels it when the requested date is on or before its start
+  (`cancelled`, `terminationDate = startDate`, zero billable days). A later date
+  schedules termination: `created` until start, then `pendingTerminate`, then
+  `terminated` (`tests/test_api_product_writes.py::test_future_delete_dates`).
+  Cancelling that delete restores an open-ended product.
 - **noChange** names a live product of the account and changes nothing
   (`tests/test_api_order_attributes.py::test_a_no_change_item_completes_and_changes_nothing`).
 - **modify** changes the product's offering to the item's `productOffering` from the
@@ -132,7 +136,7 @@ Everything else that is wrong is a **business rejection: the order is stored wit
 - **modify with `product.status`** (`suspended` / `active`, no `productOffering`)
   suspends or resumes the product from the change day (today: at once; later: the
   worker's run of the day). Billing does not change. cancelProductOrder undoes it before
-  it takes effect ([suspension](../decisions/tmf-api.md#suspension-2026-10-19),
+  or on its effective day ([suspension](../decisions/tmf-api.md#suspension-2026-10-19),
   `tests/test_api_suspension.py`).
 - **Prices:** `orderTotalPrice` names the order's `billingAccount`; `priceAlteration` is
   always empty; `productOfferingPrice` and `unitOfMeasure` are given when every add item

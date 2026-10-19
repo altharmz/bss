@@ -67,6 +67,7 @@ class Tool:
     body: type[BaseModel] | None = None
     query: dict[str, Any] = field(default_factory=dict)  # name -> schema (filters: object)
     required_query: tuple[str, ...] = ()
+    body_extra: dict[str, Any] = field(default_factory=dict)
     input_schema: dict[str, Any] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -79,6 +80,7 @@ class Tool:
         required += self.required_query
         if self.body is not None:
             properties["body"] = schema.model_schema(self.body)
+            properties["body"]["properties"].update(self.body_extra)
             required.append("body")
         object.__setattr__(
             self,
@@ -193,12 +195,14 @@ async def _query(app: Any, path: str, op: Op) -> tuple[dict[str, Any], str]:
     hint = ""
     if op.query == LIST:
         filters = await list_filters(app, path)
+        if op.filters.keys() - set(filters):
+            raise DriftError(f"{path}: registry declares unknown filters")
         query = {
             **PAGING,
             "fields": FIELDS_ARG,
             "filters": {
                 "type": "object",
-                "properties": {name: {"type": "string"} for name in filters},
+                "properties": {name: op.filters.get(name, {"type": "string"}) for name in filters},
                 "additionalProperties": False,
                 "description": "Equality filters, attribute -> value.",
             },
@@ -256,5 +260,6 @@ async def generate(app: Any) -> dict[str, Tool]:
             body=op.body,
             query=query,
             required_query=op.required,
+            body_extra=op.body_extra,
         )
     return tools

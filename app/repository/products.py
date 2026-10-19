@@ -223,8 +223,15 @@ def flip_statuses(
     rows = fetch_all(
         conn,
         """
-        UPDATE product SET status = CASE WHEN status = 'pendingTerminate'
-                                         THEN 'terminated' ELSE 'active' END::product_status_type
+        UPDATE product SET status = CASE
+            WHEN termination_date IS NOT NULL AND EXISTS (
+                SELECT 1 FROM product_order_item ti
+                  JOIN product_order t ON t.id = ti.product_order_id
+                 WHERE ti.id = product.terminated_by_item_id
+                   AND t.completion_date < %(before)s)
+            THEN CASE WHEN termination_date <= %(day)s
+                      THEN 'terminated' ELSE 'pendingTerminate' END
+            ELSE 'active' END::product_status_type
          WHERE id = ANY(%(ids)s)
            AND ((status IN ('created', 'pendingActive') AND start_date <= %(day)s)
                 OR (status = 'pendingTerminate' AND termination_date <= %(day)s))
@@ -431,13 +438,23 @@ def status_after_changes(conn: psycopg.Connection, product_id: UUID) -> str:
 
 
 def undo_status_change(conn: psycopg.Connection, changed_by_item_id: UUID) -> Row:
-    """Undo a status change that has not taken effect (its order is cancelled)."""
+    """Undo a status change allowed by cancellation's date and dependency checks."""
     return returning(
         conn,
-        "DELETE FROM product_status_change WHERE changed_by_item_id = %s AND applied_at IS NULL"
-        " RETURNING *",
+        "DELETE FROM product_status_change WHERE changed_by_item_id = %s RETURNING *",
         (changed_by_item_id,),
     )
+
+
+def restore_applied_status(conn: psycopg.Connection, product_id: UUID) -> None:
+    """Restore the latest effective status; future changes remain scheduled."""
+    row = fetch_one(
+        conn,
+        "SELECT status FROM product_status_change WHERE product_id = %s"
+        " AND applied_at IS NOT NULL ORDER BY change_date DESC LIMIT 1",
+        (product_id,),
+    )
+    set_product_status(conn, product_id, row["status"] if row else "active")
 
 
 def apply_status_changes(

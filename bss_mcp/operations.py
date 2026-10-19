@@ -76,7 +76,7 @@ FAMILIES = {
     "/tmf-api/customer/v5": "TMF629 Customer",
     "/tmf-api/accountManagement/v5": "TMF666 Account",
     "/tmf-api/payment/v4": "TMF676 Payment (v4)",
-    "/tmf-api/productInventory/v5": "TMF637 Product Inventory (read-only)",
+    "/tmf-api/productInventory/v5": "TMF637 Product Inventory",
     "/tmf-api/customerBillManagement/v5": "TMF678 Customer Bill",
     "/tmf-api/productOrderingManagement/v5": "TMF622 Product Ordering",
     "/tmf-api/schema": "TMF666 extension schema",
@@ -95,6 +95,8 @@ class Op:
     required: tuple[str, ...] = ()
     # a POST that takes no body (its handler parses none)
     no_body: bool = False
+    body_extra: dict[str, Any] = field(default_factory=dict)
+    filters: dict[str, Any] = field(default_factory=dict)
 
 
 OPERATIONS: dict[str, Op] = {
@@ -390,7 +392,18 @@ OPERATIONS: dict[str, Op] = {
         body=DemandCreate,
     ),
     "list_bills": Op("Customer bills, written by the billing runs.", query=LIST),
-    "list_bill_cycles": Op("Daily billing cycles, one per billing run.", query=LIST),
+    "list_bill_cycles": Op(
+        "Daily billing cycles, one per billing run.",
+        query=LIST,
+        filters={
+            "billingDate": {
+                "type": "string",
+                "format": "date-time",
+                "examples": ["2026-10-12T21:00:00Z"],
+                "description": "Local midnight of the billing day (BILLING_TZ), with offset.",
+            }
+        },
+    ),
     "get_bill_cycle": Op(
         "One daily billing cycle (not an account's monthly period).", query=FIELDS
     ),
@@ -419,8 +432,15 @@ OPERATIONS: dict[str, Op] = {
     ),
     "patch_order": Op(
         "Change what describes an order: description, category, priority (0 highest ..4),"
-        " externalId; null removes. State, items, dates and account are read-only.",
+        " externalId; null removes. A draft also accepts items, account and start date;"
+        " state acknowledged submits it. After processing, placed-with attributes cannot change.",
         body=OrderPatch,
+        body_extra={
+            "state": {
+                "anyOf": [{"type": "string", "enum": ["acknowledged"]}, {"type": "null"}],
+                "description": "Submit a draft for processing with acknowledged.",
+            }
+        },
     ),
     "delete_order": Op(
         "Delete a rejected order (it never executed); any other order is a 409 - cancel a"

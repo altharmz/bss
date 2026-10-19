@@ -67,6 +67,7 @@ services:
     volumes:
       - ./app:/app/app:ro
       - ./bss_mcp:/app/bss_mcp:ro
+      - ./spec:/app/spec:ro
       - mcp_data:/data
     ports:
       - "127.0.0.1:8090:8080"

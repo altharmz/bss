@@ -64,6 +64,10 @@ proves nothing was lost in the move. Index: [README.md](README.md). The design n
   visibility cut-off cannot decide anything for API-made data (a product due by D whose
   order completed on D starts on D and is active at once), so it is tested with orders
   completed at 23:59:59 and 00:00:00.
+  Review C (2026-10-19): a `created` product can already have a scheduled end. At its
+  start it becomes `pendingTerminate`, or `terminated` when a catch-up run has reached
+  the end too. The terminating order must also be visible before the run's cutoff;
+  an end placed after that cutoff does not affect that historical flip.
 - **The request queue** (slice h, `queue.process_requests`): the internal API only inserts
   `worker_request` rows; the owner takes them oldest first (marks picked, carries out,
   marks done). catchUp runs `plan.catch_up_dates` in order with the `catchUp` trigger

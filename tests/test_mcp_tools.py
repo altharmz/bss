@@ -107,6 +107,78 @@ def test_every_write_names_the_model_its_handler_parses():
             assert op.body is None and not op.no_body and parsed == [], name
 
 
+def test_body_keys_popped_by_write_handlers_are_in_the_tool_schema():
+    handlers = _handlers()
+    for name, tool in generated().items():
+        if tool.body is None:
+            continue
+        tree = ast.parse(textwrap.dedent(inspect.getsource(handlers[name])))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "body"
+                and node.func.attr == "pop"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+            ):
+                assert (
+                    node.args[0].value in tool.input_schema["properties"]["body"]["properties"]
+                ), name
+
+
+def test_bill_cycle_filter_and_passthrough_hints():
+    generated_tools = generated()
+    billing_date = generated_tools["list_bill_cycles"].query["filters"]["properties"]["billingDate"]
+    assert billing_date["format"] == "date-time"
+    assert billing_date["examples"] == ["2026-10-12T21:00:00Z"]
+    offering = generated_tools["create_offering"].input_schema["properties"]["body"]
+    hint = offering["properties"]["externalIdentifier"]["description"]
+    assert "array of ExternalIdentifier_FVO" in hint
+    assert "required: @type, id" in hint
+    from bss_mcp.server import INSTRUCTIONS
+
+    assert str(len(generated_tools)) in INSTRUCTIONS
+    assert str(sum(t.read_only for t in generated_tools.values())) in INSTRUCTIONS
+
+
+def test_draft_can_be_edited_and_submitted_through_mcp(api, mcp):
+    offering = apidata.sellable_offering(api)
+    account = apidata.account(api)
+    writer = mcp.token("draft-writer", "write")
+
+    def call(name, args, status):
+        _, result = mcp.result(writer, name, args)
+        assert isinstance(result, dict) and result["status"] == status, result
+        return result.get("body", {})
+
+    draft = call(
+        "create_order",
+        {
+            "body": apidata.order_body(
+                account, apidata.add_item(offering), requestedInitialState="draft"
+            )
+        },
+        201,
+    )
+    assert draft["state"] == "draft"
+    args = {
+        "order_id": draft["id"],
+        "body": {
+            "productOrderItem": [apidata.add_item(offering)],
+            "requestedStartDate": apidata.START,
+        },
+    }
+    assert call("patch_order", args, 200)["state"] == "draft"
+    args["body"] = {"state": "acknowledged"}
+    assert call("patch_order", args, 200)["state"] == "completed"
+    # The existing API rejects repeated submission with 422 (not the review's 409).
+    call("patch_order", args, 422)
+    args["body"] = {"requestedStartDate": iso(midnight(date(2028, 1, 1)))}
+    call("patch_order", args, 409)
+
+
 @pytest.mark.parametrize(
     ("change", "message"),
     [
@@ -114,6 +186,10 @@ def test_every_write_names_the_model_its_handler_parses():
         (lambda ops: ops.update(gone=Op("x")), "no operation for \\['gone'\\]"),
         (lambda ops: ops.update(create_payment=Op("x")), "create_payment: a POST with body None"),
         (lambda ops: ops.update(get_payment=Op("x", body=Op)), "get_payment: a GET with body"),
+        (
+            lambda ops: ops.update(list_bill_cycles=Op("x", query="list", filters={"gone": {}})),
+            "registry declares unknown filters",
+        ),
     ],
 )
 def test_generation_refuses_a_registry_that_drifted(monkeypatch, change, message):
@@ -153,13 +229,14 @@ def test_names_annotations_and_schemas():
 
 def test_the_server_lists_every_generated_tool_with_its_hints(mcp):
     listed = mcp.tools(mcp.token("writer", "write"))
-    assert set(listed) == set(generated())
+    generated_tools = generated()
+    assert set(listed) == set(generated_tools)
     for name, tool in listed.items():
-        read_only = generated()[name].read_only
+        read_only = generated_tools[name].read_only
         assert tool["annotations"]["readOnlyHint"] is read_only, name
         assert tool["annotations"]["destructiveHint"] is (not read_only), name
     reader = mcp.tools(mcp.token("reader", "read"))
-    assert set(reader) == {n for n, t in generated().items() if t.read_only}
+    assert set(reader) == {n for n, t in generated_tools.items() if t.read_only}
 
 
 # --- every tool against the real app ---

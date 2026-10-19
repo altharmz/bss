@@ -259,7 +259,14 @@ pushed `eaa1a7b`.
 **After U11: done** (2026-10-19, `b4ccd63`, deployed;
 [as built](docs/decisions/users.md#after-u11-as-built-slice-4-2026-10-19)): operator
 from the session, `APP_TRUST_FORWARDED` throttle, web and MCP smokes without basic auth.
-**Next session:** no slice is planned; pick from the ordered list below or ask the human.
+**Next session:** the MCP end-to-end review (2026-10-19) - work list with verdicts and
+slices A-C in [docs/mcp-e2e-review.md](docs/mcp-e2e-review.md). All three are implemented
+locally (no migration); the human approved same-day status undo and scheduled
+termination of future products. Three full test passes (1,366 each), lint and decision
+checks pass. The human approved a one-time shell application of the reviewed harness
+patch: the local MCP `spec/` mount and TMF622/637 API notes are applied, docs regenerated,
+and local MCP smoke passes. Commit, push and deployment are authorized (2026-10-19);
+the release gate is `make verify`.
 
 **UI user management** (the human, 2026-10-19): a user menu in the UI,
 roles `admin` (manages users, does everything) and `user` (everything but user

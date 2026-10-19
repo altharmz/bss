@@ -9,10 +9,13 @@ arguments; the string becomes a Decimal and goes to the app as an exact number.
 
 import copy
 from decimal import Decimal
+from functools import cache
 from typing import Any
 
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel
+
+from app.api import specschema
 
 MONEY_VALUE = {
     "type": "string",
@@ -49,6 +52,35 @@ def _is_pydantic_decimal(node: dict[str, Any]) -> bool:
     return types == ["number", "string"]
 
 
+@cache
+def _document_description(description: str) -> str:
+    """Summarize passthrough fields without inlining the spec's polymorphic trees."""
+    if not description.endswith(", as the spec defines it"):
+        return description
+    api, attribute, *_ = description.split()
+    attribute = attribute.rstrip(",")
+    if api not in specschema.SPEC_FILES:
+        return description
+    summaries: set[str] = set()
+    for name in specschema.schemas(api):
+        if not name.endswith("_FVO"):
+            continue
+        node = specschema.properties(api, name).get(attribute)
+        if node is None:
+            continue
+        array = node.get("type") == "array"
+        target = node.get("items", {}) if array else node
+        ref = target.get("$ref", "").rsplit("/", 1)[-1]
+        if not ref:
+            continue
+        _, required, _ = specschema._flatten(api, target)
+        summary = f"array of {ref}" if array else f"object {ref}"
+        if required:
+            summary += f"; required: {', '.join(sorted(required))}"
+        summaries.add(summary)
+    return description + (". " + " or ".join(sorted(summaries)) if summaries else "")
+
+
 def _inline(node: Any, defs: dict[str, Any], depth: int, within: tuple[str, ...]) -> Any:
     if depth > 32:
         raise ValueError("schema nests too deep")
@@ -67,6 +99,9 @@ def _inline(node: Any, defs: dict[str, Any], depth: int, within: tuple[str, ...]
     for key, value in node.items():
         if key == "title":
             continue  # an annotation, noise in a tool schema
+        if key == "description":
+            out[key] = _document_description(value)
+            continue
         if key == "properties":  # names here are attributes, never keywords
             out[key] = {name: _inline(sub, defs, depth, within) for name, sub in value.items()}
         else:
