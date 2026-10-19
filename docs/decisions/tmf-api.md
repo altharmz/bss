@@ -358,6 +358,42 @@ run, the tests above failed.
 
 ### The last gaps (2026-10-18)
 
+**Implemented 2026-10-19** (the human confirmed the plan below as written, including
+"billing does not change" for suspensions); migration `0028`. `tests/tmf-gaps.txt` has
+**no open gap**; its `# accepted deviations` section holds six lines, each with its
+reason. What the implementation decided beyond the plan:
+
+- **Step 0.** Nested response attributes are probed on populated data (the demo seed
+  plus one of each resource it does not create, `tmf_gaps.populate`): an attribute of an
+  object/array a response carries is *missing* when no returned value has it - unless
+  POST stores it as sent (an unset optional attribute is no gap). 38 new lines, so no
+  split. Two negative controls lock the probe (a defined-but-refused attribute, a
+  defined-but-never-returned nested one).
+- **Four more accepted deviations** (no value here, rather than an invented one):
+  `accountBalance.validFor` (the balance now, no period) and `billDocument.href`, `url`,
+  `validFor` (the document is embedded as `content`: no address of its own, no validity).
+  `accountBalance.id` is `currentBalance-<currency>`; a bill document's `id` is its
+  bill's, `size` its byte length, `description` names the bill and its format.
+- **billCycle is a daily run**, not an account's cycle: `BillCycleSpecification` is the
+  built-in monthly policy every run applies (named specifications are names of it),
+  `chargeDate` = `mailingDate` = `creditDate` = the run date, `paymentDueDate` = the due
+  date of the bills it issued on its date (else run date + `BILL_PAYMENT_TERM_DAYS`).
+- **Prices in TMF622/637:** `priceAlteration` is always `[]` (billing applies none);
+  `unitOfMeasure` is the catalog price's Quantity as text (TMF622/637 type it a string);
+  `orderTotalPrice` names the order's account and, when every add item has the same
+  price, that price and unit. Every `BillingAccountRef` states `ratingType: postpaid`.
+- **TMF676:** `paymentMethod` is stored as sent (validated against
+  `PaymentMethodRefOrValue`) and answered as sent; the model still reads its name and
+  @type. `account.description` is stored beside the reference.
+- **TMF637 PATCH:** one order per PATCH (terminationDate, productOffering or status;
+  422 otherwise); name and documents change directly with a
+  ProductAttributeValueChangeEvent; repeating `billingAccount`/`startDate` is a 200
+  no-op. **POST terminationDate** must be after the start (422); for a product that
+  starts later the delete order is rejected (`productNotStarted`, a 409) - before its
+  start a product can only be cancelled, as for any delete.
+- **The product's name is its own:** after an offering change it keeps the name it was
+  created with (until PATCHed); `productOffering.name` names the offering.
+
 **Plan, prepared for the next session; the human confirms it before implementation.**
 The human asked to close every remaining gap in one slice (replacing slices 9 and 10)
 and left each open choice to "TMF" ("follow TMF recommendations", "decide based on
@@ -453,6 +489,52 @@ is removed; every behaviour gap of its list ends closed or recorded as not defin
 the specs. Migration `0028` (product details/name, payment and refund documents,
 on-demand relatedParty, suspension items). Tests per area, negative proofs, `make
 progress`, API notes for TMF637/676/678 (harness files: diff first, the human's OK).
+
+### Suspension (2026-10-19)
+
+The human: "follow TMF recommendations"; confirmed with the plan above, billing
+unchanged. TMF637 has no suspend operation; TMF622 changes a product's state with a
+`modify` item carrying `product.status`. Code: `app/ordering/process.py`
+(`_status_problems`), `app/repository/products.py` (status changes), the worker's flip
+step. Tests: `tests/test_api_suspension.py`.
+
+- **The item.** `action: modify`, `product: {id, status}` with `status` `suspended` or
+  `active` (resume), no `productOffering`: an item changes the offering or the status,
+  never both (422). `product.status` on another action is a 422. Effective
+  `requestedStartDate` (today if absent). Stored in `product_order_item.product_status`
+  and answered in the item's `product`.
+- **The change** is a `product_status_change` row (product, day, status, item). Today:
+  `product.status` is set at once (ProductStateChangeEvent). Later: the status stays as
+  it is - the spec has no pending suspension state - until the worker's run of the day
+  sets it, after the created -> active flips (a product suspended from its start day is
+  activated first), with its event, once.
+- **Rules** (rejections, the order stored as `rejected`): the product is the account's
+  (`productOfOtherAccount`); it is not ended and has no end set (`productAlreadyEnded`:
+  an end decides the status - pendingTerminate, then terminated; cancel that order
+  first); the day is on or after its start (`productNotStarted`); one status change waits
+  at a time and they come in date order, one per day (`openModifyItem`, as offering
+  changes); it changes something (`statusUnchanged`: suspend an active product, resume a
+  suspended one). A delete item waits while a status change is pending
+  (`openModifyItem`): end the product once the change took effect, or cancel it.
+- **Ending a suspended product** is an ordinary delete: `terminated`, or
+  `pendingTerminate` until its date (the coming end wins over `suspended` in the status).
+  Cancelling that delete gives the product back the status its changes left it in
+  (`suspended`).
+- **cancelProductOrder** undoes a status change that has not taken effect (the row is
+  deleted, no event); one in effect is a 409. An add item cannot be undone once another
+  order changed the product's status.
+- **Billing does not change**: no spec defines what a suspension does to charges, so a
+  suspended product is billed by its dates (decisions/billing-core.md, open question
+  closed). A rule that stops charges would be ours and needs the human.
+- **C9**: adding a product or changing its offering needs an `Active` billing account
+  (`accountNotActive`); delete, suspend, resume and noChange items are executed on a
+  `Suspended` or `Closed` one too (TMF666's account states forbid nothing).
+- **TMF637 PATCH `status`** `suspended`/`active` places such an order effective today
+  (409 with the reasons if it would be rejected); any other status is a 422 (a product is
+  created by an order, ended by terminationDate or DELETE).
+- `pendingActive` and `aborted` describe asynchronous provisioning: orders complete
+  synchronously here, so they are never reached (recorded, like the order states of
+  slice 8a).
 
 ### Product writes through orders (2026-10-17)
 

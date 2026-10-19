@@ -98,11 +98,13 @@ def test_balance_is_per_currency_sum_of_linked_billing_accounts(api):
     body = decimals(api.get(fa["href"]))
     assert body["accountBalance"] == [
         {
+            "id": "currentBalance-EUR",
             "balanceType": "currentBalance",
             "amount": {"unit": "EUR", "value": Decimal("7.00")},
             "@type": "AccountBalance",
         },
         {
+            "id": "currentBalance-RUB",
             "balanceType": "currentBalance",
             "amount": {"unit": "RUB", "value": Decimal("120.50")},
             "@type": "AccountBalance",

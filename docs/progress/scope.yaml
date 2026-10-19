@@ -116,6 +116,7 @@ items:
   - {id: api.tmf678.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/customerBillManagement/v5/hub/{hub_id}", title: "Unsubscribe from TMF678 events"}
   - {id: db.product, area: db, stage: 1, table: product, title: "Products (TMF637)"}
   - {id: db.product_offering_change, area: db, stage: 5, table: product_offering_change, title: "Offering changes (TMF622 modify items)"}
+  - {id: db.product_status_change, area: db, stage: 5, table: product_status_change, title: "Suspensions and resumptions (TMF622 modify items with product.status)"}
   - {id: db.applied_customer_billing_rate, area: db, stage: 1, table: applied_customer_billing_rate, title: "Charges and refunds - ABRs (TMF678)"}
   - {id: db.customer_bill, area: db, stage: 1, table: customer_bill, title: "Customer bills (TMF678)"}
   - {id: db.billing_run, area: db, stage: 1, table: billing_run, title: "Billing runs, one per date"}

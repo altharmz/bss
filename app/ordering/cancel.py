@@ -15,7 +15,12 @@ effect is still in the future, in one transaction:
   core never charges more than it charged (`InconsistentState`), so a termination
   already reflected in a charge cannot be undone.
 - modify item: its offering change has not taken effect (change day after today) and
-  billing does not reflect it yet (`_modify_problem`); its change row is deleted.
+  billing does not reflect it yet (`_modify_problem`); its change row is deleted. A
+  status change (suspension, resumption) only has to be still to come: billing does not
+  read it.
+
+A product whose termination is undone gets back the status its status changes left it
+in (`active`, or `suspended`).
 
 Anything else refuses the whole cancellation (CancelRefused -> 409) and nothing is
 stored. Locks, in the order billing and orders take them: the order, then the account
@@ -55,6 +60,8 @@ def _item_problem(
 ) -> str | None:
     if item["action"] == "noChange":
         return None  # it changed nothing, so there is nothing to undo
+    if item["action"] == "modify" and item["product_status"] is not None:
+        return _status_problem(conn, item, product, today)
     if item["action"] == "modify":
         return _modify_problem(conn, item, product, today, cycle_day)
     if item["action"] == "add":
@@ -62,6 +69,8 @@ def _item_problem(
             return "another order already ended its product"
         if products.change_items(conn, product["id"]):
             return "another order changes its product's offering"
+        if products.status_changes_of(conn, product["id"]):
+            return "another order changes its product's status"
         if product["status"] not in NOT_STARTED or product["start_date"] <= today:
             return f"its product started on {product['start_date']}"
         day = product["start_date"]
@@ -104,6 +113,22 @@ def _modify_problem(
     return None
 
 
+def _status_problem(conn: psycopg.Connection, item: Row, product: Row, today: date) -> str | None:
+    change = next(
+        (
+            c
+            for c in products.status_changes_of(conn, product["id"])
+            if c["changed_by_item_id"] == item["id"]
+        ),
+        None,
+    )
+    if change is None:
+        return "its status change is no longer the product's"
+    if change["applied_at"] is not None or change["change_date"] <= today:
+        return f"the status change took effect on {change['change_date']}"
+    return None
+
+
 def cancel_order(
     conn: psycopg.Connection, request: CancelRequest, *, now: datetime, today: date
 ) -> Row:
@@ -135,15 +160,20 @@ def cancel_order(
         )
     for item in items:
         product = locked[item["product_id"]]
-        if item["action"] == "modify":
+        if item["action"] == "modify" and item["product_status"] is not None:
+            products.undo_status_change(conn, item["id"])  # never in effect: no event
+        elif item["action"] == "modify":
             products.undo_change(conn, item["id"])
             emit.product(conn, product["id"], "AttributeValueChange", at=now, today=today)
         elif item["action"] != "noChange":
             if item["action"] == "add":
                 products.cancel_unstarted(conn, product["id"])
             else:
+                started = product["start_date"] <= today
                 products.restore(
-                    conn, product["id"], "created" if product["start_date"] > today else "active"
+                    conn,
+                    product["id"],
+                    products.status_after_changes(conn, product["id"]) if started else "created",
                 )
             emit.product(conn, product["id"], "StateChange", at=now, today=today)
         orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "cancelled"))

@@ -1,6 +1,6 @@
 """Append-only completed payouts and their payment/credit-note sources."""
 
-from app.repository._sql import fetch_one, returning, select_page
+from app.repository._sql import fetch_one, jsonb, returning, select_page
 
 
 def get(conn, uid):
@@ -11,15 +11,16 @@ def page(conn, **kwargs):
     return select_page(conn, "refund", **kwargs)
 
 
-def insert(conn, account_id, data, now):
-    """`amount` is the total paid out, `tax_amount` the part of it the client called tax
-    (a refund is immutable once written, so both go into the INSERT)."""
+def insert(conn, account_id, data, now, details):
+    """`amount` is the total paid out, `tax_amount` the part of it the client called tax,
+    `details` its documents (a refund is immutable once written, so all go into the
+    INSERT)."""
     return returning(
         conn,
         """
         INSERT INTO refund (billing_account_id, currency, amount, tax_amount, refunded_at,
-                            method_name, method_type, description, payment_id)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *
+                            method_name, method_type, description, payment_id, details)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *
     """,
         (
             account_id,
@@ -31,6 +32,7 @@ def insert(conn, account_id, data, now):
             data.payment_method.at_type,
             data.description,
             data.payment.id if data.payment else None,
+            jsonb(details),
         ),
     )
 

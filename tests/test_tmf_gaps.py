@@ -2,22 +2,38 @@
 
 A closed gap must leave the file, and a new one cannot appear unnoticed. Rule: what the
 vendored specs define is implemented (docs/decisions/tmf-api.md, "Following TMF").
+The file's `# accepted deviations` section holds the gaps kept on purpose, each with its
+reason; the probe still finds them, so they are locked the same way.
 """
 
 from pathlib import Path
 
-from tests import tmf_gaps
+from tests import apidata, tmf_gaps
 
 GAPS_FILE = Path(__file__).resolve().parent / "tmf-gaps.txt"
+DEVIATIONS = "# accepted deviations"
+
+
+def sections() -> tuple[list[str], list[str]]:
+    """(open gaps, accepted deviations), comments and blank lines left out."""
+    gaps: list[str] = []
+    deviations: list[str] = []
+    target = gaps
+    for line in GAPS_FILE.read_text().splitlines():
+        if line.startswith(DEVIATIONS):
+            target = deviations
+        elif line and not line.startswith("#"):
+            target.append(line)
+    return gaps, deviations
 
 
 def recorded() -> list[str]:
-    lines = GAPS_FILE.read_text().splitlines()
-    return [line for line in lines if line and not line.startswith("#")]
+    gaps, deviations = sections()
+    return gaps + deviations
 
 
 def test_the_gap_list_is_the_recorded_one(api):
-    found = tmf_gaps.gaps(api.client)
+    found = tmf_gaps.gaps(api)
     expected = recorded()
     closed = sorted(set(expected) - set(found))
     opened = sorted(set(found) - set(expected))
@@ -28,12 +44,41 @@ def test_the_gap_list_is_the_recorded_one(api):
     )
 
 
-def test_the_probe_finds_a_refused_attribute(api):
-    # negative control: an attribute nothing defines is reported, at the top and nested
+def with_control(monkeypatch) -> None:
+    """Make every spec schema define the control attribute, which nothing implements."""
+    properties = tmf_gaps.properties
+
+    def defining_control(api, schema, seen=frozenset()):
+        found = properties(api, schema, seen)
+        return {**found, tmf_gaps.CONTROL: {"type": "string"}} if found else found
+
+    monkeypatch.setattr(tmf_gaps, "properties", defining_control)
+
+
+def test_the_probe_finds_a_refused_attribute(api, monkeypatch):
+    # negative control: an attribute the specs defined but the app refuses is reported,
+    # at the top and nested
+    assert not any(line.endswith(tmf_gaps.CONTROL) for line in tmf_gaps.probe_writes(api.client))
+    with_control(monkeypatch)
     lines = tmf_gaps.probe_writes(api.client)
-    assert not any(line.endswith(f" {tmf_gaps.CONTROL}") for line in lines)
-    assert any(" refused " in line for line in lines)
+    assert "TMF676 POST /payment refused zzProbe" in lines
+    assert "TMF676 POST /payment refused paymentMethod.zzProbe" in lines
+
+
+def test_the_probe_finds_a_missing_nested_attribute(api, monkeypatch):
+    # negative control: a nested attribute the specs defined and no response carries
+    apidata.account(api)
+    only = frozenset({"billingAccount"})
+    # as the write probe finds it: POST compares accountBalance, it does not store it
+    server_set = {"TMF666 POST /billingAccount accountBalance"}
+    line = "TMF666 GET /billingAccount/{id} missing accountBalance.zzProbe"
+    assert line not in tmf_gaps.probe_nested_reads(api.client, [], server_set, only)
+    with_control(monkeypatch)
+    assert line in tmf_gaps.probe_nested_reads(api.client, [], server_set, only)
 
 
 def test_the_recorded_list_is_sorted_and_unique():
-    assert recorded() == sorted(set(recorded()))
+    for section in sections():
+        assert section == sorted(set(section))
+    gaps, deviations = sections()
+    assert not set(gaps) & set(deviations)

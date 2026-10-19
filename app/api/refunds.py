@@ -17,7 +17,7 @@ from app.api.common import (
     created,
     meta_body,
     money,
-    parse,
+    parse_documented,
     parse_id,
     take_server_set,
     utc,
@@ -26,13 +26,23 @@ from app.api.common import (
 )
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
-from app.api.payment import BASE, PaymentMethod, tax_part
+from app.api.payment import (
+    BASE,
+    PaymentMethod,
+    account_extras,
+    documents_body,
+    method_body,
+    take_documents,
+    tax_part,
+)
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.adapter import settle_account
 from app.events import emit
 from app.repository import billing, parties, refunds
 
 router = APIRouter(prefix=BASE)
+# Documents to us, as a payment's (`take_documents`); `description` is a column.
+DOCUMENTS = ("name", "authorizationCode", "correlatorId", "channel", "requestor")
 ATTRIBUTES = (
     "account",
     "payment",
@@ -44,6 +54,7 @@ ATTRIBUTES = (
     "status",
     "paymentMethod",
     "description",
+    *DOCUMENTS,
 )
 
 
@@ -81,6 +92,7 @@ def refund_body(row: dict) -> dict[str, Any]:
             "account": {
                 "id": str(row["billing_account_id"]),
                 "href": f"/tmf-api/accountManagement/v5/billingAccount/{row['billing_account_id']}",
+                **account_extras(row),
                 "@referredType": "BillingAccount",
             },
             "payment": {
@@ -97,9 +109,8 @@ def refund_body(row: dict) -> dict[str, Any]:
             "statusDate": utc(row["refunded_at"]),
             "status": "done",
             "description": row["description"],
-            "paymentMethod": without_nulls(
-                {"name": row["method_name"], "@type": row["method_type"]}
-            ),
+            "paymentMethod": method_body(row, row["method_name"], row["method_type"]),
+            **documents_body(row, DOCUMENTS),
         }
     ) | meta_body(row)
 
@@ -135,7 +146,8 @@ def create_refund(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> 
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Refund")
     server_set = take_server_set(body, ("status", "statusDate", "refundDate"))
-    data = parse(RefundCreate, body)
+    documents, found = take_documents(body, DOCUMENTS, "Refund_Create")
+    data, _ = parse_documented(RefundCreate, body, (), "TMF676", "Refund_Create", found)
     with tx() as conn:
         # FOR UPDATE, as load_account below: a concurrent account delete went first or waits
         account_row = parties.get_billing_account(conn, data.account.id, "update")
@@ -165,7 +177,7 @@ def create_refund(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> 
         )
         if data.total_amount.value > available:
             raise conflict(f"refund exceeds refundable credit {available}")
-        row = refunds.insert(conn, account.id, data, now)
+        row = refunds.insert(conn, account.id, data, now, documents)
         left = data.total_amount.value
         for payment_id, credit_bill_id, credit in sources:
             take = min(left, credit)

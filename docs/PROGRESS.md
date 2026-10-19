@@ -11,7 +11,7 @@ records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 37 | 37/37 (100%) | 37/37 (100%) | unknown |
+| Database | 38 | 38/38 (100%) | 38/38 (100%) | unknown |
 | API | 145 | 145/145 (100%) | 145/145 (100%) | unknown |
 | UI | 22 | 22/22 (100%) | 22/22 (100%) | unknown |
 | Worker | 15 | 15/15 (100%) | 15/15 (100%) | unknown |
@@ -49,6 +49,7 @@ records the deployed commit.
 | `db.event_delivery` | 5 | Event deliveries to hub callbacks | yes | yes | unknown |
 | `db.product` | 1 | Products (TMF637) | yes | yes | unknown |
 | `db.product_offering_change` | 5 | Offering changes (TMF622 modify items) | yes | yes | unknown |
+| `db.product_status_change` | 5 | Suspensions and resumptions (TMF622 modify items with product.status) | yes | yes | unknown |
 | `db.applied_customer_billing_rate` | 1 | Charges and refunds - ABRs (TMF678) | yes | yes | unknown |
 | `db.customer_bill` | 1 | Customer bills (TMF678) | yes | yes | unknown |
 | `db.billing_run` | 1 | Billing runs, one per date | yes | yes | unknown |

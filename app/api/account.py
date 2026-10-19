@@ -39,7 +39,9 @@ from pydantic import Field
 
 from app.api import listing
 from app.api.accounts import (
+    BALANCE_TYPE,
     FinancialAccountRef,
+    balance_id,
     details_body,
     document_columns,
     financial_ref,
@@ -150,7 +152,6 @@ ATTRIBUTES = (
     "@baseType",
     "@schemaLocation",
 )
-BALANCE_TYPE = "currentBalance"
 # The one related party of an account is its owning customer (`customer_id`). Its role is
 # required and must be exactly this, so the role the response states is the one stored -
 # never a rewrite of whatever the client sent.
@@ -472,18 +473,16 @@ def account_href(account_id: Any) -> str:
 
 
 def account_ref(row: Row) -> dict[str, Any]:
-    return ref("BillingAccount", account_href(row["id"]), row["id"], row["name"])
+    """The v5 BillingAccountRef (TMF622/637/678) also carries the account's ratingType."""
+    body = ref("BillingAccount", account_href(row["id"]), row["id"], row["name"])
+    return body | {"ratingType": RATING_TYPE}
 
 
-def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+def customer_party(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    """The account's customer as a relatedParty entry (role `customer`)."""
     customer = parties.get_customer(conn, row["customer_id"])
     assert customer is not None  # foreign key
-    financial = (
-        None
-        if row["financial_account_id"] is None
-        else accounts.get_financial(conn, row["financial_account_id"])
-    )
-    anchor = {
+    return {
         "role": CUSTOMER_ROLE,
         "partyOrPartyRole": ref(
             "Customer",
@@ -494,6 +493,17 @@ def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         ),
         "@type": "RelatedPartyRefOrPartyRoleRef",
     }
+
+
+def linked_financial(conn: psycopg.Connection, row: Row) -> Row | None:
+    if row["financial_account_id"] is None:
+        return None
+    return accounts.get_financial(conn, row["financial_account_id"])
+
+
+def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    financial = linked_financial(conn, row)
+    anchor = customer_party(conn, row)
     return {
         "id": str(row["id"]),
         "href": account_href(row["id"]),
@@ -510,6 +520,7 @@ def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         **details_body(row),
         "accountBalance": [
             {
+                "id": balance_id(row["currency"]),
                 "balanceType": BALANCE_TYPE,
                 "amount": money(
                     billing.account_balance(conn, row["id"]).quantize(CENT), row["currency"]

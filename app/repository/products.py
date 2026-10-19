@@ -8,16 +8,19 @@ from uuid import UUID
 
 import psycopg
 
-from app.repository._sql import Row, fetch_all, fetch_one, returning, select_page
+from app.repository._sql import Row, fetch_all, fetch_one, jsonb, returning, select_page
 
 
 @dataclass(frozen=True)
 class NewProduct:
-    """What a client chose for a product its POST /product creates."""
+    """What a client chose for a product its POST /product creates: its id, TMF meta
+    attributes, name (None: the offering's) and documents."""
 
     id: UUID | None = None
     base_type: str | None = None
     schema_location: str | None = None
+    name: str | None = None
+    details: dict[str, Any] | None = None
 
 
 def create_product(
@@ -30,8 +33,12 @@ def create_product(
     status: str = "active",
     new: NewProduct | None = None,
 ) -> Row:
+    """Without a `name`, the product is named after its offering at creation (the
+    database's `product_default_name`); the name is its own from then on. Name and
+    documents are written only when given: tests create products on schemas before
+    0028."""
     new = new or NewProduct()
-    return returning(
+    row = returning(
         conn,
         """
         INSERT INTO product
@@ -50,6 +57,20 @@ def create_product(
             new.base_type,
             new.schema_location,
         ),
+    )
+    if new.name is None and not new.details:
+        return row
+    return describe(conn, row["id"], name=new.name or row["name"], details=new.details or {})
+
+
+def describe(
+    conn: psycopg.Connection, product_id: UUID, *, name: str, details: dict[str, Any]
+) -> Row:
+    """A product's name and documents (PATCH: they neither create nor end it)."""
+    return returning(
+        conn,
+        "UPDATE product SET name = %s, details = %s WHERE id = %s RETURNING *",
+        (name, jsonb(details), product_id),
     )
 
 
@@ -347,6 +368,116 @@ def undo_change(conn: psycopg.Connection, changed_by_item_id: UUID) -> Row:
         "DELETE FROM product_offering_change WHERE changed_by_item_id = %s RETURNING *",
         (changed_by_item_id,),
     )
+
+
+# --- status changes: suspension and resumption (TMF622 modify items with product.status;
+# docs/decisions/tmf-api.md#suspension-2026-10-19). Billing does not read them. ---
+
+
+def status_changes_of(conn: psycopg.Connection, product_id: UUID) -> list[Row]:
+    """The product's status changes, by change day."""
+    return fetch_all(
+        conn,
+        "SELECT * FROM product_status_change WHERE product_id = %s ORDER BY change_date",
+        (product_id,),
+    )
+
+
+def change_status(
+    conn: psycopg.Connection,
+    product_id: UUID,
+    *,
+    change_date: date,
+    status: str,
+    changed_by_item_id: UUID,
+    applied_at: datetime | None = None,
+) -> Row:
+    """The product is `status` (suspended or active) from `change_date` on.
+    `applied_at`: the change takes effect now - the product's status is set here; else
+    the worker's run of `change_date` sets it (`apply_status_changes`)."""
+    change = returning(
+        conn,
+        """
+        INSERT INTO product_status_change
+            (product_id, change_date, status, changed_by_item_id, applied_at)
+        VALUES (%s, %s, %s, %s, %s) RETURNING *
+        """,
+        (product_id, change_date, status, changed_by_item_id, applied_at),
+    )
+    if applied_at is not None:
+        set_product_status(conn, product_id, status)
+    return change
+
+
+def pending_status_change(conn: psycopg.Connection, product_id: UUID) -> Row | None:
+    """The product's status change that has not taken effect, if any."""
+    return fetch_one(
+        conn,
+        "SELECT * FROM product_status_change WHERE product_id = %s AND applied_at IS NULL",
+        (product_id,),
+    )
+
+
+def status_after_changes(conn: psycopg.Connection, product_id: UUID) -> str:
+    """What the product's status changes leave it in: the latest one's status, else
+    active (a product is active unless suspended)."""
+    row = fetch_one(
+        conn,
+        "SELECT status FROM product_status_change WHERE product_id = %s"
+        " ORDER BY change_date DESC LIMIT 1",
+        (product_id,),
+    )
+    return row["status"] if row else "active"
+
+
+def undo_status_change(conn: psycopg.Connection, changed_by_item_id: UUID) -> Row:
+    """Undo a status change that has not taken effect (its order is cancelled)."""
+    return returning(
+        conn,
+        "DELETE FROM product_status_change WHERE changed_by_item_id = %s AND applied_at IS NULL"
+        " RETURNING *",
+        (changed_by_item_id,),
+    )
+
+
+def apply_status_changes(
+    conn: psycopg.Connection, run_date: date, *, visible_before: datetime, at: datetime
+) -> list[UUID]:
+    """The status changes in effect on `run_date` that the run sees (their order
+    completed before `visible_before`) and that have not taken effect: the product's
+    status is set, the change marked applied. Products are locked in id order first, as
+    `flip_statuses` does. Idempotent. Returns the products changed (for their events)."""
+    params = {"day": run_date, "before": visible_before, "at": at}
+    due = fetch_all(
+        conn,
+        """
+        SELECT id FROM product WHERE id IN (
+            SELECT c.product_id FROM product_status_change c
+              JOIN product_order_item i ON i.id = c.changed_by_item_id
+              JOIN product_order o ON o.id = i.product_order_id
+             WHERE c.applied_at IS NULL AND c.change_date <= %(day)s
+               AND o.completion_date < %(before)s)
+         ORDER BY id FOR UPDATE
+        """,
+        params,
+    )
+    if not due:
+        return []
+    rows = fetch_all(
+        conn,
+        """
+        WITH applied AS (
+            UPDATE product_status_change c SET applied_at = %(at)s
+             WHERE c.product_id = ANY(%(ids)s) AND c.applied_at IS NULL
+               AND c.change_date <= %(day)s
+            RETURNING c.product_id, c.status)
+        UPDATE product p SET status = a.status FROM applied a
+         WHERE p.id = a.product_id
+        RETURNING p.id
+        """,
+        {**params, "ids": [row["id"] for row in due]},
+    )
+    return sorted(row["id"] for row in rows)
 
 
 def offering_on(conn: psycopg.Connection, product_id: UUID, day: date) -> UUID:

@@ -16,7 +16,12 @@ the database needs is checked (the ids, what the order references exists). It is
 processed by `submit_draft`, exactly as an order placed at that moment.
 
 A modify item changes its product's offering from requestedStartDate on, billed prorated
-(docs/decisions/billing-core.md#offering-changes-2026-10-18).
+(docs/decisions/billing-core.md#offering-changes-2026-10-18) - or, carrying
+`product.status` instead, suspends (`suspended`) or resumes (`active`) it from that day
+on; billing does not change (docs/decisions/tmf-api.md#suspension-2026-10-19).
+
+Adding a product or changing its offering needs an Active billing account; ending,
+suspending or resuming one does not (TMF666's account states forbid nothing).
 
 The billing account (optional in TMF622) is the order's, else the first item's that names
 one, else the account of the first product a modify/delete/noChange item names; an
@@ -55,6 +60,14 @@ class ItemRequest:
     new_product: products.NewProduct | None = None
     parent_item_id: str | None = None  # nested in that item (listed before this one)
     details: dict[str, Any] | None = None  # documents, stored as sent
+    # a modify item's product.status (suspended / active), instead of an offering
+    product_status: str | None = None
+
+    @property
+    def needs_active_account(self) -> bool:
+        """Adding a product or changing its offering; not ending, suspending or resuming
+        one (C9)."""
+        return self.action == "add" or (self.action == "modify" and self.product_status is None)
 
     @property
     def related_ids(self) -> list[Any]:
@@ -225,6 +238,7 @@ def _new_item(
         quoted_currency=quote["currency"] if quote else None,
         parent_item_id=item.parent_item_id,
         details=item.details,
+        product_status=item.product_status,
     )
 
 
@@ -319,7 +333,7 @@ def _validate(
     quotes: dict[str, Row],
 ) -> list[Problem]:
     problems: list[Problem] = []
-    if account["state"] != "Active":
+    if account["state"] != "Active" and any(i.needs_active_account for i in request.items):
         problems.append(Problem(None, "accountNotActive", f"billing account is {account['state']}"))
     if start < today:
         problems.append(
@@ -344,6 +358,8 @@ def _item_problems(
 ) -> list[tuple[str, str]]:
     if item.billing_account_id not in (None, account["id"]):
         return [("billingAccountMismatch", "the item's billingAccount differs from the order's")]
+    if item.action == "modify" and item.product_status is not None:
+        return _status_problems(conn, item, account, start, locked)
     if item.action == "modify":
         return _modify_problems(conn, item, account, start, today, locked, quotes)
     if item.action == "add":
@@ -407,6 +423,47 @@ def _modify_problems(
     if products.offering_on(conn, product["id"], start) == item.product_offering_id:
         return [("offeringUnchanged", f"the product is on this offering on {start} already")]
     return _add_problems(conn, item, account, start, quotes)
+
+
+def _status_problems(
+    conn: psycopg.Connection,
+    item: ItemRequest,
+    account: Row,
+    start: date,
+    locked: dict[UUID, Row],
+) -> list[tuple[str, str]]:
+    """A modify item with product.status suspends (`suspended`) or resumes (`active`)
+    the product from `start` on. Status changes come one at a time and in date order, on
+    a product that has started by then and has no end set: an end decides its status
+    (pendingTerminate, then terminated)."""
+    product = locked[item.product_id]
+    if product["billing_account_id"] != account["id"]:
+        return [("productOfOtherAccount", "the product belongs to another billing account")]
+    ends = product["termination_date"]
+    if product["status"] in ENDED or ends is not None:
+        return [
+            (
+                "productAlreadyEnded",
+                f"the product is {product['status']}"
+                + (f" and ends on {ends}: cancel that order to change its status" if ends else ""),
+            )
+        ]
+    if start < product["start_date"]:
+        return [
+            (
+                "productNotStarted",
+                f"the product starts on {product['start_date']}; its status can change from"
+                " that day on",
+            )
+        ]
+    pending = products.pending_status_change(conn, product["id"])
+    changes = products.status_changes_of(conn, product["id"])
+    if pending is not None or (changes and changes[-1]["change_date"] >= start):
+        day = (pending or changes[-1])["change_date"]
+        return [("openModifyItem", f"another order already changes its status on {day}")]
+    if products.status_after_changes(conn, product["id"]) == item.product_status:
+        return [("statusUnchanged", f"the product is {item.product_status} already")]
+    return []
 
 
 def _add_problems(
@@ -490,6 +547,15 @@ def _delete_problems(
         return [("productAlreadyEnded", f"the product is already {product['status']}")]
     if orders.open_delete_items(conn, product["id"]):
         return [("openDeleteItem", "another order is already deleting this product")]
+    waiting = products.pending_status_change(conn, product["id"])
+    if waiting is not None:
+        return [
+            (
+                "openModifyItem",
+                f"an order changes its status on {waiting['change_date']}: cancel that order,"
+                " or end the product once the change took effect",
+            )
+        ]
     pending = products.pending_change(conn, product["id"], today)
     if pending is not None and start <= pending["change_date"]:
         return [
@@ -564,6 +630,18 @@ def _execute(
             emit.product(conn, product["id"], "Create", at=now, today=today)
         elif item.action == "noChange":
             pass  # nothing to do: the product stays as it is
+        elif item.action == "modify" and item.product_status is not None:
+            products.change_status(
+                conn,
+                item.product_id,
+                change_date=start,
+                status=item.product_status,
+                changed_by_item_id=row["id"],
+                # in effect today: set now; else by the worker's run of the day
+                applied_at=now if start <= today else None,
+            )
+            if start <= today:
+                emit.product(conn, item.product_id, "StateChange", at=now, today=today)
         elif item.action == "modify":
             products.change_offering(
                 conn,

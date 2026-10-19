@@ -7,7 +7,7 @@ from uuid import UUID
 
 import psycopg
 
-from app.repository._sql import Row, fetch_one, money, returning, select_page
+from app.repository._sql import Row, fetch_one, jsonb, money, returning, select_page
 
 
 def insert_payment(
@@ -22,11 +22,13 @@ def insert_payment(
     method_name: str | None = None,
     method_type: str | None = None,
     tax_amount: Decimal = Decimal(0),
+    details: dict[str, Any] | None = None,
 ) -> Row:
     """`payment_method` is the one-word label; `method_name`/`method_type` the TMF
     paymentMethod's name and @type as sent (neither given: the label is the name).
     `amount` is the total received, `tax_amount` the part of it the client called tax
-    (written only when not 0: tests insert payments into schemas before 0025)."""
+    (written only when not 0: tests insert payments into schemas before 0025), `details`
+    its documents (only when there are any: schemas before 0028)."""
     if method_name is None and method_type is None:
         method_name = payment_method
     row = returning(
@@ -48,13 +50,19 @@ def insert_payment(
             method_type,
         ),
     )
-    if not tax_amount:
-        return row
-    return returning(
-        conn,
-        "UPDATE payment SET tax_amount = %s WHERE id = %s RETURNING *",
-        (money(tax_amount), row["id"]),
-    )
+    if tax_amount:
+        row = returning(
+            conn,
+            "UPDATE payment SET tax_amount = %s WHERE id = %s RETURNING *",
+            (money(tax_amount), row["id"]),
+        )
+    if details:
+        row = returning(
+            conn,
+            "UPDATE payment SET details = %s WHERE id = %s RETURNING *",
+            (jsonb(details), row["id"]),
+        )
+    return row
 
 
 def get_payment(conn: psycopg.Connection, payment_id: UUID) -> Row | None:

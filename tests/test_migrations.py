@@ -339,7 +339,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 38  # 37 domain tables + alembic_version
+    assert tables == 39  # 38 domain tables + alembic_version
 
 
 def test_0027_offering_changes(temp_db_url):
@@ -383,6 +383,52 @@ def test_0027_offering_changes(temp_db_url):
     command.downgrade(cfg, "0026")
     with psycopg.connect(temp_db_url) as conn:
         assert conn.execute("SELECT count(*) FROM applied_customer_billing_rate").fetchone() == (1,)
+    command.upgrade(cfg, "head")
+
+
+def test_0028_last_gaps(temp_db_url):
+    """Existing products are named after their offering; a product inserted without a
+    name gets its offering's; a modify item carries an offering or a status, not both.
+    Downgrading to 0027 refuses while a status item or an alteration price exists."""
+    from tests import factories
+
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0027")
+    with psycopg.connect(temp_db_url) as conn:
+        w = factories.world(conn)
+    command.upgrade(cfg, "0028")
+    with psycopg.connect(temp_db_url) as conn:
+        name = "SELECT name, details FROM product WHERE id = %s"
+        assert conn.execute(name, (w.product["id"],)).fetchone() == ("Fiber 100", {})
+        later = factories.product(conn, w.account["id"], w.offering["id"], date(2026, 2, 1))
+        assert later["name"] == "Fiber 100"
+        item = factories.add_order(conn, w.account["id"], w.offering["id"])["items"][0]
+        modify = (
+            "UPDATE product_order_item SET action = 'modify', product_id = %s,"
+            " product_offering_id = %s, product_status = %s WHERE id = %s"
+        )
+        with pytest.raises(psycopg.errors.CheckViolation), conn.transaction():
+            conn.execute(modify, (w.product["id"], w.offering["id"], "suspended", item["id"]))
+        conn.execute(modify, (w.product["id"], None, "suspended", item["id"]))
+    with pytest.raises(Exception, match="status items exist"):
+        command.downgrade(cfg, "0027")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute(
+            "UPDATE product_order_item SET action = 'add', product_id = NULL,"
+            " product_offering_id = %s, product_status = NULL WHERE id = %s",
+            (w.offering["id"], item["id"]),
+        )
+        conn.execute(
+            "INSERT INTO product_offering_price (product_offering_id, name, price_type, amount,"
+            " currency, valid_for, lifecycle_status) VALUES (%s, 'Loyalty', 'discount', 10,"
+            " 'RUB', tstzrange(now(), NULL), 'Active')",
+            (w.offering["id"],),
+        )
+    with pytest.raises(Exception, match="discount, allowance or penalty"):
+        command.downgrade(cfg, "0027")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute("DELETE FROM product_offering_price WHERE price_type = 'discount'")
+    command.downgrade(cfg, "0027")
     command.upgrade(cfg, "head")
 
 

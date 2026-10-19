@@ -153,6 +153,18 @@ def get_run_by_id(conn: psycopg.Connection, run_id: UUID) -> Row | None:
     return fetch_one(conn, "SELECT * FROM billing_run WHERE id = %s", (run_id,))
 
 
+def run_payment_due_date(conn: psycopg.Connection, run_id: UUID) -> date | None:
+    """When the bills a run issued on its own date are due (one term per run), or None."""
+    row = fetch_one(
+        conn,
+        "SELECT max(b.payment_due_date) AS due FROM customer_bill b"
+        " JOIN billing_run r ON r.id = b.billing_run_id"
+        " WHERE b.billing_run_id = %s AND b.bill_date = r.run_date",
+        (run_id,),
+    )
+    return row["due"] if row else None
+
+
 def held_back_by(conn: psycopg.Connection) -> Row | None:
     """The earliest run that failed as a whole (failure_kind 'run'), or None. No later
     date is billed until it succeeds."""

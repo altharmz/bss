@@ -22,6 +22,7 @@ Durable TMF678 on-demand request consumed by the billing owner.
 | `description` | `text` | yes |  | Request description or rejection/error explanation. |
 | `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
 | `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
+| `details` | `jsonb` | no | `'{}'::jsonb` | TMF678 descriptive attributes as sent (relatedParty), validated against the spec. |
 
 ## Foreign keys
 
@@ -36,6 +37,7 @@ Durable TMF678 on-demand request consumed by the billing owner.
 |---|---|---|
 | `customer_bill_on_demand_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `customer_bill_on_demand_check` | check | `CHECK (((state = 'done'::customer_bill_on_demand_state_type) = (customer_bill_id IS NOT NULL)))` |
+| `customer_bill_on_demand_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `customer_bill_on_demand_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `customer_bill_on_demand_pkey` | primary key | `PRIMARY KEY (id)` |
 

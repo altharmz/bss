@@ -74,7 +74,7 @@ def test_a_modify_item_needs_product_and_offering(api, shop):
     for item in (no_offering, no_product):
         response = api.post(apidata.ORDER, apidata.order_body(acc, item))
         assert response.status_code == 422, response.text
-        assert "needs product and productOffering" in response.json()["message"]
+        assert "needs product and either productOffering" in response.json()["message"]
 
 
 def test_rejections(api, shop):
@@ -143,7 +143,9 @@ def test_a_change_after_the_month_was_charged_is_billed_prorated(api, shop, work
     run(worker, api, NOV11)  # B from the 11th: 20 days of 600/30
     assert (z(midnight(NOV11)), Decimal("400.00")) in rates(api, product)
     after = api.get(product["href"]).json()
-    assert after["productOffering"]["id"] == b["id"] and after["name"] == "Fiber 500"
+    # the name is the product's own (its offering's at creation): the offering changed
+    assert after["productOffering"]["id"] == b["id"] and after["name"] == "Fiber 100"
+    assert after["productOffering"]["name"] == "Fiber 500"
     assert after["productPrice"][0]["price"]["dutyFreeAmount"]["value"] == 600
     names = {
         r["appliedBillingRateType"]: r["product"]["name"]

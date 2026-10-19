@@ -273,10 +273,14 @@ naming the product's initial offering failed the prorated-billing API test.
   from the next period). The billing core assumes a fixed cycle day; with a changed one,
   stored ABRs no longer sit inside one cycle period and `compute` raises
   `InconsistentState`.
-- **Suspension semantics.** Billing is date-driven: `Suspended`/`Closed` billing accounts
-  and `suspended` products are billed like any other. Whether a suspension should stop or
-  reduce charges (and how a resume re-enters billing) is open; ordering already refuses
-  new orders on a non-Active account.
+- ~~**Suspension semantics.**~~ Closed 2026-10-19 ("decide based on TMF", confirmed by
+  the human): products are suspended and resumed by TMF622 modify items with
+  `product.status` ([tmf-api.md](tmf-api.md#suspension-2026-10-19)), and **billing does
+  not change** - no spec says what a suspension does to charges, so `Suspended`/`Closed`
+  billing accounts and `suspended` products are billed by their dates like any other. A
+  rule that stops or reduces charges would be ours, a business decision for the human.
+  Ordering refuses only adding a product or changing its offering on a non-Active account
+  (C9).
 
 The resolved items of CLAUDE.md's old "Open questions" moved too: stale billing runs and
 `APP_ENV` to [worker.md](worker.md#resolved-questions), the two template ports to

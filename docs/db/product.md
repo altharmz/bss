@@ -22,6 +22,8 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `terminated_by_item_id` | `uuid` | yes |  | The delete order item that terminated or cancelled the product (role termination); NULL while open. |
 | `base_type` | `text` | yes |  | TMF @baseType as the client sent it (the super-class when sub-classing). |
 | `schema_location` | `text` | yes |  | TMF @schemaLocation as the client sent it (a JSON Schema URI). |
+| `name` | `text` | no |  | TMF637 name: the product's own; by default its offering's name at creation. |
+| `details` | `jsonb` | no | `'{}'::jsonb` | TMF637 descriptive attributes as sent, validated against the spec; billing never reads them. |
 
 ## Foreign keys
 
@@ -38,6 +40,8 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 |---|---|---|
 | `product_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `product_check` | check | `CHECK ((termination_date >= start_date))` |
+| `product_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
+| `product_name_not_blank` | check | `CHECK ((name <> ''::text))` |
 | `product_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `product_pkey` | primary key | `PRIMARY KEY (id)` |
 | `product_created_by_item_id_key` | unique | `UNIQUE (created_by_item_id)` |
@@ -57,8 +61,9 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 
 ## Triggers
 
+- `product_default_name`: `CREATE TRIGGER product_default_name BEFORE INSERT ON product FOR EACH ROW EXECUTE FUNCTION product_default_name()`
 - `product_set_updated_at`: `CREATE TRIGGER product_set_updated_at BEFORE UPDATE ON product FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`product_offering_change`](product_offering_change.md), [`product_order_item`](product_order_item.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`product_offering_change`](product_offering_change.md), [`product_order_item`](product_order_item.md), [`product_status_change`](product_status_change.md)

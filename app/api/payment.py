@@ -20,7 +20,7 @@ from fastapi import APIRouter, Request
 from psycopg import errors as pg_errors
 from pydantic import Field, model_validator
 
-from app.api import listing
+from app.api import listing, specschema
 from app.api.account import account_href
 from app.api.bill import bill_href
 from app.api.common import (
@@ -32,14 +32,14 @@ from app.api.common import (
     created,
     meta_body,
     money,
-    parse,
+    parse_documented,
     parse_id,
     utc,
     with_meta,
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, Tx
-from app.api.errors import conflict, not_found, unprocessable
+from app.api.errors import Problem, bad_request, conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.billing import settlement
 from app.billing.adapter import settle_account
@@ -50,6 +50,9 @@ from app.repository._sql import Row
 BASE = "/tmf-api/payment/v4"
 router = APIRouter(prefix=BASE)
 
+# Documents to us: stored as sent, checked against the spec (docs/decisions/tmf-api.md,
+# "The last gaps").
+DOCUMENTS = ("name", "description", "authorizationCode", "correlatorId", "channel", "payer")
 ATTRIBUTES = (
     "account",
     "amount",
@@ -60,7 +63,51 @@ ATTRIBUTES = (
     "status",
     "statusDate",
     "paymentItem",
+    *DOCUMENTS,
 )
+# What the model keeps of a paymentMethod; the rest of it is stored as sent.
+METHOD_KEYS = ("name", "@type")
+
+
+def take_documents(
+    body: dict[str, Any], documents: tuple[str, ...], schema: str
+) -> tuple[dict[str, Any], list[Problem]]:
+    """A payment's or refund's documents, taken out of `body` and checked against the
+    spec's `schema`: its own `documents`, the `account` attributes beyond the reference
+    it resolves to (`description`), and the `paymentMethod` as sent (the model keeps its
+    name and @type). Returns what to store and the problems found."""
+    sent = {name: body.pop(name) for name in documents if name in body}
+    account = body.get("account")
+    if isinstance(account, dict) and "description" in account:
+        sent["account"] = account
+        body["account"] = {k: v for k, v in account.items() if k != "description"}
+    method = body.get("paymentMethod")
+    if isinstance(method, dict):
+        sent["paymentMethod"] = method
+        body["paymentMethod"] = {k: v for k, v in method.items() if k in METHOD_KEYS}
+    values, problems = specschema.check(
+        "TMF676", schema, {name: value for name, value in sent.items() if value is not None}
+    )
+    stored = {name: value for name, value in values.items() if name != "account"}
+    if "account" in values:
+        stored["account"] = {"description": values["account"].get("description")}
+    return stored, problems
+
+
+def documents_body(row: Row, documents: tuple[str, ...]) -> dict[str, Any]:
+    details = row.get("details") or {}
+    return {name: details[name] for name in documents if name in details}
+
+
+def account_extras(row: Row) -> dict[str, Any]:
+    return (row.get("details") or {}).get("account", {})
+
+
+def method_body(row: Row, name: str | None, at_type: str | None) -> dict[str, Any]:
+    """The paymentMethod as sent (stored since 0028), else its name and @type."""
+    return (row.get("details") or {}).get("paymentMethod") or without_nulls(
+        {"name": name, "@type": at_type}
+    )
 
 
 def tax_part(total: Money, amount: Money | None, tax: Money | None, prefix: str = "") -> Decimal:
@@ -150,14 +197,14 @@ def payment_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "id": str(account["id"]),
             "href": account_href(account["id"]),
             "name": account["name"],
+            **account_extras(row),
             "@referredType": "BillingAccount",
         },
         "amount": money(row["amount"] - tax, row["currency"]),
         "taxAmount": money(tax, row["currency"]),
         "totalAmount": total,
-        "paymentMethod": without_nulls(
-            {"name": row["payment_method_name"], "@type": row["payment_method_type"]}
-        ),
+        "paymentMethod": method_body(row, row["payment_method_name"], row["payment_method_type"]),
+        **documents_body(row, DOCUMENTS),
         **_items(conn, row),
         "@type": "Payment",
         **meta_body(row),
@@ -240,7 +287,11 @@ def get_payment(payment_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 def create_payment(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
     check_type(body, "Payment")
-    data = parse(PaymentCreate, body, read_only=("status", "statusDate", "paymentDate"))
+    for name in ("status", "statusDate", "paymentDate"):
+        if name in body:
+            raise bad_request(f"{name} is read-only")
+    documents, found = take_documents(body, DOCUMENTS, "Payment_Create")
+    data, _ = parse_documented(PaymentCreate, body, (), "TMF676", "Payment_Create", found)
     with tx() as conn:
         # FOR UPDATE, the lock load_account takes below: a concurrent delete of the account
         # went first (422) or waits for this payment
@@ -267,6 +318,7 @@ def create_payment(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
                 payment_method=data.payment_method.name or data.payment_method.at_type,
                 method_name=data.payment_method.name,
                 method_type=data.payment_method.at_type,
+                details=documents,
             )
         except pg_errors.ForeignKeyViolation:
             # Backstop for the check above: the composite FK (account, currency) is what

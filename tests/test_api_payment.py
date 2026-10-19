@@ -105,7 +105,13 @@ def test_payment_method_is_mandatory(api, db_conn):
         "name": "card",
         "@type": "CreditCard",
     }
-    unknown = {**body, "paymentMethod": {"name": "card", "isPreferred": True}}
+    # the rest of a paymentMethod is stored as sent, checked against the spec
+    preferred = {**body, "paymentMethod": {"name": "card", "isPreferred": True}}
+    assert api.post(PAYMENT, preferred).json()["paymentMethod"] == {
+        "name": "card",
+        "isPreferred": True,
+    }
+    unknown = {**body, "paymentMethod": {"name": "card", "zzUnknown": True}}
     assert api.post(PAYMENT, unknown).status_code == 400
 
 
@@ -119,7 +125,8 @@ def test_payment_method_is_mandatory(api, db_conn):
         ({"account": {"href": "/x"}}, 422),
         ({"status": "done"}, 400),
         ({"paymentDate": "2026-01-01T00:00:00Z"}, 400),
-        ({"description": "rent"}, 400),
+        ({"description": 5}, 422),  # a document, checked against the spec
+        ({"payer": {"id": "p1", "@referredType": "Individual", "zzUnknown": 1}}, 400),
         ({"id": "p1"}, 400),
     ],
 )

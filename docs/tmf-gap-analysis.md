@@ -11,19 +11,27 @@ B7 and the TMF632/629 sub-resources of section 2 - TMF632 and TMF629 have none l
 375 after slice 5: [account attributes](decisions/accounts.md#account-attributes-2026-10-18),
 the TMF666 sub-resources of section 2 - TMF666 has none left;
 161 after slice 6: [catalog attributes](decisions/catalog.md#catalog-attributes-2026-10-18),
-B9 and the TMF620 sub-resources of section 2 - TMF620 has none left), produced by the
-probe in `tests/tmf_gaps.py`. Sections 3 and 5 below are superseded by it. C3, C5, C7,
-C8, the client-chosen `id` and `@baseType`/`@schemaLocation` are closed
+B9 and the TMF620 sub-resources of section 2 - TMF620 has none left; 156 after slice 7,
+100 after slices 8a/8b; the probe then went one level into responses (+38 lines), and
+[the last gaps](decisions/tmf-api.md#the-last-gaps-2026-10-18) closed them all on
+2026-10-19: **no open gap**, six accepted deviations, each with its reason in the file),
+produced by the probe in `tests/tmf_gaps.py`. Sections 3 and 5 below are superseded by
+it. C3, C5, C7, C8, the client-chosen `id` and `@baseType`/`@schemaLocation` are closed
 ([slice 1](decisions/tmf-api.md#nothing-dropped-or-rewritten-2026-10-17)). What the probe
-cannot see, and is still open:
+cannot see, all closed or recorded as not defined by the specs (2026-10-19):
 
-- States never reached (section 4): order item actions `modify`/`noChange`; order
-  `held`, `pending`, `failed`, `partial`, `draft`, `inProgress.accepted`,
-  `assessingCancellation`, `pendingCancellation`; product `pendingActive`, `suspended`,
-  `aborted` (and C9: a product on a non-Active account cannot be ended by an order);
-  payment states other than `done`; party `status`.
-- priceType `discount`, `allowance`, `penalty` (TMF620's description of `priceType`).
-- Nested response attributes (the probe asks for top-level ones only).
+- States (section 4): order item actions `modify`/`noChange` - executed (slices 8a/8b);
+  order `draft` - implemented (8a); `held`, `pending`, `failed`, `partial`,
+  `inProgress.accepted`, `assessingCancellation`, `pendingCancellation` - asynchronous
+  processing, never reached here (recorded, 8a); product `suspended` - reached
+  ([suspension](decisions/tmf-api.md#suspension-2026-10-19)), `pendingActive`, `aborted`
+  - asynchronous provisioning, never reached (recorded); C9 - closed (ends, suspensions
+  and resumptions on any account); payment states other than `done` - TMF676 v4 defines
+  none (free text, no transitions); party `status` - writable since slice 4 (the item was
+  stale).
+- priceType `discount`, `allowance`, `penalty` - records, never billed
+  ([catalog.md](decisions/catalog.md#alteration-price-types-2026-10-19)).
+- Nested response attributes - probed one level deep since 2026-10-19.
 
 **Complete (2026-10-17).** The last seven operations - TMF637 product POST/PATCH/DELETE
 (as orders placed on the caller's behalf), TMF666 billingCycleSpecification
@@ -393,7 +401,9 @@ before it.
 ## 4. Lifecycle and state enums
 
 The five TMF-derived Postgres enums equal the spec enums (`tests/test_enum_lock.py`). What
-is *reached* is a subset.
+is *reached* is a subset. **Superseded where the summary at the top says so** (2026-10-19:
+product `suspended` reached, item actions all executed, C9 closed); the table is the
+analysis of 2026-10-14.
 
 | Resource / attribute | Spec values | We accept on input | Actually reached | Transitions we enforce |
 |---|---|---|---|---|
@@ -483,7 +493,7 @@ they are given from general knowledge and not verified here.
 | C6 | Query parameters (`fields` included) silently ignored on POST/PATCH | `deps.py:50-63` | low-medium | S |
 | C7 | Order items returned in text order of `item_id`, not as sent | `repository/orders.py:67`, `:114` | low-medium | M (needs a position column: migration) |
 | C8 | Item-level `billingAccount` accepted, not stored or returned | `ordering.py:61` | low | S |
-| C9 | A product on a non-Active account cannot be terminated by an order and keeps billing | `process.py:140` | medium (domain) | S-M, needs a decision (suspension semantics are open) |
+| C9 | A product on a non-Active account cannot be terminated by an order and keeps billing - **closed 2026-10-19** (delete, suspend and resume items are executed on any account; billing by dates, decisions/billing-core.md) | `process.py:140` | medium (domain) | S-M |
 
 ### Breadth (new APIs, resources or attributes)
 

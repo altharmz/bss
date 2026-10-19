@@ -4,8 +4,17 @@ from typing import Any, Literal
 import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 Row = dict[str, Any]
+
+
+def jsonb(value: dict[str, Any]) -> Jsonb:
+    """A document for a jsonb column; tmfjson: numbers stay exact decimals, never floats."""
+    from app.api import tmfjson  # lazily: importing app.api loads every API module
+
+    return Jsonb(value, dumps=tmfjson.dumps)
+
 
 # Filter values for select_page: `column IS NULL` / `column IS NOT NULL`.
 IS_NULL = object()

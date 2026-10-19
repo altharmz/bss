@@ -8,9 +8,9 @@
     },
     "db": {
       "deployed": null,
-      "implemented": 37,
-      "items": 37,
-      "tested": 37
+      "implemented": 38,
+      "items": 38,
+      "tested": 38
     },
     "ui": {
       "deployed": null,
@@ -928,6 +928,15 @@
       "stage": 5,
       "tested": true,
       "title": "Offering changes (TMF622 modify items)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.product_status_change",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Suspensions and resumptions (TMF622 modify items with product.status)"
     },
     {
       "area": "db",

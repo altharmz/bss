@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0027**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0028**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -25,6 +25,7 @@ PostgreSQL schema at Alembic head **0027**, read from `pg_catalog` of a throwawa
 | [`cancel_product_order`](cancel_product_order.md) | ordering | TMF622 cancelProductOrder: done on insert (a refused one is not stored); one per order. |
 | [`product`](product.md) | inventory | SID Product (TMF637 product): an instance of an offering on a billing account. Written only by orders; billable on start_date <= d < termination_date. |
 | [`product_offering_change`](product_offering_change.md) | inventory | TMF622 modify items: the product's offering from change_date on (billed prorated). The offering on day d is the latest change on or before d, else product.product_offering_id. |
+| [`product_status_change`](product_status_change.md) | inventory | TMF622 modify items with product.status: the product is suspended (or active again) from change_date on. Billing does not read it. |
 | [`billing_run`](billing_run.md) | billing | One daily billing run per date (ours, not TMF). Only a billing run writes ABRs and bills; the worker's bookkeeping lives here (trigger, attempt, failure_kind). |
 | [`applied_customer_billing_rate`](applied_customer_billing_rate.md) | billing | SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recurring charge for the billable days of one cycle period, or the one refund of such a charge. Written only by a billing run. |
 | [`customer_bill`](customer_bill.md) | billing | SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every unbilled ABR of the account whose run date is <= the bill date. Bills of one account never overlap. |
@@ -76,6 +77,7 @@ flowchart LR
   subgraph area_inventory["Inventory (TMF637)"]
     product[product]
     product_offering_change[product_offering_change]
+    product_status_change[product_status_change]
   end
   subgraph area_billing["Billing and payments (TMF678, TMF676)"]
     billing_run[billing_run]
@@ -155,6 +157,8 @@ flowchart LR
   product_order_item -->|"product_offering_id"| product_offering
   product_order_item -->|"product_order_id"| product_order
   product_order_item -->|"quoted_price_id"| product_offering_price
+  product_status_change -->|"changed_by_item_id"| product_order_item
+  product_status_change -->|"product_id"| product
   refund -->|"billing_account_id"| billing_account
   refund -->|"payment_id, billing_account_id"| payment
   refund_source -->|"credit_bill_id, billing_account_id"| customer_bill
@@ -408,6 +412,7 @@ erDiagram
     integer position
     jsonb details
     uuid parent_id FK
+    product_status_type product_status
   }
   product_order_error_message {
     uuid id PK
@@ -472,6 +477,8 @@ erDiagram
     uuid terminated_by_item_id FK
     text base_type
     text schema_location
+    text name
+    jsonb details
   }
   product_offering_change {
     uuid id PK
@@ -482,6 +489,16 @@ erDiagram
     uuid product_offering_id FK
     uuid changed_by_item_id FK
     timestamptz effect_announced_at
+  }
+  product_status_change {
+    uuid id PK
+    timestamptz created_at
+    timestamptz updated_at
+    uuid product_id FK
+    date change_date
+    product_status_type status
+    uuid changed_by_item_id FK
+    timestamptz applied_at
   }
   billing_account {
     uuid id PK
@@ -494,11 +511,13 @@ erDiagram
   }
   billing_account ||--o{ product : "billing_account_id"
   product ||--o{ product_offering_change : "product_id"
+  product ||--o{ product_status_change : "product_id"
   product_offering ||--o{ product : "product_offering_id"
   product_offering ||--o{ product_offering_change : "product_offering_id"
   product_order_item |o--o{ product : "terminated_by_item_id"
   product_order_item ||--o{ product : "created_by_item_id"
   product_order_item ||--o{ product_offering_change : "changed_by_item_id"
+  product_order_item ||--o{ product_status_change : "changed_by_item_id"
 ```
 
 Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product_order_item`](product_order_item.md), [`product_offering`](product_offering.md).
@@ -570,6 +589,7 @@ erDiagram
     text payment_method_name
     text payment_method_type
     numeric tax_amount
+    jsonb details
   }
   bill_allocation {
     uuid id PK
@@ -609,6 +629,7 @@ erDiagram
     text base_type
     text schema_location
     numeric tax_amount
+    jsonb details
   }
   refund_source {
     uuid id PK
@@ -632,6 +653,7 @@ erDiagram
     text description
     text base_type
     text schema_location
+    jsonb details
   }
   bill_format {
     uuid id PK
@@ -816,10 +838,10 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 | `party_account_kind` | `PartyAccount`, `SettlementAccount` | [`party_account.kind`](party_account.md) |
 | `party_type` | `Individual`, `Organization` | [`party.party_type`](party.md) |
 | `payment_status` | `done` | [`payment.status`](payment.md) |
-| `price_type` | `recurring`, `oneTime` | [`product_offering_price.price_type`](product_offering_price.md) |
+| `price_type` | `recurring`, `oneTime`, `discount`, `allowance`, `penalty` | [`product_offering_price.price_type`](product_offering_price.md) |
 | `product_order_item_state_type` | `acknowledged`, `rejected`, `pending`, `held`, `inProgress`, `cancelled`, `completed`, `failed`, `partial`, `assessingCancellation`, `pendingCancellation` | [`product_order_item.state`](product_order_item.md) |
 | `product_order_state_type` | `acknowledged`, `rejected`, `pending`, `held`, `inProgress`, `cancelled`, `completed`, `failed`, `partial`, `assessingCancellation`, `pendingCancellation`, `draft`, `inProgress.accepted` | [`product_order.state`](product_order.md) |
-| `product_status_type` | `created`, `pendingActive`, `cancelled`, `active`, `pendingTerminate`, `terminated`, `suspended`, `aborted` | [`product.status`](product.md) |
+| `product_status_type` | `created`, `pendingActive`, `cancelled`, `active`, `pendingTerminate`, `terminated`, `suspended`, `aborted` | [`product.status`](product.md), [`product_order_item.product_status`](product_order_item.md), [`product_status_change.status`](product_status_change.md) |
 | `recurring_charge_period_type` | `monthly` | [`product_offering_price.recurring_period`](product_offering_price.md) |
 | `worker_request_kind` | `catchUp`, `retry` | [`worker_request.kind`](worker_request.md) |
 

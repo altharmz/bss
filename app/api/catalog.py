@@ -18,6 +18,11 @@ popRelationship, ...) are documents: checked against the spec and stored as sent
 sent, but billing applies it: `tax_problems` holds it to billing's rules, and it is part
 of the charge (docs/decisions/billing-core.md, "Taxes").
 
+priceType is recurring, oneTime, or one of the alterations TMF620 names as examples
+(discount, allowance, penalty): those have no arithmetic in the spec, so they are records
+- stored, served, exported - and billing never applies them (docs/decisions/catalog.md,
+"Alteration price types"). Billing charges recurring prices only.
+
 DELETE removes only what nothing references (see "deletes" below and in
 app/api/classification.py).
 """
@@ -259,13 +264,21 @@ def check_version(reference: Ref, row: Row, name: str) -> None:
         )
 
 
+def offering_ref(offering: Row) -> dict[str, Any]:
+    return versioned(
+        ref("ProductOffering", _href("productOffering", offering["id"]), offering["id"],
+            offering["name"]),
+        offering,
+    )  # fmt: skip
+
+
 def versioned(body: dict[str, Any], row: Row) -> dict[str, Any]:
     """A reference body with the referred entry's version, when it has one."""
     version = version_of(row)
     return body | {"version": version} if version else body
 
 
-def _specification_ref(spec: Row) -> dict[str, Any]:
+def specification_ref(spec: Row) -> dict[str, Any]:
     body = versioned(
         ref("ProductSpecification", _href("productSpecification", spec["id"]), spec["id"],
             spec["name"]),
@@ -405,11 +418,14 @@ def patch_specification(
 PriceDocuments = documents_model("PriceDocuments", API, PRICE_DOCUMENTS)
 
 
+PriceType = Literal["recurring", "oneTime", "discount", "allowance", "penalty"]
+
+
 def _check_charge(price_type: str, period: str | None, price: Money | None) -> None:
     if (price_type == "recurring") != (period is not None):
         raise ValueError(
             "recurringChargePeriodType is required for a recurring price and not allowed"
-            " for a oneTime price"
+            f" for a {price_type} price"
         )
     if price is not None and price.value < 0:
         raise ValueError("price.value must not be negative")
@@ -456,7 +472,7 @@ def tax_problems(tax: list[dict[str, Any]] | None, price: Money | None) -> list[
 class PriceCreate(PriceDocuments):
     name: str = Field(min_length=1)
     lifecycle_status: LifecycleStatus
-    price_type: Literal["recurring", "oneTime"]
+    price_type: PriceType
     # Optional, as in the spec; a price without one cannot be attached to an offering.
     price: Money | None = None
     # Absent: from now on.
@@ -477,7 +493,7 @@ class PricePatch(PriceDocuments):
     valid_for: TimePeriod | None = None
     # The charge: only while the price has priced nothing (see patch_price).
     price: Money | None = None
-    price_type: Literal["recurring", "oneTime"] | None = None
+    price_type: PriceType | None = None
     recurring_charge_period_type: Literal["monthly"] | None = None
     recurring_charge_period_length: Literal[1] | None = None
 
@@ -836,7 +852,7 @@ def offering_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "lifecycleStatus": row["lifecycle_status"],
             "isSellable": row["is_sellable"],
             "validFor": None if row["valid_for"] is None else time_period(row["valid_for"]),
-            "productSpecification": None if spec is None else _specification_ref(spec),
+            "productSpecification": None if spec is None else specification_ref(spec),
             "productOfferingPrice": [
                 versioned(
                     ref(

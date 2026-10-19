@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 import psycopg
+from psycopg import sql
 from psycopg.types.json import Jsonb
 
 from app.repository._sql import (
@@ -33,6 +34,8 @@ class NewOrderItem:
     quoted_currency: str | None = None
     parent_item_id: str | None = None  # the item_id it is nested in (listed before it)
     details: dict[str, Any] | None = None  # documents (migration 0026)
+    # a modify item's product.status: suspended or active (migration 0028)
+    product_status: str | None = None
 
 
 def _jsonb(value: dict[str, Any]) -> Jsonb:
@@ -80,28 +83,28 @@ def create_order(
 def insert_items(conn: psycopg.Connection, order_id: UUID, items: list[NewOrderItem]) -> list[Row]:
     rows: dict[str, Row] = {}
     for position, item in enumerate(items, start=1):
+        values = {
+            "product_order_id": order_id,
+            "item_id": item.item_id,
+            "position": position,
+            "action": item.action,
+            "state": item.state,
+            "product_offering_id": item.product_offering_id,
+            "product_id": item.product_id,
+            "quoted_price_id": item.quoted_price_id,
+            "quoted_price_name": item.quoted_price_name,
+            "quoted_amount": money(item.quoted_amount) if item.quoted_amount is not None else None,
+            "quoted_currency": item.quoted_currency,
+        }
+        if item.product_status is not None:  # in the INSERT: a modify item's CHECK needs it
+            values["product_status"] = item.product_status
         row = returning(
             conn,
-            """
-            INSERT INTO product_order_item
-                (product_order_id, item_id, position, action, state, product_offering_id,
-                 product_id, quoted_price_id, quoted_price_name, quoted_amount,
-                 quoted_currency)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
-            """,
-            (
-                order_id,
-                item.item_id,
-                position,
-                item.action,
-                item.state,
-                item.product_offering_id,
-                item.product_id,
-                item.quoted_price_id,
-                item.quoted_price_name,
-                money(item.quoted_amount) if item.quoted_amount is not None else None,
-                item.quoted_currency,
+            sql.SQL("INSERT INTO product_order_item ({}) VALUES ({}) RETURNING *").format(
+                sql.SQL(", ").join(map(sql.Identifier, values)),
+                sql.SQL(", ").join(sql.Placeholder() * len(values)),
             ),
+            tuple(values.values()),
         )
         changes: dict[str, Any] = {}
         if item.parent_item_id is not None:

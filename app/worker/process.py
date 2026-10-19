@@ -222,13 +222,16 @@ def flip_statuses(
     Cosmetic for money - billing is driven by dates - but visible in TMF637 and the UI,
     and a ProductStateChangeEvent each (at `now`, the run's clock; default: its date).
     Offering changes in effect on the date get their ProductAttributeValueChangeEvent
-    here too, once (docs/decisions/tmf-api.md#modify-items-2026-10-18)."""
+    here too, once (docs/decisions/tmf-api.md#modify-items-2026-10-18), and status
+    changes (suspension, resumption) in effect take effect, after the flips: a product
+    suspended from its start day is activated first (#suspension-2026-10-19)."""
     flipped: list[UUID] = []
     with conn.transaction():
         before = visible_before(run_date, tz)
         counts = products.flip_statuses(conn, run_date, visible_before=before, flipped=flipped)
         at = now or before
-        for product_id in flipped:
+        changed = products.apply_status_changes(conn, run_date, visible_before=before, at=at)
+        for product_id in sorted({*flipped, *changed}):
             emit.product(conn, product_id, "StateChange", at=at, today=run_date)
         for product_id in products.announce_changes(conn, run_date, visible_before=before, at=at):
             emit.product(conn, product_id, "AttributeValueChange", at=at, today=run_date)

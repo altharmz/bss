@@ -152,8 +152,8 @@ def test_billing_account_with_extension_and_balance(api):
         }
     ]
     assert (
-        '"accountBalance":[{"balanceType":"currentBalance","amount":{"unit":"EUR","value":0.00}'
-        in created.text
+        '"accountBalance":[{"id":"currentBalance-EUR","balanceType":"currentBalance",'
+        '"amount":{"unit":"EUR","value":0.00}' in created.text
     )
 
 
@@ -177,6 +177,7 @@ def test_balance_is_payments_minus_charges_positive_means_credit(api):
     balance = decimals(api.get(acc["href"]))["accountBalance"]
     assert balance == [
         {
+            "id": "currentBalance-RUB",
             "balanceType": "currentBalance",
             "amount": {"unit": "RUB", "value": Decimal("1500.00")},
             "@type": "AccountBalance",

@@ -34,8 +34,14 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF676-P
 - POST records a payment that **has been received**: `status` is always `done`,
   `paymentDate` and `statusDate` are the injected clock at POST. There is no payment
   processing (`app/api/payment.py`; `tests/test_api_payment.py::test_payment_is_recorded_as_done`).
-- Mandatory: `account`, `totalAmount`, `paymentMethod` (with a `name` or an `@type`; the
-  one word is stored and returned as both) - `::test_payment_method_is_mandatory`.
+- Mandatory: `account`, `totalAmount`, `paymentMethod` (with a `name` or an `@type`). The
+  `paymentMethod` is stored and returned as sent (checked against
+  `PaymentMethodRefOrValue`: `description`, `isPreferred`, `status`, `validFor`, ...) -
+  `::test_payment_method_is_mandatory`.
+- Descriptive attributes - `name`, `description`, `authorizationCode`, `correlatorId`,
+  `channel`, `payer` (a refund: `requestor`), `account.description` - are stored as sent,
+  checked against the spec (`tests/test_api_last_gaps.py`).
+- `status` is free text in TMF676 v4, with no states or transitions: always `done` here.
 - `amount` (net) and `taxAmount` split `totalAmount`: either gives the other, both must
   add up (`::test_amount_and_tax_amount_split_the_total`); a `paymentItem` allocates
   `amount + taxAmount` ([taxes](../decisions/billing-core.md#taxes-2026-10-18)).

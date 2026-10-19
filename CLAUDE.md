@@ -243,19 +243,18 @@ offering history in `product_offering_change`; ABRs carry their offering;
 refunded, never shortened, so charges overlap after a mid-period change); API notes for
 TMF622 and `scripts/docs/generate.py` updated with the human's OK. Committed and
 pushed `eaa1a7b`.
-**Next session: the last gaps, one slice** (replaces slices 9-10; the human: close every
-remaining gap, each open choice "decided based on TMF"). The plan is
-[The last gaps](docs/decisions/tmf-api.md#the-last-gaps-2026-10-18): step 0 extends the
-probe to nested response attributes; TMF637 descriptive attributes, own `name`, PATCH
-`productOffering`/`status` as orders, suspension as modify items with `product.status`
-(billed as before: no spec says otherwise), C9 fixed; POST's `billingAccount` and
-`productOffering` kept as recorded deviations; TMF676 documents (payment states: none
-defined); TMF678 derived attributes; priceType discount/allowance/penalty as records.
-**Start by re-reading that section and confirming it with the human**, then implement
-per the slice workflow. Not deployed: migrations `0009`-`0027` ship together
-(rolling back `0027` needs `alembic downgrade 0026` by hand; it refuses while an
-offering change or a non-rejected modify item exists; `0026` fails while a draft
-exists).
+**The last gaps** (2026-10-19; plan confirmed by the human, billing unchanged by
+suspensions; migration `0028`): committed and pushed -
+[decision](docs/decisions/tmf-api.md#the-last-gaps-2026-10-18),
+[suspension](docs/decisions/tmf-api.md#suspension-2026-10-19),
+[alteration prices](docs/decisions/catalog.md#alteration-price-types-2026-10-19). The
+probe goes one level into responses; `tests/tmf-gaps.txt` has **no open gap** and six
+accepted deviations with reasons. API notes for TMF622/637/676/678 and the docs `AREAS`
+entry applied with the human's OK. **The TMF gap work is done**; what remains is the
+deploy and the items below ("Before the next deploy", "Open checks"). Not deployed: migrations `0009`-`0028` ship together (rolling back
+`0028` needs `alembic downgrade 0027` by hand; it refuses while a status item or a
+discount/allowance/penalty price exists; `0027` refuses while an offering change or a
+non-rejected modify item exists; `0026` fails while a draft exists).
 
 **100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders
 placed on the caller's behalf (a would-be rejection is a 409, nothing stored; DELETE ends
@@ -413,8 +412,9 @@ Then, in this order (as of 2026-10-05, after slice f):
 
 Also pending, not ordered: the two fixes to port to vps-lab-template
 ([infra.md](docs/decisions/infra.md#to-port-to-vps-lab-template)), and the open design
-questions - changing `billCycleDay`, suspension semantics
-([billing-core.md](docs/decisions/billing-core.md#open-questions)).
+question of changing `billCycleDay`
+([billing-core.md](docs/decisions/billing-core.md#open-questions); suspension semantics
+closed 2026-10-19).
 
 ## Open checks
 

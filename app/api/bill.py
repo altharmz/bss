@@ -10,6 +10,8 @@ settled, and PATCH lets the operator put it on hold or release it - nothing else
 remainingAmount and appliedPayment come from the allocations.
 """
 
+import base64
+import json
 from datetime import datetime, timedelta
 from typing import Any, Literal
 
@@ -17,7 +19,15 @@ import psycopg
 from fastapi import APIRouter, Request
 
 from app.api import listing
-from app.api.account import account_ref
+from app.api.account import (
+    CYCLE_BASE,
+    CYCLE_ID,
+    account_ref,
+    customer_party,
+    cycle_specification_body,
+    linked_financial,
+)
+from app.api.accounts import financial_ref
 from app.api.common import (
     TmfModel,
     check_server_set,
@@ -41,6 +51,7 @@ from app.api.inventory import product_href
 from app.api.tmfjson import TmfJSONResponse
 from app.billing import settlement
 from app.billing.adapter import settle_account
+from app.config import settings
 from app.repository import billing, catalog, parties
 from app.repository._sql import IS_NULL, NOT_NULL, Row, select_page
 
@@ -71,20 +82,12 @@ BILL_ATTRIBUTES = (
     "taxIncludedAmount",
     "taxItem",
     "billDocument",
-)
-# Every other attribute of the spec's CustomerBill: present, but not changed by a PATCH.
-BILL_READ_ONLY = (
-    *(a for a in BILL_ATTRIBUTES if a != "state"),
-    "billCycle",
-    "billDocument",
     "financialAccount",
-    "nextBillDate",
     "paymentMethod",
     "relatedParty",
-    "taxExcludedAmount",
-    "taxIncludedAmount",
-    "taxItem",
 )
+# Every other attribute of the spec's CustomerBill: present, but not changed by a PATCH.
+BILL_READ_ONLY = tuple(a for a in BILL_ATTRIBUTES if a != "state")
 
 BillState = Literal["new", "onHold", "validated", "sent", "settled", "partiallyPaid"]
 
@@ -94,6 +97,9 @@ class BillPatch(TmfModel):
 
 
 RATE_ATTRIBUTES = (
+    "name",
+    "description",
+    "characteristic",
     "date",
     "appliedBillingRateType",
     "taxExcludedAmount",
@@ -128,6 +134,9 @@ def bill_no(bill_id: Any) -> str:
 
 def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     currency = row["currency"]
+    account = parties.get_billing_account(conn, row["billing_account_id"])
+    assert account is not None  # foreign key
+    financial = linked_financial(conn, account)
     allocated = billing.bill_allocated(conn, row["id"])
     net, tax_lines = billing.bill_taxes(conn, row["id"])
     return {
@@ -149,7 +158,7 @@ def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             }
             for t in tax_lines
         ],
-        "billCycle": ref("BillCycle", cycle_href(row["billing_run_id"]), row["billing_run_id"]),
+        "billCycle": cycle_ref(conn, row["billing_run_id"]),
         # the bill's own period ends on the next cycle day, whatever the account says today
         "nextBillDate": from_billing_date(row["bill_period"].upper),
         "remainingAmount": money(billing.remaining_amount(row, allocated), currency),
@@ -162,21 +171,35 @@ def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         ],
         "category": row["category"],
         "runType": row["run_type"],
-        "billDocument": [
-            {
-                "@type": "Attachment",
-                "name": f"{bill_no(row['id'])}.json",
-                "attachmentType": "bill",
-                "mimeType": "application/json",
-                "content": row["bill_document"],
-            }
-        ]
-        if row["bill_document"]
-        else [],
+        "billDocument": [_document_body(row)] if row["bill_document"] else [],
         "state": row["state"],
-        "billingAccount": _account_ref(conn, row["billing_account_id"]),
+        "billingAccount": account_ref(account),
+        **({} if financial is None else {"financialAccount": financial_ref(financial)}),
+        **(
+            {"paymentMethod": account["details"]["defaultPaymentMethod"]}
+            if "defaultPaymentMethod" in account["details"]
+            else {}
+        ),
+        "relatedParty": [customer_party(conn, account)],
         "lastUpdate": utc(row["updated_at"]),
         "@type": "CustomerBill",
+    }
+
+
+def _document_body(row: Row) -> dict[str, Any]:
+    """The bill's one document, embedded (`content`): it has no address of its own (no
+    href or url) and no validity period."""
+    raw = base64.b64decode(row["bill_document"])
+    fmt = json.loads(raw).get("format", {}).get("name", "JSON detailed")
+    return {
+        "@type": "Attachment",
+        "id": str(row["id"]),
+        "name": f"{bill_no(row['id'])}.json",
+        "description": f"Bill {bill_no(row['id'])}, {fmt}",
+        "attachmentType": "bill",
+        "mimeType": "application/json",
+        "content": row["bill_document"],
+        "size": {"amount": len(raw), "units": "bytes"},
     }
 
 
@@ -184,10 +207,15 @@ def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     offering = catalog.get_product_offering(conn, row["product_offering_id"])
     assert offering is not None  # foreign key
     bill_id = row["customer_bill_id"]
+    period = row["period"]
+    covered = f"{offering['name']}, {period.lower} - {period.upper - timedelta(days=1)}"
     return without_nulls(
         {
             "id": str(row["id"]),
             "href": f"{BASE}/appliedCustomerBillingRate/{row['id']}",
+            "name": offering["name"],
+            "description": f"refund of {covered}" if row["charge_type"] == "refund" else covered,
+            "characteristic": [],  # billing sets none
             "date": utc(row["applied_at"]),
             "appliedBillingRateType": RATE_TYPE[row["charge_type"]],
             "taxExcludedAmount": money(row["amount"], row["currency"]),
@@ -203,7 +231,9 @@ def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             ],
             "periodCoverage": date_period(row["period"]),
             "isBilled": bill_id is not None,
-            "bill": ref("CustomerBill", bill_href(bill_id), bill_id) if bill_id else None,
+            "bill": ref("CustomerBill", bill_href(bill_id), bill_id, bill_no(bill_id))
+            if bill_id
+            else None,
             "billingAccount": _account_ref(conn, row["billing_account_id"]),
             "product": ref(
                 "Product", product_href(row["product_id"]), row["product_id"], offering["name"]
@@ -298,27 +328,70 @@ def patch_bill(
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 
-CYCLE_ATTRIBUTES = ("name", "billingDate", "billingPeriod", "description", "validFor")
+CYCLE_ATTRIBUTES = (
+    "name",
+    "billingDate",
+    "billingPeriod",
+    "description",
+    "validFor",
+    "chargeDate",
+    "creditDate",
+    "mailingDate",
+    "paymentDueDate",
+    "BillCycleSpecification",
+)
 
 
 def cycle_href(cycle_id: Any) -> str:
     return f"{BASE}/billCycle/{cycle_id}"
 
 
-def cycle_body(row: Row) -> dict[str, Any]:
+def _cycle_name(day: Any) -> str:
+    return f"Daily billing {day}"
+
+
+def cycle_ref(conn: psycopg.Connection, run_id: Any) -> dict[str, Any]:
+    run = billing.get_run_by_id(conn, run_id)
+    assert run is not None  # foreign key
+    return ref("BillCycle", cycle_href(run_id), run_id, _cycle_name(run["run_date"]))
+
+
+def cycle_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
+    """A run charges, issues its bills and applies credit on its own date; its bills are
+    due `BILL_PAYMENT_TERM_DAYS` later (the term they were issued with). Every run applies
+    the one monthly policy, whatever an account's named specification calls it."""
     day = row["run_date"]
+    on = from_billing_date(day)
+    policy = cycle_specification_body()
+    due = billing.run_payment_due_date(conn, row["id"]) or day + timedelta(
+        days=settings.bill_payment_term_days
+    )
     return {
         "id": str(row["id"]),
         "href": cycle_href(row["id"]),
         "@type": "BillCycle",
-        "name": f"Daily billing {day}",
-        "billingDate": from_billing_date(day),
+        "name": _cycle_name(day),
+        "billingDate": on,
         "billingPeriod": day.isoformat(),
+        "chargeDate": on,
+        "creditDate": on,
+        "mailingDate": on,
+        "paymentDueDate": from_billing_date(due),
+        "BillCycleSpecification": {
+            **ref(
+                "BillingCycleSpecification",
+                f"{CYCLE_BASE}/{CYCLE_ID}",
+                CYCLE_ID,
+                policy["name"],
+                ref_type="BillCycleSpecificationRef",
+            ),
+            "description": policy["description"],
+        },
         "description": (
             "Daily billing run; account billing periods are carried by individual bills."
         ),
         "validFor": {
-            "startDateTime": from_billing_date(day),
+            "startDateTime": on,
             "endDateTime": from_billing_date(day + timedelta(days=1)),
         },
     }
@@ -342,7 +415,8 @@ def list_bill_cycles(request: Request, tx: Tx) -> TmfJSONResponse:
         rows, total = select_page(
             conn, "billing_run", where=query.where, offset=query.offset, limit=query.limit
         )
-    return listing.list_response([cycle_body(row) for row in rows], total, query)
+        items = [cycle_body(conn, row) for row in rows]
+    return listing.list_response(items, total, query)
 
 
 @router.get("/billCycle/{cycle_id}")
@@ -352,7 +426,8 @@ def get_bill_cycle(cycle_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
         row = billing.get_run_by_id(conn, parse_id("billCycle", cycle_id))
         if row is None:
             raise not_found("billCycle", cycle_id)
-    return TmfJSONResponse(listing.select_fields(cycle_body(row), fields))
+        body = cycle_body(conn, row)
+    return TmfJSONResponse(listing.select_fields(body, fields))
 
 
 @router.get("/appliedCustomerBillingRate")

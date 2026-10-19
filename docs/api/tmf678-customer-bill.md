@@ -68,7 +68,19 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF678-C
 - Newly issued bills carry billDocument: a base64 JSON attachment with exact totals,
   optional charge detail, and snapshotted presentation preferences. Configuration
   and settlement changes do not rewrite it. Legacy documents are not fabricated.
-  See [billing completion](../decisions/billing-completion.md).
+  See [billing completion](../decisions/billing-completion.md). It carries `id` (the
+  bill's), `size` (bytes) and `description`; being embedded, it has no `href`, `url` or
+  `validFor` (accepted deviations in `tests/tmf-gaps.txt`).
+- An ABR's `name` is its offering's, `description` what it bills (`<offering>, <first
+  day> - <last day>`; a refund `refund of ...`), `characteristic` empty. Every
+  `billingAccount` reference states `ratingType: postpaid`; `bill` references carry the
+  bill number as `name` (`tests/test_api_last_gaps.py`).
+- A bill names its account's customer (`relatedParty`, role `customer`), its account's
+  `financialAccount` (if linked) and `defaultPaymentMethod` (as `paymentMethod`, if set).
+- A bill cycle (a daily run) states `chargeDate` = `mailingDate` = `creditDate` = its
+  date, `paymentDueDate` = the due date of the bills it issued on its date (else its date
+  + `BILL_PAYMENT_TERM_DAYS`), and `BillCycleSpecification` = the monthly policy.
+- /customerBillOnDemand stores and returns `relatedParty` as sent.
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf678-customer-bill.md`](../../scripts/docs/api-notes/tmf678-customer-bill.md).
 

@@ -15,7 +15,7 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | `updated_at` | `timestamp with time zone` | no | `now()` | Last change: the database's now(), maintained by the set_updated_at trigger. |
 | `product_offering_id` | `uuid` | yes |  | The offering the price is attached to; NULL while unattached (an unattached price prices nothing). Never detached once set. |
 | `name` | `text` | yes |  |  |
-| `price_type` | `price_type` (enum, see [README](README.md#enums)) | no |  | TMF620 priceType: recurring or oneTime. Billing uses recurring only. |
+| `price_type` | `price_type` (enum, see [README](README.md#enums)) | no |  | TMF620 priceType: recurring, oneTime, or an alteration (discount, allowance, penalty: records). Billing uses recurring only. |
 | `recurring_period` | `recurring_charge_period_type` (enum, see [README](README.md#enums)) | yes |  | TMF620 recurringChargePeriodType (monthly); set iff recurring. |
 | `recurring_period_length` | `smallint` | no | `1` | TMF620 recurringChargePeriodLength; always 1. |
 | `amount` | `numeric(12,2)` | yes |  | numeric(12,2), exact (never float); the price for one whole period, never negative. Immutable. |

@@ -111,8 +111,10 @@ def test_patch_validation(api, shop):
     product = api.post(PRODUCT, product_body(account, offering)).json()
     assert api.patch(product["href"], {"terminationDate": None}).status_code == 422
     assert api.patch(product["href"], {}).status_code == 400
-    assert api.patch(product["href"], {"startDate": iso(midnight(NOV1))}).status_code == 400
-    assert api.patch(product["href"], {"status": "terminated"}).status_code == 400
+    # account and start date only repeat their value; status only suspends or resumes
+    assert api.patch(product["href"], {"startDate": iso(midnight(NOV1))}).status_code == 409
+    assert api.patch(product["href"], {"startDate": product["startDate"]}).status_code == 200
+    assert api.patch(product["href"], {"status": "terminated"}).status_code == 422
     assert (
         api.patch(f"{PRODUCT}/{apidata.NIL}", {"terminationDate": iso(midnight(NOV1))}).status_code
         == 404

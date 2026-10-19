@@ -24,6 +24,7 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 | `payment_method_name` | `text` | yes |  | TMF676 paymentMethod.name as sent; null when only @type was sent. |
 | `payment_method_type` | `text` | yes |  | TMF676 paymentMethod.@type as sent; null when only name was sent. |
 | `tax_amount` | `numeric(12,2)` | no | `0` | Money. TMF676 taxAmount as sent (0: not sent); amount - tax_amount is TMF amount. |
+| `details` | `jsonb` | no | `'{}'::jsonb` | TMF676 descriptive attributes as sent (name, channel, payer, the paymentMethod as sent, ...), validated against the spec. |
 
 ## Foreign keys
 
@@ -38,6 +39,7 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 | `payment_amount_check` | check | `CHECK ((amount > (0)::numeric))` |
 | `payment_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `payment_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
+| `payment_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `payment_method_named` | check | `CHECK (((payment_method_name IS NOT NULL) OR (payment_method_type IS NOT NULL)))` |
 | `payment_payment_method_name_check` | check | `CHECK ((length(payment_method_name) > 0))` |
 | `payment_payment_method_type_check` | check | `CHECK ((length(payment_method_type) > 0))` |

@@ -142,12 +142,19 @@ CANCEL_ATTRIBUTES = (
 ItemDocuments = documents_model("ProductOrderItemDocuments", API, ITEM_DOCUMENTS)
 
 
+class ItemProduct(ProductRef):
+    """The product an item names; a modify item's `status` suspends or resumes it
+    (docs/decisions/tmf-api.md#suspension-2026-10-19)."""
+
+    status: Literal["suspended", "active"] | None = None
+
+
 class OrderItemIn(ItemDocuments):  # type: ignore[misc,valid-type]
     id: str = Field(min_length=1)
     action: Literal["add", "modify", "delete", "noChange"]
     quantity: Literal[1] = 1
     product_offering: ProductOfferingRef | None = None
-    product: ProductRef | None = None
+    product: ItemProduct | None = None
     billing_account: RatedBillingAccountRef | None = None
     # nested items: processed like the others, listed after their parent
     product_order_item: list["OrderItemIn"] | None = None
@@ -283,10 +290,15 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
             raise unprocessable(
                 f"item {item.id}: a {item.action} item cannot carry productOffering"
             )
-    elif item.product is None or item.product_offering is None:
+        if item.product.status is not None:
+            raise unprocessable(
+                f"item {item.id}: product.status is a modify item's (it suspends or resumes"
+                " the product)"
+            )
+    elif item.product is None or (item.product_offering is None) == (item.product.status is None):
         raise unprocessable(
-            f"item {item.id}: a modify item needs product and productOffering (the offering"
-            " it changes to)"
+            f"item {item.id}: a modify item needs product and either productOffering (the"
+            " offering it changes to) or product.status (suspended or active), not both"
         )
     return ItemRequest(
         item_id=item.id,
@@ -296,6 +308,7 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
         billing_account_id=item.billing_account.id if item.billing_account else None,
         parent_item_id=parent,
         details=documents or None,
+        product_status=item.product.status if item.product else None,
     )
 
 
@@ -313,6 +326,7 @@ def _stored_request(conn: psycopg.Connection, order: Row) -> OrderRequest:
                 product_id=item["product_id"],
                 parent_item_id=item_ids.get(item["parent_id"]),
                 details=item["details"] or None,
+                product_status=item["product_status"],
             )
             for item in items
         ),
@@ -348,6 +362,13 @@ def _quoted_taxes(conn: psycopg.Connection, item: Row) -> tuple[Tax, ...]:
     return billing.price_taxes(price["details"])
 
 
+def _quoted_unit(conn: psycopg.Connection, item: Row) -> dict[str, Any] | None:
+    """The unitOfMeasure of the price an item was quoted at, if it has one."""
+    price = catalog.get_product_offering_price(conn, item["quoted_price_id"])
+    assert price is not None  # foreign key
+    return price["details"].get("unitOfMeasure")
+
+
 def _item_body(
     conn: psycopg.Connection, row: Row, account: Row | None, children: dict[Any, list[Row]]
 ) -> dict[str, Any]:
@@ -372,6 +393,8 @@ def _item_body(
         )
     if row["product_id"] is not None:
         body["product"] = ref("Product", product_href(row["product_id"]), row["product_id"])
+        if row["product_status"] is not None:
+            body["product"]["status"] = row["product_status"]
     body |= row["details"]
     nested = children.get(row["id"], [])
     if nested:
@@ -387,6 +410,8 @@ def _item_body(
             name=row["quoted_price_name"],
             tax=tax_on(row["quoted_amount"], taxes),
             tax_rate=total_rate(taxes),
+            unit_of_measure=_quoted_unit(conn, row),
+            billing_account=body.get("billingAccount"),
         )
         body["itemPrice"] = [price]
         body["itemTotalPrice"] = [price]  # quantity is always 1
@@ -435,6 +460,10 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         assert account is not None  # a processed order has one
         taxes = [_quoted_taxes(conn, i) for i in adds]
         rates = {total_rate(t) for t in taxes}
+        # one price for all items: the total comes from it, in its unit
+        prices = {(i["quoted_price_id"], i["quoted_price_name"]) for i in adds}
+        units = [_quoted_unit(conn, i) for i in adds]
+        ((price_id, price_name),) = prices if len(prices) == 1 else ((None, None),)
         total = [
             monthly_price(
                 sum((i["quoted_amount"] for i in adds), Decimal("0.00")),
@@ -446,6 +475,10 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                     Decimal("0.00"),
                 ),
                 tax_rate=rates.pop() if len(rates) == 1 else None,
+                price_id=price_id,
+                price_name=price_name,
+                unit_of_measure=units[0] if all(u == units[0] for u in units) else None,
+                billing_account=account_ref(account),
             )
         ]
     start = row["requested_start_date"]

@@ -7,6 +7,18 @@ conventions: [tmf-api.md](tmf-api.md).
 
 ## TMF620 mapping
 
+### Alteration price types (2026-10-19)
+
+Part of [the last gaps](tmf-api.md#the-last-gaps-2026-10-18) (the human: "decide based
+on TMF"). TMF620's `priceType` is free text whose description names `recurring`,
+`discount`, `allowance`, `penalty` as examples, with no arithmetic. So a price may be
+`discount`, `allowance` or `penalty` besides `recurring` and `oneTime`: stored, served,
+exported and imported like any price - **a record, never billed**. Billing charges
+`recurring` prices only, as before; TMF622/637 prices answer `priceAlteration: []`.
+Like `oneTime`, an alteration has no `recurringChargePeriodType` (422). Migration
+`0028` adds the three values to `price_type` (rolling back refuses while such a price
+exists). Test: `tests/test_api_last_gaps.py`.
+
 ### Catalog attributes (2026-10-18)
 
 Slice 6 of "Following TMF" ([tmf-api.md](tmf-api.md#following-tmf-2026-10-17)), the plan

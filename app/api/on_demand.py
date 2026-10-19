@@ -10,13 +10,13 @@ from app.api.account import account_ref
 from app.api.bill import BASE, bill_href
 from app.api.common import (
     RatedBillingAccountRef,
-    TmfModel,
     check_server_set,
     check_type,
     claim_id,
     created,
+    documents_model,
     meta_body,
-    parse,
+    parse_documented,
     parse_id,
     ref,
     take_id,
@@ -31,13 +31,23 @@ from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
 from app.repository import parties
-from app.repository._sql import fetch_one, returning, select_page
+from app.repository._sql import fetch_one, jsonb, returning, select_page
 
 router = APIRouter(prefix=BASE)
-ATTRIBUTES = ("billingAccount", "customerBill", "state", "name", "description", "lastUpdate")
+# Documents to us: stored as sent, checked against the spec.
+DOCUMENTS = ("relatedParty",)
+ATTRIBUTES = (
+    "billingAccount",
+    "customerBill",
+    "state",
+    "name",
+    "description",
+    "lastUpdate",
+    *DOCUMENTS,
+)
 
 
-class DemandCreate(TmfModel):
+class DemandCreate(documents_model("DemandDocuments", "TMF678", DOCUMENTS)):
     billing_account: RatedBillingAccountRef
     name: str | None = None
     description: str | None = None
@@ -61,6 +71,7 @@ def demand_body(conn, row):
             )
             if row["customer_bill_id"]
             else None,
+            **row["details"],
         }
     ) | meta_body(row)
 
@@ -109,7 +120,9 @@ def create_bill_demand(
     check_type(body, "CustomerBillOnDemand")
     uid = take_id(body)
     server_set = take_server_set(body, ("state", "customerBill", "lastUpdate"))
-    data = parse(DemandCreate, body)
+    data, documents = parse_documented(
+        DemandCreate, body, DOCUMENTS, "TMF678", "CustomerBillOnDemand_FVO"
+    )
     with tx() as conn:
         # FOR KEY SHARE until commit: a concurrent delete of the account waits for this
         if parties.get_billing_account(conn, data.billing_account.id, "key share") is None:
@@ -123,8 +136,9 @@ def create_bill_demand(
                     """
                     INSERT INTO customer_bill_on_demand
                         (id, billing_account_id, requested_at, ready_on, updated_at, name,
-                         description)
-                    VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s)
+                         description, details)
+                    VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s,
+                            %s)
                     RETURNING *
                 """,
                     (
@@ -135,6 +149,7 @@ def create_bill_demand(
                         now,
                         data.name,
                         data.description,
+                        jsonb({k: v for k, v in documents.items() if v is not None}),
                     ),
                 )
         except UniqueViolation:

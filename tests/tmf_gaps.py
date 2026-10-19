@@ -27,14 +27,16 @@ means removing its line there.
 
 import uuid
 from collections.abc import Iterator
+from datetime import timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
 from fastapi.testclient import TestClient
 
 from app.api import common
-from tests import contract
+from tests import apidata, contract, timeline
 from tests.apiclient import APIS, MERGE_PATCH
+from tests.seed import seed
 
 CONTROL = "zzProbe"
 # The specs' base paths are ours, per API (tests/apiclient.py)
@@ -142,18 +144,19 @@ def _value(shape: str | None, inner: dict[str, Any] | None = None) -> Any:
     return "probe"
 
 
-def probe_writes(client: TestClient) -> list[str]:
+def probe_writes(client: TestClient, server_set: set[str] | None = None) -> list[str]:
     """The app tells which attributes a request took as server-set (`on_server_set`):
-    those are compared whole, so the level below them is not probed."""
+    those are compared whole, so the level below them is not probed. `server_set`, if
+    given, collects them as "<api> <method> <path> <name>"."""
     taken: set[str] = set()
     common.on_server_set = taken.update
     try:
-        return _probe_writes(client, taken)
+        return _probe_writes(client, taken, set() if server_set is None else server_set)
     finally:
         common.on_server_set = None
 
 
-def _probe_writes(client: TestClient, taken: set[str]) -> list[str]:
+def _probe_writes(client: TestClient, taken: set[str], server_set: set[str]) -> list[str]:
     lines = []
     for api, method, path, schema in write_operations():
         url = _url(api, path)
@@ -173,6 +176,8 @@ def _probe_writes(client: TestClient, taken: set[str]) -> list[str]:
             if verdict:
                 lines.append(f"{label} {verdict} {name}")
                 continue
+            if name in taken:
+                server_set.add(f"{label} {name}")
             if shape is None or name in taken:
                 continue  # a server-set attribute is compared whole: nothing below it
             index = ".0" if shape == "array" else ""
@@ -219,6 +224,172 @@ def probe_reads(client: TestClient) -> list[str]:
     return lines
 
 
+def populate(api: Any) -> None:
+    """Data for the nested read probe: the demo seed (tests/seed.py), and one of each
+    resource it does not create."""
+    seed(api, api.clock, timeline.TODAY)
+    (party, *_) = api.get(f"{apidata.PARTY}/individual").json()
+    (cust, *_) = api.get(apidata.CUSTOMER).json()
+    acc = apidata.account(api, cust, name="Probe")
+    apidata.payment(api, acc, 100)
+    payout = {
+        "account": {"id": acc["id"]},
+        "totalAmount": {"unit": "RUB", "value": 20},
+        "paymentMethod": {"name": "cash payout", "@type": "Cash"},
+    }
+    offering = _versioned_offering(api)
+    starts = timeline.iso(timeline.START + timedelta(days=5))
+    apidata.order(api, acc, apidata.add_item(offering), requestedStartDate=starts)
+    placed = apidata.order(api, acc, apidata.add_item(offering), requestedStartDate=starts)
+    owner = {
+        "@type": "RelatedPartyRefOrPartyRoleRef",
+        "role": "owner",
+        "partyOrPartyRole": {"id": party["id"], "@type": "PartyRef", "@referredType": "Individual"},
+    }
+    account_api = "/tmf-api/accountManagement/v5"
+    export = _created(api, f"{apidata.CATALOG}/exportJob", {"@type": "ExportJob"})
+    for url, body in (
+        ("/tmf-api/payment/v4/refund", payout),
+        (
+            "/tmf-api/productOrderingManagement/v5/cancelProductOrder",
+            {"@type": "CancelProductOrder", "productOrder": {"id": placed["id"]}},
+        ),
+        (f"{apidata.CATALOG}/importJob", {"@type": "ImportJob", "url": export["url"]}),
+        (f"{account_api}/billFormat", {"@type": "BillFormat", "name": "JSON summary"}),
+        (
+            f"{account_api}/billPresentationMedia",
+            {"@type": "BillPresentationMedia", "name": "Portal"},
+        ),
+        (f"{account_api}/financialAccount", {"name": "Probe", "relatedParty": [owner]}),
+        (f"{account_api}/partyAccount", {"name": "Probe", "relatedParty": [owner]}),
+        (f"{account_api}/settlementAccount", {"name": "Probe", "relatedParty": [owner]}),
+        (f"{_BILL_API}/customerBillOnDemand", {"billingAccount": {"id": acc["id"]}}),
+    ):
+        _created(api, url, body)
+
+
+_BILL_API = "/tmf-api/customerBillManagement/v5"
+
+
+def _versioned_offering(api: Any) -> dict[str, Any]:
+    """An offering whose references carry what the seed's never do: versions, a target
+    product schema, a price's unit of measure."""
+    spec = _created(
+        api,
+        f"{apidata.CATALOG}/productSpecification",
+        {
+            "@type": "ProductSpecification",
+            "name": "Probe",
+            "lifecycleStatus": "Active",
+            "version": "1.0",
+            "targetProductSchema": {
+                "@type": "ProbeProduct",
+                "@schemaLocation": "https://example.com/probe.json",
+            },
+        },
+    )
+    price = _created(
+        api,
+        f"{apidata.CATALOG}/productOfferingPrice",
+        {
+            "@type": "ProductOfferingPrice",
+            "name": "Probe monthly",
+            "lifecycleStatus": "Active",
+            "priceType": "recurring",
+            "recurringChargePeriodType": "monthly",
+            "price": {"unit": "RUB", "value": 100},
+            "unitOfMeasure": {"amount": 1, "units": "line"},
+            "validFor": {"startDateTime": apidata.START},
+        },
+    )
+    return _created(
+        api,
+        f"{apidata.CATALOG}/productOffering",
+        {
+            "@type": "ProductOffering",
+            "name": "Probe",
+            "version": "1.0",
+            "lifecycleStatus": "Active",
+            "validFor": {"startDateTime": apidata.START},
+            "productSpecification": {"id": spec["id"], "@type": "ProductSpecificationRef"},
+            "productOfferingPrice": [{"id": price["id"], "@type": "ProductOfferingPriceRef"}],
+        },
+    )
+
+
+def _created(api: Any, url: str, body: dict[str, Any]) -> dict[str, Any]:
+    response = api.post(url, body)
+    assert response.status_code == 201, f"{url}: {response.text}"
+    return response.json()
+
+
+def _every(client: TestClient, url: str) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    while True:
+        page = client.get(f"{url}?offset={len(items)}&limit=100")
+        assert page.status_code == 200, f"{url}: {page.text}"
+        items += page.json()
+        if not page.json() or len(items) >= int(page.headers["X-Total-Count"]):
+            return items
+
+
+def probe_nested_reads(
+    client: TestClient,
+    writes: list[str],
+    server_set: set[str],
+    only: frozenset[str] | None = None,
+) -> list[str]:
+    """One level into responses, on populated data (`populate`): for every object or
+    array attribute some resource returns, each attribute of its spec schema that no
+    returned value carries is **missing** - unless POST takes it into a stored value
+    (stored as sent, returned as sent: an unset optional attribute is no gap). An
+    attribute POST takes as server-set (compared, not stored) is probed. Attributes no
+    resource returns a value for are not probed below their top level."""
+    lines = []
+    for api in SPECS:
+        doc = contract.spec(api)
+        schemas = doc.get("components", {}).get("schemas") or doc["definitions"]
+        for resource, schema_name in APIS[BASES[api]][1].items():
+            if resource == "hub" or (only is not None and resource not in only):
+                continue
+            items = _every(client, f"{BASES[api]}/{resource}")
+            assert items, f"{api} {resource}: no data to probe (populate)"
+            post = f"{api} POST /{resource}"
+            request = next(
+                (
+                    s
+                    for a, m, p, s in write_operations()
+                    if (a, m, p) == (api, "POST", f"/{resource}")
+                ),
+                None,
+            )
+            request_props = properties(api, request) if request else {}
+            for name, prop in sorted(properties(api, schemas[schema_name]).items()):
+                if _shape(api, prop) is None:
+                    continue
+                values = [item[name] for item in items if item.get(name) not in (None, [])]
+                if not values:
+                    continue
+                seen: set[str] = set()
+                for value in values:
+                    for element in value if isinstance(value, list) else [value]:
+                        seen |= set(element) if isinstance(element, dict) else set()
+                stored: dict[str, Any] = {}
+                if name in request_props and f"{post} {name}" not in server_set:
+                    stored = properties(api, _element(api, request_props[name]))
+                for sub in sorted(properties(api, _element(api, prop))):
+                    if sub.startswith("@") or sub in seen:
+                        continue
+                    refused = any(
+                        line.startswith(f"{post} ")
+                        and line.endswith((f" {name}", f" {name}.{sub}"))
+                        for line in writes
+                    )
+                    if sub not in stored or refused:
+                        lines.append(f"{api} GET /{resource}/{{id}} missing {name}.{sub}")
+    return lines
+
+
 def _send_get(client: TestClient, url: str) -> tuple[int, str]:
     response = client.get(url)
     message = response.json().get("message", "") if response.status_code >= 300 else ""
@@ -260,6 +431,14 @@ def probe_base_paths() -> list[str]:
     return lines
 
 
-def gaps(client: TestClient) -> list[str]:
-    found = probe_writes(client) + probe_reads(client) + probe_patch_formats(client)
+def gaps(api: Any) -> list[str]:
+    """`api`: a TmfClient with a clock (the `api` fixture) on an empty database. The
+    writes are probed first, on the empty database; then it is populated for the nested
+    reads."""
+    client = api.client
+    server_set: set[str] = set()
+    writes = probe_writes(client, server_set)
+    found = writes + probe_reads(client) + probe_patch_formats(client)
+    populate(api)
+    found += probe_nested_reads(client, writes, server_set)
     return sorted(set(found + probe_base_paths()))

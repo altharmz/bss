@@ -71,6 +71,14 @@ router = APIRouter(prefix=BASE)
 AccountState = Literal["Active", "Suspended", "Closed"]
 OWNER_ROLE = "owner"
 BALANCE_TYPE = "currentBalance"
+
+
+def balance_id(currency: str) -> str:
+    """An AccountBalance's id within the account's list: one current balance per
+    currency. It has no validFor: it is the balance now."""
+    return f"{BALANCE_TYPE}-{currency}"
+
+
 # Documents to us: stored as sent (checked against the spec), no behaviour.
 # docs/decisions/accounts.md, "Account attributes".
 FINANCIAL_DOCUMENTS = ("contact", "taxExemption")
@@ -352,6 +360,7 @@ def financial_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "creditLimit": credit_limit_body(row),
         "accountBalance": [
             {
+                "id": balance_id(currency),
                 "balanceType": BALANCE_TYPE,
                 "amount": money(amount.quantize(CENT), currency),
                 "@type": "AccountBalance",
