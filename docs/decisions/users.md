@@ -1,0 +1,119 @@
+# Users: UI user management
+
+Index: [README.md](README.md). Related: [internal-api.md](internal-api.md),
+[frontend.md](frontend.md), [mcp.md](mcp.md), [overview.md](../overview.md#authentication-and-operator-identity).
+
+## UI user management: the plan (2026-10-19)
+
+**Plan, prepared for the next session; the human confirms it (and answers the open
+questions below) before implementation.** Written at the human's request:
+
+> Create user menu in UI. Have two types of users: admin and user. Admin can create and
+> manage other users and perform all UI operations. User can perform all UI operations
+> except user management. User can change his password.
+
+### Where we start
+
+- **The app has no authentication.** Caddy (vps-infra, not this repo) asks for basic
+  auth in front of everything but `/healthz` and `/billing-status`, and sets
+  `X-Remote-User`, which the app shows as the operator - **display only, not proof of
+  identity**: any container on the `shared` network, or a shell/SSH tunnel on the VPS,
+  reaches the app directly (Open check in CLAUDE.md).
+- Basic-auth users and their passwords live in vps-infra's Caddyfile: the app can neither
+  create users nor change a password, and has no role to check.
+- The `smoke` basic-auth user (GET/HEAD only, enforced by Caddy) runs
+  `scripts/web-smoke.sh` after every deploy.
+- The MCP service has its own users (`MCP_USERS`) and calls the app over the `shared`
+  network with `X-Remote-User: mcp:<name>`; its scopes are enforced in `bss_mcp`.
+
+**Consequence:** roles cannot be enforced while identity is Caddy's. The app has to own
+authentication - and then it must authenticate **every** request, not only the UI's,
+or a user could do over `/tmf-api` what the UI denies.
+
+### Proposed design
+
+- **U1 Users in the app.** Table `app_user` (migration `0029`): `username` (unique,
+  `^[A-Za-z0-9._@-]{1,64}$`, the operator name everywhere), `role` (`admin` | `user`),
+  `password_hash` (stdlib scrypt, the parameters of `bss_mcp/passwords.py`: no new
+  dependency), `disabled`, `must_change_password`, timestamps, `last_login_at`. Users
+  are disabled, never deleted: their names stay on bill history and worker requests.
+- **U2 Sessions.** `POST /internal/v1/session` (username, password) sets an HttpOnly,
+  Secure (outside dev), `SameSite=Strict` cookie holding a random token; the server
+  keeps only its hash in `app_session` (user, created, last seen, expires). `GET
+  /internal/v1/session` answers who is signed in (name, role, must-change flag); `DELETE`
+  signs out. Idle timeout and absolute lifetime from settings (Q5). Failed logins are
+  rate-limited per user name and client address, as `bss_mcp/ratelimit.py` does.
+  Disabling a user, a password change or an admin reset revokes their sessions.
+- **U3 Enforcement in the app.** One dependency on every `/tmf-api/*` and
+  `/internal/*` route: a valid session, or the service credential (U8). `/healthz`,
+  `/billing-status` and the session endpoints stay open. A test enumerates
+  `app.routes` so a new route cannot ship unprotected. 401 without credentials; 403 for
+  a role that may not. Writes with a session cookie also need a custom request header
+  the UI always sends (CSRF, with `SameSite=Strict`); it is pinned on both sides like
+  every UI write.
+- **U4 Roles.** `admin`: everything, plus `/internal/v1/users*`. `user`: everything else
+  (all UI operations, the TMF APIs). Guards: the last active admin cannot be disabled or
+  demoted; nobody disables themselves.
+- **U5 Users API** (admin only, internal API): list; create (username, role, initial
+  password - the user must change it at first sign-in); PATCH role, disabled, reset
+  password (sets must-change again). Every change audited in the event/operator style
+  already used (who, when).
+- **U6 Own password.** `POST /internal/v1/session/password` (current, new). Policy: at
+  least 12 characters, not the user name, no other rules (Q4). Other sessions of the
+  user are revoked.
+- **U7 Operator identity.** The session's username becomes the operator
+  (`/internal/v1/context`, `requested_by`, bill hold/release history), replacing
+  `X-Remote-User` from Caddy; for the service credential it stays the principal it
+  states (`mcp:<name>`).
+- **U8 Service credential** for the MCP service (and the smoke test, Q6): a shared
+  secret in `.env.prod` for both services, sent as a header; the app accepts the
+  principal header only together with it. This also closes the Open check "bss app is
+  reachable without auth from any container on `shared`" for everything but
+  `/healthz` and `/billing-status`.
+- **U9 Bootstrap.** `python -m app.users create <name> --role admin` reads the password
+  from stdin, prints nothing secret; a make target locally and through `make remote` on
+  the VPS (Makefile: harness file, the human's OK). Locally `make seed` creates no user;
+  tests sign in through a fixture.
+- **U10 UI.**
+  - Sign-in screen (route `/sign-in`, not `/login`: Caddy routes `/login` to the MCP
+    service). Any 401 sends the browser there and back after sign-in; a must-change user
+    lands on Change password first.
+  - **User menu** where the sidebar shows the operator today: name and role, *Change
+    password*, *Users* (admins only), *Sign out*.
+  - **Users screen** (`/users`, admins only; a user gets "not allowed"): list (name,
+    role, active, last sign-in), New user, Edit (role, disable/enable), Reset password.
+  - Write bodies pinned in component tests and `tests/test_ui_requests.py`; e2e signs in.
+- **U11 Caddy.** With the app authenticating, Caddy's basic auth on the bss site is a
+  second login. Recommended: a vps-infra change request removing basic auth from the
+  bss site block (the app is the boundary), deployed **after** the app with
+  authentication is live (until then both ask; nothing is ever open).
+
+### Open questions for the human
+
+- **Q1** Remove Caddy's basic auth once the app authenticates (U11, recommended), or keep
+  it as an outer fence (two logins)?
+- **Q2** Do roles matter beyond user management? Proposed: no - `user` may do everything
+  in the UI and the TMF APIs except managing users. And MCP principals: they act as
+  today (their scopes), never as admins.
+- **Q3** Disable only, or also delete users? Proposed: disable only (history keeps the
+  names).
+- **Q4** Password policy: proposed at least 12 characters, not the user name; an admin
+  reset forces a change at the next sign-in.
+- **Q5** Session lifetime: proposed 8 hours idle, 7 days absolute.
+- **Q6** The smoke test: a service credential limited to GET/HEAD (proposed), or an app
+  user?
+- **Q7** Should the MCP login (`MCP_USERS`) later use the app's users? Proposed: a later
+  slice, not this one.
+
+### Slices
+
+1. **Backend** (migration `0029`): users, sessions, enforcement on every route, roles,
+   the users and password endpoints, the service credential in `bss_mcp`, the bootstrap
+   CLI. Tests per rule, negative proofs (a route without the dependency; a user calling
+   a users endpoint; a disabled user's session), `make test` x3.
+2. **UI**: sign-in, user menu, change password, Users screen; component tests, pinned
+   bodies, e2e.
+3. **Deploy** (each step the human's approval): `compose.prod.yaml` and `deploy.sh`
+   (service credential, smoke) - harness files, diff first; the first admin on the VPS;
+   then the vps-infra change request (U11). Rolling back `0029` drops users and sessions:
+   needs `alembic downgrade 0028` by hand.

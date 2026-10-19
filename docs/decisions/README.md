@@ -21,6 +21,7 @@ and record a new decision in it.
 | [mcp.md](mcp.md) | MCP connector: service, SDK, scopes, money as decimal strings, operator `mcp:<name>`, identity check |
 | [frontend.md](frontend.md) | Frontend (stage 5) decisions; Frontend conventions |
 | [infra.md](infra.md) | Template origin (`make init`); Environments (image size); Base image; Layout; Conventions (healthchecks, tests, local postgres, pinned dependencies, immutable migrations); Shared infrastructure (vps-infra); Known compose pitfalls; Deploying the UI; the two fixes to port to vps-lab-template |
+| [users.md](users.md) | UI user management: users, roles (admin, user), sessions, the plan (2026-10-19) |
 | [harness.md](harness.md) | Pre-commit hook; Pre-push hook; Progress tracker; Agent guardrails: what they are for |
 | [retired.md](retired.md) | Rules or decisions removed on purpose, with the reason |
 

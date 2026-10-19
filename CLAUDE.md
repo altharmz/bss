@@ -186,6 +186,13 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
+**Deployed** (the human, 2026-10-19): **`bss-app:d499338`** runs on the VPS - everything
+up to and including slice 8b: migrations up to `0027`, the TMF629/TMF676 base path move,
+event notifications (outbound HTTPS from the worker), the MCP connector, the bill
+lifecycle and the Billing runs screen. **Not deployed: `a53ac8c` (the last gaps,
+migration `0028`)** and anything after it; the next `make verify` ships them (the
+human's approval first).
+
 **Following TMF** (2026-10-17, the human's rule: what the vendored specs define is
 implemented, the rest skipped; "proceed with development"). Slice 0 done locally: the
 exact gap list `tests/tmf-gaps.txt` (831 lines), probed by `tests/tmf_gaps.py` and
@@ -197,7 +204,7 @@ Slice 1 (nothing dropped or rewritten; migration `0021`; 705 lines left) done lo
 `a8b42e3`. Slice 3 (2026-10-18; base paths: TMF629 `/tmf-api/customer/v5`, TMF676
 `/tmf-api/payment/v4`, straight rename, no aliases; 649 lines left),
 [decision](docs/decisions/tmf-api.md#base-paths-2026-10-18); committed and pushed.
-**The next deploy moves both base paths** (the UI and MCP move with it).
+Both base paths moved with the deploy of `d499338` (the UI and MCP with them).
 Slice 4 (2026-10-18; TMF632/629 attributes, migration `0022`; 476 lines left, none for
 TMF632/629): [decision](docs/decisions/tmf-api.md#party-and-customer-attributes-2026-10-18);
 committed and pushed `6743dc6`. Descriptive attributes are jsonb documents checked
@@ -243,6 +250,14 @@ offering history in `product_offering_change`; ABRs carry their offering;
 refunded, never shortened, so charges overlap after a mid-period change); API notes for
 TMF622 and `scripts/docs/generate.py` updated with the human's OK. Committed and
 pushed `eaa1a7b`.
+**Next session: UI user management** (the human, 2026-10-19): a user menu in the UI,
+roles `admin` (manages users, does everything) and `user` (everything but user
+management), everyone changes their own password. The plan:
+[users.md](docs/decisions/users.md#ui-user-management-the-plan-2026-10-19) - the app
+takes over authentication (users, sessions, every route protected, a service credential
+for MCP), three slices (backend, UI, deploy). **Start by re-reading that section and
+getting the human's answers to Q1-Q7**, then implement per the slice workflow.
+
 **The last gaps** (2026-10-19; plan confirmed by the human, billing unchanged by
 suspensions; migration `0028`): committed and pushed -
 [decision](docs/decisions/tmf-api.md#the-last-gaps-2026-10-18),
@@ -250,11 +265,9 @@ suspensions; migration `0028`): committed and pushed -
 [alteration prices](docs/decisions/catalog.md#alteration-price-types-2026-10-19). The
 probe goes one level into responses; `tests/tmf-gaps.txt` has **no open gap** and six
 accepted deviations with reasons. API notes for TMF622/637/676/678 and the docs `AREAS`
-entry applied with the human's OK. **The TMF gap work is done**; what remains is the
-deploy and the items below ("Before the next deploy", "Open checks"). Not deployed: migrations `0009`-`0028` ship together (rolling back
-`0028` needs `alembic downgrade 0027` by hand; it refuses while a status item or a
-discount/allowance/penalty price exists; `0027` refuses while an offering change or a
-non-rejected modify item exists; `0026` fails while a draft exists).
+entry applied with the human's OK. **The TMF gap work is done.** Not deployed: migration
+`0028` ships with the next `make verify` (rolling back needs `alembic downgrade 0027` by
+hand; it refuses while a status item or a discount/allowance/penalty price exists).
 
 **100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders
 placed on the caller's behalf (a would-be rejection is a 409, nothing stored; DELETE ends
@@ -262,7 +275,7 @@ today and the product stays readable), billingCycleSpecification writes (named m
 specifications only, migration `0019`, accounts may name one), PATCH productOrder
 (description, category, priority, externalId; migration `0020`). Coverage 129/129.
 Decision: [tmf-api.md](docs/decisions/tmf-api.md#product-writes-through-orders-2026-10-17).
-Not deployed: migrations `0009`-`0020` ship together with the next `make verify`.
+Deployed with `d499338`.
 
 **Event notifications** (2026-10-17, approved plan: three slices, all 17 `/hub`
 operations, real delivery). Slice 1: hubs in every API, callbacks https-only to public
@@ -271,9 +284,8 @@ transactional outbox (`0018`), events from every TMF write, orders, bills and th
 each payload validated against its listener schema. Slice 3: the worker's step 6 POSTs
 due deliveries (retries 1 min ... 12 h, then failed), re-checks and pins the address
 before each send, purges after 30 days. Coverage 122/129 (94.6%). Decision:
-[events.md](docs/decisions/events.md). Not deployed: migrations `0009`-`0018` ship
-together; **the next deploy adds outbound HTTPS from the worker to hub callbacks** (none
-until a hub exists) - tell the human before `make verify`.
+[events.md](docs/decisions/events.md). Deployed with `d499338`: the worker makes outbound
+HTTPS calls to hub callbacks (none until a hub exists).
 
 **Another 10%: deletes and order cancellation** (2026-10-17, approved plan: two slices,
 13 operations, no `/hub`; cancel failures are a 409 with nothing stored; the UI gets an
@@ -288,8 +300,7 @@ operations): cancelProductOrder undoes a completed order before any of it takes 
 (409, nothing stored, otherwise), DELETE removes rejected orders, migration `0016`
 `cancel_product_order` + order cancellation columns, UI "Undo deactivation". Coverage
 105/129 (81.4%). Decision: [tmf-api.md](docs/decisions/tmf-api.md#order-cancellation-and-deleting-rejected-orders-2026-10-17).
-Not deployed: migrations `0009`-`0016` ship together with the next `make verify`
-(rolling back `0016` needs `alembic downgrade 0015` by hand).
+Deployed with `d499338`.
 
 **TMF620 completion** (2026-10-16, approved plan: two slices, 13 operations, no `/hub`).
 Slice 1 (catalog deletes, 5 operations): DELETE on specification, offering, price,
@@ -300,17 +311,16 @@ committed and pushed (`284ada1`). Slice 2: importJob/exportJob (8 operations),
 migration `0015` `catalog_job`; documents inline as `data:` URLs both ways (no download
 endpoint - a change from the plan, because the spec's ExportJob_FVO requires `url`);
 import under POST's rules, all or nothing. Coverage 92/129 (71.3%). Decision:
-[catalog.md](docs/decisions/catalog.md#import-and-export-jobs-2026-10-16). Not deployed:
-migrations `0009`-`0015` ship together with the next `make verify`.
+[catalog.md](docs/decisions/catalog.md#import-and-export-jobs-2026-10-16). Deployed with
+`d499338`.
 
 **TMF666 accounts** (2026-10-16): two approved slices, both committed. Slice 1:
 financial accounts (4 operations) owned by a party, billing accounts linked via
 `financialAccount`, per-currency balance, read-only UI screen; migration `0013`. Slice 2:
 party and settlement accounts (8 operations), records only (no ledger), linkable to the
 same owner's financial account; migration `0014`. TMF operation coverage: 79/129
-(61.2%); scoped API items: 95. Decision: [accounts.md](docs/decisions/accounts.md). Not
-deployed: `make verify` needs the human's approval (migrations `0009`-`0014` ship
-together). Not done: API notes for the new resources in
+(61.2%); scoped API items: 95. Decision: [accounts.md](docs/decisions/accounts.md).
+Deployed with `d499338`. Not done: API notes for the new resources in
 `scripts/docs/api-notes/tmf666-account.md` (a harness file).
 
 **Refunds and bill delivery** (2026-10-16): approved milestone adds 14 TMF operations:
@@ -338,7 +348,7 @@ read-only bill cycles with bill links, next dates and tax-free totals. Migration
 `0008` snapshots prices for new completed add items; old orders keep unknown quotes.
 Decisions: [tmf-api.md](docs/decisions/tmf-api.md#input-correctness-and-read-completeness-2026-10-14).
 New tests: `tests/test_api_read_completeness.py`; progress scope is now 59 API items.
-Not committed or deployed; commit and deployment still require separate approval.
+Committed; deployed with `d499338`.
 
 **MCP connector** (task of 2026-10-11, [docs/mcp.md](docs/mcp.md)): five slices, each
 committed after the human's OK and then pushed; nothing deployed without a separate
@@ -347,37 +357,31 @@ approval. Done, local only: slice 1 (server, static tokens, scopes, limits, audi
 tools generated from `app.openapi()` + drift check; `db765f1`), slice 4 (`compose.prod.yaml`
 service, deploy.sh checks, `scripts/mcp-smoke.sh`, vps-infra change request; rehearsed
 with Caddy 2.11.4, not deployed; `5f2e436`), slice 5 (client setup docs, token tooling
-`python -m bss_mcp.tokens` + `make mcp-token*`). All slices done; what remains is the
-deploy (see "Before the next deploy") and a first connection from claude.ai, ChatGPT,
-Claude Code and Cursor against the deployed instance (only the SDK's client is tested).
+`python -m bss_mcp.tokens` + `make mcp-token*`). All slices done; the production
+connector was verified by the human with Dify, Claude, ChatGPT and others (2026-10-19).
 
-**Before the next deploy** (2026-10-10: bill lifecycle slices 1-4 merged as `1d7a242`,
-subscriber create/edit as `61d9399`; local `make check` passed on a clean database,
-nothing deployed):
+**Before the next deploy** - all shipped with `d499338` (2026-10-19; was: 2026-10-10,
+bill lifecycle slices 1-4 merged as `1d7a242`, subscriber create/edit as `61d9399`):
 
-- **`compose.prod.yaml`: pass `BILL_PAYMENT_TERM_DAYS`** to the services that need it
-  (the worker writes `paymentDueDate`; `/internal/v1/context` reports it). Compose
-  change: diff first, needs the human's OK.
+- ~~**`compose.prod.yaml`: pass `BILL_PAYMENT_TERM_DAYS`**~~ done (the human,
+  2026-10-19): passed to the services that use it.
 - **Visual review of the subscriber card** with the human before `make verify`: the
   seven figures in one row, the bill dialog, Record payment, New subscriber, Edit.
 - **Migration `0007`** (`cloud/quality-1`, if merged): adds
   `applied_customer_billing_rate.applied_at` (an ABR's TMF678 `date` from the clock),
   back-filled from each ABR's run `started_at`, then NOT NULL. Ships with the next
   deploy; rolling back needs `alembic downgrade 0006` by hand (drops the column).
-- **The MCP connector ships with the next deploy** (`compose.prod.yaml` has the `mcp`
-  service since slice 4). Before `make verify`: (1) vps-infra applies the Caddy carve-out
-  in [docs/vps-infra-change-request.md](docs/vps-infra-change-request.md#2026-10-11-route-the-mcp-connector)
-  - otherwise deploy.sh's last step, the MCP smoke test through Caddy, fails (the app,
-  UI and mcp would already be up); (2) the human puts `MCP_USERS` (name:scrypt hash,
-  `python -m bss_mcp.passwords`) into `.env.prod` - deploy.sh refuses without it. The
-  deploy itself needs the human's separate approval.
+- **The MCP connector**: done (the human, 2026-10-19) - vps-infra added the Caddy route
+  ([docs/vps-infra-change-request.md](docs/vps-infra-change-request.md#2026-10-11-route-the-mcp-connector)),
+  `MCP_USERS` is in `.env.prod`, and the production connector was verified with Dify,
+  Claude, ChatGPT and others. Every deploy still needs the human's separate approval.
 
 Then, in this order (as of 2026-10-05, after slice f):
 
 1. **Stage 4: slice g merged** (`cloud/billing-runs-ui` as `209955c`, 2026-10-10, after
    a local `make check` incl. web-e2e): the Billing runs screen, UI "tested" in the
-   progress tracker, and the fix for the flaky App.test. Not deployed yet: `make verify`
-   ships it, together with the bill lifecycle (see "Before the next deploy"). Slice f (`dcbedeb`) is
+   progress tracker, and the fix for the flaky App.test. Deployed with `d499338`,
+   together with the bill lifecycle. Slice f (`dcbedeb`) is
    **deployed**: `make verify` 2026-10-05 end to end - migration `0004` ran on the VPS,
    app and worker healthy, the worker's first run billed 2026-10-05 (`/billing-status`
    200 `ok`, age 12 s), web smoke OK through Caddy. Done: slice a (`a66faef`), b1 (`850e192`), b2
@@ -497,7 +501,7 @@ shipped).
 [billing-core](docs/decisions/billing-core.md) (stage 3, open questions) ·
 [worker](docs/decisions/worker.md) (stage 4) · [bills](docs/decisions/bills.md) (bill
 lifecycle) · [internal-api](docs/decisions/internal-api.md) · [mcp](docs/decisions/mcp.md) (MCP
-connector) ·
+connector) · [users](docs/decisions/users.md) (UI users, roles, sessions) ·
 [frontend](docs/decisions/frontend.md) · [infra](docs/decisions/infra.md) (image,
 layout, conventions, vps-infra, deploying the UI) · [harness](docs/decisions/harness.md)
 (hooks, progress tracker, guardrails) · [retired](docs/decisions/retired.md).
