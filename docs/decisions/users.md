@@ -222,3 +222,72 @@ production MCP answered 401 and the web smoke could not pass.
   `e2e-*` user disabled and none with a session.
 - **First admin on the VPS**: by the human, `python -m app.users create NAME --role
   admin` through `make remote` (password on stdin).
+
+### After U11: the plan (slice 4, 2026-10-19)
+
+**U11 is live** (vps-infra `7926cc2`, 2026-10-19, the human's OK): Caddy no longer asks
+for basic auth on the bss site (`:8445` and `bss2811`); the app is the only boundary.
+vps-infra verified, without credentials on both hostnames: `/`, `/subscribers` -> 200
+`index.html` (build `7272ffc`); `/internal/v1/context`, `/tmf-api/...` -> 401 JSON from
+the app; `/healthz` 200; no `WWW-Authenticate`.
+
+**Caddy facts** (rehearsed by vps-infra on the pinned image):
+- `X-Remote-User` is **stripped** on every route (`header_up -X-Remote-User`), never set.
+- `X-Forwarded-For`: Caddy's default, no `trusted_proxies` - it **replaces** any
+  client-sent value (forged, repeated, comma lists) with the single address it sees.
+  The last entry is the real peer; a client cannot choose it.
+- `bss2811` is the same site block as `:8445`, so `/internal/v1/session` is reachable
+  there too; those requests come through the host nginx, so Caddy sees the docker
+  gateway for every client: **all sign-ins on that route share one address bucket**
+  (accepted; document it).
+- The smoke credential's POST 403 now comes only from the app (`app/auth.py`).
+
+**Broken on production until this ships** (accepted by the human): billing runs started
+from the UI record `requestedBy = null`; every sign-in shares Caddy's address in the
+throttle; `web-smoke.sh` fails at check 1 (anonymous `GET /` is 200 now), so **`make
+deploy`/`make verify` fail at the web smoke** - this change is what unblocks deploys.
+
+**The change** (one slice; the human's OK on the plan before code, harness files with
+the Edit tool):
+
+1. **Operator.** `app/internal/billing_runs.py` `_operator()` reads `X-Remote-User`
+   (display-only, from the Caddy era) - replace it with `request.state.operator`, the
+   source `/context` and bill history use (session username, `mcp:<name>`, `smoke`).
+   MCP keeps sending `X-Remote-User` directly on `shared` with the service secret;
+   `auth.py` already validates that path. Tests: `tests/test_worker_queue.py:143`
+   sends `X-Remote-User: i.petrova` - the same name the fixture signs in with, which is
+   why the bug went unseen: send a **forged** name there and assert `requestedBy` is
+   the session user; an MCP-principal case. Negative proof: the old `_operator()` fails.
+2. **Throttle.** `limit_login` (`app/internal/users.py:76`) keys on
+   `request.client.host` (uvicorn has no `--proxy-headers`: always Caddy's address)
+   plus the bare username. New setting `APP_TRUST_FORWARDED` (default false; `"true"`
+   in `compose.prod.yaml`'s `app`): the client address is the **last**
+   `X-Forwarded-For` entry, else the peer address (loopback, SSH tunnel) - the same
+   rule as `bss_mcp/login.py:client_ip` (`MCP_TRUST_FORWARDED`); write the helper in
+   `app/` (app must not import `bss_mcp`). Keys: **(username, address)** and
+   **address**; drop the bare username key, so nobody can lock out a named user from
+   elsewhere. Keep the 20/minute limit, `Retry-After: 60` and the 10,000-key bound
+   (with a trusted address one source cannot fill it). Tests in `tests/test_users.py`
+   (replace `test_rate_limit_by_username_and_address`): one address limited across
+   usernames; another address still signs in the same user; a forged multi-entry
+   header (`X-Forwarded-For: 1.2.3.4, 5.6.7.8`) is keyed on its last entry; with the
+   flag off the header is ignored. Negative proof: keying on the first entry fails.
+3. **`scripts/web-smoke.sh`, new state only** (U11 is live, so no two-mode script):
+   anonymous `GET /` -> 200 with this build's `index.html`; deep link and asset as
+   before; anonymous `GET /internal/v1/context` -> 401 **JSON** from the app (not
+   `index.html`); the smoke secret alone (`X-Bss-Service`) -> 200 JSON, operator ==
+   `"smoke"` (a literal); `/tmf-api/accountManagement/v5/billingAccount?limit=1` with
+   the secret -> 200 JSON + `X-Total-Count`; POST with the secret -> 403 from the app;
+   `/healthz` 200. Drop the "Caddy's login alone -> 401" check and **`SMOKE_BASIC_AUTH`
+   everywhere**: `web-smoke.sh`, `scripts/deploy.sh` (no longer required in
+   `.env.smoke`; its `.env.prod` guard against that line and the dry-run message can
+   go), `.env.example`, `docs/operations.md`, `docs/decisions/infra.md`. The smoke
+   cannot be rehearsed locally (no Caddy): `bash -n`, then the deploy's own run.
+4. **Docs.** A U11 section in `docs/vps-infra-change-request.md` (done on the infra side,
+   with the facts above); this file (as built, the bss2811 throttle bucket); CLAUDE.md
+   (no more "two logins"; the deploy-blocked state resolved).
+5. **Ship**: lint, `make test` x3, the human's OK on the diff, commit, push, `make
+   verify` (the human's approval). **Then tell vps-infra** the web smoke passed: it
+   deletes `BASIC_AUTH_HASH_BSS`/`_BSS_SMOKE` from its `.env.prod` (kept for rollback
+   until then) and closes its open check; the human deletes the `SMOKE_BASIC_AUTH`
+   line from `.env.smoke`.

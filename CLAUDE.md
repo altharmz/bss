@@ -192,7 +192,8 @@ authentication with sessions and roles, the UI's sign-in and Users screen, the
 service/smoke secrets, the `terminationInPeriod` fix. Web smoke (incl. "Caddy's login
 alone -> 401 from the app") and MCP smoke passed; a real MCP tool call answered 200 as
 `mcp:demo`. Rolling back past `0029`/`0028` needs `alembic downgrade` by hand (see
-below). Until U11 the UI asks for two logins (Caddy, then the app).
+below). Since U11 (vps-infra `7926cc2`) Caddy asks for no login; the app's sign-in is
+the only one.
 
 **Following TMF** (2026-10-17, the human's rule: what the vendored specs define is
 implemented, the rest skipped; "proceed with development"). Slice 0 done locally: the
@@ -251,7 +252,15 @@ offering history in `product_offering_change`; ABRs carry their offering;
 refunded, never shortened, so charges overlap after a mid-period change); API notes for
 TMF622 and `scripts/docs/generate.py` updated with the human's OK. Committed and
 pushed `eaa1a7b`.
-**Next session: UI user management** (the human, 2026-10-19): a user menu in the UI,
+**Next session: after U11** (2026-10-19): vps-infra removed Caddy's basic auth
+(`7926cc2`, live). **Deploys fail at the web smoke until this ships**, UI billing runs
+record `requestedBy = null`, and all sign-ins share Caddy's address in the throttle.
+The plan, ready to confirm and implement:
+[users.md](docs/decisions/users.md#after-u11-the-plan-slice-4-2026-10-19) - operator
+from the session, `APP_TRUST_FORWARDED` throttle, `web-smoke.sh` without
+`SMOKE_BASIC_AUTH`, docs; then `make verify` and tell vps-infra.
+
+**UI user management** (the human, 2026-10-19): a user menu in the UI,
 roles `admin` (manages users, does everything) and `user` (everything but user
 management), everyone changes their own password. The plan:
 [users.md](docs/decisions/users.md#ui-user-management-the-plan-2026-10-19) - the app
@@ -279,8 +288,8 @@ fixture users. The first admin exists on the VPS (the human, 2026-10-19). `make 
 account's billing stops); fixed with the human's choice, the `terminationInPeriod`
 ordering rule ([billing-core.md](docs/decisions/billing-core.md#offering-changes-2026-10-18)).
 API note added with the human's OK (`7272ffc`). Deployed with `7272ffc` (see
-"Deployed" above). **Next: the vps-infra change request removing Caddy's basic auth from
-the bss site (U11)**, now that app sign-in works on production.
+"Deployed" above). U11 (Caddy's basic auth removed) is live on the vps-infra side; the
+bss follow-up is "Next session: after U11" above.
 Bootstrap CLI: `python -m app.users create NAME --role admin`.
 
 **The last gaps** (2026-10-19; plan confirmed by the human, billing unchanged by
