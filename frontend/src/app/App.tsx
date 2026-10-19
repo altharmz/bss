@@ -17,12 +17,19 @@ import {
 } from './context';
 import { RouterProvider, useRouter } from './router';
 import { Shell } from './Shell';
+import { SessionGate } from './session';
+import { UsersScreen } from '../screens/Users';
 
 const CONTEXT = '/internal/v1/context';
 
 function Screen() {
   const { route } = useRouter();
   switch (route.name) {
+    case 'users':
+      return <UsersScreen />;
+    case 'signIn':
+    case 'password':
+      return null;
     case 'subscribers':
       return <SubscribersScreen />;
     case 'subscriber':
@@ -67,7 +74,9 @@ export function App() {
       <CrumbsProvider>
         <NavVersionProvider>
           <ToastProvider>
-            <Root />
+            <SessionGate>
+              <Root />
+            </SessionGate>
           </ToastProvider>
         </NavVersionProvider>
       </CrumbsProvider>

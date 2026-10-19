@@ -70,13 +70,23 @@ export async function request(
     response = await fetch(path, {
       ...init,
       method,
-      headers: { Accept: 'application/json', ...(init.headers as Record<string, string>) },
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        ...(!['GET', 'HEAD'].includes(method) ? { 'X-Bss-Request': '1' } : {}),
+        ...(init.headers as Record<string, string>),
+      },
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
     throw new ApiError(method, path, 0, 'Network error');
   }
-  if (!response.ok) throw await failure(method, path, response);
+  if (!response.ok) {
+    if (response.status === 401 && (path !== '/internal/v1/session' || method === 'DELETE')) {
+      window.dispatchEvent(new Event('bss:unauthorized'));
+    }
+    throw await failure(method, path, response);
+  }
   return response;
 }
 

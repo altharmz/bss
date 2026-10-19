@@ -6,8 +6,8 @@ export default async function waitForPreview(): Promise<void> {
   let last = '';
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(`${base}/internal/v1/context`);
-      if (response.ok) return;
+      const response = await fetch(`${base}/internal/v1/session`);
+      if (response.status === 401) return;
       last = `HTTP ${response.status}`;
     } catch (error) {
       last = String(error);

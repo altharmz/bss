@@ -256,12 +256,24 @@ management), everyone changes their own password. The plan:
 [users.md](docs/decisions/users.md#ui-user-management-the-plan-2026-10-19) - the app
 takes over authentication (users, sessions, every route protected, a service credential
 for MCP), three slices (backend, UI, deploy). **Q1-Q7 approved with all proposed defaults.**
-Backend slice done locally (migration `0029`): three full test passes (1,345 each),
-lint, frontend unit checks, docs and progress generation passed. Commit and push
-approved by the human (2026-10-19).
-The human approved and applied the docs-generator mappings and API note. Next is the UI
-slice after backend review/commit approval; do not deploy before UI, smoke and service
-credential wiring are ready. Bootstrap CLI: `python -m app.users create NAME --role admin`.
+Backend slice committed and pushed as `1c9f216` (migration `0029`): three full test
+passes (1,345 each), lint, frontend unit checks, docs and progress generation passed;
+commit hooks also passed. The human approved and applied the docs-generator mappings
+and API note. **`1c9f216` is live on the VPS** (seen 2026-10-19: the production MCP
+connector gets `401 sign in required`), so migrations `0028`/`0029` ran there - **and
+production MCP and the web smoke are broken until slice 3**: `compose.prod.yaml` passes
+no `BSS_SERVICE_SECRET`/`BSS_SMOKE_SECRET`, `web-smoke.sh` still expects Caddy's
+`X-Remote-User`. The UI needs a first admin on the VPS.
+UI slice 2 committed and pushed (2026-10-19, the human's OK): session gate, `/sign-in`,
+forced password change, operator menu, admin `/users`, pinned request/component tests
+and browser sign-in. 250 frontend tests passed in UTC and New York; `make test` 1,346
+passed. CSRF and UI role-check negative proofs failed as expected and were reverted.
+**`make web-e2e` (and so `make check`/`make verify`) fails until its wiring lands**: the
+fixture `tests/e2e_users.py` writes `/e2e/credentials.json`, but no compose mount or
+Makefile step runs it (harness files, the human's OK); see [users.md](docs/decisions/users.md#ui-implementation-slice-2-2026-10-19).
+Slice 3 next: that wiring, the secrets in `compose.prod.yaml`, the smoke credential in
+`web-smoke.sh`/`deploy.sh`, then `make verify`.
+Bootstrap CLI: `python -m app.users create NAME --role admin`.
 
 **The last gaps** (2026-10-19; plan confirmed by the human, billing unchanged by
 suspensions; migration `0028`): committed and pushed -

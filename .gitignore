@@ -12,3 +12,5 @@ backups/
 .progress/
 # make docs: the collector's JSON (the generated docs/api/ and docs/db/ are committed)
 .docs/
+# Ephemeral local browser-test credentials; removed after the test run.
+frontend/.e2e/

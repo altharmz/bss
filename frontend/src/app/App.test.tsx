@@ -20,6 +20,8 @@ function backend(
   latestRun: Handler = () => json([{ ...RUN, status: 'completed' }], { total: 9 }),
 ) {
   return stubFetch({
+    'GET /internal/v1/session': () =>
+      json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
     'GET /internal/v1/context': context,
     [NAV_RUNS]: latestRun,
     // the billing runs screen: no runs (the screen has its own tests)
@@ -170,10 +172,10 @@ describe('shell', () => {
     ).toBe('page');
   });
 
-  it('shows a local session without an operator', async () => {
+  it('shows the authenticated operator even without a context operator', async () => {
     backend(() => json({ ...CONTEXT, operator: null, environment: 'dev' }));
     start('/subscribers');
-    expect(await screen.findByText('Local session')).toBeTruthy();
+    expect(await screen.findByText('i.petrova')).toBeTruthy();
     expect(screen.getByText('DEV')).toBeTruthy();
   });
 

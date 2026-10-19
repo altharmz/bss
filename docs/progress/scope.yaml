@@ -236,6 +236,11 @@ items:
   - {id: api.service.billingStatus, area: api, stage: 4, method: GET, path: /billing-status, title: "Freshness signal for the external monitor"}
 
   # ---------------- ui: screens and major actions ----------------
+  - {id: ui.session.signIn, area: ui, stage: 5, title: "Sign in and return to the requested page"}
+  - {id: ui.session.password, area: ui, stage: 5, title: "Change own password, including required first change"}
+  - {id: ui.session.menu, area: ui, stage: 5, title: "Operator menu: role, password, users and sign out"}
+  - {id: ui.users.list, area: ui, stage: 5, title: "Administrator users list"}
+  - {id: ui.users.manage, area: ui, stage: 5, title: "Create, edit, disable and reset users"}
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
   - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
   - {id: ui.subscribers.new, area: ui, stage: 5, title: "New subscriber: party, customer, billing account"}

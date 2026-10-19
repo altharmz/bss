@@ -49,6 +49,8 @@ function backend(
     ...extra,
     [NAV_RUNS]: noRuns,
     'GET /internal/v1/context': () => json(CONTEXT),
+    'GET /internal/v1/session': () =>
+      json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
     [`GET ${ACCOUNTS}?limit=1&fields=id`]: () => json([], { total: ROWS.length }),
     'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
       json([], { total: 3 }),

@@ -7,6 +7,7 @@ import { utcLabel } from '../format/dates';
 import { useCrumbs, useNavVersion, type SystemContext } from './context';
 import { Link, useRouter, type Route } from './router';
 import './shell.css';
+import { SignOut, useSession } from './session';
 
 // The frame around every screen: sidebar (brand, navigation, operator) and top bar
 // (breadcrumbs, business date, time zone). Billing runs shows the number of runs, or the
@@ -43,6 +44,7 @@ interface NavItem {
 }
 
 export function Sidebar({ context }: { context: SystemContext }) {
+  const session = useSession();
   const { route } = useRouter();
   const accounts = useCount(ACCOUNTS);
   const offerings = useCount(OFFERINGS);
@@ -100,16 +102,16 @@ export function Sidebar({ context }: { context: SystemContext }) {
         ))}
       </nav>
       <div className="bss-operator">
-        <div className="who">{context.operator ?? 'Local session'}</div>
-        <div className="role">
-          Billing operator
-          {context.operator !== null && (
-            <>
-              {' · '}
-              <span className="login">{context.operator}</span>
-            </>
-          )}
-        </div>
+        <details data-ui="ui.session.menu">
+          <summary>
+            <span className="who">{session?.username}</span> · {session?.role}
+          </summary>
+          <nav aria-label="User menu">
+            <Link href="/change-password">Change password</Link>
+            {session?.role === 'admin' && <Link href="/users">Users</Link>}
+            <SignOut />
+          </nav>
+        </details>
       </div>
     </aside>
   );

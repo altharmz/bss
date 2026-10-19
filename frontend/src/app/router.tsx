@@ -16,6 +16,9 @@ import {
 // mistaken for the app's /billing-status, which Caddy routes to the backend.
 
 export type Route =
+  | { name: 'signIn' }
+  | { name: 'password' }
+  | { name: 'users' }
   | { name: 'subscribers' }
   | { name: 'subscriber'; accountId: string }
   | { name: 'catalog' }
@@ -26,6 +29,9 @@ export type Route =
 const SUBSCRIBER = /^\/subscribers\/([0-9a-fA-F-]{36})\/?$/;
 
 export function parseRoute(path: string): Route {
+  if (path === '/sign-in') return { name: 'signIn' };
+  if (path === '/change-password') return { name: 'password' };
+  if (path === '/users') return { name: 'users' };
   if (path === '/subscribers' || path === '/subscribers/') return { name: 'subscribers' };
   const card = SUBSCRIBER.exec(path);
   if (card?.[1]) return { name: 'subscriber', accountId: card[1].toLowerCase() };
@@ -39,6 +45,12 @@ export function parseRoute(path: string): Route {
 
 export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
   switch (route.name) {
+    case 'signIn':
+      return '/sign-in';
+    case 'password':
+      return '/change-password';
+    case 'users':
+      return '/users';
     case 'subscribers':
       return '/subscribers';
     case 'subscriber':

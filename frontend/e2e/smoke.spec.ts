@@ -1,7 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
+import { identity, signIn } from './auth';
 
 // The e2e smoke over the seeded local stack (make seed): the built UI in a real browser,
-// the real API behind it. Read-only - nothing is ordered or changed - so it is repeatable.
+// the real API behind it. Billing data stays read-only; authentication uses disposable
+// local fixture identities, disabled and stripped of sessions after the run.
 
 /** Everything that would mean the page is broken although it rendered. */
 function watch(page: Page): string[] {
@@ -16,17 +18,14 @@ function watch(page: Page): string[] {
   return problems;
 }
 
-test('subscribers, a card with its first-charge preview, the catalog', async ({
-  page,
-  request,
-}) => {
+test('subscribers, a card with its first-charge preview, the catalog', async ({ page }) => {
+  await page.goto('/');
+  await signIn(page);
   const problems = watch(page);
-  const context = (await (await request.get('/internal/v1/context')).json()) as {
+  await expect(page).toHaveURL(/\/subscribers$/);
+  const context = (await (await page.request.get('/internal/v1/context')).json()) as {
     businessDate: string;
   };
-
-  await page.goto('/');
-  await expect(page).toHaveURL(/\/subscribers$/);
   await expect(page.getByRole('heading', { name: 'Subscribers' })).toBeVisible();
   // New subscriber opens and cancels (read-only: nothing is created)
   await page.getByRole('button', { name: '+ New subscriber' }).click();
@@ -104,10 +103,60 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({
 });
 
 test('the API is reached on the same origin, as JSON', async ({ request }) => {
+  expect((await request.get('/internal/v1/context')).status()).toBe(401);
+  const credentials = identity('admin');
+  expect(
+    (
+      await request.post('/internal/v1/session', {
+        data: credentials,
+        headers: { 'X-Bss-Request': '1' },
+      })
+    ).status(),
+  ).toBe(200);
   const response = await request.get('/internal/v1/context');
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toContain('application/json');
   const list = await request.get('/tmf-api/accountManagement/v5/billingAccount?limit=1');
   expect(list.status()).toBe(200);
   expect(Number(list.headers()['x-total-count'])).toBeGreaterThan(0);
+});
+
+test('user changes the initial password, signs in again and cannot manage users', async ({
+  page,
+}) => {
+  const user = identity('user');
+  await page.goto('/catalog');
+  await signIn(page, 'user');
+  await expect(page.getByRole('heading', { name: 'Change password' })).toBeVisible();
+  await page.getByLabel('Current password').fill(user.password);
+  await page.getByLabel('New password', { exact: true }).fill(user.password + '-changed');
+  await page.getByLabel('Confirm password').fill(user.password + '-changed');
+  await page.getByRole('button', { name: 'Change password', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+  await page.getByLabel('Username').fill(user.username);
+  await page.getByLabel('Password', { exact: true }).fill(user.password + '-changed');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Product catalog' })).toBeVisible();
+  await page.goto('/users');
+  await expect(page.getByRole('heading', { name: 'Not allowed' })).toBeVisible();
+  expect((await page.request.get('/internal/v1/users')).status()).toBe(403);
+  await page.locator('.bss-operator summary').click();
+  await expect(page.getByRole('link', { name: 'Users', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+  expect((await page.request.get('/internal/v1/session')).status()).toBe(401);
+});
+
+test('admin opens Users and its forms without changing users', async ({ page }) => {
+  await page.goto('/users');
+  await signIn(page);
+  await expect(page.getByRole('heading', { name: 'Users', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'New user' }).click();
+  await expect(page.getByRole('dialog').getByLabel('Initial password')).toBeVisible();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await page
+    .getByRole('button', { name: `Edit ${identity('admin').username}`, exact: true })
+    .click();
+  await expect(page.getByRole('dialog').getByRole('checkbox')).toBeDisabled();
+  await page.getByRole('button', { name: 'Cancel' }).click();
 });

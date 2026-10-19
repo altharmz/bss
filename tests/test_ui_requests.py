@@ -23,6 +23,73 @@ OFFSET = "+03:00"
 RUNS = "/internal/v1/billingRun"
 
 
+def test_ui_user_management_requests(api):
+    """Same bodies as Users.test.tsx and session.test.tsx, through real cookies."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    session = "/internal/v1/session"
+    users = "/internal/v1/users"
+    with TestClient(app, headers={"X-Bss-Request": "1"}) as client:
+        assert (
+            client.post(
+                session, json={"username": "i.petrova", "password": "test-password-123"}
+            ).status_code
+            == 200
+        )
+        created = client.post(
+            users, json={"username": "bob", "role": "admin", "password": "initial-password"}
+        )
+        assert created.status_code == 201
+        assert created.json()["mustChangePassword"] is True
+        assert (
+            client.post(
+                users, json={"username": "alice", "role": "user", "password": "initial-password"}
+            ).status_code
+            == 201
+        )
+        changed = client.patch(
+            users + "/alice",
+            json={"role": "admin", "disabled": True},
+            headers={"Content-Type": "application/json"},
+        )
+        assert changed.status_code == 200
+        assert changed.json()["role"] == "admin"
+        assert changed.json()["disabled"] is True
+        assert (
+            client.patch(
+                users + "/alice",
+                json={"password": "replacement-password"},
+                headers={"Content-Type": "application/json"},
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post(
+                session, json={"username": "bob", "password": "initial-password"}
+            ).status_code
+            == 200
+        )
+        assert (
+            client.post(
+                session + "/password",
+                json={"currentPassword": "initial-password", "newPassword": "replacement-password"},
+            ).status_code
+            == 204
+        )
+        assert client.get(session).status_code == 401
+        assert (
+            client.post(
+                session, json={"username": "bob", "password": "replacement-password"}
+            ).status_code
+            == 200
+        )
+        assert client.get(session).json()["mustChangePassword"] is False
+        assert client.delete(session).status_code == 204
+        assert client.get(session).status_code == 401
+
+
 @pytest.fixture
 def worker(migrated_db_url):
     conn = worker_db.connect(migrated_db_url)

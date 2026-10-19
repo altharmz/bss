@@ -14,9 +14,9 @@
     },
     "ui": {
       "deployed": null,
-      "implemented": 22,
-      "items": 22,
-      "tested": 22
+      "implemented": 27,
+      "items": 27,
+      "tested": 27
     },
     "worker": {
       "deployed": null,
@@ -1810,6 +1810,51 @@
       "stage": 4,
       "tested": true,
       "title": "Freshness signal for the external monitor"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.session.signIn",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Sign in and return to the requested page"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.session.password",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Change own password, including required first change"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.session.menu",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Operator menu: role, password, users and sign out"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.users.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Administrator users list"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.users.manage",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Create, edit, disable and reset users"
     },
     {
       "area": "ui",

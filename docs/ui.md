@@ -1,16 +1,16 @@
 # Admin UI (stage 5)
 
 A desktop admin console for billing operators: `frontend/` (Vite + React + TypeScript),
-built to static files and served by the shared Caddy on the same origin as the API, behind
-the same basic auth ([overview.md](overview.md#authentication-and-operator-identity)).
+built to static files and served by the shared Caddy on the same origin as the API.
+The app authenticates operators with sessions; removing Caddy's outer basic-auth prompt
+remains deployment slice 3 ([decisions/users.md](decisions/users.md)).
 The design handoff it implements is `design-ref/design_handoff_bss_admin/` (a read-only
 HTML prototype and README); where the build differs from the design, the decision is
 recorded in [decisions/frontend.md](decisions/frontend.md), "Frontend (stage 5)
 decisions", and summarised below.
 
-Progress (from `data-ui` markers in `frontend/src`, [PROGRESS.md](PROGRESS.md)): **13 of
-13 items built and tested** - tested meaning a passing component test saw the marker on
-screen (`expectUi`, see "Tests").
+Progress comes from `data-ui` markers in `frontend/src`: see [PROGRESS.md](PROGRESS.md).
+Tested means a passing component test saw the marker on screen (`expectUi`, see "Tests").
 
 ## Architecture
 
@@ -38,11 +38,38 @@ operation the screen calls (`frontend/src/api/bss.ts`).
 
 Sidebar with the navigation (Subscribers, Catalog, Billing runs - each with its count;
 Billing runs shows the red **failed** badge instead when the latest run failed), the
-environment (`APP_ENV`) and the operator (from `X-Remote-User`); top bar with breadcrumbs,
+environment (`APP_ENV`) and the signed-in operator and role; top bar with breadcrumbs,
 the business date and the UTC offset. The Billing runs screen asks the sidebar to reload
 its run count and badge whenever the latest run it shows changes.
 API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the count is its
 `X-Total-Count`).
+
+### Sign-in, operator menu and users
+
+The UI checks `GET /internal/v1/session` before loading the shell, business context or
+any screen. An expired session opens `/sign-in`, preserving the requested local path
+and query for after sign-in. Initial passwords and admin resets force Change password
+before any protected screen. Password changes revoke the current session too, so the
+operator signs in again. Passwords stay in form state; server failures clear password
+fields and closing a form discards them. No token or password is kept in browser storage.
+
+The sidebar operator menu shows username and role, Change password, Sign out and, for
+admins, Users. `/users` lists username, role, active state and last sign-in in the business
+time zone. New user sets an initial password and role; Edit sends only changed role and
+disabled fields; Reset password forces another first change. Self-disable is unavailable.
+The server enforces the last-active-admin rule and displays its rejection in the form.
+A non-admin opening `/users` sees Not allowed without a users-list request.
+
+Session and user writes send `X-Bss-Request: 1`. User PATCH bodies use
+`application/json`, as the internal specification requires; TMF PATCH continues to use
+the existing merge-patch helper. Component tests pin both bodies and headers, with
+real-request counterparts in `tests/test_ui_requests.py`.
+
+Browser tests use `tests/e2e_users.py` to prepare random local-only admin and user
+identities. The ordinary seed still creates no users. Credentials live only in ignored
+`frontend/.e2e/credentials.json`; cleanup disables the fixture users, revokes sessions
+and removes that file. The browser exercises forced password change, admin forms,
+ordinary-user denial and sign-out as well as the existing billing screens.
 
 ### Subscribers list (`ui.subscribers.list`) - `screens/Subscribers.tsx`
 

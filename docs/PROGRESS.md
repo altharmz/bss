@@ -13,7 +13,7 @@ records the deployed commit.
 |---|---|---|---|---|
 | Database | 41 | 41/41 (100%) | 41/41 (100%) | unknown |
 | API | 152 | 152/152 (100%) | 152/152 (100%) | unknown |
-| UI | 22 | 22/22 (100%) | 22/22 (100%) | unknown |
+| UI | 27 | 27/27 (100%) | 27/27 (100%) | unknown |
 | Worker | 15 | 15/15 (100%) | 15/15 (100%) | unknown |
 
 ## Database
@@ -225,6 +225,11 @@ records the deployed commit.
 |---|---|---|---|---|---|
 | `ui.financialAccounts.list` | 5 | Financial accounts: owner, balance per currency, contained accounts | yes | yes | unknown |
 | `ui.subscriber.financialAccount` | 5 | Subscriber card: link to the account's financial account | yes | yes | unknown |
+| `ui.session.signIn` | 5 | Sign in and return to the requested page | yes | yes | unknown |
+| `ui.session.password` | 5 | Change own password, including required first change | yes | yes | unknown |
+| `ui.session.menu` | 5 | Operator menu: role, password, users and sign out | yes | yes | unknown |
+| `ui.users.list` | 5 | Administrator users list | yes | yes | unknown |
+| `ui.users.manage` | 5 | Create, edit, disable and reset users | yes | yes | unknown |
 | `ui.shell` | 5 | Shell: sidebar, top bar with business date and zone | yes | yes | unknown |
 | `ui.subscribers.list` | 5 | Subscribers list | yes | yes | unknown |
 | `ui.subscribers.new` | 5 | New subscriber: party, customer, billing account | yes | yes | unknown |

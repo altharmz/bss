@@ -1,10 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { json, stubFetch, tmfError } from '../test/fetch';
 import { AMOUNT, ApiError, getAll, getJson, getPage, jsonWithAmount } from './client';
 
 const PATH = '/tmf-api/accountManagement/v5/billingAccount';
 
 describe('errors', () => {
+  it('notifies the session gate when a protected request returns 401', async () => {
+    const expired = vi.fn();
+    window.addEventListener('bss:unauthorized', expired);
+    try {
+      stubFetch({ [`GET ${PATH}`]: () => tmfError(401, 'Unauthorized') });
+      await expect(getJson(PATH)).rejects.toThrow('401');
+      expect(expired).toHaveBeenCalledOnce();
+    } finally {
+      window.removeEventListener('bss:unauthorized', expired);
+    }
+  });
   it('carries the call and the TMF reason', async () => {
     stubFetch({ [`GET ${PATH}`]: () => tmfError(503, 'Service Unavailable') });
     const error = await getJson(PATH).catch((e: unknown) => e);

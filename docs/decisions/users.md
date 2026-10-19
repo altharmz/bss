@@ -162,3 +162,37 @@ Validation: `make test` passed three times (1,345 tests each); `make lint`,
 documentation generator mappings and the internal API authentication note.
 `make progress` passed too (another full backend run and the UI inventory tests),
 recording all three new tables and seven new endpoints as implemented and tested.
+
+### UI implementation (slice 2, 2026-10-19)
+
+`SessionGate` checks the cookie session before mounting the shell or loading context.
+Protected-request 401s clear the UI and navigate to `/sign-in?next=...`; failed sign-in
+stays in its form. Return paths must be local absolute paths, without backslashes or
+whitespace, and cannot loop to sign-in or password change. Required password changes
+replace the entire protected UI. Successful password changes return to sign-in, matching
+the backend's revocation of every session. The operator menu uses session identity and
+role, not a context-header identity. No browser storage holds credentials.
+
+`/users` checks the session role before mounting the users list. Administrators create,
+edit role/disabled state, and reset passwords. Edits send only changed fields. Editing
+one's own security settings returns to sign-in; self-disable is unavailable in the form.
+Server rejections (including the last active admin guard) leave the form open. All UI
+writes send the CSRF header; users PATCH uses `application/json` from the internal
+contract, separately from TMF merge patches. Exact bodies and headers are pinned in
+component tests and replayed through real cookie sessions in `test_ui_requests.py`.
+
+The browser fixture is separate from seed: random local admin/user identities, with
+credentials in ignored `frontend/.e2e/credentials.json`. It refuses environments other
+than `dev` and database hosts other than `db`. Cleanup disables users, revokes sessions
+and removes credentials; user records and audit history remain. The Makefile wiring
+is a harness change and awaits separate approval. Production wiring remains slice 3.
+
+UI negative proofs: removing the CSRF header fails five pinned request assertions;
+bypassing the Users screen's admin check fails the non-admin denial test. Both
+temporary edits were reverted. All 250 frontend tests passed in UTC and New York,
+and all four browser tests passed against the built UI and real local API (twice,
+including after the final password-screen layout changes). Backend lint, frontend
+type/lint/format checks and the decision-link check passed. Verified again before the
+commit (2026-10-19): `make test` 1,346 passed, `make web-test` 250 in both zones,
+`make progress` regenerated. `make web-e2e` cannot run through make until the fixture
+is wired (a compose mount for `/e2e` and a Makefile prepare/cleanup step).

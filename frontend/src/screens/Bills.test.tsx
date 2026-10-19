@@ -108,6 +108,8 @@ function detail(over: Record<string, unknown> = {}) {
 function backend(routes: Record<string, Handler> = {}) {
   return stubFetch({
     'GET /internal/v1/context': () => json(CONTEXT),
+    'GET /internal/v1/session': () =>
+      json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
     [NAV_RUNS]: noRuns,
     'GET /tmf-api/accountManagement/v5/billingAccount?limit=1&fields=id': () =>
       json([], { total: 7 }),
