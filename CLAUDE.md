@@ -255,8 +255,13 @@ roles `admin` (manages users, does everything) and `user` (everything but user
 management), everyone changes their own password. The plan:
 [users.md](docs/decisions/users.md#ui-user-management-the-plan-2026-10-19) - the app
 takes over authentication (users, sessions, every route protected, a service credential
-for MCP), three slices (backend, UI, deploy). **Start by re-reading that section and
-getting the human's answers to Q1-Q7**, then implement per the slice workflow.
+for MCP), three slices (backend, UI, deploy). **Q1-Q7 approved with all proposed defaults.**
+Backend slice done locally (migration `0029`): three full test passes (1,345 each),
+lint, frontend unit checks, docs and progress generation passed. Commit and push
+approved by the human (2026-10-19).
+The human approved and applied the docs-generator mappings and API note. Next is the UI
+slice after backend review/commit approval; do not deploy before UI, smoke and service
+credential wiring are ready. Bootstrap CLI: `python -m app.users create NAME --role admin`.
 
 **The last gaps** (2026-10-19; plan confirmed by the human, billing unchanged by
 suspensions; migration `0028`): committed and pushed -

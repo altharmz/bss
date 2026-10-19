@@ -11,8 +11,8 @@ records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 38 | 38/38 (100%) | 38/38 (100%) | unknown |
-| API | 145 | 145/145 (100%) | 145/145 (100%) | unknown |
+| Database | 41 | 41/41 (100%) | 41/41 (100%) | unknown |
+| API | 152 | 152/152 (100%) | 152/152 (100%) | unknown |
 | UI | 22 | 22/22 (100%) | 22/22 (100%) | unknown |
 | Worker | 15 | 15/15 (100%) | 15/15 (100%) | unknown |
 
@@ -20,6 +20,9 @@ records the deployed commit.
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
+| `db.app_user` | 5 | Application users and roles | yes | yes | unknown |
+| `db.app_session` | 5 | Revocable application sessions | yes | yes | unknown |
+| `db.app_user_audit` | 5 | User management audit | yes | yes | unknown |
 | `db.financial_account` | 5 | Financial accounts (TMF666) | yes | yes | unknown |
 | `db.party_account` | 5 | Party and settlement accounts (TMF666) | yes | yes | unknown |
 | `db.refund` | 5 | Completed cash refunds (TMF676) | yes | yes | unknown |
@@ -63,6 +66,13 @@ records the deployed commit.
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
+| `api.internal.session.create` | 5 | Sign in | yes | yes | unknown |
+| `api.internal.session.get` | 5 | Current session | yes | yes | unknown |
+| `api.internal.session.delete` | 5 | Sign out | yes | yes | unknown |
+| `api.internal.session.password` | 5 | Change own password | yes | yes | unknown |
+| `api.internal.users.list` | 5 | List users (admin) | yes | yes | unknown |
+| `api.internal.users.create` | 5 | Create user (admin) | yes | yes | unknown |
+| `api.internal.users.patch` | 5 | Manage user (admin) | yes | yes | unknown |
 | `api.tmf666.financialAccount.list` | 5 | List financial accounts | yes | yes | unknown |
 | `api.tmf666.financialAccount.get` | 5 | Get a financial account | yes | yes | unknown |
 | `api.tmf666.financialAccount.create` | 5 | Create a financial account | yes | yes | unknown |

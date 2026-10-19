@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     bill_payment_term_days: int = Field(default=30, ge=1, le=365)
     # The one currency the admin UI works in (the backend stays multi-currency).
     ui_currency: str = Field(default="RUB", pattern=r"^[A-Z]{3}$")
+    session_idle_seconds: int = Field(default=8 * 3600, ge=1)
+    session_absolute_seconds: int = Field(default=7 * 86400, ge=1)
+    # Separate credentials: smoke can only read; MCP cannot access user/session APIs.
+    bss_service_secret: str = ""
+    bss_smoke_secret: str = ""
 
 
 settings = Settings()

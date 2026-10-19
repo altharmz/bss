@@ -13,7 +13,90 @@ info:
     false) so that any drift between code and contract fails a test.
 servers:
   - url: /internal/v1
+security:
+  - AppSession: []
+  - ServiceCredential: []
 paths:
+  /session:
+    post:
+      summary: Sign in and set a revocable HttpOnly session cookie.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SignIn'}
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+    get:
+      summary: Current authenticated user.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+    delete:
+      summary: Revoke this session and clear its cookie.
+      responses:
+        '204': {description: Signed out}
+  /session/password:
+    post:
+      summary: Change own password and revoke all sessions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ChangePassword'}
+      responses:
+        '204': {description: Password changed; sign in again}
+  /users:
+    get:
+      summary: List users (admin only).
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/User'}
+    post:
+      summary: Create a user with a temporary initial password (admin only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateUser'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
+  /users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    patch:
+      summary: Change role, disable or enable, or reset password (admin only).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/EditUser'}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/User'}
   /context:
     get:
       summary: Business date, time zone, environment and operator for the UI chrome.
@@ -265,6 +348,17 @@ paths:
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
 components:
+  securitySchemes:
+    AppSession:
+      type: apiKey
+      in: cookie
+      name: bss_session
+      description: Session writes also require X-Bss-Request with value '1'.
+    ServiceCredential:
+      type: apiKey
+      in: header
+      name: X-Bss-Service
+      description: MCP or read-only smoke credential; cannot access session or users endpoints.
   parameters:
     Id:
       name: id
@@ -286,6 +380,56 @@ components:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
   schemas:
+    SignIn:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: {type: string, minLength: 1, maxLength: 64}
+        password: {type: string, maxLength: 1024, writeOnly: true}
+    ChangePassword:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: {type: string, maxLength: 1024, writeOnly: true}
+        newPassword: {type: string, minLength: 12, maxLength: 1024, writeOnly: true}
+    CreateUser:
+      type: object
+      additionalProperties: false
+      required: [username, role, password]
+      properties:
+        username: {type: string, pattern: '^[A-Za-z0-9._@-]{1,64}$'}
+        role: {type: string, enum: [admin, user]}
+        password: {type: string, minLength: 12, maxLength: 1024, writeOnly: true}
+    EditUser:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        role: {type: string, enum: [admin, user]}
+        disabled: {type: boolean}
+        password: {type: string, minLength: 12, maxLength: 1024, writeOnly: true}
+    Session:
+      type: object
+      additionalProperties: false
+      required: [username, role, mustChangePassword]
+      properties:
+        username: {type: string}
+        role: {type: string, enum: [admin, user]}
+        mustChangePassword: {type: boolean}
+    User:
+      type: object
+      additionalProperties: false
+      required: [username, role, disabled, mustChangePassword, createdAt, updatedAt, lastLoginAt]
+      properties:
+        username: {type: string}
+        role: {type: string, enum: [admin, user]}
+        disabled: {type: boolean}
+        mustChangePassword: {type: boolean}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        lastLoginAt: {type: string, format: date-time, nullable: true}
     BusinessDate:
       type: string
       format: date

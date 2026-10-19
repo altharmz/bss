@@ -219,7 +219,12 @@ def build_app(
     # Guard and the handlers hold this same dict
     given_tools = tools is not None
     tools = dict(tools or {})
-    bss = Bss(settings.bss_api_url, settings.mcp_api_timeout, transport)
+    bss = Bss(
+        settings.bss_api_url,
+        settings.mcp_api_timeout,
+        transport,
+        service_secret=settings.bss_service_secret,
+    )
     public = settings.mcp_public_url.rstrip("/")
     resource_metadata_url = f"{public}/.well-known/oauth-protected-resource/mcp"
 

@@ -1,7 +1,7 @@
 """The MCP connector, slice 3 (docs/mcp.md): tools generated from app.openapi() and the
 registry in bss_mcp/operations.py, and the drift check that keeps them equal.
 
-- the tool set == the API operations minus docs/progress/scope.yaml's api exclusions;
+- the tool set == API operations minus progress exclusions and interactive auth operations;
 - every write names the request model its handler parses (read from the handler source);
 - every GET tool answers against the real app, and every write tool reaches it."""
 
@@ -24,7 +24,7 @@ import app.internal
 from app.api.hub import HUB_APIS
 from app.main import app as bss_app
 from bss_mcp import tools
-from bss_mcp.operations import EXCLUDED, OPERATIONS, Op
+from bss_mcp.operations import AUTH_OPERATIONS, EXCLUDED, OPERATIONS, Op
 from bss_mcp.tools import DriftError, generate
 from tests import apidata, docs_collect
 from tests.apidata import CATALOG
@@ -58,6 +58,7 @@ def scope_exclusions() -> set[tuple[str, str]]:
 def test_the_tools_are_the_api_operations_minus_the_scope_exclusions():
     excluded = scope_exclusions()
     assert EXCLUDED == excluded  # the runtime image's copy (it has no docs/)
+    excluded |= AUTH_OPERATIONS
     expected = {name for name, key in api_operations().items() if key not in excluded}
     assert set(generated()) == expected
     assert len(expected) == len(api_operations()) - len(excluded)
@@ -93,7 +94,7 @@ def _parsed_models(handler: Any) -> list[str]:
 def test_every_write_names_the_model_its_handler_parses():
     handlers = _handlers()
     for name, (method, _) in api_operations().items():
-        if (method, _) in EXCLUDED:
+        if (method, _) in EXCLUDED | AUTH_OPERATIONS:
             continue
         op, handler = OPERATIONS[name], handlers[name]
         parsed = _parsed_models(handler)

@@ -18,11 +18,22 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx2
+from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app.api.tmfjson import dumps, loads
+from app.routes import routes
 from bss_mcp import schema
-from bss_mcp.operations import EXCLUDED, FAMILIES, FIELDS, LIST, OPERATIONS, PAGE, Op
+from bss_mcp.operations import (
+    AUTH_OPERATIONS,
+    EXCLUDED,
+    FAMILIES,
+    FIELDS,
+    LIST,
+    OPERATIONS,
+    PAGE,
+    Op,
+)
 
 MERGE_PATCH = "application/merge-patch+json"
 PARAM = re.compile(r"\{([a-z_]+)\}")
@@ -133,7 +144,7 @@ def api_operations(openapi: dict[str, Any]) -> list[dict[str, str]]:
     out = []
     for path, operations in openapi["paths"].items():
         for method, op in operations.items():
-            if (method.upper(), path) in EXCLUDED:
+            if (method.upper(), path) in EXCLUDED | AUTH_OPERATIONS:
                 continue
             out.append(
                 {
@@ -149,7 +160,19 @@ def api_operations(openapi: dict[str, Any]) -> list[dict[str, str]]:
 
 async def list_filters(app: Any, path: str) -> list[str]:
     """The equality filters a TMF list accepts, from the handler's own 400."""
-    transport = httpx2.ASGITransport(app=app)
+    # Probe only this handler in an isolated ASGI application. The real application's
+    # authentication remains intact; no secret, database or network is needed here.
+    probe = FastAPI()
+    from app.api.errors import install
+
+    install(probe)
+    endpoint = next(
+        route.endpoint
+        for route, _ in routes(app)
+        if route.path == path and "GET" in getattr(route, "methods", set())
+    )
+    probe.add_api_route(path, endpoint, methods=["GET"])
+    transport = httpx2.ASGITransport(app=probe)
     async with httpx2.AsyncClient(transport=transport, base_url="http://probe") as client:
         response = await client.get(path, params={PROBE: "1"})
     message = response.json().get("message", "") if response.status_code == 400 else ""

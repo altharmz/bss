@@ -153,11 +153,19 @@ def openapi_operations() -> list[dict[str, Any]]:
 
 
 def list_filters(operations: list[dict[str, Any]]) -> dict[str, list[str]]:
+    from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
+    from app.api.errors import install
     from app.main import app
+    from app.routes import routes
 
-    client = TestClient(app, raise_server_exceptions=True)
+    probe = FastAPI()
+    install(probe)
+    for route, _ in routes(app):
+        if "GET" in getattr(route, "methods", set()) and route.path.startswith("/tmf-api/"):
+            probe.add_api_route(route.path, route.endpoint, methods=["GET"])
+    client = TestClient(probe, raise_server_exceptions=True)
     out = {}
     for op in operations:
         if op["method"] != "GET" or "{" in op["path"] or not op["path"].startswith("/tmf-api/"):

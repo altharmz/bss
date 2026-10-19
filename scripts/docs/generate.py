@@ -131,6 +131,8 @@ HANDLERS = {
     "/internal/v1/productOffering": "app/internal/catalog.py",
     "/internal/v1/billingRun": "app/internal/billing_runs.py",
     "/internal/v1/context": "app/internal/context.py",
+    "/internal/v1/session": "app/internal/users.py",
+    "/internal/v1/users": "app/internal/users.py",
     "/tmf-api/schema": "app/api/account.py",
     "/billing-status": "app/status.py",
     "/healthz": "app/main.py",
@@ -164,6 +166,7 @@ AREAS = {
     ),
     "worker": ("billing_run_account", "worker_request"),
     "events": ("event_subscription", "event", "event_delivery"),
+    "users": ("app_user", "app_session", "app_user_audit"),
 }
 AREA_TITLES = {
     "party": "Party, customer, account (TMF632, TMF629, TMF666)",
@@ -173,6 +176,7 @@ AREA_TITLES = {
     "billing": "Billing and payments (TMF678, TMF676)",
     "worker": "Billing worker (ours)",
     "events": "Event notifications (TMF hubs)",
+    "users": "Application users and sessions (ours)",
 }
 SKIP_TABLES = {"alembic_version"}
 
@@ -300,6 +304,8 @@ def params_text(op: dict, filters: dict[str, list[str]]) -> str:
             )
     if op["method"] in ("POST", "PATCH") and op["path"].startswith(("/tmf-api/", "/internal/")):
         media = "application/merge-patch+json" if op["method"] == "PATCH" else "application/json"
+        if op["path"].startswith("/internal/v1/users"):
+            media = "application/json"
         parts.append(f"body: {code(media)}")
     return "; ".join(parts) or "-"
 
@@ -314,7 +320,7 @@ def schemas_text(op: dict, spec_file: str | None) -> tuple[str, str]:
         for status, schema in sorted(spec_op["responses"].items())
         # a 2xx without a body (the TMF specs' asynchronous 202) is never answered here,
         # except 204 on a DELETE (TMF620 catalog deletes, tests/apiclient.py checks it)
-        if status.startswith("2") and (schema or (status == "204" and op["method"] == "DELETE"))
+        if status.startswith("2") and (schema or status == "204")
     ]
     return request, ", ".join(success) or "-"
 

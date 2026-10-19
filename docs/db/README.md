@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0028**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0029**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -44,6 +44,9 @@ PostgreSQL schema at Alembic head **0028**, read from `pg_catalog` of a throwawa
 | [`event_subscription`](event_subscription.md) | events | TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their deliveries. |
 | [`event`](event.md) | events | TMF events some hub wanted, as sent; stored in the transaction of the change. |
 | [`event_delivery`](event_delivery.md) | events | One event to one subscription: pending until the worker delivers it or gives up. |
+| [`app_user`](app_user.md) | users | Application identity: admin or user; disabled, never deleted. |
+| [`app_session`](app_session.md) | users | Revocable sessions; SHA-256 tokens only, never raw cookies. |
+| [`app_user_audit`](app_user_audit.md) | users | Security changes only: operator, target, action and injected clock; no secrets. |
 
 ## Overview
 
@@ -103,8 +106,15 @@ flowchart LR
     event[event]
     event_delivery[event_delivery]
   end
+  subgraph area_users["Application users and sessions (ours)"]
+    app_user[app_user]
+    app_session[app_session]
+    app_user_audit[app_user_audit]
+  end
   account_presentation_media -->|"billing_account_id"| billing_account
   account_presentation_media -->|"media_id"| bill_presentation_media
+  app_session -->|"username"| app_user
+  app_user_audit -->|"username"| app_user
   applied_customer_billing_rate -->|"billing_account_id"| billing_account
   applied_customer_billing_rate -->|"billing_run_id"| billing_run
   applied_customer_billing_rate -->|"customer_bill_id, billing_account_id"| customer_bill
@@ -810,6 +820,38 @@ erDiagram
   }
   event ||--o{ event_delivery : "event_id"
   event_subscription ||--o{ event_delivery : "subscription_id"
+```
+
+## Application users and sessions (ours)
+
+```mermaid
+erDiagram
+  app_user {
+    text username PK
+    text role
+    text password_hash
+    boolean disabled
+    boolean must_change_password
+    timestamptz created_at
+    timestamptz updated_at
+    timestamptz last_login_at
+  }
+  app_session {
+    text token_hash PK
+    text username FK
+    timestamptz created_at
+    timestamptz last_seen_at
+    timestamptz expires_at
+  }
+  app_user_audit {
+    uuid id PK
+    text username FK
+    text operator
+    text action
+    timestamptz occurred_at
+  }
+  app_user ||--o{ app_session : "username"
+  app_user ||--o{ app_user_audit : "username"
 ```
 
 ## Enums

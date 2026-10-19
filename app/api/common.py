@@ -282,11 +282,8 @@ OPERATOR = re.compile(r"^[A-Za-z0-9._@:-]{1,64}$")
 
 
 def operator_of(request: Request) -> str | None:
-    """The operator from X-Remote-User; display only.
-
-    docs/decisions/internal-api.md, "Trust in X-Remote-User".
-    """
-    value = request.headers.get("x-remote-user", "").strip()
+    """The operator established by authentication, never an unverified header."""
+    value = getattr(request.state, "operator", "")
     return value if OPERATOR.match(value) else None
 
 

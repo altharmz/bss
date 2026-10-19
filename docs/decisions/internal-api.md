@@ -39,6 +39,10 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
 
 "The TMF620 deviation above" is D-W21 in [catalog.md](catalog.md#tmf620-mapping).
 
+- **Superseded by application authentication (2026-10-19):** operator now comes from
+  the authenticated session, or from a verified service credential plus a validated
+  MCP principal. An arbitrary `X-Remote-User` has no effect. See [users.md](users.md).
+  The following describes the former boundary, retained as historical context.
 - **operator** comes from the `X-Remote-User` header, which the shared Caddy must *set*
   (overwrite) from the basic-auth user, so a client-sent header never passes through.
   Anything not matching `^[A-Za-z0-9._@:-]{1,64}$` is reported as null. The MCP connector

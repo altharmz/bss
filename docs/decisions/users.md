@@ -5,8 +5,9 @@ Index: [README.md](README.md). Related: [internal-api.md](internal-api.md),
 
 ## UI user management: the plan (2026-10-19)
 
-**Plan, prepared for the next session; the human confirms it (and answers the open
-questions below) before implementation.** Written at the human's request:
+**Approved 2026-10-19:** the human agreed to all Q1–Q7 proposed defaults. Implement
+the backend slice first; commits and deployment retain their separate approval gates.
+Written at the human's request:
 
 > Create user menu in UI. Have two types of users: admin and user. Admin can create and
 > manage other users and perform all UI operations. User can perform all UI operations
@@ -88,7 +89,7 @@ or a user could do over `/tmf-api` what the UI denies.
   bss site block (the app is the boundary), deployed **after** the app with
   authentication is live (until then both ask; nothing is ever open).
 
-### Open questions for the human
+### Original questions (all proposed defaults approved)
 
 - **Q1** Remove Caddy's basic auth once the app authenticates (U11, recommended), or keep
   it as an outer fence (two logins)?
@@ -115,5 +116,49 @@ or a user could do over `/tmf-api` what the UI denies.
    bodies, e2e.
 3. **Deploy** (each step the human's approval): `compose.prod.yaml` and `deploy.sh`
    (service credential, smoke) - harness files, diff first; the first admin on the VPS;
-   then the vps-infra change request (U11). Rolling back `0029` drops users and sessions:
+   then the vps-infra change request (U11). Rolling back `0029` drops users, sessions
+   and their security audit records:
    needs `alembic downgrade 0028` by hand.
+
+### Backend implementation details (2026-10-19)
+
+- App-wide authentication dependency protects new routes automatically. The service
+  identity root, health and billing status GETs, and sign-in POST are the explicit
+  public allowlist. Interactive API documentation HTTP endpoints are disabled; the
+  in-process OpenAPI document remains available to tooling. No unauthenticated mode.
+- Cookie name `bss_session`, path `/`, HttpOnly, SameSite Strict; Secure outside dev/test.
+  All session writes, including sign-in, require `X-Bss-Request: 1`. Password changes
+  revoke **all** sessions, including the current one; sign in again afterward.
+- `BSS_SERVICE_SECRET` authenticates MCP with `X-Bss-Service` plus a validated
+  `mcp:<name>` in `X-Remote-User`. `BSS_SMOKE_SECRET` is a separate read-only credential.
+  Unset credentials never authenticate. Neither can access user or session endpoints.
+- Users are never deleted. Role changes also revoke sessions. Security changes are
+  recorded in `app_user_audit` with target, operator, action and injected timestamp;
+  passwords, hashes and session tokens never enter the audit or response.
+- User administration and own password changes serialize with an exclusive table
+  lock, including concurrent login, to protect the last administrator invariant.
+- Session and user operations are explicitly excluded from MCP generation, separately
+  from progress exclusions. Filter introspection runs handlers inside an isolated
+  in-process app; it does not disable the running application's authentication.
+- Login attempts are limited to 20 per minute per username and peer address. State is
+  bounded and process-local (a restart refills it); forwarded headers are not trusted.
+  Behind Caddy the peer bucket is shared, providing a conservative global limit.
+- Bootstrap: `docker compose run --rm --no-deps app python -m app.users create NAME
+  --role admin`, password read from stdin (no echo from the CLI). The make target and
+  production credential wiring remain in the deployment slice, requiring harness
+  approval. Local seed uses a temporary service credential only inside its process;
+  it creates no users or persistent credentials. Smoke and UI clients must be adapted
+  before this is deployed.
+
+Negative proofs (each temporary mutation reverted): removing the global dependency
+fails both route enumeration and a new-route request (200 instead of 401); removing
+the admin guard lets an ordinary user list users (200 instead of 403); removing the
+disabled-user predicate keeps a disabled user's existing session alive (200 instead
+of 401). The tests observe these failures through real requests and sessions.
+
+Validation: `make test` passed three times (1,345 tests each); `make lint`,
+`make web-lint`, `make web-test` (236 tests in UTC and again in New York),
+`make decisions-check` and `make docs` passed. The human approved and applied the
+documentation generator mappings and the internal API authentication note.
+`make progress` passed too (another full backend run and the UI inventory tests),
+recording all three new tables and seven new endpoints as implemented and tested.

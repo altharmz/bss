@@ -276,7 +276,7 @@ def test_hold_and_release(api, db_conn, offering):
         ("new", "validated", "run", None),
         ("validated", "sent", "run", None),
         ("sent", "onHold", "operator", "i.petrova"),
-        ("onHold", "sent", "operator", None),
+        ("onHold", "sent", "operator", "i.petrova"),
         ("sent", "partiallyPaid", "payment", None),
     ]
     assert detail["allowedStates"] == ["onHold"]

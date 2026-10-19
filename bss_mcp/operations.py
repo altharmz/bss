@@ -6,9 +6,10 @@ model of a write, the query parameters of a read, and a one-line note condensed 
 API notes (scripts/docs/api-notes/, docs/api/) - the handlers mostly have no docstring.
 
 Kept honest by tests/test_mcp_tools.py (the drift check): the operations here are exactly
-app.openapi()'s minus EXCLUDED; EXCLUDED is exactly docs/progress/scope.yaml's excluded
-api entries; every POST/PATCH names the model its handler parses (read from the handler's
-source), and nothing else does.
+app.openapi()'s minus EXCLUDED and AUTH_OPERATIONS. EXCLUDED is exactly the progress
+scope's excluded API entries; AUTH_OPERATIONS keeps interactive credentials and user
+management outside MCP. Every exposed POST/PATCH names the model its handler parses
+(read from the handler's source), and nothing else does.
 """
 
 from dataclasses import dataclass, field
@@ -48,6 +49,16 @@ from app.internal.catalog import PriceChange
 
 # Not tools: the same list as docs/progress/scope.yaml `excluded` (area api).
 EXCLUDED = {("GET", "/")}
+# Interactive account credentials are deliberately never exposed as model tools.
+AUTH_OPERATIONS = {
+    ("GET", "/internal/v1/session"),
+    ("POST", "/internal/v1/session"),
+    ("DELETE", "/internal/v1/session"),
+    ("POST", "/internal/v1/session/password"),
+    ("GET", "/internal/v1/users"),
+    ("POST", "/internal/v1/users"),
+    ("PATCH", "/internal/v1/users/{username}"),
+}
 
 # Query shapes
 NONE = "none"  # no query parameters (any is a 400)

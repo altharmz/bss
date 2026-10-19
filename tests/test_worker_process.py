@@ -29,7 +29,7 @@ from app.worker import process
 from app.worker.process import DateRun, bill_date, retry_run
 from app.worker.runs import start_run
 from tests import apidata, timeline
-from tests.conftest import _create_database, _drop_database
+from tests.conftest import _create_database, _drop_database, install_test_user
 from tests.factories import MSK, account, rejected
 from tests.timeline import TZ, iso, midnight
 
@@ -62,6 +62,8 @@ def control_db_url(template_db):
     name = f"vpslab_test_{uuid.uuid4().hex[:8]}"
     url = _create_database(name, template=template_db)
     try:
+        with psycopg.connect(url) as conn:
+            install_test_user(conn)
         yield url
     finally:
         _drop_database(name)

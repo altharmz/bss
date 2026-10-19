@@ -381,6 +381,8 @@ def refuse_unless_local() -> None:
 
 
 def main() -> int:
+    import secrets
+
     from fastapi.testclient import TestClient
 
     from app.api.deps import get_clock
@@ -399,8 +401,24 @@ def main() -> int:
         today = SystemClock().today()
         clock = FixedClock(at(today, 9))
         app.dependency_overrides[get_clock] = lambda: clock
-        client = TmfClient(TestClient(app, raise_server_exceptions=True))
-        created = seed(client, clock, today)
+        # In-process, local-only service credential: no app user or persistent secret.
+        previous_secret = settings.bss_service_secret
+        settings.bss_service_secret = secrets.token_urlsafe(32)
+        try:
+            client = TmfClient(
+                TestClient(
+                    app,
+                    raise_server_exceptions=True,
+                    headers={
+                        "X-Bss-Service": settings.bss_service_secret,
+                        "X-Remote-User": "mcp:seed",
+                    },
+                )
+            )
+            created = seed(client, clock, today)
+        finally:
+            settings.bss_service_secret = previous_secret
+            app.dependency_overrides.pop(get_clock, None)
     except SeedError as exc:
         print(f"seed: {exc}", file=sys.stderr)
         return 1

@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # The bss app. In prod `http://bss:8080` (the alias on `shared`, where every project's
     # service is called `app`); locally `http://app:8080`.
     bss_api_url: str = "http://app:8080"
+    bss_service_secret: str = ""
     # How clients reach this service (no trailing slash); the OAuth issuer and the
     # protected resource (`<url>/mcp`) are built from it.
     mcp_public_url: str = "http://localhost:8090"

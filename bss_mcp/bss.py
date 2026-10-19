@@ -20,9 +20,15 @@ class NotBss(RuntimeError):
 
 class Bss:
     def __init__(
-        self, base_url: str, timeout: float, transport: httpx2.AsyncBaseTransport | None = None
+        self,
+        base_url: str,
+        timeout: float,
+        transport: httpx2.AsyncBaseTransport | None = None,
+        *,
+        service_secret: str = "",
     ) -> None:
         self.base_url = base_url
+        self.service_secret = service_secret
         self.client = httpx2.AsyncClient(base_url=base_url, timeout=timeout, transport=transport)
 
     async def request(
@@ -37,6 +43,8 @@ class Bss:
     ) -> httpx2.Response:
         # X-Remote-User: who did it, for the app's operator (display and bill history)
         headers = {"X-Remote-User": principal, "Accept": "application/json"}
+        if self.service_secret:
+            headers["X-Bss-Service"] = self.service_secret
         if content_type:
             headers["Content-Type"] = content_type
         return await self.client.request(method, path, params=params, content=body, headers=headers)

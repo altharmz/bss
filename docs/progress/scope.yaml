@@ -15,6 +15,16 @@
 # Status (implemented / tested / deployed) is never written here - it is derived.
 
 items:
+  - {id: db.app_user, area: db, stage: 5, table: app_user, title: "Application users and roles"}
+  - {id: db.app_session, area: db, stage: 5, table: app_session, title: "Revocable application sessions"}
+  - {id: db.app_user_audit, area: db, stage: 5, table: app_user_audit, title: "User management audit"}
+  - {id: api.internal.session.create, area: api, stage: 5, method: POST, path: /internal/v1/session, title: "Sign in"}
+  - {id: api.internal.session.get, area: api, stage: 5, method: GET, path: /internal/v1/session, title: "Current session"}
+  - {id: api.internal.session.delete, area: api, stage: 5, method: DELETE, path: /internal/v1/session, title: "Sign out"}
+  - {id: api.internal.session.password, area: api, stage: 5, method: POST, path: /internal/v1/session/password, title: "Change own password"}
+  - {id: api.internal.users.list, area: api, stage: 5, method: GET, path: /internal/v1/users, title: "List users (admin)"}
+  - {id: api.internal.users.create, area: api, stage: 5, method: POST, path: /internal/v1/users, title: "Create user (admin)"}
+  - {id: api.internal.users.patch, area: api, stage: 5, method: PATCH, path: "/internal/v1/users/{username}", title: "Manage user (admin)"}
   - {id: db.financial_account, area: db, stage: 5, table: financial_account, title: "Financial accounts (TMF666)"}
   - {id: api.tmf666.financialAccount.list, area: api, stage: 5, method: GET, path: /tmf-api/accountManagement/v5/financialAccount, title: "List financial accounts"}
   - {id: api.tmf666.financialAccount.get, area: api, stage: 5, method: GET, path: "/tmf-api/accountManagement/v5/financialAccount/{account_id}", title: "Get a financial account"}

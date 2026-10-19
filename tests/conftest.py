@@ -2,6 +2,7 @@ import os
 import time
 import uuid
 from collections.abc import Iterator
+from functools import cache
 
 import hypothesis
 import psycopg
@@ -166,6 +167,24 @@ def db_conn(migrated_db_url) -> Iterator[psycopg.Connection]:
         conn.close()
 
 
+@cache
+def _test_password_hash():
+    from bss_mcp.passwords import hash_password
+
+    return hash_password("test-password-123")
+
+
+def install_test_user(conn):
+    from tests.timeline import NOW
+
+    conn.execute(
+        "INSERT INTO app_user (username, role, password_hash, must_change_password,"
+        " created_at, updated_at) VALUES ('i.petrova', 'admin', %s, false, %s, %s)",
+        (_test_password_hash(), NOW, NOW),
+    )
+    conn.commit()
+
+
 @pytest.fixture
 def api(db_conn, migrated_db_url, monkeypatch):
     """The real app on the throwaway database with a FixedClock, behind a client that
@@ -184,8 +203,25 @@ def api(db_conn, migrated_db_url, monkeypatch):
 
     clock = FixedClock(NOW)
     monkeypatch.setattr(settings, "database_url", migrated_db_url)
+    monkeypatch.setattr(settings, "app_env", "test")
+    monkeypatch.setattr(settings, "bss_service_secret", "test-service-credential")
+    from app.internal.users import _attempts
+
+    _attempts.clear()
+    install_test_user(db_conn)
     app.dependency_overrides[get_clock] = lambda: clock
-    client = TmfClient(TestClient(app, raise_server_exceptions=False))
+    raw = TestClient(app, raise_server_exceptions=False, headers={"X-Bss-Request": "1"})
+    assert (
+        raw.post(
+            "/internal/v1/session",
+            json={
+                "username": "i.petrova",
+                "password": "test-password-123",
+            },
+        ).status_code
+        == 200
+    )
+    client = TmfClient(raw)
     client.clock = clock
     try:
         yield client
@@ -199,6 +235,7 @@ def mcp_settings(tmp_path):
     from bss_mcp.config import Settings
 
     return Settings(
+        bss_service_secret="test-service-credential",
         bss_api_url="http://bss.test",
         mcp_public_url="https://mcp.test",
         mcp_store=str(tmp_path / "mcp.db"),

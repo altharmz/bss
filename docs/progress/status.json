@@ -2,15 +2,15 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 145,
-      "items": 145,
-      "tested": 145
+      "implemented": 152,
+      "items": 152,
+      "tested": 152
     },
     "db": {
       "deployed": null,
-      "implemented": 38,
-      "items": 38,
-      "tested": 38
+      "implemented": 41,
+      "items": 41,
+      "tested": 41
     },
     "ui": {
       "deployed": null,
@@ -38,6 +38,96 @@
     }
   ],
   "items": [
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.app_user",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Application users and roles"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.app_session",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Revocable application sessions"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.app_user_audit",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "User management audit"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.session.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Sign in"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.session.get",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Current session"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.session.delete",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Sign out"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.session.password",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Change own password"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.users.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "List users (admin)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.users.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Create user (admin)"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.internal.users.patch",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Manage user (admin)"
+    },
     {
       "area": "db",
       "deployed": null,

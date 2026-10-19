@@ -1,9 +1,10 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
 from app import api, db, internal, status
+from app.auth import authenticate
 from app.config import settings
 
 logging.basicConfig(level=settings.log_level.upper())
@@ -12,7 +13,15 @@ log = logging.getLogger("app")
 # operationId = the handler's function name (e.g. create_payment), not FastAPI's
 # name+path+method: the MCP connector names its tools after it, and clients cap tool
 # names at 64 characters (tests/test_operation_ids.py).
-app = FastAPI(title="bss", version="0.1.0", generate_unique_id_function=lambda route: route.name)
+app = FastAPI(
+    title="bss",
+    version="0.1.0",
+    generate_unique_id_function=lambda route: route.name,
+    dependencies=[Depends(authenticate)],
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 api.install(app)
 internal.install(app)
 app.include_router(status.router)

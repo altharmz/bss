@@ -49,7 +49,7 @@ def test_context(api):
         "timeZone": "Europe/Moscow",
         "utcOffset": "+03:00",
         "environment": settings.app_env,
-        "operator": None,
+        "operator": "i.petrova",
         "currency": "RUB",
         "billingRunAt": "00:30",
         "paymentTermDays": 30,
@@ -72,9 +72,9 @@ def test_context_business_date_is_the_date_in_billing_tz(api):
         ("x" * 65, None),
     ],
 )
-def test_context_operator_comes_from_the_proxy_header(api, header, operator):
+def test_context_operator_ignores_the_proxy_header(api, header, operator):
     response = api.get(f"{BASE}/context", headers={"X-Remote-User": header})
-    assert response.json()["operator"] == operator
+    assert response.json()["operator"] == "i.petrova"
 
 
 def test_context_takes_no_query_and_only_get(api):

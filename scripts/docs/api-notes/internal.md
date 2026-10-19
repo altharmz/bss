@@ -2,15 +2,21 @@
 
 Ours, not TMF: what the admin UI cannot get from the TMF APIs without re-implementing
 billing rules (`app/internal/__init__.py`). Same conventions as the TMF APIs (TMF `Error`
-bodies, Decimal-exact Money, one transaction per request, the injected clock,
+bodies, Decimal-exact Money, one business transaction per request, the injected clock,
 offset/limit paging with `X-Total-Count`/`X-Result-Count`, unknown query parameters are a
 400), except that **dates are plain business dates** (`YYYY-MM-DD` in BILLING_TZ). The
 contract is [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml):
 strict schemas (`additionalProperties: false`), validated for every response in the suite.
 
+Authentication is enforced by the app: a valid session or service credential is required.
+Session validation uses a separate short transaction. Session writes require
+`X-Bss-Request: 1`, including sign-in. User management requires an admin session;
+service credentials cannot access user/session endpoints. Password changes revoke all
+sessions, including the current one. See [users and sessions](../decisions/users.md).
+
 | Endpoint | What | Proven by |
 |---|---|---|
-| `GET /context` | businessDate (injected clock), now, timeZone, utcOffset (at now), environment (`APP_ENV`), operator (from `X-Remote-User`, null unless it matches `^[A-Za-z0-9._@-]{1,64}$`), currency (`UI_CURRENCY`), billingRunAt | `tests/test_internal_api.py::test_context`, `::test_context_business_date_is_the_date_in_billing_tz`, `::test_context_operator_comes_from_the_proxy_header` |
+| `GET /context` | businessDate (injected clock), now, timeZone, utcOffset (at now), environment (`APP_ENV`), operator (authenticated session username, or a verified MCP/service principal; an arbitrary `X-Remote-User` is ignored), currency (`UI_CURRENCY`), billingRunAt | `tests/test_internal_api.py::test_context`, `::test_context_business_date_is_the_date_in_billing_tz`, `::test_context_operator_ignores_the_proxy_header` |
 | `GET /billingAccount/{id}/firstCharge` | dry run of an add order: the billing core's `compute()` on the hypothetical product - period, billable days of period days, price, amount, `chargeRunDate` = max(startDate, businessDate + 1), `billDate` = first cycle day >= chargeRunDate, the next full period, balance, `balanceAfter` (balance minus this charge only), `exceedsCreditLimit`. startDate in the past or no price in the account currency: 422 | `::test_first_charge_mid_period_today`, `::test_first_charge_rounds_half_even`, `::test_the_preview_is_what_the_billing_run_writes`, `::test_first_charge_errors` |
 | `GET /billingAccount/{id}/products` | not-ended products (created, pendingActive, active, pendingTerminate, suspended), oldest start first, with offering name/code, specification, the price valid today (or on the start date), `nextChargeDate` | `::test_open_products_with_next_charge_and_price` |
 | `GET /billingAccount/{id}/charges` | ABRs newest run first, with run date, billable days of period days, offering, bill | `::test_charges` |

@@ -93,7 +93,14 @@ async def _current(request: Request) -> dict[str, Any]:
         "raw_path": path.encode(),
         "root_path": "",
         "query_string": b"",
-        "headers": [(b"accept", b"application/json")],
+        "headers": [
+            (b"accept", b"application/json"),
+            *[
+                (name, value)
+                for name, value in request.scope["headers"]
+                if name in {b"cookie", b"x-bss-service", b"x-remote-user"}
+            ],
+        ],
         "client": request.scope.get("client"),
         "server": request.scope.get("server"),
         "state": dict(request.scope.get("state") or {}),
