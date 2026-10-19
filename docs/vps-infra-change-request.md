@@ -6,6 +6,30 @@ its own `scripts/deploy.sh`; everything below is vps-infra's Caddy and compose c
 - **Open: [the MCP connector](#2026-10-11-route-the-mcp-connector)** (below).
 - Applied: [the admin UI and its APIs](#stage-5-serve-the-bss-admin-ui-and-route-its-apis)
   (stage 5, deployed 2026-10-02 with `9424b9b`) - kept for reference.
+- Applied: [U11, no basic auth on the bss site](#2026-10-19-u11-no-basic-auth-on-the-bss-site)
+  (vps-infra `7926cc2`, live 2026-10-19).
+
+## 2026-10-19: U11, no basic auth on the bss site
+
+Done on the infra side (vps-infra `7926cc2`, the human's OK): the app authenticates every
+request itself ([users.md](decisions/users.md)), so Caddy asks for no login on `:8445` and
+`bss2811`. As rehearsed by vps-infra on the pinned image:
+
+- `X-Remote-User` is stripped on every route (`header_up -X-Remote-User`), never set.
+- `X-Forwarded-For` is Caddy's default (no `trusted_proxies`): it replaces whatever the
+  client sent with the one address Caddy sees. The app's sign-in throttle keys on its
+  last entry (`APP_TRUST_FORWARDED`).
+- `bss2811` is the same site block; requests there come through the host nginx, so Caddy
+  sees the docker gateway for every client - all sign-ins on that hostname share one
+  throttle bucket (accepted).
+- The smoke credential's POST 403 now comes from the app only.
+
+**bss side** (slice 4, [users.md](decisions/users.md#after-u11-the-plan-slice-4-2026-10-19)):
+operator from the session, the throttle above, `web-smoke.sh` without `SMOKE_BASIC_AUTH`.
+**After bss's first passing web smoke**: vps-infra deletes `BASIC_AUTH_HASH_BSS` and
+`BASIC_AUTH_HASH_BSS_SMOKE` from its `.env.prod` (kept for rollback until then) and closes
+its open check; the human deletes the `SMOKE_BASIC_AUTH` line from bss's `.env.smoke`.
+Section 3 below ("The smoke user") is history since then.
 
 ## 2026-10-11: route the MCP connector
 

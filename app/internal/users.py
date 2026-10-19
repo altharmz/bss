@@ -20,9 +20,9 @@ from app.internal.context import no_query
 from app.users import audit, check_password, hash_password, lock_users, password_policy
 
 router = APIRouter(prefix="/internal/v1")
-# One process; bounded window state, driven by the injected clock. No forwarded
-# address is trusted until deployment explicitly configures a trusted proxy.
-_attempts: dict[tuple[str, str], list] = {}
+# One process; bounded window state, driven by the injected clock. A forwarded
+# address is trusted only with APP_TRUST_FORWARDED (client_address).
+_attempts: dict[tuple[str, ...], list] = {}
 _attempts_lock = Lock()
 
 
@@ -74,11 +74,20 @@ def session_view(user):
     }
 
 
+def client_address(request):
+    """The last X-Forwarded-For entry behind Caddy (APP_TRUST_FORWARDED), else the peer;
+    the same rule as bss_mcp/login.py's client_ip."""
+    if settings.app_trust_forwarded:
+        forwarded = request.headers.get("x-forwarded-for", "")
+        if forwarded:
+            return forwarded.split(",")[-1].strip()
+    return request.client.host if request.client else "unknown"
+
+
 def limit_login(request, username, now):
-    keys = [
-        ("username", username.casefold()),
-        ("address", request.client.host if request.client else "unknown"),
-    ]
+    # No bare username key: nobody can lock a named user out from another address.
+    address = client_address(request)
+    keys = [("user", username.casefold(), address), ("address", address)]
     with _attempts_lock:
         cutoff = now - timedelta(minutes=1)
         for key in list(_attempts):

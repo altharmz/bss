@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 # The admin UI and its API routes through the shared Caddy, as a browser sees them.
-# Usage: SMOKE_BASIC_AUTH=smoke:<password> BSS_SMOKE_SECRET=<hex> \
-#          scripts/web-smoke.sh <base url> <expected build>
+# Usage: BSS_SMOKE_SECRET=<hex> scripts/web-smoke.sh <base url> <expected build>
 #   e.g. scripts/web-smoke.sh https://vpn2811.duckdns.org:8445 1a02efa
 #
-# The credentials are read from the environment and handed to curl as a config file on a
-# file descriptor - never on the command line (ps) and never printed. The `smoke` user is
-# GET-only in Caddy; check 6 proves that. Behind Caddy the app authenticates too
-# (docs/decisions/users.md): the smoke secret goes to it as X-Bss-Service, read-only there.
+# Caddy asks for no login (vps-infra U11); the app is the only boundary
+# (docs/decisions/users.md). The smoke secret goes to it as X-Bss-Service, read-only
+# there - check 6 proves that. It is read from the environment and handed to curl as a
+# config file on a file descriptor - never on the command line (ps) and never printed.
 set -euo pipefail
 
 BASE="${1:?usage: web-smoke.sh <base url> <expected build>}"
 BUILD="${2:?usage: web-smoke.sh <base url> <expected build>}"
-: "${SMOKE_BASIC_AUTH:?SMOKE_BASIC_AUTH (smoke:<password>) must be set}"
 : "${BSS_SMOKE_SECRET:?BSS_SMOKE_SECRET must be set}"
 OUT="$(mktemp)"
 HEADERS="$(mktemp)"
@@ -31,10 +29,6 @@ output = \"${OUT}\"
 dump-header = \"${HEADERS}\"
 write-out = \"%{http_code}\"
 request = \"${method}\""
-  # basic: Caddy's login only; auth: also the app's smoke credential
-  if [[ "${who}" == auth || "${who}" == basic ]]; then
-    config+=$'\n'"user = \"${SMOKE_BASIC_AUTH}\""
-  fi
   if [[ "${who}" == auth ]]; then
     config+=$'\n'"header = \"X-Bss-Service: ${BSS_SMOKE_SECRET}\""
   fi
@@ -46,13 +40,8 @@ request = \"${method}\""
 header() { grep -i "^$1:" "${HEADERS}" | head -1 | cut -d: -f2- | tr -d '\r' | sed 's/^ *//'; }
 is_json() { python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "${OUT}" 2>/dev/null; }
 
-# 1. basic auth is on for the UI
+# 1. index.html of THIS build is served, without credentials (the UI's sign-in is in it)
 code="$(get anon GET /)"
-[[ "${code}" == 401 ]] || fail "GET / without credentials answered ${code}, expected 401"
-ok "GET / without credentials -> 401"
-
-# 2. index.html of THIS build is served
-code="$(get auth GET /)"
 [[ "${code}" == 200 ]] || fail "GET / answered ${code}"
 [[ "$(header Content-Type)" == text/html* ]] || fail "GET / is not HTML: $(header Content-Type)"
 grep -q "<meta name=\"bss-build\" content=\"${BUILD}\"" "${OUT}" \
@@ -61,29 +50,31 @@ ok "GET / -> 200 text/html, bss-build ${BUILD}"
 asset="$(grep -oE '/assets/[A-Za-z0-9._-]+\.js' "${OUT}" | head -1)"
 [[ -n "${asset}" ]] || fail "index.html references no /assets/*.js"
 
-# 3. a deep link is answered by index.html too (try_files), and a hashed asset is served
-code="$(get auth GET /subscribers)"
+# 2. a deep link is answered by index.html too (try_files), and a hashed asset is served
+code="$(get anon GET /subscribers)"
 [[ "${code}" == 200 ]] && grep -q 'name="bss-build"' "${OUT}" \
   || fail "GET /subscribers answered ${code} without index.html (try_files missing?)"
 ok "GET /subscribers -> index.html (deep link)"
-code="$(get auth GET "${asset}")"
+code="$(get anon GET "${asset}")"
 [[ "${code}" == 200 ]] || fail "GET ${asset} answered ${code}"
 ok "GET ${asset} -> 200 (cache-control: $(header Cache-Control))"
 
-# 4. /internal goes to the app: JSON, not the index.html fallback. Caddy's login alone is
-#    not enough - the app answers 401 - and with the smoke credential the app names the
-#    operator `smoke`, the same name as the basic-auth user
-code="$(get basic GET /internal/v1/context)"
-[[ "${code}" == 401 ]] || fail "GET /internal/v1/context with Caddy's login only answered ${code}, expected 401 from the app"
-ok "GET /internal/v1/context without the app's credential -> 401"
+# 3. /internal goes to the app, which answers 401 JSON without a credential - not the
+#    index.html fallback
+code="$(get anon GET /internal/v1/context)"
+[[ "${code}" == 401 ]] || fail "GET /internal/v1/context without credentials answered ${code}, expected 401 from the app"
+[[ "$(header Content-Type)" == application/json* ]] && is_json \
+  || fail "GET /internal/v1/context without credentials is not JSON ($(header Content-Type)) - /internal/* not routed to the app?"
+ok "GET /internal/v1/context without credentials -> 401 JSON"
+
+# 4. with the smoke secret the app names the operator `smoke`
 code="$(get auth GET /internal/v1/context)"
 [[ "${code}" == 200 ]] || fail "GET /internal/v1/context answered ${code}"
-[[ "$(header Content-Type)" == application/json* ]] \
-  || fail "GET /internal/v1/context is not JSON ($(header Content-Type)) - /internal/* not routed to the app?"
-is_json || fail "GET /internal/v1/context body is not JSON"
+[[ "$(header Content-Type)" == application/json* ]] && is_json \
+  || fail "GET /internal/v1/context is not JSON ($(header Content-Type))"
 operator="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("operator"))' "${OUT}")"
-[[ "${operator}" == "${SMOKE_BASIC_AUTH%%:*}" ]] \
-  || fail "operator is ${operator}, expected ${SMOKE_BASIC_AUTH%%:*} - smoke credential not recognised by the app?"
+[[ "${operator}" == smoke ]] \
+  || fail "operator is ${operator}, expected smoke - smoke secret not recognised by the app?"
 ok "GET /internal/v1/context -> 200 JSON, operator ${operator}"
 
 # 5. /tmf-api goes to the app
@@ -94,10 +85,10 @@ code="$(get auth GET '/tmf-api/accountManagement/v5/billingAccount?limit=1')"
 [[ -n "$(header X-Total-Count)" ]] || fail "GET /tmf-api/.../billingAccount has no X-Total-Count"
 ok "GET /tmf-api/accountManagement/v5/billingAccount -> 200 JSON"
 
-# 6. the smoke user cannot change anything
+# 6. the smoke secret cannot change anything (the app's 403)
 code="$(get auth POST /tmf-api/productOrderingManagement/v5/productOrder)"
-[[ "${code}" == 403 ]] || fail "POST as the smoke user answered ${code}, expected 403"
-ok "POST as smoke -> 403"
+[[ "${code}" == 403 ]] || fail "POST with the smoke secret answered ${code}, expected 403"
+ok "POST with the smoke secret -> 403"
 
 # 7. /healthz stays open for the external monitor
 code="$(get anon GET /healthz)"

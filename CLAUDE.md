@@ -255,10 +255,11 @@ pushed `eaa1a7b`.
 **Next session: after U11** (2026-10-19): vps-infra removed Caddy's basic auth
 (`7926cc2`, live). **Deploys fail at the web smoke until this ships**, UI billing runs
 record `requestedBy = null`, and all sign-ins share Caddy's address in the throttle.
-The plan, ready to confirm and implement:
-[users.md](docs/decisions/users.md#after-u11-the-plan-slice-4-2026-10-19) - operator
+Slice 4 implemented locally
+([as built](docs/decisions/users.md#after-u11-as-built-slice-4-2026-10-19)): operator
 from the session, `APP_TRUST_FORWARDED` throttle, `web-smoke.sh` without
-`SMOKE_BASIC_AUTH`, docs; then `make verify` and tell vps-infra.
+`SMOKE_BASIC_AUTH`, docs. Next: the human's OK on the diff, commit, push, `make verify`
+(separate approval), then tell vps-infra the web smoke passed.
 
 **UI user management** (the human, 2026-10-19): a user menu in the UI,
 roles `admin` (manages users, does everything) and `user` (everything but user

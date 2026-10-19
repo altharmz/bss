@@ -79,10 +79,11 @@ dirty="$(git status --porcelain)" || fail "not a git work tree - cannot tell wha
 Commit or stash first:
 ${dirty}"
 
-# The web smoke test goes through the shared Caddy as the GET-only `smoke` user. Read only
-# that one variable; it is handed to the smoke script in its environment, never printed.
+# The web smoke test goes through the shared Caddy with the app's read-only smoke secret.
+# Read only that one variable; it is handed to the smoke script in its environment, never
+# printed.
 #
-# The credential lives in .env.smoke - local only: gitignored, never rsynced (the
+# The secret lives in .env.smoke - local only: gitignored, never rsynced (the
 # workstation-only counterpart of .env.prod, which IS shipped to the VPS as ~/bss/.env).
 # SMOKE_ENV points elsewhere only for a rehearsal with a dummy file.
 WEB_URL="${WEB_URL:-https://vpn2811.duckdns.org:8445}"
@@ -91,12 +92,7 @@ WEB_URL="${WEB_URL:-https://vpn2811.duckdns.org:8445}"
 MCP_URL="${MCP_URL:-https://bss2811.duckdns.org}"
 SMOKE_ENV="${SMOKE_ENV:-.env.smoke}"
 [[ -f "${SMOKE_ENV}" ]] \
-  || fail "${SMOKE_ENV} is missing: create .env.smoke with SMOKE_BASIC_AUTH=smoke:<password> (see .env.example and docs/vps-infra-change-request.md)"
-SMOKE_BASIC_AUTH="$(sed -n 's/^SMOKE_BASIC_AUTH=//p' "${SMOKE_ENV}" | tail -n 1)"
-[[ "${SMOKE_BASIC_AUTH}" == smoke:?* ]] \
-  || fail "SMOKE_BASIC_AUTH=smoke:<password> is missing in ${SMOKE_ENV}"
-! grep -q '^SMOKE_BASIC_AUTH=' .env.prod \
-  || fail ".env.prod contains SMOKE_BASIC_AUTH: remove it - .env.prod is shipped to the VPS, the smoke credential belongs in .env.smoke only"
+  || fail "${SMOKE_ENV} is missing: create .env.smoke with BSS_SMOKE_SECRET=<hex> (see .env.example)"
 # The app's read-only smoke credential (docs/decisions/users.md): the app gets it from
 # .env.prod, the web smoke from .env.smoke - the same value; a mismatch fails the smoke.
 BSS_SMOKE_SECRET="$(sed -n 's/^BSS_SMOKE_SECRET=//p' "${SMOKE_ENV}" | tail -n 1)"
@@ -157,8 +153,7 @@ if [[ "${DRY_RUN:-}" == 1 ]]; then
   grep -v '^web/assets/' <<<"${shipped}" | sed 's/^/    /'
   printf '    ... and %s files under web/assets/\n' "$(grep -c '^web/assets/.' <<<"${shipped}")"
   ! grep -q 'env\.smoke' <<<"${shipped}" || fail ".env.smoke would be shipped"
-  ! grep -q '^SMOKE_BASIC_AUTH=' .env.prod || fail ".env.prod has a SMOKE_BASIC_AUTH line"
-  log "Dry run OK: .env.smoke is not shipped, .env.prod has no SMOKE_BASIC_AUTH line; nothing touched the network"
+  log "Dry run OK: .env.smoke is not shipped; nothing touched the network"
   exit 0
 fi
 
@@ -281,7 +276,7 @@ rssh "mkdir -p ${REMOTE_DIR}/web"
 ship_web "${REMOTE}:${REMOTE_DIR}"
 
 log "Web smoke test through Caddy (${WEB_URL})"
-SMOKE_BASIC_AUTH="${SMOKE_BASIC_AUTH}" BSS_SMOKE_SECRET="${BSS_SMOKE_SECRET}" \
+BSS_SMOKE_SECRET="${BSS_SMOKE_SECRET}" \
   ./scripts/web-smoke.sh "${WEB_URL}" "${TAG}" \
   || fail "web smoke test failed (see above). The app itself is deployed and healthy; check the vps-infra Caddy routes and the files in ~/${REMOTE_DIR}/web"
 

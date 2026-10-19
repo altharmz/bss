@@ -291,3 +291,27 @@ the Edit tool):
    deletes `BASIC_AUTH_HASH_BSS`/`_BSS_SMOKE` from its `.env.prod` (kept for rollback
    until then) and closes its open check; the human deletes the `SMOKE_BASIC_AUTH`
    line from `.env.smoke`.
+
+### After U11: as built (slice 4, 2026-10-19)
+
+Built to the plan above, which the human confirmed ("continue").
+
+- **Operator.** Billing run requests (`catchUp`, `retry`) take `requestedBy` from
+  `operator_of(request)` (`app/api/common.py`), the same source as `/context` and bill
+  history; `_operator()` is gone. Until now they were the one place a client-sent
+  `X-Remote-User` still reached the database. Tests: a forged header with a session
+  records the session user (fails on the old code); an MCP retry records `mcp:demo`.
+- **Throttle.** `client_address` (`app/internal/users.py`): with `APP_TRUST_FORWARDED`
+  (`"true"` in `compose.prod.yaml`'s `app` only) the last `X-Forwarded-For` entry, else
+  the peer - `bss_mcp/login.py`'s rule, written again because `app/` does not import
+  `bss_mcp`. Keys `(user, username, address)` and `(address)`, 20 per minute each,
+  `Retry-After: 60`, at most 10,000 keys. On `bss2811` every client shares the docker
+  gateway's bucket (accepted). Negative proofs, each failing a test and reverted: the old
+  keys (a user locked out from elsewhere), the first entry instead of the last, the
+  header trusted with the flag off.
+- **Web smoke** in the new state only (`scripts/web-smoke.sh`, 7 checks); deploy.sh needs
+  only `BSS_SMOKE_SECRET` in `.env.smoke` and no longer looks for `SMOKE_BASIC_AUTH`.
+  Checked with `bash -n` only - the first real run is the deploy's.
+- **Not changed:** `worker_request.requested_by`'s column comment still says "from
+  X-Remote-User" (migrations on `master` are immutable; a comment-only migration can fix
+  it when the next one is due).

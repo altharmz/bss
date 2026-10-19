@@ -251,11 +251,13 @@ the order of deploys (backup, vps-infra, then `make verify`).
 
 - **`deploy.sh`** builds the UI locally before any network step (`make web-build
   WEB_BUILD=<tag>` stamps `index.html`'s `bss-build` marker) and refuses to start without
-  `SMOKE_BASIC_AUTH=smoke:<password>` in **`.env.smoke`** - a local-only file, gitignored
-  and never shipped. `.env.prod` is copied to the VPS as `~/bss/.env` (compose reads it
-  only to fill `${...}`; the container gets just the variables listed under
-  `environment:`, there is no `env_file`), so deploy.sh also refuses if `.env.prod` has a
-  `SMOKE_BASIC_AUTH` line. `.env.smoke` is denied to reads like `.env`/`.env.prod`
+  the web smoke's credential in **`.env.smoke`** - a local-only file, gitignored and never
+  shipped. `.env.prod` is copied to the VPS as `~/bss/.env` (compose reads it only to fill
+  `${...}`; the container gets just the variables listed under `environment:`, there is
+  no `env_file`). The credential was Caddy's `SMOKE_BASIC_AUTH=smoke:<password>` (and
+  deploy.sh refused it in `.env.prod`); since U11 (2026-10-19, Caddy asks for no login)
+  it is only the app's `BSS_SMOKE_SECRET` ([users.md](users.md#after-u11-the-plan-slice-4-2026-10-19)).
+  `.env.smoke` is denied to reads like `.env`/`.env.prod`
   (settings.json, guard). **`DRY_RUN=1 ./scripts/deploy.sh`** runs every local check and
   lists exactly what the rsync calls would ship (the same `ship_config`/`ship_web`
   functions, `--dry-run` into a scratch directory), proves `.env.smoke` is not among it,
@@ -264,14 +266,15 @@ the order of deploys (backup, vps-infra, then `make verify`).
   `--delete` pass. The directory is never replaced or renamed (the bind mount holds its
   inode); rehearsed locally: same inode across two deploys, stale assets removed. The UI
   ships last, so it never calls an API the old app lacks.
-- **`scripts/web-smoke.sh <url> <build>`** then checks the public URL as the smoke user
-  (credentials via a curl config on a file descriptor, never argv or output): `/` without
-  auth 401; `index.html` of this build; a deep link answered by `index.html`; a hashed
-  asset; **`/internal/v1/context` as JSON, not the index.html fallback, with `operator` =
-  `smoke`** (Caddy sets the header); a `/tmf-api` list as JSON with `X-Total-Count`;
-  `POST` as smoke -> 403; `/healthz` open. In the rehearsal, removing the `/internal`
-  route, the header or the smoke 403 each failed it. A failure there leaves the app
-  deployed and healthy; fix the Caddy side and re-run `make deploy`.
+- **`scripts/web-smoke.sh <url> <build>`** then checks the public URL (since U11 Caddy
+  asks for no login; the smoke secret goes to the app as `X-Bss-Service` via a curl
+  config on a file descriptor, never argv or output): `index.html` of this build, a deep
+  link answered by `index.html` and a hashed asset, all without credentials;
+  **`/internal/v1/context` 401 JSON from the app without them** (not the index.html
+  fallback), and with the secret 200 JSON with `operator` = `smoke`; a `/tmf-api` list
+  as JSON with `X-Total-Count`; `POST` with the secret -> 403 from the app; `/healthz`
+  open. A failure there leaves the app deployed and healthy; fix the Caddy side and
+  re-run `make deploy`.
 - **`make web-e2e`**: Playwright (official image, pinned by digest, same version as
   `@playwright/test`) against the **built** UI served by `vite preview` (`web-preview`
   service, proxying to the local app) and the seeded stack (`make seed` first). Read-only

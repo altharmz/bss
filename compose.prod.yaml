@@ -41,6 +41,9 @@ services:
       # service secret, the web smoke the read-only smoke secret, both as X-Bss-Service
       BSS_SERVICE_SECRET: ${BSS_SERVICE_SECRET:?BSS_SERVICE_SECRET is required - see .env.example}
       BSS_SMOKE_SECRET: ${BSS_SMOKE_SECRET:?BSS_SMOKE_SECRET is required - see .env.example}
+      # Caddy replaces X-Forwarded-For with the address it sees: the sign-in throttle keys
+      # on its last entry, else the peer (loopback, the tunnel: trusted hosts anyway)
+      APP_TRUST_FORWARDED: "true"
     networks:
       shared:
         # Every app on the shared network calls its service `app`, so that name is

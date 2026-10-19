@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     ui_currency: str = Field(default="RUB", pattern=r"^[A-Z]{3}$")
     session_idle_seconds: int = Field(default=8 * 3600, ge=1)
     session_absolute_seconds: int = Field(default=7 * 86400, ge=1)
+    # Behind Caddy (prod): the sign-in throttle keys on the last X-Forwarded-For entry,
+    # which Caddy sets and a client cannot choose. Off: the peer address only.
+    app_trust_forwarded: bool = False
     # Separate credentials: smoke can only read; MCP cannot access user/session APIs.
     bss_service_secret: str = ""
     bss_smoke_secret: str = ""

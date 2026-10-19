@@ -29,7 +29,7 @@ from app.api.errors import bad_request, conflict, not_found, unprocessable
 from app.api.listing import parse_page
 from app.api.tmfjson import TmfJSONResponse
 from app.config import settings
-from app.internal.context import OPERATOR, no_query
+from app.internal.context import no_query, operator_of
 from app.repository import billing, worker_requests
 from app.repository._sql import Row
 from app.worker.plan import catch_up_dates
@@ -82,12 +82,6 @@ def request_body(row: Row, run: Row | None) -> dict[str, Any]:
         "pickedAt": _when(row["picked_at"]),
         "doneAt": _when(row["done_at"]),
     }
-
-
-def _operator(request: Request) -> str | None:
-    """The operator from the header Caddy sets; display-only (docs/decisions/internal-api.md)."""
-    value = request.headers.get("x-remote-user", "").strip()
-    return value if OPERATOR.match(value) else None
 
 
 def _page(items: list[dict[str, Any]], total: int) -> TmfJSONResponse:
@@ -183,7 +177,7 @@ def catch_up(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJS
             kind="catchUp",
             up_to=data.up_to,
             requested_at=now,
-            requested_by=_operator(request),
+            requested_by=operator_of(request),
         )
     return TmfJSONResponse({"request": request_body(queued, None), "dates": dates}, status_code=202)
 
@@ -206,6 +200,6 @@ def retry(run_id: str, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResp
             kind="retry",
             run_id=run["id"],
             requested_at=clock.now(),
-            requested_by=_operator(request),
+            requested_by=operator_of(request),
         )
     return TmfJSONResponse({"request": request_body(queued, run)}, status_code=202)

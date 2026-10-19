@@ -78,8 +78,8 @@ deploy (e.g. to verify a cloud branch before merging it).
 What `deploy.sh` does, in order:
 
 1. **Refuses a dirty tree** (`git status --porcelain`): the image tag is the commit hash.
-2. **Refuses without the smoke credential** in the local `.env.smoke`, and if `.env.prod`
-   carries a `SMOKE_BASIC_AUTH` line (it would be shipped). Builds the UI locally with the
+2. **Refuses without the smoke secret** (`BSS_SMOKE_SECRET`) in the local `.env.smoke`,
+   and without the service and smoke secrets in `.env.prod`. Builds the UI locally with the
    commit as its `bss-build` marker. `DRY_RUN=1` stops here and lists exactly what would
    be shipped.
 3. Opens **one SSH master connection** for the whole deploy (timeouts, keepalives,
@@ -97,10 +97,11 @@ What `deploy.sh` does, in order:
    shared with `make smoke`).
 10. Rsyncs the built UI **into** `~/bss/web` (hashed assets, then `index.html`, then a
     `--delete` pass; the directory is never replaced, so Caddy's bind mount keeps it).
-11. **Web smoke** through Caddy as the GET-only `smoke` user (`scripts/web-smoke.sh`):
-    401 without auth, this build's `index.html`, a deep link, a hashed asset,
-    `/internal/v1/context` as JSON with `operator` = `smoke`, a TMF list with
-    `X-Total-Count`, `POST` -> 403, `/healthz` open.
+11. **Web smoke** through Caddy (`scripts/web-smoke.sh`; Caddy asks for no login, the app
+    is the boundary): this build's `index.html`, a deep link and a hashed asset without
+    credentials, `/internal/v1/context` 401 JSON from the app without them, with the
+    read-only smoke secret 200 JSON with `operator` = `smoke`, a TMF list with
+    `X-Total-Count`, `POST` -> 403 from the app, `/healthz` open.
 12. Prunes old `bss-app` images on the VPS, keeping the newest few (nothing else is
     touched).
 

@@ -140,8 +140,9 @@ def test_catch_up_is_refused_before_the_run_is_due(api):
 
 def test_catch_up_queues_a_request_and_says_which_dates(api, db_conn):
     api.clock.set(at(DEC3, 12))
+    # requestedBy is the signed-in user; a client-sent X-Remote-User is ignored
     response = api.post(
-        f"{RUNS}/catchUp", {"upTo": "2026-12-02"}, headers={"X-Remote-User": "i.petrova"}
+        f"{RUNS}/catchUp", {"upTo": "2026-12-02"}, headers={"X-Remote-User": "forged"}
     )
     assert response.status_code == 202
     body = response.json()
@@ -156,6 +157,14 @@ def test_catch_up_queues_a_request_and_says_which_dates(api, db_conn):
     # the API never bills: a queued request, no run, no charge
     assert (count(db_conn, "worker_request"), count(db_conn, "billing_run")) == (1, 0)
     assert count(db_conn, "applied_customer_billing_rate") == 0
+
+
+def test_a_request_from_mcp_is_requested_by_its_principal(api, worker):
+    s = scenario(api, worker, broken=True)
+    mcp = {"X-Bss-Service": "test-service-credential", "X-Remote-User": "mcp:demo"}
+    response = api.post(f"{RUNS}/{s['runs'][DEC1]['id']}/retry", None, headers=mcp)
+    assert response.status_code == 202
+    assert response.json()["request"]["requestedBy"] == "mcp:demo"
 
 
 def test_catch_up_when_nothing_is_due_queues_nothing(api, worker):

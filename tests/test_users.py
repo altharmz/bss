@@ -124,7 +124,15 @@ def test_invalid_passwords_are_indistinguishable(client, username, password):
     assert response.json()["message"] == "invalid username or password"
 
 
-def test_rate_limit_by_username_and_address(client, api):
+def forwarded(client, value, username="i.petrova", password=PASSWORD):
+    return client.post(
+        SESSION,
+        json={"username": username, "password": password},
+        headers={"X-Forwarded-For": value},
+    )
+
+
+def test_rate_limit_by_address_across_usernames(client, api):
     from app.internal.users import _attempts
 
     _attempts.clear()  # The API fixture has already performed its own sign-in.
@@ -133,6 +141,39 @@ def test_rate_limit_by_username_and_address(client, api):
     assert login(client, "another", "wrong").status_code == 429
     api.clock.set(api.clock.now() + timedelta(seconds=61))
     assert login(client).status_code == 200
+
+
+def test_rate_limit_does_not_lock_a_user_out_from_elsewhere(client, monkeypatch):
+    from app.internal.users import _attempts
+
+    _attempts.clear()
+    monkeypatch.setattr(settings, "app_trust_forwarded", True)
+    for _ in range(20):
+        assert forwarded(client, "1.1.1.1", password="wrong").status_code == 401
+    assert forwarded(client, "1.1.1.1").status_code == 429
+    assert forwarded(client, "2.2.2.2").status_code == 200
+
+
+def test_rate_limit_keys_on_the_last_forwarded_entry(client, monkeypatch):
+    from app.internal.users import _attempts
+
+    _attempts.clear()
+    monkeypatch.setattr(settings, "app_trust_forwarded", True)
+    # Caddy replaces the header; a client's own entries could only come first
+    for i in range(20):
+        response = forwarded(client, f"10.0.0.{i}, 5.6.7.8", f"u{i}", "wrong")
+        assert response.status_code == 401
+    assert forwarded(client, "5.6.7.8", "other", "wrong").status_code == 429
+    assert forwarded(client, "5.6.7.8, 9.9.9.9").status_code == 200
+
+
+def test_rate_limit_ignores_forwarded_unless_trusted(client):
+    from app.internal.users import _attempts
+
+    _attempts.clear()
+    for i in range(20):
+        assert forwarded(client, f"10.0.0.{i}", f"u{i}", "wrong").status_code == 401
+    assert forwarded(client, "10.0.1.1").status_code == 429
 
 
 @pytest.mark.parametrize("seconds", [8 * 3600, 7 * 86400])
