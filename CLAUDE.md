@@ -186,12 +186,13 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
-**Deployed** (the human, 2026-10-19): **`bss-app:d499338`** runs on the VPS - everything
-up to and including slice 8b: migrations up to `0027`, the TMF629/TMF676 base path move,
-event notifications (outbound HTTPS from the worker), the MCP connector, the bill
-lifecycle and the Billing runs screen. **Not deployed: `a53ac8c` (the last gaps,
-migration `0028`)** and anything after it; the next `make verify` ships them (the
-human's approval first).
+**Deployed** (`make verify`, 2026-10-19): **`bss-app:7272ffc`** runs on the VPS -
+everything up to and including UI user management: migrations up to `0029`, app
+authentication with sessions and roles, the UI's sign-in and Users screen, the
+service/smoke secrets, the `terminationInPeriod` fix. Web smoke (incl. "Caddy's login
+alone -> 401 from the app") and MCP smoke passed; a real MCP tool call answered 200 as
+`mcp:demo`. Rolling back past `0029`/`0028` needs `alembic downgrade` by hand (see
+below). Until U11 the UI asks for two logins (Caddy, then the app).
 
 **Following TMF** (2026-10-17, the human's rule: what the vendored specs define is
 implemented, the rest skipped; "proceed with development"). Slice 0 done locally: the
@@ -277,10 +278,9 @@ fixture users. The first admin exists on the VPS (the human, 2026-10-19). `make 
 `d499338` (a modify after a same-period termination refund = a second refund, the
 account's billing stops); fixed with the human's choice, the `terminationInPeriod`
 ordering rule ([billing-core.md](docs/decisions/billing-core.md#offering-changes-2026-10-18)).
-**Pending, needs the human's OK** (harness file): `terminationInPeriod` in
-`scripts/docs/api-notes/tmf622-product-ordering.md`, then `make docs`. Next: `make
-verify` - it restores production MCP; then the vps-infra change request removing Caddy's
-basic auth (U11).
+API note added with the human's OK (`7272ffc`). Deployed with `7272ffc` (see
+"Deployed" above). **Next: the vps-infra change request removing Caddy's basic auth from
+the bss site (U11)**, now that app sign-in works on production.
 Bootstrap CLI: `python -m app.users create NAME --role admin`.
 
 **The last gaps** (2026-10-19; plan confirmed by the human, billing unchanged by
@@ -290,9 +290,10 @@ suspensions; migration `0028`): committed and pushed -
 [alteration prices](docs/decisions/catalog.md#alteration-price-types-2026-10-19). The
 probe goes one level into responses; `tests/tmf-gaps.txt` has **no open gap** and six
 accepted deviations with reasons. API notes for TMF622/637/676/678 and the docs `AREAS`
-entry applied with the human's OK. **The TMF gap work is done.** Not deployed: migration
-`0028` ships with the next `make verify` (rolling back needs `alembic downgrade 0027` by
-hand; it refuses while a status item or a discount/allowance/penalty price exists).
+entry applied with the human's OK. **The TMF gap work is done.** Migration `0028` is deployed
+(with `1c9f216`, then `7272ffc`); rolling back needs `alembic downgrade 0027` by hand
+(after `0029`'s downgrade to `0028`); it refuses while a status item or a
+discount/allowance/penalty price exists.
 
 **100% TMF coverage** (2026-10-17, approved): TMF637 product POST/PATCH/DELETE as orders
 placed on the caller's behalf (a would-be rejection is a 409, nothing stored; DELETE ends
