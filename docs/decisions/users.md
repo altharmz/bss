@@ -312,6 +312,12 @@ Built to the plan above, which the human confirmed ("continue").
 - **Web smoke** in the new state only (`scripts/web-smoke.sh`, 7 checks); deploy.sh needs
   only `BSS_SMOKE_SECRET` in `.env.smoke` and no longer looks for `SMOKE_BASIC_AUTH`.
   Checked with `bash -n` only - the first real run is the deploy's.
+- **Deployed** with `b4ccd63` (2026-10-19): the web smoke passed 7/7 through Caddy. The
+  plan had missed `scripts/mcp-smoke.sh`'s check 6 ("everything but the carve-outs ->
+  401 Basic"); since U11 those paths are the bss site, so it now expects the UI's
+  `index.html` and no Basic challenge (the carve-outs stay proven exact), 12/12 against
+  production. vps-infra then deleted its basic-auth hashes, the human the
+  `SMOKE_BASIC_AUTH` line in `.env.smoke`.
 - **Not changed:** `worker_request.requested_by`'s column comment still says "from
   X-Remote-User" (migrations on `master` are immutable; a comment-only migration can fix
   it when the next one is due).

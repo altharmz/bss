@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The MCP connector as an MCP client first meets it: discovery, the 401 challenge, the
-# OAuth endpoints - and, through the shared Caddy, that exactly those paths bypass basic
-# auth and nothing else does.
+# OAuth endpoints - and, through the shared Caddy, that exactly those paths reach the
+# connector and everything else the bss site.
 # Usage: scripts/mcp-smoke.sh <base url> [local|caddy]
 #   local: http://localhost:8090 (make mcp-smoke)
 #   caddy: https://bss2811.duckdns.org (deploy.sh, after the web smoke test)
@@ -81,14 +81,15 @@ code="$(call GET '/authorize?client_id=nonexistent&response_type=code&code_chall
 [[ "${code}" == 400 ]] && ! basic_challenge || fail "GET /authorize answered ${code}"
 ok "GET /authorize for an unknown client -> 400"
 
-# 6. through Caddy: everything else is still behind basic auth - the carve-outs are exact
-#    and case-sensitive
+# 6. through Caddy (no login since U11): the carve-outs are exact and case-sensitive -
+#    every other path is the bss site (the UI's index.html), not the connector
 if [[ "${MODE}" == caddy ]]; then
   for path in / /MCP /Mcp /mcp/x /authorize/x /.well-known/OAUTH-AUTHORIZATION-SERVER; do
     code="$(call GET "${path}")"
-    [[ "${code}" == 401 ]] && basic_challenge || fail "GET ${path} answered ${code} without basic auth"
+    [[ "${code}" == 200 ]] && grep -q 'name="bss-build"' "${OUT}" && ! basic_challenge \
+      || fail "GET ${path} answered ${code} without the UI's index.html (a carve-out too wide?)"
   done
-  ok "/, /MCP, /Mcp, /mcp/x, /authorize/x, an upper-case well-known -> 401 Basic"
+  ok "/, /MCP, /Mcp, /mcp/x, /authorize/x, an upper-case well-known -> the UI, no Basic"
   # the public URL is reached over 443/TCP only: no HTTP/3 advertised for it
   call GET /.well-known/oauth-authorization-server >/dev/null
   [[ "$(header Alt-Svc)" != *h3* ]] || fail "Alt-Svc advertises HTTP/3: $(header Alt-Svc)"

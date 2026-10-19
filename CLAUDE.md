@@ -186,14 +186,18 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
-**Deployed** (`make verify`, 2026-10-19): **`bss-app:7272ffc`** runs on the VPS -
-everything up to and including UI user management: migrations up to `0029`, app
+**Deployed** (2026-10-19): **`bss-app:b4ccd63`** runs on the VPS - everything up to
+and including UI user management (`7272ffc`: migrations up to `0029`, app
 authentication with sessions and roles, the UI's sign-in and Users screen, the
-service/smoke secrets, the `terminationInPeriod` fix. Web smoke (incl. "Caddy's login
-alone -> 401 from the app") and MCP smoke passed; a real MCP tool call answered 200 as
-`mcp:demo`. Rolling back past `0029`/`0028` needs `alembic downgrade` by hand (see
-below). Since U11 (vps-infra `7926cc2`) Caddy asks for no login; the app's sign-in is
-the only one.
+service/smoke secrets, the `terminationInPeriod` fix) and the after-U11 slice 4
+(`b4ccd63`, no migration). `make verify`'s checks passed; its deploy hit one transient
+connect timeout in the web smoke, the re-run `make deploy` passed the new web smoke
+(7/7) and failed only the MCP smoke's stale "everything else -> 401 Basic" check, fixed
+in the commit after it (12/12 against production, read-only). Rolling back past
+`0029`/`0028` needs `alembic downgrade` by hand (see below). Since U11 (vps-infra
+`7926cc2`) Caddy asks for no login; the app's sign-in is the only one. vps-infra has
+deleted the old basic-auth hashes and the human the `SMOKE_BASIC_AUTH` line
+(2026-10-19): **U11 is closed on both sides.**
 
 **Following TMF** (2026-10-17, the human's rule: what the vendored specs define is
 implemented, the rest skipped; "proceed with development"). Slice 0 done locally: the
@@ -252,14 +256,10 @@ offering history in `product_offering_change`; ABRs carry their offering;
 refunded, never shortened, so charges overlap after a mid-period change); API notes for
 TMF622 and `scripts/docs/generate.py` updated with the human's OK. Committed and
 pushed `eaa1a7b`.
-**Next session: after U11** (2026-10-19): vps-infra removed Caddy's basic auth
-(`7926cc2`, live). **Deploys fail at the web smoke until this ships**, UI billing runs
-record `requestedBy = null`, and all sign-ins share Caddy's address in the throttle.
-Slice 4 implemented locally
-([as built](docs/decisions/users.md#after-u11-as-built-slice-4-2026-10-19)): operator
-from the session, `APP_TRUST_FORWARDED` throttle, `web-smoke.sh` without
-`SMOKE_BASIC_AUTH`, docs. Next: the human's OK on the diff, commit, push, `make verify`
-(separate approval), then tell vps-infra the web smoke passed.
+**After U11: done** (2026-10-19, `b4ccd63`, deployed;
+[as built](docs/decisions/users.md#after-u11-as-built-slice-4-2026-10-19)): operator
+from the session, `APP_TRUST_FORWARDED` throttle, web and MCP smokes without basic auth.
+**Next session:** no slice is planned; pick from the ordered list below or ask the human.
 
 **UI user management** (the human, 2026-10-19): a user menu in the UI,
 roles `admin` (manages users, does everything) and `user` (everything but user
