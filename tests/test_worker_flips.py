@@ -1,4 +1,4 @@
-"""Status flips at the start of a billing run (docs/stage4-design.md section 5; Q8).
+"""Status flips at the start of a billing run (docs/archive/stage4-design.md section 5; Q8).
 
 created / pendingActive -> active once the start date is reached, pendingTerminate ->
 terminated once the termination date is, only for what the run sees (the order completed

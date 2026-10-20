@@ -1,7 +1,7 @@
 # Working on bss in a cloud session (claude.ai/code)
 
 Probed on 2026-10-09 at commit `292fee5` (branch `cloud/env-probe`). The coverage report
-from the same probe is `docs/cloud-coverage-report.md`.
+from the same probe is `docs/archive/cloud-coverage-report.md`.
 
 ## The rule
 

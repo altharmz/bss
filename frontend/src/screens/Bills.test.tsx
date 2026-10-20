@@ -5,7 +5,7 @@ import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } fr
 import { expectUi } from '../test/expectUi';
 import { accountBody, billBody, billsUrl, NO_SETTLEMENT } from '../test/fixtures';
 
-// The bill lifecycle on the subscriber card (docs/bill-lifecycle-design.md 6.7). The
+// The bill lifecycle on the subscriber card (docs/archive/bill-lifecycle-design.md 6.7). The
 // request bodies asserted here are replayed against the real API by
 // tests/test_ui_requests.py - change both together.
 

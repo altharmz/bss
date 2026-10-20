@@ -23,7 +23,7 @@ import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
 
-// Screen 4 (stage 4, slice g; docs/stage4-design.md section 7). The worker alone bills;
+// Screen 4 (stage 4, slice g; docs/archive/stage4-design.md section 7). The worker alone bills;
 // this screen reads the runs and queues requests for it - a catch-up to a date, or a
 // retry of a failed run (any failed run, Q3). Where the design handoff and the stage 4
 // note differ, the note wins (Q11): "Run manually for any date" is "Catch up to" a date

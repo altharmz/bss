@@ -3,7 +3,7 @@
 Everything TMF678 has, plus what it cannot carry: the charges on the bill, every source
 that paid it (payments and credit notes, automatic or explicit), its state history, and
 the states an operator may set now (`allowedStates`, from the same rule PATCH applies) -
-so the UI never re-implements the hold/release rules (docs/bill-lifecycle-design.md 6.5).
+so the UI never re-implements the hold/release rules (docs/archive/bill-lifecycle-design.md 6.5).
 """
 
 from fastapi import APIRouter, Request

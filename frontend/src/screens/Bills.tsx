@@ -20,7 +20,7 @@ import { Button, Modal, Panel, Pill, TextInput } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 
-// The bill lifecycle on the subscriber card (docs/bill-lifecycle-design.md 6.7): the
+// The bill lifecycle on the subscriber card (docs/archive/bill-lifecycle-design.md 6.7): the
 // account's bills, a bill dialog with hold/release, and Record payment. Settlement is the
 // backend's: the UI shows what it reports and never allocates anything itself.
 

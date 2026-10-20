@@ -24,7 +24,7 @@ make smoke     # smoke-test the local instance make mcp-smoke    # local MCP con
 make deploy    # build locally, ship to the VPS, health + remote/web/MCP smoke
 make verify    # = make deploy (the commit was already tested by the pre-commit hook)
 make check     # on demand only: lint, test (ci profile), docs-check, web-lint/test/e2e
-make docs      # regenerate docs/api + docs/db  make progress    # docs/PROGRESS.md (slow)
+make docs      # regenerate docs/api + docs/db  make progress    # docs/PROGRESS.md (slow, on request)
 make remote CMD="..." [SERVICE=mcp]   # one-off command on the VPS image
 make ssh / tunnel                     # VPS shell / app on localhost:18081
 make hooks     # install pre-commit (lint + test) and pre-push (secrets) hooks
@@ -64,7 +64,8 @@ slips against these rules; it is a pattern matcher, not a security boundary
 
 - **One development cycle: develop -> commit -> push -> deploy, with one local test run.**
   The pre-commit hook runs `make lint` + `make test` (+ `web-lint`/`web-test` when
-  `frontend/` or `spec/` is staged) and is that run. Commit, push and deploy when you
+  `frontend/` or `spec/` is staged, `docs-check` when the generated docs' sources are;
+  nothing for a Markdown-only commit) and is that run. Commit, push and deploy when you
   judge the change ready - no approval needed. Do not re-run tests before deploying;
   stronger testing (`make check`, repeated runs) only when asked for a specific change.
 - Propose a plan before a data-model change or a large design change; otherwise act.
@@ -72,8 +73,9 @@ slips against these rules; it is a pattern matcher, not a security boundary
 - When a container misbehaves, read `make logs` before changing code.
 - If the guard blocks something you believe is legitimate, say so instead of working
   around it.
-- With a migration or API change: `make docs` and commit `docs/api`/`docs/db` with it;
-  `make progress` when scope items change (`docs/progress/scope.yaml`).
+- With a migration or API change, run `make docs` and commit `docs/api`/`docs/db` with it
+  (the hook refuses stale ones). Add new tables/operations/screens to
+  `docs/progress/scope.yaml`; `make progress` (slow, whole suite) runs only on request.
 
 **Code rules** (full text in the linked files): money is `Decimal`, never float; nothing
 in `app/` reads the wall clock except `app/clock.py`; ranges are half-open and billing

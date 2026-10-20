@@ -1,6 +1,6 @@
 """Settlement: which credits pay which customer bills, and the states that follow.
 
-docs/bill-lifecycle-design.md, section 6. Pure like core.py: no database, no clock. The
+docs/archive/bill-lifecycle-design.md, section 6. Pure like core.py: no database, no clock. The
 repository maps rows to these dataclasses (app/repository/billing.py) and writes the
 result back under the billing account's row lock.
 

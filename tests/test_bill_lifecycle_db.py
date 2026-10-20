@@ -2,7 +2,7 @@
 sent, -> settled when nothing is due) and settles the account (unused credit pays open
 bills, oldest first) - orders and payments through the API, runs through bill_account.
 
-The invariant of docs/bill-lifecycle-design.md 6.5 is checked after every scenario:
+The invariant of docs/archive/bill-lifecycle-design.md 6.5 is checked after every scenario:
 sum(remaining) - unallocated credit = -(account balance + unbilled ABRs)."""
 
 from datetime import date

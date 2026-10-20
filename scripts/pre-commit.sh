@@ -49,22 +49,38 @@ if [[ -n "$untracked" ]]; then
   fail "the checks would see files the commit does not contain - add them, delete them, or ignore them"
 fi
 
+staged="$(git diff --cached --name-only)"
+
+# Markdown only: nothing to lint or test. Not spec/ (tests read spec/README.md) or
+# scripts/docs/ (the API notes are sources of the generated docs).
+if [[ -n "$staged" ]] && ! grep -vE '\.md$' <<<"$staged" | grep -q . &&
+  ! grep -qE '^(spec|scripts/docs)/' <<<"$staged"; then
+  echo "pre-commit: Markdown only - lint and tests skipped" | tee -a "$log"
+  exit 0
+fi
+
 # run gives every check </dev/null: docker compose run only allocates a pty when stdin is
 # actually a tty, so this keeps the hook from ever blocking on stdin in a non-interactive
 # context (GUI clients, editors) as well as a plain terminal commit.
 run make lint || fail "make lint"
 run make test || fail "make test"
 
+# The generated docs/api and docs/db (~7 s), when their sources change: regenerated here,
+# so a commit that leaves them stale is refused with the files to stage.
+if grep -qE '^(app|alembic|spec|scripts/docs)/|^tests/docs_collect' <<<"$staged"; then
+  run make docs-check || fail "generated docs are out of date - git add docs/api docs/db and commit again"
+fi
+
 # The agent guard's cases, only when the commit touches .claude/.
-if git diff --cached --name-only | grep -q '^\.claude/'; then
+if grep -q '^\.claude/' <<<"$staged"; then
   run .claude/hooks/test-guard.sh || fail "guard regression cases (.claude/hooks/test-guard.sh)"
 fi
 
 # The admin UI, only when the commit touches it or the specs its types come from. These
 # targets run offline and never install: if node_modules is out of date they fail with
 # "run make web-install". A change in app/api or app/internal alone can still break the
-# UI; make verify (web-e2e) is the gate for that.
-if git diff --cached --name-only | grep -qE '^(frontend|spec)/'; then
+# UI; make check (web-e2e) is the gate for that, on demand.
+if grep -qE '^(frontend|spec)/' <<<"$staged"; then
   run make web-lint || fail "make web-lint"
   run make web-test || fail "make web-test"
 fi

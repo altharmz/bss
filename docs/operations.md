@@ -59,7 +59,8 @@ unverified until a local `make check` passes** (`docs/cloud.md`).
 
 - **Pre-commit** (`scripts/pre-commit.sh`, installed by `make hooks`): refuses the commit
   unless the working tree is exactly what is committed, then `make lint` and `make test`
-  (plus `make web-lint` and `make web-test` when `frontend/` or `spec/` is staged); keeps a
+  (plus `make web-lint` and `make web-test` when `frontend/` or `spec/` is staged,
+  `make docs-check` when the generated docs' sources are; nothing for Markdown only); keeps a
   full log of every run under `.git/pre-commit-logs/`. Never skipped; it is the one local
   test run of a development cycle ([decisions/harness.md](decisions/harness.md#development-cycle-and-gates)).
 - **Pre-push** (`scripts/pre-push.sh`): scans only the commits being pushed and refuses a
@@ -123,7 +124,7 @@ included, by cron; bss has no backup or restore tooling ([decisions/infra.md](de
 infrastructure"). Make sure a fresh dump exists before any migration that alters or
 removes data. A restore drill from a cron-made dump is an open check (CLAUDE.md, "Open
 checks"). There is **no `/backup-status` endpoint** in bss; backup monitoring, if any,
-belongs to vps-infra (see [doc-findings.md](doc-findings.md)).
+belongs to vps-infra (see [archive/doc-findings.md](archive/doc-findings.md)).
 
 ## Monitoring
 

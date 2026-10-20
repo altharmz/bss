@@ -107,7 +107,7 @@ Citations are `path:line` at `209955c`.
   written, which is weeks before its bill in the mid-cycle case. Bills only group ABRs.
 - `creditLimit` is informational only. It is shown, and `firstCharge` computes
   `exceedsCreditLimit = after < -limit` (`app/internal/accounts.py:142-170`). Nothing is
-  refused because of it ([decisions/tmf-api.md](decisions/tmf-api.md), "creditLimit").
+  refused because of it ([decisions/tmf-api.md](../decisions/tmf-api.md), "creditLimit").
 - The internal `transactions` ledger (`app/repository/billing.py:756-808`,
   `app/internal/accounts.py:274`) lists charges, refunds and payments with
   `balanceAfter`. Bills do not appear in it.
@@ -424,7 +424,7 @@ stateDiagram-v2
 - **Due date via the worker:** each run flags bills past `paymentDueDate` that still
   have money remaining. TMF has no overdue state, so this is an internal flag or a list,
   for dunning. Any *consequence*, such as suspending the account, depends on the open
-  question "Suspension semantics" ([decisions/billing-core.md](decisions/billing-core.md#open-questions)) and is **not** part of this option.
+  question "Suspension semantics" ([decisions/billing-core.md](../decisions/billing-core.md#open-questions)) and is **not** part of this option.
 - **API:** as in B, plus TMF678 PATCH (it is 405 today:
   `tests/test_api_inventory_bill.py:180` would change) and possibly an internal
   `GET /bills?overdue=true`.

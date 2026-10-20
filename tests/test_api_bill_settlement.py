@@ -1,4 +1,4 @@
-"""Bill lifecycle slice 3: the API (docs/bill-lifecycle-design.md 6.5).
+"""Bill lifecycle slice 3: the API (docs/archive/bill-lifecycle-design.md 6.5).
 
 - TMF676 POST /payment settles the account at once under its row lock: explicit
   paymentItem[] first, the rest oldest bill first; paymentItem in responses grows when

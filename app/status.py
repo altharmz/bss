@@ -1,5 +1,5 @@
 """GET /billing-status: the freshness signal for the external monitor (stage 4,
-docs/stage4-design.md section 8; D-W7, D-W12, D-W19, Q6).
+docs/archive/stage4-design.md section 8; D-W7, D-W12, D-W19, Q6).
 
 Unauthenticated (a Caddy carve-out like /healthz), so it exposes only the latest run's
 date, a status and an age - no amounts, no names, no counts. Deliberately not part of

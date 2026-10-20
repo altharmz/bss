@@ -1,7 +1,7 @@
 """The pure settlement (app/billing/settlement.py): which credits pay which bills.
 
 Hand-checked examples first, then properties over random histories of bills, payments
-and holds. The oracle is the cumulative rule of docs/bill-lifecycle-design.md 3.0: with
+and holds. The oracle is the cumulative rule of docs/archive/bill-lifecycle-design.md 3.0: with
 no holds and no explicit items, bill k (positive bills in bill-date order, cumulative
 dues cum_k) has remaining min(a_k, max(0, cum_k - C)), C = all payments + all issued
 credit notes - whatever order payments and bills arrived in, and whether settlement ran

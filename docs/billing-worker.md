@@ -3,7 +3,7 @@
 The worker runs the billing core ([domain.md](domain.md#billing)) once a day, account by
 account, survives crashes, reboots and deploys without double-billing, isolates failing
 accounts, and carries out the operator's catch-up and retry requests. Code:
-`app/worker/`; design: [stage4-design.md](stage4-design.md) (the decisions Q1-Q14 and
+`app/worker/`; design: [archive/stage4-design.md](archive/stage4-design.md) (the decisions Q1-Q14 and
 D-W*). Every capability below is a `worker.*` item of
 [progress/scope.yaml](progress/scope.yaml), proven by tests marked
 `@pytest.mark.capability(...)` - 10/10 in [PROGRESS.md](PROGRESS.md).

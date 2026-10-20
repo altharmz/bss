@@ -1,4 +1,4 @@
-"""The billing worker (stage 4, docs/stage4-design.md): everything time-driven - the daily
+"""The billing worker (stage 4, docs/archive/stage4-design.md): everything time-driven - the daily
 billing run, the replay of missed dates, the status flips and the UI's requests.
 
 A second process from the app image. It owns billing through a session advisory lock on

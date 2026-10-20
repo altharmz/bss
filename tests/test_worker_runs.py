@@ -1,6 +1,6 @@
 """Starting the billing run of a date (app/worker/runs.py) and the worker's connection.
 
-Every row of docs/stage4-design.md section 2, on real connections: ownership is the
+Every row of docs/archive/stage4-design.md section 2, on real connections: ownership is the
 session advisory lock, so "the owner is gone" is a closed connection and "the owner is
 alive" is a second connection that still holds it.
 """

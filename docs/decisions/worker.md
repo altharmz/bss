@@ -7,11 +7,11 @@ runs exclude offCycle documents when finding cycle anchors; settlement excludes
 credit consumed by cash payouts.
 
 Index: [README.md](README.md). The design note is
-[docs/stage4-design.md](../stage4-design.md); operations: [docs/billing-worker.md](../billing-worker.md).
+[docs/archive/stage4-design.md](../archive/stage4-design.md); operations: [docs/billing-worker.md](../billing-worker.md).
 
 ## Billing worker (stage 4, in progress)
 
-`app/worker/`, from `docs/stage4-design.md` and the stage 4 planning decisions (Q1-Q14,
+`app/worker/`, from `docs/archive/stage4-design.md` and the stage 4 planning decisions (Q1-Q14,
 ["Next session"](../status.md#next-session)). What exists so far (slice b: b1, b2, b3; slices c, h, d, e):
 
 - **Ownership** (`db.py`): one connection per worker (W1: autocommit, `connect_timeout`

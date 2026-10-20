@@ -186,7 +186,7 @@ def flip_statuses(
     visible_before: datetime,
     flipped: list[UUID] | None = None,
 ) -> dict[str, int]:
-    """The status flips of the billing run of `run_date` (docs/stage4-design.md section
+    """The status flips of the billing run of `run_date` (docs/archive/stage4-design.md section
     5): created / pendingActive -> active once start_date <= run_date, pendingTerminate ->
     terminated once termination_date <= run_date - only for products whose order (the one
     that created them, resp. the one that terminates them) completed before

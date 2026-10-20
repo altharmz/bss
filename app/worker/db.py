@@ -4,7 +4,7 @@ One dedicated, long-lived connection per worker process, autocommit, with explic
 transactions for each unit of work. The session advisory lock that says "this process
 owns billing" is taken on it and all the work runs on it, so the lock and the work fail
 together: a dead connection frees the lock and stops the work at the same moment. That
-is what makes a takeover safe (docs/stage4-design.md, section 2; docs/status.md, "Decided
+is what makes a takeover safe (docs/archive/stage4-design.md, section 2; docs/status.md, "Decided
 (stage 4 planning)").
 """
 

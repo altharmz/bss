@@ -1,4 +1,4 @@
-"""What starting the billing run of a date does (docs/stage4-design.md, section 2).
+"""What starting the billing run of a date does (docs/archive/stage4-design.md, section 2).
 
 The caller is the worker, on its own connection (db.py). Ownership comes first: if another
 live worker holds the lock, RunInProgress - before anything is read. With the lock held,

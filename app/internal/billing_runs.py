@@ -1,4 +1,4 @@
-"""Billing runs for the admin UI (stage 4, docs/stage4-design.md section 7), under
+"""Billing runs for the admin UI (stage 4, docs/archive/stage4-design.md section 7), under
 /internal/v1/billingRun. Ours, not TMF.
 
 Read: the runs newest first, one run, a run's per-account outcomes - every count derived

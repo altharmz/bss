@@ -1,4 +1,4 @@
-"""The worker's side of the UI's requests (worker_request; docs/stage4-design.md section 7).
+"""The worker's side of the UI's requests (worker_request; docs/archive/stage4-design.md section 7).
 
 The internal API never bills: it queues a request, and the worker - which owns billing -
 takes them oldest first, marks each picked, carries it out and marks it done:

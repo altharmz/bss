@@ -1,5 +1,5 @@
 """Billing runs in the internal API (app/internal/billing_runs.py) and the worker's request
-queue (app/worker/queue.py; docs/stage4-design.md section 7).
+queue (app/worker/queue.py; docs/archive/stage4-design.md section 7).
 
 The API only reads runs and queues requests - it never bills; the worker carries the
 requests out. Every response here is checked against spec/internal by the test client.

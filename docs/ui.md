@@ -126,7 +126,7 @@ API: `POST /tmf-api/productOrderingManagement/v5/productOrder`.
 
 ### Bills (`ui.subscriber.bills`), bill dialog (`ui.subscriber.billDetail`), hold/release (`ui.subscriber.billHold`), record payment (`ui.subscriber.recordPayment`) - `screens/Bills.tsx`
 
-The bill lifecycle (docs/bill-lifecycle-design.md section 6). The Billing account panel
+The bill lifecycle (docs/archive/bill-lifecycle-design.md section 6). The Billing account panel
 adds **Due on bills** (outstanding, with "N overdue · amount" in red and "N on hold") and
 **Unused credit**. The **Bills** panel lists the account's bills newest first: bill no.
 (`BL-xxxxxxxx`), bill date, due date ("overdue" when due before the business date with
@@ -218,7 +218,7 @@ bodies against the real API.
 
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
 
-Stage 4, slice g, from [stage4-design.md](stage4-design.md) section 7. **The worker alone
+Stage 4, slice g, from [archive/stage4-design.md](archive/stage4-design.md) section 7. **The worker alone
 bills; this screen reads runs and queues requests** for it.
 
 - **Title row**: "Scheduled daily at `BILLING_RUN_AT` UTC+3" (from the context), and

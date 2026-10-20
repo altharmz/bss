@@ -9,7 +9,7 @@ Index: [README.md](README.md).
 
 ## Bill lifecycle (option C, in progress)
 
-Design and decisions: **`docs/bill-lifecycle-design.md`**, section 6 (decided
+Design and decisions: **`docs/archive/bill-lifecycle-design.md`**, section 6 (decided
 2026-10-10: option C, payment term 30 days configurable, credit notes pay older open
 bills, overdue is display only, a Record payment dialog). Four slices: 1. schema +
 settlement core (`cloud/bill-settlement-core`), 2. worker (`cloud/bill-settlement-worker`,

@@ -1,4 +1,4 @@
-"""One wake-up of the billing worker (docs/stage4-design.md sections 4 and 6).
+"""One wake-up of the billing worker (docs/archive/stage4-design.md sections 4 and 6).
 
 The worker wakes at least every minute, re-reads the clock and does whatever is due -
 the same decision whether the date just turned, the machine was suspended, or the worker

@@ -4,7 +4,7 @@ Only the billing run creates bills and ABRs (stage 3/4), so both lists are empty
 then. `charge_type` maps to the spec's appliedBillingRateType: recurring ->
 appliedBillingCharge, refund -> appliedBillingCredit.
 
-A bill's state moves with its settlement (docs/bill-lifecycle-design.md, section 6):
+A bill's state moves with its settlement (docs/archive/bill-lifecycle-design.md, section 6):
 the run issues it (new -> validated -> sent), allocations make it partiallyPaid or
 settled, and PATCH lets the operator put it on hold or release it - nothing else.
 remainingAmount and appliedPayment come from the allocations.

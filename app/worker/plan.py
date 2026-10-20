@@ -1,6 +1,6 @@
 """Pure planning decisions of the worker - no clock, no database.
 
-- When a run that failed as a whole may be tried again (docs/stage4-design.md section 3):
+- When a run that failed as a whole may be tried again (docs/archive/stage4-design.md section 3):
   a whole-run failure (failure_kind 'run': the database gone, a lock timeout, a bug
   outside bill_account) is retried on the same date, never skipped: 5 minutes after the
   first failed attempt, 15 after the second, then hourly.

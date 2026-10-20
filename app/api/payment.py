@@ -6,7 +6,7 @@ due with their taxes); `amount` and `taxAmount` are its split as the client stat
 (`tax_part`), stored and answered.
 
 The payment settles the account at once, under the billing account's row lock
-(docs/bill-lifecycle-design.md 6.4): first its `paymentItem[]` (explicit lettering to
+(docs/archive/bill-lifecycle-design.md 6.4): first its `paymentItem[]` (explicit lettering to
 named bills), then whatever is left goes to the oldest open bills. `paymentItem` in a
 response is every allocation from the payment, summed per bill - it grows when the
 payment's unused credit later pays bills issued after it.

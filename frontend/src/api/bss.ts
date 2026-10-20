@@ -777,7 +777,7 @@ export async function undoDeactivation(productId: string): Promise<void> {
   });
 }
 
-// --- bills and payments (bill lifecycle, docs/bill-lifecycle-design.md section 6) ---
+// --- bills and payments (bill lifecycle, docs/archive/bill-lifecycle-design.md section 6) ---
 
 export const BILLS = '/tmf-api/customerBillManagement/v5/customerBill';
 export const PAYMENTS = '/tmf-api/payment/v4/payment';

@@ -11,7 +11,10 @@ test run per development cycle; commit, push and deploy need no approval).
   asked for a specific change.
 - **Pre-commit hook** (`scripts/pre-commit.sh`, installed by `make hooks` as a symlink):
   `make lint` + `make test`, plus `web-lint`/`web-test` when `frontend/` or `spec/` is
-  staged, plus the guard cases when `.claude/` is. It refuses a commit unless the working
+  staged, `make docs-check` (~7 s) when `app/`, `alembic/`, `spec/`, `scripts/docs/` or
+  `tests/docs_collect.py` is, and the guard cases when `.claude/` is. A commit of
+  Markdown files only (outside `spec/` and `scripts/docs/`, which feed tests and the
+  generated docs) skips every check (2026-10-20). It refuses a commit unless the working
   tree is exactly what is committed (no unstaged tracked changes, no untracked files under
   `app/`, `tests/`, `frontend/`, `spec/`) - a commit once passed while missing two
   functions that were only on disk. Full output of every run: `.git/pre-commit-logs/`
@@ -21,7 +24,9 @@ test run per development cycle; commit, push and deploy need no approval).
   their added lines; refuses a bcrypt hash without the marker `pre-push: allow-dummy-hash`,
   an added or changed `.env*` path (other than `.env.example`), a branch deletion and a
   non-fast-forward. Names the commit and file, never the value.
-- `make test` takes 50-90 s. Timing-based tests (`test_worker_heartbeat.py`, the thread
+- `make progress` runs only on request (it reruns the whole suite with recording, over
+  10 minutes); scope.yaml entries are still added with the feature.
+- `make test` takes about 8 minutes (1,433 tests, 2026-10-20). Timing-based tests (`test_worker_heartbeat.py`, the thread
   tests in `test_order_concurrency.py`/`test_billing_db.py`) can fail under full load;
   rerun once before suspecting a regression.
 - To check an *older* commit on its own, use a worktree: `make down`, `git worktree add
