@@ -7,6 +7,13 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**N4 deployed (2026-10-20).** The human confirms that N4 (`47b7525`) is now also
+deployed to the VPS, through migration `0033`. This session did not independently
+inspect the VPS image tag or smoke results. The implementation commit passed all
+1,494 backend tests, lint and generated-documentation drift checks; local migrations
+also succeeded. Working tree was clean after push. Next: N5 subscriber-number UI,
+then N6 release validation. Earlier pending-deployment notes below are historical.
+
 **N4 subscriber-number orders (2026-10-20).** Add/modify/delete/cancel orders now
 manage effective-dated number claims, including future reservations and quarantine.
 Migration `0033` snapshots the requirement for new products and permits number-only

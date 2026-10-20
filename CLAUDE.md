@@ -89,12 +89,11 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
 
 ## Current state (2026-10-20)
 
-- **Deployed:** `bss-app:7ad101e`, migrations through `0030`. On `master`, not yet
-  deployed: UI refunds/on-demand bill (`05efa54`), the RUB->USD label migration `0031`,
-  the prepaid design and vendored contracts (`33dd2f4`, `ad4297e`).
-- **Next:** N5 subscriber-number UI (N4 order integration is implemented;
-  migrations `0032`/`0033` and number routes are not deployed), then the independent
-  N6 number release - [scope](docs/prepaid-plan.md),
+- **Deployed:** N4 subscriber-number orders (`47b7525`), migrations through `0033`,
+  confirmed by the human on 2026-10-20. This session did not independently verify
+  the VPS image tag or deployment smoke results. N4 passed 1,494 backend tests,
+  lint and documentation drift checks before commit/push.
+- **Next:** N5 subscriber-number UI, then N6 release validation - [scope](docs/prepaid-plan.md),
   [hand-off](docs/prepaid-implementation.md), [decision](docs/decisions/prepaid.md).
 - **Backlog:** UI vs MCP gap slices 2-4 ([plan](docs/ui-mcp-gap-plan.md)); confirm the
   `~/bss/DEPLOYED` marker on the next deploy; progress drift check + per-item deployed

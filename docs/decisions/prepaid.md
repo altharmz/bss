@@ -175,3 +175,8 @@ future numbers, same-day changes, scheduled release/quarantine, cancellation con
 concurrent claims, accepted-claim grandfathering, drafts, unchecked documents, outbox
 events and migration preservation/downgrade. N5 UI is next; N6 owns independent release
 validation and the separately approved deployment.
+
+Deployment update: the human confirmed N4 (`47b7525`) deployed to the VPS on
+2026-10-20. Before commit/push, all 1,494 backend tests, lint and documentation
+drift checks passed. Local migrations reached `0033`. VPS image/smoke results were
+not independently inspected in this session. N5 UI remains next, followed by N6.
