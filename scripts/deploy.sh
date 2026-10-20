@@ -11,6 +11,7 @@ REMOTE="${REMOTE:-vps-test}"
 REMOTE_DIR="${REMOTE_DIR:-bss}"
 IMAGE_NAME="${IMAGE_NAME:-bss-app}"
 TAG="${TAG:-$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)}"
+DEPLOY_COMMIT="$(git rev-parse HEAD)"
 COMPOSE=(docker compose -f compose.yaml -f compose.prod.yaml)
 KEEP_IMAGES=3
 MIGRATE_TIMEOUT=120
@@ -247,6 +248,15 @@ if [[ "${status[app]}" != "healthy" || "${status[worker]}" != "healthy" || "${st
   rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2 || true
   fail "containers did not become healthy (last status: app ${status[app]:-none}, worker ${status[worker]:-none}, mcp ${status[mcp]:-none})"
 fi
+
+log "Recording the running commit in ~/${REMOTE_DIR}/DEPLOYED"
+rssh "cd ${REMOTE_DIR} && printf '%s\\n' '${DEPLOY_COMMIT}' > DEPLOYED.tmp && mv DEPLOYED.tmp DEPLOYED"
+
+log "Remote smoke test: deployed commit"
+deployed_commit="$(rssh "cat ${REMOTE_DIR}/DEPLOYED")"
+[[ "${deployed_commit}" == "${DEPLOY_COMMIT}" ]] \
+  || fail "deployed commit record does not match ${DEPLOY_COMMIT}"
+printf '    Deployed commit: %s (image %s:%s)\n' "${deployed_commit}" "${IMAGE_NAME}" "${TAG}"
 
 log "Remote smoke test"
 rssh "curl -fsS --max-time 5 http://127.0.0.1:18081/healthz" \

@@ -282,6 +282,32 @@ the order of deploys (backup, vps-infra, then `make verify`).
   in manual reviews); fails on any console error, page error or 5xx. Part of `make verify`
   - the gate for API changes that break the UI.
 
+## Running commit record (2026-10-20)
+
+Authorized scope: record deployment identity, independently of the progress
+tracker's future per-item deployed coverage. The human approved the exact patch and
+applied it after the protected-file edit hook continued to block agent application.
+
+After app, worker and MCP health checks pass, deploy.sh atomically replaces
+`~/bss/DEPLOYED` with the full Git HEAD used for the clean build. The remote smoke
+reads it back, requires an exact match and prints the commit alongside the image tag.
+The commit is independent of an optional TAG override. A failed write/read or mismatch
+fails deployment. Dry runs and failures before service health do not update the file.
+Later API/web/MCP smoke failures leave the record of the newly running backend intact;
+the marker records running backend identity, not success of the entire release gate.
+No local deployed coverage file is written and no coverage percentages change.
+
+Local validation: Bash syntax check passes. Isolated execution of the applied
+record/read-back block passes an actual atomic write and read (including a custom
+image tag) and fails on mismatched content, a failed write or a failed read. No network calls or
+deployment were performed. The record contains exactly the full commit plus a newline,
+and the temporary file is gone after the rename. Production confirmation awaits a
+separately approved deployment.
+
+`make lint`, `make test` (1,405 passed) and `make decisions-check` pass. Corrected
+API notes were regenerated with `make docs`; a second generation left all 53 reference
+pages identical. Scope is unchanged.
+
 ## To port to vps-lab-template
 
 Two fixes made here and still missing in the template (moved from CLAUDE.md's "Open

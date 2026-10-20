@@ -326,6 +326,36 @@ PAYMENT = "/tmf-api/payment/v4/payment"
 BILL = "/tmf-api/customerBillManagement/v5/customerBill"
 
 
+def test_refund_and_bill_request_as_the_ui_sends_them(api):
+    """AccountActions pins the same exact decimal and typed reference bodies."""
+    account = apidata.account(api)
+    a = account["id"]
+    assert api.post(PAYMENT, apidata.payment_body(account, 100)).status_code == 201
+    refund = api.post_raw(
+        "/tmf-api/payment/v4/refund",
+        f'{{"@type":"Refund","account":{{"id":"{a}","@referredType":"BillingAccount"}},'
+        '"totalAmount":{"unit":"RUB","value":25.10},'
+        '"paymentMethod":{"name":"bankTransfer"},"description":"Returned deposit"}',
+    )
+    assert refund.status_code == 201, refund.text
+    assert decimals(refund)["totalAmount"]["value"] == Decimal("25.10")
+    assert refund.json()["description"] == "Returned deposit"
+    assert refund.json()["paymentMethod"]["name"] == "bankTransfer"
+    assert refund.json()["status"] == "done"
+    assert "payment" not in refund.json()
+    demands = "/tmf-api/customerBillManagement/v5/customerBillOnDemand"
+    body = (
+        '{"@type":"CustomerBillOnDemand","billingAccount":'
+        f'{{"id":"{a}","@referredType":"BillingAccount"}}}}'
+    )
+    queued = api.post_raw(demands, body)
+    assert queued.status_code == 201, queued.text
+    assert queued.json()["billingAccount"]["id"] == a
+    assert queued.json()["state"] == "inProgress"
+    assert api.post_raw(demands, body).status_code == 409
+    assert api.get(f"{demands}?billingAccount.id={a}").json() == [queued.json()]
+
+
 def two_open_bills(api, db_conn) -> tuple[dict, list[dict]]:
     """An account with the 300.00 bills of Dec 1 and Jan 1, both unpaid."""
     from datetime import date

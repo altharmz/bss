@@ -47,6 +47,12 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await expect(page.getByRole('heading', { name: /Olga Kuznetsova/ })).toBeVisible();
   await expect(page.getByText('In arrears')).toBeVisible();
   await expect(page.getByText('Due on bills')).toBeVisible();
+  await expect(page.locator('[data-ui="ui.subscriber.refunds"]')).toBeVisible();
+  await expect(page.locator('[data-ui="ui.subscriber.billRequests"]')).toBeVisible();
+  await page.getByRole('button', { name: 'Bill now', exact: true }).click();
+  const demandDialog = page.getByRole('dialog', { name: 'Bill now' });
+  await expect(demandDialog.getByText(/from tomorrow onward/)).toBeVisible();
+  await demandDialog.getByText('Close', { exact: true }).click();
 
   // the seed puts Olga's oldest open bill on hold: its dialog offers the release only.
   // Read-only: nothing is clicked in it.
@@ -113,6 +119,44 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await run.getByText('Close', { exact: true }).click(); // the footer button, not the ×
   await expect(run).toBeHidden();
 
+  expect(problems).toEqual([]);
+});
+
+test('refund dialog opens on an account with unused credit without recording a payout', async ({
+  page,
+}) => {
+  await page.goto('/subscribers');
+  await signIn(page);
+  await expect(page.getByRole('heading', { name: 'Subscribers', exact: true })).toBeVisible();
+  const problems = watch(page);
+  const response = await page.request.get('/tmf-api/accountManagement/v5/billingAccount?limit=100');
+  expect(response.ok()).toBe(true);
+  const accounts = (await response.json()) as {
+    id: string;
+    accountBalance: { amount: { value: number } }[];
+  }[];
+  let eligible: string | undefined;
+  for (const account of accounts) {
+    if ((account.accountBalance[0]?.amount.value ?? 0) <= 0) continue;
+    const settlement = await page.request.get(
+      `/internal/v1/billingAccount/${account.id}/settlement`,
+    );
+    expect(settlement.ok()).toBe(true);
+    const credit = (await settlement.json()) as { unallocatedCredit: { value: number } };
+    if (credit.unallocatedCredit.value > 0) {
+      eligible = account.id;
+      break;
+    }
+  }
+  expect(eligible, 'the seed includes an account with refundable credit').toBeTruthy();
+  await page.goto(`/subscribers/${eligible}`);
+  await page.getByRole('button', { name: 'Refund unused credit' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Record refund' });
+  await expect(dialog.getByText(/does not send money/)).toBeVisible();
+  await expect(dialog.getByLabel('Refund amount')).not.toHaveValue('');
+  await expect(dialog.getByRole('button', { name: 'Record refund' })).toBeEnabled();
+  await dialog.getByText('Close', { exact: true }).click();
+  await expect(dialog).toBeHidden();
   expect(problems).toEqual([]);
 });
 

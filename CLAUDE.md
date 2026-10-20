@@ -216,9 +216,8 @@ including all eight web checks and all MCP checks. `/healthz` and `/billing-stat
 returned 200 (`ok`). Full logs: `/tmp/bss-charge-period-verify.log`,
 `/tmp/bss-charge-period-deploy-retry.log`, `/tmp/bss-charge-period-deploy-retry2.log`.
 No runtime changes followed these checks; the release-status follow-up is documentation
-only and needs no redeploy. The older
-slice-6 catalog documentation corrections described below are still pending and were
-not included in the approved charge-period note patch.
+only and needs no redeploy. The older slice-6 catalog documentation corrections were
+completed locally in the subsequent documentation/backlog cleanup described below.
 
 **Previous deployed release** (2026-10-19): **`bss-app:b4ccd63`** - everything up to
 and including UI user management (`7272ffc`: migrations up to `0029`, app
@@ -260,13 +259,11 @@ migration `0024`; 161 lines left, none for TMF620):
 (own-catalog references in them stored as sent), inline prices, a price's charge and an
 offering's specification changeable until the offering is ordered, the code one
 `externalIdentifier` entry, reference versions checked; committed and pushed `f476baa`.
-**Pending from slice 6, needs the human's OK** (harness file):
-`scripts/docs/api-notes/tmf620-product-catalog.md` still says category membership is
-read-only on the offering, prices are by reference only, a price's charge is read-only,
-the code is set on POST only and the specification is mandatory, and names two renamed
-tests (now `test_the_code_changes_with_patch_and_stays_unique`,
-`test_an_offering_specification_is_optional_but_must_exist`); propose the diff, then
-`make docs`.
+**Slice-6 documentation correction completed locally (2026-10-20):** the human
+approved and applied the protected source-note patch. TMF620 notes now describe
+writable category membership, inline prices, charge changes before ordering,
+changeable offering codes and optional specifications; test names are current.
+`make docs` regenerated the API reference from these corrected notes.
 Slice 7 (2026-10-18; taxes, migration `0025`; 156 gaps left):
 [decision](docs/decisions/billing-core.md#taxes-2026-10-18) - the human: "decide based
 on TMF recommendations". A price's `tax[]` is applied per ABR (rate in percent, the
@@ -293,14 +290,14 @@ pushed `eaa1a7b`.
 **After U11: done** (2026-10-19, `b4ccd63`, deployed;
 [as built](docs/decisions/users.md#after-u11-as-built-slice-4-2026-10-19)): operator
 from the session, `APP_TRUST_FORWARDED` throttle, web and MCP smokes without basic auth.
-**Next session:** the MCP end-to-end review (2026-10-19) - work list with verdicts and
+**Completed MCP end-to-end review** (2026-10-19) - work list with verdicts and
 slices A-C in [docs/mcp-e2e-review.md](docs/mcp-e2e-review.md). All three are implemented
-locally (no migration); the human approved same-day status undo and scheduled
+in `40805f4`, included in deployed `7ad101e` (no migration); the human approved same-day status undo and scheduled
 termination of future products. Three full test passes (1,366 each), lint and decision
 checks pass. The human approved a one-time shell application of the reviewed harness
 patch: the local MCP `spec/` mount and TMF622/637 API notes are applied, docs regenerated,
-and local MCP smoke passes. Commit, push and deployment are authorized (2026-10-19);
-the release gate is `make verify`.
+and local MCP smoke passes. Commit, push and deployment completed; the latest
+release verification is recorded above. Dated production follow-ups remain open.
 
 **UI user management** (the human, 2026-10-19): a user menu in the UI,
 roles `admin` (manages users, does everything) and `user` (everything but user
@@ -311,11 +308,10 @@ for MCP), three slices (backend, UI, deploy). **Q1-Q7 approved with all proposed
 Backend slice committed and pushed as `1c9f216` (migration `0029`): three full test
 passes (1,345 each), lint, frontend unit checks, docs and progress generation passed;
 commit hooks also passed. The human approved and applied the docs-generator mappings
-and API note. **`1c9f216` is live on the VPS** (seen 2026-10-19: the production MCP
-connector gets `401 sign in required`), so migrations `0028`/`0029` ran there - **and
-production MCP and the web smoke are broken until slice 3**: `compose.prod.yaml` passes
-no `BSS_SERVICE_SECRET`/`BSS_SMOKE_SECRET`, `web-smoke.sh` still expects Caddy's
-`X-Remote-User`. The UI needs a first admin on the VPS.
+and API note. **Historical rollout checkpoint:** `1c9f216` was seen live on
+2026-10-19, confirming migrations `0028`/`0029` had run. At that point production MCP
+and web smoke awaited slice 3's service/smoke secrets and the first admin. These
+rollout issues were resolved by the subsequent slices and verified releases above.
 UI slice 2 committed and pushed (2026-10-19, the human's OK): session gate, `/sign-in`,
 forced password change, operator menu, admin `/users`, pinned request/component tests
 and browser sign-in. 250 frontend tests passed in UTC and New York; `make test` 1,346
@@ -331,7 +327,7 @@ account's billing stops); fixed with the human's choice, the `terminationInPerio
 ordering rule ([billing-core.md](docs/decisions/billing-core.md#offering-changes-2026-10-18)).
 API note added with the human's OK (`7272ffc`). Deployed with `7272ffc` (see
 "Deployed" above). U11 (Caddy's basic auth removed) is live on the vps-infra side; the
-bss follow-up is "Next session: after U11" above.
+bss follow-up is complete ("After U11: done" above).
 Bootstrap CLI: `python -m app.users create NAME --role admin`.
 
 **The last gaps** (2026-10-19; plan confirmed by the human, billing unchanged by
@@ -397,8 +393,8 @@ financial accounts (4 operations) owned by a party, billing accounts linked via
 party and settlement accounts (8 operations), records only (no ledger), linkable to the
 same owner's financial account; migration `0014`. TMF operation coverage: 79/129
 (61.2%); scoped API items: 95. Decision: [accounts.md](docs/decisions/accounts.md).
-Deployed with `d499338`. Not done: API notes for the new resources in
-`scripts/docs/api-notes/tmf666-account.md` (a harness file).
+Deployed with `d499338`. API notes for these resources and later account attributes
+were completed locally in the approved 2026-10-20 cleanup; API references regenerated.
 
 **Refunds and bill delivery** (2026-10-16): approved milestone adds 14 TMF operations:
 refunds, on-demand bills, bill formats and presentation media. Migrations `0010`-`0012`
@@ -429,67 +425,63 @@ Committed; deployed with `d499338`.
 
 **MCP connector** (task of 2026-10-11, [docs/mcp.md](docs/mcp.md)): five slices, each
 committed after the human's OK and then pushed; nothing deployed without a separate
-approval. Done, local only: slice 1 (server, static tokens, scopes, limits, audit;
+approval. Implemented and deployed: slice 1 (server, static tokens, scopes, limits, audit;
 `6ae9f40`), slice 2 (OAuth 2.1 + DCR + discovery + login page; `15674e0`), slice 3 (57
 tools generated from `app.openapi()` + drift check; `db765f1`), slice 4 (`compose.prod.yaml`
 service, deploy.sh checks, `scripts/mcp-smoke.sh`, vps-infra change request; rehearsed
-with Caddy 2.11.4, not deployed; `5f2e436`), slice 5 (client setup docs, token tooling
+with Caddy 2.11.4, subsequently deployed; `5f2e436`), slice 5 (client setup docs, token tooling
 `python -m bss_mcp.tokens` + `make mcp-token*`). All slices done; the production
 connector was verified by the human with Dify, Claude, ChatGPT and others (2026-10-19).
 
-**Before the next deploy** - all shipped with `d499338` (2026-10-19; was: 2026-10-10,
-bill lifecycle slices 1-4 merged as `1d7a242`, subscriber create/edit as `61d9399`):
+**Current backlog (reconciled 2026-10-20):**
 
-- ~~**`compose.prod.yaml`: pass `BILL_PAYMENT_TERM_DAYS`**~~ done (the human,
-  2026-10-19): passed to the services that use it.
-- **Visual review of the subscriber card** with the human before `make verify`: the
-  seven figures in one row, the bill dialog, Record payment, New subscriber, Edit.
-- **Migration `0007`** (`cloud/quality-1`, if merged): adds
-  `applied_customer_billing_rate.applied_at` (an ABR's TMF678 `date` from the clock),
-  back-filled from each ABR's run `started_at`, then NOT NULL. Ships with the next
-  deploy; rolling back needs `alembic downgrade 0006` by hand (drops the column).
-- **The MCP connector**: done (the human, 2026-10-19) - vps-infra added the Caddy route
-  ([docs/vps-infra-change-request.md](docs/vps-infra-change-request.md#2026-10-11-route-the-mcp-connector)),
-  `MCP_USERS` is in `.env.prod`, and the production connector was verified with Dify,
-  Claude, ChatGPT and others. Every deploy still needs the human's separate approval.
+Documentation/backlog/deployment-identity cleanup is complete locally: corrected
+TMF620/666 notes and regenerated references; reconciled release, authentication and
+feature status; implemented the running-commit marker. Validation: `make lint`,
+`make test` (1,405 passed, 559.53 s), `make decisions-check`, Bash syntax and four
+isolated marker checks pass. A second `make docs` produced identical content across
+all 53 generated pages. No scope changes, commit or deployment in this task.
 
-Then, in this order (as of 2026-10-05, after slice f):
+1. **Deployment identity rollout:** the approved deploy.sh change is implemented
+   locally: atomically record the full running commit in `~/bss/DEPLOYED` after
+   service health, read it back and print it in the remote smoke. The human applied
+   the protected-file patch. Production activation awaits a separately approved deploy.
+2. **Progress tracker:** db/API/worker and vitest coverage collection is implemented.
+   Remaining: progress-report drift enforcement in the pre-commit/release gates and
+   per-item deployed status from `docs/progress/deployed.txt`. The remote identity
+   marker above does not implement per-item deployment coverage.
+3. **Remaining Phase 2** (APP_PORT, localhost:8080 references, stopping all profiles
+   with make down) remains deferred; exact acceptance criteria are in Open checks.
+4. **Backport vps-lab guard changes** (ports 8444 and 2053) remains parked; the push
+   policy is done. Harness edits require a reviewed diff and human approval.
+5. **Cloud startup/resume validation:** still unproven in an actual supported client;
+   retain the hook/environment/egress checks described in `docs/cloud.md`.
+6. **Subscriber-card visual review:** no completion evidence is recorded for the
+   requested human review (figures, bill dialog, Record payment, New subscriber, Edit).
+   Retained as a manual follow-up, rather than a prerequisite for releases already shipped.
+7. **UI vs MCP gap** (2026-10-20): slice 1's design (refunds and on-demand bill)
+   was approved and is implemented locally. Three full backend passes (1,406 each,
+   dev/CI/dev), 277 frontend tests in each timezone, five browser smokes, backend and
+   frontend lint and decisions check passed. Both negative proofs failed as expected
+   and were reverted. Progress generation passed (1,406 backend tests with the two
+   existing collector warnings; 277 UI tests); all four new UI items are implemented
+   and tested. `docs-check` regenerated the existing TMF620/666 cleanup correctly but
+   still fails against the uncommitted generated API pages. No commit or deployment
+   in this task. Slice 1 adds four API operations to the UI's original 40 of MCP's 145.
+   Remaining slices (modify,
+   suspend and resume; order history; product specifications) still need design OKs.
+   Design and scope: [docs/ui-mcp-gap-plan.md](docs/ui-mcp-gap-plan.md).
 
-1. **Stage 4: slice g merged** (`cloud/billing-runs-ui` as `209955c`, 2026-10-10, after
-   a local `make check` incl. web-e2e): the Billing runs screen, UI "tested" in the
-   progress tracker, and the fix for the flaky App.test. Deployed with `d499338`,
-   together with the bill lifecycle. Slice f (`dcbedeb`) is
-   **deployed**: `make verify` 2026-10-05 end to end - migration `0004` ran on the VPS,
-   app and worker healthy, the worker's first run billed 2026-10-05 (`/billing-status`
-   200 `ok`, age 12 s), web smoke OK through Caddy. Done: slice a (`a66faef`), b1 (`850e192`), b2
-   (`5e9dbe3`), b3 (`3464e54`), c (`7ad4923`), h (`840e092`), d (`1dbe739`), e
-   (`e06a22b`, `/billing-status`), f (`dcbedeb`). Per slice: plan, tests, negative proofs, `make lint`,
-   `make test` x3, `make progress`, CLAUDE.md, then show the diff and commit only after
-   the human's OK. Worker 10/10, API 54/54 in `docs/PROGRESS.md`. The planning
-   decisions Q1-Q14 are recorded (see ["Billing worker"](docs/decisions/worker.md)).
-2. **Progress tracker steps 3-5** (after slice b): "tested" (done for db and api on
-   `cloud/quality-1`: requests to the app recorded per test - at the `TestClient`, so
-   `test_health.py`'s raw clients count too - matched to OpenAPI templates, and
-   `pg_stat_user_tables` of each test database before it is dropped; UI: done for
-   vitest - `expectUi(id)`, see ["Progress tracker"](docs/decisions/harness.md#progress-tracker);
-   Playwright could record the same way),
-   the drift check in the pre-commit hook and `make verify` (with negative proofs), and
-   "deployed" from `docs/progress/deployed.txt`. Slice b also defines the `worker` area
-   (capabilities proven by `@pytest.mark.capability(...)` tests).
-3. **Docs task** (tbls + API registry + architecture.md) - planned, not started.
-4. **deploy.sh records the deployed commit** (Open check below).
-5. **Backport vps-lab's guard to bss** (ports 8444 and 2053, ask on commit/deploy) -
-   parked; the push policy is done (2026-10-09). Progress scope is now editable within authorized feature work; use
-   Edit/apply_patch for changes and `make progress` for the generated reports.
-6. **Remaining Phase 2** (APP_PORT, localhost:8080 refs, make down profiles) - deferred.
-7. **Cloud mode, first real run**: guard cloud mode, portable cases and the SessionStart
-   setup are done (2026-10-09, "Agent guardrails"; the setup rehearsed in an Ubuntu 24.04
-   container). Still unproven in an actual cloud session: the hook firing on startup and
-   resume, `CLAUDE_CODE_REMOTE` reaching the hooks, and the setup's `npm ci` /
-   `npm run lint` / `npm test` behind the egress proxy (`docs/cloud.md`).
-8. **FastAPI's `/docs`, `/redoc`, `/openapi.json` in prod**: decide whether they stay
-   exposed (behind basic auth) or get disabled; add the decision to `scope.yaml` either
-   way (needs the human's approval).
+**Completed backlog milestones:** the worker including Billing runs UI, bill
+lifecycle and subscriber create/edit shipped with `d499338`; migrations through
+`0030` are deployed. The docs task has delivered the database reference, API registry
+and runtime architecture in [docs/overview.md](docs/overview.md#runtime-architecture).
+MCP connector slices 1-5 and review slices A-C are deployed (A-C: `40805f4`, included
+in `7ad101e`). The MCP review still has the dated production restore check and
+historical test-data observation in [docs/mcp-e2e-review.md](docs/mcp-e2e-review.md).
+`BILL_PAYMENT_TERM_DAYS` wiring and U11 are complete. Interactive `/docs`, `/redoc`
+and `/openapi.json` are disabled (`app/main.py`, `test_no_interactive_api_docs`);
+in-process OpenAPI remains available to tooling. No scope items have changed here.
 
 Also pending, not ordered: the two fixes to port to vps-lab-template
 ([infra.md](docs/decisions/infra.md#to-port-to-vps-lab-template)), and the open design
@@ -502,10 +494,10 @@ closed 2026-10-19).
 Nothing below is done; remove an item only when it has passed (or, for work items,
 shipped).
 
-- **Stage 4 (the worker)** is in progress - see "Next session" above.
-- **bss app is reachable without auth from any container on `shared` and from VPS
-  loopback 127.0.0.1:18081** - close with a private app<->mcp network and a Caddy-side
-  alias (separate task). Documented as a known demo risk in [docs/mcp.md](docs/mcp.md).
+- **Network isolation remains open:** the app shares `shared` and binds VPS loopback
+  127.0.0.1:18081. Since UI user management, application authentication protects
+  business routes on those paths too; health probes remain public. A private app/MCP
+  network and a Caddy-side alias remain a separate infrastructure task.
 - **Demo data in prod: decision pending.** `make seed` refuses prod on purpose. If prod
   gets demo data, it can only be current state: history cannot be backdated through the
   API (prices and orders in the past are refused), and the seed builds its history with a
@@ -536,11 +528,10 @@ shipped).
   burst could make bss alone ask for more than the 37 connections available - a pool, or
   a cap on concurrent DB connections from the API. Decision deferred. Reproduction,
   budget and options in full: [infra.md](docs/decisions/infra.md#db-connections-per-request-open-check).
-- **Record the deployed commit on the VPS.** Finding which image runs took an ad-hoc
-  read-only `ssh vps-test 'docker ps ...'` (2026-10-03: `bss-app:9424b9b`, in the current
-  history; CLAUDE.md's `921603f` predates a squash). `deploy.sh` should write the deployed
-  commit next to the compose files (e.g. `~/bss/DEPLOYED`), and the smoke test should
-  print it. Touches `scripts/`: needs the human's OK.
+- **Deployment identity: production confirmation pending.** The approved deploy.sh
+  change records the full running commit in `~/bss/DEPLOYED` and reads/prints it in
+  the remote smoke. Local write/read and failure checks pass; confirm the marker on
+  the next separately approved deployment before closing this rollout check.
 - **The pytest container shows `(unhealthy)` during `make test`**: the image's
   HEALTHCHECK probes `/healthz`, which nothing serves while pytest runs in the `app`
   service. Harmless for `run --rm`, but noise in `docker ps`. Since the 60 s interval

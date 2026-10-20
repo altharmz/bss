@@ -330,11 +330,12 @@ tokens or passwords (a test checks the log for each).
 
 ## Known demo risks
 
-- **The bss app has no authentication of its own.** Today it is reachable without auth
-  from any container on the VPS's `shared` network (as `bss:8080`) and from the VPS
-  loopback (`127.0.0.1:18081`); Caddy's basic auth only guards the public route. The mcp
-  service is one more caller on `shared`, not a new path. To close: a private app<->mcp
-  network and a Caddy-side alias (separate task; CLAUDE.md Open checks).
+- **Network isolation remains incomplete.** The app is reachable from containers on
+  the VPS's `shared` network (as `bss:8080`) and from VPS loopback
+  (`127.0.0.1:18081`). Application authentication now protects business routes on
+  these paths too; health probes and the service identity root remain public. A
+  private app/MCP network and a Caddy-side alias remain a separate task
+  (CLAUDE.md Open checks). Caddy basic auth was removed with U11.
 - **Registration is open**, so a client's name on the login page is whatever its
   registrant chose ("Claude" included). The page also shows the host the browser goes
   back to and says to approve only a connection you just started; the password is the

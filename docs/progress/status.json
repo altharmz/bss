@@ -14,9 +14,9 @@
     },
     "ui": {
       "deployed": null,
-      "implemented": 27,
-      "items": 27,
-      "tested": 27
+      "implemented": 31,
+      "items": 31,
+      "tested": 31
     },
     "worker": {
       "deployed": null,
@@ -1963,6 +1963,42 @@
       "stage": 5,
       "tested": true,
       "title": "Record payment, optionally to chosen bills"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.recordRefund",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Record a payout from unused credit"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.refunds",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Recorded refund history with payout metadata"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.billNow",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Request an on-demand bill"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.billRequests",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "On-demand bill status and resulting bill"
     },
     {
       "area": "ui",

@@ -24,7 +24,8 @@ import { Button, Panel, Pill, useToast } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
-import { BillDialog, BillsPanel, RecordPaymentModal, useBills } from './Bills';
+import { BillDialog, RecordPaymentModal, useBills } from './Bills';
+import { AccountBills, RefundAction, RefundsPanel } from './AccountActions';
 import { EditSubscriberModal } from './SubscriberForms';
 import './screens.css';
 
@@ -178,6 +179,7 @@ function Card({
         account={account}
         today={context.businessDate}
         settlement={settlement.status === 'ok' ? settlement.data : null}
+        onChanged={reload}
       />
 
       <Panel
@@ -218,7 +220,14 @@ function Card({
         </ListState>
       </Panel>
 
-      <BillsPanel bills={bills} onOpen={(bill) => setOpenBill(bill.id)} />
+      <AccountBills
+        account={account}
+        version={version}
+        bills={bills}
+        onOpen={setOpenBill}
+        onCompleted={reload}
+      />
+      <RefundsPanel accountId={account.id} version={version} />
 
       <div className="bss-two-col">
         <History account={account} version={version} />
@@ -279,10 +288,12 @@ function BillingAccountPanel({
   account,
   today,
   settlement,
+  onChanged,
 }: {
   account: Account;
   today: string;
   settlement: AccountSettlement | null;
+  onChanged: () => void;
 }) {
   const negative = account.balanceCents < 0;
   const available =
@@ -354,6 +365,7 @@ function BillingAccountPanel({
           <div className="value">
             {settlement === null ? '…' : formatCents(toCents(settlement.unallocatedCredit.value))}
           </div>
+          <RefundAction account={account} settlement={settlement} onChanged={onChanged} />
         </div>
       </div>
     </Panel>

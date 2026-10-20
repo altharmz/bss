@@ -38,6 +38,7 @@ agent - stay in [CLAUDE.md](../CLAUDE.md), the decisions and their rationale by 
 | [vps-infra-change-request.md](vps-infra-change-request.md) | the Caddy site block, smoke user and deploy order requested from vps-infra |
 | [unattended-run.md](unattended-run.md) | log of one unattended agent work session (stage 5 checkpoint 6, stage 4 design) |
 | [cloud.md](cloud.md), [cloud-coverage-report.md](cloud-coverage-report.md) | working in a cloud session: what runs there and what does not |
+| [ui-mcp-gap-plan.md](ui-mcp-gap-plan.md) | **planned:** the API operations MCP reaches and the UI does not, and the slices to close the useful ones |
 
 ## Generated vs hand-written
 

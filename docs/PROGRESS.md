@@ -13,7 +13,7 @@ records the deployed commit.
 |---|---|---|---|---|
 | Database | 41 | 41/41 (100%) | 41/41 (100%) | unknown |
 | API | 152 | 152/152 (100%) | 152/152 (100%) | unknown |
-| UI | 27 | 27/27 (100%) | 27/27 (100%) | unknown |
+| UI | 31 | 31/31 (100%) | 31/31 (100%) | unknown |
 | Worker | 15 | 15/15 (100%) | 15/15 (100%) | unknown |
 
 ## Database
@@ -242,6 +242,10 @@ records the deployed commit.
 | `ui.subscriber.billDetail` | 5 | Bill dialog: charges, payments, history | yes | yes | unknown |
 | `ui.subscriber.billHold` | 5 | Put a bill on hold / release it | yes | yes | unknown |
 | `ui.subscriber.recordPayment` | 5 | Record payment, optionally to chosen bills | yes | yes | unknown |
+| `ui.subscriber.recordRefund` | 5 | Record a payout from unused credit | yes | yes | unknown |
+| `ui.subscriber.refunds` | 5 | Recorded refund history with payout metadata | yes | yes | unknown |
+| `ui.subscriber.billNow` | 5 | Request an on-demand bill | yes | yes | unknown |
+| `ui.subscriber.billRequests` | 5 | On-demand bill status and resulting bill | yes | yes | unknown |
 | `ui.catalog.list` | 5 | Product catalog | yes | yes | unknown |
 | `ui.catalog.offeringDetail` | 5 | Offering detail dialog | yes | yes | unknown |
 | `ui.catalog.lifecycle` | 5 | Offering lifecycle step (Activate / Retire) | yes | yes | unknown |

@@ -160,6 +160,10 @@ function backend(routes: Record<string, Handler> = {}, account: object = ACCOUNT
     [`GET ${INTERNAL}/transactions?limit=20`]: () => json(TRANSACTIONS, { total: 3 }),
     [`GET ${INTERNAL}/settlement`]: () => json(NO_SETTLEMENT),
     [billsUrl(A)]: () => json([], { total: 0 }),
+    [`GET /tmf-api/payment/v4/refund?account.id=${A}&offset=0&limit=100`]: () =>
+      json([], { total: 0 }),
+    [`GET /tmf-api/customerBillManagement/v5/customerBillOnDemand?billingAccount.id=${A}&offset=0&limit=100`]:
+      () => json([], { total: 0 }),
     ...routes,
   });
 }

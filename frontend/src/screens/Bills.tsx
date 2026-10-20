@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   loadBillDetail,
   loadBills,
@@ -52,9 +52,11 @@ export function useBills(account: Account, version: number): ResourceWithRetry<B
 export function BillsPanel({
   bills,
   onOpen,
+  action,
 }: {
   bills: ResourceWithRetry<Bill[]>;
   onOpen: (bill: Bill) => void;
+  action?: ReactNode;
 }) {
   const context = useSystemContext();
   return (
@@ -63,9 +65,10 @@ export function BillsPanel({
         title="Bills"
         subtitle="CustomerBill"
         right={
-          bills.status === 'ok' ? (
-            <span className="bss-panel-count">{bills.data.length}</span>
-          ) : undefined
+          <>
+            {bills.status === 'ok' && <span className="bss-panel-count">{bills.data.length}</span>}{' '}
+            {action}
+          </>
         }
       >
         <TableHead columns={BILL_COLUMNS} />

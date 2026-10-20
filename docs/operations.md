@@ -91,8 +91,10 @@ What `deploy.sh` does, in order:
 6. Syncs the compose files and `.env.prod` (as `~/bss/.env`).
 7. **Runs the migrations** with the new image before the app serves traffic (with a
    deadline).
-8. `up` - waits until **both `app` and `worker` are healthy** (90 s).
-9. Smoke on the VPS: `/healthz`, `/`, and `/billing-status` (200 must say `ok` or
+8. `up` - waits until **`app`, `worker` and `mcp` are healthy** (90 s).
+9. Atomically writes the full Git commit to `~/bss/DEPLOYED`, reads it back and
+   requires an exact match. The smoke output prints the commit and image tag.
+   Smoke on the VPS: `/healthz` and `/billing-status` (200 must say `ok` or
    `running`; 503 one of `stale|failed|running|none`; `scripts/billing-status-check.sh`,
    shared with `make smoke`).
 10. Rsyncs the built UI **into** `~/bss/web` (hashed assets, then `index.html`, then a
@@ -102,13 +104,16 @@ What `deploy.sh` does, in order:
     credentials, `/internal/v1/context` 401 JSON from the app without them, with the
     read-only smoke secret 200 JSON with `operator` = `smoke`, a TMF list with
     `X-Total-Count`, `POST` -> 403 from the app, `/healthz` open.
-12. Prunes old `bss-app` images on the VPS, keeping the newest few (nothing else is
+12. Runs the MCP discovery, authentication and OAuth smoke checks through Caddy.
+13. Prunes old `bss-app` images on the VPS, keeping the newest few (nothing else is
     touched).
 
 A deploy is **not fully reversible once a migration shipped**: rolling the image back does
-not roll the schema back (`alembic downgrade` by hand). The deployed commit is not yet
-recorded on the VPS (planned; CLAUDE.md, "Open checks"). Production config, limits and
-the hard constraints of the VPS (VPN ports, no prune, nothing published on 0.0.0.0): see
+not roll the schema back (`alembic downgrade` by hand). `DEPLOYED` records the backend
+that reached service health, even if a later API/web/MCP smoke fails; it does not
+certify the entire release gate. This new marker awaits its first production rollout.
+Production config, limits and the hard constraints of the VPS (VPN ports, no prune,
+nothing published on 0.0.0.0): see
 CLAUDE.md, "Hard constraints". Never run `docker build` on the VPS.
 
 ## Backups

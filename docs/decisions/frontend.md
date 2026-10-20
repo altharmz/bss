@@ -2,7 +2,27 @@
 
 The refund/bill-delivery milestone adds the ledger type `payout`, displayed as
 “Refund paid out”. The existing `refund` label still denotes an ABR credit.
-Refund and presentation management remain API/MCP workflows in this milestone.
+Refund and presentation management remained API/MCP workflows in that milestone.
+The approved UI follow-up below adds refund recording and on-demand bill requests.
+
+## Refunds and on-demand bills UI (2026-10-20)
+
+The human approved slice 1 of [the UI gap plan](../ui-mcp-gap-plan.md#slice-1-design-for-approval-2026-10-20).
+Refund unused credit lives beside the card's unused-credit figure, limited by both
+unused credit and the positive account balance. It records an already completed
+payout with amount, method and optional description; it never sends money. Closed
+and Suspended accounts remain eligible. Sources are selected by the API, without a
+payment restriction. Refund metadata has its own list, alongside the existing
+“Refund paid out” ledger entries.
+
+Bill now in the Bills heading queues the existing TMF678 request. The confirmation
+explains processing after a successful account run from tomorrow onward. A request
+list shows progress, server explanations and a link opening the existing bill dialog.
+One pending request disables another submission. Polling is bounded to three minutes,
+with explicit refresh afterward. A credit/request conflict refreshes availability or
+status; uncertain writes disable resubmission in the dialog and ask the operator to
+check history/status. No write is retried automatically. No backend billing or data
+model changes are part of this slice.
 
 Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
 needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`

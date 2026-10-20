@@ -1,7 +1,7 @@
 # bss - overview
 
 bss is a small **billing and subscriber management system (BSS)** for a telecom-style
-subscription business: a product catalog with monthly recurring prices, customers and
+subscription business: a product catalog with daily, weekly, monthly and yearly recurring prices, customers and
 billing accounts, orders that add and end products, a daily billing run that charges and
 refunds pro rata and issues bills, payments, and a browser admin console for operators.
 It is a demo-sized but rule-complete system: every money rule is enforced in code and
@@ -18,14 +18,16 @@ code by `make progress` into [PROGRESS.md](PROGRESS.md) against
 
 | Stage | What | Status |
 |---|---|---|
-| 1 | Database schema and repository functions | built: 28 tables, migrations `0001`-`0012` ([db/](db/README.md)) |
-| 2 | TMF Open API backend (8 APIs) | built: 83 scoped API items, including internal/service routes, in PROGRESS.md |
+| 1 | Database schema and repository functions | built: 41 scoped database items, migrations through `0030` ([db/](db/README.md)) |
+| 2 | TMF Open API backend (8 APIs) | built: 152 scoped API items, including internal/service routes, in PROGRESS.md |
 | 3 | Billing core (pure) and its database adapter | built ([domain.md](domain.md#billing)) |
-| 4 | Billing worker: daily runs, catch-up/retry, on-demand bills and documents | built: worker 14/14 proven ([billing-worker.md](billing-worker.md)); Billing runs UI built; deployment status unknown |
-| 5 | Admin UI (React) and its internal API | built: 19/19 UI items, including Billing runs and bill settlement ([ui.md](ui.md)) |
+| 4 | Billing worker: daily runs, catch-up/retry, on-demand bills and documents | built: worker 15/15 proven ([billing-worker.md](billing-worker.md)); Billing runs UI built and deployed |
+| 5 | Admin UI (React) and its internal API | built: 27/27 UI items, including Billing runs and bill settlement ([ui.md](ui.md)) |
 
 Implementation and test coverage are measured for all four areas in PROGRESS.md.
-Deployment status remains unknown until the deploy script records the deployed commit.
+The latest verified release is `7ad101e` (2026-10-20); CLAUDE.md records its checks.
+Per-item deployed coverage in the generated tracker remains unknown until its separate
+commit-to-coverage integration is implemented.
 
 The input/read-completeness slice adds strict TMF write queries and type checks,
 historical order price quotes, product prices/navigation, and daily bill-cycle reads
@@ -36,21 +38,19 @@ membership ([decisions/catalog.md](decisions/catalog.md#categories-and-product-c
 Refunds, on-demand bills and presentation configuration extend the billing lifecycle
 ([decision](decisions/billing-completion.md)). Formats render detailed/summary JSON;
 external delivery and payment processing remain out of scope.
-Non-listener operation coverage across the eight vendored TMF APIs is 67/129 (51.9%);
+Non-listener operation coverage across the eight vendored TMF APIs is 129/129 (100%);
 this counts operations, not complete conformance of every attribute or behavior.
 
 ## Scope
 
-In scope: one-currency-per-account monthly recurring charges with daily proration,
-refunds when a termination becomes known after charging, bills on the account's cycle
-day, payments, balance, a credit limit that only warns, the daily billing run with
-failure isolation and operator catch-up/retry.
+In scope: one currency per billing account; recurring product charges with intervals
+described in [charge-periods.md](decisions/charge-periods.md); monthly invoices;
+taxes, offering changes, order cancellation, product suspension/resumption, event
+notifications, refunds, payments, balance, and a daily worker with catch-up/retry.
 
-Out of scope ([decisions/data-model.md](decisions/data-model.md), "Domain model & decisions"): taxes, one-time charges in billing
-(a `oneTime` price can be stored but is never billed), `modify` order items and
-cancelProductOrder, changing an account's bill cycle day, suspension semantics (a
-`Suspended` account is still billed by dates), event notifications (`/hub`, listeners),
-payment processing (a payment is recorded as received).
+Out of scope: external payment processing, external bill delivery and changing an
+account's bill cycle day. One-time and alteration prices can be recorded but do not
+produce standalone billing charges. Suspension does not change date-based billing.
 
 ## Implemented APIs
 
@@ -86,7 +86,7 @@ validated against them (`tests/apiclient.py`). Per-operation reference, extensio
 | `app/config.py` | settings from environment variables only |
 | `alembic/versions/` | hand-written migrations |
 | `frontend/` | admin UI: Vite + React + TypeScript |
-| `tests/` | pytest suite (586 tests), contract validation, seed data, doc and progress collectors |
+| `tests/` | pytest suite, contract validation, seed data, doc and progress collectors |
 
 ## Runtime architecture
 
@@ -97,22 +97,25 @@ app on the host, plus the database backups ([decisions/infra.md](decisions/infra
 
 ```mermaid
 flowchart LR
-  user[Operator's browser] -- "HTTPS :8445, basic auth" --> caddy
+  user[Operator's browser] -- "HTTPS :8445, app sign-in" --> caddy
   monitor[External monitor] -- "/healthz, /billing-status (no auth)" --> caddy
   subgraph vps["VPS"]
     subgraph infra["vps-infra (not this repo)"]
-      caddy[Caddy: TLS, basic auth, X-Remote-User]
+      caddy[Caddy: TLS and routing]
       pg[(PostgreSQL 16: database bss)]
       backup[backup cron: pg_dump]
     end
     subgraph bss["bss stack (compose.yaml + compose.prod.yaml)"]
       app["app: FastAPI on :8080, alias bss<br/>384 MB, 0.5 CPU, read-only"]
+      mcp["mcp: OAuth and scoped tools"]
       worker["worker: python -m app.worker<br/>256 MB, 0.25 CPU, read-only"]
     end
     web["~/bss/web: the built UI (static files)"]
   end
   caddy -- "/tmf-api, /internal, /healthz, /billing-status" --> app
   caddy -- "everything else: static files, SPA fallback" --> web
+  caddy -- "/mcp, OAuth discovery/endpoints" --> mcp
+  mcp -- "service credential" --> app
   app --> pg
   worker --> pg
   backup --> pg
@@ -128,7 +131,7 @@ flowchart LR
 - **Database**: database and role `bss` on vps-infra's PostgreSQL (`postgres:5432` on
   the `shared` network). Migrations run from this repository during the deploy, before
   the app starts (`scripts/deploy.sh`).
-- The VPS reboots nightly at 03:00; both services have `restart: unless-stopped`, and a
+- The VPS reboots nightly at 03:00; all services have `restart: unless-stopped`, and a
   billing run interrupted by the reboot is taken over by the next worker
   ([billing-worker.md](billing-worker.md#ownership-and-takeover)).
 
@@ -139,28 +142,21 @@ UI. There is no long-running local worker (`make worker-once`). See
 
 ## Authentication and operator identity
 
-All of it is configured in vps-infra's Caddy site block, requested in
-[vps-infra-change-request.md](vps-infra-change-request.md); the app itself has **no
-authentication**.
+The app authenticates operators with sessions and roles (`admin` and `user`).
+Caddy serves the UI without basic auth following U11; business API routes require
+a session or a service credential even when reached directly on the shared network.
 
-- **Basic auth** in Caddy protects everything on the public port except `/healthz` and
-  `/billing-status`, which are carved out for the external monitor and expose nothing
-  but a status (`app/main.py`, `app/status.py`).
-- **`X-Remote-User`**: Caddy *sets* (overwrites) this header from the basic-auth user on
-  the authenticated routes and removes it on the open ones. The app reads it in
-  `GET /internal/v1/context` (`operator`) and stores it as `requested_by` on worker
-  requests; anything not matching `^[A-Za-z0-9._@-]{1,64}$` is reported as no operator
-  (`app/internal/context.py`; `tests/test_internal_api.py::test_context_operator_comes_from_the_proxy_header`).
-  **It is display-only, not proof of identity**: any container on the `shared` network,
-  or anyone with a shell or an SSH tunnel on the VPS, can reach the app directly and set
-  it. Nothing is authorised by it.
-- **The `smoke` user**: a second basic-auth user with its own password, **GET/HEAD
-  only** - Caddy answers any other method with 403 before the app. `scripts/web-smoke.sh`
-  uses it after every deploy; its plaintext lives only in the workstation's local
-  `.env.smoke`, never shipped and never printed (`scripts/deploy.sh`).
-- FastAPI's default `/docs`, `/redoc` and `/openapi.json` are served (behind basic auth
-  in production); whether they should stay is an open decision (CLAUDE.md, "Next
-  session").
+- The operator comes from the session. Admins manage users; both roles perform
+  business operations and change their own passwords.
+- MCP authenticates with `BSS_SERVICE_SECRET` and a validated `mcp:<name>` principal.
+  A separate `BSS_SMOKE_SECRET` grants read-only smoke access. Credentials are never
+  printed and cannot access user-management or session endpoints.
+- Health/billing status and the service identity root remain public. Interactive
+  `/docs`, `/redoc` and `/openapi.json` HTTP endpoints are disabled; tooling uses
+  in-process OpenAPI.
+- Network isolation remains a separate infrastructure follow-up.
+
+See [user management](decisions/users.md) for the implemented security contract.
 
 ## Configuration
 

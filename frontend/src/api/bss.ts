@@ -872,6 +872,60 @@ export async function recordPayment(accountId: string, form: PaymentForm): Promi
   return created.paymentItem?.length ?? 0;
 }
 
+// --- recorded payouts and asynchronous on-demand bills ---
+
+export const REFUNDS = '/tmf-api/payment/v4/refund';
+export const BILL_DEMANDS = '/tmf-api/customerBillManagement/v5/customerBillOnDemand';
+
+export interface RecordedRefund {
+  id: string;
+  refundDate: string;
+  totalAmount: { value: number; unit: string };
+  paymentMethod: { name: string };
+  description?: string;
+}
+
+export type BillDemand = T678['schemas']['CustomerBillOnDemand'];
+
+export function loadRefunds(accountId: string, signal?: AbortSignal) {
+  return getAll<RecordedRefund>(`${REFUNDS}?account.id=${encodeURIComponent(accountId)}`, signal);
+}
+
+export function loadBillDemands(accountId: string, signal?: AbortSignal) {
+  return getAll<BillDemand>(
+    `${BILL_DEMANDS}?billingAccount.id=${encodeURIComponent(accountId)}`,
+    signal,
+  );
+}
+
+export function recordRefund(
+  account: Account,
+  amount: string,
+  method: string,
+  description: string,
+) {
+  return postJson<RecordedRefund>(
+    REFUNDS,
+    jsonWithAmount(
+      {
+        '@type': 'Refund',
+        account: { id: account.id, '@referredType': 'BillingAccount' },
+        totalAmount: { unit: account.currency, value: AMOUNT },
+        paymentMethod: { name: method },
+        ...(description.trim() ? { description: description.trim() } : {}),
+      },
+      amount,
+    ),
+  );
+}
+
+export function requestBill(accountId: string) {
+  return postJson<BillDemand>(BILL_DEMANDS, {
+    '@type': 'CustomerBillOnDemand',
+    billingAccount: { id: accountId, '@referredType': 'BillingAccount' },
+  });
+}
+
 // --- billing runs (stage 4): the worker bills; the UI reads runs and queues requests ---
 
 export type BillingRun = Internal['schemas']['BillingRun'];

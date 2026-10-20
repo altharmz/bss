@@ -149,6 +149,28 @@ API: `GET .../customerBill?billingAccount.id=` (TMF678, all pages),
 `PATCH /tmf-api/customerBillManagement/v5/customerBill/{id}` (`{"state": ...}`, merge
 patch), `POST /tmf-api/payment/v4/payment` (`paymentItem[]` when lettered).
 
+### Refunds and on-demand bills - `screens/AccountActions.tsx`
+
+**Refund unused credit** sits beside Unused credit. Refundable credit is the lesser
+of unused credit and positive account balance; the server rechecks it when saving.
+The dialog records an already completed payout with amount, method and an optional
+description, including for Closed and Suspended accounts. It does not send money.
+The card reloads after recording; **Recorded refunds** shows payout dates, amounts,
+methods and descriptions, while Transaction history retains **Refund paid out**.
+
+**Bill now** in the Bills heading queues a request, with no amount or date input.
+The confirmation explains that processing waits for a successful account run from
+tomorrow onward. **Bill requests** shows progress, terminal states and explanations;
+**Open bill** opens the resulting bill in the existing dialog. One pending request
+disables another submission. Status refreshes every five seconds for up to three
+minutes, then offers manual Refresh. Uncertain writes are never automatically retried;
+the dialog asks the operator to check the recorded refund or request first.
+
+API: GET/POST `/tmf-api/payment/v4/refund` (`account.id` list filter), GET/POST
+`/tmf-api/customerBillManagement/v5/customerBillOnDemand` (`billingAccount.id`
+list filter). Both lists read all pages. Markers: `ui.subscriber.recordRefund`,
+`ui.subscriber.refunds`, `ui.subscriber.billNow`, `ui.subscriber.billRequests`.
+
 ### Add product (`ui.subscriber.addProduct`) - `screens/AddProduct.tsx`
 
 Modal: 1. pick an Active, sellable offering (filterable list with code, specification and

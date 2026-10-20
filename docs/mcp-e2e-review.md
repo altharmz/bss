@@ -1,4 +1,4 @@
-# MCP end-to-end review: todo (2026-10-19)
+# MCP end-to-end review (2026-10-19)
 
 An external agent (ChatGPT) called all 145 MCP tools against the deployed bss and
 reported six findings and one observation. Each was checked against the code and the
@@ -9,7 +9,14 @@ Usual rules apply (CLAUDE.md "Per change"): plan, tests, negative proofs, `make 
 `make test` x3, decision recorded, diff shown, commit only after the human's OK. Deploy
 only with a separate approval.
 
-## Local implementation status
+## Release status
+
+Slices A-C were committed as `40805f4` and are included in deployed `7ad101e`
+(2026-10-20). The release checks and successful deployment retries are recorded in
+CLAUDE.md. Implementation is complete; the unchecked production follow-ups below
+remain unverified and keep this review record open.
+
+## Implementation validation
 
 2026-10-19: slices A-C are implemented locally, with the human selecting same-day
 status undo and scheduled termination for future products. No migration. The focused
