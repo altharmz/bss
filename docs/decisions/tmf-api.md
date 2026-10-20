@@ -7,9 +7,7 @@ keeping cycleSpecification read-only. Cash payouts reduce balance and unused
 credit; issued bills carry immutable JSON attachments. These decisions extend
 the original mappings below. TMF operation coverage becomes 67/129 (51.9%).
 
-Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
-needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
-proves nothing was lost in the move. Index: [README.md](README.md). The TMF620 catalog
+Index: [README.md](README.md). The TMF620 catalog
 mapping is in [catalog.md](catalog.md).
 
 ## TMF API conventions (stage 2)

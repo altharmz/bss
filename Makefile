@@ -12,7 +12,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e docs docs-check decisions-check mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e docs docs-check mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -137,14 +137,15 @@ smoke: ## Smoke-test the local instance
 deploy: ## Build locally and ship to the VPS
 	./scripts/deploy.sh
 
-# Target-specific: also applies to the `test` prerequisite (through check, for verify).
+# On demand only, when a change needs stronger testing; the pre-commit hook is the
+# regular gate. Target-specific: also applies to the `test` prerequisite.
 check: HYPOTHESIS_PROFILE = ci
-check: lint test docs-check decisions-check web-lint web-test web-e2e ## Every local check of make verify, without the deploy
-	@echo "checked: lint, test, docs-check, decisions-check, web-lint, web-test and web-e2e passed"
+check: lint test docs-check web-lint web-test web-e2e ## Every local check (ci profile, docs, UI, browser), on demand
+	@echo "checked: lint, test, docs-check, web-lint, web-test and web-e2e passed"
 
-verify: HYPOTHESIS_PROFILE = ci
-verify: check deploy ## Full gate: make check, then a real deployment that must go healthy
-	@echo "verified: local checks passed and the remote instance is healthy"
+# The commit was tested by the pre-commit hook: deploying does not test again.
+verify: deploy ## Deploy and confirm the remote instance is healthy (health, smoke, UI, MCP)
+	@echo "verified: the remote instance is healthy"
 
 tunnel: ## Forward the remote app to localhost:18081 (Ctrl-C to stop)
 	ssh $(SSH_OPTS) -N -L 18081:127.0.0.1:18081 $(REMOTE)
@@ -181,15 +182,12 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 	fi
 	@echo "docs-check: docs/api and docs/db match the code"
 
-decisions-check: ## Fail if a decision or rule of the old CLAUDE.md is missing from CLAUDE.md + docs/decisions/
-	python3 scripts/check-decisions.py
-
 hooks: ## Install the pre-commit (lint + test) and pre-push (secrets) hooks
 	@mkdir -p .git/hooks
 	@ln -sf ../../scripts/pre-commit.sh .git/hooks/pre-commit
 	@ln -sf ../../scripts/pre-push.sh .git/hooks/pre-push
 	@chmod +x scripts/pre-commit.sh scripts/pre-push.sh
-	@echo "installed pre-commit hook -> scripts/pre-commit.sh (bypass with git commit --no-verify)"
+	@echo "installed pre-commit hook -> scripts/pre-commit.sh (lint + test before every commit)"
 	@echo "installed pre-push hook -> scripts/pre-push.sh (never bypass it)"
 
 

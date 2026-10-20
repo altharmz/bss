@@ -1,8 +1,6 @@
 # Infrastructure: image, layout, conventions, VPS, deploy
 
-Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
-needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
-proves nothing was lost in the move. Index: [README.md](README.md).
+Index: [README.md](README.md).
 
 ## Template origin (`make init`)
 
@@ -167,7 +165,7 @@ would attach the prod container to both `lab` and `shared`).
 ## DB connections per request (open check)
 
 The evidence behind the open check of the same name in
-[CLAUDE.md](../../CLAUDE.md#open-checks), which keeps the item and its decision.
+[CLAUDE.md](../status.md#open-checks), which keeps the item and its decision.
 
 - **App opens a new DB connection per request (`connect_timeout` was 3 s, now 10 s)** -
   open: how to bound the API's connections on prod (1 vCPU, shared with VPN/Xray).

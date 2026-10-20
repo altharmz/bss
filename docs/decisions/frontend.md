@@ -24,9 +24,7 @@ status; uncertain writes disable resubmission in the dialog and ask the operator
 check history/status. No write is retried automatically. No backend billing or data
 model changes are part of this slice.
 
-Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
-needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
-proves nothing was lost in the move. Index: [README.md](README.md). Screen-level detail:
+Index: [README.md](README.md). Screen-level detail:
 [docs/ui.md](../ui.md). Deploying the UI: [infra.md](infra.md#deploying-the-ui-stage-5-checkpoint-7).
 
 ## Frontend (stage 5) decisions
@@ -130,7 +128,7 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   zone; a local-`Date`-constructor bug passes the UTC run and fails the second one.
 - **Harness:** `settings.json` denies `pnpm`, `yarn`, `corepack` on the host and edits
   under `design-ref/` (`npm`, `npx`, `node` are not denied there: a deny rule cannot
-  depend on cloud mode, see ["Agent guardrails"](harness.md#agent-guardrails-what-they-are-for)); `guard.sh` blocks a command that runs a Node
+  depend on cloud mode, see ["Agent guardrails"](harness.md#the-guard)); `guard.sh` blocks a command that runs a Node
   tool on the host (also via `sh -c`, `xargs`, substitutions) unless it runs in one of the
   compose services `web`, `web-offline`, `web-preview`, `e2e` (or another container), and
   shell writes into `design-ref/`. It is quote-aware, so `docker compose run web-offline

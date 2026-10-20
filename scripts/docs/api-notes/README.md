@@ -40,4 +40,4 @@ written by `tmfjson`, so the generated OpenAPI has no response schemas. The cont
 `spec/`; the UI's TypeScript types are generated from it (`frontend/scripts/gen-types.mjs`).
 `/docs`, `/redoc` and `/openapi.json` are served by FastAPI's defaults (`app/main.py`
 does not disable them); whether they stay exposed in production is an open decision
-(CLAUDE.md, "Next session").
+(docs/status.md, "Next session").

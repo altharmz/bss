@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Installed as .git/hooks/pre-commit by `make hooks` (symlink, so edits here take effect
-# immediately). Runs the same gate as `make verify`'s first two steps before every commit.
+# immediately). The one local test run of a development cycle: lint + test before every
+# commit (the guard blocks --no-verify). Deploying does not test again.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
@@ -21,7 +22,6 @@ fail() {
   {
     printf '\033[1;31mpre-commit hook failed:\033[0m %s\n' "$*"
     printf 'Full log: %s\n' "$log"
-    printf 'Fix the issue above, or skip this hook with: git commit --no-verify\n'
   } | tee -a "$log" >&2
   exit 1
 }
@@ -55,8 +55,7 @@ fi
 run make lint || fail "make lint"
 run make test || fail "make test"
 
-# The agent guard, only when the commit touches .claude/: every regression case in
-# .claude/hooks/guard-cases.txt must still be allowed or blocked as recorded.
+# The agent guard's cases, only when the commit touches .claude/.
 if git diff --cached --name-only | grep -q '^\.claude/'; then
   run .claude/hooks/test-guard.sh || fail "guard regression cases (.claude/hooks/test-guard.sh)"
 fi

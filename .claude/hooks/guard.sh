@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
-# PreToolUse guard for Bash commands.
-#
-# Reads the tool call as JSON on stdin. Exit code 2 blocks the call and feeds the message
-# on stderr back to Claude, so the model learns why instead of retrying blindly.
-#
-# This is defence in depth on top of .claude/settings.json deny rules: it catches the
-# shapes a static matcher misses (pipelines, `sh -c`, remote commands over ssh).
+# PreToolUse guard for Bash commands: the few rules that protect production, other
+# people's containers, secrets and the commit gate. A pattern matcher against slips, not
+# a security boundary. Exit 2 blocks the call; the message on stderr goes back to Claude.
 set -uo pipefail
 
 payload="$(cat)"
@@ -13,105 +9,64 @@ cmd="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.load(sys
 [[ -z "$cmd" ]] && exit 0
 
 block() { printf 'BLOCKED by guard.sh: %s\n' "$1" >&2; exit 2; }
+has() { grep -Eq -- "$1" <<<"$cmd"; }
+cloud=false
+[[ "${CLAUDE_CODE_REMOTE:-}" == true ]] && cloud=true
 
-# --- cloud mode (CLAUDE_CODE_REMOTE=true: set by Claude Code in every cloud session) ---
-# A cloud session never reaches the VPS: any command naming it is blocked, quotes and
-# all - before guard.py, so the tokenised and the fallback path both get it.
-if [[ "${CLAUDE_CODE_REMOTE:-}" == true ]] && grep -Eqi 'vpn2811\.duckdns\.org|vps-test' <<<"$cmd"; then
-  block "cloud sessions never reach the VPS (vps-test, vpn2811.duckdns.org) - not even to probe it (docs/cloud.md)."
-fi
-
-# --- quote-aware checks first (guard.py: shlex tokens, so quoted text is never a command) ---
-# 0 = allow, 2 = blocked (reason already on stderr), 3 = cannot tokenise (unbalanced
-# quotes, a heredoc): fall through to the raw-text checks below, as strict as before.
-# Anything else (python missing, a crash) also falls through: fail-closed.
-python3 "$(dirname "$0")/guard.py" "$cmd"
-rc=$?
-(( rc == 0 )) && exit 0
-(( rc == 2 )) && exit 2
-
-# --- raw-text fallback (the guard before it was quote-aware) ---
+# --- cloud sessions never reach the VPS ---
+$cloud && has '(vpn2811\.duckdns\.org|vps-test)' &&
+  block "cloud sessions never reach the VPS (docs/cloud.md)."
 
 # --- the VPN on the VPS is production; it is not ours to touch ---
-grep -Eqi 'softether|vpnserver|vpncmd' <<<"$cmd" && \
+has '(softether|vpnserver|vpncmd)' &&
   block "the VPS runs a production SoftEther VPN server. Do not interact with it."
-# Fail-closed: the old broad rule, plus the network contexts guard.py added (a firewall or
-# socket tool, a port keyword, host:port, or the VPS by name), so this path is never
-# looser than guard.py.
-# A filesystem path is not a port (same rule as guard.py's FS_PATH): the paths are
-# replaced before the local checks; over ssh or naming the VPS the number counts anywhere.
-vpn_port='(^|[^0-9])(443|992|1194|500|4500|5555)(:|/|[^0-9]|$)'
+# A VPN port in a network context (ssh/VPS, docker publish, firewall or socket tool,
+# host:port). Filesystem paths are masked first: a number inside a path is not a port.
+vpn_port='(^|[^0-9])(443|992|1194|500|4500|5555|8444)(:|/|[^0-9]|$)'
 unpathed="$(sed -E "s#(^|[[:space:]'\"=(,{])(~|\.{1,2})?/[^[:space:]'\"\`;|&:,)]*#\1_path_#g" <<<"$cmd")"
-if grep -Eq "$vpn_port" <<<"$cmd"; then
-  grep -Eq 'ssh|vps-test|vpn2811\.duckdns\.org' <<<"$cmd" && \
-    block "ports 443/992/1194/500/4500/5555 belong to the VPN server on the VPS."
-fi
 if grep -Eq "$vpn_port" <<<"$unpathed"; then
-  grep -Eq 'docker|-p ' <<<"$unpathed" && \
-    block "ports 443/992/1194/500/4500/5555 belong to the VPN server on the VPS."
-  grep -Eq '(^|[^[:alnum:]_.-])(ufw|iptables|ip6tables|nft|firewall-cmd|ss|netstat|lsof|fuser|nc|ncat|netcat|socat|nmap|telnet|tcpdump|port|ports|dport|sport|listen)([^[:alnum:]_.-]|$)|[[:alnum:]_.-]:(443|992|1194|500|4500|5555)([^0-9]|$)' <<<"$unpathed" && \
-    block "ports 443/992/1194/500/4500/5555 belong to the VPN server on the VPS."
+  grep -Eq '(^|[^[:alnum:]_.-])(ssh|vps-test|docker|-p|ufw|iptables|ip6tables|nft|firewall-cmd|ss|netstat|lsof|fuser|nc|ncat|netcat|socat|nmap|telnet|tcpdump|port|ports|dport|sport|listen)([^[:alnum:]_.-]|$)|[[:alnum:]_.-]:(443|992|1194|500|4500|5555|8444)([^0-9]|$)' <<<"$unpathed" &&
+    block "ports 443/992/1194/500/4500/5555/8444 belong to the VPN server on the VPS."
 fi
 
-# --- destructive docker operations affect containers we do not own ---
-grep -Eq 'docker[[:space:]]+(system[[:space:]]+prune|volume[[:space:]]+rm|volume[[:space:]]+prune|network[[:space:]]+prune|builder[[:space:]]+prune)' <<<"$cmd" && \
+# --- other people's containers share these hosts ---
+has 'docker[[:space:]]+(system[[:space:]]+prune|volume[[:space:]]+(rm|prune)|network[[:space:]]+prune|builder[[:space:]]+prune)' &&
   block "destructive docker cleanup is not allowed - other containers share this host."
-grep -Eq 'docker[[:space:]]+(stop|rm|kill)[[:space:]]+\$\(docker[[:space:]]+ps' <<<"$cmd" && \
+has 'docker[[:space:]]+(stop|rm|kill)[[:space:]]+.*\$\((docker[[:space:]]+ps)' &&
   block "mass container stop/remove is not allowed."
 
-# --- remote access goes through the deploy script only ---
-if grep -Eq '(^|[|;&[:space:]])ssh[[:space:]]' <<<"$cmd"; then
-  grep -Eq 'sudo|apt|systemctl|rm[[:space:]]+-rf|docker[[:space:]]+build' <<<"$cmd" && \
-    block "privileged / build commands must not run on the VPS. Use ./scripts/deploy.sh."
-  grep -Eq 'authorized_keys|passwd|mkfs|ufw[[:space:]]|iptables|shutdown|reboot' <<<"$cmd" && \
-    block "commands that change host access, firewall or power state are the human's job."
+# --- the VPS is changed only through scripts/deploy.sh; nothing is built there ---
+if has '(^|[|;&[:space:]])ssh[[:space:]]'; then
+  has '(sudo|apt|systemctl|rm[[:space:]]+-rf|docker[[:space:]]+(build|compose[[:space:]]+build)|authorized_keys|passwd|mkfs|shutdown|reboot)' &&
+    block "privileged, build or host-level commands must not run on the VPS. Use make deploy / make remote."
 fi
 
 # --- secrets stay out of the transcript ---
-grep -Eq '(cat|less|head|tail|grep|strings)[[:space:]]+[^|]*\.env(\.prod|\.smoke)?([[:space:]]|$)' <<<"$cmd" && \
+has '(cat|less|more|head|tail|grep|strings|bat|xxd|od)[[:space:]]+[^|;&]*\.env(\.prod|\.smoke)?([[:space:]"'"'"']|$)' &&
   block "do not read .env files. See .env.example for the variable names."
+has 'docker[[:space:]]+compose([[:space:]]+-f[[:space:]]+[^[:space:]]+)*[[:space:]]+config' && ! has 'config[[:space:]]+(-q|--quiet)' &&
+  block "docker compose config prints every secret; use docker compose config --quiet."
+has 'docker[[:space:]]+compose[[:space:]].*(run|exec)[[:space:]].*[[:space:]](env|printenv)([[:space:]]|$)' &&
+  block "printing a container's environment prints its secrets."
 
-# --- history rewriting ---
-grep -Eq 'git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)' <<<"$cmd" && \
+# --- the commit gate: tests always run before a commit ---
+# (cloud sessions have no Docker, so the hook cannot run there: docs/cloud.md)
+if ! $cloud; then
+  has 'git[[:space:]].*--no-verify|git([[:space:]]+-[^[:space:]]+)*[[:space:]]+commit[[:space:]]([^;&|]*[[:space:]])?-[a-zA-Z]*n[a-zA-Z]*([[:space:]]|$)|core\.hooksPath' &&
+    block "the pre-commit (lint + test) and pre-push hooks are never skipped."
+fi
+
+# --- history on the remote is never rewritten; local work is never discarded ---
+has 'git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)' &&
   block "destructive git operations are the human's call."
-# Plain pushes are allowed; force, delete, mirror, prune, tag and +/: refspec pushes are not.
-grep -Eq '(^|[^[:alnum:]_.-])git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+|[[:space:]]+--?[[:alnum:]_-]+(=[^[:space:]]*)?)*[[:space:]]+push([[:space:]][^;&|]*)?[[:space:]](--force|--force-with-lease|--force-if-includes|--mirror|--delete|--prune|--tags|--follow-tags|-[[:alpha:]]*[fd][[:alpha:]]*|[+:][^[:space:]]*)([=[:space:];&|]|$)' <<<"$cmd" && \
-  block "force, delete, mirror, prune, tag and +/: refspec pushes are forbidden. Plain \`git push [-u] origin <branch>\` of approved commits only (CLAUDE.md)."
-# Cloud mode, fail-closed: a push that cannot be tokenised cannot be checked for its
-# cloud/* destination, so it is blocked outright.
-[[ "${CLAUDE_CODE_REMOTE:-}" == true ]] && grep -Eq '(^|[^[:alnum:]_.-])git([[:space:]]+-[Cc][[:space:]]+[^[:space:]]+|[[:space:]]+--?[[:alnum:]_-]+(=[^[:space:]]*)?)*[[:space:]]+push([^[:alnum:]_-]|$)' <<<"$cmd" && \
-  block "cloud sessions push only to cloud/* branches; this push could not be parsed - run it as a plain one-line command: git push -u origin cloud/<topic>."
+has 'git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push([[:space:]][^;&|]*)?[[:space:]](--force|--force-with-lease|--force-if-includes|--mirror|--delete|--prune|-[[:alpha:]]*[fd][[:alpha:]]*|[+:][^[:space:]]*)([=[:space:];&|]|$)' &&
+  block "force, delete, mirror, prune and +/: refspec pushes are forbidden."
+if $cloud && has 'git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push([^[:alnum:]_-]|$)'; then
+  has 'push[[:space:]]+-u[[:space:]]+origin[[:space:]]+cloud/[^[:space:];&|]+([[:space:]]+[0-9]*>&?[[:space:]]*[^[:space:];&|]+)*[[:space:]]*$' ||
+    block "cloud sessions push only as: git push -u origin cloud/<topic>."
+fi
 
-# --- the harness is changed through the Edit tool, which asks the human first ---
-# Mirrors the "ask" rules in settings.json (.claude/, compose files, Makefile, scripts/):
-# a shell write would bypass that prompt. Covers >, >>, tee, sed -i, mv, cp (as the
-# destination) and rm. Reading, running and copying *from* these paths stays allowed.
-proj="$(printf '%s' "${CLAUDE_PROJECT_DIR:-$PWD}" | sed 's/[][\\.*^$+?(){}|]/\\&/g')"
-prot="(\./|${proj}/)?((\.claude|scripts)(/[^[:space:]\"'|;&]*)?|compose(\.override|\.prod)?\.yaml|Makefile)"
-b="(^|[|;&(\`[:space:]])"       # a command starts here
-a="([^|;&]*[[:space:]\"'=])?"    # its earlier arguments
-e="([\"'[:space:]|;&)]|\$)"      # the path token ends here
-harness_write() {
-  grep -Eq ">[[:space:]]*[\"']?${prot}${e}" <<<"$cmd" && return 0
-  grep -Eq "${b}(tee|rm|mv)[[:space:]]${a}${prot}${e}" <<<"$cmd" && return 0
-  grep -Eq "${b}sed[[:space:]]([^|;&]*[[:space:]])?(--in-place|-[a-zA-Z]*i)[^|;&]*[[:space:]\"']${prot}${e}" <<<"$cmd" && return 0
-  grep -Eq "${b}cp[[:space:]]${a}${prot}[\"']?[[:space:]]*([|;&)]|\$)" <<<"$cmd" && return 0
-  return 1
-}
-harness_write && \
-  block "shell writes to .claude/, compose*.yaml, Makefile or scripts/ are not allowed. Use the Edit tool - it asks the human first."
-
-# --- the design handoff is a pristine reference: never written ---
-prot="(\./|${proj}/)?design-ref(/[^[:space:]\"'|;&]*)?"
-harness_write && \
-  block "design-ref/ is a read-only reference (the design handoff). Never write to it."
-
-# --- Node runs only in the web containers, never on the host ---
-# A command segment (split at ; && || | & and newlines) that starts with a Node tool -
-# directly, after VAR=value assignments, or as `sh -c` / `bash -c` - is blocked unless the
-# segment itself runs in the `web` or `web-offline` compose service. Use make web-*.
-# In cloud mode the sandbox is the container: npm, npx and node may run on the host (pnpm,
-# yarn and corepack stay blocked).
+# --- Node runs only in the web containers, never on the host (cloud: npm/npx/node ok) ---
 node_on_host() {
   python3 - "$cmd" <<'PY'
 import os, re, sys
@@ -120,14 +75,14 @@ tools = "pnpm|yarn|corepack" if os.environ.get("CLAUDE_CODE_REMOTE") == "true" e
 tool = rf"({tools})(\s|$)"
 starts = re.compile(r"^\s*(\w+=\S*\s+)*" + tool)
 shell_c = re.compile(r"\b(sh|bash)\s+-c\s+['\"]?\s*" + tool)
-inside = re.compile(r"\bdocker\s+compose\b.*\b(run|exec|up)\b.*\sweb(-offline)?(\s|$)")
+inside = re.compile(r"\bdocker\s+compose\b.*\b(run|exec|up)\b.*\s(web(-offline|-preview)?|e2e)(\s|$)")
 for segment in re.split(r"\|\||&&|[;|&\n]", cmd):
     if (starts.search(segment) or shell_c.search(segment)) and not inside.search(segment):
         sys.exit(0)
 sys.exit(1)
 PY
 }
-node_on_host && \
-  block "npm/npx/node run only inside the web container, never on the host. Use make web-install / web-build / web-lint / web-test / web-dev."
+node_on_host &&
+  block "npm/npx/node run only inside the web container. Use the make web-* targets."
 
 exit 0

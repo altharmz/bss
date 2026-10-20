@@ -27,14 +27,6 @@
       "Read(./design-ref/**)",
       "Edit(./docs/progress/scope.yaml)"
     ],
-    "ask": [
-      "Edit(./.claude/**)",
-      "Edit(./compose.override.yaml)",
-      "Edit(./compose.yaml)",
-      "Edit(./compose.prod.yaml)",
-      "Edit(./Makefile)",
-      "Edit(./scripts/**)"
-    ],
     "deny": [
       "Read(./.env)",
       "Read(./.env.prod)",

@@ -57,8 +57,8 @@ make web-dev       # admin UI on http://localhost:5173
 
 ```bash
 make lint && make test   # ruff; pytest, one throwaway database per test
-make check               # lint, test, docs-check, decisions-check, web-lint, web-test, web-e2e
-make verify              # make check, then deploy to the VPS and smoke-test it there
+make check               # on demand: lint, test (ci), docs-check, web-lint, web-test, web-e2e
+make verify              # = make deploy: ship to the VPS and smoke-test it there
 ```
 
 Production is one small VPS whose main job is a VPN server. bss runs next to it under

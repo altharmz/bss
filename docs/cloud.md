@@ -18,13 +18,11 @@ from the same probe is `docs/cloud-coverage-report.md`.
 - What the cloud can prove is listed below; it is a subset of the gate. In particular no
   Docker image is built here, the e2e smoke does not run, and nothing can reach the VPS.
   The human checks out the branch on the workstation and runs `make check` (lint, test,
-  docs-check, decisions-check, web-lint, web-test, web-e2e) before merging, and `make verify` (= check +
-  deploy) when it ships. Until then, a green cloud run is a hint, not a result.
-- The rules of CLAUDE.md still hold here (no `.env*`, edit files only with the Edit/Write
-  tools, guard blocks are reported, not worked around).
+  docs-check, web-lint, web-test, web-e2e) before merging, then deploys it. Until then, a green cloud run is a hint, not a result.
+- The rules of CLAUDE.md still hold here (no `.env*`, guard blocks are reported, not worked around).
 - **Cloud mode: `CLAUDE_CODE_REMOTE=true`**, which Claude Code itself sets in every cloud
   session and never on the workstation - nothing to configure. Only the exact value
-  `true` counts. The guard then (`.claude/hooks/guard.sh`, `guard.py`):
+  `true` counts. The guard then (`.claude/hooks/guard.sh`):
   - allows `npm`, `npx` and `node` on the host - here the sandbox is itself the
     container; `pnpm`, `yarn`, `corepack` stay blocked. The "Node only in containers"
     rule is unchanged on the workstation;
@@ -63,13 +61,12 @@ proxy refused the CONNECT (403), so nothing reached the VPS. Do not repeat it.
 | `make test` | **no** (same build) | equivalent: `pytest -n auto` in the pinned venv against host PostgreSQL 16 - **585 passed, ~45 s**, four runs. Differences from the container: PG 16.15 (Ubuntu) instead of `postgres:16-alpine`, the venv instead of the image, the host's tzdata |
 | `make progress` | **yes, step by step** | the same four steps on the host (cloud mode allows Node): `python -m tests.progress_collect < docs/progress/scope.yaml > .progress/backend.json` (venv), `(cd frontend && node scripts/ui-markers.mjs) > .progress/ui.json`, `(cd frontend && UI_TESTED_OUT=<abs path>/.progress/ui-tested.json npx vitest run)`, `python3 scripts/progress/generate.py`. Run so on 2026-10-10 (`cloud/billing-runs-ui`) |
 | `make docs` | **yes, step by step** | `python -m tests.docs_collect > .docs/collected.json` (venv), then `python3 scripts/docs/generate.py`; only the intended file changed (2026-10-10) |
-| `make decisions-check` | yes | `python3 scripts/check-decisions.py` (standard library + git; the same command as the target) |
 | `make web-lint`, `make web-test` | **yes, on the host** | the container route needs `make web-install`, whose `npm ci` cannot reach the registry from inside a container ("Exit handler never called!"). `cloud-setup.sh` runs the same `npm ci` (`frontend/scripts/install-deps.sh`) on the host with Node 22; then `cd frontend && sh scripts/check-deps.sh && npm run lint` (= `make web-lint`) and `... && npm test` (= `make web-test`, both TZ runs), with `SPEC_DIR=../spec` (the container mounts `spec/` at `/spec`). Rehearsed in an Ubuntu 24.04 container (see "Setup"); **run in a real cloud session 2026-10-10**: the setup's `npm ci` worked behind the proxy, lint clean, 209/209 in both zones |
 | `make web-build` | yes | `cd frontend && SPEC_DIR=../spec npm run build` |
 | `make web-e2e` (with `make seed`) | **yes, by hand** (2026-10-10, 2/2) | no image, so the stack runs on the host: a throwaway database on the host PostgreSQL, `alembic upgrade head`, `python -m tests.seed` (it refuses any database host but `db`, so `127.0.0.1 db` goes into the container's `/etc/hosts` - container setup, not a repo change), `uvicorn app.main:app --port 8080`, `npm run build`, `API_URL=http://127.0.0.1:8080 npx vite preview`, then `npx playwright test --config <scratch config>`. The scratch config is the repo's with `baseURL: http://localhost:4173` and `launchOptions.executablePath` set to the pre-installed **headless shell** (`/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell`): `@playwright/test` 1.63 wants Chromium 1243, which cannot be downloaded here, and the full `/opt/pw-browsers/chromium` binary requests `/favicon.ico` (404, which fails the smoke's console check) where the official image's headless shell does not |
 | `make up`, `make smoke` | **no** | need the built `app` image |
 | `make deploy`, `make verify`, `make ssh`, `make tunnel`, `make remote` | **never** | no ssh, the VPS is out of bounds |
-| `.claude/hooks/test-guard.sh` | yes | the cases write absolute paths as `$CLAUDE_PROJECT_DIR` (the probe's one failure was a hard-coded workstation path, fixed); `@cloud` cases run with `CLAUDE_CODE_REMOTE=true`, `@remote-false` ones with `false`, all others with it removed, so the suite means the same here and on the workstation. Proven on the workstation with `CLAUDE_PROJECT_DIR=/home/user/bss` and with `CLAUDE_CODE_REMOTE=true` exported |
+| `.claude/hooks/test-guard.sh` | yes | `cloud-*` cases run with `CLAUDE_CODE_REMOTE=true`, all others with it removed, so the suite means the same here and on the workstation |
 
 ## The harness in a cloud session
 

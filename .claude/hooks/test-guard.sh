@@ -1,55 +1,20 @@
 #!/usr/bin/env bash
-# Runs the regression cases in guard-cases.txt through guard.sh, exactly as Claude Code
-# calls it (the tool call as JSON on stdin). Exit 0 if every case behaves as expected.
+# Runs guard-cases.txt through guard.sh as Claude Code calls it (JSON on stdin).
 # Called by scripts/pre-commit.sh whenever .claude/ changes.
 set -uo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-export CLAUDE_PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(cd "${here}/../.." && pwd)}"
-cases="${here}/guard-cases.txt"
-
-total=0
 failed=0
-while IFS= read -r line || [[ -n "${line}" ]]; do
-  [[ -z "${line}" || "${line}" == \#* ]] && continue
-  expected="${line%% *}"
-  command="${line#* }"
-  command="${command//\$CLAUDE_PROJECT_DIR/${CLAUDE_PROJECT_DIR}}"
-  # <expected>@cloud: the case runs in cloud mode (CLAUDE_CODE_REMOTE=true); every other
-  # case runs with CLAUDE_CODE_REMOTE removed, so the suite means the same on the
-  # workstation and in a cloud session (where Claude Code sets it for the hook's caller).
-  mode=(env -u CLAUDE_CODE_REMOTE)
-  if [[ "${expected}" == *@cloud ]]; then
-    mode=(env CLAUDE_CODE_REMOTE=true)
-    expected="${expected%@cloud}"
-  elif [[ "${expected}" == *@remote-false ]]; then # only the exact value "true" counts
-    mode=(env CLAUDE_CODE_REMOTE=false)
-    expected="${expected%@remote-false}"
-  fi
-  case "${expected}" in
-    allow-ml | block-ml)
-      command="${command//\\n/$'\n'}"
-      expected="${expected%-ml}"
-      ;;
-    allow | block) ;;
-    *)
-      echo "bad case (expected allow/block): ${line}" >&2
-      failed=$((failed + 1))
-      continue
-      ;;
-  esac
-  payload="$(python3 -c 'import json,sys; print(json.dumps({"tool_input": {"command": sys.argv[1]}}))' "${command}")"
-  printf '%s' "${payload}" | "${mode[@]}" "${here}/guard.sh" >/dev/null 2>&1
-  rc=$?
-  total=$((total + 1))
-  if [[ "${expected}:${rc}" != "allow:0" && "${expected}:${rc}" != "block:2" ]]; then
-    printf 'FAIL expected %s (%s), got exit %s: %s\n' "${expected}" "${mode[*]}" "${rc}" "${command}" >&2
+while IFS=$'\t' read -r expected command; do
+  [[ -z "${expected}" || "${expected}" == \#* ]] && continue
+  run=(env -u CLAUDE_CODE_REMOTE)
+  if [[ "${expected}" == cloud-* ]]; then run=(env CLAUDE_CODE_REMOTE=true); expected="${expected#cloud-}"; fi
+  python3 -c 'import json,sys; print(json.dumps({"tool_input": {"command": sys.argv[1]}}))' "${command}" |
+    "${run[@]}" "${here}/guard.sh" >/dev/null 2>&1
+  [[ $? == 2 ]] && got=block || got=allow
+  if [[ "${got}" != "${expected}" ]]; then
+    echo "FAIL: expected ${expected}, got ${got}: ${command}"
     failed=$((failed + 1))
   fi
-done <"${cases}"
-
-if ((failed > 0)); then
-  printf 'guard regression: %d of %d cases failed\n' "${failed}" "${total}" >&2
-  exit 1
-fi
-printf 'guard regression: all %d cases pass\n' "${total}"
+done <"${here}/guard-cases.txt"
+((failed == 0)) && echo "guard: all cases pass" || { echo "guard: ${failed} failed"; exit 1; }

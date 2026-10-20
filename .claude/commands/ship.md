@@ -1,14 +1,12 @@
 ---
-description: Lint, test, deploy to the VPS and confirm the remote instance is healthy
+description: Deploy the committed HEAD to the VPS and confirm the remote instance is healthy
 ---
 
-Run the full verification gate for this change:
+The commit was already linted and tested by the pre-commit hook - do not test again.
 
-1. `make lint` — fix anything it reports.
-2. `make test` — all tests must pass. If a test fails, read the output before editing code.
-3. `make deploy` — builds locally and ships to `vps-test`. Never build on the VPS.
-4. If the deploy script fails, read the remote logs it printed and report the root cause.
-   Do not retry the deploy more than once without changing something.
+1. Commit and push anything pending (the hook runs lint + test).
+2. `make deploy` - builds locally and ships to `vps-test`; never build on the VPS.
+3. If it fails, read the remote logs it printed and report the root cause. Retry at most
+   once without changing something (the VPS sometimes stalls new connections).
 
-Report the final state in three lines: image tag deployed, health status, and anything
-that needs the human's attention.
+Report in three lines: image tag deployed, health status, anything needing attention.

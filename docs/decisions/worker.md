@@ -6,15 +6,13 @@ issue. Both paths keep the billing ownership lock and account row locks. Monthly
 runs exclude offCycle documents when finding cycle anchors; settlement excludes
 credit consumed by cash payouts.
 
-Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
-needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
-proves nothing was lost in the move. Index: [README.md](README.md). The design note is
+Index: [README.md](README.md). The design note is
 [docs/stage4-design.md](../stage4-design.md); operations: [docs/billing-worker.md](../billing-worker.md).
 
 ## Billing worker (stage 4, in progress)
 
 `app/worker/`, from `docs/stage4-design.md` and the stage 4 planning decisions (Q1-Q14,
-["Next session"](../../CLAUDE.md#next-session)). What exists so far (slice b: b1, b2, b3; slices c, h, d, e):
+["Next session"](../status.md#next-session)). What exists so far (slice b: b1, b2, b3; slices c, h, d, e):
 
 - **Ownership** (`db.py`): one connection per worker (W1: autocommit, `connect_timeout`
   10, keepalives 30/10/3, `lock_timeout` 30s); the session advisory lock on it says who

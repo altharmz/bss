@@ -44,7 +44,6 @@ for test speed - not crash-safe; recover with `make clean && make up` ([decision
 | UI lint | `make web-lint` | tsc, eslint, prettier |
 | UI end-to-end | `make web-e2e` | Playwright on the built UI against the seeded local stack, read-only |
 | Generated docs | `make docs-check` | docs/api and docs/db match the code |
-| Decision records | `make decisions-check` | every decision and rule of the old CLAUDE.md is still in CLAUDE.md or [decisions/](decisions/README.md); their links resolve |
 
 ### In a cloud session
 
@@ -61,19 +60,20 @@ unverified until a local `make check` passes** (`docs/cloud.md`).
 - **Pre-commit** (`scripts/pre-commit.sh`, installed by `make hooks`): refuses the commit
   unless the working tree is exactly what is committed, then `make lint` and `make test`
   (plus `make web-lint` and `make web-test` when `frontend/` or `spec/` is staged); keeps a
-  full log of every run under `.git/pre-commit-logs/`. Skip deliberately with `git commit
-  --no-verify` ([decisions/harness.md](decisions/harness.md#pre-commit-hook)).
+  full log of every run under `.git/pre-commit-logs/`. Never skipped; it is the one local
+  test run of a development cycle ([decisions/harness.md](decisions/harness.md#development-cycle-and-gates)).
 - **Pre-push** (`scripts/pre-push.sh`): scans only the commits being pushed and refuses a
   bcrypt hash, an added `.env*` path (other than `.env.example`), a branch deletion or a
-  non-fast-forward. Never bypassed ([decisions/harness.md](decisions/harness.md#pre-push-hook)).
+  non-fast-forward. Never bypassed ([decisions/harness.md](decisions/harness.md#development-cycle-and-gates)).
 
 ## Deploy
 
 `make deploy` runs `scripts/deploy.sh`, the **only** script allowed to change anything on
-the VPS. `make verify` is the gate: `make check` (`lint`, `test` with hypothesis `ci`,
-`docs-check`, `decisions-check`, `web-lint`, `web-test`, `web-e2e`), then the deploy - it exits non-zero and
-prints remote logs when anything fails. `make check` alone is the same gate without the
-deploy (e.g. to verify a cloud branch before merging it).
+the VPS; `make verify` is the same. The commit was already tested by the pre-commit
+hook, so deploying does not test again; it exits non-zero and prints remote logs when
+anything fails. `make check` (`lint`, `test` with hypothesis `ci`, `docs-check`,
+`web-lint`, `web-test`, `web-e2e`) runs on demand - for a change that needs stronger
+testing, or a cloud branch before merging it.
 
 What `deploy.sh` does, in order:
 
@@ -143,21 +143,18 @@ repository).
 ## The agent harness
 
 Claude Code sessions on this repository run with guard rails against **agent mistakes,
-not a hostile agent** ([decisions/harness.md](decisions/harness.md#agent-guardrails-what-they-are-for)):
+not a hostile agent** ([decisions/harness.md](decisions/harness.md#the-guard)):
 
-- `.claude/settings.json`: `allow` (make, docker compose, read/edit of `app/`, `tests/`,
-  `frontend/`, plain pushes), `ask` (edits of `.claude/**`, compose files, `Makefile`,
-  `scripts/**`, `docs/progress/scope.yaml`), `deny` (reading or editing `.env*`, docker
-  prune and volume removal, `sudo`, Node tools on the host, edits under `design-ref/`).
-- `.claude/hooks/guard.sh` / `guard.py`: a quote-aware pattern matcher run before every
-  shell command - blocks reading secrets, destructive docker cleanups, anything touching
-  the VPN or its ports, shell writes to harness files, host Node, and force/delete/tag
-  pushes. Fails closed on commands it cannot tokenise. Regression cases:
-  `.claude/hooks/guard-cases.txt`, run by `.claude/hooks/test-guard.sh`.
+- `.claude/settings.json`: `allow` (make, docker compose, git commit/push, read/edit of
+  the sources), `deny` (reading or editing `.env*`, docker prune and volume removal,
+  `sudo`, pnpm/yarn/corepack, edits under `design-ref/`).
+- `.claude/hooks/guard.sh`: a short pattern matcher run before every shell command -
+  blocks reading secrets, destructive docker cleanups, anything touching the VPN or its
+  ports, build or privileged commands over ssh, skipping the git hooks, host Node, and
+  force/delete pushes. Cases: `.claude/hooks/guard-cases.txt`, run by
+  `.claude/hooks/test-guard.sh`.
 - `.claude/hooks/format.sh`: formats edited Python (ruff) and UI files (prettier) in
   containers.
-- **Approval rules**: commits need the human's OK; pushing an approved commit is allowed;
-  force, delete, mirror, prune and tag pushes are forbidden; cloud sessions push only to
-  `cloud/*` branches; changes to the Dockerfile, compose files, deploy script or data
-  model start with a plan; a blocked command is reported, never worked around (CLAUDE.md,
-  "Hard constraints", "Working style").
+- **Approval rules**: none for commit, push or deploy - the pre-commit hook's lint and
+  tests are the gate; cloud sessions push only to `cloud/*` branches; a data-model or
+  large design change starts with a plan (CLAUDE.md, "Working style").
