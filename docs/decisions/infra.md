@@ -134,6 +134,11 @@ would attach the prod container to both `lab` and `shared`).
   examples per property come from a profile selected by `HYPOTHESIS_PROFILE`: `dev` (50)
   for `make test` and the pre-commit hook, `ci` (200) for `make verify` (a target-specific
   variable in the Makefile). Plain `pytest` without the variable uses `dev`.
+  **Workers stay at `-n auto`** (one per core, 12 on the workstation): measured
+  2026-10-20, 12 workers already keep the CPU ~91% busy, and `-n 24` saturated it,
+  pushed the WSL VM into swap and made postgres fail the concurrent template migrations
+  with `out of shared memory` (its lock table). The `api` fixture's TestClient runs
+  inside `with`: one event-loop thread per test instead of one per request.
 - **The local postgres runs with `fsync=off`, `full_page_writes=off`,
   `synchronous_commit=off`** (`command:` of `db` in `compose.override.yaml`): every test
   clones and drops a database, and with fsync on each drop waits for a server-wide
