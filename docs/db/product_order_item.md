@@ -72,4 +72,4 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 
 ## Referenced by
 
-[`product`](product.md), [`product_offering_change`](product_offering_change.md), [`product_order_error_message`](product_order_error_message.md), [`product_status_change`](product_status_change.md)
+[`number_assignment`](number_assignment.md), [`product`](product.md), [`product_offering_change`](product_offering_change.md), [`product_order_error_message`](product_order_error_message.md), [`product_status_change`](product_status_change.md)

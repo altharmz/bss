@@ -8,7 +8,8 @@ and executable fixtures in N1; runtime slices follow. Numbers ship independently
 
 N1 development: the two pinned files are now vendored unchanged, with executable
 contract fixtures, provenance checks and 36 planned/absent endpoint records. No
-number inventory or prepaid runtime exists yet. See the
+prepaid runtime exists yet. N2 adds number persistence only; inventory routes and
+order integration follow in N3/N4. See the
 [implementation record](decisions/prepaid.md#n1-pinned-contracts-and-executable-fixtures-2026-10-20).
 
 ## Contract findings

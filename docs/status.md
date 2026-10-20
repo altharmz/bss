@@ -7,6 +7,13 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**N2 subscriber-number persistence (2026-10-20).** Migration `0032` adds canonical
+number inventory and effective-dated, order-linked assignment history, with overlap
+exclusions for number/product, cancelled audit versions and a downgrade barrier.
+Existing product and financial behavior is unchanged. Next: N3 inventory API;
+orders/UI follow in N4/N5. Deployment awaits the independent number milestone and
+separate approval. Details: [decision record](decisions/prepaid.md#n2-subscriber-number-persistence-2026-10-20).
+
 **Subscriber numbers and prepaid design finalized (2026-10-20).** The human requested
 design completion, choosing remaining policies according to TMF, and authorized its
 commit/push. Development starts in a separate session: [scope](prepaid-plan.md),
@@ -16,9 +23,8 @@ contracts are vendored unchanged, 24 contract fixtures pass, and all 36 new endp
 are recorded as planned/absent. Three full backend passes (1,433 each, dev/CI/dev),
 frontend checks, provenance and documentation checks pass; progress is regenerated.
 Validation detail and the cached scope-label correction are in the decision record.
-Next: subscriber-number runtime as an independent release. No number/prepaid runtime
-or migration exists yet. The human authorized committing/pushing N1; no deployment
-is authorized or performed for this slice.
+At N1, no number/prepaid runtime or migration existed. The human authorized
+committing/pushing N1; no deployment is authorized or performed for that slice.
 
 **Current release (2026-10-20): sidebar count and product charge periods.**
 The financial accounts sidebar now shows its total. New offering supports daily,

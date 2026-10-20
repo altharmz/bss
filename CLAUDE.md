@@ -92,7 +92,8 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
 - **Deployed:** `bss-app:7ad101e`, migrations through `0030`. On `master`, not yet
   deployed: UI refunds/on-demand bill (`05efa54`), the RUB->USD label migration `0031`,
   the prepaid design and vendored contracts (`33dd2f4`, `ad4297e`).
-- **Next:** subscriber-number runtime as an independent release - [scope](docs/prepaid-plan.md),
+- **Next:** N3 subscriber-number inventory API (N2 persistence is implemented; migration
+  `0032` is not deployed), then the independent number release - [scope](docs/prepaid-plan.md),
   [hand-off](docs/prepaid-implementation.md), [decision](docs/decisions/prepaid.md).
 - **Backlog:** UI vs MCP gap slices 2-4 ([plan](docs/ui-mcp-gap-plan.md)); confirm the
   `~/bss/DEPLOYED` marker on the next deploy; progress drift check + per-item deployed

@@ -225,10 +225,12 @@ log "Starting the app"
 rssh "cd ${REMOTE_DIR} && \
   IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} up -d --remove-orphans"
 
-# Both services must go healthy: the app (/healthz) and the billing worker (its liveness
-# file, touched after its first wake-up). One unhealthy service ends the wait at once.
+# All three must go healthy: the app (/healthz), the billing worker (its liveness file,
+# touched after its first wake-up) and mcp. One unhealthy service ends the wait at once.
+# 240 s = the longest start period in compose.prod.yaml (app, 180 s) + one 60 s probe
+# interval: a container ready just after its start period is seen only at the next probe.
 log "Waiting for the app, worker and mcp containers to become healthy"
-deadline=$(( SECONDS + 90 ))
+deadline=$(( SECONDS + 240 ))
 declare -A status=([app]="" [worker]="" [mcp]="")
 while (( SECONDS < deadline )); do
   for svc in app worker mcp; do

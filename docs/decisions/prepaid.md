@@ -79,3 +79,33 @@ renderer passes. The generated reports show all 36 new operations unimplemented,
 untested and with deployment unknown. The human authorized committing/pushing N1.
 No runtime code, migration or deployment is included in N1. Next is subscriber-number
 runtime implementation.
+
+## N2: subscriber-number persistence (2026-10-20)
+
+Migration `0032` adds `subscriber_number` and `number_assignment`; it does not
+change existing products or financial rows. Numbers use unique canonical E.164
+digits and the fixed `msisdn` specification. Administrative states copy the full
+TMF639 enum; the inventory API will restrict writes to lock/unlock in N3.
+
+Assignments store explicit start/release business dates and generate their half-open
+`daterange`. GiST exclusions protect both number and product against overlap,
+including future claims. Same-day empty ranges retain audit without claiming dates.
+Cancelled versions carry a cancellation instant/item and stay outside exclusions;
+restoring a conflicting version is rejected by the same constraint. Assigning,
+ending and cancelling items have foreign keys, and a unique identity sequence orders
+audit insertion (not transaction commits). Release and cancellation metadata must
+be complete. Quarantine at acceptance is nonnegative; checks under number locks
+using current configuration belong to N4, rather than a time-dependent SQL constraint.
+
+History prevents deleting referenced numbers/products/items. Downgrade refuses any
+retained number inventory or assignment history. No route, order behavior or prepaid
+account mode is enabled by N2. N3 is next; deployment remains at the independent
+subscriber-number milestone after N6 and requires its separate approval.
+
+Validation: the full backend run passed 1,450 tests with one failure in the currency
+migration regression, which upgraded to `head` and expected an unchanged global FK
+list. Pinning that test to its subject revision `0031` preserves its exact comparison;
+the corrected test passes. All 18 number persistence tests also pass separately.
+The full run includes the database-owner NOSUPERUSER upgrade/downgrade proof.
+Lint/format checks, documentation generation and whitespace checks pass. Full-run
+log: `/tmp/bss-n2-test.log`. No second full run was needed for the test-only correction.

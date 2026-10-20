@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0031**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0032**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -26,6 +26,8 @@ PostgreSQL schema at Alembic head **0031**, read from `pg_catalog` of a throwawa
 | [`product`](product.md) | inventory | SID Product (TMF637 product): an instance of an offering on a billing account. Written only by orders; billable on start_date <= d < termination_date. |
 | [`product_offering_change`](product_offering_change.md) | inventory | TMF622 modify items: the product's offering from change_date on (billed prorated). The offering on day d is the latest change on or before d, else product.product_offering_id. |
 | [`product_status_change`](product_status_change.md) | inventory | TMF622 modify items with product.status: the product is suspended (or active again) from change_date on. Billing does not read it. |
+| [`subscriber_number`](subscriber_number.md) | inventory | TMF639 LogicalResource inventory: canonical E.164 digits, built-in msisdn specification. |
+| [`number_assignment`](number_assignment.md) | inventory | Order-owned number claims; half-open business dates, retained cancelled audit versions. |
 | [`billing_run`](billing_run.md) | billing | One daily billing run per date (ours, not TMF). Only a billing run writes ABRs and bills; the worker's bookkeeping lives here (trigger, attempt, failure_kind). |
 | [`applied_customer_billing_rate`](applied_customer_billing_rate.md) | billing | SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recurring charge for the billable days of one cycle period, or the one refund of such a charge. Written only by a billing run. |
 | [`customer_bill`](customer_bill.md) | billing | SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every unbilled ABR of the account whose run date is <= the bill date. Bills of one account never overlap. |
@@ -77,10 +79,12 @@ flowchart LR
     product_order_error_message[product_order_error_message]
     cancel_product_order[cancel_product_order]
   end
-  subgraph area_inventory["Inventory (TMF637)"]
+  subgraph area_inventory["Inventory (TMF637, TMF639)"]
     product[product]
     product_offering_change[product_offering_change]
     product_status_change[product_status_change]
+    subscriber_number[subscriber_number]
+    number_assignment[number_assignment]
   end
   subgraph area_billing["Billing and payments (TMF678, TMF676)"]
     billing_run[billing_run]
@@ -145,6 +149,11 @@ flowchart LR
   event_delivery -->|"event_id"| event
   event_delivery -->|"subscription_id"| event_subscription
   financial_account -->|"party_id"| party
+  number_assignment -->|"assigned_by_item_id"| product_order_item
+  number_assignment -->|"cancelled_by_item_id"| product_order_item
+  number_assignment -->|"ended_by_item_id"| product_order_item
+  number_assignment -->|"product_id"| product
+  number_assignment -->|"subscriber_number_id"| subscriber_number
   offering_category -->|"category_id"| category
   offering_category -->|"offering_id"| product_offering
   party_account -->|"financial_account_id, party_id"| financial_account
@@ -470,7 +479,7 @@ erDiagram
 
 Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product`](product.md), [`product_offering`](product_offering.md), [`product_offering_price`](product_offering_price.md).
 
-## Inventory (TMF637)
+## Inventory (TMF637, TMF639)
 
 ```mermaid
 erDiagram
@@ -510,6 +519,34 @@ erDiagram
     uuid changed_by_item_id FK
     timestamptz applied_at
   }
+  subscriber_number {
+    uuid id PK
+    timestamptz created_at
+    timestamptz updated_at
+    text value
+    resource_administrative_state_type administrative_state
+    text resource_specification_id
+    text name
+    text description
+    jsonb attrs
+    jsonb tmf_meta
+  }
+  number_assignment {
+    uuid id PK
+    bigint audit_sequence
+    timestamptz created_at
+    timestamptz updated_at
+    uuid subscriber_number_id FK
+    uuid product_id FK
+    uuid assigned_by_item_id FK
+    uuid ended_by_item_id FK
+    date effective_from
+    date released_on
+    daterange valid_for
+    integer quarantine_days
+    timestamptz cancelled_at
+    uuid cancelled_by_item_id FK
+  }
   billing_account {
     uuid id PK
   }
@@ -520,14 +557,19 @@ erDiagram
     uuid id PK
   }
   billing_account ||--o{ product : "billing_account_id"
+  product ||--o{ number_assignment : "product_id"
   product ||--o{ product_offering_change : "product_id"
   product ||--o{ product_status_change : "product_id"
   product_offering ||--o{ product : "product_offering_id"
   product_offering ||--o{ product_offering_change : "product_offering_id"
+  product_order_item |o--o{ number_assignment : "cancelled_by_item_id"
+  product_order_item |o--o{ number_assignment : "ended_by_item_id"
   product_order_item |o--o{ product : "terminated_by_item_id"
+  product_order_item ||--o{ number_assignment : "assigned_by_item_id"
   product_order_item ||--o{ product : "created_by_item_id"
   product_order_item ||--o{ product_offering_change : "changed_by_item_id"
   product_order_item ||--o{ product_status_change : "changed_by_item_id"
+  subscriber_number ||--o{ number_assignment : "subscriber_number_id"
 ```
 
 Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product_order_item`](product_order_item.md), [`product_offering`](product_offering.md).
@@ -885,6 +927,7 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 | `product_order_state_type` | `acknowledged`, `rejected`, `pending`, `held`, `inProgress`, `cancelled`, `completed`, `failed`, `partial`, `assessingCancellation`, `pendingCancellation`, `draft`, `inProgress.accepted` | [`product_order.state`](product_order.md) |
 | `product_status_type` | `created`, `pendingActive`, `cancelled`, `active`, `pendingTerminate`, `terminated`, `suspended`, `aborted` | [`product.status`](product.md), [`product_order_item.product_status`](product_order_item.md), [`product_status_change.status`](product_status_change.md) |
 | `recurring_charge_period_type` | `monthly` | - |
+| `resource_administrative_state_type` | `locked`, `unlocked`, `shuttingDown` | [`subscriber_number.administrative_state`](subscriber_number.md) |
 | `worker_request_kind` | `catchUp`, `retry` | [`worker_request.kind`](worker_request.md) |
 
 Every table except `billing_run_account` has the audit columns `id` (uuid, `gen_random_uuid()`), `created_at` and `updated_at` (database `now()`; a `BEFORE UPDATE` trigger calling `set_updated_at()` maintains `updated_at`). The extension `btree_gist` backs the exclusion constraints.

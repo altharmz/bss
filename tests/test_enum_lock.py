@@ -14,6 +14,10 @@ SPEC_DIR = Path(__file__).resolve().parent.parent / "spec"
 
 # Postgres enum type -> (spec file, schema name)
 TMF_ENUMS = {
+    "resource_administrative_state_type": (
+        "TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml",
+        "ResourceAdministrativeStateType",
+    ),
     "customer_bill_on_demand_state_type": (
         "TMF678-CustomerBill-v5.0.0.oas.yaml",
         "CustomerBillOnDemandStateType",
@@ -60,7 +64,7 @@ def test_tmf_enums_match_spec(db_conn):
         assert actual, f"enum type {type_name} does not exist"
         assert actual == expected, f"{type_name} differs from {filename}#{schema}"
         compared += 1
-    assert compared == 6
+    assert compared == 7
 
 
 def test_every_spec_file_is_present():

@@ -111,8 +111,10 @@ would attach the prod container to both `lab` and `shared`).
     after 3 probes, ~3 min. On the VPS (`compose.prod.yaml`) the app's start period is
     180 s and mcp's 120 s: both start slower than 30 s there (0.5 / 0.25 CPU, starting
     together), and after the start period the next probe comes only 60 s later - past
-    deploy.sh's 90 s wait (2026-10-18: a deploy failed with the app "starting" and its
-    first passing probe just after the wait).
+    deploy.sh's old 90 s wait (2026-10-18: a deploy failed with the app "starting" and its
+    first passing probe just after the wait; 2026-10-20: the same with mcp still
+    probing its routes at startup). deploy.sh now waits 240 s = the longest start
+    period (180 s) + one probe interval (60 s).
   - Proven locally (2026-10-05): the app server killed (port still listening) -> probe
     exit 142 (read timeout), `unhealthy` after 3 probes, healthy 2.7 s after a restart;
     `/healthz` returning 500 -> exit 1, `unhealthy`, healthy again at the next probe once

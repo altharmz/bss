@@ -74,7 +74,8 @@ def test_0031_relabels_existing_money_atomically(temp_db_url):
             SELECT conname, condeferrable, condeferred FROM pg_constraint
             WHERE contype = 'f' ORDER BY conname
         """).fetchall()
-    command.upgrade(cfg, "head")
+    # Compare FK timing across this migration alone; later migrations may add FKs.
+    command.upgrade(cfg, "0031")
     with psycopg.connect(temp_db_url) as conn:
         assert conn.execute(
             "SELECT currency FROM billing_account ORDER BY currency"

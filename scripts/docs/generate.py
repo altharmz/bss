@@ -152,7 +152,8 @@ AREAS = {
         "product_order_error_message",
         "cancel_product_order",
     ),
-    "inventory": ("product", "product_offering_change", "product_status_change"),
+    "inventory": ("product", "product_offering_change", "product_status_change",
+                  "subscriber_number", "number_assignment"),
     "billing": (
         "billing_run",
         "applied_customer_billing_rate",
@@ -172,7 +173,7 @@ AREA_TITLES = {
     "party": "Party, customer, account (TMF632, TMF629, TMF666)",
     "catalog": "Catalog (TMF620)",
     "ordering": "Ordering (TMF622)",
-    "inventory": "Inventory (TMF637)",
+    "inventory": "Inventory (TMF637, TMF639)",
     "billing": "Billing and payments (TMF678, TMF676)",
     "worker": "Billing worker (ours)",
     "events": "Event notifications (TMF hubs)",
