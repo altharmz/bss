@@ -13,6 +13,12 @@ Downgrade keeps USD labels because original USD and renamed RUB cannot be distin
 Design references and past migrations remain immutable. Test examples use USD, with
 GBP replacing previous USD examples where a distinct second currency is needed.
 
+The first deployment rolled back because recorded refunds reject all updates.
+The human approved correcting `0031` after it reached master: the migration disables
+only `refund.refund_immutable` within its transaction and restores it before commit.
+The regression fixture includes a payout and checks both its unchanged amount and
+the restored rejection of subsequent edits.
+
 Refund/bill-delivery milestone (2026-10-16): the balance rule below is extended by
 subtracting completed cash payouts (`refund`), separately from negative refund ABRs.
 On-demand bills are also written only by the billing owner, from posted ABRs.

@@ -6,10 +6,11 @@ from datetime import date
 from decimal import Decimal
 
 import psycopg
+import pytest
 from alembic.config import Config
 
 from alembic import command
-from app.repository import billing
+from app.repository import billing, payments
 from tests import factories
 
 
@@ -23,6 +24,22 @@ def test_0031_relabels_existing_money_atomically(temp_db_url):
         world = factories.World(offering, account, product, factories.run(conn))
         factories.charge(conn, world, factories.days(date(2026, 1, 1), date(2026, 2, 1)))
         factories.account(conn, currency="EUR")
+        payments.insert_payment(
+            conn,
+            billing_account_id=account["id"],
+            currency="RUB",
+            amount=Decimal("20.00"),
+            received_at=factories.NOW,
+            payment_method="cash",
+        )
+        conn.execute(
+            "WITH payout AS ("
+            " INSERT INTO refund (billing_account_id, currency, amount, refunded_at, method_name)"
+            " VALUES (%s, 'RUB', 10, now(), 'cash') RETURNING id"
+            ") INSERT INTO refund_source (refund_id, billing_account_id, payment_id, amount)"
+            " SELECT payout.id, p.billing_account_id, p.id, 10 FROM payout, payment p",
+            (account["id"],),
+        )
         bill = billing.insert_bill(
             conn,
             billing_account_id=account["id"],
@@ -74,6 +91,12 @@ def test_0031_relabels_existing_money_atomically(temp_db_url):
         assert details["paymentPlan"][0]["totalAmount"] == {"unit": "USD", "value": 123.45}
         assert details["description"] == "RUB"
         assert details["other"] == {"unit": "EUR", "value": 5}
+        assert conn.execute("SELECT currency, amount FROM refund").fetchone() == (
+            "USD",
+            Decimal("10.00"),
+        )
+        with pytest.raises(psycopg.errors.CheckViolation, match="immutable"), conn.transaction():
+            conn.execute("UPDATE refund SET amount = amount + 1")
         document = conn.execute("SELECT bill_document FROM customer_bill").fetchone()[0]
         assert json.loads(base64.b64decode(document), parse_float=Decimal) == {
             "amountDue": {"unit": "USD", "value": Decimal("100.00")}

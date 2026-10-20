@@ -14,6 +14,9 @@ depends_on = None
 
 def upgrade() -> None:
     conn = op.get_bind()
+    # This one-time relabel must include immutable recorded payouts. The table
+    # lock and transactional DDL keep the exception confined to this migration.
+    conn.exec_driver_sql("ALTER TABLE refund DISABLE TRIGGER refund_immutable")
     # Account currencies participate in composite foreign keys. Defer their checks
     # together, then restore each constraint's original timing before returning.
     constraints = conn.exec_driver_sql("""
@@ -88,6 +91,7 @@ def upgrade() -> None:
         ) if deferrable else "NOT DEFERRABLE"
         conn.exec_driver_sql(f"ALTER TABLE {table} ALTER CONSTRAINT {quote(name)} {timing}")
     conn.exec_driver_sql("DROP FUNCTION pg_temp.usd_labels(jsonb)")
+    conn.exec_driver_sql("ALTER TABLE refund ENABLE TRIGGER refund_immutable")
 
 
 def downgrade() -> None:
