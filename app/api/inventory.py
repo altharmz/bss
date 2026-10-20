@@ -138,6 +138,14 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
         *(c["changed_by_item_id"] for c in products.status_changes_of(conn, row["id"])),
         row["terminated_by_item_id"],
     ]
+    if row.get("requires_msisdn"):
+        number_items = conn.execute(
+            """SELECT DISTINCT assigned_by_item_id
+            FROM number_assignment WHERE product_id = %s AND cancelled_at IS NULL
+            AND assigned_by_item_id <> %s ORDER BY assigned_by_item_id""",
+            (row["id"], row["created_by_item_id"]),
+        ).fetchall()
+        item_ids.extend(item[0] for item in number_items)
     terminated = row["termination_date"]
     # creationDate: the creating order's order_date - the injected clock of the request
     # that wrote the product (products are written only by orders), not created_at
@@ -199,13 +207,32 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
                     unit_of_measure=price["details"].get("unitOfMeasure"),
                 )
             ]
+    details = dict(row["details"])
+    if row.get("requires_msisdn"):
+        claim = conn.execute(
+            """SELECT subscriber_number_id FROM number_assignment
+            WHERE product_id = %s AND cancelled_at IS NULL AND valid_for @> %s::date""",
+            (row["id"], max(today, row["start_date"])),
+        ).fetchone()
+        details["realizingResource"] = (
+            []
+            if claim is None
+            else [
+                {
+                    "id": str(claim[0]),
+                    "@type": "ResourceRef",
+                    "@referredType": "LogicalResource",
+                    "href": f"/tmf-api/resourceInventory/v5/resource/{claim[0]}",
+                }
+            ]
+        )
     return without_nulls(
         {
             "id": str(row["id"]),
             "href": product_href(row["id"]),
             "name": row["name"],
             "status": row["status"],
-            **row["details"],
+            **details,
             "creationDate": utc(creating_order["order_date"]),
             "orderDate": utc(creating_order["order_date"]),
             "startDate": from_billing_date(row["start_date"]),
@@ -245,12 +272,13 @@ def list_products(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
         filters={
             "billingAccount.id": ("billing_account_id", listing.as_uuid),
             "status": ("status", listing.as_str),
+            "realizingResource.id": ("realizingResource.id", listing.as_uuid),
         },
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
         rows, total = products.list_products(
-            conn, where=query.where, offset=query.offset, limit=query.limit
+            conn, where=query.where, offset=query.offset, limit=query.limit, today=clock.today()
         )
         today = clock.today()
         items = [product_body(conn, row, today) for row in rows]
@@ -476,6 +504,8 @@ def patch_product(
         if current is None:
             raise not_found("product", product_id)
         before = product_body(conn, current, today)
+        if current.get("requires_msisdn") and "realizingResource" in documents:
+            raise conflict("realizingResource: change subscriber numbers through a product order")
         check_server_set(server_set, before)
         _check_fixed(data, current)
         old = emit.before(conn, API, "product", lambda: before)

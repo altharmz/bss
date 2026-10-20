@@ -22,6 +22,25 @@ def number(conn, value="12025550123"):
     ).fetchone()[0]
 
 
+def test_number_requirement_migration_preserves_existing_products(temp_db_url):
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0032")
+    with psycopg.connect(temp_db_url) as conn:
+        w = world(conn)
+        before = conn.execute("SELECT row_to_json(product) FROM product").fetchone()[0]
+    command.upgrade(cfg, "0033")
+    with psycopg.connect(temp_db_url) as conn:
+        after = conn.execute("SELECT row_to_json(product) FROM product").fetchone()[0]
+        assert after.pop("requires_msisdn") is False
+        assert after == before
+        conn.execute("UPDATE product SET requires_msisdn = true WHERE id = %s", (w.product["id"],))
+    with pytest.raises(Exception, match="number-requiring products"):
+        command.downgrade(cfg, "0032")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute("UPDATE product SET requires_msisdn = false")
+    command.downgrade(cfg, "0032")
+
+
 def assignment(conn, number_id, prod, start=date(2026, 1, 1), end=None, cancelled=False):
     return conn.execute(
         """INSERT INTO number_assignment

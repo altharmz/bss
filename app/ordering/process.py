@@ -39,6 +39,7 @@ import psycopg
 
 from app.config import settings
 from app.events import emit
+from app.ordering import numbers as number_orders
 from app.ordering.states import item_transition, order_transition
 from app.repository import billing, catalog, orders, parties, products
 from app.repository._sql import Row
@@ -282,6 +283,12 @@ def _process(
     # an open state, or it would collide with the open delete it is rejected for.
     quotes: dict[str, Row] = {}
     problems = _validate(conn, request, account, start, today, locked, quotes)
+    number_rows = number_orders.lock(
+        conn, named, [number_orders.references(i) for i in request.items]
+    )
+    problems += [
+        Problem(*p) for p in number_orders.validate(conn, request, locked, number_rows, start)
+    ]
     failing = {problem.item_id for problem in problems}
 
     def initial(item: ItemRequest) -> str:
@@ -319,7 +326,9 @@ def _process(
     if problems:
         _reject(conn, order, rows, problems, now)
     else:
+        old_numbers = number_orders.before(conn, number_rows, today)
         _execute(conn, order, request, rows, start, today, locked, now)
+        number_orders.changed(conn, number_rows, old_numbers, now, today)
     return order["id"]
 
 
@@ -361,6 +370,17 @@ def _item_problems(
     if item.action == "modify" and item.product_status is not None:
         return _status_problems(conn, item, account, start, locked)
     if item.action == "modify":
+        if item.product_offering_id is None and number_orders.references(item) is not None:
+            product = locked[item.product_id]
+            if product["billing_account_id"] != account["id"]:
+                return [("productOfOtherAccount", "the product belongs to another billing account")]
+            if product["status"] in ENDED or (
+                product["termination_date"] is not None and start >= product["termination_date"]
+            ):
+                return [("productAlreadyEnded", "the product has ended")]
+            if start < product["start_date"]:
+                return [("productNotStarted", "number change precedes product start")]
+            return []
         return _modify_problems(conn, item, account, start, today, locked, quotes)
     if item.action == "add":
         return _add_problems(conn, item, account, start, quotes)
@@ -568,6 +588,11 @@ def _delete_problems(
         return [("productOfOtherAccount", "the product belongs to another billing account")]
     if product["status"] in ENDED or product["termination_date"] is not None:
         return [("productAlreadyEnded", f"the product is already {product['status']}")]
+    if any(
+        c["effective_from"] > start and c["assigned_by_item_id"] != product["created_by_item_id"]
+        for c in number_orders.claims(conn, [product["id"]])
+    ):
+        return [("openModifyItem", "cancel the future number change before ending this product")]
     if orders.open_delete_items(conn, product["id"]):
         return [("openDeleteItem", "another order is already deleting this product")]
     waiting = products.pending_status_change(conn, product["id"])
@@ -628,6 +653,9 @@ def _execute(
         progress = item_transition(row["state"], "inProgress")
         orders.set_order_item_state(conn, row["id"], progress)
         if item.action == "add":
+            new_product = item.new_product or products.NewProduct(
+                details=(item.details or {}).get("product")
+            )
             product = products.create_product(
                 conn,
                 billing_account_id=order["billing_account_id"],
@@ -637,9 +665,10 @@ def _execute(
                 # a future start stays `created` until the stage 4 worker activates it;
                 # billing is driven by the dates, not by this status
                 status="active" if start <= today else "created",
-                new=item.new_product,
+                new=new_product,
             )
             orders.set_order_item_product(conn, row["id"], product["id"])
+            number_orders.execute(conn, item, product["id"], row["id"], start, now)
             emit.product(conn, product["id"], "Create", at=now, today=today)
         elif item.action == "noChange":
             pass  # nothing to do: the product stays as it is
@@ -656,19 +685,22 @@ def _execute(
             if start <= today:
                 emit.product(conn, item.product_id, "StateChange", at=now, today=today)
         elif item.action == "modify":
-            products.change_offering(
-                conn,
-                item.product_id,
-                change_date=start,
-                product_offering_id=item.product_offering_id,
-                changed_by_item_id=row["id"],
-                # in effect today: announced now; else by the worker's run of the day
-                announced_at=now if start <= today else None,
-            )
+            if item.product_offering_id is not None:
+                products.change_offering(
+                    conn,
+                    item.product_id,
+                    change_date=start,
+                    product_offering_id=item.product_offering_id,
+                    changed_by_item_id=row["id"],
+                    # in effect today: announced now; else by the worker's run of the day
+                    announced_at=now if start <= today else None,
+                )
+            number_orders.execute(conn, item, item.product_id, row["id"], start, now)
             if start <= today:
                 emit.product(conn, item.product_id, "AttributeValueChange", at=now, today=today)
         else:
             product = locked[item.product_id]
+            number_orders.execute(conn, item, product["id"], row["id"], start, now)
             if product["start_date"] > today and start <= product["start_date"]:
                 # never activated: cancelled, with zero billable days
                 products.terminate_product(

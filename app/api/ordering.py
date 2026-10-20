@@ -17,6 +17,7 @@ import copy
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, Literal
+from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Request, Response
@@ -147,6 +148,8 @@ class ItemProduct(ProductRef):
     (docs/decisions/tmf-api.md#suspension-2026-10-19)."""
 
     status: Literal["suspended", "active"] | None = None
+    id: UUID | None = None
+    realizing_resource: list[dict[str, Any]] | None = None
 
 
 class OrderItemIn(ItemDocuments):  # type: ignore[misc,valid-type]
@@ -281,10 +284,12 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
     if item.action == "add":
         if item.product_offering is None:
             raise unprocessable(f"item {item.id}: an add item needs productOffering")
-        if item.product is not None:
+        if item.product is not None and (
+            item.product.id is not None or item.product.status is not None
+        ):
             raise unprocessable(f"item {item.id}: an add item cannot carry a product")
     elif item.action in ("delete", "noChange"):
-        if item.product is None:
+        if item.product is None or item.product.id is None:
             raise unprocessable(f"item {item.id}: a {item.action} item needs product")
         if item.product_offering is not None:
             raise unprocessable(
@@ -295,11 +300,33 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
                 f"item {item.id}: product.status is a modify item's (it suspends or resumes"
                 " the product)"
             )
-    elif item.product is None or (item.product_offering is None) == (item.product.status is None):
-        raise unprocessable(
-            f"item {item.id}: a modify item needs product and either productOffering (the"
-            " offering it changes to) or product.status (suspended or active), not both"
+        if item.product.realizing_resource is not None:
+            raise unprocessable("realizingResource is writable only on add or modify items")
+    elif (
+        item.product is None
+        or item.product.id is None
+        or sum(
+            (
+                item.product_offering is not None,
+                item.product.status is not None,
+                item.product.realizing_resource is not None,
+            )
         )
+        != 1
+    ):
+        raise unprocessable(
+            f"item {item.id}: a modify item needs product and exactly one of productOffering,"
+            " product.status (suspended or active), or product.realizingResource"
+        )
+    if item.product and item.product.realizing_resource is not None:
+        values, problems = specschema.check(
+            API, "Product_FVO", {"realizingResource": item.product.realizing_resource}
+        )
+        if problems:
+            from app.api.errors import problems_error
+
+            raise problems_error(problems)
+        documents = {**documents, "product": values}
     return ItemRequest(
         item_id=item.id,
         action=item.action,
@@ -404,7 +431,14 @@ def _item_body(
         body["product"] = ref("Product", product_href(row["product_id"]), row["product_id"])
         if row["product_status"] is not None:
             body["product"]["status"] = row["product_status"]
-    body |= row["details"]
+    extra = dict(row["details"])
+    if "product" in extra:
+        body["product"] = {
+            **extra.pop("product"),
+            **body.get("product", {}),
+            "@type": "Product",
+        }
+    body |= extra
     nested = children.get(row["id"], [])
     if nested:
         body["productOrderItem"] = [_item_body(conn, item, account, children) for item in nested]

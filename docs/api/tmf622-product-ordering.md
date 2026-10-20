@@ -32,6 +32,15 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF622-P
 
 ## Behaviour and deviations
 
+**Subscriber numbers (N4).** Specifications referencing built-in `msisdn` require one
+`product.realizingResource` ResourceRef on add items. The requirement is snapshotted
+on the product. A modify item can carry that list instead of an offering or status
+to change its number from `requestedStartDate`. Unknown, locked, overlapping or
+quarantined numbers reject the order; future starts reserve the entire interval.
+Delete releases at effective termination. Cancellation retains audit and refuses a
+restoration conflicting with another accepted claim (409, atomically).
+Number changes do not change prices or billing. See `tests/test_number_orders.py`.
+
 Completed add items expose `itemPrice` and `itemTotalPrice` as snapshots of their
 quoted full charge-interval fee (`0008`); `orderTotalPrice` sums fees with the same
 interval and returns separate entries when intervals differ. These are not
@@ -73,9 +82,10 @@ is `done` - `app/ordering/cancel.py`; `tests/test_api_order_cancel.py`
 malformed JSON, an unknown attribute or an empty `productOrderItem[]` (400); a missing
 mandatory field, a reference to a billing account, offering or product that does not
 exist, duplicate item ids (nested ones included), a product in two items, `quantity`
-other than 1, an add item without `productOffering` (or with a `product`), a delete or
+other than 1, an add item without `productOffering` (or with `product.id`/status), a delete or
 noChange item without `product` (or with a `productOffering`), a modify item without
-`product`, or with both or neither of `productOffering` and `product.status`,
+`product`, or without exactly one of `productOffering`, `product.status` and
+`product.realizingResource`,
 `product.status` on another action, an order with no account
 to bill (none sent, none derivable), a document the spec's schema refuses, an item
 relationship to an item not in the order (422) - `app/api/ordering.py`

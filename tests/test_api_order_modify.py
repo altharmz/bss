@@ -74,7 +74,8 @@ def test_a_modify_item_needs_product_and_offering(api, shop):
     for item in (no_offering, no_product):
         response = api.post(apidata.ORDER, apidata.order_body(acc, item))
         assert response.status_code == 422, response.text
-        assert "needs product and either productOffering" in response.json()["message"]
+        assert "needs product and exactly one of productOffering" in response.json()["message"]
+        assert "product.realizingResource" in response.json()["message"]
 
 
 def test_rejections(api, shop):

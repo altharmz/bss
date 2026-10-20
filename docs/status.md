@@ -7,6 +7,13 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**N4 subscriber-number orders (2026-10-20).** Add/modify/delete/cancel orders now
+manage effective-dated number claims, including future reservations and quarantine.
+Migration `0033` snapshots the requirement for new products and permits number-only
+modify items. TMF637 exposes effective resources and lookup by realizingResource.id;
+existing unchecked resource documents remain writable. Next: N5 UI, then N6 release
+validation and separate deployment approval. Details: [decision](decisions/prepaid.md#n4-subscriber-numbers-through-orders-2026-10-20).
+
 **N3 subscriber-number inventory (2026-10-20).** TMF639 resource CRUD and hubs,
 clock-derived allocation state, transactional events and eight MCP tools are
 implemented. Number identity/specification are immutable; only never-assigned

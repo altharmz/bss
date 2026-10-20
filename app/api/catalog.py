@@ -397,13 +397,26 @@ def patch_specification(
     changes = columns(data, exclude=_document_fields(SPEC_DOCUMENTS))
     with tx() as conn:
         uid = parse_id("productSpecification", spec_id)
-        current = catalog.get_product_specification(conn, uid)
+        current = catalog.lock_product_specification(conn, uid)
         if current is None:
             raise not_found("productSpecification", spec_id)
         if data.lifecycle_status is not None:
             _check_lifecycle("specification", current["lifecycle_status"], data.lifecycle_status)
         if documents:
             changes["details"] = merge_documents(current["details"], documents)
+            from app.ordering.numbers import required
+
+            if required(current["details"]) != required(changes["details"]):
+                ordered = conn.execute(
+                    """SELECT 1 FROM product_order_item i JOIN product_offering o
+                    ON o.id = i.product_offering_id
+                    WHERE o.product_specification_id = %s LIMIT 1""",
+                    (uid,),
+                ).fetchone()
+                if ordered:
+                    raise conflict(
+                        "resourceSpecification: the msisdn requirement cannot change after ordering"
+                    )
         old = emit.before(conn, API, "productSpecification", lambda: specification_body(current))
         row = catalog.update_product_specification(conn, uid, changes)
         new = specification_body(with_meta(conn, "product_specification", row, data))

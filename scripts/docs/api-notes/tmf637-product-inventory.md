@@ -1,5 +1,12 @@
 ## Behaviour and deviations
 
+- **Subscriber numbers (N4):** products whose creation specification requires built-in
+  `msisdn` derive `realizingResource` from their assignment at the business date (future
+  products: their start date). Change numbers through TMF622 modify orders; direct PATCH
+  of their resource list gives 409. `realizingResource.id` filters these effective
+  assignments before counts/paging. Products without the requirement retain unchecked
+  resource documents. Number-change items appear with role `modification`.
+
 - **Review update (2026-10-19):** a future product accepts an exclusive
   `terminationDate` after its start, including on POST. It remains `created` until
   start, then `pendingTerminate`, then `terminated`; catching up past both dates

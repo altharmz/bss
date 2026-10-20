@@ -143,3 +143,35 @@ documentation drift). Its first run passed 1,468 tests and found two new fixture
 errors: a nested-reference negative test omitted required `@type`, and pagination
 expected insertion order despite equal fixed creation instants (UUID breaks ties).
 Both fixtures were corrected without changing those runtime conventions.
+
+## N4: subscriber numbers through orders (2026-10-20)
+
+Migration `0033` snapshots `product.requires_msisdn` (false for existing products)
+and extends the modify-item CHECK to permit exactly one resource/offering/status
+change. Downgrade refuses retained requiring products or number-change orders.
+The snapshot is resolved under a shared specification lock; changing its built-in
+requirement after any offering order history is a 409. Other specification references
+remain unchecked documents, including existing products' realizingResource values.
+
+Add items accept a product resource list without a product id; requiring products
+need exactly one inventory number. Modify items can change that number without
+repricing. Deletes release it at the effective business date, including an empty
+interval for an unstarted cancellation. Drafts claim only on submission. Products
+are locked before all affected numbers, with number locks in stable UUID order.
+Eligibility includes future claims and the current quarantine setting; the accepted
+setting is retained in assignment audit. Later locks/settings cannot revoke accepted
+claims. Same-day changes retain empty assignment history.
+
+Cancellation voids assigned versions and restores released intervals only while
+the existing workflow permits undoing their product effects. A conflicting accepted
+reuse returns 409 before either order changes. Dependent future number changes
+must be cancelled first. Current/future number projections use business dates;
+TMF637 supports realizingResource.id filtering before paging and lists number-change
+order items. Requiring products cannot bypass orders through a direct resource PATCH.
+Transactional resource events describe accepted assignment transitions.
+
+Tests cover API contracts, malformed nested references, missing/unknown/locked/busy/
+future numbers, same-day changes, scheduled release/quarantine, cancellation conflicts,
+concurrent claims, accepted-claim grandfathering, drafts, unchecked documents, outbox
+events and migration preservation/downgrade. N5 UI is next; N6 owns independent release
+validation and the separately approved deployment.

@@ -13,7 +13,7 @@
 |---|---|---|---|---|---|
 | POST | `/tmf-api/productInventory/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/inventory.py`](../../app/api/inventory.py) |
 | DELETE | `/tmf-api/productInventory/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/inventory.py`](../../app/api/inventory.py) |
-| GET | `/tmf-api/productInventory/v5/product` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `status` | - | 200 `array of Product` | [`app/api/inventory.py`](../../app/api/inventory.py) |
+| GET | `/tmf-api/productInventory/v5/product` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `billingAccount.id`, `realizingResource.id`, `status` | - | 200 `array of Product` | [`app/api/inventory.py`](../../app/api/inventory.py) |
 | POST | `/tmf-api/productInventory/v5/product` | query: `fields`; body: `application/json` | `Product_FVO` | 201 `Product` | [`app/api/inventory.py`](../../app/api/inventory.py) |
 | DELETE | `/tmf-api/productInventory/v5/product/{product_id}` | path: `product_id` | - | 204 (no body) | [`app/api/inventory.py`](../../app/api/inventory.py) |
 | GET | `/tmf-api/productInventory/v5/product/{product_id}` | path: `product_id`; query: `fields` | - | 200 `Product` | [`app/api/inventory.py`](../../app/api/inventory.py) |
@@ -28,6 +28,13 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF637-P
 
 
 ## Behaviour and deviations
+
+- **Subscriber numbers (N4):** products whose creation specification requires built-in
+  `msisdn` derive `realizingResource` from their assignment at the business date (future
+  products: their start date). Change numbers through TMF622 modify orders; direct PATCH
+  of their resource list gives 409. `realizingResource.id` filters these effective
+  assignments before counts/paging. Products without the requirement retain unchecked
+  resource documents. Number-change items appear with role `modification`.
 
 - **Review update (2026-10-19):** a future product accepts an exclusive
   `terminationDate` after its start, including on POST. It remains `created` until

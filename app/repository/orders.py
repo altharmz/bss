@@ -98,6 +98,8 @@ def insert_items(conn: psycopg.Connection, order_id: UUID, items: list[NewOrderI
         }
         if item.product_status is not None:  # in the INSERT: a modify item's CHECK needs it
             values["product_status"] = item.product_status
+        if item.details:
+            values["details"] = _jsonb(item.details)
         row = returning(
             conn,
             sql.SQL("INSERT INTO product_order_item ({}) VALUES ({}) RETURNING *").format(
@@ -109,8 +111,6 @@ def insert_items(conn: psycopg.Connection, order_id: UUID, items: list[NewOrderI
         changes: dict[str, Any] = {}
         if item.parent_item_id is not None:
             changes["parent_id"] = rows[item.parent_item_id]["id"]
-        if item.details:
-            changes["details"] = _jsonb(item.details)
         if changes:
             row = update_by_id(conn, "product_order_item", row["id"], changes)
         rows[item.item_id] = row

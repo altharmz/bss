@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 import psycopg
+from psycopg import sql
 
 from app.repository._sql import Row, fetch_all, fetch_one, jsonb, returning, select_page
 
@@ -162,9 +163,38 @@ def list_active_products(conn: psycopg.Connection, billing_account_id: UUID, on:
 
 
 def list_products(
-    conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
+    conn: psycopg.Connection,
+    *,
+    where: dict[str, Any],
+    offset: int,
+    limit: int,
+    today: date | None = None,
 ) -> tuple[list[Row], int]:
-    return select_page(conn, "product", where=where, offset=offset, limit=limit)
+    where = dict(where)
+    number_id = where.pop("realizingResource.id", None)
+    if number_id is None:
+        return select_page(conn, "product", where=where, offset=offset, limit=limit)
+    conditions = [
+        sql.SQL(
+            """EXISTS (SELECT 1 FROM number_assignment a WHERE a.product_id = product.id
+            AND a.subscriber_number_id = %s AND a.cancelled_at IS NULL
+            AND a.valid_for @> greatest(%s::date, product.start_date))"""
+        )
+    ]
+    params = [number_id, today]
+    for key, value in where.items():
+        conditions.append(sql.SQL("{}::text = %s").format(sql.Identifier(key)))
+        params.append(str(value))
+    clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
+    total = fetch_one(conn, sql.SQL("SELECT count(*) AS n FROM product") + clause, params)["n"]
+    rows = fetch_all(
+        conn,
+        sql.SQL("SELECT * FROM product")
+        + clause
+        + sql.SQL(" ORDER BY created_at, id OFFSET %s LIMIT %s"),
+        [*params, offset, limit],
+    )
+    return rows, total
 
 
 def lock_products(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[UUID, Row]:

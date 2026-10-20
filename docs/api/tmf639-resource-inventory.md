@@ -53,7 +53,9 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF639-R
   history, including cancelled versions, gives 409.
 - POST/GET/DELETE hubs subscribe to the four resource events. Create/delete, lock state
   changes and descriptive changes use the transactional outbox; no-op PATCH emits no
-  event. All eight operations are also MCP tools. Order integration follows in N4.
+  event. All eight operations are also MCP tools. Orders assign, change and release
+  numbers under stable number locks; assignment transitions emit resource change
+  events in the same transaction. Scheduled state reads follow their effective dates.
 
 Tests: `tests/test_api_resource_inventory.py`, `tests/test_api_hub.py`,
 `tests/test_mcp_tools.py`; the gap ledger locks excluded attributes and subclasses.

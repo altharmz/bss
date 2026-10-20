@@ -35,9 +35,10 @@ from uuid import UUID
 import psycopg
 
 from app.events import emit
+from app.ordering import numbers as number_orders
 from app.ordering.states import item_transition, order_transition
 from app.repository import billing, orders, parties, products
-from app.repository._sql import Row
+from app.repository._sql import Row, fetch_one
 
 NOT_STARTED = frozenset({"created", "pendingActive"})
 
@@ -62,8 +63,25 @@ def _item_problem(
     if item["action"] == "modify" and item["product_status"] is not None:
         return _status_problem(conn, item, product, today)
     if item["action"] == "modify":
+        if item["product_offering_id"] is None:
+            claim = fetch_one(
+                conn,
+                """SELECT * FROM number_assignment WHERE assigned_by_item_id = %s
+                AND cancelled_at IS NULL""",
+                (item["id"],),
+            )
+            if claim is None or claim["effective_from"] <= today:
+                return "the number change has already taken effect"
+            if claim["ended_by_item_id"] is not None:
+                return "another order ended the number assignment"
+            return None
         return _modify_problem(conn, item, product, today, cycle_day)
     if item["action"] == "add":
+        if any(
+            c["assigned_by_item_id"] != item["id"]
+            for c in number_orders.claims(conn, [product["id"]])
+        ):
+            return "another order changes its product number"
         if product["termination_date"] is not None:
             return "another order already ended its product"
         if products.change_items(conn, product["id"]):
@@ -152,6 +170,7 @@ def cancel_order(
     assert account is not None  # foreign key, and the order is locked
     items = orders.items_of(conn, order["id"])
     locked = products.lock_products(conn, [i["product_id"] for i in items if i["product_id"]])
+    number_rows = number_orders.lock(conn, list(locked))
     problems = []
     for item in items:
         product = locked[item["product_id"]]
@@ -164,10 +183,15 @@ def cancel_order(
         )
         if problem is not None:
             problems.append(f"item {item['item_id']} ({item['action']}): {problem}")
+    number_problem = number_orders.cancellation_problem(conn, items)
+    if number_problem:
+        problems.append(number_problem)
     if problems:
         raise CancelRefused(
             f"productOrder {order['id']} cannot be cancelled: " + "; ".join(problems)
         )
+    old_numbers = number_orders.before(conn, number_rows, today)
+    number_orders.cancel(conn, items, now)
     for item in items:
         product = locked[item["product_id"]]
         if item["action"] == "modify" and item["product_status"] is not None:
@@ -176,7 +200,8 @@ def cancel_order(
                 products.restore_applied_status(conn, product["id"])
                 emit.product(conn, product["id"], "StateChange", at=now, today=today)
         elif item["action"] == "modify":
-            products.undo_change(conn, item["id"])
+            if item["product_offering_id"] is not None:
+                products.undo_change(conn, item["id"])
             emit.product(conn, product["id"], "AttributeValueChange", at=now, today=today)
         elif item["action"] != "noChange":
             if item["action"] == "add":
@@ -190,6 +215,7 @@ def cancel_order(
                 )
             emit.product(conn, product["id"], "StateChange", at=now, today=today)
         orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "cancelled"))
+    number_orders.changed(conn, number_rows, old_numbers, now, today)
     return _cancelled(conn, order, request, now)
 
 
