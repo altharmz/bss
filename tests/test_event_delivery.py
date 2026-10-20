@@ -102,7 +102,7 @@ def test_money_goes_out_as_an_exact_number(api, db_conn, listener):
     acc = apidata.account(api)
     api.post_raw(
         apidata.PAYMENT,
-        f'{{"account":{{"id":"{acc["id"]}"}},"totalAmount":{{"unit":"RUB","value":19.90}},'
+        f'{{"account":{{"id":"{acc["id"]}"}},"totalAmount":{{"unit":"USD","value":19.90}},'
         '"paymentMethod":{"name":"bankTransfer","@type":"BankAccountTransfer"}}',
     )
     deliver.process(db_conn, clock=api.clock)

@@ -20,7 +20,7 @@ def test_0030_preserves_monthly_data_and_refuses_lossy_downgrade(temp_db_url):
         price_id = conn.execute("""
             INSERT INTO product_offering_price
                 (name, lifecycle_status, price_type, recurring_period, amount, currency, valid_for)
-            VALUES ('P', 'Active', 'recurring', 'monthly', 10, 'RUB', tstzrange(now(), NULL))
+            VALUES ('P', 'Active', 'recurring', 'monthly', 10, 'USD', tstzrange(now(), NULL))
             RETURNING id
         """).fetchone()[0]
     command.upgrade(cfg, "0030")
@@ -67,7 +67,7 @@ PREEXISTING_ROWS = {
            SELECT id, 'o', 'Active', tstzrange(now(), NULL) FROM product_specification""",
         """INSERT INTO product_offering_price
                (product_offering_id, price_type, amount, currency, valid_for)
-           SELECT id, 'oneTime', 1, 'RUB', tstzrange(now(), NULL) FROM product_offering""",
+           SELECT id, 'oneTime', 1, 'USD', tstzrange(now(), NULL) FROM product_offering""",
     ],
 }
 
@@ -115,7 +115,7 @@ def test_0004_on_existing_runs_and_accounts(temp_db_url):
         conn.execute(
             """
             INSERT INTO billing_account (customer_id, name, state, currency, bill_cycle_day)
-            SELECT id, 'I main', 'Active', 'RUB', 1 FROM customer
+            SELECT id, 'I main', 'Active', 'USD', 1 FROM customer
             """
         )
     command.upgrade(cfg, "0004")
@@ -191,7 +191,7 @@ def test_0006_on_existing_bills(temp_db_url):
             """
             INSERT INTO billing_account
                 (customer_id, name, state, currency, bill_cycle_day, opened_at)
-            SELECT id, 'I main', 'Active', 'RUB', 1, now() FROM customer
+            SELECT id, 'I main', 'Active', 'USD', 1, now() FROM customer
             """
         )
         conn.execute(
@@ -207,7 +207,7 @@ def test_0006_on_existing_bills(temp_db_url):
             """
             INSERT INTO customer_bill (billing_account_id, currency, bill_period, bill_date,
                 state, amount_due, billing_run_id)
-            SELECT a.id, 'RUB', daterange(r.run_date, (r.run_date + interval '1 month')::date),
+            SELECT a.id, 'USD', daterange(r.run_date, (r.run_date + interval '1 month')::date),
                    r.run_date, 'new',
                    CASE WHEN r.run_date = '2026-10-01' THEN 300.00 ELSE -116.13 END, r.id
             FROM billing_account a CROSS JOIN billing_run r
@@ -215,7 +215,7 @@ def test_0006_on_existing_bills(temp_db_url):
         )
         conn.execute(
             "INSERT INTO payment (billing_account_id, currency, amount, received_at,"
-            " status, payment_method) SELECT id, 'RUB', 10, now(), 'done', 'cash'"
+            " status, payment_method) SELECT id, 'USD', 10, now(), 'done', 'cash'"
             " FROM billing_account"
         )
     command.upgrade(cfg, "0006")
@@ -279,7 +279,7 @@ def test_0007_on_existing_abrs(temp_db_url):
             """
             INSERT INTO billing_account
                 (customer_id, name, state, currency, bill_cycle_day, opened_at)
-            SELECT id, 'I main', 'Active', 'RUB', 1, now() FROM customer
+            SELECT id, 'I main', 'Active', 'USD', 1, now() FROM customer
             """
         )
         conn.execute(
@@ -328,7 +328,7 @@ def test_0007_on_existing_abrs(temp_db_url):
             """
             INSERT INTO applied_customer_billing_rate (product_id, billing_account_id,
                 charge_type, amount, currency, period, billing_run_id)
-            SELECT p.id, p.billing_account_id, 'recurring', 10.00, 'RUB',
+            SELECT p.id, p.billing_account_id, 'recurring', 10.00, 'USD',
                    daterange(r.run_date, r.run_date + 1), r.id
             FROM product p CROSS JOIN billing_run r
             """
@@ -456,7 +456,7 @@ def test_0028_last_gaps(temp_db_url):
         conn.execute(
             "INSERT INTO product_offering_price (product_offering_id, name, price_type, amount,"
             " currency, valid_for, lifecycle_status) VALUES (%s, 'Loyalty', 'discount', 10,"
-            " 'RUB', tstzrange(now(), NULL), 'Active')",
+            " 'USD', tstzrange(now(), NULL), 'Active')",
             (w.offering["id"],),
         )
     with pytest.raises(Exception, match="discount, allowance or penalty"):
@@ -638,7 +638,7 @@ def test_0013_financial_accounts_round_trip(temp_db_url):
         conn.execute(
             "INSERT INTO billing_account"
             " (customer_id, name, state, currency, bill_cycle_day, opened_at)"
-            " SELECT id, 'Main', 'Active', 'RUB', 1, now() FROM customer"
+            " SELECT id, 'Main', 'Active', 'USD', 1, now() FROM customer"
         )
     command.upgrade(cfg, "0013")
     with psycopg.connect(temp_db_url) as conn:
@@ -777,7 +777,7 @@ def test_0021_meta_payment_method_and_item_position(temp_db_url):
         account = factories.account(conn)
         conn.execute(
             "INSERT INTO payment (billing_account_id, currency, amount, received_at,"
-            " payment_method, status) VALUES (%s, 'RUB', 10, %s, 'cash', 'done')",
+            " payment_method, status) VALUES (%s, 'USD', 10, %s, 'cash', 'done')",
             (account["id"], factories.NOW),
         )
         order_id = conn.execute(
@@ -872,7 +872,7 @@ def test_0023_account_details(temp_db_url):
         conn.execute(
             "INSERT INTO billing_account"
             " (customer_id, name, state, currency, bill_cycle_day, opened_at)"
-            " SELECT id, 'Main', 'Active', 'RUB', 1, now() FROM customer"
+            " SELECT id, 'Main', 'Active', 'USD', 1, now() FROM customer"
         )
         conn.execute(
             "INSERT INTO financial_account (party_id, name) VALUES (%s, 'Group')", (party,)
@@ -933,7 +933,7 @@ def test_0024_catalog_details_and_optional_attributes(temp_db_url):
         conn.execute(
             "INSERT INTO product_offering_price (product_offering_id, name, lifecycle_status,"
             " price_type, recurring_period, amount, currency, valid_for)"
-            " VALUES (%s, 'P', 'Active', 'recurring', 'monthly', 5, 'RUB', tstzrange(now(), NULL))",
+            " VALUES (%s, 'P', 'Active', 'recurring', 'monthly', 5, 'USD', tstzrange(now(), NULL))",
             (offering,),
         )
         conn.execute("INSERT INTO product_catalog (name) VALUES ('Main')")
@@ -1002,14 +1002,14 @@ def test_0025_taxes(temp_db_url):
             conn,
             billing_account_id=w.account["id"],
             amount=Decimal("100.00"),
-            currency="RUB",
+            currency="USD",
             received_at=w.run["started_at"],
             payment_method="cash",
         )
         price = (
             "INSERT INTO product_offering_price (product_offering_id, name, lifecycle_status,"
             " price_type, recurring_period, amount, currency, valid_for, details)"
-            " VALUES (%s, 'Taxed', 'Active', 'recurring', 'monthly', 10, 'RUB',"
+            " VALUES (%s, 'Taxed', 'Active', 'recurring', 'monthly', 10, 'USD',"
             " tstzrange(now(), NULL), %s)"
         )
         vat = '{"tax": [{"@type": "TaxItem", "taxCategory": "VAT", "taxRate": 20}]}'

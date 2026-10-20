@@ -31,7 +31,7 @@ def price(api, status: str) -> dict:
             "lifecycleStatus": status,
             "priceType": "recurring",
             "recurringChargePeriodType": "monthly",
-            "price": {"unit": "RUB", "value": 300},
+            "price": {"unit": "USD", "value": 300},
             "validFor": {"startDateTime": START},
         },
     )

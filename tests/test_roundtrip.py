@@ -19,14 +19,14 @@ def test_decimal_roundtrip(db_conn, amount):
         product_offering_id=off["id"],
         price_type="oneTime",
         amount=Decimal(amount),
-        currency="RUB",
+        currency="USD",
         valid_for=Range(T0, None, "[)"),
     )
     pay = payments.insert_payment(
         db_conn,
         billing_account_id=acc["id"],
         amount=Decimal(amount),
-        currency="RUB",
+        currency="USD",
         payment_method="bankTransfer",
         received_at=NOW,
     )
@@ -45,7 +45,7 @@ def test_float_money_is_refused(db_conn):
             db_conn,
             billing_account_id=acc["id"],
             amount=0.1,
-            currency="RUB",
+            currency="USD",
             payment_method="bankTransfer",
             received_at=NOW,
         )
@@ -76,7 +76,7 @@ def test_daterange_roundtrip(db_conn):
     bill = billing.insert_bill(
         db_conn,
         billing_account_id=acc["id"],
-        currency="RUB",
+        currency="USD",
         bill_period=period,
         bill_date=date(2026, 2, 1),
         amount_due=Decimal("0.00"),

@@ -237,7 +237,7 @@ def test_order_product_payment_and_bill_events(api, db_conn, everything, worker)
         f"{BASES['TMF676']}/refund",
         {
             "account": {"id": acc["id"]},
-            "totalAmount": {"unit": "RUB", "value": 10},
+            "totalAmount": {"unit": "USD", "value": 10},
             "paymentMethod": {"@type": "Cash"},
         },
     )
@@ -290,7 +290,7 @@ def test_event_ids_are_unique_and_payloads_are_exact_json(api, db_conn, everythi
     response = api.post_raw(
         apidata.PAYMENT,
         f'{{"@type":"Payment","account":{{"id":"{acc["id"]}"}},'
-        '"totalAmount":{"unit":"RUB","value":19.90},'
+        '"totalAmount":{"unit":"USD","value":19.90},'
         '"paymentMethod":{"name":"bankTransfer","@type":"BankAccountTransfer"}}',
     )
     assert response.status_code == 201, response.text

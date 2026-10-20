@@ -106,7 +106,7 @@ def test_applied_billing_rates(api, world, db_conn):
         billing_account_id=world.account["id"],
         charge_type="refund",
         amount=Decimal("-50.00"),
-        currency="RUB",
+        currency="USD",
         period=days(date(2026, 2, 15), date(2026, 3, 1)),
         billing_run_id=world.run["id"],
         applied_at=world.run["started_at"],
@@ -119,8 +119,8 @@ def test_applied_billing_rates(api, world, db_conn):
     charge, credit = by_id[str(feb["id"])], by_id[str(refund["id"])]
     assert charge["appliedBillingRateType"] == "appliedBillingCharge"
     assert credit["appliedBillingRateType"] == "appliedBillingCredit"
-    assert charge["taxExcludedAmount"] == {"unit": "RUB", "value": Decimal("100.00")}
-    assert credit["taxExcludedAmount"] == {"unit": "RUB", "value": Decimal("-50.00")}
+    assert charge["taxExcludedAmount"] == {"unit": "USD", "value": Decimal("100.00")}
+    assert credit["taxExcludedAmount"] == {"unit": "USD", "value": Decimal("-50.00")}
     assert charge["periodCoverage"] == {
         "startDateTime": "2026-01-31T21:00:00Z",
         "endDateTime": "2026-02-28T21:00:00Z",
@@ -135,7 +135,7 @@ def test_customer_bill_and_is_billed(api, world, db_conn):
     bill = billing.insert_bill(
         db_conn,
         billing_account_id=world.account["id"],
-        currency="RUB",
+        currency="USD",
         bill_period=days(date(2026, 1, 1), date(2026, 2, 1)),
         bill_date=date(2026, 2, 1),
         amount_due=Decimal("499.90"),
@@ -151,7 +151,7 @@ def test_customer_bill_and_is_billed(api, world, db_conn):
     db_conn.commit()
 
     body = decimals(api.get(f"{BILL}/{bill['id']}"))
-    assert body["amountDue"] == {"unit": "RUB", "value": Decimal("499.90")}
+    assert body["amountDue"] == {"unit": "USD", "value": Decimal("499.90")}
     assert body["state"] == "new"
     assert body["billDate"] == "2026-01-31T21:00:00Z"
     assert body["billingPeriod"] == {
@@ -176,7 +176,7 @@ def test_balance_includes_charges(api, world, db_conn):
     db_conn.commit()
     href = f"/tmf-api/accountManagement/v5/billingAccount/{world.account['id']}"
     (balance,) = decimals(api.get(href))["accountBalance"]
-    assert balance["amount"] == {"unit": "RUB", "value": Decimal("-100.00")}  # customer owes
+    assert balance["amount"] == {"unit": "USD", "value": Decimal("-100.00")}  # customer owes
 
 
 @pytest.mark.parametrize(

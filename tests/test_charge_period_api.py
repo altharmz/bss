@@ -21,7 +21,7 @@ def offering(api, unit, length=1, amount=100):
         api,
         recurringChargePeriodType=unit,
         recurringChargePeriodLength=length,
-        price={"unit": "RUB", "value": amount},
+        price={"unit": "USD", "value": amount},
     )
     return make_offering(api, productOfferingPrice=price_refs(price)), price
 
@@ -48,8 +48,8 @@ def test_interval_reaches_the_worker_and_every_read_view(api, db_conn, unit, len
     assert preview_response.status_code == 200, preview_response.text
     preview = preview_response.json()
     assert preview["period"] == {"start": str(START), "end": end}
-    assert preview["price"] == {"unit": "RUB", "value": 100}
-    assert preview["amount"] == {"unit": "RUB", "value": 100}
+    assert preview["price"] == {"unit": "USD", "value": 100}
+    assert preview["amount"] == {"unit": "USD", "value": 100}
     assert preview["prorated"] is False
     assert preview["next"]["start"] == end
     assert preview["recurringChargePeriod"] == label
@@ -110,7 +110,7 @@ def test_cross_cadence_offering_change_and_one_refund_rule(api, db_conn):
 def test_successor_preserves_interval_and_cannot_reinterpret_a_live_price(api):
     offer, price = offering(api, "weekly", 2)
     path = f"/internal/v1/productOffering/{offer['id']}/priceChange"
-    response = api.post(path, {"amount": 120, "currency": "RUB", "validFrom": "2026-11-01"})
+    response = api.post(path, {"amount": 120, "currency": "USD", "validFrom": "2026-11-01"})
     assert response.status_code == 201, response.text
     new = api.get(response.json()["newPrice"]["href"]).json()
     assert (new["recurringChargePeriodType"], new["recurringChargePeriodLength"]) == ("weekly", 2)

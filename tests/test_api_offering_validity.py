@@ -103,7 +103,7 @@ def test_ending_an_offering_leaves_its_live_products_priced(api, offering):
     api.clock.set(midnight(date(2026, 11, 15)) + timedelta(hours=10))
     products = api.get(f"/internal/v1/billingAccount/{account['id']}/products").json()
     assert [(p["status"], p["price"]) for p in products] == [
-        ("active", {"unit": "RUB", "value": 300})
+        ("active", {"unit": "USD", "value": 300})
     ]
     late = apidata.order(api, account, apidata.add_item(offering))
     assert late["state"] == "rejected"

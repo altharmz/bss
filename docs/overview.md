@@ -169,7 +169,7 @@ Environment variables only (`app/config.py`); no config files.
 | `LOG_LEVEL` | `info` | |
 | `BILLING_TZ` | `Europe/Moscow` | the zone that defines "today" for billing |
 | `BILLING_RUN_AT` | `00:30` | local time of the daily run; the worker refuses anything not strictly between 00:00 and 02:00 |
-| `UI_CURRENCY` | `RUB` | the one currency the admin UI works in |
+| `UI_CURRENCY` | `USD` | the one currency the admin UI works in |
 | `WORKER_FAKE_NOW` | unset | tests only: pins the worker's clock; refused unless `APP_ENV=test` (`app/worker/runtime.py`) |
 | `WORKER_LIVENESS_FILE` | `/tmp/worker-alive` | the worker's healthcheck file |
 

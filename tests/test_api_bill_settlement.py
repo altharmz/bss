@@ -53,7 +53,7 @@ def pay(api, account: dict, value, day: date, **over):
 def item(bill_id: str, value, **over) -> dict:
     return {
         "item": {"id": bill_id, "@referredType": "CustomerBill"},
-        "amount": {"unit": "RUB", "value": value},
+        "amount": {"unit": "USD", "value": value},
         **over,
     }
 
@@ -95,7 +95,7 @@ def test_a_bill_shows_its_due_date_and_number(api, db_conn, offering):
     [b] = bills(api, account)
     assert b["state"] == "sent"
     assert b["paymentDueDate"] == "2026-12-30T21:00:00Z"  # Dec 31, midnight in Moscow
-    assert b["remainingAmount"] == {"unit": "RUB", "value": D("300.00")}
+    assert b["remainingAmount"] == {"unit": "USD", "value": D("300.00")}
     assert b["appliedPayment"] == []
     assert (b["category"], b["runType"]) == ("normal", "onCycle")
     assert b["billNo"] == "BL-" + b["id"].replace("-", "")[:8].upper()
@@ -113,8 +113,8 @@ def test_a_payment_settles_at_once_and_its_credit_pays_later_bills(api, db_conn,
     assert decimals(first)["paymentItem"] == [
         {
             "item": {"id": dec["id"], "href": dec["href"], "@referredType": "CustomerBill"},
-            "amount": {"unit": "RUB", "value": D("100.00")},
-            "totalAmount": {"unit": "RUB", "value": D("100.00")},
+            "amount": {"unit": "USD", "value": D("100.00")},
+            "totalAmount": {"unit": "USD", "value": D("100.00")},
             "@type": "PaymentItem",
         }
     ]
@@ -122,7 +122,7 @@ def test_a_payment_settles_at_once_and_its_credit_pays_later_bills(api, db_conn,
     assert (dec["state"], dec["remainingAmount"]["value"]) == ("partiallyPaid", D("200.00"))
     assert dec["appliedPayment"] == [
         {
-            "appliedAmount": {"unit": "RUB", "value": D("100.00")},
+            "appliedAmount": {"unit": "USD", "value": D("100.00")},
             "payment": {
                 "id": first.json()["id"],
                 "href": first.json()["href"],
@@ -195,8 +195,8 @@ def test_explicit_items_pay_the_named_bill_first(api, db_conn, offering):
             lambda b, other: [
                 {
                     **item(b, 10),
-                    "taxAmount": {"unit": "RUB", "value": 1},
-                    "totalAmount": {"unit": "RUB", "value": 10},  # not amount + taxAmount
+                    "taxAmount": {"unit": "USD", "value": 1},
+                    "totalAmount": {"unit": "USD", "value": 10},  # not amount + taxAmount
                 }
             ],
             422,
@@ -254,7 +254,7 @@ def test_hold_and_release(api, db_conn, offering):
     assert decimals(api.get(b["href"]))["remainingAmount"]["value"] == D("300.00")
     assert summary(api, account)["onHold"] == {
         "count": 1,
-        "amount": {"unit": "RUB", "value": D("300.00")},
+        "amount": {"unit": "USD", "value": D("300.00")},
     }
     check_invariant(api, account)
 
@@ -300,7 +300,7 @@ def test_a_held_partly_paid_bill_is_released_as_partially_paid(api, db_conn, off
         ('{"state": "validated"}', "application/merge-patch+json", 409),
         ('{"state": "unknown"}', "application/merge-patch+json", 422),
         # the run's attributes: repeated, never changed (422 for another value)
-        ('{"amountDue": {"unit": "RUB", "value": 1}}', "application/merge-patch+json", 422),
+        ('{"amountDue": {"unit": "USD", "value": 1}}', "application/merge-patch+json", 422),
         ('{"billCycle": {"id": "x"}}', "application/merge-patch+json", 422),
         ('{"state": "onHold", "colour": 1}', "application/merge-patch+json", 400),
         ('{"state": "onHold", "@type": "Product"}', "application/merge-patch+json", 400),
@@ -362,7 +362,7 @@ def test_the_bill_dialog(api, db_conn, offering):
     assert api.get(f"{INTERNAL}/customerBill/{b['id']}").json()["overdue"] is True
     assert summary(api, account)["overdue"] == {
         "count": 1,
-        "amount": {"unit": "RUB", "value": D("250.00")},
+        "amount": {"unit": "USD", "value": D("250.00")},
     }
     assert api.get(f"{INTERNAL}/customerBill/{b['id']}?x=1").status_code == 400
     assert api.get(f"{INTERNAL}/customerBill/{apidata.NIL}").status_code == 404
@@ -372,10 +372,10 @@ def test_the_bill_dialog(api, db_conn, offering):
 def test_an_account_without_bills(api):
     account = apidata.account(api)
     assert summary(api, account) == {
-        "outstanding": {"unit": "RUB", "value": 0},
-        "unallocatedCredit": {"unit": "RUB", "value": 0},
-        "overdue": {"count": 0, "amount": {"unit": "RUB", "value": 0}},
-        "onHold": {"count": 0, "amount": {"unit": "RUB", "value": 0}},
+        "outstanding": {"unit": "USD", "value": 0},
+        "unallocatedCredit": {"unit": "USD", "value": 0},
+        "overdue": {"count": 0, "amount": {"unit": "USD", "value": 0}},
+        "onHold": {"count": 0, "amount": {"unit": "USD", "value": 0}},
         "paymentTermDays": 30,
     }
 

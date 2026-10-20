@@ -16,12 +16,12 @@ OFFERING = f"{CATALOG}/productOffering"
 
 
 def test_credit_limit_is_stored_returned_changed_and_removed(api):
-    created = apidata.account(api, creditLimit={"unit": "RUB", "value": 500})
+    created = apidata.account(api, creditLimit={"unit": "USD", "value": 500})
     assert decimals(api.get(created["href"]))["creditLimit"] == {
-        "unit": "RUB",
+        "unit": "USD",
         "value": Decimal("500.00"),
     }
-    changed = api.patch(created["href"], {"creditLimit": {"unit": "RUB", "value": 1000.5}})
+    changed = api.patch(created["href"], {"creditLimit": {"unit": "USD", "value": 1000.5}})
     assert changed.status_code == 200
     assert decimals(changed)["creditLimit"]["value"] == Decimal("1000.50")
     removed = api.patch(created["href"], {"creditLimit": None})
@@ -36,10 +36,10 @@ def test_an_account_without_a_credit_limit_has_no_attribute(api):
     ("limit", "status"),
     [
         ({"unit": "EUR", "value": 100}, 422),  # not the account's currency
-        ({"unit": "RUB", "value": -1}, 422),
-        ({"unit": "RUB", "value": 1.005}, 422),  # never rounded
-        ({"unit": "RUB"}, 422),
-        ({"unit": "RUB", "value": 1, "currency": "RUB"}, 400),
+        ({"unit": "USD", "value": -1}, 422),
+        ({"unit": "USD", "value": 1.005}, 422),  # never rounded
+        ({"unit": "USD"}, 422),
+        ({"unit": "USD", "value": 1, "currency": "USD"}, 400),
     ],
 )
 def test_invalid_credit_limits(api, limit, status):
@@ -52,7 +52,7 @@ def test_invalid_credit_limits(api, limit, status):
 
 def test_the_credit_limit_never_blocks_an_order(api):
     offering = apidata.sellable_offering(api)
-    account = apidata.account(api, creditLimit={"unit": "RUB", "value": 0})
+    account = apidata.account(api, creditLimit={"unit": "USD", "value": 0})
     api.clock.set(api.clock.now().replace(day=2))
     placed = apidata.order(api, account, apidata.add_item(offering))
     assert placed["state"] == "completed"

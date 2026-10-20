@@ -94,7 +94,7 @@ def test_a_retry_of_failed_accounts_keeps_the_worker_alive(api, worker, monkeypa
     """D-W17 through the wake-up: x is retried for Dec 1 and caught up on its blocked
     Dec 2 and 3 (retry_run, no checkpoint), then Dec 4 is billed for all three."""
     s = scenario(api, worker, broken=True)
-    set_currency(worker, s["fragile"]["id"], "RUB")
+    set_currency(worker, s["fragile"]["id"], "USD")
     slow_accounts(monkeypatch)
     api.clock.set(msk(DEC4, 0, 30))
     with Liveness() as alive:

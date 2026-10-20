@@ -7,7 +7,7 @@ import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
 const CAT = '/tmf-api/productCatalogManagement/v5';
-const rub = (value: number) => ({ unit: 'RUB', value });
+const usd = (value: number) => ({ unit: 'USD', value });
 const ids = (n: number) => `0000000${n}-0000-4000-8000-00000000000${n}`;
 const code = (id: string) => [{ id, externalIdentifierType: 'offeringCode' }];
 
@@ -49,16 +49,16 @@ const OFFERINGS = [
   },
 ];
 const PRICES = [
-  { id: 'pr1', price: rub(1290), validFor: { startDateTime: '2026-06-01T21:00:00Z' } },
+  { id: 'pr1', price: usd(1290), validFor: { startDateTime: '2026-06-01T21:00:00Z' } },
   // 650 now, 700 from tomorrow: the current one is shown
   {
     id: 'pr2',
-    price: rub(650),
+    price: usd(650),
     validFor: { startDateTime: '2026-06-01T21:00:00Z', endDateTime: '2026-10-01T21:00:00Z' },
   },
-  { id: 'pr3', price: rub(700), validFor: { startDateTime: '2026-10-01T21:00:00Z' } },
+  { id: 'pr3', price: usd(700), validFor: { startDateTime: '2026-10-01T21:00:00Z' } },
   // only a future price: shown with its start
-  { id: 'pr4', price: rub(399), validFor: { startDateTime: '2026-10-04T21:00:00Z' } },
+  { id: 'pr4', price: usd(399), validFor: { startDateTime: '2026-10-04T21:00:00Z' } },
 ];
 const SPECS = [
   { id: 's1', name: 'Mobile Voice & Data' },
@@ -124,7 +124,7 @@ describe('catalog', () => {
     await waitFor(() => expect(cellsOf('Mobile L')[4]).toBe('2 weeks'));
     fireEvent.click(row('Mobile L'));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText(/RUB \/ 2 weeks/)).toBeTruthy();
+    expect(within(dialog).getByText(/USD \/ 2 weeks/)).toBeTruthy();
   });
 
   it('lists offerings with code, specification, price, period, status and validity', async () => {
@@ -132,7 +132,7 @@ describe('catalog', () => {
     await open();
     await waitFor(() => row('Mobile L'));
     expectUi('ui.catalog.list');
-    expect(screen.getByRole('columnheader', { name: 'Price, RUB' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Price, USD' })).toBeTruthy();
     expect(cellsOf('Mobile L')).toEqual([
       'MOB-L',
       'Mobile L',
@@ -223,9 +223,9 @@ describe('new offering', () => {
     expect(within(dialog).getByRole('alert').textContent).toBe('Code MOB-L is already in use');
     fireEvent.change(field(dialog, /Code/), { target: { value: 'mob-xl' } });
     fireEvent.change(field(dialog, /^Name/), { target: { value: 'Mobile XL' } });
-    fireEvent.change(field(dialog, /Price, RUB/), { target: { value: '0' } });
+    fireEvent.change(field(dialog, /Price, USD/), { target: { value: '0' } });
     expect(within(dialog).getByRole('alert').textContent).toBe('Price must be a positive number');
-    fireEvent.change(field(dialog, /Price, RUB/), { target: { value: '1,990.5' } });
+    fireEvent.change(field(dialog, /Price, USD/), { target: { value: '1,990.5' } });
     fireEvent.change(field(dialog, /Valid to/), { target: { value: '2026-10-01' } });
     expect(within(dialog).getByRole('alert').textContent).toBe('End date is before start date');
     fireEvent.change(field(dialog, /Valid to/), { target: { value: '' } });
@@ -259,7 +259,7 @@ describe('new offering', () => {
     fireEvent.change(field(dialog, /Code/), { target: { value: 'mob-xl' } });
     fireEvent.change(field(dialog, /^Name/), { target: { value: 'Mobile XL' } });
     fireEvent.change(field(dialog, /Specification/), { target: { value: 's1' } });
-    fireEvent.change(field(dialog, /Price, RUB/), { target: { value: '1,990.5' } });
+    fireEvent.change(field(dialog, /Price, USD/), { target: { value: '1,990.5' } });
     fireEvent.change(field(dialog, /Valid to/), { target: { value: '2026-12-31' } });
     fireEvent.change(field(dialog, /Recurrence/), { target: { value: unit } });
     fireEvent.change(field(dialog, /Charge every/), { target: { value: String(length) } });
@@ -277,7 +277,7 @@ describe('new offering', () => {
       endDateTime: '2027-01-01T00:00:00+03:00', // "valid to 2026-12-31" is inclusive
     };
     // the amount is an exact number token in the JSON text, not a float
-    expect(String(priceCall?.[1]?.body)).toContain('"price":{"unit":"RUB","value":1990.50}');
+    expect(String(priceCall?.[1]?.body)).toContain('"price":{"unit":"USD","value":1990.50}');
     expect(JSON.parse(String(priceCall?.[1]?.body))).toEqual({
       '@type': 'ProductOfferingPrice',
       name: `Mobile XL ${unit}`,
@@ -285,7 +285,7 @@ describe('new offering', () => {
       priceType: 'recurring',
       recurringChargePeriodType: unit,
       ...(unit !== 'monthly' || length !== 1 ? { recurringChargePeriodLength: length } : {}),
-      price: { unit: 'RUB', value: 1990.5 },
+      price: { unit: 'USD', value: 1990.5 },
       validFor,
     });
     expect(JSON.parse(String(offeringCall?.[1]?.body))).toEqual({
@@ -320,7 +320,7 @@ describe('new offering', () => {
     const dialog = await openForm();
     fireEvent.change(field(dialog, /Code/), { target: { value: 'MOB-XL' } });
     fireEvent.change(field(dialog, /^Name/), { target: { value: 'Mobile XL' } });
-    fireEvent.change(field(dialog, /Price, RUB/), { target: { value: '10' } });
+    fireEvent.change(field(dialog, /Price, USD/), { target: { value: '10' } });
     fireEvent.click(create(dialog));
     expect(await within(dialog).findByText('offering code MOB-XL is already in use')).toBeTruthy();
     expect(screen.getByRole('dialog')).toBeTruthy();
@@ -344,7 +344,7 @@ describe('lifecycle', () => {
       },
     });
     const dialog = await details('TV Basic');
-    expect(within(dialog).getByText('399.00 RUB / month · 2026-10-05 – open-ended')).toBeTruthy();
+    expect(within(dialog).getByText('399.00 USD / month · 2026-10-05 – open-ended')).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Activate' })).toBe(
       expectUi('ui.catalog.lifecycle'),
     );
@@ -431,7 +431,7 @@ describe('change price', () => {
     fireEvent.click(change);
     return within(dialog).getByRole('region', { name: 'Change price' });
   }
-  const priceField = (form: HTMLElement) => within(form).getByLabelText(/New price, RUB/);
+  const priceField = (form: HTMLElement) => within(form).getByLabelText(/New price, USD/);
   const submit = (form: HTMLElement) =>
     within(form).getByRole('button', { name: 'Change price' }) as HTMLButtonElement;
 
@@ -479,7 +479,7 @@ describe('change price', () => {
           {
             productOffering: { id: ids(1), href: '/o' },
             endedPrice: { id: 'pr1', href: '/p1', endsOn: '2026-11-01' },
-            newPrice: { id: 'pr9', href: '/p9', price: rub(1390), validFrom: '2026-11-01' },
+            newPrice: { id: 'pr9', href: '/p9', price: usd(1390), validFrom: '2026-11-01' },
           },
           { status: 201 },
         ),
@@ -490,11 +490,11 @@ describe('change price', () => {
     fireEvent.click(submit(form));
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
-      'Price of MOB-L changes to 1,390.00 RUB from 2026-11-01',
+      'Price of MOB-L changes to 1,390.00 USD from 2026-11-01',
     );
     const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/priceChange'));
     expect(String(call?.[1]?.body)).toBe(
-      '{"amount":1390.00,"currency":"RUB","validFrom":"2026-11-01"}',
+      '{"amount":1390.00,"currency":"USD","validFrom":"2026-11-01"}',
     );
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -507,7 +507,7 @@ describe('change price', () => {
             '@type': 'Error',
             code: '409',
             reason: 'Conflict',
-            message: 'a recurring price in RUB already starts on or after 2026-11-01',
+            message: 'a recurring price in USD already starts on or after 2026-11-01',
             status: '409',
           },
           { status: 409 },
@@ -519,7 +519,7 @@ describe('change price', () => {
     fireEvent.click(submit(form));
     expect(
       await within(form).findByText(
-        'a recurring price in RUB already starts on or after 2026-11-01',
+        'a recurring price in USD already starts on or after 2026-11-01',
       ),
     ).toBeTruthy();
     expect(screen.getByRole('dialog')).toBeTruthy();

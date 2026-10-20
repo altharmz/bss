@@ -99,7 +99,7 @@ def test_financial_account_link_and_relationships(api, resource, typ):
         (acc["id"], typ, acc["href"]),
     ]
     # no ledger: the balance is the billing account's alone
-    assert [b["amount"]["unit"] for b in body["accountBalance"]] == ["RUB"]
+    assert [b["amount"]["unit"] for b in body["accountBalance"]] == ["USD"]
     assert [
         a["id"] for a in api.get(f"{BASE}/{resource}?financialAccount.id={fa['id']}").json()
     ] == [acc["id"]]
@@ -153,12 +153,12 @@ def test_validation(api, resource, typ):
         ({"accountRelationship": [{"@type": "AccountRelationship", "x": 1}]}, 422),
         ({"name": ""}, 422),
         ({"state": "Open"}, 422),
-        ({"creditLimit": {"unit": "RUB", "value": -5}}, 422),
+        ({"creditLimit": {"unit": "USD", "value": -5}}, 422),
     ]:
         body = {"name": "x", "relatedParty": [owner(person)], **extra}
         assert api.post(url, body).status_code == status, extra
     assert api.get(url).json() == []
-    acc = create(api, resource, person, description="d", creditLimit={"unit": "RUB", "value": 5})
+    acc = create(api, resource, person, description="d", creditLimit={"unit": "USD", "value": 5})
     patched = api.patch(
         acc["href"], {"state": "Suspended", "accountType": "Wholesale", "description": None}
     ).json()

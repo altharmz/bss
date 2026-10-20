@@ -14,16 +14,16 @@ const P2 = 'p0000002-0000-4000-8000-000000000002';
 const P3 = 'p0000003-0000-4000-8000-000000000003';
 const ORDERS = '/tmf-api/productOrderingManagement/v5/productOrder';
 const INTERNAL = `/internal/v1/billingAccount/${A}`;
-const rub = (value: number) => ({ unit: 'RUB', value });
+const usd = (value: number) => ({ unit: 'USD', value });
 
 const ACCOUNT = accountBody(
   A,
   { id: C, name: 'Olga Kuznetsova' },
   {
     accountBalance: [
-      { balanceType: 'currentBalance', amount: rub(-5784.19), '@type': 'AccountBalance' },
+      { balanceType: 'currentBalance', amount: usd(-5784.19), '@type': 'AccountBalance' },
     ],
-    creditLimit: rub(500),
+    creditLimit: usd(500),
     billCycleDay: 28,
   },
 );
@@ -37,7 +37,7 @@ function product(id: string, over: Record<string, unknown>) {
     terminationDate: null,
     productOffering: { id: O1, name: 'Mobile L', code: 'MOB-L' },
     productSpecification: { id: 's1', name: 'Mobile Voice & Data' },
-    price: rub(1290),
+    price: usd(1290),
     nextChargeDate: '2026-10-28',
     ...over,
   };
@@ -51,7 +51,7 @@ const PRODUCTS = [
     nextChargeDate: null,
     productOffering: { id: O2, name: 'Fiber 100', code: null },
     productSpecification: { id: 's2', name: 'Home Internet' },
-    price: rub(650),
+    price: usd(650),
   }),
   product(P3, { status: 'created', startDate: '2026-10-06', nextChargeDate: '2026-10-06' }),
 ];
@@ -66,7 +66,7 @@ const CHARGES = [
     billableDays: 12,
     periodDays: 31,
     prorated: true,
-    amount: rub(-116.13),
+    amount: usd(-116.13),
     product: { id: P1, href: '/p' },
     productOffering: { id: O1, name: 'Mobile L' },
     bill: null,
@@ -80,7 +80,7 @@ const CHARGES = [
     billableDays: 31,
     periodDays: 31,
     prorated: false,
-    amount: rub(300),
+    amount: usd(300),
     product: { id: P1, href: '/p' },
     productOffering: { id: O1, name: 'Mobile L' },
     bill: { id: 'b1', href: '/b1' },
@@ -95,8 +95,8 @@ const TRANSACTIONS = [
     date: '2026-12-20',
     note: 'Mobile L',
     period: null,
-    amount: rub(116.13),
-    balanceAfter: rub(-83.87),
+    amount: usd(116.13),
+    balanceAfter: usd(-83.87),
   },
   {
     id: 't2',
@@ -105,8 +105,8 @@ const TRANSACTIONS = [
     date: '2026-12-05',
     note: 'Bank card',
     period: null,
-    amount: rub(100),
-    balanceAfter: rub(-200),
+    amount: usd(100),
+    balanceAfter: usd(-200),
   },
   {
     id: 't1',
@@ -115,8 +115,8 @@ const TRANSACTIONS = [
     date: '2026-12-01',
     note: 'Mobile L',
     period: null,
-    amount: rub(-300),
-    balanceAfter: rub(-300),
+    amount: usd(-300),
+    balanceAfter: usd(-300),
   },
 ];
 
@@ -129,14 +129,14 @@ const FIRST_CHARGE = {
   billableDays: 27,
   periodDays: 30,
   prorated: true,
-  price: rub(650),
-  amount: rub(585),
+  price: usd(650),
+  amount: usd(585),
   chargeRunDate: '2026-10-02',
   billDate: '2026-10-28',
-  next: { start: '2026-10-28', amount: rub(650) },
-  balance: rub(-5784.19),
-  balanceAfter: rub(-6369.19),
-  creditLimit: rub(500),
+  next: { start: '2026-10-28', amount: usd(650) },
+  balance: usd(-5784.19),
+  balanceAfter: usd(-6369.19),
+  creditLimit: usd(500),
   exceedsCreditLimit: true,
 };
 
@@ -228,7 +228,7 @@ describe('subscriber card', () => {
     const balance = within(kpis).getByText('−5,784.19');
     expect(balance.className).toContain('negative');
     expect(within(kpis).getByText('In arrears')).toBeTruthy();
-    expect(within(kpis).getByText('RUB')).toBeTruthy();
+    expect(within(kpis).getByText('USD')).toBeTruthy();
     expect(within(kpis).getByText('Day 28')).toBeTruthy();
     expect(within(kpis).getByText('next cycle 2026-10-28')).toBeTruthy();
     expect(within(kpis).getByText('500.00')).toBeTruthy();
@@ -436,8 +436,8 @@ describe('add product', () => {
     },
   ];
   const PRICES = [
-    { id: 'pr1', price: rub(1290), validFor: { startDateTime: '2026-06-01T21:00:00Z' } },
-    { id: 'pr2', price: rub(650), validFor: { startDateTime: '2026-06-01T21:00:00Z' } },
+    { id: 'pr1', price: usd(1290), validFor: { startDateTime: '2026-06-01T21:00:00Z' } },
+    { id: 'pr2', price: usd(650), validFor: { startDateTime: '2026-06-01T21:00:00Z' } },
   ];
   const catalog = {
     'GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true&offset=0&limit=100':
@@ -470,7 +470,7 @@ describe('add product', () => {
     fireEvent.click(options[1] as HTMLElement);
     expect(await within(dialog).findByTestId('first-charge')).toHaveProperty(
       'textContent',
-      '585.00 RUB',
+      '585.00 USD',
     );
     expect(within(dialog).getByText('2026-10-01 – 2026-10-27')).toBeTruthy();
     expect(within(dialog).getByText('27 of 30 (prorated)')).toBeTruthy();
@@ -480,7 +480,7 @@ describe('add product', () => {
     ).toBeTruthy();
     expect(within(dialog).getByText('Then from 2026-10-28')).toBeTruthy();
     expect(within(dialog).getByRole('note').textContent).toContain(
-      'Balance will exceed the credit limit of 500.00 RUB',
+      'Balance will exceed the credit limit of 500.00 USD',
     );
     expect(
       within(dialog).getByText(/today · the charge is written by the billing run of 2026-10-02/),
@@ -510,7 +510,7 @@ describe('add product', () => {
 
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
-      'Fiber 100 ordered · first charge 585.00 RUB in the run of 2026-10-06',
+      'Fiber 100 ordered · first charge 585.00 USD in the run of 2026-10-06',
     );
     expect(screen.queryByRole('dialog')).toBeNull();
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
@@ -565,7 +565,7 @@ describe('add product', () => {
             '@type': 'Error',
             code: '422',
             reason: 'Unprocessable Entity',
-            message: 'productOffering Fiber 100 has no recurring price in RUB valid on 2026-10-01',
+            message: 'productOffering Fiber 100 has no recurring price in USD valid on 2026-10-01',
             status: '422',
           },
           { status: 422 },
@@ -575,7 +575,7 @@ describe('add product', () => {
     fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
     expect(
       await within(dialog).findByText(
-        'productOffering Fiber 100 has no recurring price in RUB valid on 2026-10-01',
+        'productOffering Fiber 100 has no recurring price in USD valid on 2026-10-01',
       ),
     ).toBeTruthy();
     expect(
@@ -642,7 +642,7 @@ describe('edit subscriber', () => {
       }),
     );
     expect(within(dialog).getByText(/takes no new orders/)).toBeTruthy();
-    fireEvent.change(within(dialog).getByLabelText('Credit limit, RUB (empty = none)'), {
+    fireEvent.change(within(dialog).getByLabelText('Credit limit, USD (empty = none)'), {
       target: { value: '' },
     });
     fireEvent.click(save);
@@ -667,14 +667,14 @@ describe('edit subscriber', () => {
         name: 'Inactive',
       }),
     );
-    fireEvent.change(within(dialog).getByLabelText('Credit limit, RUB (empty = none)'), {
+    fireEvent.change(within(dialog).getByLabelText('Credit limit, USD (empty = none)'), {
       target: { value: '2,000.1' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await screen.findByRole('status');
     expect(patches(fetchMock)).toEqual([
       [CUSTOMER_URL, '{"status":"Inactive"}'],
-      [ACCOUNT_URL, '{"creditLimit":{"unit":"RUB","value":2000.10}}'],
+      [ACCOUNT_URL, '{"creditLimit":{"unit":"USD","value":2000.10}}'],
     ]);
   });
 
@@ -701,7 +701,7 @@ describe('edit subscriber', () => {
     fireEvent.change(within(dialog).getByLabelText('Customer name'), {
       target: { value: 'Olga K' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Credit limit, RUB (empty = none)'), {
+    fireEvent.change(within(dialog).getByLabelText('Credit limit, USD (empty = none)'), {
       target: { value: '1.234' },
     });
     expect(within(dialog).getByText('Enter a credit limit with at most 2 decimals.')).toBeTruthy();

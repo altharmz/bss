@@ -113,7 +113,7 @@ def test_a_bill_is_due_after_the_term_in_force_and_its_issue_is_recorded(
 
 
 def test_examples_1_4_11_and_the_tmf678_view(api, db_conn, offering):
-    account = apidata.account(api)  # cycle day 1, RUB
+    account = apidata.account(api)  # cycle day 1, USD
     product = add(api, account, offering, date(2026, 12, 1), on=at(date(2026, 11, 20)))
 
     # example 1: the full period, charged in advance and billed the same day

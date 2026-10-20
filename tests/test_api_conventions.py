@@ -34,7 +34,7 @@ def price_json(value: str, **over) -> str:
         '{"@type": "ProductOfferingPrice", "name": "Monthly", "lifecycleStatus": "Active",'
         ' "priceType": "recurring", "recurringChargePeriodType": "monthly",'
         f' "validFor": {{"startDateTime": "{START}"}},'
-        f' "price": {{"unit": "RUB", "value": {value}}}{extra}}}'
+        f' "price": {{"unit": "USD", "value": {value}}}{extra}}}'
     )
 
 
@@ -53,7 +53,7 @@ def test_money_goes_out_as_a_json_number_and_parses_back_exactly(api, literal):
     assert f'"value":{literal}}}' in created.text
     assert decimals(created)["price"]["value"] == Decimal(literal)
     fetched = api.get(created.headers["Location"])
-    assert decimals(fetched)["price"] == {"unit": "RUB", "value": Decimal(literal)}
+    assert decimals(fetched)["price"] == {"unit": "USD", "value": Decimal(literal)}
 
 
 def test_incoming_amount_is_stored_exactly(api, db_conn):
@@ -409,7 +409,7 @@ def test_a_broken_body_fails_contract_validation(api):
         "'@type' is a required property" in e
         for e in contract.errors("TMF620", "ProductOfferingPrice", no_type)
     )
-    as_string = {**good, "price": {"unit": "RUB", "value": "19.99"}}
+    as_string = {**good, "price": {"unit": "USD", "value": "19.99"}}
     assert any(
         e.startswith("price/value:")
         for e in contract.errors("TMF620", "ProductOfferingPrice", as_string)

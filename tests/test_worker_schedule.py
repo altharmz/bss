@@ -158,7 +158,7 @@ def test_failed_accounts_are_retried_once_before_the_new_date(api, worker):
     """D-W17: x failed on Dec 1 and is blocked after; once fixed, the scheduled wake-up of
     Dec 4 retries Dec 1 (which catches x up on Dec 2 and 3) before billing Dec 4."""
     s = scenario(api, worker, broken=True)
-    set_currency(worker, s["fragile"]["id"], "RUB")
+    set_currency(worker, s["fragile"]["id"], "USD")
     api.clock.set(msk(DEC4, 0, 30))
     result = wake(worker, api.clock)
     assert result.retried == [DEC1]  # Dec 2 and 3 were caught up by it

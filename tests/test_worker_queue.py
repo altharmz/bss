@@ -80,7 +80,7 @@ def test_runs_are_listed_newest_first_with_derived_counts(api, worker):
     assert dec2["accounts"] == {"total": 3, "ok": 2, "failed": 0, "blocked": 1}
     assert dec1["error"] == "1 of 3 accounts not billed (1 failed)"
     # Dec 1 charged a and b (300 each); Dec 2 charged nothing
-    assert dec1["charges"] == {"count": 2, "amounts": [{"unit": "RUB", "value": 600}]}
+    assert dec1["charges"] == {"count": 2, "amounts": [{"unit": "USD", "value": 600}]}
     assert dec2["charges"] == {"count": 0, "amounts": []}
     one = api.get(f"{RUNS}/{s['runs'][DEC1]['id']}").json()
     assert one == dec1
@@ -247,7 +247,7 @@ def test_a_catch_up_puts_a_run_failed_as_a_whole_first(api, worker, monkeypatch)
 @pytest.mark.capability("worker.requestQueue")
 def test_a_retry_request_retries_only_the_failed_accounts(api, worker):
     s = scenario(api, worker, broken=True)
-    set_currency(worker, s["fragile"]["id"], "RUB")  # the fix
+    set_currency(worker, s["fragile"]["id"], "USD")  # the fix
     api.clock.set(at(DEC3, 12))
     api.post(f"{RUNS}/{s['runs'][DEC1]['id']}/retry", None)
     ok_rows = {
@@ -319,7 +319,7 @@ def test_only_the_owner_processes_requests(api, worker, migrated_db_url):
 
 def test_a_retry_of_a_run_fixed_in_the_meantime_does_nothing(api, worker):
     s = scenario(api, worker, broken=True)
-    set_currency(worker, s["fragile"]["id"], "RUB")
+    set_currency(worker, s["fragile"]["id"], "USD")
     api.post(f"{RUNS}/{s['runs'][DEC1]['id']}/retry", None)
     api.post(f"{RUNS}/{s['runs'][DEC2]['id']}/retry", None)
     process_requests(worker, clock=api.clock, tz=TZ)  # Dec 1 retry fixes Dec 2 as well

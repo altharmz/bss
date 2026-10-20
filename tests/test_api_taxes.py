@@ -23,19 +23,19 @@ REFUND = "/tmf-api/payment/v4/refund"
 INTERNAL = "/internal/v1/billingAccount"
 
 
-def rub(value) -> dict:
+def usd(value) -> dict:
     """Money as a response holds it (read with `decimals`)."""
-    return {"unit": "RUB", "value": D(value)}
+    return {"unit": "USD", "value": D(value)}
 
 
 def send(value) -> dict:
     """Money for a request body: a JSON number (the client cannot encode a Decimal)."""
     number = D(value)
-    return {"unit": "RUB", "value": int(number) if number == int(number) else float(number)}
+    return {"unit": "USD", "value": int(number) if number == int(number) else float(number)}
 
 
 def vat(rate, amount) -> dict:
-    return {"taxCategory": "VAT", "taxRate": D(rate), "taxAmount": rub(amount)}
+    return {"taxCategory": "VAT", "taxRate": D(rate), "taxAmount": usd(amount)}
 
 
 def without_type(lines: list[dict]) -> list[dict]:
@@ -70,42 +70,42 @@ def bills(api, account) -> list[dict]:
 def test_a_charge_carries_its_tax_lines_and_the_bill_is_due_with_them(api, db_conn, taxed):
     account = account_billed(api, db_conn, taxed)
     [rate] = rates(api, account)
-    assert rate["taxExcludedAmount"] == rub("300.00")
-    assert rate["taxIncludedAmount"] == rub("360.00")
+    assert rate["taxExcludedAmount"] == usd("300.00")
+    assert rate["taxIncludedAmount"] == usd("360.00")
     assert rate["appliedTax"] == [{**vat(20, "60.00"), "@type": "AppliedBillingTaxRate"}]
     [b] = bills(api, account)
     assert (b["taxExcludedAmount"], b["taxIncludedAmount"], b["amountDue"]) == (
-        rub("300.00"),
-        rub("360.00"),
-        rub("360.00"),
+        usd("300.00"),
+        usd("360.00"),
+        usd("360.00"),
     )
     assert b["taxItem"] == [{**vat(20, "60.00"), "@type": "TaxItem"}]
-    assert b["remainingAmount"] == rub("360.00")
+    assert b["remainingAmount"] == usd("360.00")
     fields = decimals(api.get(f"{BILL}/{b['id']}?fields=taxItem"))
     assert fields["taxItem"] == b["taxItem"]
     picked = decimals(api.get(f"{RATE}/{rate['id']}?fields=appliedTax"))
     assert picked["appliedTax"] == rate["appliedTax"]
     document = json.loads(base64.b64decode(b["billDocument"][0]["content"]), parse_float=D)
-    assert document["taxExcludedAmount"] == rub("300.00")
+    assert document["taxExcludedAmount"] == usd("300.00")
     assert document["taxItem"] == [vat(20, "60.00")]
-    assert document["charges"][0]["taxIncludedAmount"] == rub("360.00")
+    assert document["charges"][0]["taxIncludedAmount"] == usd("360.00")
 
 
 def test_the_tax_included_amount_settles_the_bill_and_the_balance(api, db_conn, taxed):
     account = account_billed(api, db_conn, taxed)
     (balance,) = decimals(api.get(f"{ACCOUNT}/{account['id']}"))["accountBalance"]
-    assert balance["amount"] == rub("-360.00")
+    assert balance["amount"] == usd("-360.00")
     api.clock.set(at(date(2026, 12, 5)))
     paid = api.post(PAYMENT, apidata.payment_body(account, 360, amount=send(300)))
     assert paid.status_code == 201, paid.text
     [b] = bills(api, account)
-    assert (b["state"], b["remainingAmount"]) == ("settled", rub("0.00"))
+    assert (b["state"], b["remainingAmount"]) == ("settled", usd("0.00"))
     (balance,) = decimals(api.get(f"{ACCOUNT}/{account['id']}"))["accountBalance"]
-    assert balance["amount"] == rub("0.00")
+    assert balance["amount"] == usd("0.00")
     [charge] = decimals(api.get(f"{INTERNAL}/{account['id']}/charges"))
-    assert charge["amount"] == rub("360.00")  # with its taxes
+    assert charge["amount"] == usd("360.00")  # with its taxes
     ledger = decimals(api.get(f"{INTERNAL}/{account['id']}/transactions"))
-    assert [t["balanceAfter"] for t in ledger] == [rub("0.00"), rub("-360.00")]
+    assert [t["balanceAfter"] for t in ledger] == [usd("0.00"), usd("-360.00")]
 
 
 def test_each_tax_item_is_a_line_and_the_bill_sums_them_per_category(api, db_conn):
@@ -120,14 +120,14 @@ def test_each_tax_item_is_a_line_and_the_bill_sums_them_per_category(api, db_con
         # 99.99 x 20% = 19.998 -> 20.00; x 1.5% = 1.49985 -> 1.50
         assert without_type(rate["appliedTax"]) == [
             vat(20, "20.00"),
-            {"taxCategory": "city", "taxRate": D("1.5"), "taxAmount": rub("1.50")},
+            {"taxCategory": "city", "taxRate": D("1.5"), "taxAmount": usd("1.50")},
         ]
     [b] = bills(api, account)
     assert without_type(b["taxItem"]) == [
-        {"taxCategory": "VAT", "taxRate": D(20), "taxAmount": rub("40.00")},
-        {"taxCategory": "city", "taxRate": D("1.5"), "taxAmount": rub("3.00")},
+        {"taxCategory": "VAT", "taxRate": D(20), "taxAmount": usd("40.00")},
+        {"taxCategory": "city", "taxRate": D("1.5"), "taxAmount": usd("3.00")},
     ]
-    assert b["amountDue"] == rub(D("199.98") + D("43.00"))
+    assert b["amountDue"] == usd(D("199.98") + D("43.00"))
 
 
 def test_a_refund_takes_its_tax_back(api, db_conn, taxed):
@@ -139,9 +139,9 @@ def test_a_refund_takes_its_tax_back(api, db_conn, taxed):
         r for r in rates(api, account) if r["appliedBillingRateType"] == "appliedBillingCredit"
     ]
     # expected 300 x 15/31 = 145.16, its tax 29.03; refund 145.16 - 300, 29.03 - 60
-    assert refund["taxExcludedAmount"] == rub("-154.84")
+    assert refund["taxExcludedAmount"] == usd("-154.84")
     assert without_type(refund["appliedTax"]) == [vat(20, "-30.97")]
-    assert refund["taxIncludedAmount"] == rub("-185.81")
+    assert refund["taxIncludedAmount"] == usd("-185.81")
 
 
 def test_an_exempt_account_gets_the_line_at_rate_zero(api, db_conn, taxed):
@@ -155,7 +155,7 @@ def test_an_exempt_account_gets_the_line_at_rate_zero(api, db_conn, taxed):
     [rate] = rates(api, account)
     assert without_type(rate["appliedTax"]) == [vat(0, "0.00")]
     [b] = bills(api, account)
-    assert b["amountDue"] == rub("300.00")
+    assert b["amountDue"] == usd("300.00")
     assert without_type(b["taxItem"]) == [vat(0, "0.00")]
 
 
@@ -180,12 +180,12 @@ def test_an_exemption_of_another_type_or_not_yet_valid_does_not_apply(api, db_co
 def test_an_untaxed_price_bills_as_before(api, db_conn):
     account = account_billed(api, db_conn, apidata.sellable_offering(api, value=300))
     [rate] = rates(api, account)
-    assert (rate["appliedTax"], rate["taxIncludedAmount"]) == ([], rub("300.00"))
+    assert (rate["appliedTax"], rate["taxIncludedAmount"]) == ([], usd("300.00"))
     [b] = bills(api, account)
     assert (b["taxItem"], b["taxExcludedAmount"], b["amountDue"]) == (
         [],
-        rub("300.00"),
-        rub("300.00"),
+        usd("300.00"),
+        usd("300.00"),
     )
 
 
@@ -196,14 +196,14 @@ def test_order_and_product_prices_show_the_rate_and_the_tax_included_amount(api,
     account = apidata.account(api)
     product = add(api, account, taxed, date(2026, 12, 1), on=at(date(2026, 11, 20)))
     [price] = decimals(api.get(product["href"]))["productPrice"]
-    assert price["price"]["dutyFreeAmount"] == rub("300.00")
-    assert price["price"]["taxIncludedAmount"] == rub("360.00")
+    assert price["price"]["dutyFreeAmount"] == usd("300.00")
+    assert price["price"]["taxIncludedAmount"] == usd("360.00")
     assert price["price"]["taxRate"] == 20
     [order] = decimals(api.get(f"{ORDER}?billingAccount.id={account['id']}"))
     [item_price] = order["productOrderItem"][0]["itemPrice"]
-    assert item_price["price"]["taxIncludedAmount"] == rub("360.00")
+    assert item_price["price"]["taxIncludedAmount"] == usd("360.00")
     [total] = order["orderTotalPrice"]
-    assert (total["price"]["taxRate"], total["price"]["taxIncludedAmount"]) == (20, rub("360.00"))
+    assert (total["price"]["taxRate"], total["price"]["taxIncludedAmount"]) == (20, usd("360.00"))
 
 
 def test_a_total_over_different_rates_has_no_one_rate(api):
@@ -220,7 +220,7 @@ def test_a_total_over_different_rates_has_no_one_rate(api):
     )
     [total] = decimals(api.get(f"{ORDER}/{placed['id']}"))["orderTotalPrice"]
     assert "taxRate" not in total["price"]
-    assert total["price"]["taxIncludedAmount"] == rub("220.00")
+    assert total["price"]["taxIncludedAmount"] == usd("220.00")
 
 
 # --- TMF620: the rules a price's tax follows ---
@@ -262,7 +262,7 @@ def test_a_tax_amount_is_the_tax_of_a_full_month_and_is_kept(api):
     created = api.post(PRICE, price_body(tax=tax))
     assert created.status_code == 201, created.text
     assert decimals(api.get(created.json()["href"]))["tax"] == [
-        {"@type": "TaxItem", "taxCategory": "VAT", "taxRate": D("12.5"), "taxAmount": rub("37.50")}
+        {"@type": "TaxItem", "taxCategory": "VAT", "taxRate": D("12.5"), "taxAmount": usd("37.50")}
     ]
     # a new price must come with a matching tax amount
     changed = api.patch(created.json()["href"], {"price": send(400)})
@@ -317,7 +317,7 @@ def test_a_payment_item_pays_its_amount_and_tax_amount(api, db_conn, taxed):
     }
     paid = api.post(PAYMENT, apidata.payment_body(account, 120, paymentItem=[item]))
     assert paid.status_code == 201, paid.text
-    assert decimals(api.get(b["href"]))["remainingAmount"] == rub("240.00")
+    assert decimals(api.get(b["href"]))["remainingAmount"] == usd("240.00")
     # 230 + 20 is more than the 240 the bill still owes, though 230 alone is not
     over = {**item, "amount": send(230), "totalAmount": send(250)}
     refused = api.post(PAYMENT, apidata.payment_body(account, 250, paymentItem=[over]))
@@ -338,9 +338,9 @@ def test_a_refund_keeps_its_tax_amount(api, db_conn):
     assert created.status_code == 201, created.text
     refund = decimals(api.get(f"{REFUND}/{created.json()['id']}"))
     assert (refund["amount"], refund["taxAmount"], refund["totalAmount"]) == (
-        rub(50),
-        rub(10),
-        rub(60),
+        usd(50),
+        usd(10),
+        usd(60),
     )
     bad = api.post(REFUND, {**body, "amount": send(40)})
     assert bad.status_code == 422, bad.text

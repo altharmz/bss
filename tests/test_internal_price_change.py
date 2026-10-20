@@ -18,13 +18,13 @@ BASE = "/internal/v1/productOffering"
 
 
 def change(api, offering_id: str, **over):
-    body = {"amount": 330.5, "currency": "RUB", "validFrom": "2026-11-01"} | over
+    body = {"amount": 330.5, "currency": "USD", "validFrom": "2026-11-01"} | over
     return api.post(f"{BASE}/{offering_id}/priceChange", body)
 
 
 @pytest.fixture
 def live(api):
-    """A 300.00 RUB offering with one open-ended product; today is 2026-10-02."""
+    """A 300.00 USD offering with one open-ended product; today is 2026-10-02."""
     offering = apidata.sellable_offering(api, value=300)
     account = apidata.account(api)
     api.clock.set(midnight(date(2026, 10, 2)) + timedelta(hours=10))
@@ -52,7 +52,7 @@ def test_tmf620_cannot_change_a_live_price_in_either_order(api, live):
             "lifecycleStatus": "Active",
             "priceType": "recurring",
             "recurringChargePeriodType": "monthly",
-            "price": {"unit": "RUB", "value": 330},
+            "price": {"unit": "USD", "value": 330},
             "validFor": {"startDateTime": switch},
         },
     ).json()
@@ -69,7 +69,7 @@ def test_a_live_price_changes_in_one_step(api, live):
     assert response.status_code == 201, response.text
     body = decimals(response)
     assert body["endedPrice"]["endsOn"] == "2026-11-01"
-    assert body["newPrice"]["price"] == {"unit": "RUB", "value": Decimal("330.50")}
+    assert body["newPrice"]["price"] == {"unit": "USD", "value": Decimal("330.50")}
     assert body["newPrice"]["validFrom"] == "2026-11-01"
     assert response.headers["Location"] == body["newPrice"]["href"]
 
@@ -120,7 +120,7 @@ def test_the_new_price_can_be_changed_again_later(api, live):
         ({"validFrom": "2026-11-01T00:00:00+03:00"}, 422, None),
         ({"amount": 1.005}, 422, None),  # never rounded
         ({"amount": -1}, 422, "amount must not be negative"),
-        ({"currency": "rub"}, 422, None),
+        ({"currency": "usd"}, 422, None),
         ({"currency": "EUR"}, 409, "no open-ended recurring price in EUR"),
         ({"extra": 1}, 400, None),
     ],
@@ -137,7 +137,7 @@ def test_unknown_offering_and_wrong_content_type(api):
     assert change(api, apidata.NIL).status_code == 404
     response = api.post_raw(
         f"{BASE}/{apidata.NIL}/priceChange",
-        '{"amount": 1, "currency": "RUB", "validFrom": "2026-11-01"}',
+        '{"amount": 1, "currency": "USD", "validFrom": "2026-11-01"}',
         content_type="text/plain",
     )
     assert response.status_code == 415

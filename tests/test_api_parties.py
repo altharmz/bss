@@ -177,9 +177,9 @@ def test_balance_is_payments_minus_charges_positive_means_credit(api):
     balance = decimals(api.get(acc["href"]))["accountBalance"]
     assert balance == [
         {
-            "id": "currentBalance-RUB",
+            "id": "currentBalance-USD",
             "balanceType": "currentBalance",
-            "amount": {"unit": "RUB", "value": Decimal("1500.00")},
+            "amount": {"unit": "USD", "value": Decimal("1500.00")},
             "@type": "AccountBalance",
         }
     ]
@@ -192,7 +192,7 @@ def test_balance_is_payments_minus_charges_positive_means_credit(api):
         ({"billCycleDay": 0}, 422),
         ({"billCycleDay": "5"}, 422),
         ({"billCycleDay": 5.0}, 422),
-        ({"currency": "rub"}, 422),
+        ({"currency": "usd"}, 422),
         ({"state": "Open"}, 422),
         ({"relatedParty": []}, 422),
         ({"accountBalance": []}, 422),  # the server's: a new account has a zero balance
@@ -286,7 +286,7 @@ def test_billing_account_patch(api):
     assert api.patch(acc["href"], repeated).json() == current
     assert api.patch(acc["href"], {"@type": "BillingAccount", "name": "B"}).status_code == 200
     assert api.patch(acc["href"], {"@type": "PartyAccount"}).status_code == 400
-    assert api.get(acc["href"]).json()["currency"] == "RUB"
+    assert api.get(acc["href"]).json()["currency"] == "USD"
 
 
 def test_billing_account_filters_and_fields(api):

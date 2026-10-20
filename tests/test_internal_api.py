@@ -22,8 +22,8 @@ D = Decimal
 BASE = "/internal/v1"
 
 
-def rub(value: str) -> dict:
-    return {"unit": "RUB", "value": D(value)}
+def usd(value: str) -> dict:
+    return {"unit": "USD", "value": D(value)}
 
 
 def preview(api, account: dict, offering: dict, start: str):
@@ -50,7 +50,7 @@ def test_context(api):
         "utcOffset": "+03:00",
         "environment": settings.app_env,
         "operator": "i.petrova",
-        "currency": "RUB",
+        "currency": "USD",
         "billingRunAt": "00:30",
         "paymentTermDays": 30,
     }
@@ -98,13 +98,13 @@ def test_first_charge_mid_period_today(api, offering):
         "billableDays": 17,
         "periodDays": 31,
         "prorated": True,
-        "price": rub("300.00"),
-        "amount": rub("164.52"),  # 300 x 17/31 = 164.516...
+        "price": usd("300.00"),
+        "amount": usd("164.52"),  # 300 x 17/31 = 164.516...
         "chargeRunDate": "2026-10-16",  # tomorrow's run sees today's order
         "billDate": "2026-11-01",
-        "next": {"start": "2026-11-01", "amount": rub("300.00")},
-        "balance": rub("0.00"),
-        "balanceAfter": rub("-164.52"),
+        "next": {"start": "2026-11-01", "amount": usd("300.00")},
+        "balance": usd("0.00"),
+        "balanceAfter": usd("-164.52"),
         "creditLimit": None,
         "exceedsCreditLimit": False,
     }
@@ -115,7 +115,7 @@ def test_first_charge_full_period_in_the_future(api, offering):
     api.clock.set(at(date(2026, 10, 15)))
     body = decimals(preview(api, account, offering, "2026-11-01"))
     assert (body["amount"], body["prorated"], body["chargeRunDate"], body["billDate"]) == (
-        rub("300.00"),
+        usd("300.00"),
         False,
         "2026-11-01",  # the run of the start date sees an order completed before it
         "2026-11-01",
@@ -127,7 +127,7 @@ def test_first_charge_rounds_half_even(api):
     account = apidata.account(api)
     body = decimals(preview(api, account, offering, "2026-11-16"))
     # 3.25 x 15/30 = 1.625 exactly: half-even 1.62, half-up would give 1.63
-    assert (body["amount"], body["billableDays"], body["periodDays"]) == (rub("1.62"), 15, 30)
+    assert (body["amount"], body["billableDays"], body["periodDays"]) == (usd("1.62"), 15, 30)
 
 
 @pytest.mark.parametrize(("year", "days", "amount"), [(2027, 28, "289.29"), (2028, 29, "279.31")])
@@ -135,18 +135,18 @@ def test_first_charge_period_length_is_the_denominator(api, offering, year, days
     account = apidata.account(api, billCycleDay=28)
     body = decimals(preview(api, account, offering, f"{year}-03-01"))
     assert (body["amount"], body["periodDays"], body["period"]["end"]) == (
-        rub(amount),
+        usd(amount),
         days,
         f"{year}-03-28",
     )
 
 
 def test_first_charge_against_the_credit_limit(api, offering):
-    account = apidata.account(api, creditLimit={"unit": "RUB", "value": 100})
+    account = apidata.account(api, creditLimit={"unit": "USD", "value": 100})
     api.clock.set(at(date(2026, 10, 15)))
     body = decimals(preview(api, account, offering, "2026-10-15"))
-    assert (body["creditLimit"], body["exceedsCreditLimit"]) == (rub("100.00"), True)
-    roomy = apidata.account(api, creditLimit={"unit": "RUB", "value": 200})
+    assert (body["creditLimit"], body["exceedsCreditLimit"]) == (usd("100.00"), True)
+    roomy = apidata.account(api, creditLimit={"unit": "USD", "value": 200})
     assert decimals(preview(api, roomy, offering, "2026-10-15"))["exceedsCreditLimit"] is False
 
 
@@ -246,7 +246,7 @@ def test_open_products_with_next_charge_and_price(api, offering):
         "code": "FIBER-100",
     }
     assert first["productSpecification"]["name"] == "Fiber"
-    assert first["price"] == rub("300.00")
+    assert first["price"] == usd("300.00")
     assert first["href"] == running["href"]
 
 
@@ -287,10 +287,10 @@ def test_charges(api, history):
         "billableDays": 12,
         "periodDays": 31,
     }
-    assert (refund["amount"], refund["prorated"], refund["bill"]) == (rub("-116.13"), True, None)
+    assert (refund["amount"], refund["prorated"], refund["bill"]) == (usd("-116.13"), True, None)
     assert (charge["kind"], charge["amount"], charge["prorated"]) == (
         "charge",
-        rub("300.00"),
+        usd("300.00"),
         False,
     )
     assert charge["bill"] is not None  # on the Dec 1 bill
@@ -305,9 +305,9 @@ def test_transactions_carry_the_running_balance(api, history):
     assert response.headers["X-Total-Count"] == "3"
     rows = decimals(response)
     assert [(t["type"], t["date"], t["amount"], t["balanceAfter"]) for t in rows] == [
-        ("refund", "2026-12-20", rub("116.13"), rub("-83.87")),
-        ("payment", "2026-12-05", rub("100.00"), rub("-200.00")),
-        ("charge", "2026-12-01", rub("-300.00"), rub("-300.00")),
+        ("refund", "2026-12-20", usd("116.13"), usd("-83.87")),
+        ("payment", "2026-12-05", usd("100.00"), usd("-200.00")),
+        ("charge", "2026-12-01", usd("-300.00"), usd("-300.00")),
     ]
     assert [t["note"] for t in rows] == ["Fiber 100", "bankTransfer", "Fiber 100"]
     assert rows[1]["period"] is None

@@ -122,7 +122,7 @@ def create_offering(api, code: str = "MOB-XL", unit: str = "monthly", length: in
         f"{CATALOG}/productOfferingPrice",
         f'{{"@type":"ProductOfferingPrice","name":"Mobile XL {unit}","lifecycleStatus":"Active",'
         f'"priceType":"recurring","recurringChargePeriodType":"{unit}",{multiplier}'
-        f'"price":{{"unit":"RUB","value":1990.50}},"validFor":{valid_for}}}',
+        f'"price":{{"unit":"USD","value":1990.50}},"validFor":{valid_for}}}',
     )
     assert price.status_code == 201, price.text
     offering = api.post(
@@ -165,7 +165,7 @@ def test_new_offering_is_stored_as_the_ui_means_it(api, unit, length):
         "endDateTime": "2026-12-31T21:00:00Z",
     }
     price = decimals(api.get(offering["productOfferingPrice"][0]["href"]))
-    assert price["price"] == {"unit": "RUB", "value": Decimal("1990.50")}
+    assert price["price"] == {"unit": "USD", "value": Decimal("1990.50")}
     assert (price["recurringChargePeriodType"], price["recurringChargePeriodLength"]) == (
         unit,
         length,
@@ -264,10 +264,10 @@ def test_price_change_as_the_ui_sends_it(api):
     assert apidata.order(api, account, apidata.add_item(offering))["state"] == "completed"
     response = api.post_raw(
         f"/internal/v1/productOffering/{offering['id']}/priceChange",
-        '{"amount":1390.00,"currency":"RUB","validFrom":"2026-11-01"}',
+        '{"amount":1390.00,"currency":"USD","validFrom":"2026-11-01"}',
     )
     assert response.status_code == 201, response.text
-    assert decimals(response)["newPrice"]["price"] == {"unit": "RUB", "value": Decimal("1390.00")}
+    assert decimals(response)["newPrice"]["price"] == {"unit": "USD", "value": Decimal("1390.00")}
 
 
 def started_after(api, queued_at: str) -> list[dict]:
@@ -282,7 +282,7 @@ def test_retry_as_the_ui_sends_it(api, worker):
     """retryRun(): a POST without a body or content type. Once the worker has carried it
     out, the retried run reads as started after the request - what the screen waits for."""
     s = scenario(api, worker, broken=True)  # x failed on Dec 1, blocked on Dec 2 and 3
-    set_currency(worker, s["fragile"]["id"], "RUB")  # the fix
+    set_currency(worker, s["fragile"]["id"], "USD")  # the fix
     api.clock.set(at(DEC3, 12))
     dec1 = s["runs"][DEC1]["id"]
     response = api.request("POST", f"{RUNS}/{dec1}/retry")
@@ -334,7 +334,7 @@ def test_refund_and_bill_request_as_the_ui_sends_them(api):
     refund = api.post_raw(
         "/tmf-api/payment/v4/refund",
         f'{{"@type":"Refund","account":{{"id":"{a}","@referredType":"BillingAccount"}},'
-        '"totalAmount":{"unit":"RUB","value":25.10},'
+        '"totalAmount":{"unit":"USD","value":25.10},'
         '"paymentMethod":{"name":"bankTransfer"},"description":"Returned deposit"}',
     )
     assert refund.status_code == 201, refund.text
@@ -380,7 +380,7 @@ def test_payments_as_the_ui_sends_them(api, db_conn):
     plain = api.post_raw(
         PAYMENT,
         f'{{"@type":"Payment","account":{{"id":"{a}","@referredType":"BillingAccount"}},'
-        '"totalAmount":{"unit":"RUB","value":350.00},"paymentMethod":{"name":"bankTransfer"}}',
+        '"totalAmount":{"unit":"USD","value":350.00},"paymentMethod":{"name":"bankTransfer"}}',
     )
     assert plain.status_code == 201, plain.text
     assert [i["item"]["id"] for i in plain.json()["paymentItem"]] == [dec["id"], jan["id"]]
@@ -388,9 +388,9 @@ def test_payments_as_the_ui_sends_them(api, db_conn):
     lettered = api.post_raw(
         PAYMENT,
         f'{{"@type":"Payment","account":{{"id":"{a}","@referredType":"BillingAccount"}},'
-        '"totalAmount":{"unit":"RUB","value":100.00},"paymentMethod":{"name":"cash"},'
+        '"totalAmount":{"unit":"USD","value":100.00},"paymentMethod":{"name":"cash"},'
         f'"paymentItem":[{{"@type":"PaymentItem","item":{{"id":"{jan["id"]}",'
-        '"@referredType":"CustomerBill"},"amount":{"unit":"RUB","value":100.00}}]}',
+        '"@referredType":"CustomerBill"},"amount":{"unit":"USD","value":100.00}}]}',
     )
     assert lettered.status_code == 201, lettered.text
     bills = decimals(api.get(f"{BILL}?billingAccount.id={a}"))
@@ -434,12 +434,12 @@ def create_subscriber_as_the_ui_does(api, credit_limit: str | None = "1500.50") 
     )
     assert customer.status_code == 201, customer.text
     limit = (
-        "" if credit_limit is None else f',"creditLimit":{{"unit":"RUB","value":{credit_limit}}}'
+        "" if credit_limit is None else f',"creditLimit":{{"unit":"USD","value":{credit_limit}}}'
     )
     account = api.post_raw(
         ACCOUNTS,
         '{"@type":"BssBillingAccount","name":"Olga Kuznetsova main","billCycleDay":15,'
-        '"currency":"RUB","relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef",'
+        '"currency":"USD","relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef",'
         f'"role":"customer","partyOrPartyRole":{{"id":"{customer.json()["id"]}",'
         '"name":"Olga Kuznetsova","@type":"PartyRoleRef","@referredType":"Customer"}}]'
         f"{limit}}}",
@@ -451,7 +451,7 @@ def create_subscriber_as_the_ui_does(api, credit_limit: str | None = "1500.50") 
 def test_new_subscriber_as_the_ui_creates_it(api):
     made = create_subscriber_as_the_ui_does(api)
     account = decimals(api.get(made["account"]["href"]))
-    assert account["creditLimit"] == {"unit": "RUB", "value": Decimal("1500.50")}
+    assert account["creditLimit"] == {"unit": "USD", "value": Decimal("1500.50")}
     assert (account["billCycleDay"], account["state"]) == (15, "Active")
     assert account["relatedParty"][0]["partyOrPartyRole"]["name"] == "Olga Kuznetsova"
     assert made["customer"]["status"] == "Active"
@@ -471,7 +471,7 @@ def test_edit_subscriber_as_the_ui_patches_it(api):
     exact = api.request(
         "PATCH",
         made["account"]["href"],
-        content='{"creditLimit":{"unit":"RUB","value":2000.10}}',
+        content='{"creditLimit":{"unit":"USD","value":2000.10}}',
         headers={"Content-Type": "application/merge-patch+json"},
     )
     assert exact.status_code == 200, exact.text

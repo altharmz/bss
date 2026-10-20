@@ -292,7 +292,7 @@ def test_write_settlement_records_the_operator(db_conn):
     w = world(db_conn)
     bill = make_bill(db_conn, w, date(2026, 1, 1), "1.00")
     change = settlement.StateChange(bill["id"], "sent", "onHold")
-    core = Account(id=w.account["id"], currency="RUB", bill_cycle_day=1)
+    core = Account(id=w.account["id"], currency="USD", bill_cycle_day=1)
     billing.write_settlement(
         db_conn,
         core,

@@ -1,5 +1,18 @@
 # Data model and cross-cutting domain decisions
 
+## Currency label rename (2026-10-20)
+
+The human requested RUB renamed to USD everywhere, without conversion. USD is now
+the UI and new-account default. Migration `0031` relabels stored currency columns
+and nested Money documents, including historical charges, quotes, event payloads
+and base64 JSON bill documents;
+all numerical amounts stay unchanged. Other currencies stay unchanged. Foreign key
+checks are deferred during the atomic relabel and their original timing restored.
+Conflicting price timelines cause the migration to fail rather than discard records.
+Downgrade keeps USD labels because original USD and renamed RUB cannot be distinguished.
+Design references and past migrations remain immutable. Test examples use USD, with
+GBP replacing previous USD examples where a distinct second currency is needed.
+
 Refund/bill-delivery milestone (2026-10-16): the balance rule below is extended by
 subtracting completed cash payouts (`refund`), separately from negative refund ABRs.
 On-demand bills are also written only by the billing owner, from posted ABRs.

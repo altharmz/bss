@@ -327,11 +327,11 @@ def test_a_price_s_charge_changes_while_it_has_priced_nothing(api):
 
     price = make_price(api)
     offering = make_offering(api, productOfferingPrice=price_refs(price))
-    assert api.patch(price["href"], {"price": {"unit": "RUB", "value": 550}}).status_code == 200
+    assert api.patch(price["href"], {"price": {"unit": "USD", "value": 550}}).status_code == 200
 
     apidata.order(api, apidata.account(api), apidata.add_item(offering))  # ordered: fixed now
     for change in (
-        {"price": {"unit": "RUB", "value": 600}},
+        {"price": {"unit": "USD", "value": 600}},
         {"price": {"unit": "EUR", "value": 550}},
         {"priceType": "oneTime", "recurringChargePeriodType": None},
     ):
@@ -340,7 +340,7 @@ def test_a_price_s_charge_changes_while_it_has_priced_nothing(api):
         assert "end its validFor and attach a new price" in response.json()["message"]
     # repeating the current charge is no change
     same = {
-        "price": {"unit": "RUB", "value": 550},
+        "price": {"unit": "USD", "value": 550},
         "priceType": "recurring",
         "recurringChargePeriodType": "monthly",
         "recurringChargePeriodLength": 1,

@@ -39,7 +39,7 @@ def worker(migrated_db_url):
 def payout_body(account, value=20, **over):
     return {
         "account": {"id": account["id"]},
-        "totalAmount": {"unit": "RUB", "value": value},
+        "totalAmount": {"unit": "USD", "value": value},
         "paymentMethod": {"name": "cash payout", "@type": "Cash"},
         **over,
     }
@@ -251,7 +251,7 @@ def test_refund_and_preferences_invalid_requests_are_atomic(api):
     assert api.post(REFUND, payout_body(account, 20, payment={"id": NIL})).status_code == 422
     assert (
         api.post(
-            REFUND, payout_body(account, 20, totalAmount={"unit": "USD", "value": 20})
+            REFUND, payout_body(account, 20, totalAmount={"unit": "GBP", "value": 20})
         ).status_code
         == 422
     )
@@ -279,7 +279,7 @@ def test_database_credit_bounds_reject_unfunded_refund(api, db_conn):
     with pytest.raises(psycopg.errors.CheckViolation), db_conn.transaction():
         db_conn.execute(
             "INSERT INTO refund (billing_account_id, currency, amount, refunded_at, method_type)"
-            " VALUES (%s,'RUB',20,%s,'Cash')",
+            " VALUES (%s,'USD',20,%s,'Cash')",
             (UUID(account["id"]), api.clock.now()),
         )
         db_conn.execute("SET CONSTRAINTS credit_usage_bounds IMMEDIATE")
@@ -293,7 +293,7 @@ def test_database_combines_payout_and_settlement_usage(api, db_conn):
     with pytest.raises(psycopg.errors.CheckViolation), db_conn.transaction():
         refund_id = db_conn.execute(
             "INSERT INTO refund (billing_account_id, currency, amount, refunded_at, method_type)"
-            " VALUES (%s,'RUB',120,%s,'Cash') RETURNING id",
+            " VALUES (%s,'USD',120,%s,'Cash') RETURNING id",
             (UUID(account["id"]), api.clock.now()),
         ).fetchone()[0]
         db_conn.execute(

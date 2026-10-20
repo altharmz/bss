@@ -40,8 +40,8 @@ describe('errors', () => {
 
 describe('jsonWithAmount', () => {
   it('writes the amount as an exact number token', () => {
-    const text = jsonWithAmount({ price: { unit: 'RUB', value: AMOUNT } }, '1290.50');
-    expect(text).toBe('{"price":{"unit":"RUB","value":1290.50}}');
+    const text = jsonWithAmount({ price: { unit: 'USD', value: AMOUNT } }, '1290.50');
+    expect(text).toBe('{"price":{"unit":"USD","value":1290.50}}');
     // JSON.stringify of the float would have lost the trailing zero (and, in general, exactness)
     expect(JSON.stringify({ value: 1290.5 })).toBe('{"value":1290.5}');
   });

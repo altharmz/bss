@@ -21,7 +21,7 @@ const SEP30 = {
   runDate: '2026-09-30',
   startedAt: '2026-09-29T21:30:00Z',
   finishedAt: '2026-09-29T21:32:10Z',
-  charges: { count: 2, amounts: [{ unit: 'RUB', value: 600 }] },
+  charges: { count: 2, amounts: [{ unit: 'USD', value: 600 }] },
   isLatest: false,
 };
 const SEP29_FAILED = {
@@ -33,7 +33,7 @@ const SEP29_FAILED = {
   startedAt: '2026-09-28T21:30:00Z',
   finishedAt: '2026-09-28T21:30:40Z',
   accounts: { total: 3, ok: 2, failed: 1, blocked: 0 },
-  charges: { count: 2, amounts: [{ unit: 'RUB', value: 600 }] },
+  charges: { count: 2, amounts: [{ unit: 'USD', value: 600 }] },
   error: '1 of 3 accounts not billed (1 failed)',
   isLatest: false,
 };
@@ -49,7 +49,7 @@ const RUNNING = {
   status: 'running',
   finishedAt: null,
   accounts: { total: 3, ok: 2, failed: 0, blocked: 0 },
-  charges: { count: 2, amounts: [{ unit: 'RUB', value: 600 }] },
+  charges: { count: 2, amounts: [{ unit: 'USD', value: 600 }] },
 };
 
 const page = (runs: Run[], total = runs.length) => json(runs, { total });
@@ -141,7 +141,7 @@ describe('billing runs: latest run and history', () => {
     expect(within(panel).getByText('1 min 05 s')).toBeTruthy();
     expect(within(panel).getByText('4')).toBeTruthy();
     expect(within(panel).getByText('2,241.40')).toBeTruthy();
-    expect(within(panel).getByText('Amount, RUB')).toBeTruthy();
+    expect(within(panel).getByText('Amount, USD')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull(); // no failure banner
 
     expect(historyRows().map((r) => r.textContent?.slice(0, 10))).toEqual([
@@ -633,7 +633,7 @@ describe('billing runs: one run and its accounts', () => {
   const FAILED_ACCOUNT = {
     billingAccount: { id: A1, name: 'Olga Kuznetsova main' },
     status: 'failed',
-    error: 'MissingPrice: no recurring price in RUB on 2026-10-01',
+    error: 'MissingPrice: no recurring price in USD on 2026-10-01',
     waitsFor: null,
     attempts: 2,
     finishedAt: '2026-09-30T21:30:40Z',
@@ -660,7 +660,7 @@ describe('billing runs: one run and its accounts', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Run for 2026-10-01' });
     expect(await within(dialog).findByText('Olga Kuznetsova main')).toBeTruthy();
     expect(
-      within(dialog).getByText('MissingPrice: no recurring price in RUB on 2026-10-01'),
+      within(dialog).getByText('MissingPrice: no recurring price in USD on 2026-10-01'),
     ).toBeTruthy();
     expect(within(dialog).getByText('BA-AAAA0001').getAttribute('href')).toBe(`/subscribers/${A1}`);
     expect(within(dialog).getByText('3 · ok 1 · failed 1 · blocked 1')).toBeTruthy();

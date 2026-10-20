@@ -62,7 +62,7 @@ def account_body(cust: dict[str, Any], **over) -> dict[str, Any]:
         "@baseType": "BillingAccount",
         "name": "Main account",
         "billCycleDay": 1,
-        "currency": "RUB",
+        "currency": "USD",
         "relatedParty": [
             {
                 "@type": "RelatedPartyRefOrPartyRoleRef",
@@ -84,7 +84,7 @@ def account(api, cust=None, **over) -> dict[str, Any]:
     return _post(api, ACCOUNT, account_body(cust or customer(api), **over))
 
 
-def payment_body(acc: dict[str, Any], value=1500, unit="RUB", **over) -> dict[str, Any]:
+def payment_body(acc: dict[str, Any], value=1500, unit="USD", **over) -> dict[str, Any]:
     return {
         "@type": "Payment",
         "account": {"id": acc["id"], "href": acc["href"], "@referredType": "BillingAccount"},
@@ -111,7 +111,7 @@ def tax_item(category: str, rate, **over) -> dict[str, Any]:
 def sellable_offering(
     api,
     value=600,
-    unit="RUB",
+    unit="USD",
     name="Fiber 100",
     code: str | None = None,
     tax: list[dict[str, Any]] | None = None,

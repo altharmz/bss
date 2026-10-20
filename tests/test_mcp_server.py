@@ -147,7 +147,7 @@ def test_a_decimal_string_reaches_the_app_as_an_exact_amount(api, mcp):
     arguments["body"]["totalAmount"]["value"] = "1234.56"
     is_error, answer = mcp.result(mcp.token("writer", "write"), "create_payment", arguments)
     assert not is_error and answer["status"] == 201, answer
-    assert answer["body"]["totalAmount"] == {"unit": "RUB", "value": 1234.56}
+    assert answer["body"]["totalAmount"] == {"unit": "USD", "value": 1234.56}
     stored = api.get(answer["body"]["href"]).text
     assert '"value":1234.56' in stored.replace(" ", "")
 

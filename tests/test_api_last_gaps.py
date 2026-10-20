@@ -73,7 +73,7 @@ def test_a_refund_keeps_its_documents(api):
     apidata.payment(api, account, 100)
     body = {
         "account": {"id": account["id"], "description": "the main account"},
-        "totalAmount": {"unit": "RUB", "value": 20},
+        "totalAmount": {"unit": "USD", "value": 20},
         "paymentMethod": METHOD,
         "requestor": {**PARTY, "role": "requestor"},
         **DOCUMENTS,
@@ -152,7 +152,7 @@ def test_alteration_prices_are_records_never_billed(api, db_conn):
             "name": "Loyalty",
             "lifecycleStatus": "Active",
             "priceType": "discount",
-            "price": {"unit": "RUB", "value": 50},
+            "price": {"unit": "USD", "value": 50},
             "validFor": {"startDateTime": apidata.START},
         },
     )

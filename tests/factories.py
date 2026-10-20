@@ -36,7 +36,7 @@ def offering(conn: psycopg.Connection) -> Row:
     )
 
 
-def account(conn: psycopg.Connection, currency: str = "RUB", name: str = "Ivanov") -> Row:
+def account(conn: psycopg.Connection, currency: str = "USD", name: str = "Ivanov") -> Row:
     party = parties.create_individual(conn, given_name="Ivan", family_name=name)
     customer = parties.create_customer(conn, party_id=party["id"], name=name)
     return parties.create_billing_account(

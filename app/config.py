@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # never moves the due date of an existing bill (docs/bill-lifecycle-design.md, 6.6).
     bill_payment_term_days: int = Field(default=30, ge=1, le=365)
     # The one currency the admin UI works in (the backend stays multi-currency).
-    ui_currency: str = Field(default="RUB", pattern=r"^[A-Z]{3}$")
+    ui_currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
     session_idle_seconds: int = Field(default=8 * 3600, ge=1)
     session_absolute_seconds: int = Field(default=7 * 86400, ge=1)
     # Behind Caddy (prod): the sign-in throttle keys on the last X-Forwarded-For entry,

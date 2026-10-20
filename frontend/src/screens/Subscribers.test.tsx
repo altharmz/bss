@@ -18,7 +18,7 @@ const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount';
 const PRODUCTS = '/tmf-api/productInventory/v5/product';
 
 const balance = (value: number) => [
-  { balanceType: 'currentBalance', amount: { unit: 'RUB', value }, '@type': 'AccountBalance' },
+  { balanceType: 'currentBalance', amount: { unit: 'USD', value }, '@type': 'AccountBalance' },
 ];
 
 const IVAN = { id: 'aaaa1111-0000-4000-8000-000000000001', name: 'Ivan Petrov' };
@@ -84,7 +84,7 @@ describe('subscribers list', () => {
     const cells = within(ivan).getAllByRole('cell');
     expect(cells[0]?.textContent).toBe('AAAA1111'); // the customer's short id
     expect(cells[2]?.textContent).toBe('Active');
-    expect(cells[3]?.textContent).toBe('1,250.40RUB');
+    expect(cells[3]?.textContent).toBe('1,250.40USD');
     expect(cells[4]?.textContent).toBe('2');
     expect(cells[5]?.textContent).toBe('Day 5');
 
@@ -203,7 +203,7 @@ describe('new subscriber', () => {
     fireEvent.change(within(dialog).getByLabelText('Billing cycle day (1-28)'), {
       target: { value: '15' },
     });
-    fireEvent.change(within(dialog).getByLabelText('Credit limit, RUB (optional)'), {
+    fireEvent.change(within(dialog).getByLabelText('Credit limit, USD (optional)'), {
       target: { value: '1,500.5' },
     });
     fireEvent.click(create);
@@ -226,10 +226,10 @@ describe('new subscriber', () => {
       [
         ACCOUNTS,
         '{"@type":"BssBillingAccount","name":"Olga Kuznetsova main","billCycleDay":15,' +
-          '"currency":"RUB","relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef",' +
+          '"currency":"USD","relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef",' +
           `"role":"customer","partyOrPartyRole":{"id":"${NEW_CUSTOMER}",` +
           '"name":"Olga Kuznetsova","@type":"PartyRoleRef","@referredType":"Customer"}}],' +
-          '"creditLimit":{"unit":"RUB","value":1500.50}}',
+          '"creditLimit":{"unit":"USD","value":1500.50}}',
       ],
     ]);
   });

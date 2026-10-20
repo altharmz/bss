@@ -21,7 +21,7 @@ def d(month: int, day: int) -> datetime:
 
 
 def offering_with_prices(api, *periods: tuple[datetime, datetime | None]) -> dict:
-    """An Active offering whose recurring RUB prices cover exactly `periods` (start, end);
+    """An Active offering whose recurring USD prices cover exactly `periods` (start, end);
     the first one starts at START."""
     offering = apidata.sellable_offering(api, value=300)
     first = offering["productOfferingPrice"][0]
@@ -39,7 +39,7 @@ def offering_with_prices(api, *periods: tuple[datetime, datetime | None]) -> dic
                 "lifecycleStatus": "Active",
                 "priceType": "recurring",
                 "recurringChargePeriodType": "monthly",
-                "price": {"unit": "RUB", "value": 310},
+                "price": {"unit": "USD", "value": 310},
                 "validFor": {"startDateTime": iso(start)}
                 | ({"endDateTime": iso(end)} if end else {}),
             },
@@ -84,7 +84,7 @@ def test_a_gap_later_in_the_chain_is_rejected(api):
     offering = offering_with_prices(api, (START, d(11, 1)), (d(11, 1), d(12, 1)), (d(12, 15), None))
     assert rejection(order(api, offering, date(2026, 10, 2))) == (
         "priceEnds",
-        "the recurring price in RUB ends at 2026-12-01 00:00 and no price follows it",
+        "the recurring price in USD ends at 2026-12-01 00:00 and no price follows it",
     )
 
 
@@ -92,7 +92,7 @@ def test_an_ended_last_price_is_rejected(api):
     offering = offering_with_prices(api, (START, d(11, 1)), (d(11, 1), d(12, 1)))
     assert rejection(order(api, offering, date(2026, 10, 2))) == (
         "priceEnds",
-        "the recurring price in RUB ends at 2026-12-01 00:00 and no price follows it",
+        "the recurring price in USD ends at 2026-12-01 00:00 and no price follows it",
     )
 
 

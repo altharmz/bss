@@ -52,7 +52,7 @@ def _spec_and_price(api) -> tuple[dict[str, Any], dict[str, Any]]:
             "lifecycleStatus": "Active",
             "priceType": "recurring",
             "recurringChargePeriodType": "monthly",
-            "price": {"unit": "RUB", "value": 300},
+            "price": {"unit": "USD", "value": 300},
             "validFor": {"startDateTime": apidata.START},
         },
     ).json()

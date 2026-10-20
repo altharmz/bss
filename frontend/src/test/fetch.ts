@@ -65,7 +65,7 @@ export const CONTEXT = {
   utcOffset: '+03:00',
   environment: 'prod',
   operator: 'i.petrova',
-  currency: 'RUB',
+  currency: 'USD',
   billingRunAt: '00:30',
   paymentTermDays: 30,
 };

@@ -40,7 +40,7 @@ def terminate(api, account, product, on: date) -> None:
 
 @pytest.fixture
 def live(api):
-    """A 300.00 RUB offering with one open-ended product on a RUB account."""
+    """A 300.00 USD offering with one open-ended product on a USD account."""
     offering = apidata.sellable_offering(api, value=300)
     account = apidata.account(api)
     api.clock.set(midnight(date(2026, 10, 2)) + timedelta(hours=10))
@@ -54,7 +54,7 @@ def test_ending_the_price_of_a_live_product_is_refused(api, live):
     response = end_price(api, price_href, midnight(date(2026, 11, 1)))
     assert response.status_code == 409
     assert response.json()["message"] == (
-        "validFor.endDateTime would leave 1 product(s) of this offering in RUB without a"
+        "validFor.endDateTime would leave 1 product(s) of this offering in USD without a"
         " price from 2026-11-01: terminate them by then, or attach a price that starts"
         " exactly at the new end"
     )
@@ -107,7 +107,7 @@ def test_a_gap_before_a_later_successor_is_refused_an_exact_successor_is_not(api
             "lifecycleStatus": "Active",
             "priceType": "recurring",
             "recurringChargePeriodType": "monthly",
-            "price": {"unit": "RUB", "value": 330},
+            "price": {"unit": "USD", "value": 330},
             "validFor": {"startDateTime": iso(midnight(date(2026, 12, 15)))},
         },
     ).json()
@@ -137,7 +137,7 @@ def test_an_unattached_price_can_always_end(api):
             "lifecycleStatus": "Active",
             "priceType": "recurring",
             "recurringChargePeriodType": "monthly",
-            "price": {"unit": "RUB", "value": 1},
+            "price": {"unit": "USD", "value": 1},
             "validFor": {"startDateTime": iso(START)},
         },
     ).json()

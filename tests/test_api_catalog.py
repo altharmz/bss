@@ -29,7 +29,7 @@ def price_body(**over) -> dict:
         "lifecycleStatus": "Active",
         "priceType": "recurring",
         "recurringChargePeriodType": "monthly",
-        "price": {"unit": "RUB", "value": 500},
+        "price": {"unit": "USD", "value": 500},
         "validFor": {"startDateTime": START},
         **over,
     }
@@ -117,8 +117,8 @@ def test_offering_filters(api):
 
 
 def test_price_round_trip(api):
-    price = make_price(api, price={"unit": "RUB", "value": 499.9})
-    assert decimals(api.get(price["href"]))["price"] == {"unit": "RUB", "value": Decimal("499.90")}
+    price = make_price(api, price={"unit": "USD", "value": 499.9})
+    assert decimals(api.get(price["href"]))["price"] == {"unit": "USD", "value": Decimal("499.90")}
     assert price["priceType"] == "recurring"
     assert price["recurringChargePeriodType"] == "monthly"
     assert price["recurringChargePeriodLength"] == 1
@@ -137,9 +137,9 @@ def test_price_validation(api):
     assert status(recurringChargePeriodType="fortnightly") == 422
     assert status(recurringChargePeriodLength=0) == 422
     assert status(priceType="usage") == 422
-    assert status(price={"unit": "rub", "value": 1}) == 422
-    assert status(price={"unit": "RUB"}) == 422
-    assert status(price={"unit": "RUB", "value": 1, "taxRate": 20}) == 400
+    assert status(price={"unit": "usd", "value": 1}) == 422
+    assert status(price={"unit": "USD"}) == 422
+    assert status(price={"unit": "USD", "value": 1, "taxRate": 20}) == 400
     assert api.get(PRICE).json() == []
 
 
@@ -212,7 +212,7 @@ def test_changing_a_price_means_ending_it_and_attaching_a_new_one(api):
     ended = api.patch(old["href"], {"validFor": {"startDateTime": START, "endDateTime": switch}})
     assert ended.status_code == 200
     assert ended.json()["validFor"]["endDateTime"] == z(timeline.START + timedelta(days=31))
-    new = make_price(api, price={"unit": "RUB", "value": 600}, validFor={"startDateTime": switch})
+    new = make_price(api, price={"unit": "USD", "value": 600}, validFor={"startDateTime": switch})
     attached = api.patch(offering["href"], {"productOfferingPrice": price_refs(old, new)})
     assert attached.status_code == 200
 

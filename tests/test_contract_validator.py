@@ -15,7 +15,7 @@ VALUE = {
     "@type": "ProductOfferingPrice",
     "name": "Monthly",
     "priceType": "recurring",
-    "price": {"unit": "RUB", "value": 19.99},
+    "price": {"unit": "USD", "value": 19.99},
 }
 
 
@@ -69,7 +69,7 @@ def test_unknown_discriminator_value_is_rejected():
 
 def test_allof_is_resolved_down_to_nested_money():
     # price -> Money.value is declared three $ref/allOf levels below the oneOf branch
-    broken = {**VALUE, "price": {"unit": "RUB", "value": "19.99"}}
+    broken = {**VALUE, "price": {"unit": "USD", "value": "19.99"}}
     assert any(e.startswith("price/value:") and "number" in e for e in _errors(broken))
 
 

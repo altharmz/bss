@@ -17,7 +17,7 @@ const B3 = 'b3000003-0000-4000-8000-000000000003';
 const INTERNAL = `/internal/v1/billingAccount/${A}`;
 const BILL = '/tmf-api/customerBillManagement/v5/customerBill';
 const PAYMENT = '/tmf-api/payment/v4/payment';
-const rub = (value: number) => ({ unit: 'RUB', value });
+const usd = (value: number) => ({ unit: 'USD', value });
 
 // business date 2026-10-01: B1 (due Aug 31) is overdue, B2 (due Oct 1) is not yet
 const BILLS = [
@@ -27,10 +27,10 @@ const BILLS = [
 ];
 
 const SETTLEMENT = {
-  outstanding: rub(400),
-  unallocatedCredit: rub(25.5),
-  overdue: { count: 1, amount: rub(300) },
-  onHold: { count: 0, amount: rub(0) },
+  outstanding: usd(400),
+  unallocatedCredit: usd(25.5),
+  overdue: { count: 1, amount: usd(300) },
+  onHold: { count: 0, amount: usd(0) },
   paymentTermDays: 30,
 };
 
@@ -43,8 +43,8 @@ function detail(over: Record<string, unknown> = {}) {
     billDate: '2026-09-01',
     period: { start: '2026-09-01', end: '2026-10-01' },
     paymentDueDate: '2026-10-01',
-    amountDue: rub(300),
-    remainingAmount: rub(100),
+    amountDue: usd(300),
+    remainingAmount: usd(100),
     state: 'partiallyPaid',
     category: 'normal',
     overdue: false,
@@ -55,7 +55,7 @@ function detail(over: Record<string, unknown> = {}) {
         href: '/r1',
         kind: 'charge',
         period: { start: '2026-09-01', end: '2026-10-01' },
-        amount: rub(300),
+        amount: usd(300),
         product: { id: 'p1', href: '/p1' },
         productOffering: { id: 'o1', name: 'Mobile L' },
       },
@@ -66,7 +66,7 @@ function detail(over: Record<string, unknown> = {}) {
         id: 'pay1',
         href: `${PAYMENT}/pay1`,
         label: 'bankTransfer',
-        amount: rub(200),
+        amount: usd(200),
         allocation: 'automatic',
         allocatedAt: '2026-09-05T09:00:00Z',
       },
@@ -261,7 +261,7 @@ describe('bills on the subscriber card', () => {
   it('offers no action on a settled bill', async () => {
     backend({
       [`GET /internal/v1/customerBill/${B2}`]: () =>
-        json(detail({ state: 'settled', remainingAmount: rub(0), allowedStates: [] })),
+        json(detail({ state: 'settled', remainingAmount: usd(0), allowedStates: [] })),
     });
     await open();
     fireEvent.click(await waitFor(() => billRow('BL-B2000002')));
@@ -287,13 +287,13 @@ describe('record payment', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Record payment' }));
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
-      'Payment of 1,500.50 RUB recorded · applied to 2 bills',
+      'Payment of 1,500.50 USD recorded · applied to 2 bills',
     );
     const post = sentBody(fetchMock, 'POST');
     expect(post.url).toBe(PAYMENT);
     expect(post.body).toBe(
       `{"@type":"Payment","account":{"id":"${A}","@referredType":"BillingAccount"},` +
-        '"totalAmount":{"unit":"RUB","value":1500.50},"paymentMethod":{"name":"bankTransfer"}}',
+        '"totalAmount":{"unit":"USD","value":1500.50},"paymentMethod":{"name":"bankTransfer"}}',
     );
     // the card reloads its bills
     await waitFor(() =>
@@ -336,13 +336,13 @@ describe('record payment', () => {
     fireEvent.click(submit);
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
-      'Payment of 350.00 RUB recorded · applied to 1 bill',
+      'Payment of 350.00 USD recorded · applied to 1 bill',
     );
     expect(sentBody(fetchMock, 'POST').body).toBe(
       `{"@type":"Payment","account":{"id":"${A}","@referredType":"BillingAccount"},` +
-        '"totalAmount":{"unit":"RUB","value":350.00},"paymentMethod":{"name":"cash"},' +
+        '"totalAmount":{"unit":"USD","value":350.00},"paymentMethod":{"name":"cash"},' +
         `"paymentItem":[{"@type":"PaymentItem","item":{"id":"${B2}","@referredType":"CustomerBill"},` +
-        '"amount":{"unit":"RUB","value":100.00}}]}',
+        '"amount":{"unit":"USD","value":100.00}}]}',
     );
   });
 
@@ -385,7 +385,7 @@ describe('record payment', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Record payment' }));
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
-      'Payment of 10.00 RUB recorded · kept as credit',
+      'Payment of 10.00 USD recorded · kept as credit',
     );
   });
 });

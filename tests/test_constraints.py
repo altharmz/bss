@@ -20,7 +20,7 @@ from tests.factories import (
 )
 
 
-def _price(conn, offering_id, start, end, currency="RUB"):
+def _price(conn, offering_id, start, end, currency="USD"):
     return catalog.create_product_offering_price(
         conn,
         product_offering_id=offering_id,
@@ -37,7 +37,7 @@ def test_overlapping_price_is_rejected_adjacent_is_accepted(db_conn):
     a, b, c = T0, T0.replace(month=3), T0.replace(month=6)
     _price(db_conn, off["id"], a, b)
     _price(db_conn, off["id"], b, c)  # [a,b) and [b,c) touch but do not overlap
-    _price(db_conn, off["id"], a, b, currency="USD")  # other currency: its own timeline
+    _price(db_conn, off["id"], a, b, currency="GBP")  # other currency: its own timeline
     with rejected(db_conn, errors.ExclusionViolation):
         _price(db_conn, off["id"], a.replace(month=2), None)
 
@@ -50,7 +50,7 @@ def test_recurring_price_requires_period(db_conn):
             product_offering_id=off["id"],
             price_type="recurring",
             amount=Decimal("1.00"),
-            currency="RUB",
+            currency="USD",
             valid_for=Range(T0, None, "[)"),
         )
 
@@ -91,7 +91,7 @@ def _refund(conn, w, amount, refunds_rate_id, product_id=None):
         billing_account_id=w.account["id"],
         charge_type="refund",
         amount=Decimal(amount),
-        currency="RUB",
+        currency="USD",
         period=days(date(2026, 1, 20), date(2026, 2, 1)),
         billing_run_id=w.run["id"],
         applied_at=w.run["started_at"],
@@ -135,7 +135,7 @@ def test_abr_on_a_bill_of_another_account_is_rejected(db_conn):
     bill = billing.insert_bill(
         db_conn,
         billing_account_id=stranger["id"],
-        currency="RUB",
+        currency="USD",
         bill_period=days(date(2026, 1, 1), date(2026, 2, 1)),
         bill_date=date(2026, 2, 1),
         amount_due=Decimal("0.00"),
@@ -149,7 +149,7 @@ def test_abr_on_a_bill_of_another_account_is_rejected(db_conn):
             billing_account_id=w.account["id"],
             charge_type="recurring",
             amount=Decimal("1.00"),
-            currency="RUB",
+            currency="USD",
             period=days(date(2026, 1, 1), date(2026, 2, 1)),
             billing_run_id=w.run["id"],
             applied_at=w.run["started_at"],
@@ -164,7 +164,7 @@ def test_overlapping_bill_periods_are_rejected(db_conn):
         return billing.insert_bill(
             db_conn,
             billing_account_id=w.account["id"],
-            currency="RUB",
+            currency="USD",
             bill_period=days(start, end),
             bill_date=end,
             amount_due=Decimal("0.00"),
@@ -179,13 +179,13 @@ def test_overlapping_bill_periods_are_rejected(db_conn):
 
 
 def test_currency_must_match_billing_account(db_conn):
-    acc = account(db_conn, currency="RUB")
+    acc = account(db_conn, currency="USD")
     with rejected(db_conn, errors.ForeignKeyViolation):
         payments.insert_payment(
             db_conn,
             billing_account_id=acc["id"],
             amount=Decimal("1.00"),
-            currency="USD",
+            currency="GBP",
             payment_method="bankTransfer",
             received_at=NOW,
         )
@@ -248,7 +248,7 @@ def test_bill_cycle_day_29_is_rejected(db_conn):
         db_conn,
         customer_id=acc["customer_id"],
         name="ok",
-        currency="RUB",
+        currency="USD",
         bill_cycle_day=28,
         opened_at=acc["opened_at"],
     )
@@ -257,7 +257,7 @@ def test_bill_cycle_day_29_is_rejected(db_conn):
             db_conn,
             customer_id=acc["customer_id"],
             name="x",
-            currency="RUB",
+            currency="USD",
             bill_cycle_day=29,
             opened_at=acc["opened_at"],
         )
@@ -287,4 +287,4 @@ def test_termination_before_start_is_rejected(db_conn):
 
 def test_bad_currency_code_is_rejected(db_conn):
     with rejected(db_conn, errors.CheckViolation):
-        account(db_conn, currency="rub")
+        account(db_conn, currency="usd")

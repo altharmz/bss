@@ -21,13 +21,13 @@ def test_payment_is_recorded_as_done(api, db_conn):
     acc = apidata.account(api)
     created = api.post_raw(
         PAYMENT,
-        f'{{"@type": "Payment", "account": {{"id": "{acc["id"]}"}}, "totalAmount": {{"unit": "RUB",'
+        f'{{"@type": "Payment", "account": {{"id": "{acc["id"]}"}}, "totalAmount": {{"unit": "USD",'
         ' "value": 1500.50}, "paymentMethod": {"name": "bankTransfer"}}',
     )
     assert created.status_code == 201
     body = created.json()
     assert created.headers["Location"] == body["href"] == f"{PAYMENT}/{body['id']}"
-    assert '"totalAmount":{"unit":"RUB","value":1500.50}' in created.text
+    assert '"totalAmount":{"unit":"USD","value":1500.50}' in created.text
     assert body["status"] == "done"
     assert body["paymentDate"] == body["statusDate"] == z(NOW)  # the clock
     assert body["account"] == {
@@ -38,13 +38,13 @@ def test_payment_is_recorded_as_done(api, db_conn):
     }
     assert body["paymentMethod"] == {"name": "bankTransfer"}  # as sent, no @type invented
     ((amount, currency, method, status, received_at),) = stored(db_conn)
-    assert (amount, currency, method, status) == (Decimal("1500.50"), "RUB", "bankTransfer", "done")
+    assert (amount, currency, method, status) == (Decimal("1500.50"), "USD", "bankTransfer", "done")
     assert received_at == api.clock.now()
     assert api.get(body["href"]).json() == body
 
 
-def rub(value) -> dict:
-    return {"unit": "RUB", "value": value}
+def usd(value) -> dict:
+    return {"unit": "USD", "value": value}
 
 
 def test_amount_and_tax_amount_split_the_total(api, db_conn):
@@ -52,21 +52,21 @@ def test_amount_and_tax_amount_split_the_total(api, db_conn):
     other; both must add up; none sent is a payment with no tax."""
     acc = apidata.account(api)
     for extra in (
-        {"amount": rub(1400)},
-        {"taxAmount": rub(100)},
-        {"amount": rub(1400), "taxAmount": rub(100)},
+        {"amount": usd(1400)},
+        {"taxAmount": usd(100)},
+        {"amount": usd(1400), "taxAmount": usd(100)},
     ):
         created = api.post(PAYMENT, apidata.payment_body(acc, **extra))
         assert created.status_code == 201, extra
         body = created.json()
         assert (body["amount"], body["taxAmount"], body["totalAmount"]) == (
-            rub(1400),
-            rub(100),
-            rub(1500),
+            usd(1400),
+            usd(100),
+            usd(1500),
         )
-        assert api.get(f"{body['href']}?fields=taxAmount").json()["taxAmount"] == rub(100)
+        assert api.get(f"{body['href']}?fields=taxAmount").json()["taxAmount"] == usd(100)
     plain = api.post(PAYMENT, apidata.payment_body(acc)).json()
-    assert (plain["amount"], plain["taxAmount"]) == (rub(1500), rub(0))
+    assert (plain["amount"], plain["taxAmount"]) == (usd(1500), usd(0))
     assert (
         sorted(db_conn.execute("SELECT amount, tax_amount FROM payment").fetchall())
         == [(Decimal("1500.00"), Decimal("0.00"))] + [(Decimal("1500.00"), Decimal("100.00"))] * 3
@@ -76,12 +76,12 @@ def test_amount_and_tax_amount_split_the_total(api, db_conn):
 @pytest.mark.parametrize(
     "extra",
     [
-        {"amount": rub(1400), "taxAmount": rub(50)},  # does not add up
+        {"amount": usd(1400), "taxAmount": usd(50)},  # does not add up
         {"taxAmount": {"unit": "EUR", "value": 100}},
         {"amount": {"unit": "EUR", "value": 1400}},
-        {"taxAmount": rub(1600)},  # more than the total
-        {"taxAmount": rub(-1)},
-        {"amount": rub(1600)},  # a negative tax
+        {"taxAmount": usd(1600)},  # more than the total
+        {"taxAmount": usd(-1)},
+        {"amount": usd(1600)},  # a negative tax
     ],
 )
 def test_a_tax_split_that_does_not_fit_the_total_is_refused(api, db_conn, extra):
@@ -118,9 +118,9 @@ def test_payment_method_is_mandatory(api, db_conn):
 @pytest.mark.parametrize(
     ("change", "status"),
     [
-        ({"totalAmount": {"unit": "RUB", "value": 0}}, 422),
-        ({"totalAmount": {"unit": "RUB", "value": -5}}, 422),
-        ({"totalAmount": {"unit": "RUB", "value": "5"}}, 422),
+        ({"totalAmount": {"unit": "USD", "value": 0}}, 422),
+        ({"totalAmount": {"unit": "USD", "value": -5}}, 422),
+        ({"totalAmount": {"unit": "USD", "value": "5"}}, 422),
         ({"account": {"id": NIL}}, 422),
         ({"account": {"href": "/x"}}, 422),
         ({"status": "done"}, 400),
@@ -139,7 +139,7 @@ def test_invalid_payments_are_rejected(api, db_conn, change, status):
 def test_three_decimals_are_rejected(api, db_conn):
     acc = apidata.account(api)
     text = (
-        f'{{"account": {{"id": "{acc["id"]}"}}, "totalAmount": {{"unit": "RUB", "value": 10.005}},'
+        f'{{"account": {{"id": "{acc["id"]}"}}, "totalAmount": {{"unit": "USD", "value": 10.005}},'
         ' "paymentMethod": {"name": "cash"}}'
     )
     assert api.post_raw(PAYMENT, text).status_code == 422
@@ -147,17 +147,17 @@ def test_three_decimals_are_rejected(api, db_conn):
 
 
 def test_currency_must_match_the_account(api, db_conn):
-    acc = apidata.account(api)  # RUB
+    acc = apidata.account(api)  # USD
     response = api.post(PAYMENT, apidata.payment_body(acc, unit="EUR"))
     assert response.status_code == 422
-    assert "does not match the account's currency RUB" in response.json()["message"]
+    assert "does not match the account's currency USD" in response.json()["message"]
     assert stored(db_conn) == []
 
 
 def test_currency_foreign_key_violation_is_a_409_not_a_500(api, db_conn, monkeypatch):
     """If the check before the insert were ever skipped, the composite FK (account,
     currency) still refuses the row - and that must surface as a TMF 409."""
-    acc = apidata.account(api)  # RUB
+    acc = apidata.account(api)  # USD
     real = payment_api.parties.get_billing_account
 
     def claims_eur(conn, account_id, lock=None):

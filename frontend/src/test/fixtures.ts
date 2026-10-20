@@ -16,19 +16,19 @@ export const RUN = {
   finishedAt: '2026-09-30T21:31:05Z',
   heartbeatAt: '2026-09-30T21:31:05Z',
   accounts: { total: 3, ok: 3, failed: 0, blocked: 0 },
-  charges: { count: 4, amounts: [{ unit: 'RUB', value: 2241.4 }] },
+  charges: { count: 4, amounts: [{ unit: 'USD', value: 2241.4 }] },
   error: null,
   isLatest: true,
 };
 
-const rub = (value: number) => ({ unit: 'RUB', value });
+const usd = (value: number) => ({ unit: 'USD', value });
 
 /** GET /internal/v1/billingAccount/{id}/settlement of an account with nothing on bills. */
 export const NO_SETTLEMENT = {
-  outstanding: rub(0),
-  unallocatedCredit: rub(0),
-  overdue: { count: 0, amount: rub(0) },
-  onHold: { count: 0, amount: rub(0) },
+  outstanding: usd(0),
+  unallocatedCredit: usd(0),
+  overdue: { count: 0, amount: usd(0) },
+  onHold: { count: 0, amount: usd(0) },
   paymentTermDays: 30,
 };
 
@@ -63,8 +63,8 @@ export function billBody(
     billDate: midnight(billDate),
     billingPeriod: { startDateTime: midnight(billDate), endDateTime: midnight(day(next)) },
     paymentDueDate: midnight(day(due)),
-    amountDue: rub(amountDue),
-    remainingAmount: rub(remaining),
+    amountDue: usd(amountDue),
+    remainingAmount: usd(remaining),
     appliedPayment: [],
     category: amountDue < 0 ? 'creditNote' : 'normal',
     runType: 'onCycle',
@@ -94,12 +94,12 @@ export function accountBody(
     accountBalance: [
       {
         balanceType: 'currentBalance',
-        amount: { unit: 'RUB', value: 0 },
+        amount: { unit: 'USD', value: 0 },
         '@type': 'AccountBalance',
       },
     ],
     billCycleDay: 1,
-    currency: 'RUB',
+    currency: 'USD',
     '@type': 'BssBillingAccount',
     ...over,
   };

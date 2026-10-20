@@ -15,12 +15,12 @@ const account: Account = {
   customerId: 'c1',
   customerName: 'Olga',
   cycleDay: 1,
-  currency: 'RUB',
+  currency: 'USD',
   balanceCents: 10025,
   creditLimitCents: null,
   financialAccount: null,
 };
-const credit = { ...NO_SETTLEMENT, unallocatedCredit: { unit: 'RUB', value: 150 } };
+const credit = { ...NO_SETTLEMENT, unallocatedCredit: { unit: 'USD', value: 150 } };
 const DEMANDS = `GET ${BILL_DEMANDS}?billingAccount.id=${A}&offset=0&limit=100`;
 const REFUND_LIST = `GET ${REFUNDS}?account.id=${A}&offset=0&limit=100`;
 const demand = (state = 'inProgress') => ({ id: 'd1', state, lastUpdate: '2026-09-30T21:30:00Z' });
@@ -67,7 +67,7 @@ describe('refunds', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Record refund' }));
     await waitFor(() => expect(changed).toHaveBeenCalledOnce());
     expect(fetchMock.mock.calls[0]?.[1]?.body).toBe(
-      `{"@type":"Refund","account":{"id":"${A}","@referredType":"BillingAccount"},"totalAmount":{"unit":"RUB","value":25.10},"paymentMethod":{"name":"bankTransfer"},"description":"Returned deposit"}`,
+      `{"@type":"Refund","account":{"id":"${A}","@referredType":"BillingAccount"},"totalAmount":{"unit":"USD","value":25.10},"paymentMethod":{"name":"bankTransfer"},"description":"Returned deposit"}`,
     );
   });
 
@@ -107,7 +107,7 @@ describe('refunds', () => {
           accountBody(
             A,
             { id: 'c1', name: 'Olga' },
-            { accountBalance: [{ amount: { unit: 'RUB', value: 10 } }] },
+            { accountBalance: [{ amount: { unit: 'USD', value: 10 } }] },
           ),
         ),
       [`GET /internal/v1/billingAccount/${A}/settlement`]: () => json(credit),
@@ -116,7 +116,7 @@ describe('refunds', () => {
       <RefundModal account={account} initialLimit={10025} onClose={vi.fn()} onRecorded={vi.fn()} />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Record refund' }));
-    await screen.findByText('Refundable credit 10.00 RUB');
+    await screen.findByText('Refundable credit 10.00 USD');
     expect((screen.getByLabelText('Refund amount') as HTMLInputElement).value).toBe('100.25');
     expect(
       (screen.getByRole('button', { name: 'Record refund' }) as HTMLButtonElement).disabled,
@@ -147,7 +147,7 @@ describe('refunds', () => {
             {
               id: 'r1',
               refundDate: '2026-09-30T21:30:00Z',
-              totalAmount: { unit: 'RUB', value: 25.1 },
+              totalAmount: { unit: 'USD', value: 25.1 },
               paymentMethod: { name: 'cash' },
               description: 'Returned deposit',
             },
@@ -160,7 +160,7 @@ describe('refunds', () => {
             {
               id: 'r2',
               refundDate: '2026-10-01T09:00:00Z',
-              totalAmount: { unit: 'RUB', value: 10 },
+              totalAmount: { unit: 'USD', value: 10 },
               paymentMethod: { name: 'card' },
             },
           ],
@@ -175,7 +175,7 @@ describe('refunds', () => {
     await screen.findByText('Returned deposit');
     expectUi('ui.subscriber.refunds');
     expect(screen.getByText('2026-10-01 00:30:00')).toBeTruthy();
-    expect(screen.getByText('25.10 RUB')).toBeTruthy();
+    expect(screen.getByText('25.10 USD')).toBeTruthy();
     expect(screen.getByText('card')).toBeTruthy();
   });
 

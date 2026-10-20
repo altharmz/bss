@@ -291,7 +291,7 @@ def world(api, db_conn) -> dict[str, Any]:
         "/tmf-api/payment/v4/refund",
         {
             "account": {"id": refund_account["id"]},
-            "totalAmount": {"unit": "RUB", "value": 10},
+            "totalAmount": {"unit": "USD", "value": 10},
             "paymentMethod": {"@type": "Cash"},
         },
     ).json()
@@ -448,7 +448,7 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         "lifecycleStatus": "Active",
         "priceType": "recurring",
         "recurringChargePeriodType": "monthly",
-        "price": {"unit": "RUB", "value": "450.50"},
+        "price": {"unit": "USD", "value": "450.50"},
     }
     price = call("create_price", {"body": {**price_fields, "validFor": {"startDateTime": start}}})
     assert price["price"]["value"] == 450.5
@@ -588,7 +588,7 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         {
             "body": {
                 "account": {"id": account["id"]},
-                "totalAmount": {"unit": "RUB", "value": "20.00"},
+                "totalAmount": {"unit": "USD", "value": "20.00"},
                 "paymentMethod": {"@type": "Cash"},
             }
         },
@@ -598,7 +598,7 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         "price_change",
         {
             "offering_id": offering["id"],
-            "body": {"amount": "499.99", "currency": "RUB", "validFrom": "2027-02-01"},
+            "body": {"amount": "499.99", "currency": "USD", "validFrom": "2027-02-01"},
         },
     )
     call("catch_up", {"body": {"upTo": str(date(2026, 12, 2))}}, expected=(200, 202))

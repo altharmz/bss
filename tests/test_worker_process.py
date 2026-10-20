@@ -7,7 +7,7 @@ failed must end with exactly the charges and bills of the control - which also c
 catch-up in the wrong order (a termination effective Dec 3, ordered Dec 2, gives a charge
 and a refund when the dates are billed one by one, a single reduced charge otherwise).
 
-A price is "broken" by switching its currency (the account bills in RUB, so MissingPrice -
+A price is "broken" by switching its currency (the account bills in USD, so MissingPrice -
 a BillingError) and fixed by switching it back.
 """
 
@@ -209,7 +209,7 @@ def test_a_failed_account_blocks_only_itself_and_catches_up_in_order(api, worker
     others = {i: (ledger(worker, i), outcome(worker, DEC1, i)) for i in (a, b)}
 
     # the fix (a reviewed one-off script in real life), then a retry of Dec 1
-    set_currency(worker, s["fragile"]["id"], "RUB")
+    set_currency(worker, s["fragile"]["id"], "USD")
     api.clock.set(at(DEC3, 12))
     retry_run(worker, first["id"], clock=api.clock, tz=TZ)
 
@@ -230,7 +230,7 @@ def test_a_failed_account_blocks_only_itself_and_catches_up_in_order(api, worker
 def test_retrying_a_later_run_leaves_accounts_blocked_on_an_earlier_date(api, worker):
     s = scenario(api, worker, broken=True)
     x = s["ids"]["x"]
-    set_currency(worker, s["fragile"]["id"], "RUB")  # fixed, but Dec 1 is not retried
+    set_currency(worker, s["fragile"]["id"], "USD")  # fixed, but Dec 1 is not retried
     retry_run(worker, s["runs"][DEC2]["id"], clock=api.clock, tz=TZ)
     assert outcome(worker, DEC2, x)["status"] == "blocked"  # still waiting for Dec 1
     assert billing.get_run(worker, DEC2)["status"] == "failed"
@@ -241,12 +241,12 @@ def test_retrying_a_later_run_leaves_accounts_blocked_on_an_earlier_date(api, wo
 def test_a_catch_up_stops_at_the_next_failure_and_later_dates_wait_for_it(api, worker, monkeypatch):
     s = scenario(api, worker, broken=True)
     x = s["ids"]["x"]
-    set_currency(worker, s["fragile"]["id"], "RUB")
+    set_currency(worker, s["fragile"]["id"], "USD")
     real = process.bill_account
 
     def fails_on_dec2(conn, account_id, run, **kw):
         if account_id == x and run["run_date"] == DEC2:
-            raise MissingPrice(uuid.uuid4(), DEC2, "RUB")  # injected for Dec 2 only
+            raise MissingPrice(uuid.uuid4(), DEC2, "USD")  # injected for Dec 2 only
         return real(conn, account_id, run, **kw)
 
     monkeypatch.setattr(process, "bill_account", fails_on_dec2)

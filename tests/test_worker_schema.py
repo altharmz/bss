@@ -195,7 +195,7 @@ def test_opened_at_is_required(db_conn):
         db_conn.execute(
             """
             INSERT INTO billing_account (customer_id, name, state, currency, bill_cycle_day)
-            VALUES (%s, 'x', 'Active', 'RUB', 1)
+            VALUES (%s, 'x', 'Active', 'USD', 1)
             """,
             (acc["customer_id"],),
         )

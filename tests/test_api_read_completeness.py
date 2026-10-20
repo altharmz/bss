@@ -58,7 +58,7 @@ def write_cases(api, db_conn):
                 "lifecycleStatus": "Active",
                 "priceType": "recurring",
                 "recurringChargePeriodType": "monthly",
-                "price": {"unit": "RUB", "value": 99.99},
+                "price": {"unit": "USD", "value": 99.99},
                 "validFor": {"startDateTime": future},
             },
         ),
@@ -223,7 +223,7 @@ def test_order_quotes_are_exact_summed_and_immutable_after_catalog_changes(api, 
     assert api.patch(price["href"], {"name": "Renamed"}).status_code == 200
     response = api.post(
         f"/internal/v1/productOffering/{offering['id']}/priceChange",
-        {"amount": 350.99, "currency": "RUB", "validFrom": "2026-10-15"},
+        {"amount": 350.99, "currency": "USD", "validFrom": "2026-10-15"},
     )
     assert response.status_code == 201, response.text
     api.clock.set(midnight(date(2026, 11, 10)))
@@ -242,7 +242,7 @@ def test_product_price_uses_billing_period_not_a_mid_period_catalog_change(api, 
     assert product["productPrice"][0]["@type"] == "ProductPrice"
     changed = api.post(
         f"/internal/v1/productOffering/{offering['id']}/priceChange",
-        {"amount": 350.99, "currency": "RUB", "validFrom": "2026-10-15"},
+        {"amount": 350.99, "currency": "USD", "validFrom": "2026-10-15"},
     )
     assert changed.status_code == 201, changed.text
     api.clock.set(midnight(date(2026, 10, 20)))
@@ -317,7 +317,7 @@ def test_future_product_uses_its_scheduled_start_price_and_currency(api, shop):
     offering, account = shop
     changed = api.post(
         f"/internal/v1/productOffering/{offering['id']}/priceChange",
-        {"amount": 399.01, "currency": "RUB", "validFrom": "2026-11-01"},
+        {"amount": 399.01, "currency": "USD", "validFrom": "2026-11-01"},
     )
     assert changed.status_code == 201
     placed = apidata.order(
@@ -329,7 +329,7 @@ def test_future_product_uses_its_scheduled_start_price_and_currency(api, shop):
     product = apidata.product_of(api, placed)
     assert product["status"] == "created" and fee(product["productPrice"][0]) == 399.01
     assert fee(placed["productOrderItem"][0]["itemPrice"][0]) == 399.01
-    assert product["productPrice"][0]["price"]["dutyFreeAmount"]["unit"] == "RUB"
+    assert product["productPrice"][0]["price"]["dutyFreeAmount"]["unit"] == "USD"
 
 
 def test_cycle_links_dates_amounts_paging_and_read_only_contract(api, db_conn):

@@ -79,20 +79,20 @@ def test_balance_is_per_currency_sum_of_linked_billing_accounts(api):
     org = apidata.organization(api)
     fa = financial(api, org)
     cust = apidata.customer(api, org)
-    rub1 = apidata.account(api, cust, name="RUB 1", financialAccount=link(fa))
-    rub2 = apidata.account(api, cust, name="RUB 2")
+    usd1 = apidata.account(api, cust, name="USD 1", financialAccount=link(fa))
+    usd2 = apidata.account(api, cust, name="USD 2")
     eur = apidata.account(api, cust, name="EUR", currency="EUR", financialAccount=link(fa))
-    assert rub1["financialAccount"] == {
+    assert usd1["financialAccount"] == {
         "id": fa["id"],
         "href": fa["href"],
         "name": fa["name"],
         "@type": "FinancialAccountRef",
         "@referredType": "FinancialAccount",
     }
-    assert "financialAccount" not in rub2
-    assert api.patch(rub2["href"], {"financialAccount": link(fa)}).status_code == 200
-    apidata.payment(api, rub1, 100)
-    apidata.payment(api, rub2, 20.5)
+    assert "financialAccount" not in usd2
+    assert api.patch(usd2["href"], {"financialAccount": link(fa)}).status_code == 200
+    apidata.payment(api, usd1, 100)
+    apidata.payment(api, usd2, 20.5)
     apidata.payment(api, eur, 7, unit="EUR")
     apidata.payment(api, apidata.account(api, cust, name="unlinked"), 1000)
     body = decimals(api.get(fa["href"]))
@@ -104,9 +104,9 @@ def test_balance_is_per_currency_sum_of_linked_billing_accounts(api):
             "@type": "AccountBalance",
         },
         {
-            "id": "currentBalance-RUB",
+            "id": "currentBalance-USD",
             "balanceType": "currentBalance",
-            "amount": {"unit": "RUB", "value": Decimal("120.50")},
+            "amount": {"unit": "USD", "value": Decimal("120.50")},
             "@type": "AccountBalance",
         },
     ]
@@ -114,17 +114,17 @@ def test_balance_is_per_currency_sum_of_linked_billing_accounts(api):
         (r["relationshipType"], r["account"]["id"], r["account"]["@referredType"])
         for r in body["accountRelationship"]
     ] == [
-        ("contains", rub1["id"], "BillingAccount"),
-        ("contains", rub2["id"], "BillingAccount"),
+        ("contains", usd1["id"], "BillingAccount"),
+        ("contains", usd2["id"], "BillingAccount"),
         ("contains", eur["id"], "BillingAccount"),
     ]
     assert body["accountRelationship"][0]["account"]["@type"] == "AccountRef"
     linked = api.get(f"{ACCOUNT}?financialAccount.id={fa['id']}").json()
-    assert [a["name"] for a in linked] == ["RUB 1", "RUB 2", "EUR"]
-    unlinked = api.patch(rub1["href"], {"financialAccount": None}).json()
+    assert [a["name"] for a in linked] == ["USD 1", "USD 2", "EUR"]
+    unlinked = api.patch(usd1["href"], {"financialAccount": None}).json()
     assert "financialAccount" not in unlinked
-    rub = decimals(api.get(fa["href"]))["accountBalance"][1]["amount"]
-    assert rub == {"unit": "RUB", "value": Decimal("20.50")}
+    usd = decimals(api.get(fa["href"]))["accountBalance"][1]["amount"]
+    assert usd == {"unit": "USD", "value": Decimal("20.50")}
 
 
 def test_link_needs_the_same_owner_and_an_open_financial_account(api):
@@ -205,8 +205,8 @@ def test_create_repeating_what_the_server_sets_and_choosing_the_id(api):
 
 def test_patch_and_credit_limit(api):
     org = apidata.organization(api)
-    fa = financial(api, org, creditLimit={"unit": "USD", "value": 500})
-    assert decimals(api.get(fa["href"]))["creditLimit"] == {"unit": "USD", "value": Decimal(500)}
+    fa = financial(api, org, creditLimit={"unit": "GBP", "value": 500})
+    assert decimals(api.get(fa["href"]))["creditLimit"] == {"unit": "GBP", "value": Decimal(500)}
     patched = api.patch(
         fa["href"],
         {
@@ -231,8 +231,8 @@ def test_patch_and_credit_limit(api):
         ({"state": None}, 422),
         ({"state": "Open"}, 422),
         ({"accountType": ""}, 422),
-        ({"creditLimit": {"unit": "RUB", "value": -1}}, 422),
-        ({"creditLimit": {"unit": "RUB", "value": 0.001}}, 422),
+        ({"creditLimit": {"unit": "USD", "value": -1}}, 422),
+        ({"creditLimit": {"unit": "USD", "value": 0.001}}, 422),
         ({"relatedParty": []}, 422),
         ({"relatedParty": None}, 422),
         ({"accountBalance": [{"balanceType": "currentBalance"}]}, 422),
@@ -253,7 +253,7 @@ def test_patch_and_credit_limit(api):
             {
                 "name": "x",
                 "relatedParty": [owner(org)],
-                "creditLimit": {"unit": "RUB", "value": -1},
+                "creditLimit": {"unit": "USD", "value": -1},
             },
         ).status_code
         == 422

@@ -18,7 +18,7 @@ TODAY = timeline.TOMORROW
 
 @pytest.fixture
 def shop(api):
-    """An offering with a RUB monthly price and an Active RUB account; the clock is then
+    """An offering with a USD monthly price and an Active USD account; the clock is then
     moved to the day the price starts."""
     offering = apidata.sellable_offering(api)
     acc = apidata.account(api)

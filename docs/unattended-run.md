@@ -85,7 +85,7 @@ Nothing stuck; no command was refused during the run, and no protected file was 
    history ("No charges") - her orders are from today.
 5. **Sergey Volkov's card**: "+ Add product" disabled with its caption.
 6. **Ivan Petrov's card**: a refund in the charge history and a mix of transactions.
-8. **Catalog list**: codes, "Price, RUB", "month", status pills, validity
+8. **Catalog list**: codes, "Price, USD", "month", status pills, validity
    ("2026-06-04 – open-ended" style), TV Basic in In Design; search "net", the status
    filter, a search that matches nothing.
 9. **Catalog -> + New offering**: the validation messages (type an existing code such as

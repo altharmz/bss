@@ -43,7 +43,7 @@ const GROUP = {
   accountType: 'Business',
   state: 'Active',
   relatedParty: owner('Romashka LLC', 'Organization'),
-  accountBalance: [balance('EUR', 7), balance('RUB', -120.5)],
+  accountBalance: [balance('EUR', 7), balance('USD', -120.5)],
   accountRelationship: [
     contains(B1, 'Main account', 'BillingAccount'),
     contains('s0000001-0000-4000-8000-000000000001', 'Partner payouts', 'SettlementAccount'),

@@ -77,7 +77,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await page.getByRole('button', { name: '+ Add product' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Add product' });
   await dialog.getByRole('radio').filter({ hasText: '/ mo' }).first().click();
-  await expect(dialog.getByTestId('first-charge')).toContainText('RUB');
+  await expect(dialog.getByTestId('first-charge')).toContainText('USD');
   await expect(dialog.getByText(/in the run of \d{4}-\d{2}-\d{2} · on the bill of/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();

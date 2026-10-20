@@ -26,7 +26,7 @@ def test_full_flow(api):
             "lifecycleStatus": "Active",
             "priceType": "recurring",
             "recurringChargePeriodType": "monthly",
-            "price": {"unit": "RUB", "value": 599.90},
+            "price": {"unit": "USD", "value": 599.90},
             "validFor": {"startDateTime": iso(timeline.START)},
         },
     ).json()
@@ -72,7 +72,7 @@ def test_full_flow(api):
     paid = apidata.payment(api, account, 1000)
     assert api.get(f"{PAYMENT}?account.id={account['id']}").json() == [paid]
     (balance,) = decimals(api.get(f"{ACCOUNT}/{account['id']}"))["accountBalance"]
-    assert balance["amount"] == {"unit": "RUB", "value": Decimal("1000.00")}
+    assert balance["amount"] == {"unit": "USD", "value": Decimal("1000.00")}
     assert api.get(RATE).json() == []  # stage 2 never writes an ABR
 
     # a modify order of the ended product is stored as rejected, with its reason

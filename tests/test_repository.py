@@ -49,7 +49,7 @@ def test_create_and_get_product_offering_price(db_conn):
         price_type="recurring",
         recurring_period="monthly",
         amount=Decimal("499.90"),
-        currency="RUB",
+        currency="USD",
         valid_for=Range(T0, None, "[)"),
     )
     got = catalog.get_product_offering_price(db_conn, price["id"])
@@ -68,7 +68,7 @@ def test_price_at(db_conn):
             price_type="recurring",
             recurring_period="monthly",
             amount=Decimal(amount),
-            currency="RUB",
+            currency="USD",
             valid_for=Range(start, end, "[)"),
         )
 
@@ -79,7 +79,7 @@ def test_price_at(db_conn):
             db_conn,
             product_offering_id=off["id"],
             price_type="recurring",
-            currency="RUB",
+            currency="USD",
             at=when,
         )
 
@@ -89,7 +89,7 @@ def test_price_at(db_conn):
     assert at(T0 - timedelta(days=1)) is None
     assert (
         catalog.price_at(
-            db_conn, product_offering_id=off["id"], price_type="recurring", currency="USD", at=T0
+            db_conn, product_offering_id=off["id"], price_type="recurring", currency="GBP", at=T0
         )
         is None
     )
@@ -119,10 +119,10 @@ def test_create_and_get_customer(db_conn):
 
 
 def test_create_and_get_billing_account(db_conn):
-    acc = account(db_conn, currency="USD")
+    acc = account(db_conn, currency="GBP")
     got = parties.get_billing_account(db_conn, acc["id"])
     assert got == acc
-    assert (got["currency"], got["state"], got["bill_cycle_day"]) == ("USD", "Active", 1)
+    assert (got["currency"], got["state"], got["bill_cycle_day"]) == ("GBP", "Active", 1)
 
 
 # --- orders ---
@@ -360,7 +360,7 @@ def test_list_abrs(db_conn):
         billing_account_id=w.account["id"],
         charge_type="refund",
         amount=Decimal("-50.00"),
-        currency="RUB",
+        currency="USD",
         period=days(date(2026, 2, 15), date(2026, 3, 1)),
         billing_run_id=w.run["id"],
         applied_at=w.run["started_at"],
@@ -382,7 +382,7 @@ def test_insert_bill(db_conn):
     bill = billing.insert_bill(
         db_conn,
         billing_account_id=w.account["id"],
-        currency="RUB",
+        currency="USD",
         bill_period=days(date(2026, 1, 1), date(2026, 2, 1)),
         bill_date=date(2026, 2, 1),
         amount_due=Decimal("499.90"),
@@ -414,7 +414,7 @@ def test_account_balance(db_conn):
         billing_account_id=w.account["id"],
         charge_type="refund",
         amount=Decimal("-161.29"),
-        currency="RUB",
+        currency="USD",
         period=days(date(2026, 1, 22), date(2026, 2, 1)),
         billing_run_id=w.run["id"],
         applied_at=w.run["started_at"],
@@ -425,7 +425,7 @@ def test_account_balance(db_conn):
             db_conn,
             billing_account_id=w.account["id"],
             amount=Decimal(amount),
-            currency="RUB",
+            currency="USD",
             payment_method="bankTransfer",
             received_at=NOW,
         )
@@ -435,7 +435,7 @@ def test_account_balance(db_conn):
         db_conn,
         billing_account_id=other["id"],
         amount=Decimal("999.00"),
-        currency="RUB",
+        currency="USD",
         payment_method="bankTransfer",
         received_at=NOW,
     )
@@ -462,7 +462,7 @@ def test_insert_payment(db_conn):
         db_conn,
         billing_account_id=acc["id"],
         amount=Decimal("1000.00"),
-        currency="RUB",
+        currency="USD",
         payment_method="bankTransfer",
         received_at=received,
     )

@@ -152,7 +152,7 @@ def build_catalog(api: Api, first_day: date) -> dict[str, dict[str, Any]]:
                 "lifecycleStatus": "Active",
                 "priceType": "recurring",
                 "recurringChargePeriodType": "monthly",
-                "price": {"unit": "RUB", "value": plan.price},
+                "price": {"unit": "USD", "value": plan.price},
                 "validFor": {"startDateTime": start},
             },
         )
@@ -194,7 +194,7 @@ def build_accounts(api: Api) -> dict[str, dict[str, Any]]:
         extra = (
             {}
             if plan.credit_limit is None
-            else {"creditLimit": {"unit": "RUB", "value": int(plan.credit_limit)}}
+            else {"creditLimit": {"unit": "USD", "value": int(plan.credit_limit)}}
         )
         accounts[plan.key] = api.post(
             ACCOUNT,
@@ -255,7 +255,7 @@ def pay_newest(api: Api, world: World, who: str, value: int, method: str) -> Non
     body["paymentItem"] = [
         {
             "item": {"id": newest["id"], "@referredType": "CustomerBill"},
-            "amount": {"unit": "RUB", "value": value},
+            "amount": {"unit": "USD", "value": value},
         }
     ]
     api.post(apidata.PAYMENT, body)

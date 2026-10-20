@@ -234,7 +234,7 @@ def populate(api: Any) -> None:
     apidata.payment(api, acc, 100)
     payout = {
         "account": {"id": acc["id"]},
-        "totalAmount": {"unit": "RUB", "value": 20},
+        "totalAmount": {"unit": "USD", "value": 20},
         "paymentMethod": {"name": "cash payout", "@type": "Cash"},
     }
     offering = _versioned_offering(api)
@@ -297,7 +297,7 @@ def _versioned_offering(api: Any) -> dict[str, Any]:
             "lifecycleStatus": "Active",
             "priceType": "recurring",
             "recurringChargePeriodType": "monthly",
-            "price": {"unit": "RUB", "value": 100},
+            "price": {"unit": "USD", "value": 100},
             "unitOfMeasure": {"amount": 1, "units": "line"},
             "validFor": {"startDateTime": apidata.START},
         },
