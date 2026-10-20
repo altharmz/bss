@@ -5,7 +5,10 @@
 The human requested daily, weekly, monthly and yearly product charge periods with
 positive integer multiples. Account invoice cycles remain monthly. This extends the
 monthly-only policy in [catalog.md](catalog.md) and [billing-core.md](billing-core.md).
-The implementation is local and requires migration `0030`; nothing has been deployed.
+Deployed as `bss-app:7ad101e` on 2026-10-20; migration `0030` is applied locally and
+in production. All local `make verify` checks passed; deployment completed on the
+second `make deploy` retry after intermittent public connection timeouts. App, worker
+and MCP were healthy, and all web and MCP smoke checks passed on the final attempt.
 
 ## TMF contract
 

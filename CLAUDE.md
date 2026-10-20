@@ -193,7 +193,7 @@ charge periods only (invoices remain monthly) and activation-date anniversaries 
 a full first interval for the new cadences. Monthly length-1 retains existing calendar
 alignment/proration. Decision and implementation detail:
 [charge-periods.md](docs/decisions/charge-periods.md). Migration `0030` is applied to
-the local database; production is unchanged. Downgrade refuses non-monthly or
+both local and production databases. Downgrade refuses non-monthly or
 length-not-1 prices rather than discarding them.
 
 Validation completed: three full backend passes (1,398, then 1,405 twice; the later
@@ -203,19 +203,24 @@ check. Negative proofs for the missing sidebar count and a week miscalculated as
 failed as expected and were reverted. The human approved the three charge-period API
 note edits under `scripts/docs/api-notes/`; the edit hook still blocked them, so the
 human applied the supplied patch from the shell and it was verified. API/database
-reference docs are regenerated with `make docs`. `make docs-check` compares generated
-files with committed HEAD and must pass after committing the generated files.
+reference docs are regenerated with `make docs`; `make docs-check` passed after commit.
 Progress scope has not changed.
 
-The human authorized commit, push and deployment of this work on 2026-10-20.
-The release gate is `make verify`; confirm its result and the deployed commit before
-calling this release deployed. Until that succeeds, the deployed status below remains
-the last verified release. No runtime changes followed the successful full test
-passes; the subsequent edits were documentation only. The older
+**Deployed (2026-10-20): `bss-app:7ad101e`**, committed and pushed to `master`.
+`make verify` passed all local checks: 1,405 backend tests with the CI profile,
+documentation/decision checks, frontend lint, 258 frontend tests in each timezone and
+four browser tests. Its deployment applied `0030` and reached healthy app/worker/MCP,
+but a public web health request timed out. The first `make deploy` retry passed the
+web smoke but timed out on an MCP request; the second retry succeeded end to end,
+including all eight web checks and all MCP checks. `/healthz` and `/billing-status`
+returned 200 (`ok`). Full logs: `/tmp/bss-charge-period-verify.log`,
+`/tmp/bss-charge-period-deploy-retry.log`, `/tmp/bss-charge-period-deploy-retry2.log`.
+No runtime changes followed these checks; the release-status follow-up is documentation
+only and needs no redeploy. The older
 slice-6 catalog documentation corrections described below are still pending and were
 not included in the approved charge-period note patch.
 
-**Deployed** (2026-10-19): **`bss-app:b4ccd63`** runs on the VPS - everything up to
+**Previous deployed release** (2026-10-19): **`bss-app:b4ccd63`** - everything up to
 and including UI user management (`7272ffc`: migrations up to `0029`, app
 authentication with sessions and roles, the UI's sign-in and Users screen, the
 service/smoke secrets, the `terminationInPeriod` fix) and the after-U11 slice 4
