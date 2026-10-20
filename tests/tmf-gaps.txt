@@ -4,7 +4,56 @@
 # requires (we require, the spec does not), missing (never returned; "a.b": one level into
 # a returned value), content-type (415), base path. Behaviour gaps (states, rewrites,
 # order) are in docs/tmf-gap-analysis.md.
-# No open gaps (2026-10-19).
+# Planned restrictions for the new contracts (not implemented behavior yet):
+# TMF639: LogicalResource/msisdn only; other subclasses and non-number states are
+# excluded from number inventory. Assigned numbers use busy; quarantine uses the
+# free-string allocationStatus, never a new usageState enum.
+# TMF654: monetary only; no usage rating, recurring adjustment, automatic top-up,
+# vouchers or future operator holds. Monetary Quantity requires explicit amount
+# and units; reserveBalance requires an explicit amount (no inferred all-funds hold).
+# Executed action financial/ownership fields are immutable; transfers are final.
+# BalanceActionHistory: waive required receiverLogicalResource only for persisted
+# TopupBalance, AdjustBalance and ReserveBalance kinds. Status always remains required;
+# transfers validate against the unchanged schema. No fictitious receiver is added.
+# Events: register all declared names; TransferBalanceCancelEvent is unreachable.
+# Listener paths are subscriber endpoints, not BSS operations or missing endpoints.
+# Contract-only APIs (N1): 36 absent endpoints. Attribute probes start with routes.
+TMF639 DELETE /hub/{id} endpoint absent
+TMF639 DELETE /resource/{id} endpoint absent
+TMF639 GET /hub/{id} endpoint absent
+TMF639 GET /resource endpoint absent
+TMF639 GET /resource/{id} endpoint absent
+TMF639 PATCH /resource/{id} endpoint absent
+TMF639 POST /hub endpoint absent
+TMF639 POST /resource endpoint absent
+TMF654 DELETE /adjustBalance/{id} endpoint absent
+TMF654 DELETE /hub/{id} endpoint absent
+TMF654 DELETE /reserveBalance/{id} endpoint absent
+TMF654 DELETE /topupBalance/{id} endpoint absent
+TMF654 DELETE /transferBalance/{id} endpoint absent
+TMF654 GET /accumulatedBalance endpoint absent
+TMF654 GET /accumulatedBalance/{id} endpoint absent
+TMF654 GET /adjustBalance endpoint absent
+TMF654 GET /adjustBalance/{id} endpoint absent
+TMF654 GET /balanceActionHistory endpoint absent
+TMF654 GET /balanceActionHistory/{id} endpoint absent
+TMF654 GET /bucket endpoint absent
+TMF654 GET /bucket/{id} endpoint absent
+TMF654 GET /reserveBalance endpoint absent
+TMF654 GET /reserveBalance/{id} endpoint absent
+TMF654 GET /topupBalance endpoint absent
+TMF654 GET /topupBalance/{id} endpoint absent
+TMF654 GET /transferBalance endpoint absent
+TMF654 GET /transferBalance/{id} endpoint absent
+TMF654 PATCH /adjustBalance/{id} endpoint absent
+TMF654 PATCH /reserveBalance/{id} endpoint absent
+TMF654 PATCH /topupBalance/{id} endpoint absent
+TMF654 PATCH /transferBalance/{id} endpoint absent
+TMF654 POST /adjustBalance endpoint absent
+TMF654 POST /hub endpoint absent
+TMF654 POST /reserveBalance endpoint absent
+TMF654 POST /topupBalance endpoint absent
+TMF654 POST /transferBalance endpoint absent
 
 # accepted deviations: gaps kept on purpose, each with its reason (docs/decisions/tmf-api.md,
 # "The last gaps"). The probe still finds them; the lock is exact.

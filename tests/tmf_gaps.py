@@ -42,6 +42,45 @@ CONTROL = "zzProbe"
 # The specs' base paths are ours, per API (tests/apiclient.py)
 BASES = {spec: base for base, (spec, _) in APIS.items()}
 SPECS = ("TMF620", "TMF622", "TMF629", "TMF632", "TMF637", "TMF666", "TMF676", "TMF678")
+# Contract-only APIs: endpoint gaps until implementation starts. Move each API into
+# SPECS and APIS when its routes land, enabling the existing attribute probes too.
+PENDING_BASES = {
+    "TMF639": "/tmf-api/resourceInventory/v5",
+    "TMF654": "/tmf-api/prepayBalanceManagement/v4",
+}
+
+
+def server_path(doc: dict[str, Any]) -> str:
+    """Resolve OAS server variable defaults before extracting the path (Swagger: basePath)."""
+    if "basePath" in doc:
+        return doc["basePath"]
+    server = doc["servers"][0]
+    url = server["url"]
+    for name, variable in server.get("variables", {}).items():
+        url = url.replace("{" + name + "}", variable["default"])
+    return urlsplit(url).path
+
+
+def pending_operations():
+    for api, base in PENDING_BASES.items():
+        for path, item in contract.spec(api)["paths"].items():
+            if path.startswith("/listener/"):
+                continue
+            for method in ("get", "post", "patch", "delete"):
+                if method in item:
+                    yield api, base, method.upper(), path
+
+
+def probe_pending_operations(client: TestClient) -> list[str]:
+    lines = []
+    for api, base, method, path in pending_operations():
+        url = base + path.replace("{id}", str(uuid.uuid4()))
+        response = client.request(method, url, json={})
+        assert response.status_code == 404, (
+            f"{api} {method} {path} is no longer absent: enable its attribute probes"
+        )
+        lines.append(f"{api} {method} {path} endpoint absent")
+    return lines
 
 
 def _resolve(api: str, schema: dict[str, Any]) -> dict[str, Any]:
@@ -421,13 +460,12 @@ def probe_base_paths() -> list[str]:
     """The API name and version of the spec's own server URL (`servers`, v4 `basePath`)
     are ours. The prefix before them is the deployment's apiRoot."""
     lines = []
-    for api in SPECS:
+    for api, base in {**BASES, **PENDING_BASES}.items():
         doc = contract.spec(api)
-        url = doc.get("basePath") or doc["servers"][0]["url"]
-        path = urlsplit(url.replace("{apiRoot}", "")).path.strip("/")
+        path = server_path(doc).strip("/")
         tail = "/".join(path.split("/")[-2:])
-        if tail and not BASES[api].endswith(f"/{tail}"):
-            lines.append(f"{api} base path .../{tail} (ours {BASES[api]})")
+        if tail and not base.endswith(f"/{tail}"):
+            lines.append(f"{api} base path .../{tail} (ours {base})")
     return lines
 
 
@@ -439,6 +477,7 @@ def gaps(api: Any) -> list[str]:
     server_set: set[str] = set()
     writes = probe_writes(client, server_set)
     found = writes + probe_reads(client) + probe_patch_formats(client)
+    found += probe_pending_operations(client)
     populate(api)
     found += probe_nested_reads(client, writes, server_set)
     return sorted(set(found + probe_base_paths()))

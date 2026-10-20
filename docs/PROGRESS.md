@@ -12,7 +12,7 @@ records the deployed commit.
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
 | Database | 41 | 41/41 (100%) | 41/41 (100%) | unknown |
-| API | 152 | 152/152 (100%) | 152/152 (100%) | unknown |
+| API | 188 | 152/188 (80%) | 152/188 (80%) | unknown |
 | UI | 31 | 31/31 (100%) | 31/31 (100%) | unknown |
 | Worker | 15 | 15/15 (100%) | 15/15 (100%) | unknown |
 
@@ -66,6 +66,42 @@ records the deployed commit.
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
+| `api.tmf639.hub.create` | 5 | TMF639 POST /hub | no | no | unknown |
+| `api.tmf639.hub.get` | 5 | TMF639 GET /hub/{id} | no | no | unknown |
+| `api.tmf639.hub.delete` | 5 | TMF639 DELETE /hub/{id} | no | no | unknown |
+| `api.tmf639.resource.list` | 5 | TMF639 GET /resource | no | no | unknown |
+| `api.tmf639.resource.create` | 5 | TMF639 POST /resource | no | no | unknown |
+| `api.tmf639.resource.get` | 5 | TMF639 GET /resource/{id} | no | no | unknown |
+| `api.tmf639.resource.patch` | 5 | TMF639 PATCH /resource/{id} | no | no | unknown |
+| `api.tmf639.resource.delete` | 5 | TMF639 DELETE /resource/{id} | no | no | unknown |
+| `api.tmf654.bucket.list` | 5 | TMF654 GET /bucket | no | no | unknown |
+| `api.tmf654.bucket.get` | 5 | TMF654 GET /bucket/{id} | no | no | unknown |
+| `api.tmf654.topupBalance.list` | 5 | TMF654 GET /topupBalance | no | no | unknown |
+| `api.tmf654.topupBalance.create` | 5 | TMF654 POST /topupBalance | no | no | unknown |
+| `api.tmf654.topupBalance.patch` | 5 | TMF654 PATCH /topupBalance/{id} | no | no | unknown |
+| `api.tmf654.topupBalance.get` | 5 | TMF654 GET /topupBalance/{id} | no | no | unknown |
+| `api.tmf654.topupBalance.delete` | 5 | TMF654 DELETE /topupBalance/{id} | no | no | unknown |
+| `api.tmf654.adjustBalance.list` | 5 | TMF654 GET /adjustBalance | no | no | unknown |
+| `api.tmf654.adjustBalance.create` | 5 | TMF654 POST /adjustBalance | no | no | unknown |
+| `api.tmf654.adjustBalance.patch` | 5 | TMF654 PATCH /adjustBalance/{id} | no | no | unknown |
+| `api.tmf654.adjustBalance.get` | 5 | TMF654 GET /adjustBalance/{id} | no | no | unknown |
+| `api.tmf654.adjustBalance.delete` | 5 | TMF654 DELETE /adjustBalance/{id} | no | no | unknown |
+| `api.tmf654.transferBalance.list` | 5 | TMF654 GET /transferBalance | no | no | unknown |
+| `api.tmf654.transferBalance.create` | 5 | TMF654 POST /transferBalance | no | no | unknown |
+| `api.tmf654.transferBalance.patch` | 5 | TMF654 PATCH /transferBalance/{id} | no | no | unknown |
+| `api.tmf654.transferBalance.get` | 5 | TMF654 GET /transferBalance/{id} | no | no | unknown |
+| `api.tmf654.transferBalance.delete` | 5 | TMF654 DELETE /transferBalance/{id} | no | no | unknown |
+| `api.tmf654.reserveBalance.list` | 5 | TMF654 GET /reserveBalance | no | no | unknown |
+| `api.tmf654.reserveBalance.create` | 5 | TMF654 POST /reserveBalance | no | no | unknown |
+| `api.tmf654.reserveBalance.patch` | 5 | TMF654 PATCH /reserveBalance/{id} | no | no | unknown |
+| `api.tmf654.reserveBalance.get` | 5 | TMF654 GET /reserveBalance/{id} | no | no | unknown |
+| `api.tmf654.reserveBalance.delete` | 5 | TMF654 DELETE /reserveBalance/{id} | no | no | unknown |
+| `api.tmf654.accumulatedBalance.list` | 5 | TMF654 GET /accumulatedBalance | no | no | unknown |
+| `api.tmf654.accumulatedBalance.get` | 5 | TMF654 GET /accumulatedBalance/{id} | no | no | unknown |
+| `api.tmf654.balanceActionHistory.list` | 5 | TMF654 GET /balanceActionHistory | no | no | unknown |
+| `api.tmf654.balanceActionHistory.get` | 5 | TMF654 GET /balanceActionHistory/{id} | no | no | unknown |
+| `api.tmf654.hub.create` | 5 | TMF654 POST /hub | no | no | unknown |
+| `api.tmf654.hub.delete` | 5 | TMF654 DELETE /hub/{id} | no | no | unknown |
 | `api.internal.session.create` | 5 | Sign in | yes | yes | unknown |
 | `api.internal.session.get` | 5 | Current session | yes | yes | unknown |
 | `api.internal.session.delete` | 5 | Sign out | yes | yes | unknown |

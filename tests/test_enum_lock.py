@@ -69,6 +69,6 @@ def test_every_spec_file_is_present():
         for line in (SPEC_DIR / "SHA256SUMS").read_text().splitlines()
         if line.strip()
     ]
-    assert len(listed) == 8
+    assert len(listed) == 10
     for name in listed:
         assert (SPEC_DIR / name).is_file(), f"spec file missing: {name}"

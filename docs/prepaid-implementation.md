@@ -3,14 +3,19 @@
 Status: **design complete**, 2026-10-20. The human authorized remaining choices
 according to TMF and authorized committing/pushing design only. This document and
 [the scope plan](prepaid-plan.md) are the development hand-off; this document wins
-where it corrects the original proposal. Runtime implementation, contract vendoring
-and executable proofs belong to the next session. Numbers ship independently first.
+where it corrects the original proposal. Development begins with contract vendoring
+and executable fixtures in N1; runtime slices follow. Numbers ship independently first.
+
+N1 development: the two pinned files are now vendored unchanged, with executable
+contract fixtures, provenance checks and 36 planned/absent endpoint records. No
+number inventory or prepaid runtime exists yet. See the
+[implementation record](decisions/prepaid.md#n1-pinned-contracts-and-executable-fixtures-2026-10-20).
 
 ## Contract findings
 
 Inspected official [TMF639](https://github.com/tmforum-apis/TMF639_ResourceInventory/blob/2693a854940de3c6e15b1aade24f981d94b75d3a/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml)
 and [TMF654](https://github.com/tmforum-apis/TMF654_PrepayBalanceManagement/blob/562e655d14d796b8380b4e244a5b601f69d60b64/TMF654-PrepayBalance-v4.0.0.swagger.json)
-schemas at these pinned revisions. Download these exact files during N1, unmodified:
+schemas at these pinned revisions. N1 vendors these exact files, unmodified:
 
 | Contract | Git blob SHA | SHA256 |
 |---|---|---|

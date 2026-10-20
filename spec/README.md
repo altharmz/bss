@@ -32,6 +32,16 @@ Three checks, which prove different things:
 | `TMF678-CustomerBill-v5.0.0.oas.yaml` | Customer Bill | 5.0.0 | [TMF678_CustomerBill](https://github.com/tmforum-apis/TMF678_CustomerBill/blob/6d1628e7ac15f077083216f9bccd469e9f1af74f/TMF678-CustomerBill-v5.0.0.oas.yaml) | `6d1628e7ac15f077083216f9bccd469e9f1af74f` |
 | `TMF676-Payment-v4.0.0.swagger.json` | Payment | 4.0.0 ² | [TMF676_PaymentManagement](https://github.com/tmforum-apis/TMF676_PaymentManagement/blob/1de83fd2dc6d09e250c9d1ca7abf3b1b93688d9f/TMF676-Payment-v4.0.0.swagger.json) | `1de83fd2dc6d09e250c9d1ca7abf3b1b93688d9f` |
 
+## Subscriber-number and prepaid contracts
+
+Additional contracts vendored for subscriber numbers and prepaid (N1). Their
+operations remain unimplemented; contract fixtures do not imply runtime coverage.
+
+| File | API | Version | Source repo | Upstream commit |
+|------|-----|---------|-------------|-----------------|
+| `TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml` | Resource Inventory | 5.0.0 | [TMF639_ResourceInventory](https://github.com/tmforum-apis/TMF639_ResourceInventory/blob/2693a854940de3c6e15b1aade24f981d94b75d3a/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml) | `2693a854940de3c6e15b1aade24f981d94b75d3a` |
+| `TMF654-PrepayBalance-v4.0.0.swagger.json` | Prepay Balance | 4.0.0 | [TMF654_PrepayBalanceManagement](https://github.com/tmforum-apis/TMF654_PrepayBalanceManagement/blob/562e655d14d796b8380b4e244a5b601f69d60b64/TMF654-PrepayBalance-v4.0.0.swagger.json) | `562e655d14d796b8380b4e244a5b601f69d60b64` |
+
 ## Upstream blob SHAs
 
 The git blob SHA of each file at its pinned commit, as returned by the GitHub API
@@ -49,6 +59,8 @@ run `make spec-verify-upstream`.
 | `TMF629-Customer_Management-v5.0.1.oas.yaml` | `467d54a24c6f85541980daf82fbdead6ad57868e` |
 | `TMF632-Party_Management-v5.0.0.oas.yaml` | `72ae9fdab3f19beadb995f24dccf84e1b62fb784` |
 | `TMF637-ProductInventory-v5.0.0.oas.yaml` | `637ee2e7e156adf8e640102d9bd951d229ab24e9` |
+| `TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml` | `2c34d9772bb937e4aebb59ae71d1a6825df39737` |
+| `TMF654-PrepayBalance-v4.0.0.swagger.json` | `60378955ca383e0f2e6427d57d9d9d5ed1ddb349` |
 | `TMF666-Account_Management-v5.0.0.oas.yaml` | `082fb3d09777b8c894283f9c6649c5daa690660f` |
 | `TMF678-CustomerBill-v5.0.0.oas.yaml` | `9425d310fda1e739b21595d2b445b7bc6ca6d5cb` |
 | `TMF676-Payment-v4.0.0.swagger.json` | `b3fcf10ad03954ddd2619df48bb6907ac96390f7` |

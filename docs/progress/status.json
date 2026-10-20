@@ -3,7 +3,7 @@
     "api": {
       "deployed": null,
       "implemented": 152,
-      "items": 152,
+      "items": 188,
       "tested": 152
     },
     "db": {
@@ -38,6 +38,330 @@
     }
   ],
   "items": [
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf639.hub.create",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF639 POST /hub"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf639.hub.get",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF639 GET /hub/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf639.hub.delete",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF639 DELETE /hub/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf639.resource.list",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF639 GET /resource"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf639.resource.create",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF639 POST /resource"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf639.resource.get",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF639 GET /resource/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf639.resource.patch",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF639 PATCH /resource/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf639.resource.delete",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF639 DELETE /resource/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.bucket.list",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /bucket"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.bucket.get",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /bucket/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.topupBalance.list",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /topupBalance"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.topupBalance.create",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 POST /topupBalance"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.topupBalance.patch",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 PATCH /topupBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.topupBalance.get",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /topupBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.topupBalance.delete",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 DELETE /topupBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.adjustBalance.list",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /adjustBalance"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.adjustBalance.create",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 POST /adjustBalance"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.adjustBalance.patch",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 PATCH /adjustBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.adjustBalance.get",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /adjustBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.adjustBalance.delete",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 DELETE /adjustBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.transferBalance.list",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /transferBalance"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.transferBalance.create",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 POST /transferBalance"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.transferBalance.patch",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 PATCH /transferBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.transferBalance.get",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /transferBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.transferBalance.delete",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 DELETE /transferBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.reserveBalance.list",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /reserveBalance"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.reserveBalance.create",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 POST /reserveBalance"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.reserveBalance.patch",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 PATCH /reserveBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.reserveBalance.get",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /reserveBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.reserveBalance.delete",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 DELETE /reserveBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.accumulatedBalance.list",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /accumulatedBalance"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.accumulatedBalance.get",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /accumulatedBalance/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.balanceActionHistory.list",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /balanceActionHistory"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.balanceActionHistory.get",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 GET /balanceActionHistory/{id}"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.hub.create",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 POST /hub"
+    },
+    {
+      "area": "api",
+      "deployed": null,
+      "id": "api.tmf654.hub.delete",
+      "implemented": false,
+      "stage": 5,
+      "tested": false,
+      "title": "TMF654 DELETE /hub/{id}"
+    },
     {
       "area": "db",
       "deployed": null,

@@ -15,7 +15,7 @@ import yaml
 from app.config import settings
 from app.events import callbacks
 from app.events.types import BASES, EVENT_TYPES
-from tests import apidata
+from tests import apidata, tmf_gaps
 
 APIS = sorted(BASES)
 CALLBACK = "http://listener.test/events"
@@ -42,7 +42,24 @@ def spec_events() -> dict[str, set[str]]:
 
 
 def test_the_event_types_are_the_specs_listener_events():
-    assert {api: set(types) for api, types in EVENT_TYPES.items()} == spec_events()
+    # N1 vendors contracts before their hubs exist. Lock their planned names too,
+    # without exposing subscriptions or claiming runtime event coverage early.
+    pending = {
+        "TMF639": {
+            "ResourceAttributeValueChangeEvent",
+            "ResourceCreateEvent",
+            "ResourceDeleteEvent",
+            "ResourceStateChangeEvent",
+        },
+        "TMF654": {
+            f"{kind}{event}Event"
+            for kind in ("TopupBalance", "AdjustBalance", "ReserveBalance", "TransferBalance")
+            for event in ("Create", "Failure", "Cancel")
+        },
+    }
+    assert set(pending) == set(tmf_gaps.PENDING_BASES)
+    assert not set(pending) & set(EVENT_TYPES)
+    assert {**{api: set(types) for api, types in EVENT_TYPES.items()}, **pending} == spec_events()
 
 
 @pytest.mark.parametrize("name", APIS)

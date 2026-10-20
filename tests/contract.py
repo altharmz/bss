@@ -33,6 +33,8 @@ SPEC_FILES = {
     "TMF629": "TMF629-Customer_Management-v5.0.1.oas.yaml",
     "TMF632": "TMF632-Party_Management-v5.0.0.oas.yaml",
     "TMF637": "TMF637-ProductInventory-v5.0.0.oas.yaml",
+    "TMF639": "TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml",
+    "TMF654": "TMF654-PrepayBalance-v4.0.0.swagger.json",
     "TMF666": "TMF666-Account_Management-v5.0.0.oas.yaml",
     "TMF676": "TMF676-Payment-v4.0.0.swagger.json",
     "TMF678": "TMF678-CustomerBill-v5.0.0.oas.yaml",
@@ -105,6 +107,27 @@ def errors(api: str, schema: str, instance: Any, *, partial: bool = False) -> li
 def assert_valid(api: str, schema: str, instance: Any, *, partial: bool = False) -> None:
     problems = errors(api, schema, instance, partial=partial)
     assert not problems, f"body does not conform to {api} {schema}:\n  " + "\n  ".join(problems)
+
+
+def balance_history_errors(kind: str, instance: Any) -> list[str]:
+    """TMF654's sole schema exception: non-transfers have no receiver resource.
+
+    The caller must supply the persisted action kind; never infer it from a missing
+    receiver. Transfers use the unchanged schema, and status is always required.
+    """
+    if kind not in {"TopupBalance", "AdjustBalance", "ReserveBalance", "TransferBalance"}:
+        raise ValueError(f"unknown balance action kind: {kind}")
+    found = validator("TMF654", "BalanceActionHistory").iter_errors(instance)
+    return sorted(
+        f"{'/'.join(str(p) for p in e.absolute_path) or '<root>'}: {e.message}"
+        for e in found
+        if not (
+            kind != "TransferBalance"
+            and not e.absolute_path
+            and e.validator == "required"
+            and e.message == "'receiverLogicalResource' is a required property"
+        )
+    )
 
 
 def declared_statuses(api: str, path: str, method: str) -> set[str]:

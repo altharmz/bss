@@ -190,9 +190,14 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 design completion, choosing remaining policies according to TMF, and authorized its
 commit/push. Development starts in a separate session: [scope](docs/prepaid-plan.md),
 [implementation hand-off](docs/prepaid-implementation.md),
-[decision record](docs/decisions/prepaid.md). Start with the pinned contracts, then
-subscriber numbers as an independent release. No prepaid runtime or migration exists
-yet; do not treat design completion as implemented coverage or deployment approval.
+[decision record](docs/decisions/prepaid.md). N1 is complete locally: both pinned
+contracts are vendored unchanged, 24 contract fixtures pass, and all 36 new endpoints
+are recorded as planned/absent. Three full backend passes (1,433 each, dev/CI/dev),
+frontend checks, provenance and documentation checks pass; progress is regenerated.
+Validation detail and the cached scope-label correction are in the decision record.
+Next: subscriber-number runtime as an independent release. No number/prepaid runtime
+or migration exists yet. The human authorized committing/pushing N1; no deployment
+is authorized or performed for this slice.
 
 **Current release (2026-10-20): sidebar count and product charge periods.**
 The financial accounts sidebar now shows its total. New offering supports daily,

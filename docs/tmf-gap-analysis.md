@@ -1,5 +1,13 @@
 # TMF conformance gap analysis
 
+**Contract expansion (N1, 2026-10-20).** TMF639 v5 and TMF654 v4 are now
+vendored for the subscriber-number/prepaid work. Their 36 non-listener operations
+are planned and absent, recorded separately from attribute gaps and policy
+restrictions in `tests/tmf-gaps.txt`. The original eight APIs still implement
+129 operations; the expanded contract inventory has 165. The dated completion
+claims below describe the original eight contracts. Number and prepaid runtime
+implementation is pending; fixtures alone do not close endpoint gaps.
+
 **Following TMF (2026-10-17).** Rule: what the vendored specs define is implemented, the
 rest skipped ([the decision](decisions/tmf-api.md#following-tmf-2026-10-17)). The
 attribute-level gaps are no longer tracked in this file: **`tests/tmf-gaps.txt` is the
