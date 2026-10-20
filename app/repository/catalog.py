@@ -106,6 +106,7 @@ def create_product_offering_price(
     currency: str | None,
     valid_for: Range,
     recurring_period: str | None = None,
+    recurring_period_length: int = 1,
     name: str | None = None,
     lifecycle_status: str = "Active",
     details: dict[str, Any] | None = None,
@@ -119,8 +120,8 @@ def create_product_offering_price(
         """
         INSERT INTO product_offering_price
             (id, product_offering_id, name, lifecycle_status, price_type, recurring_period,
-             amount, currency, valid_for)
-        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s, %s)
+             amount, currency, valid_for, recurring_period_length)
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING *
         """,
         (
@@ -133,6 +134,7 @@ def create_product_offering_price(
             None if amount is None else money(amount),
             currency,
             valid_for,
+            recurring_period_length,
         ),
     )
     return _with_details(conn, "product_offering_price", row, details)

@@ -431,6 +431,18 @@ export interface Offering {
   code: string | null;
   specification: string;
   priceCents: number | null; // display only; the charge itself comes from the preview
+  interval?: string;
+}
+
+export function chargeInterval(type = 'monthly', length = 1): string {
+  const unit: Record<string, string> = {
+    daily: 'day',
+    weekly: 'week',
+    monthly: 'month',
+    yearly: 'year',
+  };
+  const name = unit[type] ?? type;
+  return length === 1 ? name : `${length} ${name}s`;
 }
 
 /** The recurring price valid at `now` in `currency`, for display in lists. What is
@@ -453,7 +465,13 @@ function displayPrice(
       Date.parse(from) <= Date.parse(now) &&
       (to === undefined || Date.parse(now) < Date.parse(to))
     ) {
-      return toCents(value);
+      return {
+        cents: toCents(value),
+        interval: chargeInterval(
+          price.recurringChargePeriodType,
+          price.recurringChargePeriodLength,
+        ),
+      };
     }
   }
   return null;
@@ -482,7 +500,8 @@ export async function loadSellableOfferings(
     name: need(offering.name, 'offering name'),
     code: offeringCode(offering),
     specification: offering.productSpecification?.name ?? '',
-    priceCents: displayPrice(offering, byId, now, currency),
+    priceCents: displayPrice(offering, byId, now, currency)?.cents ?? null,
+    interval: displayPrice(offering, byId, now, currency)?.interval ?? 'month',
   }));
 }
 
@@ -495,6 +514,7 @@ export interface CatalogPrice {
   id: string;
   cents: number;
   currency: string;
+  interval?: string;
   from: string; // instant
   to: string | null; // instant, exclusive; null = open-ended
 }
@@ -548,6 +568,10 @@ export async function loadCatalog(signal: AbortSignal): Promise<Catalog> {
             id: need(price.id, 'price id'),
             cents: toCents(need(price.price?.value, 'price value')),
             currency: need(price.price?.unit, 'price unit'),
+            interval: chargeInterval(
+              price.recurringChargePeriodType,
+              price.recurringChargePeriodLength,
+            ),
             from: need(price.validFor?.startDateTime, 'price validFor.startDateTime'),
             to: price.validFor?.endDateTime ?? null,
           },
@@ -563,17 +587,17 @@ export function shownPrice(
   prices: CatalogPrice[],
   now: string,
   currency: string,
-): { cents: number; from: string | null } | null {
+): { cents: number; from: string | null; interval?: string } | null {
   const at = Date.parse(now);
   const mine = prices.filter((p) => p.currency === currency);
   const current = mine.find(
     (p) => Date.parse(p.from) <= at && (p.to === null || at < Date.parse(p.to)),
   );
-  if (current) return { cents: current.cents, from: null };
+  if (current) return { cents: current.cents, from: null, interval: current.interval ?? 'month' };
   const next = mine
     .filter((p) => Date.parse(p.from) > at)
     .sort((a, b) => Date.parse(a.from) - Date.parse(b.from))[0];
-  return next ? { cents: next.cents, from: next.from } : null;
+  return next ? { cents: next.cents, from: next.from, interval: next.interval ?? 'month' } : null;
 }
 
 export interface NewOffering {
@@ -582,6 +606,8 @@ export interface NewOffering {
   specificationId: string;
   amount: string; // canonical decimal string, e.g. "1290.50"
   currency: string;
+  recurringPeriodType?: string;
+  recurringPeriodLength?: number;
   validFrom: string; // business date: the price and the offering start at its midnight
   validTo: string | null; // business date, inclusive (last valid day); null = open-ended
 }
@@ -610,10 +636,14 @@ export async function createOffering(form: NewOffering, timeZone: string): Promi
     jsonWithAmount(
       {
         '@type': 'ProductOfferingPrice',
-        name: `${form.name} monthly`,
+        name: `${form.name} ${form.recurringPeriodType ?? 'monthly'}`,
         lifecycleStatus: 'Active',
         priceType: 'recurring',
-        recurringChargePeriodType: 'monthly',
+        recurringChargePeriodType: form.recurringPeriodType ?? 'monthly',
+        ...((form.recurringPeriodLength ?? 1) !== 1 ||
+        (form.recurringPeriodType ?? 'monthly') !== 'monthly'
+          ? { recurringChargePeriodLength: form.recurringPeriodLength ?? 1 }
+          : {}),
         price: { unit: form.currency, value: AMOUNT },
         validFor,
       },

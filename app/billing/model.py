@@ -92,7 +92,7 @@ class AppliedTax:
 
 @dataclass(frozen=True)
 class Price:
-    """A recurring monthly price (length 1). `valid_to` is exclusive, None = open-ended.
+    """A recurring interval price. `valid_to` is exclusive, None = open-ended.
     `amount` is before tax; `taxes` are applied on top of it."""
 
     id: UUID
@@ -102,6 +102,8 @@ class Price:
     valid_from: datetime
     valid_to: datetime | None
     taxes: tuple[Tax, ...] = ()
+    recurring_period: str = "monthly"
+    recurring_period_length: int = 1
 
 
 @dataclass(frozen=True)

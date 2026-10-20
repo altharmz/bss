@@ -1,5 +1,9 @@
 # Catalog: TMF620 mapping and price rules
 
+Since 2026-10-20, recurring prices support daily, weekly, monthly and yearly units
+with lengths 1..1000; see [charge-periods.md](charge-periods.md). This extends the
+monthly-only mapping recorded below. Successor prices retain the same interval.
+
 Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
 needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
 proves nothing was lost in the move. Index: [README.md](README.md). Shared API

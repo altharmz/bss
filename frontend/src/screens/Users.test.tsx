@@ -20,6 +20,8 @@ function start(
   write: Handler = () => json(alice),
 ) {
   const backend = stubFetch({
+    'GET /tmf-api/accountManagement/v5/financialAccount?limit=1&fields=id': () =>
+      json([], { total: 23 }),
     'GET /internal/v1/session': () =>
       json({ username: 'i.petrova', role, mustChangePassword: false }),
     'GET /internal/v1/context': () => json(CONTEXT),

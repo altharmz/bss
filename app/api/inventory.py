@@ -18,6 +18,7 @@ neither create nor end it, so PATCH changes them directly
 from datetime import date, timedelta
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import psycopg
 from fastapi import APIRouter, Request, Response
@@ -52,7 +53,9 @@ from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import bad_request, conflict, not_found, unprocessable
 from app.api.prices import monthly_price, tax_on, total_rate
 from app.api.tmfjson import TmfJSONResponse
-from app.billing.core import cycle_period
+from app.billing.core import cycle_period, product_charge_period
+from app.billing.model import MissingPrice
+from app.config import settings
 from app.events import emit
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
 from app.repository import billing, catalog, orders, parties, products
@@ -157,6 +160,22 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
             cycle_period(day, account["bill_cycle_day"]).start,
             *(c.day for c in changes if c.day <= day),
         )
+        recurring = billing.load_recurring_prices(conn, list(core.offering_ids))
+        try:
+            priced_on = max(
+                row["start_date"],
+                product_charge_period(
+                    core,
+                    max(day, row["start_date"]),
+                    recurring,
+                    account["currency"],
+                    account["bill_cycle_day"],
+                    ZoneInfo(settings.billing_tz),
+                ).start,
+                *(c.day for c in changes if c.day <= day),
+            )
+        except MissingPrice:
+            pass  # the lookup below returns no price, as before
         price = catalog.price_at(
             conn,
             product_offering_id=core.offering_on(priced_on),
@@ -173,6 +192,8 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
                     resource_type="ProductPrice",
                     price_id=price["id"],
                     name=price["name"],
+                    recurring_period=price["recurring_period"],
+                    recurring_period_length=price["recurring_period_length"],
                     tax=tax_on(price["amount"], taxes),
                     tax_rate=total_rate(taxes),
                     unit_of_measure=price["details"].get("unitOfMeasure"),

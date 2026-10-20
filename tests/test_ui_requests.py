@@ -110,15 +110,18 @@ def spec(api) -> dict:
     ).json()
 
 
-def create_offering(api, code: str = "MOB-XL") -> dict:
+def create_offering(api, code: str = "MOB-XL", unit: str = "monthly", length: int = 1) -> dict:
     """createOffering(): the price (amount as a raw number token), then the offering."""
     valid_for = (
         '{"startDateTime":"2026-10-02T00:00:00+03:00","endDateTime":"2027-01-01T00:00:00+03:00"}'
     )
+    multiplier = (
+        f'"recurringChargePeriodLength":{length},' if (unit, length) != ("monthly", 1) else ""
+    )
     price = api.post_raw(
         f"{CATALOG}/productOfferingPrice",
-        '{"@type":"ProductOfferingPrice","name":"Mobile XL monthly","lifecycleStatus":"Active",'
-        '"priceType":"recurring","recurringChargePeriodType":"monthly",'
+        f'{{"@type":"ProductOfferingPrice","name":"Mobile XL {unit}","lifecycleStatus":"Active",'
+        f'"priceType":"recurring","recurringChargePeriodType":"{unit}",{multiplier}'
         f'"price":{{"unit":"RUB","value":1990.50}},"validFor":{valid_for}}}',
     )
     assert price.status_code == 201, price.text
@@ -149,8 +152,11 @@ def create_offering(api, code: str = "MOB-XL") -> dict:
     return offering.json()
 
 
-def test_new_offering_is_stored_as_the_ui_means_it(api):
-    offering = create_offering(api)
+@pytest.mark.parametrize(
+    "unit,length", [("monthly", 1), ("daily", 3), ("weekly", 2), ("monthly", 3), ("yearly", 1)]
+)
+def test_new_offering_is_stored_as_the_ui_means_it(api, unit, length):
+    offering = create_offering(api, unit=unit, length=length)
     assert offering["lifecycleStatus"] == "In Design"
     assert offering["externalIdentifier"][0]["id"] == "MOB-XL"
     # "valid to 2026-12-31" (inclusive) is stored as the exclusive midnight of Jan 1
@@ -160,6 +166,10 @@ def test_new_offering_is_stored_as_the_ui_means_it(api):
     }
     price = decimals(api.get(offering["productOfferingPrice"][0]["href"]))
     assert price["price"] == {"unit": "RUB", "value": Decimal("1990.50")}
+    assert (price["recurringChargePeriodType"], price["recurringChargePeriodLength"]) == (
+        unit,
+        length,
+    )
 
 
 def test_lifecycle_steps_are_merge_patches(api):

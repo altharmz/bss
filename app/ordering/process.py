@@ -37,11 +37,10 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
-from app.billing.core import cycle_period
 from app.config import settings
 from app.events import emit
 from app.ordering.states import item_transition, order_transition
-from app.repository import catalog, orders, parties, products
+from app.repository import billing, catalog, orders, parties, products
 from app.repository._sql import Row
 
 # Product statuses after which a product can no longer be deleted.
@@ -411,7 +410,13 @@ def _modify_problems(
         ]
     # The termination may already have refunded part of D's period; the change would cut
     # the same charge again (one refund per charge, billing-core.md#offering-changes-2026-10-18)
-    if ends is not None and ends < cycle_period(start, account["bill_cycle_day"]).end:
+    if (
+        ends is not None
+        and ends
+        < billing.product_period(
+            conn, product | {"currency": account["currency"]}, start, account["bill_cycle_day"]
+        ).end
+    ):
         return [
             (
                 "terminationInPeriod",

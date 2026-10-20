@@ -100,11 +100,12 @@ def price_change(offering_id: str, body: JsonBody, tx: Tx, clock: ClockDep) -> T
             conn,
             product_offering_id=uid,
             price_type="recurring",
-            recurring_period="monthly",
+            recurring_period=old["recurring_period"],
+            recurring_period_length=old["recurring_period_length"],
             amount=data.amount,
             currency=data.currency,
             valid_for=Range(switch, None, "[)"),
-            name=f"{offering['name']} monthly from {data.valid_from}",
+            name=f"{offering['name']} {old['recurring_period']} from {data.valid_from}",
             lifecycle_status=old["lifecycle_status"],
         )
     new_href = _price_href(new["id"])

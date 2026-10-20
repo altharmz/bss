@@ -33,8 +33,9 @@ proves nothing was lost in the move. Index: [README.md](README.md). Screen-level
 - Credit limit: shown, and the over-limit warning in Add product, informational only.
 - Offering code: `externalIdentifier` (above). Subscriber no. and `BA-xxxxxxxx` are
   display ids: the first 8 hex digits of the UUID, upper case.
-- Weekly recurrence is not offered (monthly only). One currency in the UI (`UI_CURRENCY`);
-  the backend stays multi-currency.
+- Recurrence offers daily, weekly, monthly and yearly with a positive multiplier
+  (1..1000), since 2026-10-20; see [charge-periods.md](charge-periods.md). One currency
+  in the UI (`UI_CURRENCY`); the backend stays multi-currency.
 - Pills for statuses the design lacks (`created`, `pendingTerminate`, `suspended`,
   `cancelled`, Suspended/Closed accounts) reuse existing token colours only.
 - Retiring an offering does not end its prices; its products keep billing.

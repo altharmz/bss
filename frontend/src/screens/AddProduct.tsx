@@ -165,7 +165,9 @@ export function AddProductModal({
                 </span>
                 <span>{offer.specification}</span>
                 <span className="num num-right">
-                  {offer.priceCents === null ? '—' : `${formatCents(offer.priceCents)} / mo`}
+                  {offer.priceCents === null
+                    ? '—'
+                    : `${formatCents(offer.priceCents)} / ${offer.interval ?? 'mo'}`}
                 </span>
               </div>
             ))}
@@ -240,7 +242,7 @@ function Preview({
           </dd>
           <dt>Offering price</dt>
           <dd>
-            {price} {p.price.unit} / mo
+            {price} {p.price.unit} / {p.recurringChargePeriod ?? 'mo'}
           </dd>
           <dt>Formula</dt>
           <dd>{p.prorated ? `${price} × ${p.billableDays} / ${p.periodDays}` : 'full period'}</dd>

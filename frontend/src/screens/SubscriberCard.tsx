@@ -461,7 +461,7 @@ function ProductRow({
             ) : (
               <>
                 <Amount cents={toCents(product.price.value)} currency={product.price.unit} />{' '}
-                <span className="bss-secondary">/ mo</span>
+                <span className="bss-secondary">/ {product.recurringChargePeriod ?? 'mo'}</span>
               </>
             ),
           actions: ending ? (

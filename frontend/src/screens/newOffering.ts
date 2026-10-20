@@ -14,6 +14,8 @@ export interface OfferingForm {
   name: string;
   specificationId: string;
   price: string;
+  recurringPeriodType?: string;
+  recurringPeriodLength?: string;
   validFrom: string;
   validTo: string;
 }
@@ -38,6 +40,16 @@ export function checkOffering(form: OfferingForm, takenCodes: Set<string>, today
   else if (code && !CODE.test(code))
     error = 'Code may use A-Z, 0-9, "-" and "_" (up to 32 characters)';
   else if (form.price.trim() && amount === null) error = 'Price must be a positive number';
+  else if (
+    form.recurringPeriodType &&
+    !['daily', 'weekly', 'monthly', 'yearly'].includes(form.recurringPeriodType)
+  )
+    error = 'Choose a supported charge period';
+  else if (
+    form.recurringPeriodLength !== undefined &&
+    (!/^[1-9]\d*$/.test(form.recurringPeriodLength) || Number(form.recurringPeriodLength) > 1000)
+  )
+    error = 'Charge period length must be a whole number from 1 to 1000';
   else if (form.validFrom && (!isIsoDate(form.validFrom) || form.validFrom < earliest)) {
     error = `Valid from cannot be earlier than ${earliest}`;
   } else if (form.validTo && form.validFrom && form.validTo < form.validFrom) {

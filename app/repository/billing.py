@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -798,17 +799,17 @@ def core_product(row: Row, changes: tuple[OfferingChange, ...] = ()) -> Product:
 
 
 def load_recurring_prices(conn: psycopg.Connection, offering_ids: list[UUID]) -> tuple[Price, ...]:
-    """Every monthly recurring price attached to these offerings, in any currency. Not
+    """Every recurring price attached to these offerings, in any currency. Not
     filtered by time: a price change only takes effect at or after the moment it was made,
     and the core looks prices up at midnights <= as_of."""
     rows = fetch_all(
         conn,
         """
-        SELECT id, product_offering_id, amount, currency, valid_for, details
+        SELECT id, product_offering_id, amount, currency, valid_for, details,
+               recurring_period, recurring_period_length
         FROM product_offering_price
         WHERE product_offering_id = ANY(%s)
-          AND price_type = 'recurring' AND recurring_period = 'monthly'
-          AND recurring_period_length = 1
+          AND price_type = 'recurring'
         ORDER BY id
         """,
         (sorted(set(offering_ids)),),
@@ -822,8 +823,27 @@ def load_recurring_prices(conn: psycopg.Connection, offering_ids: list[UUID]) ->
             valid_from=row["valid_for"].lower,
             valid_to=row["valid_for"].upper,
             taxes=price_taxes(row["details"]),
+            recurring_period=row["recurring_period"],
+            recurring_period_length=row["recurring_period_length"],
         )
         for row in rows
+    )
+
+
+def product_period(conn: psycopg.Connection, row: Row, day: date, cycle_day: int) -> DateRange:
+    """The true product charge period for ordering and read views."""
+    from app.billing.core import product_charge_period
+    from app.config import settings
+
+    changes = offering_changes(conn, [row["id"]]).get(row["id"], ())
+    product = core_product(row, changes)
+    return product_charge_period(
+        product,
+        max(day, product.start_date),
+        load_recurring_prices(conn, list(product.offering_ids)),
+        row["currency"],
+        cycle_day,
+        ZoneInfo(settings.billing_tz),
     )
 
 
@@ -1266,8 +1286,10 @@ def page_account_charges(
     rows = fetch_all(
         conn,
         """
-        SELECT a.*, r.run_date, o.id AS offering_id, o.name AS offering_name
+        SELECT a.*, r.run_date, o.id AS offering_id, o.name AS offering_name,
+               lower(coalesce(c.period, a.period)) AS charge_start
         FROM applied_customer_billing_rate a
+        LEFT JOIN applied_customer_billing_rate c ON c.id = a.refunds_rate_id
         JOIN billing_run r ON r.id = a.billing_run_id
         JOIN product_offering o ON o.id = a.product_offering_id
         WHERE a.billing_account_id = %s

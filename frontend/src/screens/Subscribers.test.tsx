@@ -46,6 +46,8 @@ function backend(
   extra: Record<string, Handler> = {},
 ) {
   return stubFetch({
+    'GET /tmf-api/accountManagement/v5/financialAccount?limit=1&fields=id': () =>
+      json([], { total: 23 }),
     ...extra,
     [NAV_RUNS]: noRuns,
     'GET /internal/v1/context': () => json(CONTEXT),

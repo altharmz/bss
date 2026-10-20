@@ -134,8 +134,8 @@ def test_price_validation(api):
 
     assert status(recurringChargePeriodType=None) == 422  # recurring needs a period
     assert status(priceType="oneTime") == 422  # and a oneTime price must not have one
-    assert status(recurringChargePeriodType="weekly") == 422
-    assert status(recurringChargePeriodLength=3) == 422
+    assert status(recurringChargePeriodType="fortnightly") == 422
+    assert status(recurringChargePeriodLength=0) == 422
     assert status(priceType="usage") == 422
     assert status(price={"unit": "rub", "value": 1}) == 422
     assert status(price={"unit": "RUB"}) == 422

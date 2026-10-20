@@ -142,6 +142,8 @@ const FIRST_CHARGE = {
 
 function backend(routes: Record<string, Handler> = {}, account: object = ACCOUNT) {
   return stubFetch({
+    'GET /tmf-api/accountManagement/v5/financialAccount?limit=1&fields=id': () =>
+      json([], { total: 23 }),
     'GET /internal/v1/context': () => json(CONTEXT),
     'GET /internal/v1/session': () =>
       json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
@@ -456,7 +458,7 @@ describe('add product', () => {
     const options = await within(dialog).findAllByRole('radio');
     expect(options).toHaveLength(2);
     expect(within(options[0] as HTMLElement).getByText('already active')).toBeTruthy();
-    expect(within(options[1] as HTMLElement).getByText('650.00 / mo')).toBeTruthy();
+    expect(within(options[1] as HTMLElement).getByText('650.00 / month')).toBeTruthy();
     expect(
       (within(dialog).getByRole('button', { name: 'Activate' }) as HTMLButtonElement).disabled,
     ).toBe(true);

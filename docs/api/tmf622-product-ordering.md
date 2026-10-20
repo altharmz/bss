@@ -33,7 +33,8 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF622-P
 ## Behaviour and deviations
 
 Completed add items expose `itemPrice` and `itemTotalPrice` as snapshots of their
-quoted full monthly fee (`0008`); `orderTotalPrice` sums those add fees. These are not
+quoted full charge-interval fee (`0008`); `orderTotalPrice` sums fees with the same
+interval and returns separate entries when intervals differ. These are not
 the prorated first charge or a lifetime total. Catalog changes do not rewrite a
 quote. Deletes have no quote, and old orders without recorded quotes and rejected
 orders omit it. `tests/test_api_read_completeness.py` verifies exact totals and history.

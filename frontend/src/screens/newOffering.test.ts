@@ -26,6 +26,15 @@ describe('New offering validation', () => {
     [{ price: '-5' }, 'Price must be a positive number'],
     [{ price: '12.345' }, 'Price must be a positive number'],
     [{ price: 'abc' }, 'Price must be a positive number'],
+    [{ recurringPeriodLength: '0' }, 'Charge period length must be a whole number from 1 to 1000'],
+    [
+      { recurringPeriodLength: '1.5' },
+      'Charge period length must be a whole number from 1 to 1000',
+    ],
+    [
+      { recurringPeriodLength: '1001' },
+      'Charge period length must be a whole number from 1 to 1000',
+    ],
     [{ validFrom: '2026-10-01' }, 'Valid from cannot be earlier than 2026-10-02'],
     [{ validTo: '2026-10-01', validFrom: '2026-10-05' }, 'End date is before start date'],
   ])('%j -> %s', (over, message) => {

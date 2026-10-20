@@ -18,8 +18,8 @@ from app.api.errors import bad_request, not_found, unprocessable
 from app.api.inventory import product_href
 from app.api.listing import parse_page
 from app.api.tmfjson import TmfJSONResponse
-from app.billing.core import compute, cycle_period, price_at
-from app.billing.model import Account, BillingState, DateRange, MissingPrice, Product
+from app.billing.core import compute, cycle_period, price_at, product_charge_period
+from app.billing.model import Account, BillingState, DateRange, MissingPrice, Price, Product
 from app.config import settings
 from app.internal.context import no_query
 from app.repository import billing, catalog, parties, products
@@ -31,6 +31,15 @@ router = APIRouter(prefix=BASE)
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # The product a preview prices: it does not exist, so it has no id of its own.
 NO_PRODUCT = UUID(int=0)
+
+
+def _cadence(price: Price) -> dict[str, str]:
+    if (price.recurring_period, price.recurring_period_length) == ("monthly", 1):
+        return {}
+    units = {"daily": "day", "weekly": "week", "monthly": "month", "yearly": "year"}
+    unit = units[price.recurring_period]
+    length = price.recurring_period_length
+    return {"recurringChargePeriod": unit if length == 1 else f"{length} {unit}s"}
 
 
 def _params(request: Request, *names: str) -> dict[str, str]:
@@ -141,7 +150,9 @@ def first_charge(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> 
         except MissingPrice:  # the price ends with this period and nothing follows it
             following = None
         balance = billing.account_balance(conn, row["id"])
-    cycle = cycle_period(start, account.bill_cycle_day)
+    cycle = product_charge_period(
+        product, start, state.prices, account.currency, account.bill_cycle_day, tz
+    )
     run_date = max(start, today + timedelta(days=1))
     after = balance - charge.total
     limit = row["credit_limit"]
@@ -156,6 +167,7 @@ def first_charge(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> 
             "periodDays": cycle.days,
             "prorated": charge.period.days < cycle.days,
             "price": money(price.amount, price.currency),
+            **_cadence(price),
             "amount": money(charge.total, charge.currency),
             "chargeRunDate": run_date,
             "billDate": _first_cycle_day_from(run_date, account.bill_cycle_day),
@@ -198,18 +210,24 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
         row = _account(conn, account_id)
         account = _core_account(row)
         rows = products.list_open_products(conn, row["id"], today)
-        prices = billing.load_recurring_prices(conn, [p["offering_id"] for p in rows])
+        changes = billing.offering_changes(conn, [p["id"] for p in rows])
+        cores = {p["id"]: billing.core_product(p, changes.get(p["id"], ())) for p in rows}
+        prices = billing.load_recurring_prices(
+            conn, [o for p in cores.values() for o in p.offering_ids]
+        )
     items = []
     for p in rows:
-        core = Product(
-            id=p["id"],
-            offering_id=p["offering_id"],  # the offering on the day priced
-            status=p["status"],
-            start_date=p["start_date"],
-            termination_date=p["termination_date"],
-        )
+        core = cores[p["id"]]
+        nxt = _next_charge(p, today, account.bill_cycle_day)
         try:
             price = price_at(core, max(today, p["start_date"]), prices, account.currency, tz)
+            if p["start_date"] <= today:
+                nxt = product_charge_period(
+                    core, today, prices, account.currency, account.bill_cycle_day, tz
+                ).end
+                nxt = min([nxt, *(c.day for c in core.changes if c.day > today)])
+                if p["termination_date"] is not None and p["termination_date"] <= nxt:
+                    nxt = None
         except MissingPrice:
             price = None
         items.append(
@@ -228,7 +246,8 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                 if p["specification_id"] is None
                 else {"id": str(p["specification_id"]), "name": p["specification_name"]},
                 "price": None if price is None else money(price.amount, price.currency),
-                "nextChargeDate": _next_charge(p, today, account.bill_cycle_day),
+                **({} if price is None else _cadence(price)),
+                "nextChargeDate": nxt,
             }
         )
     return _page(items, len(items))
@@ -271,10 +290,20 @@ def charges(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
     with tx() as conn:
         row = _account(conn, account_id)
         rows, total = billing.page_account_charges(conn, row["id"], offset=offset, limit=limit)
+        periods = {}
+        for a in rows:
+            product = products.get_product(conn, a["product_id"])
+            assert product is not None
+            periods[a["id"]] = billing.product_period(
+                conn,
+                product | {"currency": row["currency"]},
+                a["charge_start"],
+                row["bill_cycle_day"],
+            )
     items = []
     for a in rows:
         covered = DateRange(a["period"].lower, a["period"].upper)
-        cycle = cycle_period(covered.start, row["bill_cycle_day"])
+        cycle = periods[a["id"]]
         items.append(
             {
                 "id": str(a["id"]),

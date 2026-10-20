@@ -20,6 +20,8 @@ function backend(
   latestRun: Handler = () => json([{ ...RUN, status: 'completed' }], { total: 9 }),
 ) {
   return stubFetch({
+    'GET /tmf-api/accountManagement/v5/financialAccount?limit=1&fields=id': () =>
+      json([], { total: 23 }),
     'GET /internal/v1/session': () =>
       json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
     'GET /internal/v1/context': context,
@@ -120,6 +122,8 @@ describe('shell', () => {
     ]);
     expect(await within(nav).findByText('1,284')).toBeTruthy();
     expect(await within(nav).findByText('12')).toBeTruthy();
+    const financial = within(nav).getByRole('link', { name: /Financial accounts/ });
+    expect(await within(financial).findByText('23')).toBeTruthy();
     const runs = within(nav).getByRole('link', { name: /Billing runs/ });
     expect(await within(runs).findByText('9')).toBeTruthy(); // X-Total-Count of the runs
     expect(within(runs).queryByText('failed')).toBeNull();

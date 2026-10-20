@@ -165,7 +165,7 @@ export function CatalogScreen() {
                             )}
                           </div>
                         ),
-                      period: 'month',
+                      period: price?.interval ?? 'month',
                       status: <Pill status={offering.status} />,
                       validity: validity(offering, context.timeZone),
                     }}
@@ -312,7 +312,7 @@ export function OfferingModal({
             ) : (
               offering.prices.map((price) => (
                 <div key={price.id} className="num">
-                  {formatCents(price.cents)} {price.currency} / mo ·{' '}
+                  {formatCents(price.cents)} {price.currency} / {price.interval ?? 'month'} ·{' '}
                   {businessDate(price.from, context.timeZone)} –{' '}
                   {price.to === null ? 'open-ended' : lastValidDay(price.to, context.timeZone)}
                 </div>
@@ -387,7 +387,8 @@ function PriceChangeSection({
       <div className="bss-step-head">Change price</div>
       <div className="bss-form">
         <label>
-          New price, {context.currency} / month
+          New price, {context.currency} /{' '}
+          {offering.prices.find((p) => p.currency === context.currency)?.interval ?? 'month'}
           <TextInput
             mono
             inputMode="decimal"
@@ -445,6 +446,8 @@ export function NewOfferingModal({
     name: '',
     specificationId: catalog.specifications[0]?.id ?? '',
     price: '',
+    recurringPeriodType: 'monthly',
+    recurringPeriodLength: '1',
     validFrom: tomorrow,
     validTo: '',
   });
@@ -466,6 +469,8 @@ export function NewOfferingModal({
           name: form.name.trim(),
           specificationId: form.specificationId,
           amount: checked.amount,
+          recurringPeriodType: form.recurringPeriodType ?? 'monthly',
+          recurringPeriodLength: Number(form.recurringPeriodLength ?? '1'),
           currency: context.currency,
           validFrom: form.validFrom,
           validTo: form.validTo || null,
@@ -541,12 +546,32 @@ export function NewOfferingModal({
           </label>
           <label>
             Recurrence
-            {/* monthly only: weekly is not supported by billing (decision 5) */}
-            <select className="bss-input" value="month" disabled>
-              <option value="month">month</option>
+            <select
+              className="bss-input"
+              value={form.recurringPeriodType}
+              onChange={(e) => set('recurringPeriodType')(e.target.value)}
+            >
+              <option value="daily">day</option>
+              <option value="weekly">week</option>
+              <option value="monthly">month</option>
+              <option value="yearly">year</option>
             </select>
           </label>
         </div>
+        <label>
+          Charge every
+          <TextInput
+            type="number"
+            min="1"
+            max="1000"
+            step="1"
+            value={form.recurringPeriodLength ?? '1'}
+            onChange={(e) => set('recurringPeriodLength')(e.target.value)}
+          />
+          <span className="bss-secondary">
+            Selected periods per charge; price covers the entire interval.
+          </span>
+        </label>
         <label>
           Valid from
           <TextInput

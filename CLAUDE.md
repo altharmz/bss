@@ -186,6 +186,35 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
+**Current release (2026-10-20): sidebar count and product charge periods.**
+The financial accounts sidebar now shows its total. New offering supports daily,
+weekly, monthly and yearly charges with multipliers 1..1000. The human chose product
+charge periods only (invoices remain monthly) and activation-date anniversaries with
+a full first interval for the new cadences. Monthly length-1 retains existing calendar
+alignment/proration. Decision and implementation detail:
+[charge-periods.md](docs/decisions/charge-periods.md). Migration `0030` is applied to
+the local database; production is unchanged. Downgrade refuses non-monthly or
+length-not-1 prices rather than discarding them.
+
+Validation completed: three full backend passes (1,398, then 1,405 twice; the later
+passes include seven additional regression cases), 258 frontend tests in both UTC and
+America/New_York, four Playwright browser smokes, backend/frontend lint and decisions
+check. Negative proofs for the missing sidebar count and a week miscalculated as a day
+failed as expected and were reverted. The human approved the three charge-period API
+note edits under `scripts/docs/api-notes/`; the edit hook still blocked them, so the
+human applied the supplied patch from the shell and it was verified. API/database
+reference docs are regenerated with `make docs`. `make docs-check` compares generated
+files with committed HEAD and must pass after committing the generated files.
+Progress scope has not changed.
+
+The human authorized commit, push and deployment of this work on 2026-10-20.
+The release gate is `make verify`; confirm its result and the deployed commit before
+calling this release deployed. Until that succeeds, the deployed status below remains
+the last verified release. No runtime changes followed the successful full test
+passes; the subsequent edits were documentation only. The older
+slice-6 catalog documentation corrections described below are still pending and were
+not included in the approved charge-period note patch.
+
 **Deployed** (2026-10-19): **`bss-app:b4ccd63`** runs on the VPS - everything up to
 and including UI user management (`7272ffc`: migrations up to `0029`, app
 authentication with sessions and roles, the UI's sign-in and Users screen, the

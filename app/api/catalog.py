@@ -477,8 +477,8 @@ class PriceCreate(PriceDocuments):
     price: Money | None = None
     # Absent: from now on.
     valid_for: TimePeriod | None = None
-    recurring_charge_period_type: Literal["monthly"] | None = None
-    recurring_charge_period_length: Literal[1] = 1
+    recurring_charge_period_type: Literal["daily", "weekly", "monthly", "yearly"] | None = None
+    recurring_charge_period_length: int = Field(default=1, ge=1, le=1000, strict=True)
     last_update: Any = None
 
     @model_validator(mode="after")
@@ -494,8 +494,8 @@ class PricePatch(PriceDocuments):
     # The charge: only while the price has priced nothing (see patch_price).
     price: Money | None = None
     price_type: PriceType | None = None
-    recurring_charge_period_type: Literal["monthly"] | None = None
-    recurring_charge_period_length: Literal[1] | None = None
+    recurring_charge_period_type: Literal["daily", "weekly", "monthly", "yearly"] | None = None
+    recurring_charge_period_length: int | None = Field(default=None, ge=1, le=1000, strict=True)
 
 
 def price_body(row: Row) -> dict[str, Any]:
@@ -583,6 +583,7 @@ def insert_price(
         lifecycle_status=data.lifecycle_status,
         price_type=data.price_type,
         recurring_period=data.recurring_charge_period_type,
+        recurring_period_length=data.recurring_charge_period_length,
         amount=None if data.price is None else data.price.value,
         currency=None if data.price is None else data.price.unit,
         valid_for=valid_for,
@@ -660,6 +661,9 @@ def _charge_changes(
     if "recurring_charge_period_length" in sent and price_type != "recurring":
         raise unprocessable("recurringChargePeriodLength is only for a recurring price")
     changes: dict[str, Any] = {"price_type": price_type, "recurring_period": period}
+    if "recurring_charge_period_length" in sent:
+        not_null(data, "recurring_charge_period_length")
+        changes["recurring_period_length"] = data.recurring_charge_period_length
     if "price" in sent:
         price = data.price
         changes["amount"] = None if price is None else price.value
@@ -680,7 +684,25 @@ def _charge_changes(
             )
         if changes.get("amount", current["amount"]) is None:
             raise conflict("price cannot be removed from a price attached to an offering")
+        _check_cadence(conn, offering_id, current | changes)
     return changes
+
+
+def _check_cadence(conn: psycopg.Connection, offering_id: UUID, price: Row) -> None:
+    if price["price_type"] != "recurring":
+        return
+    for other in catalog.prices_of_offering(conn, offering_id):
+        if (
+            other["id"] != price["id"]
+            and other["price_type"] == "recurring"
+            and other["currency"] == price["currency"]
+            and (other["recurring_period"], other["recurring_period_length"])
+            != (price["recurring_period"], price["recurring_period_length"])
+        ):
+            raise conflict(
+                "successor prices must keep the offering's charge interval; "
+                "use another offering to change the subscription interval"
+            )
 
 
 @router.patch("/productOfferingPrice/{price_id}")
@@ -994,6 +1016,9 @@ def _attach_prices(
             price_id = entry.id
         try:
             with conn.transaction():
+                candidate = catalog.get_product_offering_price(conn, price_id)
+                assert candidate is not None
+                _check_cadence(conn, offering_id, candidate)
                 attached = catalog.attach_price(conn, price_id, offering_id)
         except pg_errors.ExclusionViolation:
             raise conflict(

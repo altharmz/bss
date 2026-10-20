@@ -27,6 +27,12 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
     businessDate: string;
   };
   await expect(page.getByRole('heading', { name: 'Subscribers' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Operations' })
+      .getByRole('link', { name: /Financial accounts/ })
+      .locator('.count'),
+  ).toHaveText(/^\d[\d,]*$/);
   // New subscriber opens and cancels (read-only: nothing is created)
   await page.getByRole('button', { name: '+ New subscriber' }).click();
   const create = page.getByRole('dialog', { name: 'New subscriber' });
@@ -76,6 +82,14 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
     .click();
   await expect(page.getByRole('heading', { name: 'Product catalog' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'MOB-L', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '+ New offering' }).click();
+  const newOffering = page.getByRole('dialog', { name: 'New product offering' });
+  await expect(newOffering.getByLabel('Recurrence')).toBeEnabled();
+  await newOffering.getByLabel('Recurrence').selectOption('weekly');
+  await newOffering.getByLabel('Charge every').fill('2');
+  await expect(newOffering.getByLabel('Recurrence')).toHaveValue('weekly');
+  await expect(newOffering.getByLabel('Charge every')).toHaveValue('2');
+  await newOffering.getByRole('button', { name: 'Cancel' }).click();
 
   // a deep link is answered by index.html (client-side route)
   await page.goto('/catalog');

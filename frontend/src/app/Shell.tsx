@@ -14,6 +14,7 @@ import { SignOut, useSession } from './session';
 // red "failed" badge instead when the latest run failed (README "Global Layout").
 
 const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount';
+const FINANCIAL_ACCOUNTS = '/tmf-api/accountManagement/v5/financialAccount';
 const OFFERINGS = '/tmf-api/productCatalogManagement/v5/productOffering';
 
 function useCount(path: string): string {
@@ -47,6 +48,7 @@ export function Sidebar({ context }: { context: SystemContext }) {
   const session = useSession();
   const { route } = useRouter();
   const accounts = useCount(ACCOUNTS);
+  const financialAccounts = useCount(FINANCIAL_ACCOUNTS);
   const offerings = useCount(OFFERINGS);
   const runs = useRunsNav();
   const items: NavItem[] = [
@@ -70,10 +72,9 @@ export function Sidebar({ context }: { context: SystemContext }) {
       active: (r) => r.name === 'billingRuns',
     },
     {
-      // no count: one more request on every screen for a rarely used list
       label: 'Financial accounts',
       href: '/financial-accounts',
-      count: '',
+      count: financialAccounts,
       active: (r) => r.name === 'financialAccounts',
     },
   ];

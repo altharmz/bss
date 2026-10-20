@@ -1,5 +1,9 @@
 # Billing core (stage 3) and its open questions
 
+The monthly-only charge policy below is extended by
+[configurable charge periods](charge-periods.md) (2026-10-20). Monthly length-1 prices
+keep the original calculation; new cadences use activation-date anniversaries.
+
 Decision records moved from CLAUDE.md (as of `910ec0a`), unchanged in meaning. The rules
 needed every session stay in [CLAUDE.md](../../CLAUDE.md); `scripts/check-decisions.py`
 proves nothing was lost in the move. Index: [README.md](README.md).

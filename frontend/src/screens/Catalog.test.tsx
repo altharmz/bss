@@ -68,6 +68,8 @@ const SPECS = [
 
 function backend(routes: Record<string, Handler> = {}, offerings: unknown[] = OFFERINGS) {
   return stubFetch({
+    'GET /tmf-api/accountManagement/v5/financialAccount?limit=1&fields=id': () =>
+      json([], { total: 23 }),
     'GET /internal/v1/context': () => json(CONTEXT),
     'GET /internal/v1/session': () =>
       json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
@@ -106,6 +108,25 @@ const cellsOf = (name: string) =>
     .map((c) => c.textContent);
 
 describe('catalog', () => {
+  it('shows a non-monthly price interval in the list and offering details', async () => {
+    backend({
+      [`GET ${CAT}/productOfferingPrice?priceType=recurring&offset=0&limit=100`]: () =>
+        json(
+          PRICES.map((p) => ({
+            ...p,
+            recurringChargePeriodType: 'weekly',
+            recurringChargePeriodLength: 2,
+          })),
+          { total: PRICES.length },
+        ),
+    });
+    await open();
+    await waitFor(() => expect(cellsOf('Mobile L')[4]).toBe('2 weeks'));
+    fireEvent.click(row('Mobile L'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/RUB \/ 2 weeks/)).toBeTruthy();
+  });
+
   it('lists offerings with code, specification, price, period, status and validity', async () => {
     backend();
     await open();
@@ -210,10 +231,21 @@ describe('new offering', () => {
     fireEvent.change(field(dialog, /Valid to/), { target: { value: '' } });
     expect(within(dialog).queryByRole('alert')).toBeNull();
     expect(create(dialog).disabled).toBe(false);
-    expect((field(dialog, /Recurrence/) as HTMLSelectElement).disabled).toBe(true); // month only
+    expect((field(dialog, /Recurrence/) as HTMLSelectElement).disabled).toBe(false);
+    expect(
+      within(field(dialog, /Recurrence/))
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['day', 'week', 'month', 'year']);
   });
 
-  it('creates the price, then the In Design offering that references it', async () => {
+  it.each([
+    ['monthly', 1],
+    ['daily', 3],
+    ['weekly', 2],
+    ['monthly', 3],
+    ['yearly', 1],
+  ] as const)('creates an offering priced every %s × %s', async (unit, length) => {
     let created = false;
     const { fetchMock } = backend({
       [`POST ${CAT}/productOfferingPrice`]: () => json({ id: 'new-price' }, { status: 201 }),
@@ -229,6 +261,8 @@ describe('new offering', () => {
     fireEvent.change(field(dialog, /Specification/), { target: { value: 's1' } });
     fireEvent.change(field(dialog, /Price, RUB/), { target: { value: '1,990.5' } });
     fireEvent.change(field(dialog, /Valid to/), { target: { value: '2026-12-31' } });
+    fireEvent.change(field(dialog, /Recurrence/), { target: { value: unit } });
+    fireEvent.change(field(dialog, /Charge every/), { target: { value: String(length) } });
     fireEvent.click(create(dialog));
 
     expect(await screen.findByRole('status')).toHaveProperty(
@@ -246,10 +280,11 @@ describe('new offering', () => {
     expect(String(priceCall?.[1]?.body)).toContain('"price":{"unit":"RUB","value":1990.50}');
     expect(JSON.parse(String(priceCall?.[1]?.body))).toEqual({
       '@type': 'ProductOfferingPrice',
-      name: 'Mobile XL monthly',
+      name: `Mobile XL ${unit}`,
       lifecycleStatus: 'Active',
       priceType: 'recurring',
-      recurringChargePeriodType: 'monthly',
+      recurringChargePeriodType: unit,
+      ...(unit !== 'monthly' || length !== 1 ? { recurringChargePeriodLength: length } : {}),
       price: { unit: 'RUB', value: 1990.5 },
       validFor,
     });
@@ -309,7 +344,7 @@ describe('lifecycle', () => {
       },
     });
     const dialog = await details('TV Basic');
-    expect(within(dialog).getByText('399.00 RUB / mo · 2026-10-05 – open-ended')).toBeTruthy();
+    expect(within(dialog).getByText('399.00 RUB / month · 2026-10-05 – open-ended')).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Activate' })).toBe(
       expectUi('ui.catalog.lifecycle'),
     );

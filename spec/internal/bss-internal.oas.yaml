@@ -684,14 +684,15 @@ components:
         period: {$ref: '#/components/schemas/DateRange'}
         cyclePeriod: {$ref: '#/components/schemas/DateRange'}
         billableDays: {type: integer, minimum: 1}
-        periodDays: {type: integer, minimum: 28, maximum: 31}
+        periodDays: {type: integer, minimum: 1}
         prorated: {type: boolean}
         price:
-          description: The monthly price before tax.
+          description: The full charge interval price before tax.
           allOf: [{$ref: '#/components/schemas/Money'}]
         amount:
           description: The first charge with its taxes (the account's exemptions applied).
           allOf: [{$ref: '#/components/schemas/Money'}]
+        recurringChargePeriod: {type: string, description: 'Charge interval label; absent means month.'}
         chargeRunDate: {$ref: '#/components/schemas/BusinessDate'}
         billDate: {$ref: '#/components/schemas/BusinessDate'}
         next:
@@ -715,6 +716,7 @@ components:
       required: [id, href, status, startDate, terminationDate, productOffering,
                  productSpecification, price, nextChargeDate]
       properties:
+        recurringChargePeriod: {type: string, description: 'Charge interval label; absent means month.'}
         id: {type: string, format: uuid}
         href: {type: string}
         status:
@@ -747,7 +749,7 @@ components:
         runDate: {$ref: '#/components/schemas/BusinessDate'}
         period: {$ref: '#/components/schemas/DateRange'}
         billableDays: {type: integer, minimum: 1}
-        periodDays: {type: integer, minimum: 28, maximum: 31}
+        periodDays: {type: integer, minimum: 1}
         prorated: {type: boolean}
         amount:
           description: With its taxes (the ABR's taxIncludedAmount) - a refund is negative.

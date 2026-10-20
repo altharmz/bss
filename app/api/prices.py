@@ -1,4 +1,4 @@
-"""Read-only TMF monthly price views; the billing engine remains authoritative."""
+"""Read-only TMF recurring price views; the billing engine remains authoritative."""
 
 from decimal import Decimal
 from typing import Any
@@ -11,7 +11,7 @@ CATALOG_BASE = "/tmf-api/productCatalogManagement/v5"
 
 
 def tax_on(amount: Decimal, taxes: tuple[Tax, ...]) -> Decimal:
-    """The tax of a full month of `amount`: each tax item rounded once, as billing does.
+    """The tax of a full interval of `amount`: each tax item rounded once, as billing does.
     The view ignores the account's exemptions; the ABRs show what was applied."""
     return sum((tax_of(amount, t.rate) for t in taxes), Decimal("0.00"))
 
@@ -40,6 +40,8 @@ def monthly_price(
     unit_of_measure: dict[str, Any] | None = None,
     billing_account: dict[str, Any] | None = None,
     price_name: str | None = None,
+    recurring_period: str = "monthly",
+    recurring_period_length: int = 1,
 ) -> dict[str, Any]:
     """`tax`: the tax on `amount`; `tax_rate`: Price.taxRate in percent (None: omitted -
     a total over items taxed at different rates has no one rate). `price_id`: the
@@ -50,7 +52,17 @@ def monthly_price(
         "name": name,
         "description": "Full monthly recurring fee; actual charges are prorated by billing.",
         "priceType": "recurring",
-        "recurringChargePeriod": "month",
+        "recurringChargePeriod": {
+            "daily": "day",
+            "weekly": "week",
+            "monthly": "month",
+            "yearly": "year",
+        }[recurring_period]
+        if recurring_period_length == 1
+        else f"{recurring_period_length} "
+        + {"daily": "days", "weekly": "weeks", "monthly": "months", "yearly": "years"}[
+            recurring_period
+        ],
         "price": {
             "dutyFreeAmount": money(amount, currency),
             "taxIncludedAmount": money(amount + tax, currency),
@@ -62,6 +74,8 @@ def monthly_price(
     }
     if unit_of_measure is not None:
         body["unitOfMeasure"] = unit_text(unit_of_measure)
+    if (recurring_period, recurring_period_length) != ("monthly", 1):
+        body["description"] = "Full recurring fee; actual charges are prorated by billing."
     if billing_account is not None:
         body["billingAccount"] = billing_account
     if price_id is not None:

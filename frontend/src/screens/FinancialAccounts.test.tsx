@@ -71,6 +71,8 @@ const EMPTY = {
 
 function backend(list: Handler) {
   return stubFetch({
+    'GET /tmf-api/accountManagement/v5/financialAccount?limit=1&fields=id': () =>
+      json([], { total: 23 }),
     'GET /internal/v1/context': () => json(CONTEXT),
     'GET /internal/v1/session': () =>
       json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),

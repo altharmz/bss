@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0029**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0030**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -310,7 +310,7 @@ erDiagram
     uuid product_offering_id FK
     text name
     price_type price_type
-    recurring_charge_period_type recurring_period
+    text recurring_period
     smallint recurring_period_length
     numeric amount
     char currency
@@ -884,7 +884,7 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 | `product_order_item_state_type` | `acknowledged`, `rejected`, `pending`, `held`, `inProgress`, `cancelled`, `completed`, `failed`, `partial`, `assessingCancellation`, `pendingCancellation` | [`product_order_item.state`](product_order_item.md) |
 | `product_order_state_type` | `acknowledged`, `rejected`, `pending`, `held`, `inProgress`, `cancelled`, `completed`, `failed`, `partial`, `assessingCancellation`, `pendingCancellation`, `draft`, `inProgress.accepted` | [`product_order.state`](product_order.md) |
 | `product_status_type` | `created`, `pendingActive`, `cancelled`, `active`, `pendingTerminate`, `terminated`, `suspended`, `aborted` | [`product.status`](product.md), [`product_order_item.product_status`](product_order_item.md), [`product_status_change.status`](product_status_change.md) |
-| `recurring_charge_period_type` | `monthly` | [`product_offering_price.recurring_period`](product_offering_price.md) |
+| `recurring_charge_period_type` | `monthly` | - |
 | `worker_request_kind` | `catchUp`, `retry` | [`worker_request.kind`](worker_request.md) |
 
 Every table except `billing_run_account` has the audit columns `id` (uuid, `gen_random_uuid()`), `created_at` and `updated_at` (database `now()`; a `BEFORE UPDATE` trigger calling `set_updated_at()` maintains `updated_at`). The extension `btree_gist` backs the exclusion constraints.

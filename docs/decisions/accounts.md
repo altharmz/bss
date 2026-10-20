@@ -51,12 +51,15 @@ ignored on POST like a billing account's, 400 on PATCH). `contact`, `taxExemptio
 **Closing** a financial account that still contains accounts is allowed; the links stay
 and are still summed. Only new links to it are refused.
 
-**UI**: read-only. A *Financial accounts* screen (sidebar, no count - one more request on
-every screen for a rarely used list) lists owner, state, the balance per currency and the
-contained accounts, billing accounts linking to their subscriber card. The subscriber
+**UI**: read-only. A *Financial accounts* screen lists owner, state, the balance per
+currency and the contained accounts, billing accounts linking to their subscriber card. The subscriber
 card names the account's financial account next to its BillingAccount id. Creating and
 linking stay in the API and the MCP tools: UI writes would need the pinned request
 contract (frontend.md) for a feature the demo does not need on screen.
+
+Since 2026-10-20, the sidebar shows the financial account total like the other lists,
+using `financialAccount?limit=1&fields=id` and `X-Total-Count`. This adds one small
+request when the sidebar mounts; loading or failed counts stay blank.
 
 **Migration `0013`**: table `financial_account` (owner `party_id`, `UNIQUE (id,
 party_id)` for slice 2's composite foreign key), `billing_account.financial_account_id`

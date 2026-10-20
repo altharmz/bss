@@ -29,15 +29,14 @@ in id order (as orders and the status flips do).
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 import psycopg
 
-from app.billing.core import cycle_period
 from app.events import emit
 from app.ordering.states import item_transition, order_transition
-from app.repository import orders, parties, products
+from app.repository import billing, orders, parties, products
 from app.repository._sql import Row
 
 NOT_STARTED = frozenset({"created", "pendingActive"})
@@ -81,7 +80,7 @@ def _item_problem(
         if ends <= today:
             return f"the termination took effect on {ends}"
         day = ends
-    period = cycle_period(day, cycle_day)
+    period = billing.product_period(conn, product, day, cycle_day)
     if products.charged_from(conn, product["id"], period.start):
         return f"billing already charged its product for the period from {period.start}"
     return None
@@ -107,7 +106,10 @@ def _modify_problem(
     day = change["change_date"]
     if day <= today:
         return f"the offering change took effect on {day}"
-    mid_period = cycle_period(day, cycle_day).start != day
+    # Use the old schedule just before the change, whose charge may have been cut.
+    mid_period = (
+        billing.product_period(conn, product, day - timedelta(days=1), cycle_day).end != day
+    )
     if products.change_billed(conn, product["id"], day, mid_period=mid_period):
         return f"billing already reflects the offering change on {day}"
     return None
@@ -153,7 +155,13 @@ def cancel_order(
     problems = []
     for item in items:
         product = locked[item["product_id"]]
-        problem = _item_problem(conn, item, product, today, account["bill_cycle_day"])
+        problem = _item_problem(
+            conn,
+            item,
+            product | {"currency": account["currency"]},
+            today,
+            account["bill_cycle_day"],
+        )
         if problem is not None:
             problems.append(f"item {item['item_id']} ({item['action']}): {problem}")
     if problems:

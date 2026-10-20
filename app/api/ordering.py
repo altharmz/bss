@@ -362,6 +362,15 @@ def _quoted_taxes(conn: psycopg.Connection, item: Row) -> tuple[Tax, ...]:
     return billing.price_taxes(price["details"])
 
 
+def _quoted_period(conn: psycopg.Connection, item: Row) -> dict[str, Any]:
+    price = catalog.get_product_offering_price(conn, item["quoted_price_id"])
+    assert price is not None
+    return {
+        "recurring_period": price["recurring_period"],
+        "recurring_period_length": price["recurring_period_length"],
+    }
+
+
 def _quoted_unit(conn: psycopg.Connection, item: Row) -> dict[str, Any] | None:
     """The unitOfMeasure of the price an item was quoted at, if it has one."""
     price = catalog.get_product_offering_price(conn, item["quoted_price_id"])
@@ -412,6 +421,7 @@ def _item_body(
             tax_rate=total_rate(taxes),
             unit_of_measure=_quoted_unit(conn, row),
             billing_account=body.get("billingAccount"),
+            **_quoted_period(conn, row),
         )
         body["itemPrice"] = [price]
         body["itemTotalPrice"] = [price]  # quantity is always 1
@@ -469,7 +479,10 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                 sum((i["quoted_amount"] for i in adds), Decimal("0.00")),
                 account["currency"],
                 resource_type="OrderPrice",
-                name="New subscriptions monthly total",
+                name="New subscriptions monthly total"
+                if _quoted_period(conn, adds[0])
+                == {"recurring_period": "monthly", "recurring_period_length": 1}
+                else "New subscriptions recurring total",
                 tax=sum(
                     (tax_on(i["quoted_amount"], t) for i, t in zip(adds, taxes, strict=True)),
                     Decimal("0.00"),
@@ -479,8 +492,16 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                 price_name=price_name,
                 unit_of_measure=units[0] if all(u == units[0] for u in units) else None,
                 billing_account=account_ref(account),
+                **_quoted_period(conn, adds[0]),
             )
         ]
+        # Different recurring intervals cannot be added into one recurring amount.
+        if any(_quoted_period(conn, item) != _quoted_period(conn, adds[0]) for item in adds):
+            total = [
+                entry
+                for item in adds
+                for entry in _item_body(conn, item, account, children).get("itemTotalPrice", [])
+            ]
     start = row["requested_start_date"]
     return without_nulls(
         {

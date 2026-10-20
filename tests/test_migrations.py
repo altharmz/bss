@@ -13,6 +13,41 @@ def test_alembic_upgrade_head_on_clean_database(temp_db_url):
     command.upgrade(Config("alembic.ini"), "head")
 
 
+def test_0030_preserves_monthly_data_and_refuses_lossy_downgrade(temp_db_url):
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0029")
+    with psycopg.connect(temp_db_url) as conn:
+        price_id = conn.execute("""
+            INSERT INTO product_offering_price
+                (name, lifecycle_status, price_type, recurring_period, amount, currency, valid_for)
+            VALUES ('P', 'Active', 'recurring', 'monthly', 10, 'RUB', tstzrange(now(), NULL))
+            RETURNING id
+        """).fetchone()[0]
+    command.upgrade(cfg, "0030")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute(
+            "SELECT recurring_period, recurring_period_length FROM product_offering_price"
+            " WHERE id = %s",
+            (price_id,),
+        ).fetchone() == ("monthly", 1)
+        conn.execute(
+            "UPDATE product_offering_price SET recurring_period = 'weekly',"
+            " recurring_period_length = 2 WHERE id = %s",
+            (price_id,),
+        )
+    with pytest.raises(Exception, match="non-monthly prices"):
+        command.downgrade(cfg, "0029")
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("0030",)
+        conn.execute(
+            "UPDATE product_offering_price SET recurring_period = 'monthly',"
+            " recurring_period_length = 1 WHERE id = %s",
+            (price_id,),
+        )
+    command.downgrade(cfg, "0029")
+    command.upgrade(cfg, "0030")
+
+
 def test_alembic_downgrade_then_upgrade_roundtrip(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "head")

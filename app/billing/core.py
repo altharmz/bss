@@ -24,6 +24,7 @@ Bills: a bill on cycle day D, for [D, next D), collects the unbilled ABRs whose 
 those that would be empty. A bill's amount due includes the taxes of its ABRs.
 """
 
+from calendar import monthrange
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
@@ -85,6 +86,52 @@ def billable_range(product: Product, period: DateRange) -> DateRange:
     if end <= start:
         return DateRange(start, start)
     return DateRange(start, end)
+
+
+def charge_period(day: date, anchor: date, price: Price, cycle_day: int) -> DateRange:
+    """Charge interval containing day. Legacy monthly fees keep calendar alignment;
+    all new cadences use anniversaries of anchor, clamped independently at month ends."""
+    unit, length = price.recurring_period, price.recurring_period_length
+    if unit not in {"daily", "weekly", "monthly", "yearly"} or not 1 <= length <= 1000:
+        raise InconsistentState(f"price {price.id}: invalid charge interval {unit}/{length}")
+    if unit == "monthly" and length == 1:
+        return cycle_period(day, cycle_day)
+    if unit in {"daily", "weekly"}:
+        days = length * (7 if unit == "weekly" else 1)
+        start = anchor + timedelta(days=((day - anchor).days // days) * days)
+        return DateRange(start, start + timedelta(days=days))
+    months = length * (12 if unit == "yearly" else 1)
+
+    def boundary(index: int) -> date:
+        year, month = divmod(anchor.year * 12 + anchor.month - 1 + index * months, 12)
+        return date(year, month + 1, min(anchor.day, monthrange(year, month + 1)[1]))
+
+    index = ((day.year - anchor.year) * 12 + day.month - anchor.month) // months
+    if boundary(index) > day:
+        index -= 1
+    return DateRange(boundary(index), boundary(index + 1))
+
+
+def product_charge_period(
+    product: Product,
+    day: date,
+    prices: tuple[Price, ...],
+    currency: str,
+    cycle_day: int,
+    tz: ZoneInfo,
+) -> DateRange:
+    anchor = max([product.start_date, *(c.day for c in product.changes if c.day <= day)])
+    # Cadence stays fixed across successor prices, even when validity ends at a
+    # known termination. The period can still be inspected after that price ends.
+    matching = [
+        p
+        for p in prices
+        if p.offering_id == product.offering_on(max(day, anchor)) and p.currency == currency
+    ]
+    if not matching:
+        raise MissingPrice(product.id, day, currency)
+    price = matching[0]
+    return charge_period(day, anchor, price, cycle_day)
 
 
 def prorate(amount: Decimal, days: int, period: DateRange) -> Decimal:
@@ -172,8 +219,12 @@ def _check_stored(state: BillingState, as_of: date) -> None:
             raise InconsistentState(f"ABR {abr.id} of product {abr.product_id} not in the account")
         if abr.run_date > as_of:
             raise InconsistentState(f"ABR {abr.id} written by the run of {abr.run_date} > {as_of}")
-        if abr.period.is_empty or not abr.period.within(
-            cycle_period(abr.period.start, account.bill_cycle_day)
+        if abr.period.is_empty or (
+            all(
+                p.recurring_period == "monthly" and p.recurring_period_length == 1
+                for p in state.prices
+            )
+            and not abr.period.within(cycle_period(abr.period.start, account.bill_cycle_day))
         ):
             raise InconsistentState(f"ABR {abr.id} period {abr.period} not inside one cycle period")
     for bill in state.bills:
@@ -182,10 +233,18 @@ def _check_stored(state: BillingState, as_of: date) -> None:
 
 
 def _product_abrs(state: BillingState, product: Product, as_of: date, tz: ZoneInfo) -> list[NewAbr]:
+    if any(
+        p.offering_id in product.offering_ids
+        and (p.recurring_period != "monthly" or p.recurring_period_length != 1)
+        for p in state.prices
+    ):
+        return _anniversary_abrs(state, product, as_of, tz)
     account = state.account
     by_period: dict[date, list[StoredAbr]] = defaultdict(list)
     for abr in state.abrs:
         if abr.product_id == product.id:
+            if not abr.period.within(cycle_period(abr.period.start, account.bill_cycle_day)):
+                raise InconsistentState(f"ABR {abr.id} outside its monthly charge period")
             by_period[cycle_period(abr.period.start, account.bill_cycle_day).start].append(abr)
 
     out: list[NewAbr] = []
@@ -198,6 +257,64 @@ def _product_abrs(state: BillingState, product: Product, as_of: date, tz: ZoneIn
         raise InconsistentState(
             f"product {product.id}: stored ABRs in periods {sorted(by_period)} it is not billed for"
         )
+    return out
+
+
+def _anniversary_abrs(
+    state: BillingState, product: Product, as_of: date, tz: ZoneInfo
+) -> list[NewAbr]:
+    """Each offering era has its own schedule. Match stored charges by segment start;
+    their refunds follow the charge id, even across a monthly invoice boundary."""
+    charges = {
+        a.period.start: a
+        for a in state.abrs
+        if a.product_id == product.id and a.kind == "recurring"
+    }
+    refunds: dict[UUID, list[StoredAbr]] = defaultdict(list)
+    if len(charges) != sum(
+        a.product_id == product.id and a.kind == "recurring" for a in state.abrs
+    ):
+        raise InconsistentState(f"product {product.id}: duplicate charge starts")
+    for a in state.abrs:
+        if a.product_id == product.id and a.kind == "refund":
+            refunds[a.refunds_id].append(a)
+    eras = sorted(set([product.start_date, *(c.day for c in product.changes)]))
+    out = []
+    for i, anchor in enumerate(eras):
+        if anchor > as_of:
+            break
+        end = eras[i + 1] if i + 1 < len(eras) else None
+        if product.status in NOT_BILLABLE and not charges:
+            continue
+        price = price_at(product, anchor, state.prices, state.account.currency, tz)
+        period = charge_period(anchor, anchor, price, state.account.bill_cycle_day)
+        while period.start <= as_of and (end is None or period.start < end):
+            start = max(anchor, period.start)
+            stop = min(period.end, end) if end is not None else period.end
+            if product.termination_date is not None:
+                stop = min(stop, product.termination_date)
+            rng = DateRange(start, start if product.status in NOT_BILLABLE else max(start, stop))
+            charge = charges.pop(start, None)
+            if charge is not None and not charge.period.within(period):
+                raise InconsistentState(f"charge {charge.id} outside its charge period {period}")
+            abr = _segment_diff(
+                state,
+                product,
+                period,
+                start,
+                rng,
+                charge,
+                refunds.pop(charge.id, []) if charge else [],
+                as_of,
+                tz,
+            )
+            if abr is not None:
+                out.append(abr)
+            if product.termination_date is not None and period.end >= product.termination_date:
+                break
+            period = charge_period(period.end, anchor, price, state.account.bill_cycle_day)
+    if charges or refunds:
+        raise InconsistentState(f"product {product.id}: charges or refunds outside its schedule")
     return out
 
 

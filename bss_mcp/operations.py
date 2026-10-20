@@ -157,7 +157,8 @@ OPERATIONS: dict[str, Op] = {
     "get_price": Op("One product offering price.", query=FIELDS),
     "create_price": Op(
         "Create a price on its own; attach it through an offering's productOfferingPrice."
-        " Recurring prices are monthly; a price never starts in the past.",
+        " Recurring prices use daily, weekly, monthly or yearly periods with length 1..1000;"
+        " a price never starts in the past.",
         body=PriceCreate,
     ),
     "patch_price": Op(
@@ -492,7 +493,8 @@ OPERATIONS: dict[str, Op] = {
     ),
     "price_change": Op(
         "Change the price of a live offering in one step: ends the current recurring price"
-        " in that currency at validFrom and attaches the new amount from then on.",
+        " in that currency at validFrom and attaches the new amount from then on,"
+        " preserving its charge interval.",
         body=PriceChange,
     ),
     "list_runs": Op(

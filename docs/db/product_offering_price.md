@@ -16,8 +16,8 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | `product_offering_id` | `uuid` | yes |  | The offering the price is attached to; NULL while unattached (an unattached price prices nothing). Never detached once set. |
 | `name` | `text` | yes |  |  |
 | `price_type` | `price_type` (enum, see [README](README.md#enums)) | no |  | TMF620 priceType: recurring, oneTime, or an alteration (discount, allowance, penalty: records). Billing uses recurring only. |
-| `recurring_period` | `recurring_charge_period_type` (enum, see [README](README.md#enums)) | yes |  | TMF620 recurringChargePeriodType (monthly); set iff recurring. |
-| `recurring_period_length` | `smallint` | no | `1` | TMF620 recurringChargePeriodLength; always 1. |
+| `recurring_period` | `text` | yes |  | TMF620 recurringChargePeriodType: daily, weekly, monthly or yearly. |
+| `recurring_period_length` | `smallint` | no | `1` | TMF620 recurringChargePeriodLength: positive interval multiplier. |
 | `amount` | `numeric(12,2)` | yes |  | numeric(12,2), exact (never float); the price for one whole period, never negative. Immutable. |
 | `currency` | `character(3)` | yes |  | ISO 4217 code, three upper-case letters. Immutable. |
 | `valid_for` | `tstzrange` | no |  | TMF620 validFor as a half-open tstzrange [start, end); NULL upper = open-ended. The start never lies in the past and never moves; the end is only set or moved to now or later, and never so that a product is left without a price. |
@@ -43,7 +43,8 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 | `product_offering_price_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
 | `product_offering_price_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `product_offering_price_recurring_has_period` | check | `CHECK (((price_type = 'recurring'::price_type) = (recurring_period IS NOT NULL)))` |
-| `product_offering_price_recurring_period_length_check` | check | `CHECK ((recurring_period_length = 1))` |
+| `product_offering_price_recurring_period_check` | check | `CHECK ((recurring_period = ANY (ARRAY['daily'::text, 'weekly'::text, 'monthly'::text, 'yearly'::text])))` |
+| `product_offering_price_recurring_period_length_check` | check | `CHECK (((recurring_period_length >= 1) AND (recurring_period_length <= 1000)))` |
 | `product_offering_price_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `product_offering_price_valid_for_check` | check | `CHECK (((NOT isempty(valid_for)) AND (NOT lower_inf(valid_for)) AND lower_inc(valid_for) AND (NOT upper_inc(valid_for))))` |
 | `product_offering_price_pkey` | primary key | `PRIMARY KEY (id)` |

@@ -66,7 +66,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF637-P
   one; an offering change does not rename it. `creationDate` and `orderDate` come from
   the creating order's injected clock. `productSpecification` and the owning Customer's
   `relatedParty` reference are returned and can be followed.
-- `productPrice[]` shows the full monthly fee selected at the billing period's start
+- `productPrice[]` shows the full charge-interval fee selected at the charge period's start
   (or activation within the first period), so a mid-period catalog change waits until
   the next billing period. Future products use their start date, ended products their
   last billable period, and cancelled/aborted products have no price. The price is not
