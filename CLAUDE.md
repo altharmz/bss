@@ -101,7 +101,7 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   status; APP_PORT / `make down` profiles (two stacks with vps-lab); vps-lab guard
   backport; changing `billCycleDay` (open question); subscriber-card visual review.
 - **Open checks:** network isolation of app/MCP; demo data in prod (pending); DB
-  connections per request unbounded; restore drill from a cron-made dump; pytest
+  pool confirmed on the VPS; restore drill from a cron-made dump; pytest
   container shows `(unhealthy)`. Detail for all of these: [docs/status.md](docs/status.md).
 
 ## Where the decisions are

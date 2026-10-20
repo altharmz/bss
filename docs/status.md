@@ -367,14 +367,11 @@ shipped).
   something on host port 8080; a busy `APP_PORT` makes the health wait fail non-zero; no
   bss container after `make down`. Then `make verify` up to (not including) deploy.
   Touches Makefile, compose files, maybe scripts/: diff first.
-- **App opens a new DB connection per request (`connect_timeout` was 3 s, now 10 s)** -
-  open: how to bound the API's connections on prod (1 vCPU, shared with VPN/Xray).
-  **Decided (stage 4 planning):** the API keeps a connection per request with
-  `connect_timeout` raised to 10 s (done: `app/config.py`); a pool only after measuring
-  on the VPS. The worker holds one dedicated long-lived connection. **Not bounded:** a
-  burst could make bss alone ask for more than the 37 connections available - a pool, or
-  a cap on concurrent DB connections from the API. Decision deferred. Reproduction,
-  budget and options in full: [infra.md](decisions/infra.md#db-connections-per-request-open-check).
+- **DB connections: pooled (2026-10-20), confirm on the VPS.** The API takes
+  connections from a pool of at most 10 (`DB_POOL_SIZE`) instead of opening two per
+  request; this also cut `make test`. To confirm after the deploy: at most 10 bss API
+  sessions in `pg_stat_activity` under load, and the app answers after the nightly
+  reboot. [infra.md](decisions/infra.md#db-connection-pool).
 - **Deployment identity: production confirmation pending.** The approved deploy.sh
   change records the full running commit in `~/bss/DEPLOYED` and reads/prints it in
   the remote smoke. Local write/read and failure checks pass; confirm the marker on

@@ -182,23 +182,32 @@ def _value(shape: str | None, inner: dict[str, Any] | None = None) -> Any:
     return "probe"
 
 
-def probe_writes(client: TestClient, server_set: set[str] | None = None) -> list[str]:
+def probe_writes(
+    client: TestClient,
+    server_set: set[str] | None = None,
+    only: frozenset[str] | None = None,
+) -> list[str]:
     """The app tells which attributes a request took as server-set (`on_server_set`):
     those are compared whole, so the level below them is not probed. `server_set`, if
-    given, collects them as "<api> <method> <path> <name>"."""
+    given, collects them as "<api> <method> <path> <name>". `only`, if given, limits the
+    probe to those operations ("<api> <method> <path>")."""
     taken: set[str] = set()
     common.on_server_set = taken.update
     try:
-        return _probe_writes(client, taken, set() if server_set is None else server_set)
+        return _probe_writes(client, taken, set() if server_set is None else server_set, only)
     finally:
         common.on_server_set = None
 
 
-def _probe_writes(client: TestClient, taken: set[str], server_set: set[str]) -> list[str]:
+def _probe_writes(
+    client: TestClient, taken: set[str], server_set: set[str], only: frozenset[str] | None
+) -> list[str]:
     lines = []
     for api, method, path, schema in write_operations():
-        url = _url(api, path)
         label = f"{api} {method} {path}"
+        if only is not None and label not in only:
+            continue
+        url = _url(api, path)
         _, message = _send(client, method, url, {CONTROL: 1})
         if _verdict(message, CONTROL) != "refused":
             lines.append(f"{label} unprobed")

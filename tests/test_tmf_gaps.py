@@ -57,10 +57,14 @@ def with_control(monkeypatch) -> None:
 
 def test_the_probe_finds_a_refused_attribute(api, monkeypatch):
     # negative control: an attribute the specs defined but the app refuses is reported,
-    # at the top and nested
-    assert not any(line.endswith(tmf_gaps.CONTROL) for line in tmf_gaps.probe_writes(api.client))
+    # at the top and nested. One operation is enough: the probe is the same for every
+    # one, and the full probe never reports the control (it is not in tmf-gaps.txt, so
+    # test_the_gap_list_is_the_recorded_one would fail).
+    only = frozenset({"TMF676 POST /payment"})
+    lines = tmf_gaps.probe_writes(api.client, only=only)
+    assert not any(line.endswith(tmf_gaps.CONTROL) for line in lines)
     with_control(monkeypatch)
-    lines = tmf_gaps.probe_writes(api.client)
+    lines = tmf_gaps.probe_writes(api.client, only=only)
     assert "TMF676 POST /payment refused zzProbe" in lines
     assert "TMF676 POST /payment refused paymentMethod.zzProbe" in lines
 

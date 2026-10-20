@@ -100,6 +100,11 @@ def _create_database(name: str, template: str | None = None) -> str:
 
 
 def _drop_database(name: str) -> None:
+    from app import db
+
+    # the app's pool for this database (app/db.py): closed first, else its workers would
+    # keep reconnecting to a database that no longer exists
+    db.close(ADMIN_URL.rsplit("/", 1)[0] + f"/{name}")
     with psycopg.connect(ADMIN_URL, autocommit=True) as conn:
         conn.execute(
             sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(name))
@@ -152,6 +157,9 @@ def migrated_db_url(template_db, monkeypatch) -> Iterator[str]:
     finally:
         try:
             if PROGRESS_RECORD:
+                from app import db
+
+                db.close(test_url)  # its sessions must end before the statistics are read
                 _record_written_tables(test_url)
         finally:
             _drop_database(test_db)

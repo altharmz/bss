@@ -164,10 +164,35 @@ would attach the prod container to both `lab` and `shared`).
   edit, still has the old comment text; production gets the edited one.
 - Before every commit: `make lint && make test`. Small, focused commits.
 
-## DB connections per request (open check)
+## DB connection pool
 
-The evidence behind the open check of the same name in
-[CLAUDE.md](../status.md#open-checks), which keeps the item and its decision.
+**Decided 2026-10-20:** the API takes its connections from a pool (`app/db.py`,
+`psycopg_pool`): at most `DB_POOL_SIZE` (default 10) per process, one kept open; a
+request waits up to `DB_CONNECT_TIMEOUT` (10 s) for a free one. This replaces "a
+connection per request; a pool only after measuring on the VPS" (history below).
+
+- **Why:** measured locally, a request spent most of its time connecting. Each request
+  opened two connections (the session check in `app/auth.py`, then the handler), each a
+  TCP connect, a SCRAM handshake and a new backend: 69 ms for a request the app refuses
+  at once, 8.4 ms pooled. `make test` (~1450 tests, mostly API requests) took 8-8.5 min.
+  Production saves the same per request and gets the bound the open check asked for.
+- **Budget:** postgres on the VPS has 37 usable connections; bss takes at most 10 (API)
+  + 1 (worker) + a migration or `pg_dump`. Before, the threadpool's 40 sync requests
+  could ask for 40.
+- **Same semantics as a fresh connection:** `connection()` uses `getconn`/`putconn`,
+  not the pool's context manager (which commits on exit); whatever the caller left
+  uncommitted or failed is rolled back before the connection goes back, as closing it
+  did. Nothing in `app/` keeps session state: its advisory locks are `_xact_` ones, no
+  `SET`. The worker's session advisory lock is on its own connection
+  (`app/worker/db.py`), not pooled.
+- **Database restarts** (nightly reboot, a db restart): `check=` tests a connection
+  before handing it out and replaces a dead one. `tests/test_db_pool.py` proves reuse,
+  rollback of leftovers, and replacement after `pg_terminate_backend`.
+- **Tests:** pools are keyed by URL, so each test database gets its own; conftest's
+  `_drop_database` closes it before the drop (else its workers would reconnect to a
+  dropped database). `--reload` restarts the process, so no pool outlives a reload.
+
+History - the open check before the pool:
 
 - **App opens a new DB connection per request (`connect_timeout` was 3 s, now 10 s)** -
   open: how to bound the API's connections on prod (1 vCPU, shared with VPN/Xray).

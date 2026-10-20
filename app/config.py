@@ -12,9 +12,12 @@ class Settings(BaseSettings):
     app_env: str = "prod"
     log_level: str = "info"
     database_url: str = "postgresql://app:app@db:5432/app"
-    # Seconds per connection attempt. The API opens one connection per request; 3 s turned
-    # a short database stall into 500s (docs/status.md, Open checks), so 10 s.
+    # Seconds per connection attempt, and the longest a request waits for a pooled
+    # connection. 3 s turned a short database stall into 500s (docs/status.md), so 10 s.
     db_connect_timeout: int = 10
+    # The API's connection pool (app/db.py): at most this many connections to postgres,
+    # whatever the number of requests in flight (37 usable on the VPS's postgres).
+    db_pool_size: int = Field(default=10, ge=1)
     # "Today" for billing is the calendar date in this zone (see app/clock.py).
     billing_tz: str = "Europe/Moscow"
     msisdn_quarantine_days: int = Field(default=0, ge=0)
