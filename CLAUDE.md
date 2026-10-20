@@ -186,6 +186,14 @@ both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Next session
 
+**Subscriber numbers and prepaid design finalized (2026-10-20).** The human requested
+design completion, choosing remaining policies according to TMF, and authorized its
+commit/push. Development starts in a separate session: [scope](docs/prepaid-plan.md),
+[implementation hand-off](docs/prepaid-implementation.md),
+[decision record](docs/decisions/prepaid.md). Start with the pinned contracts, then
+subscriber numbers as an independent release. No prepaid runtime or migration exists
+yet; do not treat design completion as implemented coverage or deployment approval.
+
 **Current release (2026-10-20): sidebar count and product charge periods.**
 The financial accounts sidebar now shows its total. New offering supports daily,
 weekly, monthly and yearly charges with multipliers 1..1000. The human chose product
