@@ -19,6 +19,7 @@ MERGE_PATCH = "application/merge-patch+json"
 
 # base path -> (spec, {resource: response schema})
 APIS: dict[str, tuple[str, dict[str, str]]] = {
+    "/tmf-api/resourceInventory/v5": ("TMF639", {"resource": "LogicalResource"}),
     "/tmf-api/productCatalogManagement/v5": (
         "TMF620",
         {

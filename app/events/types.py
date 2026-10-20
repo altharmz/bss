@@ -7,6 +7,7 @@ remain valid names. tests/test_api_hub.py checks this table against spec/.
 """
 
 BASES: dict[str, str] = {
+    "TMF639": "/tmf-api/resourceInventory/v5",
     "TMF620": "/tmf-api/productCatalogManagement/v5",
     "TMF622": "/tmf-api/productOrderingManagement/v5",
     "TMF629": "/tmf-api/customer/v5",
@@ -25,6 +26,7 @@ def _crud(*resources: str) -> tuple[str, ...]:
 
 
 EVENT_TYPES: dict[str, frozenset[str]] = {
+    "TMF639": frozenset(_crud("Resource")),
     "TMF620": frozenset(
         _crud(
             "Category",

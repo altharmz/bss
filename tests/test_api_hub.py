@@ -1,4 +1,4 @@
-"""TMF hubs: POST/DELETE /hub in every API, GET /hub/{id} in TMF629.
+"""TMF hubs: POST/DELETE /hub in every API, GET /hub/{id} in TMF629 and TMF639.
 
 A hub is a subscription: a callback and optionally the event types it wants. Outside
 dev and test the callback must be https and lead only to public addresses
@@ -42,15 +42,9 @@ def spec_events() -> dict[str, set[str]]:
 
 
 def test_the_event_types_are_the_specs_listener_events():
-    # N1 vendors contracts before their hubs exist. Lock their planned names too,
+    # N1 vendors TMF654 before its hub exists. Lock its planned names too,
     # without exposing subscriptions or claiming runtime event coverage early.
     pending = {
-        "TMF639": {
-            "ResourceAttributeValueChangeEvent",
-            "ResourceCreateEvent",
-            "ResourceDeleteEvent",
-            "ResourceStateChangeEvent",
-        },
         "TMF654": {
             f"{kind}{event}Event"
             for kind in ("TopupBalance", "AdjustBalance", "ReserveBalance", "TransferBalance")
@@ -77,7 +71,7 @@ def test_create_and_delete_a_hub(api, name):
         assert body["href"] == f"{base}/hub/{body['id']}" == created.headers["location"]
         assert body["@type"] == "Hub"
     href = f"{base}/hub/{body['id']}"
-    expected_get = 200 if name == "TMF629" else 405
+    expected_get = 200 if name in {"TMF629", "TMF639"} else 405
     assert api.request("GET", href).status_code == expected_get
     assert api.request("GET", f"{base}/hub").status_code == 405
     assert api.delete(f"{href}?x=1").status_code == 400

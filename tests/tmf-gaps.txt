@@ -4,7 +4,7 @@
 # requires (we require, the spec does not), missing (never returned; "a.b": one level into
 # a returned value), content-type (415), base path. Behaviour gaps (states, rewrites,
 # order) are in docs/tmf-gap-analysis.md.
-# Planned restrictions for the new contracts (not implemented behavior yet):
+# Restrictions for the new contracts (TMF639 implemented, TMF654 planned):
 # TMF639: LogicalResource/msisdn only; other subclasses and non-number states are
 # excluded from number inventory. Assigned numbers use busy; quarantine uses the
 # free-string allocationStatus, never a new usageState enum.
@@ -17,15 +17,7 @@
 # transfers validate against the unchanged schema. No fictitious receiver is added.
 # Events: register all declared names; TransferBalanceCancelEvent is unreachable.
 # Listener paths are subscriber endpoints, not BSS operations or missing endpoints.
-# Contract-only APIs (N1): 36 absent endpoints. Attribute probes start with routes.
-TMF639 DELETE /hub/{id} endpoint absent
-TMF639 DELETE /resource/{id} endpoint absent
-TMF639 GET /hub/{id} endpoint absent
-TMF639 GET /resource endpoint absent
-TMF639 GET /resource/{id} endpoint absent
-TMF639 PATCH /resource/{id} endpoint absent
-TMF639 POST /hub endpoint absent
-TMF639 POST /resource endpoint absent
+# Contract-only TMF654: 28 absent endpoints. TMF639 uses the attribute probes.
 TMF654 DELETE /adjustBalance/{id} endpoint absent
 TMF654 DELETE /hub/{id} endpoint absent
 TMF654 DELETE /reserveBalance/{id} endpoint absent
@@ -60,6 +52,38 @@ TMF654 POST /transferBalance endpoint absent
 # POST /product: billing cannot charge a product without an account and an offering.
 TMF637 POST /product requires billingAccount
 TMF637 POST /product requires productOffering
+# TMF639 number-only inventory: no network/alarm/lifecycle management. The built-in
+# specification has no resource catalog URL, name or version. Name/value are required;
+# href and PATCH id are managed by the server. See docs/decisions/prepaid.md (N3).
+TMF639 GET /resource/{id} missing alarmStatus
+TMF639 GET /resource/{id} missing availabilityStatus
+TMF639 GET /resource/{id} missing controlStatus
+TMF639 GET /resource/{id} missing lifecycleState
+TMF639 GET /resource/{id} missing operationalState
+TMF639 GET /resource/{id} missing proceduralStatus
+TMF639 GET /resource/{id} missing resourceSpecification.href
+TMF639 GET /resource/{id} missing resourceSpecification.name
+TMF639 GET /resource/{id} missing resourceSpecification.version
+TMF639 GET /resource/{id} missing unknownStatus
+TMF639 PATCH /resource/{id} read-only href
+TMF639 PATCH /resource/{id} read-only id
+TMF639 PATCH /resource/{id} refused alarmStatus
+TMF639 PATCH /resource/{id} refused availabilityStatus
+TMF639 PATCH /resource/{id} refused controlStatus
+TMF639 PATCH /resource/{id} refused lifecycleState
+TMF639 PATCH /resource/{id} refused operationalState
+TMF639 PATCH /resource/{id} refused proceduralStatus
+TMF639 PATCH /resource/{id} refused unknownStatus
+TMF639 POST /resource read-only href
+TMF639 POST /resource refused alarmStatus
+TMF639 POST /resource refused availabilityStatus
+TMF639 POST /resource refused controlStatus
+TMF639 POST /resource refused lifecycleState
+TMF639 POST /resource refused operationalState
+TMF639 POST /resource refused proceduralStatus
+TMF639 POST /resource refused unknownStatus
+TMF639 POST /resource requires name
+TMF639 POST /resource requires value
 # accountBalance: one current balance per currency - the balance now, with no period.
 TMF666 GET /billingAccount/{id} missing accountBalance.validFor
 # billDocument: the document is embedded (content); it has no address of its own (href,

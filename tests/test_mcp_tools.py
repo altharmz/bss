@@ -324,7 +324,23 @@ def world(api, db_conn) -> dict[str, Any]:
         {"productOrder": {"id": later["id"]}},
     ).json()
     hub = api.post("/tmf-api/customer/v5/hub", {"callback": "http://listener.test/events"}).json()
+    number = api.post(
+        "/tmf-api/resourceInventory/v5/resource",
+        {
+            "@type": "LogicalResource",
+            "name": "MCP number",
+            "value": "12025550123",
+        },
+    ).json()
+    resource_hub = api.post(
+        "/tmf-api/resourceInventory/v5/hub",
+        {
+            "callback": "http://listener.test/numbers",
+        },
+    ).json()
     return {
+        "number": number,
+        "resource_hub": resource_hub,
         "hub": hub,
         "cancellation": cancellation,
         "export_job": export_job,
@@ -357,6 +373,8 @@ def world(api, db_conn) -> dict[str, Any]:
 def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
     acc, offering = world["account"]["id"], world["offering"]["id"]
     by_id = {
+        "get_resource": {"resource_id": world["number"]["id"]},
+        "get_hub_resource": {"hub_id": world["resource_hub"]["id"]},
         "get_bill_format": {"format_id": world["format"]["id"]},
         "get_bill_media": {"media_id": world["media"]["id"]},
         "get_bill_demand": {"demand_id": world["demand"]["id"]},
@@ -442,6 +460,18 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         "create_catalog", {"body": {"name": "MCP catalog", "category": [{"id": category["id"]}]}}
     )
     call("patch_catalog", {"catalog_id": catalog["id"], "body": {"description": "via MCP"}})
+    number = call(
+        "create_resource",
+        {
+            "body": {
+                "@type": "LogicalResource",
+                "name": "Spare number",
+                "value": "12025550124",
+            }
+        },
+    )
+    call("patch_resource", {"resource_id": number["id"], "body": {"administrativeState": "locked"}})
+    call("delete_resource", {"resource_id": number["id"]}, expected=(204,))
     price_fields = {
         "@type": "ProductOfferingPrice",
         "name": "Monthly",

@@ -130,6 +130,7 @@ def _hub_id(raw: str) -> UUID:
 
 # (api, short name in the handler names); only TMF629's spec has GET /hub/{id}
 HUB_APIS = (
+    ("TMF639", "resource"),
     ("TMF620", "catalog"),
     ("TMF622", "ordering"),
     ("TMF629", "customer"),
@@ -147,6 +148,22 @@ GONE = {"response_class": Response, "status_code": 204}
 
 
 # --- one handler per API and operation (the function name is the operationId) ---
+
+
+@_routers["TMF639"].post("/hub", **HUB)
+def create_hub_resource(body: JsonBody, request: Request, tx: Tx, clock: ClockDep):
+    _checked(body, request)
+    return _create("TMF639", parse(HubIn, body, read_only=READ_ONLY), tx, clock)
+
+
+@_routers["TMF639"].get("/hub/{hub_id}")
+def get_hub_resource(hub_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
+    return _get("TMF639", hub_id, request, tx)
+
+
+@_routers["TMF639"].delete("/hub/{hub_id}", **GONE)
+def delete_hub_resource(hub_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
+    return _delete("TMF639", hub_id, request, tx, clock)
 
 
 @_routers["TMF620"].post("/hub", **HUB)

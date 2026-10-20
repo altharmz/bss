@@ -158,7 +158,15 @@ def test_server_defaults_and_endpoint_listener_counts():
     ]:
         doc = contract.spec(api)
         assert tmf_gaps.server_path(doc) == expected_path
-        assert sum(row[0] == api for row in tmf_gaps.pending_operations()) == endpoints
+        assert (
+            sum(
+                method in ("get", "post", "patch", "delete")
+                for path, item in doc["paths"].items()
+                if not path.startswith("/listener/")
+                for method in item
+            )
+            == endpoints
+        )
         assert sum(p.startswith("/listener/") for p in doc["paths"]) == listeners
     assert tmf_gaps.probe_base_paths() == []
 

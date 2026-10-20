@@ -7,6 +7,13 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**N3 subscriber-number inventory (2026-10-20).** TMF639 resource CRUD and hubs,
+clock-derived allocation state, transactional events and eight MCP tools are
+implemented. Number identity/specification are immutable; only never-assigned
+numbers may be deleted. Contract probes now cover TMF639 attributes and formats;
+TMF654 remains planned. Next: N4 orders, then N5 UI and N6 release validation.
+Deployment still awaits the independent number milestone and separate approval.
+
 **N2 subscriber-number persistence (2026-10-20).** Migration `0032` adds canonical
 number inventory and effective-dated, order-linked assignment history, with overlap
 exclusions for number/product, cancelled audit versions and a downgrade barrier.

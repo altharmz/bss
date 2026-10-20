@@ -109,3 +109,37 @@ the corrected test passes. All 18 number persistence tests also pass separately.
 The full run includes the database-owner NOSUPERUSER upgrade/downgrade proof.
 Lint/format checks, documentation generation and whitespace checks pass. Full-run
 log: `/tmp/bss-n2-test.log`. No second full run was needed for the test-only correction.
+
+## N3: subscriber-number inventory API (2026-10-20)
+
+TMF639 now exposes the five resource operations and POST/GET/DELETE hubs, with eight
+MCP tools. Resources are canonical E.164 LogicalResource numbers with the fixed
+`msisdn` specification (no fictitious catalog href). Value is immutable; descriptions,
+schema-validated documents and lock/unlock are editable. Any assignment history,
+including cancelled and empty intervals, prevents deletion. Writes lock the number
+row; duplicate API creation is serialized by value and client-selected id.
+
+Reads derive busy/idle and allocated/reserved/quarantined/available from half-open
+business-date assignments, excluding cancelled and empty claims. Current use takes
+priority over future claims, future claims over quarantine. Quarantine uses the
+current nonnegative `MSISDN_QUARANTINE_DAYS` setting (default zero); changing it never
+changes an existing assignment. List state filters apply before counts and paging.
+Locking preserves current use and accepted future claims. Only N4 will write claims.
+
+Creation date, computed state and specification accept equal values only. Unknown
+nested attributes are refused; documents use FVO schemas on creation and Resource
+schemas on PATCH, as the pinned contract declares. Unsupported resource subclasses,
+network/alarm/lifecycle states and required name/value are explicit gap restrictions.
+All four PATCH formats, fields selection, paging and equality filters use existing
+conventions. Outbox events cover creation/deletion, administrative state changes and
+descriptive changes; no-op patches emit nothing. Hubs retain existing callback checks.
+
+The existing TMF probes now include TMF639; only TMF654 endpoints remain absent.
+API/database reference docs include the new API. No migration or order/UI change is
+part of N3, and deployment still requires the separate N6 release approval.
+
+Validation uses the normal pre-commit hook (lint, full backend suite and generated
+documentation drift). Its first run passed 1,468 tests and found two new fixture
+errors: a nested-reference negative test omitted required `@type`, and pagination
+expected insertion order despite equal fixed creation instants (UUID breaks ties).
+Both fixtures were corrected without changing those runtime conventions.

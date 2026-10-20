@@ -41,11 +41,10 @@ from tests.seed import seed
 CONTROL = "zzProbe"
 # The specs' base paths are ours, per API (tests/apiclient.py)
 BASES = {spec: base for base, (spec, _) in APIS.items()}
-SPECS = ("TMF620", "TMF622", "TMF629", "TMF632", "TMF637", "TMF666", "TMF676", "TMF678")
+SPECS = ("TMF620", "TMF622", "TMF629", "TMF632", "TMF637", "TMF639", "TMF666", "TMF676", "TMF678")
 # Contract-only APIs: endpoint gaps until implementation starts. Move each API into
 # SPECS and APIS when its routes land, enabling the existing attribute probes too.
 PENDING_BASES = {
-    "TMF639": "/tmf-api/resourceInventory/v5",
     "TMF654": "/tmf-api/prepayBalanceManagement/v4",
 }
 
@@ -288,6 +287,10 @@ def populate(api: Any) -> None:
     account_api = "/tmf-api/accountManagement/v5"
     export = _created(api, f"{apidata.CATALOG}/exportJob", {"@type": "ExportJob"})
     for url, body in (
+        (
+            "/tmf-api/resourceInventory/v5/resource",
+            {"@type": "LogicalResource", "name": "Probe number", "value": "12025550123"},
+        ),
         ("/tmf-api/payment/v4/refund", payout),
         (
             "/tmf-api/productOrderingManagement/v5/cancelProductOrder",

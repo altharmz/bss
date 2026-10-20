@@ -44,6 +44,7 @@ from app.api.party import IndividualCreate, IndividualPatch, OrganizationCreate,
 from app.api.payment import PaymentCreate
 from app.api.presentation import FormatCreate, FormatPatch, MediaCreate, MediaPatch
 from app.api.refunds import RefundCreate
+from app.api.resource_inventory import ResourceCreate, ResourcePatch
 from app.internal.billing_runs import OUTCOMES, CatchUp
 from app.internal.catalog import PriceChange
 
@@ -71,6 +72,7 @@ DATE_ARG = {"type": "string", "pattern": r"^\d{4}-\d{2}-\d{2}$", "description": 
 
 # path prefix -> what the API is, at the head of each description
 FAMILIES = {
+    "/tmf-api/resourceInventory/v5": "TMF639 Subscriber Number Inventory",
     "/tmf-api/productCatalogManagement/v5": "TMF620 Product Catalog",
     "/tmf-api/partyManagement/v5": "TMF632 Party",
     "/tmf-api/customer/v5": "TMF629 Customer",
@@ -100,6 +102,23 @@ class Op:
 
 
 OPERATIONS: dict[str, Op] = {
+    "list_resources": Op(
+        "Subscriber numbers; filter by value, administrativeState, usageState or allocationStatus.",
+        query=LIST,
+    ),
+    "get_resource": Op("One subscriber number with dated allocation state.", query=FIELDS),
+    "create_resource": Op(
+        "Create a canonical E.164 number (digits only); built-in msisdn specification.",
+        body=ResourceCreate,
+    ),
+    "patch_resource": Op(
+        "Edit descriptions or lock/unlock a number. Value and specification are immutable;"
+        " locking preserves assignments.",
+        body=ResourcePatch,
+    ),
+    "delete_resource": Op(
+        "Delete a never-assigned number; any retained assignment history gives 409."
+    ),
     # --- TMF620 product catalog ---
     "list_categories": Op("Categories and their offerings and child categories.", query=LIST),
     "get_category": Op("One category.", query=FIELDS),
@@ -471,6 +490,7 @@ OPERATIONS: dict[str, Op] = {
         for api, short in HUB_APIS
     },
     "get_hub_customer": Op("One TMF629 event subscription.", query=FIELDS),
+    "get_hub_resource": Op("One TMF639 event subscription.", query=FIELDS),
     # --- internal ---
     "get_context": Op(
         "Business date, time zone, currency, billing run time, payment term, and the"

@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     db_connect_timeout: int = 10
     # "Today" for billing is the calendar date in this zone (see app/clock.py).
     billing_tz: str = "Europe/Moscow"
+    msisdn_quarantine_days: int = Field(default=0, ge=0)
     # Local time (BILLING_TZ, HH:MM) of the daily billing run. It must come after 00:00
     # (the run of D sees orders completed before 00:00 of D), before the 02:15 backup,
     # and well before the 03:00 reboot. Stage 4's worker reads it; the UI only shows it.

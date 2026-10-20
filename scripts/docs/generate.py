@@ -97,6 +97,13 @@ APIS = (
         "v5",
     ),
     Api("internal", "Internal API (admin UI)", "/internal/v1", "INTERNAL", "v1"),
+    Api(
+        "tmf639-resource-inventory",
+        "TMF639 Resource Inventory",
+        "/tmf-api/resourceInventory/v5",
+        "TMF639",
+        "v5",
+    ),
     Api("service", "Service endpoints", "", None, "-"),
 )
 
@@ -113,6 +120,8 @@ NO_SPEC = {
 
 # Where each operation's handler lives (for the "Code" column).
 HANDLERS = {
+    "/tmf-api/resourceInventory/v5/hub": "app/api/hub.py",
+    "/tmf-api/resourceInventory/v5": "app/api/resource_inventory.py",
     "/tmf-api/productCatalogManagement/v5/category": "app/api/classification.py",
     "/tmf-api/productCatalogManagement/v5/productCatalog": "app/api/classification.py",
     "/tmf-api/payment/v4/refund": "app/api/refunds.py",
