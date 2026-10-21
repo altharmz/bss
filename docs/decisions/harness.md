@@ -24,6 +24,8 @@ test run per development cycle; commit, push and deploy need no approval).
   their added lines; refuses a bcrypt hash without the marker `pre-push: allow-dummy-hash`,
   an added or changed `.env*` path (other than `.env.example`), a branch deletion and a
   non-fast-forward. Names the commit and file, never the value.
+- **Tests with every change** (the human, 2026-10-21): every new feature or bug fix
+  comes with a test that fails without it. A CLAUDE.md rule, not enforced by a hook.
 - `make progress` runs only on request (it reruns the whole suite with recording, over
   10 minutes); scope.yaml entries are still added with the feature.
 - `make test` takes about 8 minutes (1,433 tests, 2026-10-20). Timing-based tests (`test_worker_heartbeat.py`, the thread

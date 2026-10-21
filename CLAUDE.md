@@ -68,6 +68,7 @@ slips against these rules; it is a pattern matcher, not a security boundary
   nothing for a Markdown-only commit) and is that run. Commit, push and deploy when you
   judge the change ready - no approval needed. Do not re-run tests before deploying;
   stronger testing (`make check`, repeated runs) only when asked for a specific change.
+- Every new feature or bug fix comes with a test that fails without it.
 - Propose a plan before a data-model change or a large design change; otherwise act.
 - Before saying "it works on the server", deploy (`make deploy` reports health and smoke).
 - When a container misbehaves, read `make logs` before changing code.
