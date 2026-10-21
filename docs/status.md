@@ -7,6 +7,14 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2b1 legacy funding adapter (2026-10-21).** Adds a locked repository snapshot
+over existing payment/credit-note sources, combined allocation/payout consumption,
+positive bill and unbilled obligations, with independent ledger reconciliation.
+No runtime caller or migration yet; prepaid creation stays unavailable. P2a's pure
+selector is `29abe5f`. Next: persisted holds/consumption and combined database
+bounds, then wire consuming paths and durable worker/recovery. See the
+[P2b1 decision](decisions/prepaid.md#p2b1-legacy-funding-repository-2026-10-21).
+
 **P1 prepaid identity foundation (2026-10-21).** Migration `0034` adds stored
 account mode (existing/new accounts default postpaid), the prepaid zero-credit-limit
 rule, history protection for mode changes and stable account/currency bucket and

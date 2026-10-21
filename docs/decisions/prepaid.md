@@ -1,5 +1,26 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2b1: legacy funding repository (2026-10-21)
+
+`app/repository/funding.py` loads a reconciled legacy snapshot under the account
+row lock. It reuses settlement's payment and issued credit-note consumption totals,
+including both allocations and immutable payouts. Obligations include positive
+bills in every state (including onHold), less allocations, and net unbilled ABRs
+including tax. Independent ledger reconciliation refuses mismatched history as a
+technical failure. Negative ledger balances remain valid debt, not source corruption.
+
+Credit-note ordering uses bill-date midnight UTC as a deterministic date key,
+not a claim about its actual issue instant. Unissued negative bills are not funding
+sources; a snapshot before their issue fails reconciliation rather than granting
+premature credit. Future callers must finish issuing credits before loading funding.
+
+Database tests cover empty/foreign-account funds, settlement invariance, unbilled
+charges, held/unissued bills, combined payout/allocation consumption, unissued
+credits and inconsistent legacy history. This adapter has no runtime callers yet.
+Next: persisted holds/consumption and combined database bounds, then wire every
+consuming path. No migration, API or worker behavior changes in P2b1; prepaid
+creation stays unavailable.
+
 ## P2a: pure shared-funding core (2026-10-21)
 
 `app/billing/funding.py` plans exact source amounts after combined consumption and
