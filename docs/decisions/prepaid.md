@@ -26,6 +26,11 @@ the durable worker path. Tests cover constraints, identity retention, mode histo
 populated financial migration and downgrade barriers; the existing database-owner
 test covers upgrade/downgrade without superuser privileges.
 
+Validation: implementation `5992cde` passed all 1,507 backend tests, lint/format and
+generated-documentation drift checks in the commit hook. All 12 new persistence
+tests pass. The prior full run passed 1,506 tests with one old schema-count assertion
+still expecting 44 tables; correcting it to 45 resolved that failure.
+
 The human requested completion of the prepaid design, choosing remaining policies
 according to TMF, then committing/pushing design changes. Development will occur in
 another session. The authoritative hand-off is:

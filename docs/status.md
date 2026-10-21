@@ -14,6 +14,10 @@ accumulatedBalance identities. No balance column or financial/worker behavior is
 introduced; prepaid creation remains rejected. The migration preserves populated
 finances and immutable refunds and refuses a lossy downgrade. See
 [P1 decision](decisions/prepaid.md#p1-account-mode-and-balance-identities-2026-10-21).
+Implementation commit: `5992cde`. The commit hook passed all 1,507 backend tests,
+lint/format and generated-documentation drift checks. The initial full run's sole
+failure was an existing schema-count assertion (44 instead of the new 45); it was
+corrected before the successful hook run. All 12 new prepaid persistence tests pass.
 Next: shared funding sources, holds and combined bounds across settlement, refunds
 and prepaid operations, then durable worker/recovery. Stages 3–4 remain gated together.
 
