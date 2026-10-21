@@ -124,12 +124,13 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   P2c3b4 adds actual-date renewal price/tax selection and atomic recovery. P2c4a
   dispatches queued purchase/renewal commands with durable technical retries.
   P2c4b retains funding shortfall amounts and decision instants in migration `0042`,
-  without technical backoff. Next: lifecycle integration and command producers.
+  without technical backoff.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).
-- **Next:** finish prepaid schema/funding and worker core behind unavailable prepaid creation -
-  [scope](docs/prepaid-plan.md), [decision](docs/decisions/prepaid.md).
+- **Next:** prepaid slice P3b, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
+  (24 slices; prepaid creation stays a 422 until P5a) - [scope](docs/prepaid-plan.md),
+  [decision](docs/decisions/prepaid.md).
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21
   ([frontend.md](docs/decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21));
   UI vs MCP gap slices 2 and 4 ([plan](docs/ui-mcp-gap-plan.md));

@@ -1,5 +1,18 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P3a: daily-run isolation (2026-10-21)
+
+The locked billing-account projection carries its rating mode into the pure daily
+core. Prepaid computation returns no ABRs or bills, including refunds; command
+posting owns those finances. Daily membership, outcome counts, issue/settlement,
+postpaid visibility cutoffs and replay remain unchanged. Prepaid on-demand requests
+collect only existing unbilled ABRs through the successful daily run's date (including
+command-run sources), or finish rejected without an empty bill. They never authorize
+a new interval. Public prepaid creation remains unavailable.
+
+Tests exercise a live prepaid product across daily and cycle boundaries, replay,
+and on-demand requests with and without an existing charge. P3b is next.
+
 ## P2c4b: durable funding shortfalls (2026-10-21)
 
 Migration `0042` adds append-only funding observations keyed by command and injected

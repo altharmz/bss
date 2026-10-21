@@ -70,6 +70,7 @@ class Account:
     currency: str
     bill_cycle_day: int
     exemptions: tuple[Exemption, ...] = ()
+    rating_type: str = "postpaid"
 
 
 @dataclass(frozen=True)

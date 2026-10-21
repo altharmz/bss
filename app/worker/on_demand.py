@@ -60,11 +60,12 @@ def process_demands(conn, *, clock, tz, checkpoint=None, heartbeat=None):
                 """
                 SELECT a.* FROM applied_customer_billing_rate a
                 JOIN billing_run r ON r.id = a.billing_run_id
-                WHERE r.kind = 'daily' AND a.billing_account_id = %s AND a.customer_bill_id IS NULL
+                WHERE (r.kind = 'daily' OR %s = 'prepaid')
+                  AND a.billing_account_id = %s AND a.customer_bill_id IS NULL
                   AND r.run_date <= %s
                 ORDER BY a.applied_at, a.id FOR UPDATE OF a
             """,
-                (account.id, run["run_date"]),
+                (account.rating_type, account.id, run["run_date"]),
             )
             if not abrs:
                 conn.execute(

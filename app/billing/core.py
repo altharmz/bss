@@ -200,6 +200,8 @@ def price_at(
 def compute(state: BillingState, as_of: date, tz: ZoneInfo) -> BillingResult:
     """Everything the run at `as_of` must write for this account. Running it again after
     the result has been stored yields an empty result."""
+    if state.account.rating_type == "prepaid":
+        return BillingResult(abrs=(), bills=())
     _check_stored(state, as_of)
     abrs = tuple(
         abr for product in state.products for abr in _product_abrs(state, product, as_of, tz)

@@ -202,6 +202,50 @@ def test_no_unbilled_charges_rejects_without_empty_bill(api, worker):
     assert api.get(apidata.BILL).json() == []
 
 
+@pytest.mark.parametrize("existing_charge", [False, True])
+def test_prepaid_daily_isolation_and_existing_charge_demand(api, worker, db_conn, existing_charge):
+    from psycopg.types.range import Range
+
+    account = apidata.account(api)
+    db_conn.execute(
+        "UPDATE billing_account SET rating_type = 'prepaid' WHERE id = %s", (account["id"],)
+    )
+    db_conn.commit()
+    offering = apidata.sellable_offering(api, value=310)
+    product = add(api, account, offering, date(2026, 12, 2), on=at(date(2026, 12, 2)))
+    request = demand(api, account)
+    run(worker, api, date(2026, 12, 3))
+    assert api.get(apidata.RATE).json() == []
+    assert api.get(apidata.BILL).json() == []
+    if existing_charge:
+        daily = billing.get_run(db_conn, date(2026, 12, 3))
+        billing.insert_abr(
+            db_conn,
+            product_id=UUID(product["id"]),
+            billing_account_id=UUID(account["id"]),
+            charge_type="recurring",
+            amount=Decimal("7.00"),
+            currency="USD",
+            period=Range(date(2026, 12, 2), date(2027, 1, 1), "[)"),
+            billing_run_id=daily["id"],
+            applied_at=api.clock.now(),
+        )
+        db_conn.commit()
+    assert process_demands(worker, clock=api.clock, tz=TZ) == [UUID(request["id"])]
+    result = api.get(request["href"]).json()
+    assert result["state"] == ("done" if existing_charge else "rejected")
+    run(worker, api, date(2027, 1, 1))
+    # A later cycle and its replay cannot create charges, refunds or onCycle bills.
+    run(worker, api, date(2027, 1, 1))
+    bills = api.get(apidata.BILL).json()
+    assert len(bills) == int(existing_charge)
+    if existing_charge:
+        assert bills[0]["runType"] == "offCycle"
+        assert bills[0]["amountDue"]["value"] == 7
+    assert len(api.get(apidata.RATE).json()) == int(existing_charge)
+    assert process_demands(worker, clock=api.clock, tz=TZ) == []
+
+
 @pytest.mark.capability("worker.billDocument")
 def test_presentation_preferences_render_and_preserve_history(api, worker):
     fmt = api.post(FORMAT, {"@type": "BillFormat", "name": "JSON summary"}).json()

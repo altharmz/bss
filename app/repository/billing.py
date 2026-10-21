@@ -677,7 +677,7 @@ def load_account(conn: psycopg.Connection, account_id: UUID) -> Account:
     concurrently would both see it unbilled."""
     row = fetch_one(
         conn,
-        "SELECT id, currency, bill_cycle_day, details FROM billing_account"
+        "SELECT id, currency, bill_cycle_day, details, rating_type FROM billing_account"
         " WHERE id = %s FOR UPDATE",
         (account_id,),
     )
@@ -693,6 +693,7 @@ def core_account(row: Row) -> Account:
         currency=row["currency"],
         bill_cycle_day=row["bill_cycle_day"],
         exemptions=exemptions(row["details"]),
+        rating_type=row["rating_type"],
     )
 
 
