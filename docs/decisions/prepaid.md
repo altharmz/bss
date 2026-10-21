@@ -1,5 +1,31 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2c2: command billing-run identity isolation (2026-10-21)
+
+Migration `0039` preserves daily run IDs/history and replaces date uniqueness with
+a partial daily-date index. Internal `kind` is `daily` or `prepaidCommand`; each
+command run has one unique retained journal reference. Kind, command, date and run
+UUID are immutable; command runs cannot be deleted or downgraded away. Daily
+outcomes, blocking references and worker retry requests reject command runs in SQL.
+Existing inserts default to daily. Command runs reuse the existing `scheduled`
+trigger as internal bookkeeping; kind, rather than trigger, defines isolation.
+
+`prepaid_commands.ensure_run` shares the command identity lock, returns the retained
+run on replay (including a later date), and rolls back with its caller's effects.
+The future dispatcher must take billing ownership first. No runtime caller,
+command-run completion/recovery or financial posting is introduced here.
+
+Daily scheduling, takeover, failure/backoff, health, internal list/count/detail/retry,
+TMF bill-cycle list/retrieve and on-demand readiness explicitly select daily runs.
+The legacy daily billing adapter refuses command runs. Financial history joins
+remain inclusive so future command ABRs and bills retain their real run references;
+the prepaid document projection belongs with posting. Tests cover same-date
+coexistence, replay, rollback/concurrency, all command states, API/count isolation,
+database reference guards and populated migration round-trip/retention.
+
+Prepaid creation remains unavailable. Next: posting/funded intervals, then owner
+dispatch/recovery and internal retry operations.
+
 ## P2c1: durable command journal foundation (2026-10-21)
 
 Migration `0038` adds `prepaid_command`: immutable account/kind/due-date/request

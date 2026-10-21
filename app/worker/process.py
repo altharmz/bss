@@ -287,7 +287,7 @@ def retry_run(
     stay blocked until that date is fixed). An account that succeeds is then billed for
     its blocked later dates, in order, one run at a time; it stops at the first date that
     fails again, and its later blocked rows wait for that one instead."""
-    run = billing.get_run_by_id(conn, run_id)
+    run = billing.get_daily_run_by_id(conn, run_id)
     if run is None or run["status"] != "failed":
         raise LookupError(f"billing run {run_id} is not failed")
     accounts = billing.failed_accounts(conn, run_id)

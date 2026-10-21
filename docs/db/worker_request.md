@@ -43,3 +43,7 @@ The admin UI's queue for the billing worker (ours): catch-up and retry requests.
 |---|---|---|
 | `worker_request_pending` | `CREATE INDEX worker_request_pending ON worker_request USING btree (requested_at) WHERE (done_at IS NULL)` | no |
 | `worker_request_pkey` | `CREATE UNIQUE INDEX worker_request_pkey ON worker_request USING btree (id)` | yes |
+
+## Triggers
+
+- `billing_run_daily_reference`: `CREATE TRIGGER billing_run_daily_reference BEFORE INSERT OR UPDATE ON worker_request FOR EACH ROW EXECUTE FUNCTION billing_run_daily_reference()`

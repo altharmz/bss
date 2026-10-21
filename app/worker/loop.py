@@ -96,7 +96,7 @@ def tick(
         if plan.dates and held is None:  # a new scheduled date: retry failed accounts first
             for run in billing.failed_account_runs(conn):
                 # re-read: retrying an earlier run catches its accounts up on this one too
-                current = billing.get_run_by_id(conn, run["id"])
+                current = billing.get_daily_run_by_id(conn, run["id"])
                 if current is None or current["status"] != "failed":
                     continue
                 retry_run(conn, run["id"], clock=clock, tz=tz, heartbeat=heartbeat)

@@ -7,6 +7,14 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2c2 command run identities (2026-10-21).** Migration `0039` separates daily
+date uniqueness from retained one-per-command run identities. Daily scheduling,
+health, retries, counts, bill cycles and on-demand readiness exclude command runs;
+database guards also isolate daily outcomes and retry requests. No dispatcher or
+posting path is enabled; prepaid creation stays unavailable. Next: posting/funded
+intervals, then worker dispatch/recovery and internal retry operations. See the
+[decision](decisions/prepaid.md#p2c2-command-billing-run-identity-isolation-2026-10-21).
+
 **P2c1 durable command journal (2026-10-21).** Migration `0038` retains immutable
 requests and completed results, with technical backoff/manual retry and shared
 funding-command identity locking. Fourteen tests cover journal and funding atomicity,

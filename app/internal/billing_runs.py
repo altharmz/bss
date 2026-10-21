@@ -121,7 +121,7 @@ def run_accounts(run_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
         raise bad_request(f"status must be one of {', '.join(OUTCOMES)}")
     with tx() as conn:
         uid = parse_id("billingRun", run_id)
-        if billing.get_run_by_id(conn, uid) is None:
+        if billing.get_daily_run_by_id(conn, uid) is None:
             raise not_found("billingRun", run_id)
         rows, total = billing.page_run_outcomes(
             conn, uid, status=status, offset=offset, limit=limit
@@ -186,7 +186,7 @@ def catch_up(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJS
 def retry(run_id: str, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     no_query(request)
     with tx() as conn:
-        run = billing.get_run_by_id(conn, parse_id("billingRun", run_id))
+        run = billing.get_daily_run_by_id(conn, parse_id("billingRun", run_id))
         if run is None:
             raise not_found("billingRun", run_id)
         if run["status"] != "failed":

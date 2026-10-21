@@ -111,8 +111,9 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   P2b5 adds durable hold conversion in migration `0037`. P2b6 makes settlement
   and refunds select around held sources. No runtime caller creates holds yet.
   P2c1 adds the durable command request/result and technical-retry journal in
-  migration `0038`, without a runtime producer or dispatcher. Next: command run
-  identities, posting/funded intervals and worker recovery.
+  migration `0038`, without a runtime producer or dispatcher. Command run
+  identities are isolated in P2c2 (migration `0039`). Next: posting/funded intervals
+  and worker recovery.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).

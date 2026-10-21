@@ -130,7 +130,7 @@ def _retry(
     tz: ZoneInfo,
     heartbeat: Heartbeat | None = None,
 ) -> None:
-    run = billing.get_run_by_id(conn, run_id)
+    run = billing.get_daily_run_by_id(conn, run_id)
     if run is None or run["status"] != "failed":
         return  # fixed in the meantime (e.g. by a catch-up)
     if run["failure_kind"] == "accounts":

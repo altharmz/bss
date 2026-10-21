@@ -77,7 +77,9 @@ def freshness(
 def billing_status(request: Request, tx: Tx, clock: ClockDep) -> JSONResponse:
     no_query(request)
     with tx() as conn:
-        latest = fetch_one(conn, "SELECT * FROM billing_run ORDER BY run_date DESC LIMIT 1")
+        latest = fetch_one(
+            conn, "SELECT * FROM billing_run WHERE kind = 'daily' ORDER BY run_date DESC LIMIT 1"
+        )
     code, body = freshness(
         latest,
         clock.now(),

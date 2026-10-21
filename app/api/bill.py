@@ -413,7 +413,11 @@ def list_bill_cycles(request: Request, tx: Tx) -> TmfJSONResponse:
     )
     with tx() as conn:
         rows, total = select_page(
-            conn, "billing_run", where=query.where, offset=query.offset, limit=query.limit
+            conn,
+            "billing_run",
+            where={**query.where, "kind": "daily"},
+            offset=query.offset,
+            limit=query.limit,
         )
         items = [cycle_body(conn, row) for row in rows]
     return listing.list_response(items, total, query)
@@ -423,7 +427,7 @@ def list_bill_cycles(request: Request, tx: Tx) -> TmfJSONResponse:
 def get_bill_cycle(cycle_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, CYCLE_ATTRIBUTES)
     with tx() as conn:
-        row = billing.get_run_by_id(conn, parse_id("billCycle", cycle_id))
+        row = billing.get_daily_run_by_id(conn, parse_id("billCycle", cycle_id))
         if row is None:
             raise not_found("billCycle", cycle_id)
         body = cycle_body(conn, row)

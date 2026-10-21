@@ -56,7 +56,11 @@ def insert_run(conn: psycopg.Connection, run_date: date, *, now: datetime, trigg
 
 def lock_run(conn: psycopg.Connection, run_date: date) -> Row | None:
     """The run of `run_date`, locked until the transaction ends, or None."""
-    return fetch_one(conn, "SELECT * FROM billing_run WHERE run_date = %s FOR UPDATE", (run_date,))
+    return fetch_one(
+        conn,
+        "SELECT * FROM billing_run WHERE kind = 'daily' AND run_date = %s FOR UPDATE",
+        (run_date,),
+    )
 
 
 def reopen_run(conn: psycopg.Connection, run_id: UUID, *, now: datetime, trigger: str) -> Row:
@@ -67,7 +71,7 @@ def reopen_run(conn: psycopg.Connection, run_id: UUID, *, now: datetime, trigger
         UPDATE billing_run
            SET status = 'running', attempt = attempt + 1, trigger = %s, started_at = %s,
                finished_at = NULL, error = NULL, failure_kind = NULL, updated_at = now()
-         WHERE id = %s AND status = 'failed'
+         WHERE kind = 'daily' AND id = %s AND status = 'failed'
         RETURNING *
         """,
         (trigger, now, run_id),
@@ -86,7 +90,7 @@ def take_over_run(conn: psycopg.Connection, run_id: UUID, *, now: datetime) -> R
         """
         UPDATE billing_run SET attempt = attempt + 1, started_at = %s, heartbeat_at = %s,
                updated_at = now()
-         WHERE id = %s AND status = 'running'
+         WHERE kind = 'daily' AND id = %s AND status = 'running'
         RETURNING *
         """,
         (now, now, run_id),
@@ -108,7 +112,7 @@ def _end_run(
         conn,
         """
         UPDATE billing_run SET status = %s, finished_at = %s, error = %s, failure_kind = %s
-        WHERE id = %s AND status = 'running' RETURNING *
+        WHERE kind = 'daily' AND id = %s AND status = 'running' RETURNING *
         """,
         (status, now, error, failure_kind, run_id),
     )
@@ -124,7 +128,7 @@ def finish_run(
     There are no counters (migration 0004): this check is the "completed means every
     member is ok" rule, and RunNotComplete says what is missing."""
     run = fetch_one(conn, "SELECT * FROM billing_run WHERE id = %s FOR UPDATE", (run_id,))
-    if run is None or run["status"] != "running":
+    if run is None or run["kind"] != "daily" or run["status"] != "running":
         raise LookupError(f"no running billing run {run_id}")
     gaps = outcome_gaps(conn, run_id, run["run_date"], tz)
     if gaps:
@@ -147,11 +151,17 @@ def fail_run(
 
 
 def get_run(conn: psycopg.Connection, run_date: date) -> Row | None:
-    return fetch_one(conn, "SELECT * FROM billing_run WHERE run_date = %s", (run_date,))
+    return fetch_one(
+        conn, "SELECT * FROM billing_run WHERE kind = 'daily' AND run_date = %s", (run_date,)
+    )
 
 
 def get_run_by_id(conn: psycopg.Connection, run_id: UUID) -> Row | None:
     return fetch_one(conn, "SELECT * FROM billing_run WHERE id = %s", (run_id,))
+
+
+def get_daily_run_by_id(conn: psycopg.Connection, run_id: UUID) -> Row | None:
+    return fetch_one(conn, "SELECT * FROM billing_run WHERE kind = 'daily' AND id = %s", (run_id,))
 
 
 def run_payment_due_date(conn: psycopg.Connection, run_id: UUID) -> date | None:
@@ -171,7 +181,8 @@ def held_back_by(conn: psycopg.Connection) -> Row | None:
     date is billed until it succeeds."""
     return fetch_one(
         conn,
-        "SELECT * FROM billing_run WHERE status = 'failed' AND failure_kind = 'run'"
+        "SELECT * FROM billing_run WHERE kind = 'daily' AND status = 'failed'"
+        " AND failure_kind = 'run'"
         " ORDER BY run_date LIMIT 1",
     )
 
@@ -180,7 +191,9 @@ def unfinished_run(conn: psycopg.Connection) -> Row | None:
     """The earliest run still running - left by a worker that was killed or stopped; its
     new owner takes it over."""
     return fetch_one(
-        conn, "SELECT * FROM billing_run WHERE status = 'running' ORDER BY run_date LIMIT 1"
+        conn,
+        "SELECT * FROM billing_run WHERE kind = 'daily' AND status = 'running'"
+        " ORDER BY run_date LIMIT 1",
     )
 
 
@@ -188,20 +201,21 @@ def failed_account_runs(conn: psycopg.Connection) -> list[Row]:
     """Runs that failed because of accounts (failure_kind 'accounts'), oldest first."""
     return fetch_all(
         conn,
-        "SELECT * FROM billing_run WHERE status = 'failed' AND failure_kind = 'accounts'"
+        "SELECT * FROM billing_run WHERE kind = 'daily' AND status = 'failed'"
+        " AND failure_kind = 'accounts'"
         " ORDER BY run_date",
     )
 
 
 def latest_run_date(conn: psycopg.Connection) -> date | None:
-    row = fetch_one(conn, "SELECT max(run_date) AS latest FROM billing_run")
+    row = fetch_one(conn, "SELECT max(run_date) AS latest FROM billing_run WHERE kind = 'daily'")
     return row["latest"] if row else None
 
 
 _RUN_VIEW = """
     SELECT r.*, m.total, o.ok, o.failed, o.blocked, r.run_date = l.latest AS is_latest
       FROM billing_run r
-     CROSS JOIN (SELECT max(run_date) AS latest FROM billing_run) l
+     CROSS JOIN (SELECT max(run_date) AS latest FROM billing_run WHERE kind = 'daily') l
      CROSS JOIN LATERAL (
             SELECT count(*) AS total FROM billing_account a
              WHERE a.opened_at < (r.run_date::timestamp AT TIME ZONE %(tz)s)) m
@@ -220,17 +234,20 @@ def page_runs(
     date), its outcome counts and whether it is the latest - derived, not stored."""
     rows = fetch_all(
         conn,
-        _RUN_VIEW + " ORDER BY r.run_date DESC OFFSET %(offset)s LIMIT %(limit)s",
+        _RUN_VIEW
+        + " WHERE r.kind = 'daily' ORDER BY r.run_date DESC OFFSET %(offset)s LIMIT %(limit)s",
         {"tz": tz or settings.billing_tz, "offset": offset, "limit": limit},
     )
-    total = fetch_one(conn, "SELECT count(*) AS n FROM billing_run")
+    total = fetch_one(conn, "SELECT count(*) AS n FROM billing_run WHERE kind = 'daily'")
     assert total is not None
     return rows, total["n"]
 
 
 def run_view(conn: psycopg.Connection, run_id: UUID, tz: str | None = None) -> Row | None:
     return fetch_one(
-        conn, _RUN_VIEW + " WHERE r.id = %(id)s", {"tz": tz or settings.billing_tz, "id": run_id}
+        conn,
+        _RUN_VIEW + " WHERE r.kind = 'daily' AND r.id = %(id)s",
+        {"tz": tz or settings.billing_tz, "id": run_id},
     )
 
 
@@ -371,7 +388,8 @@ def earliest_failure_before(
         """
         SELECT o.run_id, r.run_date FROM billing_run_account o
           JOIN billing_run r ON r.id = o.run_id
-         WHERE o.billing_account_id = %s AND o.status = 'failed' AND r.run_date < %s
+         WHERE r.kind = 'daily' AND o.billing_account_id = %s AND o.status = 'failed'
+           AND r.run_date < %s
          ORDER BY r.run_date LIMIT 1
         """,
         (account_id, run_date),
@@ -394,7 +412,8 @@ def blocked_dates_after(conn: psycopg.Connection, account_id: UUID, run_date: da
         conn,
         """
         SELECT r.run_date FROM billing_run_account o JOIN billing_run r ON r.id = o.run_id
-         WHERE o.billing_account_id = %s AND o.status = 'blocked' AND r.run_date > %s
+         WHERE r.kind = 'daily' AND o.billing_account_id = %s
+           AND o.status = 'blocked' AND r.run_date > %s
          ORDER BY r.run_date
         """,
         (account_id, run_date),
@@ -411,8 +430,8 @@ def retarget_blocked(
         """
         UPDATE billing_run_account o SET waits_for_run_id = %s, updated_at = now()
           FROM billing_run r
-         WHERE r.id = o.run_id AND o.billing_account_id = %s AND o.status = 'blocked'
-           AND r.run_date > %s
+         WHERE r.kind = 'daily' AND r.id = o.run_id AND o.billing_account_id = %s
+           AND o.status = 'blocked' AND r.run_date > %s
         """,
         (waits_for, account_id, after),
     )
@@ -644,7 +663,8 @@ def running_run(conn: psycopg.Connection, run_id: UUID) -> Row:
     concurrent finish."""
     row = fetch_one(
         conn,
-        "SELECT run_date, started_at, status FROM billing_run WHERE id = %s FOR SHARE",
+        "SELECT run_date, started_at, status FROM billing_run WHERE kind = 'daily'"
+        " AND id = %s FOR SHARE",
         (run_id,),
     )
     if row is None or row["status"] != "running":

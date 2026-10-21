@@ -19,6 +19,27 @@ def get(conn: psycopg.Connection, command_id: UUID) -> Row | None:
     return fetch_one(conn, "SELECT * FROM prepaid_command WHERE id = %s", (command_id,))
 
 
+def ensure_run(conn: psycopg.Connection, command_id: UUID, *, run_date: date, now: datetime) -> Row:
+    """Retain one real run per command, in the caller's effects transaction.
+
+    The billing owner must hold ownership first. Replays keep the original date,
+    including when a retry arrives on a later business date. This foundation does
+    not dispatch, complete or recover a command run.
+    """
+    lock_identity(conn, command_id)
+    if get(conn, command_id) is None:
+        raise ValueError("unknown prepaid command")
+    existing = fetch_one(conn, "SELECT * FROM billing_run WHERE command_id = %s", (command_id,))
+    if existing is not None:
+        return existing
+    return returning(
+        conn,
+        "INSERT INTO billing_run (kind, command_id, run_date, status, started_at, trigger)"
+        " VALUES ('prepaidCommand', %s, %s, 'running', %s, 'scheduled') RETURNING *",
+        (command_id, run_date, now),
+    )
+
+
 def lock_identity(conn: psycopg.Connection, command_id: UUID) -> None:
     if not isinstance(command_id, UUID):
         raise ValueError("command identity must be a UUID")

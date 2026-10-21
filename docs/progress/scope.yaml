@@ -174,7 +174,7 @@ items:
   - {id: db.product_status_change, area: db, stage: 5, table: product_status_change, title: "Suspensions and resumptions (TMF622 modify items with product.status)"}
   - {id: db.applied_customer_billing_rate, area: db, stage: 1, table: applied_customer_billing_rate, title: "Charges and refunds - ABRs (TMF678)"}
   - {id: db.customer_bill, area: db, stage: 1, table: customer_bill, title: "Customer bills (TMF678)"}
-  - {id: db.billing_run, area: db, stage: 1, table: billing_run, title: "Billing runs, one per date"}
+  - {id: db.billing_run, area: db, stage: 1, table: billing_run, title: "Daily billing runs and retained prepaid command run identities"}
   - {id: db.payment, area: db, stage: 1, table: payment, title: "Payments (TMF676)"}
   - {id: db.billing_run_account, area: db, stage: 4, table: billing_run_account, title: "Per-(run, account) outcomes: ok / failed / blocked"}
   - {id: db.worker_request, area: db, stage: 4, table: worker_request, title: "UI request queue for the worker (catch-up, retry)"}

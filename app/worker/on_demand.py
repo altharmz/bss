@@ -45,7 +45,7 @@ def process_demands(conn, *, clock, tz, checkpoint=None, heartbeat=None):
                 SELECT r.*, a.status AS account_status FROM billing_run r
                 LEFT JOIN billing_run_account a
                     ON a.run_id = r.id AND a.billing_account_id = %s
-                WHERE r.run_date >= %s AND r.run_date <= %s
+                WHERE r.kind = 'daily' AND r.run_date >= %s AND r.run_date <= %s
                 ORDER BY r.run_date DESC LIMIT 1
             """,
                 (account.id, demand["ready_on"], clock.now().astimezone(tz).date()),
@@ -60,7 +60,8 @@ def process_demands(conn, *, clock, tz, checkpoint=None, heartbeat=None):
                 """
                 SELECT a.* FROM applied_customer_billing_rate a
                 JOIN billing_run r ON r.id = a.billing_run_id
-                WHERE a.billing_account_id = %s AND a.customer_bill_id IS NULL AND r.run_date <= %s
+                WHERE r.kind = 'daily' AND a.billing_account_id = %s AND a.customer_bill_id IS NULL
+                  AND r.run_date <= %s
                 ORDER BY a.applied_at, a.id FOR UPDATE OF a
             """,
                 (account.id, run["run_date"]),

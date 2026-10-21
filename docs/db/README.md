@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0038**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0039**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -28,7 +28,7 @@ PostgreSQL schema at Alembic head **0038**, read from `pg_catalog` of a throwawa
 | [`product_status_change`](product_status_change.md) | inventory | TMF622 modify items with product.status: the product is suspended (or active again) from change_date on. Billing does not read it. |
 | [`subscriber_number`](subscriber_number.md) | inventory | TMF639 LogicalResource inventory: canonical E.164 digits, built-in msisdn specification. |
 | [`number_assignment`](number_assignment.md) | inventory | Order-owned number claims; half-open business dates, retained cancelled audit versions. |
-| [`billing_run`](billing_run.md) | billing | One daily billing run per date (ours, not TMF). Only a billing run writes ABRs and bills; the worker's bookkeeping lives here (trigger, attempt, failure_kind). |
+| [`billing_run`](billing_run.md) | billing | Daily runs have one identity per business date; prepaid command runs have one retained identity per command. Only billing runs write ABRs and bills. |
 | [`applied_customer_billing_rate`](applied_customer_billing_rate.md) | billing | SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recurring charge for the billable days of one cycle period, or the one refund of such a charge. Written only by a billing run. |
 | [`customer_bill`](customer_bill.md) | billing | SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every unbilled ABR of the account whose run date is <= the bill date. Bills of one account never overlap. |
 | [`payment`](payment.md) | billing | SID Payment (TMF676 v4 payment): money received on a billing account. Never changed or deleted. |
@@ -147,6 +147,7 @@ flowchart LR
   billing_account -->|"customer_id"| customer
   billing_account -->|"cycle_specification_id"| billing_cycle_specification
   billing_account -->|"financial_account_id"| financial_account
+  billing_run -->|"command_id"| prepaid_command
   billing_run_account -->|"billing_account_id"| billing_account
   billing_run_account -->|"run_id"| billing_run
   billing_run_account -->|"waits_for_run_id"| billing_run
@@ -621,6 +622,8 @@ erDiagram
     integer attempt
     timestamptz heartbeat_at
     billing_run_failure_kind failure_kind
+    text kind
+    uuid command_id FK
   }
   applied_customer_billing_rate {
     uuid id PK
@@ -872,6 +875,7 @@ erDiagram
   payment |o--o{ funding_hold_source : "payment_id, billing_account_id"
   payment |o--o{ refund : "payment_id, billing_account_id"
   payment |o--o{ refund_source : "payment_id, billing_account_id"
+  prepaid_command |o--o{ billing_run : "command_id"
   product ||--o{ applied_customer_billing_rate : "product_id, billing_account_id"
   product_offering ||--o{ applied_customer_billing_rate : "product_offering_id"
   refund ||--o{ refund_source : "refund_id, billing_account_id"
