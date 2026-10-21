@@ -1,6 +1,6 @@
 """Atomic prepaid purchase posting, called only by the billing owner.
 
-No producer or dispatcher yet. Immutable requests retain accepted purchase quotes
+No producer yet. Immutable requests retain accepted purchase quotes
 or renewal predecessor identities; callers never supply replacement retry amounts.
 """
 

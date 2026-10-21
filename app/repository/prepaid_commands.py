@@ -1,4 +1,4 @@
-"""Durable command journal foundation. No public or worker caller yet.
+"""Durable command journal used by internal posting and worker dispatch.
 
 Call within a transaction. Acquire command identity before account/child locks,
 using the same advisory identity as funding holds. Future execution must take the

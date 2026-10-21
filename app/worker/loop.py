@@ -31,6 +31,7 @@ from app.clock import Clock
 from app.events import deliver
 from app.repository import billing
 from app.worker.plan import scheduled
+from app.worker.prepaid import process_commands
 from app.worker.process import (
     Checkpoint,
     Heartbeat,
@@ -56,6 +57,7 @@ class Tick:
     retried: list[date] = field(default_factory=list)
     billed: list[date] = field(default_factory=list)
     requests: list[UUID] = field(default_factory=list)
+    prepaid_commands: list[UUID] = field(default_factory=list)
     deliveries: int = 0  # event POSTs tried (step 6)
     stopped: bool = False
 
@@ -117,6 +119,9 @@ def tick(
                 break
             result.billed.append(run_date)
         result.requests = process_requests(
+            conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
+        )
+        result.prepaid_commands = process_commands(
             conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
         )
         sent = deliver.process(conn, clock=clock, checkpoint=checkpoint, heartbeat=heartbeat)

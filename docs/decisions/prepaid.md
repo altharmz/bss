@@ -1,5 +1,31 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2c4a: retained-command dispatch (2026-10-21)
+
+The billing owner dispatches existing order/renewal commands on each tick, after
+operator requests and before event delivery, independently of daily billing gaps.
+No producer or public prepaid creation is enabled. Transfers remain untouched.
+Candidates exclude completed, future-dated and backoff-delayed commands. Accounts
+are visited by UUID; each account pass locks command identities before its account
+and orders attempts by due date, product UUID, then command UUID. Batch orders
+remain atomic and use command UUID for their position within a tied date.
+
+The clock is read again after locking the account. Posting runs in a savepoint;
+technical failures roll back posting effects before the existing journal records
+diagnostics and its one-minute/five-minute/hourly backoff. A later tick retries
+with the original identity. Each candidate is attempted at most once per tick;
+a failed command does not block later candidates. Account-pass commit retains
+successful effects and diagnostics together. Loss of that transaction leaves them
+retryable. Checkpoints run between accounts; heartbeats follow each account pass.
+
+Funding shortfalls remain pending and are logged, with no technical backoff or
+financial effects. Durable funding-reason projection is deferred to lifecycle
+integration: the journal currently permits only terminal results and technical
+errors. This foundation does not generate renewals, change product/order states
+or expose entitlement. Suspended accounts/products still fail the posting guard.
+These remain prerequisites before prepaid creation can be exposed. No schema or
+API change is included.
+
 ## P2c3b4: actual-date renewal recovery (2026-10-21)
 
 The internal poster accepts a renewal intent containing `previous_interval_id`.

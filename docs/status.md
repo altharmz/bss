@@ -7,6 +7,14 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2c4a retained-command dispatch (2026-10-21).** Worker ticks now attempt queued
+purchase/renewal commands under billing ownership, in ordered account passes.
+Atomic posting rollback precedes durable technical diagnostics/backoff. Funding
+shortfalls remain pending for the next tick and are logged; durable funding reasons
+remain part of lifecycle integration. No producer, entitlement projection or prepaid
+creation is enabled. Next: lifecycle integration and durable funding outcomes; see
+[the decision](decisions/prepaid.md#p2c4a-retained-command-dispatch-2026-10-21).
+
 **P2c3b4 actual-date renewal recovery (2026-10-21).** Internal renewal intents
 reference the latest funded interval. Authorization selects today's price/tax,
 reserves and posts atomically, preserves on-time anchors and resets late coverage
