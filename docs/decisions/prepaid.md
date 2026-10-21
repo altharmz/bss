@@ -1,5 +1,43 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2c3b1: atomic single-product posting (2026-10-21)
+
+`app/billing/prepaid.py` adds an internal billing-owner-only posting primitive.
+The journal request holds a strict single-product interval quote (product, offering,
+price provenance, currency, net/tax lines, original calendar anchor/index and cadence).
+The future producer must validate catalog price selection and exemption eligibility
+before accepting this quote; the primitive validates its shape, exact cents, tax
+arithmetic and authorization-date coverage. It does not reselect catalog prices.
+Month/year boundaries clamp independently from the original anchor, including
+monthly length one. Day/week coverage uses business dates.
+
+Posting takes command identity then account/product locks, requires an Active prepaid
+account, eligible product and exact outstanding command hold, and writes one original
+recurring ABR, one offCycle bill with coverage matching the grant, its retained JSON
+document and issue history, exact-source settlement, funded interval, completed run
+and completed command result together. The bill is due on its authorization date.
+Issuing touches only this bill; unrelated waiting bills are left to their own paths.
+Completed replay returns the retained result without any new financial writes.
+Exceptions roll back the entire posting savepoint and preserve the accepted hold.
+The caller owns the outer commit and technical-error bookkeeping after rollback.
+
+Command bills omit optional TMF678 `billCycle`, since the public cycle endpoints
+expose daily runs only. Their financial run identity remains stored. Daily documents
+retain their existing cycle reference. No public operation or schema is added.
+
+This is the single-product part of P2c3b. Existing one-command/one-hold/one-bill
+conversion cannot yet fund multiple product bills: that extension remains next,
+before dispatcher/recovery. Stale-date quotes fail closed; recovery must resolve
+actual-date pricing/coverage before enabling this caller. Offering changes, funding
+versus manual suspension, entitlement projection and order lifecycle remain later
+work. No producer, dispatcher or runtime API calls this primitive, and prepaid
+creation remains unavailable.
+
+Validation: all 1,650 backend tests pass, including 21 new cases for tax-inclusive posting/document projection,
+zero grants, replay/daily isolation, rollback after snapshot/conversion/completion,
+quote/account/product/hold guards, outer rollback, adjacent renewal and original-anchor
+calendar boundaries. Lint, format and generated-documentation drift checks pass.
+
 ## P2c3a: retained funded intervals (2026-10-21)
 
 Migration `0040` adds immutable `funded_interval` history: actual authorization

@@ -117,8 +117,9 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   migration `0038`, without a runtime producer or dispatcher. Command run
   identities are isolated in P2c2 (migration `0039`). P2c3a retains immutable funded
   intervals with matching command/run/charge identities (migration `0040`), with no
-  posting caller or entitlement projection. Next: atomic posting and document
-  projection, then worker recovery.
+  entitlement projection. P2c3b1 adds internal atomic single-product posting and
+  document projection, with no producer/dispatcher. Next: multi-product conversion
+  and actual-date recovery, then worker dispatch.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).

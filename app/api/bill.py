@@ -158,7 +158,7 @@ def bill_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             }
             for t in tax_lines
         ],
-        "billCycle": cycle_ref(conn, row["billing_run_id"]),
+        **cycle_link(conn, row["billing_run_id"]),
         # the bill's own period ends on the next cycle day, whatever the account says today
         "nextBillDate": from_billing_date(row["bill_period"].upper),
         "remainingAmount": money(billing.remaining_amount(row, allocated), currency),
@@ -354,6 +354,13 @@ def cycle_ref(conn: psycopg.Connection, run_id: Any) -> dict[str, Any]:
     run = billing.get_run_by_id(conn, run_id)
     assert run is not None  # foreign key
     return ref("BillCycle", cycle_href(run_id), run_id, _cycle_name(run["run_date"]))
+
+
+def cycle_link(conn: psycopg.Connection, run_id: Any) -> dict[str, Any]:
+    """Command documents have no daily bill cycle to link to."""
+    run = billing.get_run_by_id(conn, run_id)
+    assert run is not None
+    return {"billCycle": cycle_ref(conn, run_id)} if run["kind"] == "daily" else {}
 
 
 def cycle_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:

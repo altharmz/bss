@@ -7,6 +7,15 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2c3b1 single-product posting (2026-10-21).** Internal billing-owner posting now
+atomically writes the recurring ABR, settled offCycle document, exact-source hold
+conversion, grant and completed command/run. Replay retains the result; failures
+restore all posting effects and the hold. Command documents omit an unreachable
+daily bill-cycle link. All 1,650 backend tests (21 new), lint, format and generated
+documentation checks pass. No producer/dispatcher or
+prepaid creation is enabled. Next: multi-product conversion and actual-date recovery,
+then worker dispatch; see [the decision](decisions/prepaid.md).
+
 **P2c3a funded-interval persistence (2026-10-21).** Migration `0040` retains
 immutable prepaid grants with exact command/run/recurring-charge ownership and
 quote totals, non-overlapping coverage and unique replay/calendar identities.
