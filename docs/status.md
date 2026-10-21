@@ -7,6 +7,22 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P1 prepaid identity foundation (2026-10-21).** Migration `0034` adds stored
+account mode (existing/new accounts default postpaid), the prepaid zero-credit-limit
+rule, history protection for mode changes and stable account/currency bucket and
+accumulatedBalance identities. No balance column or financial/worker behavior is
+introduced; prepaid creation remains rejected. The migration preserves populated
+finances and immutable refunds and refuses a lossy downgrade. See
+[P1 decision](decisions/prepaid.md#p1-account-mode-and-balance-identities-2026-10-21).
+Next: shared funding sources, holds and combined bounds across settlement, refunds
+and prepaid operations, then durable worker/recovery. Stages 3–4 remain gated together.
+
+**Number milestone deployed (2026-10-21).** `make deploy` shipped `013da24` (N5/N6
+and the process updates) through migration `0033`. Health, web and MCP smoke passed.
+The remote smoke read `~/bss/DEPLOYED` and matched
+`013da24b739a923e295067732c7fd5353f8ef411`; deployment identity rollout is confirmed.
+Older pending-deployment notes below are historical.
+
 **N6 subscriber-number release validation (2026-10-21).** Local validation is
 complete: lock/quarantine negative proofs failed as expected and were reverted;
 three full backend passes each passed 1,495 tests (CI, dev, progress collector);
@@ -412,10 +428,6 @@ shipped).
   request; this also cut `make test`. To confirm after the deploy: at most 10 bss API
   sessions in `pg_stat_activity` under load, and the app answers after the nightly
   reboot. [infra.md](decisions/infra.md#db-connection-pool).
-- **Deployment identity: production confirmation pending.** The approved deploy.sh
-  change records the full running commit in `~/bss/DEPLOYED` and reads/prints it in
-  the remote smoke. Local write/read and failure checks pass; confirm the marker on
-  the next separately approved deployment before closing this rollout check.
 - **The pytest container shows `(unhealthy)` during `make test`**: the image's
   HEALTHCHECK probes `/healthz`, which nothing serves while pytest runs in the `app`
   service. Harmless for `run --rm`, but noise in `docker ps`. Since the 60 s interval

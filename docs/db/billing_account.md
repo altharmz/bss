@@ -26,6 +26,7 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | `description` | `text` | yes |  | TMF666 description. |
 | `account_type` | `text` | yes |  | TMF666 accountType, a record only. |
 | `details` | `jsonb` | no | `'{}'::jsonb` | TMF666 descriptive attributes (contact, paymentPlan, relatedParty as sent, ...), validated against the spec; billing never reads them. |
+| `rating_type` | `text` | no | `'postpaid'::text` | TMF666 account funding mode; existing accounts remain postpaid. Prepaid creation is not yet exposed. |
 
 ## Foreign keys
 
@@ -45,8 +46,11 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | `billing_account_credit_limit_not_negative` | check | `CHECK ((credit_limit >= (0)::numeric))` |
 | `billing_account_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
 | `billing_account_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
+| `billing_account_prepaid_credit_limit` | check | `CHECK (((rating_type <> 'prepaid'::text) OR (COALESCE(credit_limit, (0)::numeric) = (0)::numeric)))` |
+| `billing_account_rating_type` | check | `CHECK ((rating_type = ANY (ARRAY['prepaid'::text, 'postpaid'::text])))` |
 | `billing_account_pkey` | primary key | `PRIMARY KEY (id)` |
 | `billing_account_id_currency_key` | unique | `UNIQUE (id, currency)` |
+| `billing_account_mode_identity` | unique | `UNIQUE (id, currency, rating_type)` |
 
 ## Indexes
 
@@ -56,13 +60,15 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | `billing_account_cycle_specification_idx` | `CREATE INDEX billing_account_cycle_specification_idx ON billing_account USING btree (cycle_specification_id)` | no |
 | `billing_account_financial_account_idx` | `CREATE INDEX billing_account_financial_account_idx ON billing_account USING btree (financial_account_id)` | no |
 | `billing_account_id_currency_key` | `CREATE UNIQUE INDEX billing_account_id_currency_key ON billing_account USING btree (id, currency)` | yes |
+| `billing_account_mode_identity` | `CREATE UNIQUE INDEX billing_account_mode_identity ON billing_account USING btree (id, currency, rating_type)` | yes |
 | `billing_account_pkey` | `CREATE UNIQUE INDEX billing_account_pkey ON billing_account USING btree (id)` | yes |
 
 ## Triggers
 
 - `billing_account_financial_owner`: `CREATE TRIGGER billing_account_financial_owner BEFORE INSERT OR UPDATE OF financial_account_id, customer_id ON billing_account FOR EACH ROW EXECUTE FUNCTION billing_account_financial_owner()`
+- `billing_account_mode_history`: `CREATE TRIGGER billing_account_mode_history BEFORE UPDATE OF rating_type ON billing_account FOR EACH ROW EXECUTE FUNCTION billing_account_mode_history()`
 - `billing_account_set_updated_at`: `CREATE TRIGGER billing_account_set_updated_at BEFORE UPDATE ON billing_account FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
 
 ## Referenced by
 
-[`account_presentation_media`](account_presentation_media.md), [`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`payment`](payment.md), [`product`](product.md), [`product_order`](product_order.md), [`refund`](refund.md)
+[`account_presentation_media`](account_presentation_media.md), [`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`payment`](payment.md), [`prepaid_bucket`](prepaid_bucket.md), [`product`](product.md), [`product_order`](product_order.md), [`refund`](refund.md)

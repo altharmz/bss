@@ -95,21 +95,18 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
 
 ## Current state (2026-10-21)
 
-- **Deployed:** N4 subscriber-number orders (`47b7525`), migrations through `0033`,
-  confirmed by the human on 2026-10-20. This session did not independently verify
-  the VPS image tag or deployment smoke results. N4 passed 1,494 backend tests,
-  lint and documentation drift checks before commit/push.
-- **Implemented:** N5 subscriber-number UI: inventory/create/search/lock, number selection
-  and changes through orders. Local checks: 1,495 backend tests, 284 frontend tests in
-  each timezone, frontend lint and five browser tests passed. Not deployed.
-- **Validated:** N6 release checks: lock/quarantine negative proofs, three complete
-  backend passes (1,495 each, including progress collection), frontend/browser checks,
-  lint and docs passed. Progress scope labels corrected; all number items tested.
-  [Release evidence](docs/subscriber-number-release.md). Not yet committed/deployed.
-- **Next:** commit, push and deploy the validated number milestone (N5 + N6 docs); then prepaid schema/funding and worker core behind unavailable prepaid creation -
+- **Deployed:** N5/N6 number milestone deployed as `013da24`; health, web and MCP
+  smoke passed and `~/bss/DEPLOYED` matched the full commit. P1 adds migration
+  `0034` for account mode and stable prepaid bucket/accumulation identities;
+  prepaid creation remains unavailable. Next development: shared funding sources,
+  holds and combined consumption bounds, then durable worker/recovery.
+- **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
+  timezone, browser checks, lint and docs passed. All number scope items tested.
+  [Release evidence](docs/subscriber-number-release.md).
+- **Next:** finish prepaid schema/funding and worker core behind unavailable prepaid creation -
   [scope](docs/prepaid-plan.md), [decision](docs/decisions/prepaid.md).
-- **Backlog:** UI vs MCP gap slices 2-4 ([plan](docs/ui-mcp-gap-plan.md)); confirm the
-  `~/bss/DEPLOYED` marker on the next deploy; progress drift check + per-item deployed
+- **Backlog:** UI vs MCP gap slices 2-4 ([plan](docs/ui-mcp-gap-plan.md));
+  progress drift check + per-item deployed
   status; APP_PORT / `make down` profiles (two stacks with vps-lab); vps-lab guard
   backport; changing `billCycleDay` (open question); subscriber-card visual review.
 - **Open checks:** network isolation of app/MCP; demo data in prod (pending); DB

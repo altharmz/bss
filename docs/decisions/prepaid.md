@@ -1,5 +1,31 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P1: account mode and balance identities (2026-10-21)
+
+The first prepaid persistence slice is migration `0034`: checked
+`billing_account.rating_type`, defaulting existing and new accounts to `postpaid`,
+and `prepaid_bucket`. A prepaid account cannot carry a positive credit limit.
+The bucket has stable UUIDs for both TMF654 bucket and accumulatedBalance, one
+account/currency pair, a composite foreign key requiring a matching prepaid owner,
+and an injected creation instant. It stores no balance. Bucket identities cannot
+be updated or deleted; account deletion cannot discard them. They will be created
+with financial history by the future funding path, not by reading an empty account.
+
+Mode changes are refused after existing order, product, payment, refund, bill,
+allocation or run history, or a retained bucket. Repeating the same mode is harmless.
+The account history registry includes buckets for owner-change/deletion checks.
+Downgrade to `0033` refuses any prepaid account or retained bucket; an entirely
+postpaid database can round-trip without changing existing finances or refunds.
+Future action/command tables must extend the history guard when they land.
+
+Prepaid POST/PATCH remains a 422; no TMF654 route, financial operation or worker
+behavior is enabled. P1 is an additive foundation within stages 3–4, which stay
+gated together until shared source accounting and recovery proofs pass. Next is
+shared funding sources, reservations and combined consumption bounds, followed by
+the durable worker path. Tests cover constraints, identity retention, mode history,
+populated financial migration and downgrade barriers; the existing database-owner
+test covers upgrade/downgrade without superuser privileges.
+
 The human requested completion of the prepaid design, choosing remaining policies
 according to TMF, then committing/pushing design changes. Development will occur in
 another session. The authoritative hand-off is:

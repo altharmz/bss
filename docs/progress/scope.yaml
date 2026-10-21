@@ -15,6 +15,7 @@
 # Status (implemented / tested / deployed) is never written here - it is derived.
 
 items:
+  - {id: db.prepaid_bucket, area: db, stage: 5, table: prepaid_bucket, title: "Stable prepaid bucket and accumulated-balance identities"}
   - {id: db.subscriber_number, area: db, stage: 5, table: subscriber_number, title: "Subscriber-number inventory (TMF639)"}
   - {id: db.number_assignment, area: db, stage: 5, table: number_assignment, title: "Effective-dated number assignment history"}
   - {id: api.tmf639.hub.create, area: api, stage: 5, method: POST, path: "/tmf-api/resourceInventory/v5/hub", title: "TMF639 POST /hub"}

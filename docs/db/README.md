@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0033**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0034**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -41,6 +41,7 @@ PostgreSQL schema at Alembic head **0033**, read from `pg_catalog` of a throwawa
 | [`bill_presentation_media`](bill_presentation_media.md) | billing | TMF666 bill presentation configuration. |
 | [`account_presentation_media`](account_presentation_media.md) | billing | Account bill delivery preferences; no external delivery is performed. |
 | [`billing_cycle_specification`](billing_cycle_specification.md) | billing | TMF666 billingCycleSpecification: named instances of the one monthly policy; billing never reads it. |
+| [`prepaid_bucket`](prepaid_bucket.md) | billing | Stable TMF654 bucket and accumulatedBalance identities for one prepaid account/currency. No stored balance; funding ledger is introduced separately. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
 | [`worker_request`](worker_request.md) | worker | The admin UI's queue for the billing worker (ours): catch-up and retry requests. The API only inserts; the worker picks them up oldest first. |
 | [`event_subscription`](event_subscription.md) | events | TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their deliveries. |
@@ -100,6 +101,7 @@ flowchart LR
     bill_presentation_media[bill_presentation_media]
     account_presentation_media[account_presentation_media]
     billing_cycle_specification[billing_cycle_specification]
+    prepaid_bucket[prepaid_bucket]
   end
   subgraph area_worker["Billing worker (ours)"]
     billing_run_account[billing_run_account]
@@ -159,6 +161,7 @@ flowchart LR
   party_account -->|"financial_account_id, party_id"| financial_account
   party_account -->|"party_id"| party
   payment -->|"billing_account_id"| billing_account
+  prepaid_bucket -->|"billing_account_id, rating_type"| billing_account
   product -->|"billing_account_id"| billing_account
   product -->|"created_by_item_id"| product_order_item
   product -->|"product_offering_id"| product_offering
@@ -231,6 +234,7 @@ erDiagram
     text description
     text account_type
     jsonb details
+    text rating_type
   }
   financial_account {
     uuid id PK
@@ -745,6 +749,14 @@ erDiagram
     text schema_location
     jsonb details
   }
+  prepaid_bucket {
+    uuid id PK
+    uuid accumulated_balance_id
+    uuid billing_account_id FK
+    text currency FK
+    text rating_type FK
+    timestamptz created_at
+  }
   billing_account {
     uuid id PK
   }
@@ -762,6 +774,7 @@ erDiagram
   billing_account ||--o{ customer_bill : "billing_account_id, currency"
   billing_account ||--o{ customer_bill_on_demand : "billing_account_id"
   billing_account ||--o{ payment : "billing_account_id, currency"
+  billing_account ||--o{ prepaid_bucket : "billing_account_id, currency, rating_type"
   billing_account ||--o{ refund : "billing_account_id, currency"
   billing_run ||--o{ applied_customer_billing_rate : "billing_run_id"
   billing_run ||--o{ customer_bill : "billing_run_id"
