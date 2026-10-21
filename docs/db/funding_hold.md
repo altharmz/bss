@@ -49,4 +49,4 @@ Internal source-pinned funding hold foundation; no public API.
 
 ## Referenced by
 
-[`funding_hold_source`](funding_hold_source.md)
+[`funding_command_hold`](funding_command_hold.md), [`funding_hold_source`](funding_hold_source.md)

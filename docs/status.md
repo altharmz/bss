@@ -7,6 +7,14 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2b4 command-owned hold retries (2026-10-21).** Migration `0036` retains a
+one-to-one command/hold identity. Internal retries serialize before account locks,
+return the original hold after commit/release, and reject changed account/amount.
+Owned releases require the matching command. No public or worker caller; prepaid
+creation remains unavailable. Next: durable consumption and conversion to
+allocations, consuming-path integration and worker recovery. See the
+[P2b4 decision](decisions/prepaid.md#p2b4-command-owned-hold-retries-2026-10-21).
+
 **P2b3 retained funding holds (2026-10-21).** Migration `0035` pins reservations to
 existing payment/credit-note sources. Deferred bounds combine outstanding holds,
 allocations and payouts; released history remains immutable. Locked funding plans

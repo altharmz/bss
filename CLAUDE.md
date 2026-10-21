@@ -103,7 +103,9 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   `0034` for account mode and stable prepaid bucket/accumulation identities;
   prepaid creation remains unavailable. P2b3 adds retained source-pinned holds and
   combined allocation/payout/hold bounds in migration `0035`, with no runtime callers.
-  Next: durable consumption/command ownership, consuming-path integration and worker recovery.
+  P2b4 adds retained command-owned hold retry identities in migration `0036`,
+  still without runtime callers. Next: durable consumption, consuming-path
+  integration and worker recovery.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).

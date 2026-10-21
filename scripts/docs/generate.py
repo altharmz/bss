@@ -176,6 +176,7 @@ AREAS = {
         "prepaid_bucket",
         "funding_hold",
         "funding_hold_source",
+        "funding_command_hold",
     ),
     "worker": ("billing_run_account", "worker_request"),
     "events": ("event_subscription", "event", "event_delivery"),

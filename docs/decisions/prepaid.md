@@ -1,5 +1,29 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2b4: command-owned hold retries (2026-10-21)
+
+Migration `0036` adds an immutable one-to-one internal command UUID/hold mapping.
+Composite foreign keys retain the owning account; existing anonymous holds remain
+unchanged. Ownership cannot be reassigned or deleted, even after release, and
+downgrade refuses retained command identities. The existing account-mode history
+guard covers these commands through their mandatory hold, including zero holds.
+
+`reserve_for_command` takes a transaction-scoped identity advisory lock before
+account/source locks. A committed retry with the same account and amount returns
+the original hold, including after release, without quoting or reserving again.
+A changed account/amount is refused; rollback retains neither identity nor hold.
+The first reservation instant is retained; a retry's instant is not request data.
+Release requires the matching command owner for owned holds. Anonymous foundation
+holds retain their existing release behavior. Callers own the transaction and must
+acquire this identity before any account or child locks.
+
+This is only internal reservation ownership, not the HTTP response idempotency
+journal or worker command/result/recovery journal. No runtime caller or API is
+enabled, and prepaid creation remains unavailable. Next: durable consumption and
+conversion to allocations, consuming-path integration, then worker recovery.
+Tests cover committed/released replay, conflicting requests, rollback, concurrent
+duplicates, immutable/cross-account ownership and migration preservation/retention.
+
 ## P2b3: retained funding holds (2026-10-21)
 
 Migration `0035` adds `funding_hold` and immutable `funding_hold_source` amounts

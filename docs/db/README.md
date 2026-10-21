@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0035**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0036**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -44,6 +44,7 @@ PostgreSQL schema at Alembic head **0035**, read from `pg_catalog` of a throwawa
 | [`prepaid_bucket`](prepaid_bucket.md) | billing | Stable TMF654 bucket and accumulatedBalance identities for one prepaid account/currency. No stored balance; funding ledger is introduced separately. |
 | [`funding_hold`](funding_hold.md) | billing | Internal source-pinned funding hold foundation; no public API. |
 | [`funding_hold_source`](funding_hold_source.md) | billing | Internal source-pinned funding hold foundation; no public API. |
+| [`funding_command_hold`](funding_command_hold.md) | billing | Retained internal command-to-hold retry identity; no public API or worker caller. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
 | [`worker_request`](worker_request.md) | worker | The admin UI's queue for the billing worker (ours): catch-up and retry requests. The API only inserts; the worker picks them up oldest first. |
 | [`event_subscription`](event_subscription.md) | events | TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their deliveries. |
@@ -106,6 +107,7 @@ flowchart LR
     prepaid_bucket[prepaid_bucket]
     funding_hold[funding_hold]
     funding_hold_source[funding_hold_source]
+    funding_command_hold[funding_command_hold]
   end
   subgraph area_worker["Billing worker (ours)"]
     billing_run_account[billing_run_account]
@@ -155,6 +157,7 @@ flowchart LR
   event_delivery -->|"event_id"| event
   event_delivery -->|"subscription_id"| event_subscription
   financial_account -->|"party_id"| party
+  funding_command_hold -->|"hold_id, billing_account_id"| funding_hold
   funding_hold -->|"billing_account_id"| billing_account
   funding_hold_source -->|"credit_bill_id, billing_account_id"| customer_bill
   funding_hold_source -->|"hold_id, billing_account_id"| funding_hold
@@ -781,6 +784,11 @@ erDiagram
     uuid credit_bill_id FK
     numeric amount
   }
+  funding_command_hold {
+    uuid command_id PK
+    uuid hold_id FK
+    uuid billing_account_id FK
+  }
   billing_account {
     uuid id PK
   }
@@ -810,6 +818,7 @@ erDiagram
   customer_bill |o--o{ refund_source : "credit_bill_id, billing_account_id"
   customer_bill ||--o{ bill_allocation : "customer_bill_id, billing_account_id"
   customer_bill ||--o{ customer_bill_state_change : "customer_bill_id"
+  funding_hold ||--o{ funding_command_hold : "hold_id, billing_account_id"
   funding_hold ||--o{ funding_hold_source : "hold_id, billing_account_id"
   payment |o--o{ bill_allocation : "payment_id, billing_account_id"
   payment |o--o{ funding_hold_source : "payment_id, billing_account_id"

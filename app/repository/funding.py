@@ -135,7 +135,12 @@ def reserve(
 
 
 def release(
-    conn: psycopg.Connection, account_id: UUID, hold_id: UUID, *, released_at: datetime
+    conn: psycopg.Connection,
+    account_id: UUID,
+    hold_id: UUID,
+    *,
+    released_at: datetime,
+    command_id: UUID | None = None,
 ) -> None:
     """Release once under the owner lock; repeated release retains the first instant."""
     billing.load_account(conn, account_id)
@@ -145,7 +150,53 @@ def release(
     ).fetchone()
     if row is None:
         raise ValueError("unknown funding hold for account")
+    owner = conn.execute(
+        "SELECT command_id FROM funding_command_hold WHERE hold_id = %s", (hold_id,)
+    ).fetchone()
+    if (owner[0] if owner else None) != command_id:
+        raise ValueError("funding hold command owner mismatch")
     if row[0] is None:
         conn.execute(
             "UPDATE funding_hold SET released_at = %s WHERE id = %s", (released_at, hold_id)
         )
+
+
+def reserve_for_command(
+    conn: psycopg.Connection,
+    account_id: UUID,
+    amount: Decimal,
+    *,
+    command_id: UUID,
+    held_at: datetime,
+) -> UUID:
+    """Reserve once for an internal command, atomically with its retained identity.
+
+    Acquire identity before account locks. Callers must not already hold account or
+    child locks. Same account/amount replays the original hold even after release;
+    a changed quote instant does not change the request. A rollback consumes no key.
+    This is not the HTTP idempotency journal or the worker command/result journal.
+    """
+    if not isinstance(command_id, UUID):
+        raise ValueError("command identity must be a UUID")
+    if not isinstance(amount, Decimal) or not amount.is_finite() or amount < 0:
+        raise ValueError("funding amount must be a finite nonnegative Decimal")
+    conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+        (f"funding-command:{command_id}",),
+    )
+    existing = conn.execute(
+        "SELECT h.id, h.billing_account_id, h.amount FROM funding_command_hold c"
+        " JOIN funding_hold h ON h.id = c.hold_id WHERE c.command_id = %s",
+        (command_id,),
+    ).fetchone()
+    if existing is not None:
+        if existing[1] != account_id or existing[2] != amount:
+            raise ValueError("funding command request mismatch")
+        return existing[0]
+    hold_id = reserve(conn, account_id, amount, held_at=held_at)
+    conn.execute(
+        "INSERT INTO funding_command_hold (command_id, hold_id, billing_account_id)"
+        " VALUES (%s, %s, %s)",
+        (command_id, hold_id, account_id),
+    )
+    return hold_id

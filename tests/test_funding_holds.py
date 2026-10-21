@@ -122,7 +122,8 @@ def test_hold_downgrade_retains_released_history(temp_db_url):
     with psycopg.connect(temp_db_url) as conn:
         assert funding.load(conn, acc["id"]).spendable == D("20")
         hold = funding.reserve(conn, acc["id"], D("10"), held_at=NOW)
-        funding.release(conn, acc["id"], hold, released_at=NOW)
+        # This proof deliberately stays at 0035, before command ownership exists.
+        conn.execute("UPDATE funding_hold SET released_at = %s WHERE id = %s", (NOW, hold))
     with pytest.raises(Exception, match="funding hold history must be retained"):
         command.downgrade(cfg, "0034")
 
