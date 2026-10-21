@@ -66,8 +66,11 @@ slips against these rules; it is a pattern matcher, not a security boundary
   The pre-commit hook runs `make lint` + `make test` (+ `web-lint`/`web-test` when
   `frontend/` or `spec/` is staged, `docs-check` when the generated docs' sources are;
   nothing for a Markdown-only commit) and is that run. Commit, push and deploy when you
-  judge the change ready - no approval needed. Do not re-run tests before deploying;
-  stronger testing (`make check`, repeated runs) only when asked for a specific change.
+  judge the change ready - no approval needed. Do not re-run tests before deploying.
+  Nothing beyond the hook is required: targeted tests while developing, `make check`,
+  `make web-e2e`, `make progress` or a negative proof are optional - run one when you
+  judge it worth its time. This section overrides process steps in older plans and
+  hand-offs (separate commit/deploy approvals, three backend passes, release proofs).
 - Every new feature or bug fix comes with a test that fails without it.
 - Propose a plan before a data-model change or a large design change; otherwise act.
 - Before saying "it works on the server", deploy (`make deploy` reports health and smoke).
@@ -97,8 +100,12 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
 - **Implemented:** N5 subscriber-number UI: inventory/create/search/lock, number selection
   and changes through orders. Local checks: 1,495 backend tests, 284 frontend tests in
   each timezone, frontend lint and five browser tests passed. Not deployed.
-- **Next:** N6 release validation and separate deployment approval - [scope](docs/prepaid-plan.md),
-  [hand-off](docs/prepaid-implementation.md), [decision](docs/decisions/prepaid.md).
+- **Validated:** N6 release checks: lock/quarantine negative proofs, three complete
+  backend passes (1,495 each, including progress collection), frontend/browser checks,
+  lint and docs passed. Progress scope labels corrected; all number items tested.
+  [Release evidence](docs/subscriber-number-release.md). Not yet committed/deployed.
+- **Next:** commit, push and deploy the validated number milestone (N5 + N6 docs); then prepaid schema/funding and worker core behind unavailable prepaid creation -
+  [scope](docs/prepaid-plan.md), [decision](docs/decisions/prepaid.md).
 - **Backlog:** UI vs MCP gap slices 2-4 ([plan](docs/ui-mcp-gap-plan.md)); confirm the
   `~/bss/DEPLOYED` marker on the next deploy; progress drift check + per-item deployed
   status; APP_PORT / `make down` profiles (two stacks with vps-lab); vps-lab guard

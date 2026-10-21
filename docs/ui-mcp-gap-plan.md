@@ -79,9 +79,9 @@ Re-measure before starting a slice: the lists above change with the code.
 Every slice is frontend-only unless its own design finds otherwise (the API operations
 exist and are tested). Per slice: a design note for the human, pinned write requests on
 both sides ([frontend conventions](decisions/frontend.md#frontend-conventions)),
-`data-ui` markers plus `scope.yaml` items (`make progress`), component and request tests,
-`make web-lint`, `make web-test` in UTC and America/New_York, `make web-e2e`, negative
-proofs, then the diff for the human's OK.
+`data-ui` markers plus `scope.yaml` items, component and request tests (the pre-commit
+hook runs web-lint/web-test in both timezones); `make web-e2e`, `make progress` and
+negative proofs only when judged useful. Commit, push and deploy need no approval.
 
 1. **Refunds and on-demand bill on the subscriber card.** "Refund unused credit" (TMF676
    refund POST, list on the card) and "Bill now" (customerBillOnDemand POST, with its state

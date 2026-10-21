@@ -20,7 +20,7 @@ and termination behavior remain in the existing order workflows. Failed uncertai
 writes disable resubmission and direct the operator to inspect inventory/product
 state. Component tests pin inventory/add/modify requests; backend tests replay them.
 Browser smoke opens inventory and validates the creation form without creating data.
-N6 owns independent release validation and separate deployment approval.
+N6 owns release validation; deployment follows the normal cycle.
 
 The refund/bill-delivery milestone adds the ledger type `payout`, displayed as
 “Refund paid out”. The existing `refund` label still denotes an ABR credit.

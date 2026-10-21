@@ -18,13 +18,13 @@ items:
   - {id: db.subscriber_number, area: db, stage: 5, table: subscriber_number, title: "Subscriber-number inventory (TMF639)"}
   - {id: db.number_assignment, area: db, stage: 5, table: number_assignment, title: "Effective-dated number assignment history"}
   - {id: api.tmf639.hub.create, area: api, stage: 5, method: POST, path: "/tmf-api/resourceInventory/v5/hub", title: "TMF639 POST /hub"}
-  - {id: api.tmf639.hub.get, area: api, stage: 5, method: GET, path: "/tmf-api/resourceInventory/v5/hub/{id}", title: "TMF639 GET /hub/{id}"}
-  - {id: api.tmf639.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/resourceInventory/v5/hub/{id}", title: "TMF639 DELETE /hub/{id}"}
+  - {id: api.tmf639.hub.get, area: api, stage: 5, method: GET, path: "/tmf-api/resourceInventory/v5/hub/{hub_id}", title: "TMF639 GET /hub/{id}"}
+  - {id: api.tmf639.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/resourceInventory/v5/hub/{hub_id}", title: "TMF639 DELETE /hub/{id}"}
   - {id: api.tmf639.resource.list, area: api, stage: 5, method: GET, path: "/tmf-api/resourceInventory/v5/resource", title: "TMF639 GET /resource"}
   - {id: api.tmf639.resource.create, area: api, stage: 5, method: POST, path: "/tmf-api/resourceInventory/v5/resource", title: "TMF639 POST /resource"}
-  - {id: api.tmf639.resource.get, area: api, stage: 5, method: GET, path: "/tmf-api/resourceInventory/v5/resource/{id}", title: "TMF639 GET /resource/{id}"}
-  - {id: api.tmf639.resource.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/resourceInventory/v5/resource/{id}", title: "TMF639 PATCH /resource/{id}"}
-  - {id: api.tmf639.resource.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/resourceInventory/v5/resource/{id}", title: "TMF639 DELETE /resource/{id}"}
+  - {id: api.tmf639.resource.get, area: api, stage: 5, method: GET, path: "/tmf-api/resourceInventory/v5/resource/{resource_id}", title: "TMF639 GET /resource/{id}"}
+  - {id: api.tmf639.resource.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/resourceInventory/v5/resource/{resource_id}", title: "TMF639 PATCH /resource/{id}"}
+  - {id: api.tmf639.resource.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/resourceInventory/v5/resource/{resource_id}", title: "TMF639 DELETE /resource/{id}"}
   - {id: api.tmf654.bucket.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/bucket", title: "TMF654 GET /bucket"}
   - {id: api.tmf654.bucket.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/bucket/{id}", title: "TMF654 GET /bucket/{id}"}
   - {id: api.tmf654.topupBalance.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/topupBalance", title: "TMF654 GET /topupBalance"}

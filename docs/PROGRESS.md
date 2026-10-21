@@ -11,15 +11,17 @@ records the deployed commit.
 
 | Area | Items | Implemented | Tested | Deployed |
 |---|---|---|---|---|
-| Database | 41 | 41/41 (100%) | 41/41 (100%) | unknown |
-| API | 188 | 152/188 (80%) | 152/188 (80%) | unknown |
-| UI | 31 | 31/31 (100%) | 31/31 (100%) | unknown |
+| Database | 43 | 43/43 (100%) | 43/43 (100%) | unknown |
+| API | 188 | 160/188 (85%) | 160/188 (85%) | unknown |
+| UI | 35 | 35/35 (100%) | 35/35 (100%) | unknown |
 | Worker | 15 | 15/15 (100%) | 15/15 (100%) | unknown |
 
 ## Database
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
+| `db.subscriber_number` | 5 | Subscriber-number inventory (TMF639) | yes | yes | unknown |
+| `db.number_assignment` | 5 | Effective-dated number assignment history | yes | yes | unknown |
 | `db.app_user` | 5 | Application users and roles | yes | yes | unknown |
 | `db.app_session` | 5 | Revocable application sessions | yes | yes | unknown |
 | `db.app_user_audit` | 5 | User management audit | yes | yes | unknown |
@@ -66,14 +68,14 @@ records the deployed commit.
 
 | Id | Stage | Title | Implemented | Tested | Deployed |
 |---|---|---|---|---|---|
-| `api.tmf639.hub.create` | 5 | TMF639 POST /hub | no | no | unknown |
-| `api.tmf639.hub.get` | 5 | TMF639 GET /hub/{id} | no | no | unknown |
-| `api.tmf639.hub.delete` | 5 | TMF639 DELETE /hub/{id} | no | no | unknown |
-| `api.tmf639.resource.list` | 5 | TMF639 GET /resource | no | no | unknown |
-| `api.tmf639.resource.create` | 5 | TMF639 POST /resource | no | no | unknown |
-| `api.tmf639.resource.get` | 5 | TMF639 GET /resource/{id} | no | no | unknown |
-| `api.tmf639.resource.patch` | 5 | TMF639 PATCH /resource/{id} | no | no | unknown |
-| `api.tmf639.resource.delete` | 5 | TMF639 DELETE /resource/{id} | no | no | unknown |
+| `api.tmf639.hub.create` | 5 | TMF639 POST /hub | yes | yes | unknown |
+| `api.tmf639.hub.get` | 5 | TMF639 GET /hub/{id} | yes | yes | unknown |
+| `api.tmf639.hub.delete` | 5 | TMF639 DELETE /hub/{id} | yes | yes | unknown |
+| `api.tmf639.resource.list` | 5 | TMF639 GET /resource | yes | yes | unknown |
+| `api.tmf639.resource.create` | 5 | TMF639 POST /resource | yes | yes | unknown |
+| `api.tmf639.resource.get` | 5 | TMF639 GET /resource/{id} | yes | yes | unknown |
+| `api.tmf639.resource.patch` | 5 | TMF639 PATCH /resource/{id} | yes | yes | unknown |
+| `api.tmf639.resource.delete` | 5 | TMF639 DELETE /resource/{id} | yes | yes | unknown |
 | `api.tmf654.bucket.list` | 5 | TMF654 GET /bucket | no | no | unknown |
 | `api.tmf654.bucket.get` | 5 | TMF654 GET /bucket/{id} | no | no | unknown |
 | `api.tmf654.topupBalance.list` | 5 | TMF654 GET /topupBalance | no | no | unknown |
@@ -268,6 +270,10 @@ records the deployed commit.
 | `ui.users.manage` | 5 | Create, edit, disable and reset users | yes | yes | unknown |
 | `ui.shell` | 5 | Shell: sidebar, top bar with business date and zone | yes | yes | unknown |
 | `ui.subscribers.list` | 5 | Subscribers list | yes | yes | unknown |
+| `ui.numbers.list` | 5 | Subscriber-number inventory and search | yes | yes | unknown |
+| `ui.numbers.create` | 5 | Create an inventory number | yes | yes | unknown |
+| `ui.numbers.detail` | 5 | Number details, assignments and lock/unlock | yes | yes | unknown |
+| `ui.subscriber.number` | 5 | Product number and order-based number change | yes | yes | unknown |
 | `ui.subscribers.new` | 5 | New subscriber: party, customer, billing account | yes | yes | unknown |
 | `ui.subscriber.edit` | 5 | Edit subscriber: names, statuses, credit limit | yes | yes | unknown |
 | `ui.subscriber.card` | 5 | Subscriber card: account, products, charges, transactions | yes | yes | unknown |

@@ -241,7 +241,7 @@ Reservations alone are insufficient if existing payouts or settlement can ignore
 | 3. Schema and funding core | Additive migrations: account mode, reservation/source accounting, adjustments, transfers, paid intervals and command-run identity. Existing rows default to postpaid. Prove concurrency and rollback with existing populated financial history, including immutable refunds. |
 | 4. API and worker | TMF666 `ratingType: prepaid`; TMF654 resources and hub; order/product states for pending activation and funding suspension; renewal, expiry/resumption, termination credits, transfers, settled documents and durable recovery. Update TMF account references, internal previews, MCP tools and the gap lock together. Preserve postpaid behavior. |
 | 5. Admin UI | Account mode selector/filter; available, reserved and paid-through figures from the bucket; Record top-up, adjustment and transfer (by number); funding status and renewal shortfall; pending activation/resumption; clear refusal and retry messages. Pin request bodies in frontend and backend tests. |
-| 6. Release validation | Mixed prepaid/postpaid demo data with numbers; full backend/frontend/browser checks; TMF639/654 bodies validated against the vendored specs; documented operational recovery and migration rollback limits; review the final diff before commit/push/deployment approval. |
+| 6. Release validation | Mixed prepaid/postpaid demo data with numbers; full backend/frontend/browser checks; TMF639/654 bodies validated against the vendored specs; documented operational recovery and migration rollback limits. Shipped through the normal cycle. |
 
 Stages 3 and 4 are developed together behind an unavailable prepaid create path
 (`ratingType: prepaid` stays a 422) until money accounting and worker recovery are
@@ -309,7 +309,7 @@ Decided by the human (2026-10-20):
 
 7. Number quarantine after release is a setting, `MSISDN_QUARANTINE_DAYS`, default 0.
 8. Subscriber numbers (stage 2) ship on their own, before the prepaid stages are
-   complete; they go through their own commit, push and deployment approval.
+   complete; they ship through the normal cycle (commit, push, deploy, no approval).
 
 9. Late recovery buys one interval from today's authorization date, never historical
    catch-up, even with older funds. Entitlement cannot outlive its persisted grant.
@@ -320,5 +320,5 @@ Decided by the human (2026-10-20):
     history receiver is created.
 
 Design completion and its commit/push are authorized in this session. Development
-starts in another session; implementation commits and deployment remain separately
-reviewable under the project workflow.
+starts in another session; implementation commits and deployment follow CLAUDE.md's
+development cycle (no approval, superseded 2026-10-21).

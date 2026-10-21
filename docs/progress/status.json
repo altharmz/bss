@@ -2,21 +2,21 @@
   "areas": {
     "api": {
       "deployed": null,
-      "implemented": 152,
+      "implemented": 160,
       "items": 188,
-      "tested": 152
+      "tested": 160
     },
     "db": {
       "deployed": null,
-      "implemented": 41,
-      "items": 41,
-      "tested": 41
+      "implemented": 43,
+      "items": 43,
+      "tested": 43
     },
     "ui": {
       "deployed": null,
-      "implemented": 31,
-      "items": 31,
-      "tested": 31
+      "implemented": 35,
+      "items": 35,
+      "tested": 35
     },
     "worker": {
       "deployed": null,
@@ -39,75 +39,93 @@
   ],
   "items": [
     {
+      "area": "db",
+      "deployed": null,
+      "id": "db.subscriber_number",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Subscriber-number inventory (TMF639)"
+    },
+    {
+      "area": "db",
+      "deployed": null,
+      "id": "db.number_assignment",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Effective-dated number assignment history"
+    },
+    {
       "area": "api",
       "deployed": null,
       "id": "api.tmf639.hub.create",
-      "implemented": false,
+      "implemented": true,
       "stage": 5,
-      "tested": false,
+      "tested": true,
       "title": "TMF639 POST /hub"
     },
     {
       "area": "api",
       "deployed": null,
       "id": "api.tmf639.hub.get",
-      "implemented": false,
+      "implemented": true,
       "stage": 5,
-      "tested": false,
+      "tested": true,
       "title": "TMF639 GET /hub/{id}"
     },
     {
       "area": "api",
       "deployed": null,
       "id": "api.tmf639.hub.delete",
-      "implemented": false,
+      "implemented": true,
       "stage": 5,
-      "tested": false,
+      "tested": true,
       "title": "TMF639 DELETE /hub/{id}"
     },
     {
       "area": "api",
       "deployed": null,
       "id": "api.tmf639.resource.list",
-      "implemented": false,
+      "implemented": true,
       "stage": 5,
-      "tested": false,
+      "tested": true,
       "title": "TMF639 GET /resource"
     },
     {
       "area": "api",
       "deployed": null,
       "id": "api.tmf639.resource.create",
-      "implemented": false,
+      "implemented": true,
       "stage": 5,
-      "tested": false,
+      "tested": true,
       "title": "TMF639 POST /resource"
     },
     {
       "area": "api",
       "deployed": null,
       "id": "api.tmf639.resource.get",
-      "implemented": false,
+      "implemented": true,
       "stage": 5,
-      "tested": false,
+      "tested": true,
       "title": "TMF639 GET /resource/{id}"
     },
     {
       "area": "api",
       "deployed": null,
       "id": "api.tmf639.resource.patch",
-      "implemented": false,
+      "implemented": true,
       "stage": 5,
-      "tested": false,
+      "tested": true,
       "title": "TMF639 PATCH /resource/{id}"
     },
     {
       "area": "api",
       "deployed": null,
       "id": "api.tmf639.resource.delete",
-      "implemented": false,
+      "implemented": true,
       "stage": 5,
-      "tested": false,
+      "tested": true,
       "title": "TMF639 DELETE /resource/{id}"
     },
     {
@@ -2197,6 +2215,42 @@
       "stage": 5,
       "tested": true,
       "title": "Subscribers list"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.numbers.list",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Subscriber-number inventory and search"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.numbers.create",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Create an inventory number"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.numbers.detail",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Number details, assignments and lock/unlock"
+    },
+    {
+      "area": "ui",
+      "deployed": null,
+      "id": "ui.subscriber.number",
+      "implemented": true,
+      "stage": 5,
+      "tested": true,
+      "title": "Product number and order-based number change"
     },
     {
       "area": "ui",

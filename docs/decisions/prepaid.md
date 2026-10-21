@@ -100,7 +100,7 @@ using current configuration belong to N4, rather than a time-dependent SQL const
 History prevents deleting referenced numbers/products/items. Downgrade refuses any
 retained number inventory or assignment history. No route, order behavior or prepaid
 account mode is enabled by N2. N3 is next; deployment remains at the independent
-subscriber-number milestone after N6 and requires its separate approval.
+subscriber-number milestone after N6 (no separate approval since 2026-10-21).
 
 Validation: the full backend run passed 1,450 tests with one failure in the currency
 migration regression, which upgraded to `head` and expected an unchanged global FK
@@ -194,3 +194,21 @@ modify bodies are pinned by component tests and replayed against the real backen
 Local validation passed 1,495 backend tests, 284 frontend tests in each timezone,
 backend/frontend lint and five browser smoke tests. N5 is not deployed; N6 owns
 the independent release proofs, progress generation and deployment approval.
+
+## N6: subscriber-number release validation (2026-10-21)
+
+Release evidence is in [the validation record](../subscriber-number-release.md).
+Lock and quarantine mutations each made their targeted test fail and were reverted.
+Three complete backend suites passed 1,495 tests each (CI, dev and the serial progress
+collector); the initial dev attempt had one existing heartbeat timing failure under
+concurrent frontend load. No timing threshold or runtime behavior was changed.
+Backend/frontend lint, documentation drift, 284 frontend tests in each timezone,
+five browser smokes and the collector's 284 UI tests passed. The collector retains
+its two existing pytest warnings.
+
+Progress initially found five TMF639 scope parameter names inconsistent with the
+implemented paths. Correcting only those labels in the source and cached scope,
+checking full equality and preserving measured evidence allowed the standard renderer
+to pass. All number items are implemented/tested and nothing is unscoped. The 28
+TMF654 operations remain planned. No runtime, migration or deployment change is part
+of N6; shipping follows the normal cycle (commit, push, deploy, no approval).

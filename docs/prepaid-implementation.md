@@ -122,11 +122,9 @@ a receipt asserted by an authorized operator.
 | N3: inventory | TMF639 CRUD, fields, paging, filters, PATCH formats and nested validation. Immutable number value and built-in specification; editable descriptions and lock/unlock. Delete only never-assigned numbers. Hubs, outbox events, MCP tools and contract tests. |
 | N4: orders | Built-in msisdn requirement, add/modify/release/cancel through effective-dated assignments and product lookup by realizingResource.id. Preserve existing unchecked documents on products whose specifications do not require numbers. |
 | N5: UI | Number inventory, create/search/lock, number selection in New subscriber, details and number changes through orders; pinned request tests and browser coverage. |
-| N6: release | Negative proofs, three backend passes, lint, frontend/browser checks, contract validation and progress generation. Review diff before separate commit and deployment approval. |
+| N6: release | Contract validation and release notes (operational recovery, rollback limits). Testing, commit, push and deploy follow CLAUDE.md's development cycle; no approval. |
 
-Read catalog, events, frontend and MCP decision records before their slices. Supply
-protected documentation-generator/harness edits as reviewable patches when approval
-is needed; never bypass guards.
+Read catalog, events, frontend and MCP decision records before their slices. Never bypass guards.
 
 Future-dated postpaid orders already complete synchronously. Reserve the assignment
 interval when their order completes, before service starts. Derive current usage from
@@ -522,8 +520,7 @@ configured time zones. MCP keeps read/write scopes and decimal-string amounts.
 
 ## Development acceptance and hand-off
 
-Implement N1..N6 first, commit/push/deploy numbers only with the normal separate
-approvals. Then develop schema/funding and API/worker behind unavailable prepaid
+Implement N1..N6 first and ship numbers through the normal cycle. Then develop schema/funding and API/worker behind unavailable prepaid
 creation, followed by UI and release validation. N1 contract vendoring and fixture
 validation are implementation prerequisites, not unfinished business design.
 Update progress scope as features enter development; do not mark designed features
@@ -551,8 +548,8 @@ Required executable proofs in addition to the original acceptance list:
 - Upgrade populated history as database owner; refusal of lossy downgrades and startup
   protection against exposing prepaid creation before the complete core is enabled.
 
-Run the project-required negative proofs, lint, three full backend passes for a slice,
-frontend checks and browser tests when implementing. Record actual evidence then.
+Testing follows CLAUDE.md's development cycle: one full run by the pre-commit hook;
+anything more (negative proofs, browser tests, extra passes) only when judged useful.
 No runtime code, migrations, vendored specs or deployment are part of this design
 commit. The remaining work is implementation and its verification; there are no
 open policy choices requiring another design session.

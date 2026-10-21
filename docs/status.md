@@ -7,6 +7,20 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**N6 subscriber-number release validation (2026-10-21).** Local validation is
+complete: lock/quarantine negative proofs failed as expected and were reverted;
+three full backend passes each passed 1,495 tests (CI, dev, progress collector);
+284 frontend tests in each timezone, five browser smokes, backend/frontend lint
+and documentation drift checks passed. The initial backend attempt had one
+heartbeat timing failure under concurrent load; subsequent passes succeeded without
+code changes. Progress was collected successfully; five TMF639 scope parameter labels
+were corrected before rerendering from unchanged evidence. All number scope items
+are implemented/tested, no items are unscoped, and TMF654 runtime remains planned.
+See [release evidence](subscriber-number-release.md). No deployment was performed
+yet; commit, push and deploy follow the normal cycle (no approval). After shipping
+numbers, the next development milestone is prepaid schema/funding and worker core
+behind unavailable prepaid account creation. Confirm `~/bss/DEPLOYED` on deployment.
+
 **N5 subscriber-number UI (2026-10-21).** Adds `/numbers`, inventory creation/search,
 assignment details and locks, requiring-offering number selection, an optional initial
 product step in New subscriber, and order-based number changes from the card. Request
