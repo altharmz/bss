@@ -44,6 +44,7 @@ Durable internal prepaid command journal; no runtime dispatcher or public API ye
 | `prepaid_command_state_check` | check | `CHECK ((state = ANY (ARRAY['pending'::text, 'completed'::text, 'failedTechnical'::text])))` |
 | `prepaid_command_pkey` | primary key | `PRIMARY KEY (id)` |
 | `prepaid_command_hold_owner` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
+| `prepaid_command_grant_owner` | unique | `UNIQUE (id, billing_account_id, kind)` |
 
 ## Indexes
 
@@ -51,6 +52,7 @@ Durable internal prepaid command journal; no runtime dispatcher or public API ye
 |---|---|---|
 | `prepaid_command_billing_account_id_idx` | `CREATE INDEX prepaid_command_billing_account_id_idx ON prepaid_command USING btree (billing_account_id)` | no |
 | `prepaid_command_due_date_id_idx` | `CREATE INDEX prepaid_command_due_date_id_idx ON prepaid_command USING btree (due_date, id) WHERE (state <> 'completed'::text)` | no |
+| `prepaid_command_grant_owner` | `CREATE UNIQUE INDEX prepaid_command_grant_owner ON prepaid_command USING btree (id, billing_account_id, kind)` | yes |
 | `prepaid_command_pkey` | `CREATE UNIQUE INDEX prepaid_command_pkey ON prepaid_command USING btree (id)` | yes |
 
 ## Triggers
@@ -61,4 +63,4 @@ Durable internal prepaid command journal; no runtime dispatcher or public API ye
 
 ## Referenced by
 
-[`billing_run`](billing_run.md)
+[`billing_run`](billing_run.md), [`funded_interval`](funded_interval.md)

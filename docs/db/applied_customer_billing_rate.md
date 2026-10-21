@@ -49,6 +49,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `applied_customer_billing_rate_no_lines_no_tax` | check | `CHECK (((applied_tax <> '[]'::jsonb) OR (tax_amount = (0)::numeric)))` |
 | `applied_customer_billing_rate_period_check` | check | `CHECK (((NOT isempty(period)) AND (NOT lower_inf(period)) AND (NOT upper_inf(period))))` |
 | `applied_customer_billing_rate_pkey` | primary key | `PRIMARY KEY (id)` |
+| `abr_grant_identity` | unique | `UNIQUE (id, product_id, billing_account_id, billing_run_id, period, currency, amount, tax_amount, charge_type)` |
 | `applied_customer_billing_rate_id_product_id_key` | unique | `UNIQUE (id, product_id)` |
 | `applied_customer_billing_rate_refunds_rate_id_key` | unique | `UNIQUE (refunds_rate_id)` |
 
@@ -56,6 +57,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `abr_grant_identity` | `CREATE UNIQUE INDEX abr_grant_identity ON applied_customer_billing_rate USING btree (id, product_id, billing_account_id, billing_run_id, period, currency, amount, tax_amount, charge_type)` | yes |
 | `abr_one_per_start` | `CREATE UNIQUE INDEX abr_one_per_start ON applied_customer_billing_rate USING btree (product_id, charge_type, lower(period))` | no |
 | `applied_customer_billing_rate_billing_account_id_idx` | `CREATE INDEX applied_customer_billing_rate_billing_account_id_idx ON applied_customer_billing_rate USING btree (billing_account_id)` | no |
 | `applied_customer_billing_rate_billing_run_id_idx` | `CREATE INDEX applied_customer_billing_rate_billing_run_id_idx ON applied_customer_billing_rate USING btree (billing_run_id)` | no |
@@ -69,3 +71,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 
 - `abr_default_offering`: `CREATE TRIGGER abr_default_offering BEFORE INSERT ON applied_customer_billing_rate FOR EACH ROW EXECUTE FUNCTION abr_default_offering()`
 - `applied_customer_billing_rate_set_updated_at`: `CREATE TRIGGER applied_customer_billing_rate_set_updated_at BEFORE UPDATE ON applied_customer_billing_rate FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
+
+## Referenced by
+
+[`funded_interval`](funded_interval.md)

@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0039**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0040**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -46,6 +46,7 @@ PostgreSQL schema at Alembic head **0039**, read from `pg_catalog` of a throwawa
 | [`funding_hold_source`](funding_hold_source.md) | billing | Internal source-pinned funding hold foundation; no public API. |
 | [`funding_command_hold`](funding_command_hold.md) | billing | Retained internal command-to-hold retry identity; no public API or worker caller. |
 | [`prepaid_command`](prepaid_command.md) | billing | Durable internal prepaid command journal; no runtime dispatcher or public API yet. Request and completed result are retained. |
+| [`funded_interval`](funded_interval.md) | billing | Immutable prepaid service grants. Persistence foundation only; the future billing owner must atomically post and settle the charge, convert its hold and complete the command. |
 | [`funding_hold_conversion`](funding_hold_conversion.md) | billing | Retained internal command hold conversion; no runtime caller. |
 | [`funding_conversion_source`](funding_conversion_source.md) | billing | Retained internal command hold conversion; no runtime caller. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
@@ -112,6 +113,7 @@ flowchart LR
     funding_hold_source[funding_hold_source]
     funding_command_hold[funding_command_hold]
     prepaid_command[prepaid_command]
+    funded_interval[funded_interval]
     funding_hold_conversion[funding_hold_conversion]
     funding_conversion_source[funding_conversion_source]
   end
@@ -164,6 +166,11 @@ flowchart LR
   event_delivery -->|"event_id"| event
   event_delivery -->|"subscription_id"| event_subscription
   financial_account -->|"party_id"| party
+  funded_interval -->|"applied_rate_id, product_id, billing_account_id, billing_run_id, period, amount, tax_amount, charge_type"| applied_customer_billing_rate
+  funded_interval -->|"billing_account_id, rating_type"| billing_account
+  funded_interval -->|"billing_run_id, command_id"| billing_run
+  funded_interval -->|"command_id, billing_account_id, command_kind"| prepaid_command
+  funded_interval -->|"product_id, billing_account_id"| product
   funding_command_hold -->|"hold_id, billing_account_id"| funding_hold
   funding_conversion_source -->|"allocation_id"| bill_allocation
   funding_conversion_source -->|"hold_id, billing_account_id"| funding_hold_conversion
@@ -820,6 +827,25 @@ erDiagram
     jsonb result
     text error
   }
+  funded_interval {
+    uuid id PK
+    uuid product_id FK
+    uuid billing_account_id FK
+    text currency FK
+    text rating_type FK
+    uuid command_id FK
+    text command_kind FK
+    uuid billing_run_id FK
+    uuid applied_rate_id FK
+    charge_type charge_type FK
+    timestamptz authorized_at
+    daterange period FK
+    date anchor_date
+    integer interval_index
+    numeric amount FK
+    numeric tax_amount FK
+    jsonb quote
+  }
   funding_hold_conversion {
     uuid hold_id PK,FK
     uuid billing_account_id FK
@@ -842,6 +868,7 @@ erDiagram
     uuid id PK
   }
   applied_customer_billing_rate |o--o{ applied_customer_billing_rate : "refunds_rate_id, product_id"
+  applied_customer_billing_rate ||--o{ funded_interval : "applied_rate_id, product_id, billing_account_id, billing_run_id, period, currency, amount, tax_amount, charge_type"
   bill_allocation ||--o{ funding_conversion_source : "allocation_id"
   bill_presentation_media ||--o{ account_presentation_media : "media_id"
   billing_account ||--o{ account_presentation_media : "billing_account_id"
@@ -849,6 +876,7 @@ erDiagram
   billing_account ||--o{ bill_allocation : "billing_account_id, currency"
   billing_account ||--o{ customer_bill : "billing_account_id, currency"
   billing_account ||--o{ customer_bill_on_demand : "billing_account_id"
+  billing_account ||--o{ funded_interval : "billing_account_id, currency, rating_type"
   billing_account ||--o{ funding_hold : "billing_account_id, currency"
   billing_account ||--o{ payment : "billing_account_id, currency"
   billing_account ||--o{ prepaid_bucket : "billing_account_id, currency, rating_type"
@@ -856,6 +884,7 @@ erDiagram
   billing_account ||--o{ refund : "billing_account_id, currency"
   billing_run ||--o{ applied_customer_billing_rate : "billing_run_id"
   billing_run ||--o{ customer_bill : "billing_run_id"
+  billing_run ||--o{ funded_interval : "billing_run_id, command_id"
   customer_bill |o--o{ applied_customer_billing_rate : "customer_bill_id, billing_account_id"
   customer_bill |o--o{ bill_allocation : "credit_bill_id, billing_account_id"
   customer_bill |o--o{ customer_bill_on_demand : "customer_bill_id"
@@ -876,7 +905,9 @@ erDiagram
   payment |o--o{ refund : "payment_id, billing_account_id"
   payment |o--o{ refund_source : "payment_id, billing_account_id"
   prepaid_command |o--o{ billing_run : "command_id"
+  prepaid_command ||--o{ funded_interval : "command_id, billing_account_id, command_kind"
   product ||--o{ applied_customer_billing_rate : "product_id, billing_account_id"
+  product ||--o{ funded_interval : "product_id, billing_account_id"
   product_offering ||--o{ applied_customer_billing_rate : "product_offering_id"
   refund ||--o{ refund_source : "refund_id, billing_account_id"
 ```
@@ -1015,7 +1046,7 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 | `billing_run_trigger` | `scheduled`, `catchUp`, `retry` | [`billing_run.trigger`](billing_run.md) |
 | `catalog_job_kind` | `ImportJob`, `ExportJob` | [`catalog_job.kind`](catalog_job.md) |
 | `catalog_job_status` | `Succeeded`, `Failed` | [`catalog_job.status`](catalog_job.md) |
-| `charge_type` | `recurring`, `refund` | [`applied_customer_billing_rate.charge_type`](applied_customer_billing_rate.md) |
+| `charge_type` | `recurring`, `refund` | [`applied_customer_billing_rate.charge_type`](applied_customer_billing_rate.md), [`funded_interval.charge_type`](funded_interval.md) |
 | `customer_bill_on_demand_state_type` | `inProgress`, `rejected`, `done`, `terminatedWithError` | [`customer_bill_on_demand.state`](customer_bill_on_demand.md) |
 | `customer_bill_state_type` | `new`, `onHold`, `validated`, `sent`, `settled`, `partiallyPaid` | [`customer_bill.state`](customer_bill.md), [`customer_bill_state_change.from_state`](customer_bill_state_change.md), [`customer_bill_state_change.to_state`](customer_bill_state_change.md) |
 | `customer_status` | `Created`, `Active`, `Inactive` | [`customer.status`](customer.md) |

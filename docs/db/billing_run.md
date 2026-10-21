@@ -43,6 +43,7 @@ Daily runs have one identity per business date; prepaid command runs have one re
 | `billing_run_kind_check` | check | `CHECK ((kind = ANY (ARRAY['daily'::text, 'prepaidCommand'::text])))` |
 | `billing_run_pkey` | primary key | `PRIMARY KEY (id)` |
 | `billing_run_command_id_key` | unique | `UNIQUE (command_id)` |
+| `billing_run_grant_command` | unique | `UNIQUE (id, command_id)` |
 
 ## Indexes
 
@@ -50,6 +51,7 @@ Daily runs have one identity per business date; prepaid command runs have one re
 |---|---|---|
 | `billing_run_command_id_key` | `CREATE UNIQUE INDEX billing_run_command_id_key ON billing_run USING btree (command_id)` | yes |
 | `billing_run_daily_date` | `CREATE UNIQUE INDEX billing_run_daily_date ON billing_run USING btree (run_date) WHERE (kind = 'daily'::text)` | no |
+| `billing_run_grant_command` | `CREATE UNIQUE INDEX billing_run_grant_command ON billing_run USING btree (id, command_id)` | yes |
 | `billing_run_pkey` | `CREATE UNIQUE INDEX billing_run_pkey ON billing_run USING btree (id)` | yes |
 
 ## Triggers
@@ -59,4 +61,4 @@ Daily runs have one identity per business date; prepaid command runs have one re
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`worker_request`](worker_request.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`funded_interval`](funded_interval.md), [`worker_request`](worker_request.md)

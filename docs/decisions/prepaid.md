@@ -1,5 +1,35 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2c3a: retained funded intervals (2026-10-21)
+
+Migration `0040` adds immutable `funded_interval` history: actual authorization
+instant, finite nonempty half-open coverage, original anchor/index, exact amount
+and tax total, an immutable quote document, and product/command/run/ABR links.
+Unique command/product and product/anchor/index identities prevent duplicate grants;
+GiST exclusion prevents overlapping coverage. Zero-price grants are valid.
+
+Composite foreign keys require a prepaid account and matching product ownership,
+an order/renewal command for that account, its own command run, and an original
+recurring ABR with identical product/account/run/currency/coverage/amount/tax.
+Referenced financial identity cannot subsequently be changed underneath a grant.
+The retained command and product already protect account history; no independent
+account-history registration is needed. Downgrade refuses retained grants, while
+an empty upgrade/downgrade preserves existing financial history.
+
+This is persistence only. The future posting caller must validate the quote shape,
+calendar anchor/index and authorization business date, then create the charge,
+settled offCycle bill, hold conversion, grant and completed command result in one
+transaction under billing ownership. The table does not itself prove settlement
+or expose entitlement. No posting, producer, dispatcher, projection or API is enabled;
+prepaid creation remains unavailable. Next: P2c3b atomic posting and document
+projection, then worker dispatch/recovery and internal retry operations. Later
+slices still own prepaid order/renewal lifecycle, action APIs, MCP/UI and release proofs.
+
+Validation: all 22 new persistence cases pass. The first full run passed 1,628
+tests and failed only the non-superuser migration test's old table count (51
+instead of 52); its upgrade/downgrade steps succeeded. Both schema-count assertions
+now include the new table. Generated database references were refreshed.
+
 ## P2c2: command billing-run identity isolation (2026-10-21)
 
 Migration `0039` preserves daily run IDs/history and replaces date uniqueness with

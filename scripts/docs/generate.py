@@ -178,6 +178,7 @@ AREAS = {
         "funding_hold_source",
         "funding_command_hold",
         "prepaid_command",
+        "funded_interval",
         "funding_hold_conversion",
         "funding_conversion_source",
     ),

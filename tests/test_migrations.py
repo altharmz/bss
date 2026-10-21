@@ -374,7 +374,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 51  # 50 domain tables + alembic_version
+    assert tables == 52  # 51 domain tables + alembic_version
 
 
 def test_0027_offering_changes(temp_db_url):

@@ -7,6 +7,16 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2c3a funded-interval persistence (2026-10-21).** Migration `0040` retains
+immutable prepaid grants with exact command/run/recurring-charge ownership and
+quote totals, non-overlapping coverage and unique replay/calendar identities.
+Persistence tests cover invalid links, retention, zero-price adjacent renewal,
+rollback and populated migration round-trip. No posting, entitlement projection
+or worker caller is enabled; prepaid creation stays unavailable. Next: atomic
+posting/settlement and document projection, then worker dispatch/recovery and
+internal retry operations. See the
+[decision](decisions/prepaid.md#p2c3a-retained-funded-intervals-2026-10-21).
+
 **P2c2 command run identities (2026-10-21).** Migration `0039` separates daily
 date uniqueness from retained one-per-command run identities. Daily scheduling,
 health, retries, counts, bill cycles and on-demand readiness exclude command runs;

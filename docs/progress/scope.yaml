@@ -137,6 +137,7 @@ items:
   - {id: api.tmf620.importJob.create, area: api, stage: 5, method: POST, path: /tmf-api/productCatalogManagement/v5/importJob, title: "Import a catalog document (all or nothing)"}
   - {id: api.tmf620.importJob.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/productCatalogManagement/v5/importJob/{job_id}", title: "Delete an import job"}
   # ---------------- db: tables ----------------
+  - {id: db.funded_interval, area: db, stage: 5, table: funded_interval, title: "Retained prepaid funded service intervals"}
   - {id: db.product_specification, area: db, stage: 1, table: product_specification, title: "Product specifications (TMF620)"}
   - {id: db.product_offering, area: db, stage: 1, table: product_offering, title: "Product offerings (TMF620)"}
   - {id: db.product_offering_price, area: db, stage: 1, table: product_offering_price, title: "Offering prices (TMF620)"}

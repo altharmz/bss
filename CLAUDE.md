@@ -115,8 +115,10 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   and refunds select around held sources. No runtime caller creates holds yet.
   P2c1 adds the durable command request/result and technical-retry journal in
   migration `0038`, without a runtime producer or dispatcher. Command run
-  identities are isolated in P2c2 (migration `0039`). Next: posting/funded intervals
-  and worker recovery.
+  identities are isolated in P2c2 (migration `0039`). P2c3a retains immutable funded
+  intervals with matching command/run/charge identities (migration `0040`), with no
+  posting caller or entitlement projection. Next: atomic posting and document
+  projection, then worker recovery.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).
