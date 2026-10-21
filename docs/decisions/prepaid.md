@@ -1,5 +1,27 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2a: pure shared-funding core (2026-10-21)
+
+`app/billing/funding.py` plans exact source amounts after combined consumption and
+outstanding holds. It preserves settlement's payment-before-credit-note ordering,
+then orders adjustment, transfer and reversal credits by kind, availability instant
+and UUID. The repository must supply one account/currency under the account lock;
+this pure layer neither writes reservations nor enables a financial path.
+
+Source corruption (including overconsumption, duplicate identities and nonfinite
+amounts) is a technical failure, distinct from an ordinary insufficient-funds result.
+Reconciliation requires unused sources minus unpaid obligations to equal the ledger;
+unpaid obligations include unbilled charges and issued bills' remaining amounts.
+Allocations reduce both sides of that source/obligation difference, leaving the
+ledger unchanged. Spendable ledger balance then subtracts outstanding holds once.
+
+Tests cover combined holds/consumption, exact fractional selection, deterministic
+ordering, duplicate and invalid sources, zero funding, shortfalls and reconciliation
+before/after settlement. No migration, API, existing settlement or worker changes
+are included. P2b remains shared persistence, legacy-source reconciliation and
+database combined bounds, followed by wiring every consuming path and durable
+worker/recovery. Prepaid account creation remains unavailable until those proofs pass.
+
 ## P1: account mode and balance identities (2026-10-21)
 
 The first prepaid persistence slice is migration `0034`: checked
