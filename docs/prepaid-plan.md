@@ -250,6 +250,24 @@ database can store the mode.
 
 ## Acceptance criteria
 
+### Remaining implementation estimate after P2c4b (2026-10-21)
+
+Estimate: **14–20 further reviewable slices**, at the current small-commit size.
+These are planning ranges, not new scope or a completion guarantee:
+
+| Remaining area | Slices |
+|---|---:|
+| Lifecycle: entitlement/manual vs funding suspension, order completion, start producers, renewal/resumption producers, cancellation/termination and offering changes | 5–7 |
+| TMF654 and money: balance views, top-ups/direct payments, operator reservations/expiry, adjustments, transfers/fees, history/events/idempotency | 5–7 |
+| Account-mode enablement, reference/preview integration and MCP | 1–2 |
+| Admin UI and pinned request tests | 2–3 |
+| Mixed-mode release/recovery evidence and operational documentation | 1 |
+
+Lifecycle and action APIs contain the largest uncertainty, particularly termination
+credits, scheduled-order cancellation and transfer source accounting. Re-estimate
+after lifecycle producers work end to end. Prepaid creation remains unavailable
+until its core lifecycle and financial recovery requirements are complete.
+
 - Numbers: a duplicate or malformed `value` is refused; a locked, busy or unknown number
   rejects the order; a number realizes at most one live product; termination and
   cancellation return it to `idle`; a modify item moves a product to a new number;

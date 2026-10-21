@@ -58,11 +58,17 @@ def test_shortfall_remains_pending_and_recovers_on_next_tick(db_conn):
     db_conn.commit()
     assert dispatch(db_conn, now) == [cmd["id"]]
     assert commands.get(db_conn, cmd["id"])["state"] == "pending"
+    reason = commands.needs_topup(db_conn, cmd["id"])
+    assert reason["required"] > reason["available"]
+    assert reason["observed_at"] == now
+    assert commands.get(db_conn, cmd["id"])["attempts"] == 0
     assert db_conn.execute("SELECT count(*) FROM funded_interval").fetchone() == (1,)
     make_payment(db_conn, acc, "20")
     db_conn.commit()
     later = now + timedelta(days=1)
     assert dispatch(db_conn, later) == [cmd["id"]]
+    assert commands.needs_topup(db_conn, cmd["id"]) is None
+    assert db_conn.execute("SELECT count(*) FROM prepaid_funding_shortfall").fetchone() == (1,)
     assert db_conn.execute(
         "SELECT lower(period) FROM funded_interval WHERE command_id = %s", (cmd["id"],)
     ).fetchone() == (later.date(),)

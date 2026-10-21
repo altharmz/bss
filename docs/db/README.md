@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0041**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0042**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -46,6 +46,7 @@ PostgreSQL schema at Alembic head **0041**, read from `pg_catalog` of a throwawa
 | [`funding_hold_source`](funding_hold_source.md) | billing | Internal source-pinned funding hold foundation; no public API. |
 | [`funding_command_hold`](funding_command_hold.md) | billing | Retained internal command-to-hold retry identity; no public API or worker caller. |
 | [`prepaid_command`](prepaid_command.md) | billing | Durable internal prepaid command journal; no runtime dispatcher or public API yet. Request and completed result are retained. |
+| [`prepaid_funding_shortfall`](prepaid_funding_shortfall.md) | billing | Retained needs-top-up observations; current only while the command is pending. Not technical retry attempts. |
 | [`funded_interval`](funded_interval.md) | billing | Immutable prepaid service grants. Persistence foundation only; the future billing owner must atomically post and settle the charge, convert its hold and complete the command. |
 | [`funding_hold_conversion`](funding_hold_conversion.md) | billing | Retained internal command hold conversion; no runtime caller. |
 | [`funding_conversion_source`](funding_conversion_source.md) | billing | Retained internal command hold conversion; no runtime caller. |
@@ -114,6 +115,7 @@ flowchart LR
     funding_hold_source[funding_hold_source]
     funding_command_hold[funding_command_hold]
     prepaid_command[prepaid_command]
+    prepaid_funding_shortfall[prepaid_funding_shortfall]
     funded_interval[funded_interval]
     funding_hold_conversion[funding_hold_conversion]
     funding_conversion_source[funding_conversion_source]
@@ -199,6 +201,7 @@ flowchart LR
   payment -->|"billing_account_id"| billing_account
   prepaid_bucket -->|"billing_account_id, rating_type"| billing_account
   prepaid_command -->|"billing_account_id"| billing_account
+  prepaid_funding_shortfall -->|"command_id"| prepaid_command
   product -->|"billing_account_id"| billing_account
   product -->|"created_by_item_id"| product_order_item
   product -->|"product_offering_id"| product_offering
@@ -831,6 +834,12 @@ erDiagram
     jsonb result
     text error
   }
+  prepaid_funding_shortfall {
+    uuid command_id PK,FK
+    timestamptz observed_at PK
+    numeric required
+    numeric available
+  }
   funded_interval {
     uuid id PK
     uuid product_id FK
@@ -917,6 +926,7 @@ erDiagram
   payment |o--o{ refund_source : "payment_id, billing_account_id"
   prepaid_command |o--o{ billing_run : "command_id"
   prepaid_command ||--o{ funded_interval : "command_id, billing_account_id, command_kind"
+  prepaid_command ||--o{ prepaid_funding_shortfall : "command_id"
   product ||--o{ applied_customer_billing_rate : "product_id, billing_account_id"
   product ||--o{ funded_interval : "product_id, billing_account_id"
   product_offering ||--o{ applied_customer_billing_rate : "product_offering_id"

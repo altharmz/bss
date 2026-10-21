@@ -7,6 +7,7 @@ technical failure only in a fresh transaction after rolling back those effects.
 """
 
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -90,7 +91,57 @@ def _locked(conn: psycopg.Connection, command_id: UUID, now: datetime) -> Row:
         raise ValueError("unknown prepaid command")
     if now < (row["attempted_at"] or row["created_at"]):
         raise ValueError("command decision precedes recorded history")
+    latest = fetch_one(
+        conn,
+        "SELECT observed_at FROM prepaid_funding_shortfall WHERE command_id = %s"
+        " ORDER BY observed_at DESC LIMIT 1",
+        (command_id,),
+    )
+    if latest is not None and now < latest["observed_at"]:
+        raise ValueError("command decision precedes recorded funding history")
     return row
+
+
+def needs_topup(conn: psycopg.Connection, command_id: UUID) -> Row | None:
+    """Latest funding reason, only while pending; retained history survives recovery."""
+    return fetch_one(
+        conn,
+        "SELECT s.* FROM prepaid_funding_shortfall s JOIN prepaid_command c ON c.id = s.command_id"
+        " WHERE c.id = %s AND c.state = 'pending' ORDER BY s.observed_at DESC LIMIT 1",
+        (command_id,),
+    )
+
+
+def record_shortfall(
+    conn: psycopg.Connection,
+    command_id: UUID,
+    *,
+    required: Decimal,
+    available: Decimal,
+    now: datetime,
+) -> None:
+    """Retain a business decision after posting rollback, without technical backoff."""
+    row = _locked(conn, command_id, now)
+    if row["state"] == "completed":
+        return
+    if not (required.is_finite() and available.is_finite() and required > available >= 0):
+        raise ValueError("invalid funding shortfall")
+    if row["state"] == "failedTechnical":
+        retry(conn, command_id, now=now)
+    existing = fetch_one(
+        conn,
+        "SELECT * FROM prepaid_funding_shortfall WHERE command_id = %s AND observed_at = %s",
+        (command_id, now),
+    )
+    if existing is not None:
+        if (existing["required"], existing["available"]) != (required, available):
+            raise ValueError("funding decision mismatch")
+        return
+    conn.execute(
+        "INSERT INTO prepaid_funding_shortfall (command_id, observed_at, required, available)"
+        " VALUES (%s, %s, %s, %s)",
+        (command_id, now, required, available),
+    )
 
 
 def ready(conn: psycopg.Connection, command_id: UUID, *, now: datetime, today: date) -> Row:

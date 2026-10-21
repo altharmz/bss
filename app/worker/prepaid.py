@@ -33,9 +33,9 @@ def process_commands(
 ) -> list[UUID]:
     """Attempt each eligible command once per tick, independently of daily gaps.
 
-    Funding shortfalls remain pending for the next tick. Durable funding-reason
-    projection belongs to the lifecycle extension; they never become technical
-    failures. Unsupported transfer commands are left to their future dispatcher.
+    Funding shortfalls retain a needs-top-up reason and remain pending for the
+    next tick. They never become technical failures. Unsupported transfer commands
+    are left to their future dispatcher.
     """
     ensure_ownership(conn)
     now = clock.now()
@@ -72,6 +72,13 @@ def process_commands(
                 try:
                     post_interval(conn, cmd["id"], now=now, tz=tz)
                 except InsufficientFunds as shortfall:
+                    commands.record_shortfall(
+                        conn,
+                        cmd["id"],
+                        required=shortfall.required,
+                        available=shortfall.available,
+                        now=now,
+                    )
                     log.info("prepaid command %s needs top-up: %s", cmd["id"], shortfall)
                 except Exception as error:
                     commands.fail(conn, cmd["id"], str(error) or type(error).__name__, now=now)

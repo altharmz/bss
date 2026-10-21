@@ -1,5 +1,23 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2c4b: durable funding shortfalls (2026-10-21)
+
+Migration `0042` adds append-only funding observations keyed by command and injected
+decision instant. After posting rolls back a shortfall, dispatch retains the exact
+required and spendable amounts under the existing command/account locks. Funding
+decisions leave the command pending with no technical backoff or attempt increment.
+A technical retry that reaches funding checks returns to pending. Repeated identical
+decisions at the same instant are idempotent; conflicting decisions are refused.
+Later decisions cannot precede retained funding history.
+
+The internal `needs_topup` projection returns the latest observation only while its
+command is pending. Successful posting or technical failure supersedes that current
+projection; earlier observations remain for audit. A lost transaction retains neither
+the observation nor partial posting. Downgrade refuses retained funding observations.
+No public API, entitlement projection, command producer or account creation is enabled.
+Next is lifecycle integration, including separate manual/funding suspension causes,
+paid-through entitlement and atomic order completion.
+
 ## P2c4a: retained-command dispatch (2026-10-21)
 
 The billing owner dispatches existing order/renewal commands on each tick, after

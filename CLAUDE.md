@@ -123,8 +123,8 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   purchase posting and exact-source multi-bill conversion (migration `0041`). Next:
   P2c3b4 adds actual-date renewal price/tax selection and atomic recovery. P2c4a
   dispatches queued purchase/renewal commands with durable technical retries.
-  Funding shortfalls remain pending and logged. Next: lifecycle integration,
-  durable funding reasons and command producers.
+  P2c4b retains funding shortfall amounts and decision instants in migration `0042`,
+  without technical backoff. Next: lifecycle integration and command producers.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).

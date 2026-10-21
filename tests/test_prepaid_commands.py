@@ -114,6 +114,58 @@ def test_due_date_and_chronology_are_enforced(db_conn):
         commands.retry(db_conn, uuid4(), now=NOW)
 
 
+def test_funding_decisions_survive_recovery_and_enforce_chronology(db_conn):
+    row = enqueue(db_conn, account(db_conn))
+    key = row["id"]
+    commands.fail(db_conn, key, "broken", now=NOW)
+    at = NOW + timedelta(minutes=1)
+    commands.record_shortfall(db_conn, key, required=D(20), available=D(5), now=at)
+    db_conn.commit()
+    current = commands.get(db_conn, key)
+    assert current["state"] == "pending"
+    assert current["attempts"] == 1
+    assert current["error"] is None and current["next_retry_at"] is None
+    commands.record_shortfall(db_conn, key, required=D(20), available=D(5), now=at)
+    with pytest.raises(ValueError, match="mismatch"):
+        commands.record_shortfall(db_conn, key, required=D(21), available=D(5), now=at)
+    with pytest.raises(ValueError, match="precedes"):
+        commands.complete(db_conn, key, {}, now=NOW)
+    with rejected(db_conn, errors.CheckViolation):
+        db_conn.execute("DELETE FROM prepaid_funding_shortfall")
+    commands.complete(db_conn, key, {"ok": True}, now=at)
+    assert commands.needs_topup(db_conn, key) is None
+    assert db_conn.execute("SELECT count(*) FROM prepaid_funding_shortfall").fetchone() == (1,)
+
+
+def test_shortfall_rollback_and_latest_observation(db_conn):
+    row = enqueue(db_conn, account(db_conn))
+    db_conn.commit()
+    key = row["id"]
+    commands.record_shortfall(db_conn, key, required=D(20), available=D(5), now=NOW)
+    db_conn.rollback()
+    assert commands.needs_topup(db_conn, key) is None
+    for offset, amount in enumerate((D(5), D(10))):
+        commands.record_shortfall(
+            db_conn, key, required=D(20), available=amount, now=NOW + timedelta(minutes=offset)
+        )
+    assert commands.needs_topup(db_conn, key)["available"] == D(10)
+
+
+def test_shortfall_migration_preserves_commands_and_refuses_history_loss(temp_db_url):
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0041")
+    with psycopg.connect(temp_db_url) as conn:
+        row = enqueue(conn, account(conn))
+    command.upgrade(cfg, "0042")
+    command.downgrade(cfg, "0041")
+    command.upgrade(cfg, "0042")
+    with psycopg.connect(temp_db_url) as conn:
+        assert commands.get(conn, row["id"]) == row
+        commands.record_shortfall(conn, row["id"], required=D(20), available=D(5), now=NOW)
+    with pytest.raises(Exception, match="funding decisions must be retained"):
+        command.downgrade(cfg, "0041")
+
+
 def test_concurrent_journal_and_hold_retries_share_identity_lock(db_conn, migrated_db_url):
     acc = account(db_conn)
     db_conn.commit()
