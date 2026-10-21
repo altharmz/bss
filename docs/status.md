@@ -7,6 +7,15 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2c3b2 delayed accepted starts (2026-10-21).** The internal single-product
+poster preserves an accepted initial order's exact money/tax/cadence while buying
+one full interval from its actual authorization business date. Original quote
+dates remain immutable; grant coverage and documents show the actual interval.
+Late renewals still fail closed pending fresh price/tax selection. Tests cover
+delays, timezone boundaries, replay and posting-stage rollback. Next: multi-product
+conversion and renewal recovery, then dispatch. Prepaid creation stays unavailable;
+see [the decision](decisions/prepaid.md#p2c3b2-delayed-accepted-starts-2026-10-21).
+
 **P2c3b1 single-product posting (2026-10-21).** Internal billing-owner posting now
 atomically writes the recurring ABR, settled offCycle document, exact-source hold
 conversion, grant and completed command/run. Replay retains the result; failures

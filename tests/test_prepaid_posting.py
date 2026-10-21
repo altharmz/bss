@@ -2,7 +2,7 @@
 
 import base64
 import json
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 from decimal import Decimal as D
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -90,6 +90,70 @@ def test_zero_purchase_needs_no_allocations(db_conn):
     assert db_conn.execute("SELECT amount FROM funded_interval").fetchone() == (D(0),)
 
 
+@pytest.mark.parametrize("days", [1, 45, 400])
+def test_delayed_start_keeps_accepted_money_and_buys_only_today(db_conn, days):
+    acc, _, cmd, _ = prepared(db_conn)
+    assert worker_db.acquire_ownership(db_conn)
+    now = NOW + timedelta(days=days)
+    result = post(db_conn, cmd, now)
+    db_conn.commit()
+    grant = db_conn.execute(
+        "SELECT lower(period), upper(period), anchor_date, interval_index, quote, authorized_at"
+        " FROM funded_interval"
+    ).fetchone()
+    assert grant[0] == grant[2] == now.date()
+    assert (
+        grant[1]
+        == prepaid.IntervalQuote.model_validate(dict(cmd["request"], anchor=now.date().isoformat()))
+        .period()
+        .end
+    )
+    assert grant[3:] == (0, cmd["request"], now)
+    assert commands.get(db_conn, cmd["id"])["request"] == cmd["request"]
+    bill = billing.get_bill(db_conn, result["bill_id"])
+    assert bill["amount_due"] == D(12) and bill["bill_date"] == now.date()
+    document = json.loads(base64.b64decode(bill["bill_document"]))
+    assert document["billingPeriod"]["start"] == now.date().isoformat()
+    assert funding.load(db_conn, acc["id"]).spendable == D(18)
+    assert post(db_conn, cmd, now + timedelta(days=3)) == result
+
+
+def test_delayed_start_uses_authorization_business_date(db_conn):
+    _, _, cmd, _ = prepared(db_conn)
+    assert worker_db.acquire_ownership(db_conn)
+    now = NOW.astimezone(UTC).replace(hour=22)
+    post(db_conn, cmd, now)
+    assert db_conn.execute("SELECT lower(period) FROM funded_interval").fetchone() == (
+        now.date() + timedelta(days=1),
+    )
+
+
+def test_late_renewal_requires_fresh_quote_and_retains_hold(db_conn):
+    acc, _, cmd, _ = prepared(db_conn)
+    assert worker_db.acquire_ownership(db_conn)
+    post(db_conn, cmd)
+    now = NOW.replace(month=2)
+    renewal = commands.enqueue(
+        db_conn,
+        uuid4(),
+        acc["id"],
+        kind="renewal",
+        due_date=now.date(),
+        request=dict(cmd["request"], index=1),
+        now=now,
+    )
+    hold = funding.reserve_for_command(
+        db_conn, acc["id"], D(12), command_id=renewal["id"], held_at=now
+    )
+    with pytest.raises(ValueError, match="authorization business date"):
+        post(db_conn, renewal, now + timedelta(days=1))
+    assert commands.get(db_conn, renewal["id"])["state"] == "pending"
+    assert db_conn.execute(
+        "SELECT released_at FROM funding_hold WHERE id = %s", (hold,)
+    ).fetchone() == (None,)
+    assert db_conn.execute("SELECT count(*) FROM funded_interval").fetchone() == (1,)
+
+
 def test_outer_rollback_restores_accepted_command_and_hold(db_conn):
     _, _, cmd, _ = prepared(db_conn)
     db_conn.commit()
@@ -129,7 +193,8 @@ def test_adjacent_renewal_keeps_anchor_and_its_own_command_run(db_conn):
 
 
 @pytest.mark.parametrize("stage", ["snapshot", "conversion", "completion"])
-def test_failure_rolls_back_all_posting_and_retains_hold(db_conn, monkeypatch, stage):
+@pytest.mark.parametrize("delay", [0, 45])
+def test_failure_rolls_back_all_posting_and_retains_hold(db_conn, monkeypatch, stage, delay):
     _, _, cmd, hold = prepared(db_conn)
     db_conn.commit()
     assert worker_db.acquire_ownership(db_conn)
@@ -146,7 +211,7 @@ def test_failure_rolls_back_all_posting_and_retains_hold(db_conn, monkeypatch, s
 
     monkeypatch.setattr(module, name, fail)
     with pytest.raises(RuntimeError, match="injected crash"):
-        post(db_conn, cmd)
+        post(db_conn, cmd, NOW + timedelta(days=delay))
     for table in (
         "billing_run",
         "applied_customer_billing_rate",
@@ -164,7 +229,7 @@ def test_failure_rolls_back_all_posting_and_retains_hold(db_conn, monkeypatch, s
         "SELECT released_at FROM funding_hold WHERE id = %s", (hold,)
     ).fetchone() == (None,)
     monkeypatch.setattr(module, name, original)
-    post(db_conn, cmd)
+    post(db_conn, cmd, NOW + timedelta(days=delay))
     db_conn.commit()
 
 

@@ -1,5 +1,22 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2c3b2: delayed accepted starts (2026-10-21)
+
+The internal single-product poster now recovers a held initial order on a later
+business date. It retains the accepted amount, tax, price and cadence and buys one
+full interval from the actual authorization date, resetting the grant anchor to
+that date at index zero. The immutable command request and grant quote retain the
+original quoted date; the grant's period/anchor and bill document record actual
+coverage. No waiting-gap service or charge is created. Initial quotes must start
+on the command due date at index zero; future commands remain ineligible.
+
+Completed retries still return the original result. Late renewal quotes remain
+refused with their holds intact: renewal recovery needs actual-date price/tax
+selection, rather than reuse of an accepted initial-order quote. This slice does
+not enable a producer, dispatcher or prepaid creation. Multi-product conversion
+and renewal recovery remain next. Tests cover long delays, business-date timezone
+boundaries, preserved funds/quote, replay and rollback at each posting stage.
+
 ## P2c3b1: atomic single-product posting (2026-10-21)
 
 `app/billing/prepaid.py` adds an internal billing-owner-only posting primitive.

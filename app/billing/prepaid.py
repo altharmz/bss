@@ -91,6 +91,13 @@ def post_interval(
             raise ValueError("interval posting requires an order or renewal command")
         quote = IntervalQuote.model_validate(cmd["request"])
         period = quote.period()
+        if cmd["kind"] == "order":
+            if quote.index != 0 or period.start != cmd["due_date"]:
+                raise ValueError("initial order quote must start on its due date at index zero")
+            # Immediate starts retain their accepted money/cadence after a crash or
+            # worker delay. Only actual coverage moves; the journal stays immutable.
+            quote = quote.model_copy(update={"anchor": today})
+            period = quote.period()
         if period.start != today:
             raise ValueError("funded interval must start on authorization business date")
         account = billing.load_account(conn, cmd["billing_account_id"])
