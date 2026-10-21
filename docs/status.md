@@ -7,6 +7,18 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**N5 subscriber-number UI (2026-10-21).** Adds `/numbers`, inventory creation/search,
+assignment details and locks, requiring-offering number selection, an optional initial
+product step in New subscriber, and order-based number changes from the card. Request
+bodies are pinned in component/backend tests; browser smoke covers inventory and the
+creation form. Validation: 1,495 backend tests; 284 frontend tests in each of UTC and
+America/New_York; backend/frontend lint; five browser smoke tests passed. The first
+backend fixture attempted to change an immutable price start (corrected to order on
+the valid date); frontend lint found non-null assertions (replaced with validated
+inventory projections); the navigation assertion was updated for Numbers.
+Not deployed: N6 release validation and separate deployment approval follow. The
+picker shows currently available unlocked inventory; future releases require refresh.
+
 **N4 deployed (2026-10-20).** The human confirms that N4 (`47b7525`) is now also
 deployed to the VPS, through migration `0033`. This session did not independently
 inspect the VPS image tag or smoke results. The implementation commit passed all

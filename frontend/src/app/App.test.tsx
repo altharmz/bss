@@ -115,6 +115,7 @@ describe('shell', () => {
     expect(screen.getAllByText('i.petrova').length).toBeGreaterThan(0);
     const links = within(nav).getAllByRole('link');
     expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      '/numbers',
       '/subscribers',
       '/catalog',
       '/billing-runs',

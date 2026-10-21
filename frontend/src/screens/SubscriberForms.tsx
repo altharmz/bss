@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import {
   createSubscriber,
+  loadAccount,
   loadProfile,
   partyName,
   updateSubscriber,
@@ -17,6 +18,7 @@ import { accountLabel } from '../format/ids';
 import { parseAmount } from '../format/money';
 import { Button, Modal, Segmented, TextInput } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
+import { AddProductModal } from './AddProduct';
 
 // Create and edit a subscriber (party + customer + billing account) through the TMF APIs.
 // There is no delete: an account carries products, bills and payments; it can be Closed.
@@ -67,6 +69,8 @@ export function NewSubscriberModal({
   const [limit, setLimit] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [initialProduct, setInitialProduct] = useState(false);
+  const [createdId, setCreatedId] = useState<string | null>(null);
 
   const name = partyName({ kind, givenName, familyName, organizationName });
   const named =
@@ -93,13 +97,17 @@ export function NewSubscriberModal({
         currency: context.currency,
         creditLimit: credit.value,
       });
-      onCreated(accountId, name);
+      if (initialProduct) setCreatedId(accountId);
+      else onCreated(accountId, name);
     } catch (error) {
       setProblem(explain(error));
     } finally {
       setBusy(false);
     }
   }
+
+  if (createdId)
+    return <InitialProduct accountId={createdId} onDone={() => onCreated(createdId, name)} />;
 
   return (
     <Modal
@@ -169,7 +177,49 @@ export function NewSubscriberModal({
           <div className="caption">
             Currency {context.currency}. The cycle day and the currency cannot be changed later.
           </div>
+          <label>
+            <input
+              type="checkbox"
+              checked={initialProduct}
+              onChange={(e) => setInitialProduct(e.target.checked)}
+            />{' '}
+            Add an initial product and select its subscriber number after creating the account
+          </label>
         </section>
+      </div>
+    </Modal>
+  );
+}
+
+function InitialProduct({ accountId, onDone }: { accountId: string; onDone: () => void }) {
+  const account = useResource(`new-account:${accountId}`, (signal) =>
+    loadAccount(accountId, signal),
+  );
+  if (account.status === 'ok')
+    return (
+      <AddProductModal
+        account={account.data}
+        activeOfferingIds={new Set()}
+        onClose={onDone}
+        onOrdered={onDone}
+      />
+    );
+  return (
+    <Modal
+      title="Subscriber created"
+      width={560}
+      onClose={onDone}
+      footer={<Button onClick={onDone}>Open subscriber</Button>}
+    >
+      <div className="bss-modal-body">
+        <p>The account was created. Add its initial product next.</p>
+        {account.status === 'error' && (
+          <ErrorBlock
+            title="Failed to load the created account"
+            error={account.error}
+            onRetry={account.retry}
+          />
+        )}
       </div>
     </Modal>
   );

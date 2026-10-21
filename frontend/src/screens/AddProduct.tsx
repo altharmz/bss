@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { requiresNumber } from '../api/numbers';
+import { NumberPicker } from './Numbers';
 import {
   loadFirstCharge,
   loadSellableOfferings,
@@ -50,6 +52,8 @@ export function AddProductModal({
   const [start, setStart] = useState(today);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string[]>([]);
+  const [numberId, setNumberId] = useState('');
+  const [uncertain, setUncertain] = useState(false);
 
   const offerings = useResource('offerings', (signal) =>
     loadSellableOfferings(context.now, account.currency, signal),
@@ -62,7 +66,6 @@ export function AddProductModal({
       : Promise.resolve(null),
   );
   const first = preview.status === 'ok' ? preview.data : null;
-  const ready = first !== null;
 
   const q = filter.trim().toLowerCase();
   const visible =
@@ -73,13 +76,28 @@ export function AddProductModal({
       : [];
   const chosen =
     offerings.status === 'ok' ? offerings.data.find((o) => o.id === offeringId) : undefined;
+  const requirement = useResource(
+    `number-requirement:${chosen?.specificationId ?? ''}`,
+    (signal) =>
+      chosen?.specificationId
+        ? requiresNumber(chosen.specificationId, signal)
+        : Promise.resolve(false),
+  );
+  const needsNumber = requirement.status === 'ok' && requirement.data;
+  const ready = first !== null && requirement.status === 'ok' && (!needsNumber || numberId !== '');
 
   async function confirm() {
     if (first === null || offeringId === null || chosen === undefined) return;
     setBusy(true);
     setProblem([]);
     try {
-      const result = await orderAdd(account.id, offeringId, start, context.timeZone);
+      const result = await orderAdd(
+        account.id,
+        offeringId,
+        start,
+        context.timeZone,
+        needsNumber ? numberId : undefined,
+      );
       if (result.state === 'completed') {
         onOrdered(
           `${chosen.name} ordered · first charge ${formatAmount(first.amount.value)}` +
@@ -89,7 +107,8 @@ export function AddProductModal({
         setProblem(result.reasons.length ? result.reasons : [`The order was ${result.state}.`]);
       }
     } catch (error) {
-      setProblem([explain(error)]);
+      setProblem([`${explain(error)}. Close and check the subscriber before submitting again.`]);
+      setUncertain(true);
     } finally {
       setBusy(false);
     }
@@ -110,7 +129,11 @@ export function AddProductModal({
             </div>
           )}
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!ready || busy} onClick={() => void confirm()}>
+          <Button
+            variant="primary"
+            disabled={!ready || busy || uncertain}
+            onClick={() => void confirm()}
+          >
             {start === today ? 'Activate' : `Activate from ${start}`}
           </Button>
         </>
@@ -176,6 +199,14 @@ export function AddProductModal({
 
         <section>
           <div className="bss-step-head">2. Start date</div>
+          {requirement.status === 'error' && (
+            <ErrorBlock
+              title="Failed to load number requirement"
+              error={requirement.error}
+              onRetry={requirement.retry}
+            />
+          )}
+          {needsNumber && <NumberPicker value={numberId} onChange={setNumberId} />}
           <TextInput
             mono
             type="date"

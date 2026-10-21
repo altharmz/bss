@@ -281,6 +281,10 @@ items:
   - {id: ui.users.manage, area: ui, stage: 5, title: "Create, edit, disable and reset users"}
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
   - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
+  - {id: ui.numbers.list, area: ui, stage: 5, title: "Subscriber-number inventory and search"}
+  - {id: ui.numbers.create, area: ui, stage: 5, title: "Create an inventory number"}
+  - {id: ui.numbers.detail, area: ui, stage: 5, title: "Number details, assignments and lock/unlock"}
+  - {id: ui.subscriber.number, area: ui, stage: 5, title: "Product number and order-based number change"}
   - {id: ui.subscribers.new, area: ui, stage: 5, title: "New subscriber: party, customer, billing account"}
   - {id: ui.subscriber.edit, area: ui, stage: 5, title: "Edit subscriber: names, statuses, credit limit"}
   - {id: ui.subscriber.card, area: ui, stage: 5, title: "Subscriber card: account, products, charges, transactions"}

@@ -19,12 +19,15 @@ import { RouterProvider, useRouter } from './router';
 import { Shell } from './Shell';
 import { SessionGate } from './session';
 import { UsersScreen } from '../screens/Users';
+import { NumbersScreen } from '../screens/Numbers';
 
 const CONTEXT = '/internal/v1/context';
 
 function Screen() {
   const { route } = useRouter();
   switch (route.name) {
+    case 'numbers':
+      return <NumbersScreen />;
     case 'users':
       return <UsersScreen />;
     case 'signIn':

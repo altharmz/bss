@@ -454,6 +454,61 @@ describe('add product', () => {
     return screen.getByRole('dialog', { name: 'Add product' });
   }
 
+  it('requires explicit number selection for an msisdn offering', async () => {
+    const numberId = '10000000-0000-4000-8000-000000000001';
+    const { fetchMock } = backend({
+      ...catalog,
+      'GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true&offset=0&limit=100':
+        () =>
+          json(
+            OFFERINGS.map((o) => ({
+              ...o,
+              productSpecification: { ...o.productSpecification, id: 'number-spec' },
+            })),
+            { total: 2 },
+          ),
+      'GET /tmf-api/productCatalogManagement/v5/productSpecification/number-spec': () =>
+        json({ resourceSpecification: [{ id: 'msisdn' }] }),
+      'GET /tmf-api/resourceInventory/v5/resource?offset=0&limit=100': () =>
+        json(
+          [
+            {
+              id: numberId,
+              value: '12025550123',
+              administrativeState: 'unlocked',
+              allocationStatus: 'available',
+            },
+          ],
+          { total: 1 },
+        ),
+      [preview('2026-10-01')]: () => json(FIRST_CHARGE),
+      [`POST ${ORDERS}`]: () =>
+        json({
+          state: 'rejected',
+          productOrderErrorMessage: [{ reason: 'Number no longer available' }],
+        }),
+    });
+    const dialog = await openModal();
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
+    await within(dialog).findByTestId('first-charge');
+    await within(dialog).findByRole('option', { name: '12025550123' });
+    expect(within(dialog).getByRole('button', { name: 'Activate' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+    fireEvent.change(within(dialog).getByLabelText('Subscriber number'), {
+      target: { value: numberId },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Activate' }));
+    expect(await within(dialog).findByText('Number no longer available')).toBeTruthy();
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(post?.[1]?.body)).productOrderItem[0].product).toEqual({
+      '@type': 'ProductRefOrValue',
+      realizingResource: [
+        { id: numberId, '@type': 'ResourceRef', '@referredType': 'LogicalResource' },
+      ],
+    });
+  });
+
   it('lists sellable offerings, marks those already active, and previews from the backend', async () => {
     backend({ ...catalog, [preview('2026-10-01')]: () => json(FIRST_CHARGE) });
     const dialog = await openModal();

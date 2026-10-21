@@ -1,5 +1,27 @@
 # Frontend (admin UI, stage 5): decisions and conventions
 
+## N5: subscriber-number UI (2026-10-21)
+
+`/numbers` lists and searches inventory, creates strictly formatted E.164 digits,
+shows allocation/usage/administrative state and linked products, and locks/unlocks
+through TMF639. Lock copy explains that accepted claims and service continue.
+TMF639 types are generated from the pinned vendored contract.
+
+Add product resolves the selected offering's specification before enabling submission.
+An `msisdn` requirement reveals an explicit number picker; the order validates the
+complete interval. The picker shows currently available unlocked inventory; future
+releases still require a later refresh. New subscriber offers an optional initial
+product step after account creation; closing it opens the already-created account.
+There is no rollback or repeated account creation after this step.
+
+The card's Subscriber number dialog reads the public product projection and permits
+number changes for requiring products through a modify order effective today. Price
+and termination behavior remain in the existing order workflows. Failed uncertain
+writes disable resubmission and direct the operator to inspect inventory/product
+state. Component tests pin inventory/add/modify requests; backend tests replay them.
+Browser smoke opens inventory and validates the creation form without creating data.
+N6 owns independent release validation and separate deployment approval.
+
 The refund/bill-delivery milestone adds the ledger type `payout`, displayed as
 “Refund paid out”. The existing `refund` label still denotes an ABR credit.
 Refund and presentation management remained API/MCP workflows in that milestone.

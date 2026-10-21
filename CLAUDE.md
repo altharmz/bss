@@ -87,13 +87,16 @@ Unknown attributes are a 400; the contract is the vendored specs in `spec/`, nev
 billing run creates ABRs and bills. Node runs only in containers on the workstation; the
 UI's write requests are pinned on both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
-## Current state (2026-10-20)
+## Current state (2026-10-21)
 
 - **Deployed:** N4 subscriber-number orders (`47b7525`), migrations through `0033`,
   confirmed by the human on 2026-10-20. This session did not independently verify
   the VPS image tag or deployment smoke results. N4 passed 1,494 backend tests,
   lint and documentation drift checks before commit/push.
-- **Next:** N5 subscriber-number UI, then N6 release validation - [scope](docs/prepaid-plan.md),
+- **Implemented:** N5 subscriber-number UI: inventory/create/search/lock, number selection
+  and changes through orders. Local checks: 1,495 backend tests, 284 frontend tests in
+  each timezone, frontend lint and five browser tests passed. Not deployed.
+- **Next:** N6 release validation and separate deployment approval - [scope](docs/prepaid-plan.md),
   [hand-off](docs/prepaid-implementation.md), [decision](docs/decisions/prepaid.md).
 - **Backlog:** UI vs MCP gap slices 2-4 ([plan](docs/ui-mcp-gap-plan.md)); confirm the
   `~/bss/DEPLOYED` marker on the next deploy; progress drift check + per-item deployed

@@ -4,6 +4,7 @@
 // silently blank cell.
 
 import { toCents } from '../format/money';
+import { numberProduct } from './numbers';
 import { addDays, businessDate, zonedDateTime } from '../format/dates';
 import {
   AMOUNT,
@@ -427,6 +428,7 @@ type PriceBody = T620['schemas']['ProductOfferingPrice'];
 
 export interface Offering {
   id: string;
+  specificationId?: string | undefined;
   name: string;
   code: string | null;
   specification: string;
@@ -500,6 +502,7 @@ export async function loadSellableOfferings(
     name: need(offering.name, 'offering name'),
     code: offeringCode(offering),
     specification: offering.productSpecification?.name ?? '',
+    specificationId: offering.productSpecification?.id,
     priceCents: displayPrice(offering, byId, now, currency)?.cents ?? null,
     interval: displayPrice(offering, byId, now, currency)?.interval ?? 'month',
   }));
@@ -725,6 +728,7 @@ export async function orderAdd(
   offeringId: string,
   startDate: string,
   timeZone: string,
+  numberId?: string,
 ): Promise<OrderOutcome> {
   const order = await postJson<OrderBody>(PATHS.orders, {
     '@type': 'ProductOrder',
@@ -736,6 +740,7 @@ export async function orderAdd(
         id: '1',
         action: 'add',
         productOffering: { id: offeringId, '@type': 'ProductOfferingRef' },
+        ...(numberId ? { product: numberProduct(numberId) } : {}),
       },
     ],
   });

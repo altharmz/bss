@@ -179,6 +179,32 @@ function bodies(fetchMock: ReturnType<typeof stubFetch>['fetchMock']) {
 }
 
 describe('new subscriber', () => {
+  it('keeps the created account when the optional initial-product step cannot load', async () => {
+    const { fetchMock } = backend(undefined, {
+      [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),
+      [`POST ${CUSTOMERS}`]: () => json({ id: NEW_CUSTOMER }, { status: 201 }),
+      [`POST ${ACCOUNTS}`]: () => json({ id: NEW_ACCOUNT }, { status: 201 }),
+      [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: () => tmfError(503, 'Unavailable'),
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: '+ New subscriber' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
+    fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
+    fireEvent.click(within(dialog).getByRole('checkbox'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
+    const next = await screen.findByRole('dialog', { name: 'Subscriber created' });
+    expect(await within(next).findByText('Failed to load the created account')).toBeTruthy();
+    fireEvent.click(within(next).getByText('Retry'));
+    expect(await within(next).findByText('Failed to load the created account')).toBeTruthy();
+    expect(bodies(fetchMock)).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: 'Create subscriber' })).toBeNull();
+    fireEvent.click(within(next).getByText('Open subscriber'));
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Olga K created');
+    expect(window.location.pathname).toBe(`/subscribers/${NEW_ACCOUNT}`);
+    expect(bodies(fetchMock)).toHaveLength(3);
+  });
+
   it('creates the party, the customer and the account, then opens the card', async () => {
     const { fetchMock } = backend(undefined, {
       [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),

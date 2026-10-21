@@ -19,6 +19,7 @@ const SPECS = {
   tmf622: 'TMF622-ProductOrdering-v5.0.0.oas.yaml',
   tmf629: 'TMF629-Customer_Management-v5.0.1.oas.yaml',
   tmf637: 'TMF637-ProductInventory-v5.0.0.oas.yaml',
+  tmf639: 'TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml',
   tmf666: 'TMF666-Account_Management-v5.0.0.oas.yaml',
   tmf678: 'TMF678-CustomerBill-v5.0.0.oas.yaml',
   internal: 'internal/bss-internal.oas.yaml',

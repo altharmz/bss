@@ -24,6 +24,7 @@ import { Button, Panel, Pill, useToast } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
+import { ProductNumber } from './ProductNumber';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
 import { AccountBills, RefundAction, RefundsPanel } from './AccountActions';
 import { EditSubscriberModal } from './SubscriberForms';
@@ -458,6 +459,7 @@ function ProductRow({
                 </>
               )}
               <div className="bss-code">{code}</div>
+              <ProductNumber accountId={account.id} productId={product.id} onDone={onDone} />
               {problem !== null && (
                 <div className="bss-inline-error" role="alert">
                   {problem}

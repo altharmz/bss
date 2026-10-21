@@ -180,3 +180,17 @@ Deployment update: the human confirmed N4 (`47b7525`) deployed to the VPS on
 2026-10-20. Before commit/push, all 1,494 backend tests, lint and documentation
 drift checks passed. Local migrations reached `0033`. VPS image/smoke results were
 not independently inspected in this session. N5 UI remains next, followed by N6.
+
+## N5: subscriber-number UI (2026-10-21)
+
+The UI now provides inventory search, number creation, assignment details and
+lock/unlock at `/numbers`. Requiring offerings prompt for a number in Add product;
+New subscriber optionally continues to that step after account creation. Product
+number dialogs submit changes through modify orders effective today. See the
+[frontend decision](frontend.md#n5-subscriber-number-ui-2026-10-21) for UX and retry
+behavior. Inventory types come from the pinned TMF639 contract. Inventory, add and
+modify bodies are pinned by component tests and replayed against the real backend.
+
+Local validation passed 1,495 backend tests, 284 frontend tests in each timezone,
+backend/frontend lint and five browser smoke tests. N5 is not deployed; N6 owns
+the independent release proofs, progress generation and deployment approval.

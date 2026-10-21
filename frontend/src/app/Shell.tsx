@@ -52,6 +52,7 @@ export function Sidebar({ context }: { context: SystemContext }) {
   const offerings = useCount(OFFERINGS);
   const runs = useRunsNav();
   const items: NavItem[] = [
+    { label: 'Numbers', href: '/numbers', count: '', active: (r) => r.name === 'numbers' },
     {
       label: 'Subscribers',
       href: '/subscribers',

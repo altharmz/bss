@@ -39,6 +39,19 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await expect(create.getByText('Given name')).toBeVisible();
   await create.getByRole('button', { name: 'Cancel' }).click();
   await expect(create).toBeHidden();
+  await page.getByRole('link', { name: 'Numbers', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Numbers', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'New number', exact: true }).click();
+  const numberDialog = page.getByRole('dialog', { name: 'New number' });
+  await numberDialog.getByLabel('Number', { exact: true }).fill('+12025550123');
+  await expect(numberDialog.getByRole('button', { name: 'Create number' })).toBeDisabled();
+  await numberDialog.getByLabel('Number', { exact: true }).fill('12025550123');
+  await expect(numberDialog.getByRole('button', { name: 'Create number' })).toBeEnabled();
+  await numberDialog.getByRole('button', { name: 'Cancel' }).click();
+  await page
+    .getByRole('navigation', { name: 'Operations' })
+    .getByRole('link', { name: /Subscribers/ })
+    .click();
   await expect(page.getByRole('banner').getByText(context.businessDate)).toBeVisible();
 
   const olga = page.getByRole('row').filter({ hasText: 'Olga Kuznetsova' });

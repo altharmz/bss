@@ -23,6 +23,86 @@ OFFSET = "+03:00"
 RUNS = "/internal/v1/billingRun"
 
 
+def test_ui_number_inventory_and_orders(api):
+    """Exact inventory/add/modify bodies pinned in Numbers.test.tsx."""
+    url = "/tmf-api/resourceInventory/v5/resource"
+    numbers = []
+    for value in ("12025550123", "12025550124"):
+        created = api.post(
+            url,
+            {
+                "@type": "LogicalResource",
+                "name": f"MSISDN {value}",
+                "value": value,
+                "administrativeState": "unlocked",
+                "resourceSpecification": {"id": "msisdn", "@type": "ResourceSpecificationRef"},
+            },
+        )
+        assert created.status_code == 201, created.text
+        numbers.append(created.json())
+    first, second = numbers
+    assert api.patch(first["href"], {"administrativeState": "locked"}).status_code == 200
+    assert api.patch(first["href"], {"administrativeState": "unlocked"}).status_code == 200
+    offering = apidata.sellable_offering(api)
+    assert (
+        api.patch(
+            offering["productSpecification"]["href"],
+            {"resourceSpecification": [{"id": "msisdn", "@type": "ResourceSpecificationRef"}]},
+        ).status_code
+        == 200
+    )
+    account = apidata.account(api)
+
+    def product_ref(number):
+        return {
+            "@type": "ProductRefOrValue",
+            "realizingResource": [
+                {"id": number["id"], "@type": "ResourceRef", "@referredType": "LogicalResource"}
+            ],
+        }
+
+    order = api.post(
+        ORDER,
+        {
+            "@type": "ProductOrder",
+            "billingAccount": {"id": account["id"], "@type": "BillingAccountRef"},
+            "requestedStartDate": "2026-10-02T12:00:00+03:00",
+            "productOrderItem": [
+                {
+                    "@type": "ProductOrderItem",
+                    "id": "1",
+                    "action": "add",
+                    "productOffering": {"id": offering["id"], "@type": "ProductOfferingRef"},
+                    "product": product_ref(first),
+                }
+            ],
+        },
+    )
+    assert order.status_code == 201, order.text
+    assert order.json()["state"] == "completed", order.text
+    product = apidata.product_of(api, order.json())
+    api.clock.set(datetime.fromisoformat("2026-10-02T09:00:00+00:00"))
+    changed = api.post(
+        ORDER,
+        {
+            "@type": "ProductOrder",
+            "billingAccount": {"id": account["id"], "@type": "BillingAccountRef"},
+            "productOrderItem": [
+                {
+                    "@type": "ProductOrderItem",
+                    "id": "1",
+                    "action": "modify",
+                    "product": {**product_ref(second), "id": product["id"]},
+                }
+            ],
+        },
+    )
+    assert changed.status_code == 201, changed.text
+    assert changed.json()["state"] == "completed", changed.text
+    lookup = api.get(f"{apidata.PRODUCT}?realizingResource.id={second['id']}").json()
+    assert [p["id"] for p in lookup] == [product["id"]]
+
+
 def test_ui_user_management_requests(api):
     """Same bodies as Users.test.tsx and session.test.tsx, through real cookies."""
     from fastapi.testclient import TestClient

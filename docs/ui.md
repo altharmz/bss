@@ -273,6 +273,13 @@ API: `GET /internal/v1/billingRun?limit=14`, `GET .../billingRun/{id}`,
 
 ## Tests
 
+Subscriber numbers: `/numbers` provides inventory search, creation, state details,
+assignment links and lock/unlock. Add product requires a number when the selected
+offering's specification requires `msisdn`. New subscriber optionally continues to
+this product step after creating the account. A product's Subscriber number dialog
+shows the effective number and submits changes through a modify order. The picker
+shows currently available unlocked stock; the server checks dates and quarantine.
+
 `make web-test`: vitest, run twice - in UTC and with `TZ=America/New_York` - so every
 request body is proven independent of the browser's zone. `make web-lint`: tsc, eslint,
 prettier. `make web-e2e`: Playwright against the built UI and the seeded local stack,
