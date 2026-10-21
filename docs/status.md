@@ -7,6 +7,13 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2b2 funding plans (2026-10-21).** The locked legacy adapter now quotes exact
+payment/credit-note amounts capped by spendable ledger balance, preserving funds
+needed for held bills and unbilled charges. Plans do not write or reserve money.
+No runtime caller or migration; prepaid creation remains unavailable. Next:
+persisted holds/consumption and combined database bounds. See the
+[P2b2 decision](decisions/prepaid.md#p2b2-obligation-aware-funding-plans-2026-10-21).
+
 **P2b1 legacy funding adapter (2026-10-21).** Adds a locked repository snapshot
 over existing payment/credit-note sources, combined allocation/payout consumption,
 positive bill and unbilled obligations, with independent ledger reconciliation.

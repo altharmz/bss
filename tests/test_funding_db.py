@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.billing.funding import InsufficientFunds
 from app.billing.model import InconsistentState
 from app.repository import billing, funding
 from tests.factories import NOW, account, charge, days, world
@@ -117,3 +118,58 @@ def test_unissued_credit_is_not_a_funding_source(db_conn):
     billed_charge(db_conn, w, date(2026, 2, 1), "-10", "new")
     with pytest.raises(InconsistentState, match="reconcile"):
         funding.load(db_conn, w.account["id"])
+
+
+def test_plan_limits_unused_sources_by_unpaid_obligations(db_conn):
+    w = world(db_conn)
+    billed_charge(db_conn, w, date(2026, 1, 1), "40", "onHold")
+    charge(db_conn, w, days(date(2026, 3, 1), date(2026, 4, 1)), "5")
+    payment = make_payment(db_conn, w.account, "60")
+    result = funding.plan(db_conn, w.account["id"], D("15"))
+    assert result.amount == result.snapshot.spendable == D("15")
+    assert [(s.kind, s.id, s.amount) for s in result.sources] == [
+        ("payment", payment["id"], D("15"))
+    ]
+    with pytest.raises(InsufficientFunds) as exc:
+        funding.plan(db_conn, w.account["id"], D("15.01"))
+    assert exc.value.required == D("15.01")
+    assert exc.value.available == D("15")
+    # Planning is read-only, including repeated quotes in the same transaction.
+    assert funding.plan(db_conn, w.account["id"], D("15")) == result
+
+
+def test_plan_pins_remaining_payment_then_issued_credit(db_conn):
+    w = world(db_conn)
+    billed_charge(db_conn, w, date(2026, 1, 1), "25")
+    note = billed_charge(db_conn, w, date(2026, 2, 1), "-20", "settled")
+    payment = make_payment(db_conn, w.account, "30")
+    settle_account(db_conn, w.account)
+    result = funding.plan(db_conn, w.account["id"], D("12.34"))
+    assert [(s.kind, s.id, s.amount) for s in result.sources] == [
+        ("payment", payment["id"], D("5")),
+        ("creditNote", note["id"], D("7.34")),
+    ]
+
+
+def test_plan_debt_has_no_available_funds_but_accepts_zero(db_conn):
+    w = world(db_conn)
+    billed_charge(db_conn, w, date(2026, 1, 1), "40")
+    make_payment(db_conn, w.account, "10")
+    assert funding.plan(db_conn, w.account["id"], D(0)).sources == ()
+    with pytest.raises(InsufficientFunds) as exc:
+        funding.plan(db_conn, w.account["id"], D("0.01"))
+    assert exc.value.available == 0
+
+
+@pytest.mark.parametrize("amount", [D("-1"), D("NaN"), D("Infinity"), 1, 1.0])
+def test_plan_rejects_invalid_amount_without_loading(amount):
+    with pytest.raises(ValueError, match="finite nonnegative Decimal"):
+        funding.plan(None, None, amount)
+
+
+def test_plan_keeps_reconciliation_failure_technical(db_conn):
+    w = world(db_conn)
+    make_bill(db_conn, w, date(2026, 1, 1), "40")
+    make_payment(db_conn, w.account, "60")
+    with pytest.raises(InconsistentState, match="reconcile"):
+        funding.plan(db_conn, w.account["id"], D("100"))

@@ -1,5 +1,23 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2b2: obligation-aware funding plans (2026-10-21)
+
+The legacy repository now quotes exact source amounts under the account lock.
+`plan` first reconciles the snapshot, caps a purchase at positive spendable ledger
+balance, then selects unused payments and issued credit notes. Source credit alone
+is insufficient: held bills and unbilled charges already claim part of that money.
+Debt yields zero available funds; zero quotes are valid. Invalid amounts are refused
+before loading, and inconsistent history remains a technical failure even if the
+requested purchase would also exceed available funds.
+
+A plan is read-only and valid only within its transaction. It is not a reservation;
+repeated quotes do not accumulate holds. A future consuming caller must persist its
+hold or consumption before releasing the lock. Tests cover obligation caps, exact
+mixed-source selection after settlement, debt, invalid amounts, repeated quotes and
+technical failures. No runtime caller, schema or API change is included. Next:
+persisted holds/consumption and combined database bounds, followed by consuming-path
+integration and worker recovery. Prepaid creation stays unavailable.
+
 ## P2b1: legacy funding repository (2026-10-21)
 
 `app/repository/funding.py` loads a reconciled legacy snapshot under the account

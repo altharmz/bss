@@ -11,7 +11,7 @@ from uuid import UUID
 
 import psycopg
 
-from app.billing.funding import Source, reconcile
+from app.billing.funding import InsufficientFunds, Source, SourceAmount, reconcile, select_sources
 from app.repository import billing
 
 
@@ -23,6 +23,29 @@ class Snapshot:
     ledger: Decimal
     unpaid_obligations: Decimal
     spendable: Decimal
+
+
+@dataclass(frozen=True)
+class Plan:
+    snapshot: Snapshot
+    amount: Decimal
+    sources: tuple[SourceAmount, ...]
+
+
+def plan(conn: psycopg.Connection, account_id: UUID, amount: Decimal) -> Plan:
+    """Quote exact sources under the account lock, respecting unpaid obligations.
+
+    This does not reserve money. A future writer must persist the hold/consumption
+    in this same transaction before releasing the account lock. Repeated calls do
+    not accumulate reservations. Zero is allowed even on an indebted account.
+    """
+    if not isinstance(amount, Decimal) or not amount.is_finite() or amount < 0:
+        raise ValueError("funding amount must be a finite nonnegative Decimal")
+    snapshot = load(conn, account_id)
+    available = max(Decimal(0), snapshot.spendable)
+    if amount > available:
+        raise InsufficientFunds(amount, available)
+    return Plan(snapshot, amount, select_sources(snapshot.sources, amount))
 
 
 def load(conn: psycopg.Connection, account_id: UUID) -> Snapshot:
