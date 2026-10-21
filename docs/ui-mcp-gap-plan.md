@@ -93,9 +93,10 @@ negative proofs only when judged useful. Commit, push and deploy need no approva
    cancellation through cancelProductOrder, as "Undo deactivation" does. Open: the date
    picker's limits (today or later, as the API enforces) and the proration explanation
    shown before submitting.
-3. **Order history per account.** productOrder list filtered by billing account, order
-   detail, and cancellations. Drafts (create, PATCH, submit, DELETE) only if the human
-   wants them in the UI.
+3. **Orders screen** (redesigned and approved 2026-10-21). This is a global read-only `/orders` list
+   filtered by state and account, linked from the subscriber card, with an order dialog
+   showing items and cancellations. Drafts stay API/MCP. Design:
+   [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
 4. **Product specifications in the UI.** Create and edit specifications from the offering
    screen, so creating an offering no longer depends on MCP or the API.
 5. **Optional, only on request:** payment history (TMF676 list) on the card; party and

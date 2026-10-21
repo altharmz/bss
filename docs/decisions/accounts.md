@@ -60,6 +60,8 @@ contract (frontend.md) for a feature the demo does not need on screen.
 Since 2026-10-20, the sidebar shows the financial account total like the other lists,
 using `financialAccount?limit=1&fields=id` and `X-Total-Count`. This adds one small
 request when the sidebar mounts; loading or failed counts stay blank.
+**Superseded 2026-10-21:** the item moves to the sidebar's Billing section without a
+count ([frontend.md](frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21)).
 
 **Migration `0013`**: table `financial_account` (owner `party_id`, `UNIQUE (id,
 party_id)` for slice 2's composite foreign key), `billing_account.financial_account_id`

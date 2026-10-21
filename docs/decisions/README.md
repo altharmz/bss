@@ -19,7 +19,7 @@ changing it, and record a new decision in it. Status history: [status.md](../sta
 | [bills.md](bills.md) | Bill lifecycle (option C): slices 1-4, migration 0006, settlement |
 | [internal-api.md](internal-api.md) | Internal API (stage 5): endpoints, `X-Remote-User` trust |
 | [mcp.md](mcp.md) | MCP connector: service, SDK, scopes, money as decimal strings, operator `mcp:<name>`, identity check |
-| [frontend.md](frontend.md) | Frontend (stage 5) decisions; Frontend conventions |
+| [frontend.md](frontend.md) | Sidebar grouped by TMF area and global Orders screen (2026-10-21); Frontend (stage 5) decisions; Frontend conventions |
 | [infra.md](infra.md) | Template origin (`make init`); Environments (image size); Base image; Layout; Conventions (healthchecks, tests, local postgres, pinned dependencies, immutable migrations); Shared infrastructure (vps-infra); Known compose pitfalls; Deploying the UI; the two fixes to port to vps-lab-template |
 | [users.md](users.md) | UI user management: users, roles (admin, user), sessions, the plan (2026-10-19) |
 | [harness.md](harness.md) | Development cycle and gates (hooks); the guard; Codex; Progress tracker |

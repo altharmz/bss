@@ -44,6 +44,12 @@ its run count and badge whenever the latest run it shows changes.
 API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the count is its
 `X-Total-Count`).
 
+**Decided, not implemented yet (2026-10-21):** the sidebar becomes three sections:
+Customers (Subscribers), Products (Product catalog, Orders, Numbers) and Billing
+(Billing runs, Financial accounts without a count). A new read-only `/orders` screen is
+added. Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
+Update this section when the code lands.
+
 ### Sign-in, operator menu and users
 
 The UI checks `GET /internal/v1/session` before loading the shell, business context or

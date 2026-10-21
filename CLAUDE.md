@@ -127,7 +127,9 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   [Release evidence](docs/subscriber-number-release.md).
 - **Next:** finish prepaid schema/funding and worker core behind unavailable prepaid creation -
   [scope](docs/prepaid-plan.md), [decision](docs/decisions/prepaid.md).
-- **Backlog:** UI vs MCP gap slices 2-4 ([plan](docs/ui-mcp-gap-plan.md));
+- **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21
+  ([frontend.md](docs/decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21));
+  UI vs MCP gap slices 2 and 4 ([plan](docs/ui-mcp-gap-plan.md));
   progress drift check + per-item deployed
   status; APP_PORT / `make down` profiles (two stacks with vps-lab); vps-lab guard
   backport; changing `billCycleDay` (open question); subscriber-card visual review.

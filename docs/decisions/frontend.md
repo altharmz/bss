@@ -1,5 +1,61 @@
 # Frontend (admin UI, stage 5): decisions and conventions
 
+## Sidebar grouped by TMF area; global Orders screen (2026-10-21)
+
+Decided by the human on 2026-10-21. Nothing is implemented yet. It replaces the single "Operations"
+heading from the design handoff (`design-ref/`, which is left unedited). TMF does not
+define a UI menu. The groups follow the TMF Open API and ODA component areas
+instead: party/customer, product (catalog, ordering, inventory, resources) and billing
+(bills, payments, accounts).
+
+**Sidebar** (`frontend/src/app/Shell.tsx`), three labelled sections in this order. The
+section label has the same style as the old "Operations" label. Each section is its own `<nav>`, or one
+`<nav aria-label="Main">` holds all three:
+
+| Section | Items (count source) |
+|---|---|
+| Customers | Subscribers (billingAccount total) |
+| Products | Product catalog (productOffering total), Orders (productOrder total), Numbers (no count, unchanged) |
+| Billing | Billing runs (run count / red **failed** badge, unchanged), Financial accounts (**no count**) |
+
+- **Financial accounts moves to Billing and loses its count.** It is a read-only TMF666
+  aggregate that billing ignores ([accounts.md](accounts.md#financial-accounts-slice-1)).
+  It runs nearly one per billing account, so its total repeated the Subscribers number.
+  The sidebar's `financialAccount?limit=1` request goes away. The screen, its route and the
+  card's link to it stay as they are.
+- **Orders** is a new item (below). Its count uses `productOrder?limit=1&fields=id`
+  and `X-Total-Count`, like the other lists. A loading or failed count stays blank.
+- A later global **Bills** list belongs under Billing. It is not part of this change.
+- Tests: the sidebar test asserts the three section labels, the item order per section,
+  the Orders count, and that Financial accounts has no count and makes no count request.
+  `docs/ui.md` Shell section and `scope.yaml` items are updated with the code.
+
+**Orders screen** (`/orders`, `screens/Orders.tsx`, `data-ui="ui.orders"`). This replaces
+[UI gap slice 3](../ui-mcp-gap-plan.md)'s per-account order history. It is read-only
+and frontend-only: TMF622 `GET /productOrder` already filters by `state` and
+`billingAccount.id`, and `GET /cancelProductOrder` by `productOrder.id`.
+
+- List, paginated with the existing ListState patterns. Columns: order display id
+  (first 8 hex digits, upper case, as elsewhere), subscriber (account name linking to the
+  subscriber card), state pill, item actions (for example "add Basic 10", "delete ..."),
+  requested start date, creation date (business time zone), completion or cancellation
+  date. Filters: state (TMF622 states), and account through `?account=<billingAccount id>`
+  in the URL, shown as a removable chip with the account name. Reset filters as in other
+  lists.
+- The subscriber card links to `/orders?account=<id>` ("Orders" next to the Bills/
+  transactions headings). The card itself shows no order list.
+- Row opens an **order dialog**: header fields, each `productOrderItem` (action,
+  offering, product link, item state, item price), `productOrderErrorMessage` when present,
+  and the order's cancellations (`cancelProductOrder?productOrder.id=`), with date,
+  state and reason.
+- **No writes in this screen.** Drafts (create, PATCH, submit, DELETE) and cancelling
+  stay in the API/MCP. "Undo deactivation" stays on the card. Modify orders (suspend,
+  resume, change offering) remain gap slice 2.
+- Tests: component tests pin the list request (filters, paging), the account chip from
+  the URL, the dialog's item and cancellation rendering, and the error and empty states.
+  `tests/test_ui_requests.py` replays the GET filters against the backend. The e2e opens
+  `/orders` and one dialog read-only.
+
 ## N5: subscriber-number UI (2026-10-21)
 
 `/numbers` lists and searches inventory, creates strictly formatted E.164 digits,
