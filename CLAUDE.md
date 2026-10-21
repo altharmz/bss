@@ -80,8 +80,11 @@ slips against these rules; it is a pattern matcher, not a security boundary
   `make web-e2e`, `make progress` or a negative proof are optional - run one when you
   judge it worth its time. This section overrides process steps in older plans and
   hand-offs (separate commit approvals, three backend passes, release proofs, deploy steps).
-- Every new feature or bug fix comes with a test that fails without it. To show that
-  (optional), run only that test - `docker compose run --rm app pytest tests/<file>.py
+- Every slice adds new tests; every new feature or bug fix comes with a test that fails
+  without it. Never delete, skip or weaken an existing test to make the suite pass - fix
+  the code. If a test is genuinely wrong because the requirements changed, modify it and
+  add a line `TEST-CHANGE: <reason>` to the commit message. To show a new test fails
+  without its change (optional), run only that test - `docker compose run --rm app pytest tests/<file>.py
   -k <name>` before the fix or with the change reverted - never a full suite.
 - Propose a plan before a data-model change or a large design change; otherwise act.
 - Say "it works on the server" only after a deploy (`make deploy` reports health and smoke).
