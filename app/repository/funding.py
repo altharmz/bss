@@ -239,6 +239,142 @@ def convert_for_command(
     return hold_id
 
 
+def convert_bills_for_command(
+    conn: psycopg.Connection,
+    account_id: UUID,
+    bill_ids: list[UUID],
+    *,
+    command_id: UUID,
+    converted_at: datetime,
+) -> UUID:
+    """Convert a complete bill set from pinned sources in one savepoint.
+
+    Bills and sources are visited in UUID order. A held source may split across
+    bills, but every cent must be consumed exactly once. Replay compares the
+    entire retained bill set; partial conversion and target replacement fail.
+    """
+    if not isinstance(command_id, UUID):
+        raise ValueError("command identity must be a UUID")
+    if not bill_ids or any(not isinstance(b, UUID) for b in bill_ids):
+        raise ValueError("conversion requires a nonempty UUID bill set")
+    targets = sorted(set(bill_ids))
+    if len(targets) != len(bill_ids):
+        raise ValueError("duplicate conversion bill")
+    conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+        (f"funding-command:{command_id}",),
+    )
+    account = billing.load_account(conn, account_id)
+    row = conn.execute(
+        "SELECT h.id, h.amount, h.held_at, h.released_at, c.hold_id, c.customer_bill_id"
+        " FROM funding_command_hold o JOIN funding_hold h ON h.id = o.hold_id"
+        " LEFT JOIN funding_hold_conversion c ON c.hold_id = h.id"
+        " WHERE o.command_id = %s AND o.billing_account_id = %s",
+        (command_id, account_id),
+    ).fetchone()
+    if row is None:
+        raise ValueError("unknown funding command for account")
+    hold_id, amount, held_at, released_at, converted, legacy_target = row
+    if converted is not None:
+        retained = [
+            r[0]
+            for r in conn.execute(
+                "SELECT customer_bill_id FROM funding_conversion_bill"
+                " WHERE hold_id = %s ORDER BY customer_bill_id",
+                (hold_id,),
+            )
+        ]
+        if legacy_target is not None or retained != targets:
+            raise ValueError("funding conversion target mismatch")
+        return hold_id
+    if released_at is not None:
+        raise ValueError("released funding hold cannot be converted")
+    if converted_at < held_at:
+        raise ValueError("conversion precedes funding hold")
+    bills = conn.execute(
+        "SELECT id, amount_due, state FROM customer_bill"
+        " WHERE id = ANY(%s) AND billing_account_id = %s ORDER BY id FOR UPDATE",
+        (targets, account_id),
+    ).fetchall()
+    if (
+        len(bills) != len(targets)
+        or any(b[1] < 0 or b[2] not in ("sent", "settled") for b in bills)
+        or sum((b[1] for b in bills), Decimal(0)) != amount
+    ):
+        raise ValueError("conversion requires matching issued bills for the entire hold")
+    if conn.execute(
+        "SELECT 1 FROM bill_allocation WHERE customer_bill_id = ANY(%s)", (targets,)
+    ).fetchone():
+        raise ValueError("conversion bill already has allocations")
+    sources = conn.execute(
+        "SELECT id, payment_id, credit_bill_id, amount FROM funding_hold_source"
+        " WHERE hold_id = %s ORDER BY id",
+        (hold_id,),
+    ).fetchall()
+    with conn.transaction():
+        conn.execute("SET CONSTRAINTS funding_batch_conversion_bounds DEFERRED")
+        release(conn, account_id, hold_id, released_at=converted_at, command_id=command_id)
+        conn.execute(
+            "INSERT INTO funding_hold_conversion"
+            " (hold_id, billing_account_id, converted_at) VALUES (%s, %s, %s)",
+            (hold_id, account_id, converted_at),
+        )
+        source_index = 0
+        source_left = sources[0][3] if sources else Decimal(0)
+        for bill_id, bill_amount, state in bills:
+            conn.execute(
+                "INSERT INTO funding_conversion_bill"
+                " (customer_bill_id, hold_id, billing_account_id) VALUES (%s, %s, %s)",
+                (bill_id, hold_id, account_id),
+            )
+            remaining = bill_amount
+            while remaining:
+                source_id, payment_id, credit_id, _ = sources[source_index]
+                take = min(remaining, source_left)
+                allocation_id = conn.execute(
+                    "INSERT INTO bill_allocation"
+                    " (billing_account_id, currency, customer_bill_id, payment_id, credit_bill_id,"
+                    " amount, kind, allocated_at) VALUES (%s,%s,%s,%s,%s,%s,'automatic',%s)"
+                    " RETURNING id",
+                    (
+                        account_id,
+                        account.currency,
+                        bill_id,
+                        payment_id,
+                        credit_id,
+                        take,
+                        converted_at,
+                    ),
+                ).fetchone()[0]
+                conn.execute(
+                    "INSERT INTO funding_conversion_source"
+                    " (hold_source_id, hold_id, allocation_id, billing_account_id)"
+                    " VALUES (%s,%s,%s,%s)",
+                    (source_id, hold_id, allocation_id, account_id),
+                )
+                remaining -= take
+                source_left -= take
+                if not source_left:
+                    source_index += 1
+                    source_left = (
+                        sources[source_index][3] if source_index < len(sources) else Decimal(0)
+                    )
+            if state != "settled":
+                billing.record_bill_state(
+                    conn, StateChange(bill_id, state, "settled"), now=converted_at, cause="run"
+                )
+        conn.execute(
+            "SET CONSTRAINTS funding_batch_conversion_bounds, funding_conversion_bounds,"
+            " funding_hold_bounds, bill_allocation_bounds IMMEDIATE"
+        )
+        conn.execute(
+            "SET CONSTRAINTS funding_batch_conversion_bounds, funding_conversion_bounds,"
+            " funding_hold_bounds, bill_allocation_bounds DEFERRED"
+        )
+        load(conn, account_id)
+    return hold_id
+
+
 def release(
     conn: psycopg.Connection,
     account_id: UUID,

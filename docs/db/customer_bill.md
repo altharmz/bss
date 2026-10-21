@@ -42,6 +42,7 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 | `customer_bill_due_after_bill_date` | check | `CHECK ((payment_due_date >= bill_date))` |
 | `customer_bill_run_type_check` | check | `CHECK ((run_type = ANY (ARRAY['onCycle'::text, 'offCycle'::text])))` |
 | `customer_bill_pkey` | primary key | `PRIMARY KEY (id)` |
+| `funding_batch_conversion_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_conversion_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_hold_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `customer_bill_id_billing_account_id_key` | unique | `UNIQUE (id, billing_account_id)` |
@@ -59,10 +60,11 @@ SID CustomerBill (TMF678 customerBill): issued on a cycle day, collects every un
 ## Triggers
 
 - `customer_bill_set_updated_at`: `CREATE TRIGGER customer_bill_set_updated_at BEFORE UPDATE ON customer_bill FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
+- `funding_batch_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_batch_conversion_bounds AFTER INSERT OR UPDATE ON customer_bill DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_batch_conversion_bounds()`
 - `funding_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_conversion_bounds AFTER INSERT OR UPDATE ON customer_bill DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_conversion_bounds()`
 - `funding_hold_bounds`: `CREATE CONSTRAINT TRIGGER funding_hold_bounds AFTER INSERT OR UPDATE ON customer_bill DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_hold_bounds()`
 - `funding_source_account_lock`: `CREATE TRIGGER funding_source_account_lock BEFORE UPDATE ON customer_bill FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`customer_bill_state_change`](customer_bill_state_change.md), [`funding_hold_conversion`](funding_hold_conversion.md), [`funding_hold_source`](funding_hold_source.md), [`refund_source`](refund_source.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`customer_bill_state_change`](customer_bill_state_change.md), [`funding_conversion_bill`](funding_conversion_bill.md), [`funding_hold_conversion`](funding_hold_conversion.md), [`funding_hold_source`](funding_hold_source.md), [`refund_source`](refund_source.md)

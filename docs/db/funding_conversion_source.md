@@ -10,7 +10,7 @@ Retained internal command hold conversion; no runtime caller.
 
 | Column | Type | Null | Default | Description |
 |---|---|---|---|---|
-| `hold_source_id` | `uuid` | no |  | Immutable held source converted exactly once. |
+| `hold_source_id` | `uuid` | no |  | Immutable held source; allocations across bills must sum to its exact amount. |
 | `hold_id` | `uuid` | no |  | Conversion owning this exact source allocation. |
 | `allocation_id` | `uuid` | no |  | Retained allocation matching the held source and amount exactly. |
 | `billing_account_id` | `uuid` | no |  | Owning account serialized by its row lock. |
@@ -28,7 +28,8 @@ Retained internal command hold conversion; no runtime caller.
 
 | Name | Kind | Definition |
 |---|---|---|
-| `funding_conversion_source_pkey` | primary key | `PRIMARY KEY (hold_source_id)` |
+| `funding_conversion_source_pkey` | primary key | `PRIMARY KEY (hold_source_id, allocation_id)` |
+| `funding_batch_conversion_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_conversion_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_conversion_source_allocation_id_key` | unique | `UNIQUE (allocation_id)` |
 
@@ -38,10 +39,11 @@ Retained internal command hold conversion; no runtime caller.
 |---|---|---|
 | `funding_conversion_source_allocation_id_key` | `CREATE UNIQUE INDEX funding_conversion_source_allocation_id_key ON funding_conversion_source USING btree (allocation_id)` | yes |
 | `funding_conversion_source_hold_id_idx` | `CREATE INDEX funding_conversion_source_hold_id_idx ON funding_conversion_source USING btree (hold_id)` | no |
-| `funding_conversion_source_pkey` | `CREATE UNIQUE INDEX funding_conversion_source_pkey ON funding_conversion_source USING btree (hold_source_id)` | yes |
+| `funding_conversion_source_pkey` | `CREATE UNIQUE INDEX funding_conversion_source_pkey ON funding_conversion_source USING btree (hold_source_id, allocation_id)` | yes |
 
 ## Triggers
 
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON funding_conversion_source FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
+- `funding_batch_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_batch_conversion_bounds AFTER INSERT OR UPDATE ON funding_conversion_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_batch_conversion_bounds()`
 - `funding_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_conversion_bounds AFTER INSERT OR UPDATE ON funding_conversion_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_conversion_bounds()`
 - `funding_conversion_retained`: `CREATE TRIGGER funding_conversion_retained BEFORE DELETE OR UPDATE ON funding_conversion_source FOR EACH ROW EXECUTE FUNCTION funding_hold_retained()`

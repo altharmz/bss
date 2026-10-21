@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0040**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0041**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -49,6 +49,7 @@ PostgreSQL schema at Alembic head **0040**, read from `pg_catalog` of a throwawa
 | [`funded_interval`](funded_interval.md) | billing | Immutable prepaid service grants. Persistence foundation only; the future billing owner must atomically post and settle the charge, convert its hold and complete the command. |
 | [`funding_hold_conversion`](funding_hold_conversion.md) | billing | Retained internal command hold conversion; no runtime caller. |
 | [`funding_conversion_source`](funding_conversion_source.md) | billing | Retained internal command hold conversion; no runtime caller. |
+| [`funding_conversion_bill`](funding_conversion_bill.md) | billing | Immutable bill set consuming one command hold atomically; legacy single-bill conversions retain their original target. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
 | [`worker_request`](worker_request.md) | worker | The admin UI's queue for the billing worker (ours): catch-up and retry requests. The API only inserts; the worker picks them up oldest first. |
 | [`event_subscription`](event_subscription.md) | events | TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their deliveries. |
@@ -116,6 +117,7 @@ flowchart LR
     funded_interval[funded_interval]
     funding_hold_conversion[funding_hold_conversion]
     funding_conversion_source[funding_conversion_source]
+    funding_conversion_bill[funding_conversion_bill]
   end
   subgraph area_worker["Billing worker (ours)"]
     billing_run_account[billing_run_account]
@@ -172,6 +174,8 @@ flowchart LR
   funded_interval -->|"command_id, billing_account_id, command_kind"| prepaid_command
   funded_interval -->|"product_id, billing_account_id"| product
   funding_command_hold -->|"hold_id, billing_account_id"| funding_hold
+  funding_conversion_bill -->|"customer_bill_id, billing_account_id"| customer_bill
+  funding_conversion_bill -->|"hold_id, billing_account_id"| funding_hold_conversion
   funding_conversion_source -->|"allocation_id"| bill_allocation
   funding_conversion_source -->|"hold_id, billing_account_id"| funding_hold_conversion
   funding_conversion_source -->|"hold_id"| funding_hold_conversion
@@ -855,7 +859,12 @@ erDiagram
   funding_conversion_source {
     uuid hold_source_id PK,FK
     uuid hold_id FK
-    uuid allocation_id FK
+    uuid allocation_id PK,FK
+    uuid billing_account_id FK
+  }
+  funding_conversion_bill {
+    uuid customer_bill_id PK,FK
+    uuid hold_id FK
     uuid billing_account_id FK
   }
   billing_account {
@@ -888,15 +897,17 @@ erDiagram
   customer_bill |o--o{ applied_customer_billing_rate : "customer_bill_id, billing_account_id"
   customer_bill |o--o{ bill_allocation : "credit_bill_id, billing_account_id"
   customer_bill |o--o{ customer_bill_on_demand : "customer_bill_id"
+  customer_bill |o--o{ funding_hold_conversion : "customer_bill_id, billing_account_id"
   customer_bill |o--o{ funding_hold_source : "credit_bill_id, billing_account_id"
   customer_bill |o--o{ refund_source : "credit_bill_id, billing_account_id"
   customer_bill ||--o{ bill_allocation : "customer_bill_id, billing_account_id"
   customer_bill ||--o{ customer_bill_state_change : "customer_bill_id"
-  customer_bill ||--o{ funding_hold_conversion : "customer_bill_id, billing_account_id"
+  customer_bill ||--o{ funding_conversion_bill : "customer_bill_id, billing_account_id"
   funding_command_hold ||--o{ funding_hold_conversion : "hold_id"
   funding_hold ||--o{ funding_command_hold : "hold_id, billing_account_id"
   funding_hold ||--o{ funding_hold_conversion : "hold_id, billing_account_id"
   funding_hold ||--o{ funding_hold_source : "hold_id, billing_account_id"
+  funding_hold_conversion ||--o{ funding_conversion_bill : "hold_id, billing_account_id"
   funding_hold_conversion ||--o{ funding_conversion_source : "hold_id"
   funding_hold_conversion ||--o{ funding_conversion_source : "hold_id, billing_account_id"
   funding_hold_source ||--o{ funding_conversion_source : "hold_source_id"

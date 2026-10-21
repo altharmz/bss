@@ -119,8 +119,9 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   intervals with matching command/run/charge identities (migration `0040`), with no
   entitlement projection. P2c3b1 adds internal atomic single-product posting and
   document projection, with no producer/dispatcher. P2c3b2 recovers delayed accepted
-  starts with original money and actual-date coverage. Next: multi-product conversion
-  and renewal recovery, then worker dispatch.
+  starts with original money and actual-date coverage. P2c3b3 adds atomic multi-product
+  purchase posting and exact-source multi-bill conversion (migration `0041`). Next:
+  actual-date renewal recovery, then worker dispatch and lifecycle integration.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).

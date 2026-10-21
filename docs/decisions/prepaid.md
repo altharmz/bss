@@ -1,5 +1,35 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2c3b3: atomic multi-product purchases (2026-10-21)
+
+Migration `0041` extends retained conversion with an immutable bill set and allows
+one held source to split across several allocations. Existing single-bill results
+keep their original shape. Multi-bill conversions require every target to be
+settled, their combined total to equal the hold, and each pinned source to be
+consumed exactly across the target allocations, at the release/conversion instant.
+Unmapped allocations, substituted sources, mixed legacy/batch targets and partial
+conversion are refused by deferred database checks. Downgrade preserves legacy
+history and refuses retained multi-bill results.
+
+The billing-owner primitive accepts an initial-order request containing an
+`intervals` quote list, with one quote per distinct product. It validates the whole
+set and locks products in UUID order, then creates one recurring ABR, offCycle bill,
+retained document and grant per product. A single exact-total hold funds all bills
+in one savepoint with the command/run result and events. Source splitting visits
+target bills and pinned source rows in UUID order; it never reselects funds.
+Completed replay returns retained results without posting again; conversion replay
+compares the entire bill set. Initial orders delayed across business dates retain
+accepted money and cadence while every product starts its full interval on the
+actual authorization date.
+
+This extends only purchase posting, not the order item-tree lifecycle. No producer,
+dispatcher, number/order mutation or entitlement projection is added; prepaid
+creation remains unavailable. Automatic renewals remain single-product. Next:
+actual-date renewal price/tax selection and recovery, then worker dispatch and the
+remaining lifecycle integration. Tests cover split mixed sources, zero totals,
+concurrent replay, invalid target/quote sets, database invariant refusals, migration
+preservation and rollback after a second bill, conversion or command completion.
+
 ## P2c3b2: delayed accepted starts (2026-10-21)
 
 The internal single-product poster now recovers a held initial order on a later

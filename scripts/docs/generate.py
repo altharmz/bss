@@ -181,6 +181,7 @@ AREAS = {
         "funded_interval",
         "funding_hold_conversion",
         "funding_conversion_source",
+        "funding_conversion_bill",
     ),
     "worker": ("billing_run_account", "worker_request"),
     "events": ("event_subscription", "event", "event_delivery"),

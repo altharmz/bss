@@ -7,6 +7,15 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2c3b3 multi-product purchases (2026-10-21).** Migration `0041` retains one
+command hold's bill set and exact source splits. Internal posting now buys a whole
+initial-order quote set atomically, with a separate settled offCycle document and
+funded interval per product. Delayed starts retain accepted money and use actual
+authorization-date coverage. Replay, rollback, database bounds and legacy migration
+retention are tested. No producer/dispatcher or prepaid creation is enabled. Next:
+actual-date renewal recovery, then dispatch and lifecycle integration; see
+[the decision](decisions/prepaid.md#p2c3b3-atomic-multi-product-purchases-2026-10-21).
+
 **P2c3b2 delayed accepted starts (2026-10-21).** The internal single-product
 poster preserves an accepted initial order's exact money/tax/cadence while buying
 one full interval from its actual authorization business date. Original quote

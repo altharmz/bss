@@ -12,7 +12,7 @@ Retained internal command hold conversion; no runtime caller.
 |---|---|---|---|---|
 | `hold_id` | `uuid` | no |  | Command-owned hold consumed exactly once; retained retry result. |
 | `billing_account_id` | `uuid` | no |  | Account shared by hold and target bill. |
-| `customer_bill_id` | `uuid` | no |  | One fully funded settled bill with exactly the held total. |
+| `customer_bill_id` | `uuid` | yes |  | Legacy single-bill target; null identifies a retained multi-bill conversion. |
 | `converted_at` | `timestamp with time zone` | no |  | Injected conversion instant, also the hold release and allocation instant. |
 
 ## Foreign keys
@@ -28,6 +28,7 @@ Retained internal command hold conversion; no runtime caller.
 | Name | Kind | Definition |
 |---|---|---|
 | `funding_hold_conversion_pkey` | primary key | `PRIMARY KEY (hold_id)` |
+| `funding_batch_conversion_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_conversion_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_hold_conversion_customer_bill_id_key` | unique | `UNIQUE (customer_bill_id)` |
 | `funding_hold_conversion_hold_id_billing_account_id_key` | unique | `UNIQUE (hold_id, billing_account_id)` |
@@ -44,9 +45,10 @@ Retained internal command hold conversion; no runtime caller.
 ## Triggers
 
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON funding_hold_conversion FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
+- `funding_batch_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_batch_conversion_bounds AFTER INSERT OR UPDATE ON funding_hold_conversion DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_batch_conversion_bounds()`
 - `funding_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_conversion_bounds AFTER INSERT OR UPDATE ON funding_hold_conversion DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_conversion_bounds()`
 - `funding_conversion_retained`: `CREATE TRIGGER funding_conversion_retained BEFORE DELETE OR UPDATE ON funding_hold_conversion FOR EACH ROW EXECUTE FUNCTION funding_hold_retained()`
 
 ## Referenced by
 
-[`funding_conversion_source`](funding_conversion_source.md)
+[`funding_conversion_bill`](funding_conversion_bill.md), [`funding_conversion_source`](funding_conversion_source.md)
