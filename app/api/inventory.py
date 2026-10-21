@@ -127,6 +127,10 @@ def _related_order_item(conn: psycopg.Connection, item_id: UUID) -> dict[str, An
 
 def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, Any]:
     account = parties.get_billing_account(conn, row["billing_account_id"])
+    if account["rating_type"] == "prepaid":
+        from app.billing.entitlement import view
+
+        row = row | {"status": view(conn, row, account, today)["status"]}
     # the offering valid today (on the start date for a product that starts later)
     changes = billing.offering_changes(conn, [row["id"]]).get(row["id"], ())
     core = billing.core_product(row, changes)

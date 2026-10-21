@@ -18,6 +18,7 @@ from app.api.errors import bad_request, not_found, unprocessable
 from app.api.inventory import product_href
 from app.api.listing import parse_page
 from app.api.tmfjson import TmfJSONResponse
+from app.billing import entitlement
 from app.billing.core import compute, cycle_period, price_at, product_charge_period
 from app.billing.model import Account, BillingState, DateRange, MissingPrice, Price, Product
 from app.config import settings
@@ -210,6 +211,11 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
         row = _account(conn, account_id)
         account = _core_account(row)
         rows = products.list_open_products(conn, row["id"], today)
+        prepaid_views = (
+            {p["id"]: entitlement.view(conn, p, row, today) for p in rows}
+            if row["rating_type"] == "prepaid"
+            else {}
+        )
         changes = billing.offering_changes(conn, [p["id"] for p in rows])
         cores = {p["id"]: billing.core_product(p, changes.get(p["id"], ())) for p in rows}
         prices = billing.load_recurring_prices(
@@ -247,7 +253,10 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                 else {"id": str(p["specification_id"]), "name": p["specification_name"]},
                 "price": None if price is None else money(price.amount, price.currency),
                 **({} if price is None else _cadence(price)),
-                "nextChargeDate": nxt,
+                "nextChargeDate": prepaid_views[p["id"]]["paidThrough"]
+                if p["id"] in prepaid_views
+                else nxt,
+                **prepaid_views.get(p["id"], {}),
             }
         )
     return _page(items, len(items))

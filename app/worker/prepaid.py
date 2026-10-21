@@ -11,12 +11,14 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
+from app.billing import entitlement
 from app.billing.funding import InsufficientFunds
 from app.billing.prepaid import post_interval
 from app.clock import Clock
+from app.events import emit
 from app.repository import billing
 from app.repository import prepaid_commands as commands
-from app.repository._sql import fetch_all
+from app.repository._sql import fetch_all, fetch_one
 from app.worker.process import Checkpoint, Heartbeat
 from app.worker.runs import ensure_ownership
 
@@ -87,3 +89,36 @@ def process_commands(
         if heartbeat is not None:
             heartbeat()
     return attempted
+
+
+def observe_entitlements(conn, *, clock, tz, checkpoint=None, heartbeat=None):
+    """Persist observed entitlement transitions once, under account/product locks."""
+    ensure_ownership(conn)
+    accounts = fetch_all(
+        conn, "SELECT id FROM billing_account WHERE rating_type = 'prepaid' ORDER BY id"
+    )
+    for account in accounts:
+        if checkpoint is not None and checkpoint():
+            break
+        with conn.transaction():
+            billing.load_account(conn, account["id"])
+            account = fetch_one(
+                conn, "SELECT * FROM billing_account WHERE id = %s", (account["id"],)
+            )
+            rows = fetch_all(
+                conn,
+                "SELECT * FROM product WHERE billing_account_id = %s"
+                " AND status NOT IN ('terminated', 'cancelled', 'aborted') ORDER BY id FOR UPDATE",
+                (account["id"],),
+            )
+            now = clock.now()
+            today = now.astimezone(tz).date()
+            for product in rows:
+                state = entitlement.view(conn, product, account, today)["status"]
+                if state != product["status"]:
+                    conn.execute(
+                        "UPDATE product SET status = %s WHERE id = %s", (state, product["id"])
+                    )
+                    emit.product(conn, product["id"], "StateChange", at=now, today=today)
+        if heartbeat is not None:
+            heartbeat()

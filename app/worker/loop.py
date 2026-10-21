@@ -31,7 +31,7 @@ from app.clock import Clock
 from app.events import deliver
 from app.repository import billing
 from app.worker.plan import scheduled
-from app.worker.prepaid import process_commands
+from app.worker.prepaid import observe_entitlements, process_commands
 from app.worker.process import (
     Checkpoint,
     Heartbeat,
@@ -124,6 +124,7 @@ def tick(
         result.prepaid_commands = process_commands(
             conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
         )
+        observe_entitlements(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
         sent = deliver.process(conn, clock=clock, checkpoint=checkpoint, heartbeat=heartbeat)
         result.deliveries = len(sent.delivered) + len(sent.retrying) + len(sent.failed)
         deliver.purge(conn, clock=clock)

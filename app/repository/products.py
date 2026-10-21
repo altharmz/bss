@@ -238,6 +238,8 @@ def flip_statuses(
               JOIN product_order c ON c.id = ci.product_order_id
              WHERE p.status IN ('created', 'pendingActive') AND p.start_date <= %(day)s
                AND c.completion_date < %(before)s
+               AND NOT EXISTS (SELECT FROM billing_account a
+                   WHERE a.id = p.billing_account_id AND a.rating_type = 'prepaid')
             UNION
             SELECT p.id FROM product p
               JOIN product_order_item ti ON ti.id = p.terminated_by_item_id
@@ -442,6 +444,11 @@ def change_status(
         (product_id, change_date, status, changed_by_item_id, applied_at),
     )
     if applied_at is not None:
+        conn.execute(
+            "UPDATE product p SET manually_suspended = %s FROM billing_account a"
+            " WHERE a.id = p.billing_account_id AND a.rating_type = 'prepaid' AND p.id = %s",
+            (status == "suspended", product_id),
+        )
         set_product_status(conn, product_id, status)
     return change
 

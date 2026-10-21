@@ -192,7 +192,12 @@ def post_interval(
             )
             if prod is None or prod["billing_account_id"] != account.id:
                 raise ValueError("quote product does not belong to account")
-            if prod["status"] in {"suspended", "terminated", "cancelled", "aborted"}:
+            if prod["manually_suspended"] or prod["status"] in {
+                "suspended",
+                "terminated",
+                "cancelled",
+                "aborted",
+            }:
                 raise ValueError("product lifecycle prevents authorization")
             if prod["product_offering_id"] != quote.offering_id:
                 raise ValueError("offering changes require the lifecycle posting extension")

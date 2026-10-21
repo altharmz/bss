@@ -1,5 +1,18 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P3b: entitlement and independent suspension causes (2026-10-21)
+
+Migration `0043` retains manual suspension separately from prepaid funding expiry.
+One effective-state function uses the injected business date: terminal lifecycle,
+manual/account suspension, live grant, pending first grant, then funding suspension.
+The internal account product view adds authorization, paid-through, suspension cause
+and retained needs-top-up amounts. TMF637 reads use the same effective state.
+GET does not write or emit; the worker observes states under account/product locks,
+stores transitions and emits TMF637 StateChange events at observation time.
+Daily activation skips prepaid products. Public prepaid creation remains gated.
+Tests cover precedence, exact half-open expiry, read purity and worker persistence.
+P3c is next.
+
 ## P3a: daily-run isolation (2026-10-21)
 
 The locked billing-account projection carries its rating mode into the pure daily
