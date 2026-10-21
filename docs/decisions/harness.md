@@ -1,12 +1,15 @@
 # Harness: hooks, guard, progress tracker
 
 Simplified on 2026-10-20 (the human: keep only the really important rules; one local
-test run per development cycle; commit, push and deploy need no approval).
+test run per development cycle; commit and push need no approval). Since 2026-10-21
+deploying is the human's call: the agent deploys only when asked and never asks or
+suggests it.
 
 ## Development cycle and gates
 
 - **One local test run per cycle**: develop -> commit (the pre-commit hook runs lint and
-  tests) -> push -> deploy. `make verify` is `make deploy`; it does not test again.
+  tests) -> push. Deploying is separate and only on the human's request (manually or
+  by asking the agent, `/ship`). `make verify` is `make deploy`; it does not test again.
   `make check` (ci Hypothesis profile, docs-check, UI and browser tests) runs only when
   asked for a specific change.
 - **Pre-commit hook** (`scripts/pre-commit.sh`, installed by `make hooks` as a symlink):
@@ -25,7 +28,7 @@ test run per development cycle; commit, push and deploy need no approval).
   an added or changed `.env*` path (other than `.env.example`), a branch deletion and a
   non-fast-forward. Names the commit and file, never the value.
 - **No extra gates** (the human, 2026-10-21): the hook's run is the only required test
-  run, and commit, push and deploy need no approval - also where an older plan or
+  run, and commit and push need no approval - also where an older plan or
   hand-off still asks for "three backend passes", release proofs or "separate approval"
   (CLAUDE.md says it overrides them; the forward-looking ones were reworded). Extra runs
   (`make check`, `web-e2e`, `progress`, negative proofs) are the agent's call.

@@ -34,6 +34,7 @@ TMF676 recorded refund and its consumed credit.
 | `refund_source_check` | check | `CHECK ((num_nonnulls(payment_id, credit_bill_id) = 1))` |
 | `refund_source_pkey` | primary key | `PRIMARY KEY (id)` |
 | `credit_usage_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
+| `funding_hold_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 
 ## Indexes
 
@@ -48,4 +49,5 @@ TMF676 recorded refund and its consumed credit.
 
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON refund_source FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `credit_usage_bounds`: `CREATE CONSTRAINT TRIGGER credit_usage_bounds AFTER INSERT ON refund_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION credit_usage_bounds()`
+- `funding_hold_bounds`: `CREATE CONSTRAINT TRIGGER funding_hold_bounds AFTER INSERT OR UPDATE ON refund_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_hold_bounds()`
 - `refund_immutable`: `CREATE TRIGGER refund_immutable BEFORE DELETE OR UPDATE ON refund_source FOR EACH ROW EXECUTE FUNCTION refund_immutable()`

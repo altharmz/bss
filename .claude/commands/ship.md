@@ -2,6 +2,8 @@
 description: Deploy the committed HEAD to the VPS and confirm the remote instance is healthy
 ---
 
+Run only when the human asked for a deployment - never on your own initiative.
+
 The commit was already linted and tested by the pre-commit hook - do not test again.
 
 1. Commit and push anything pending (the hook runs lint + test).

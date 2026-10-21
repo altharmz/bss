@@ -1,5 +1,32 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2b3: retained funding holds (2026-10-21)
+
+Migration `0035` adds `funding_hold` and immutable `funding_hold_source` amounts
+referencing existing payments or settled negative bills. Composite foreign keys
+preserve the owning account/currency. Holds retain all history after an irreversible
+release; zero holds require no sources. Deferred checks require exact source totals
+and bound allocations + payouts + outstanding holds by each source amount. Account
+locks serialize inserts, releases and source updates, including direct SQL writes.
+Source updates also recheck bounds; retained hold history prevents mode changes,
+owner reassignment, deletion and lossy downgrade.
+
+The funding repository loads outstanding source holds, subtracts them once from
+spendable ledger balance and from source availability, and offers internal reserve
+and idempotent release methods. Reserve re-quotes under the account lock, requires
+exact cents and checks its constraints before returning. Neither method commits.
+Reservation creation has no retry identity yet: no API, order or worker calls it.
+Expiry, ownership by commands, conversion to allocations and new debit/credit source
+kinds belong to subsequent slices. Legacy settlement/refunds currently fail closed
+at the shared bounds if a hold conflicts; integration must make them select around
+held funds before any public caller creates holds. Prepaid creation stays unavailable.
+
+Tests cover mixed sources, debt/obligation caps with holds, irreversible release,
+zero holds, exact amounts, cross-account references, combined allocation/payout/hold
+bounds, direct-SQL serialization, migration round-trip and downgrade retention.
+Next: durable consumption/command ownership and consuming-path integration, then
+worker recovery. The full prepaid milestone remains gated.
+
 ## P2b2: obligation-aware funding plans (2026-10-21)
 
 The legacy repository now quotes exact source amounts under the account lock.

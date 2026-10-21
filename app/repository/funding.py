@@ -1,10 +1,10 @@
 """Legacy funding snapshot, serialized with settlement by the account row lock.
 
-No writes or runtime consumers yet. Call within a transaction; the lock is retained
+No runtime consumers yet. Call within a transaction; the lock is retained
 until it ends. Unissued credits cannot fund purchases and fail reconciliation closed.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, time
 from decimal import Decimal
 from uuid import UUID
@@ -70,6 +70,16 @@ def load(conn: psycopg.Connection, account_id: UUID) -> Snapshot:
         for b in bills
         if b.is_credit_note and b.state == "settled"
     )
+    held = {}
+    for payment_id, credit_id, amount in conn.execute(
+        "SELECT s.payment_id, s.credit_bill_id, sum(s.amount)"
+        " FROM funding_hold_source s JOIN funding_hold h ON h.id = s.hold_id"
+        " WHERE h.billing_account_id = %s AND h.released_at IS NULL"
+        " GROUP BY s.payment_id, s.credit_bill_id",
+        (account_id,),
+    ):
+        held[("payment", payment_id) if payment_id else ("creditNote", credit_id)] = amount
+    sources = tuple(replace(s, held=held.get((s.kind, s.id), Decimal(0))) for s in sources)
     unbilled = conn.execute(
         "SELECT coalesce(sum(amount + tax_amount), 0)"
         " FROM applied_customer_billing_rate"
@@ -82,3 +92,60 @@ def load(conn: psycopg.Connection, account_id: UUID) -> Snapshot:
     ledger = billing.account_balance(conn, account_id)
     spendable = reconcile(sources, ledger, obligations)
     return Snapshot(account_id, account.currency, sources, ledger, obligations, spendable)
+
+
+def reserve(
+    conn: psycopg.Connection, account_id: UUID, amount: Decimal, *, held_at: datetime
+) -> UUID:
+    """Pin a fresh hold atomically with its quote; caller owns the transaction.
+
+    This internal foundation has no API caller or retry identity yet. Do not use it
+    for worker commands until their durable ownership/idempotency journal exists.
+    """
+    if (
+        not isinstance(amount, Decimal)
+        or not amount.is_finite()
+        or amount < 0
+        or amount > Decimal("9999999999.99")
+        or amount != amount.quantize(Decimal("0.01"))
+    ):
+        raise ValueError("hold amount must be nonnegative exact cents within numeric(12,2)")
+    result = plan(conn, account_id, amount)
+    hold_id = conn.execute(
+        "INSERT INTO funding_hold (billing_account_id, currency, amount, held_at)"
+        " VALUES (%s, %s, %s, %s) RETURNING id",
+        (account_id, result.snapshot.currency, amount, held_at),
+    ).fetchone()[0]
+    for source in result.sources:
+        conn.execute(
+            "INSERT INTO funding_hold_source"
+            " (hold_id, billing_account_id, payment_id, credit_bill_id, amount)"
+            " VALUES (%s, %s, %s, %s, %s)",
+            (
+                hold_id,
+                account_id,
+                source.id if source.kind == "payment" else None,
+                source.id if source.kind == "creditNote" else None,
+                source.amount,
+            ),
+        )
+    conn.execute("SET CONSTRAINTS funding_hold_bounds IMMEDIATE")
+    conn.execute("SET CONSTRAINTS funding_hold_bounds DEFERRED")
+    return hold_id
+
+
+def release(
+    conn: psycopg.Connection, account_id: UUID, hold_id: UUID, *, released_at: datetime
+) -> None:
+    """Release once under the owner lock; repeated release retains the first instant."""
+    billing.load_account(conn, account_id)
+    row = conn.execute(
+        "SELECT released_at FROM funding_hold WHERE id = %s AND billing_account_id = %s",
+        (hold_id, account_id),
+    ).fetchone()
+    if row is None:
+        raise ValueError("unknown funding hold for account")
+    if row[0] is None:
+        conn.execute(
+            "UPDATE funding_hold SET released_at = %s WHERE id = %s", (released_at, hold_id)
+        )

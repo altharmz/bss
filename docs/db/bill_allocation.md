@@ -40,6 +40,7 @@ An amount applied to a customer bill (ours; TMF678 appliedPayment, TMF676 paymen
 | `bill_allocation_pkey` | primary key | `PRIMARY KEY (id)` |
 | `bill_allocation_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `credit_usage_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
+| `funding_hold_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 
 ## Indexes
 
@@ -56,3 +57,4 @@ An amount applied to a customer bill (ours; TMF678 appliedPayment, TMF676 paymen
 - `bill_allocation_bounds`: `CREATE CONSTRAINT TRIGGER bill_allocation_bounds AFTER INSERT ON bill_allocation DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION bill_allocation_bounds()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON bill_allocation FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `credit_usage_bounds`: `CREATE CONSTRAINT TRIGGER credit_usage_bounds AFTER INSERT ON bill_allocation DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION credit_usage_bounds()`
+- `funding_hold_bounds`: `CREATE CONSTRAINT TRIGGER funding_hold_bounds AFTER INSERT OR UPDATE ON bill_allocation DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_hold_bounds()`

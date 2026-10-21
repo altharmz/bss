@@ -62,20 +62,23 @@ slips against these rules; it is a pattern matcher, not a security boundary
 
 ## Working style
 
-- **One development cycle: develop -> commit -> push -> deploy, with one local test run.**
+- **One development cycle: develop -> commit -> push, with one local test run.**
   The pre-commit hook runs `make lint` + `make test` (+ `web-lint`/`web-test` when
   `frontend/` or `spec/` is staged, `docs-check` when the generated docs' sources are;
-  nothing for a Markdown-only commit) and is that run. Commit, push and deploy when you
-  judge the change ready - no approval needed. Do not re-run tests before deploying.
+  nothing for a Markdown-only commit) and is that run. Commit and push when you judge
+  the change ready - no approval needed.
+- **Deploying is the human's decision.** Never run `make deploy`/`make verify`/`/ship` on
+  your own, and never ask or suggest whether to deploy; the human deploys manually or asks
+  you to, then use `/ship` and do not re-run tests first.
   Nothing beyond the hook is required: targeted tests while developing, `make check`,
   `make web-e2e`, `make progress` or a negative proof are optional - run one when you
   judge it worth its time. This section overrides process steps in older plans and
-  hand-offs (separate commit/deploy approvals, three backend passes, release proofs).
+  hand-offs (separate commit approvals, three backend passes, release proofs, deploy steps).
 - Every new feature or bug fix comes with a test that fails without it. To show that
   (optional), run only that test - `docker compose run --rm app pytest tests/<file>.py
   -k <name>` before the fix or with the change reverted - never a full suite.
 - Propose a plan before a data-model change or a large design change; otherwise act.
-- Before saying "it works on the server", deploy (`make deploy` reports health and smoke).
+- Say "it works on the server" only after a deploy (`make deploy` reports health and smoke).
 - When a container misbehaves, read `make logs` before changing code.
 - If the guard blocks something you believe is legitimate, say so instead of working
   around it.
@@ -98,8 +101,9 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
 - **Deployed:** N5/N6 number milestone deployed as `013da24`; health, web and MCP
   smoke passed and `~/bss/DEPLOYED` matched the full commit. P1 adds migration
   `0034` for account mode and stable prepaid bucket/accumulation identities;
-  prepaid creation remains unavailable. Next development: shared funding sources,
-  holds and combined consumption bounds, then durable worker/recovery.
+  prepaid creation remains unavailable. P2b3 adds retained source-pinned holds and
+  combined allocation/payout/hold bounds in migration `0035`, with no runtime callers.
+  Next: durable consumption/command ownership, consuming-path integration and worker recovery.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).

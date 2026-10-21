@@ -174,6 +174,8 @@ AREAS = {
         "bill_format", "bill_presentation_media", "account_presentation_media",
         "billing_cycle_specification",
         "prepaid_bucket",
+        "funding_hold",
+        "funding_hold_source",
     ),
     "worker": ("billing_run_account", "worker_request"),
     "events": ("event_subscription", "event", "event_delivery"),

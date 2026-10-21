@@ -7,6 +7,14 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2b3 retained funding holds (2026-10-21).** Migration `0035` pins reservations to
+existing payment/credit-note sources. Deferred bounds combine outstanding holds,
+allocations and payouts; released history remains immutable. Locked funding plans
+now honor holds, with internal reserve/release methods and no runtime callers.
+Prepaid creation remains unavailable. Next: durable consumption/command ownership,
+integration of consuming paths, then worker recovery. See the
+[P2b3 decision](decisions/prepaid.md#p2b3-retained-funding-holds-2026-10-21).
+
 **P2b2 funding plans (2026-10-21).** The locked legacy adapter now quotes exact
 payment/credit-note amounts capped by spendable ledger balance, preserving funds
 needed for held bills and unbilled charges. Plans do not write or reserve money.
