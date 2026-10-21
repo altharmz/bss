@@ -9,7 +9,7 @@ PATCH_PAYLOAD="$(cat)" python3 - "$root" <<'PY'
 import fnmatch, json, os, posixpath, re, sys
 
 root = sys.argv[1]
-DENY = [".env", ".env.prod", ".env.smoke", "design-ref/*"]
+DENY = [".env", ".env.prod", ".env.smoke", "design-ref/*", ".deployed"]
 
 def block(reason):
     print(f"BLOCKED by .codex/patch-guard.sh: {reason}", file=sys.stderr)
@@ -25,5 +25,5 @@ except Exception as e:
 for raw in re.findall(r"^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+?)\s*$", patch, re.M):
     rel = posixpath.relpath(posixpath.normpath(posixpath.join(cwd, raw)), root)
     if any(fnmatch.fnmatch(rel, p) for p in DENY):
-        block(f"{rel} is never edited by an agent (secrets, design reference).")
+        block(f"{rel} is never edited by an agent (secrets, design reference, the deploy record).")
 PY

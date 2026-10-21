@@ -23,6 +23,7 @@ make seed      # local demo data (refuses prod) make psql        # local db (nee
 make smoke     # smoke-test the local instance make mcp-smoke    # local MCP connector checks
 make deploy    # build locally, ship to the VPS, health + remote/web/MCP smoke
 make verify    # = make deploy (the commit was already tested by the pre-commit hook)
+make deployed  # last deploy (.deployed, written only by deploy.sh) + commits not deployed yet
 make check     # on demand only: lint, test (ci profile), docs-check, web-lint/test/e2e
 make docs      # regenerate docs/api + docs/db  make progress    # docs/PROGRESS.md (slow, on request)
 make remote CMD="..." [SERVICE=mcp]   # one-off command on the VPS image
@@ -69,7 +70,8 @@ slips against these rules; it is a pattern matcher, not a security boundary
   the change ready - no approval needed.
 - **Deploying is the human's decision.** Never run `make deploy`/`make verify`/`/ship` on
   your own, and never ask or suggest whether to deploy; the human deploys manually or asks
-  you to, then use `/ship` and do not re-run tests first.
+  you to, then use `/ship` and do not re-run tests first. What is deployed: `make
+  deployed`; never write `.deployed` or record a deployment in the docs by hand.
   Nothing beyond the hook is required: targeted tests while developing, `make check`,
   `make web-e2e`, `make progress` or a negative proof are optional - run one when you
   judge it worth its time. This section overrides process steps in older plans and
@@ -98,8 +100,7 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
 
 ## Current state (2026-10-21)
 
-- **Deployed:** N5/N6 number milestone deployed as `013da24`; health, web and MCP
-  smoke passed and `~/bss/DEPLOYED` matched the full commit. P1 adds migration
+- **Deployed:** see `make deployed`. **Built:** P1 adds migration
   `0034` for account mode and stable prepaid bucket/accumulation identities;
   prepaid creation remains unavailable. P2b3 adds retained source-pinned holds and
   combined allocation/payout/hold bounds in migration `0035`, with no runtime callers.

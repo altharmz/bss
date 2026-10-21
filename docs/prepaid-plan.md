@@ -320,5 +320,5 @@ Decided by the human (2026-10-20):
     history receiver is created.
 
 Design completion and its commit/push are authorized in this session. Development
-starts in another session; implementation commits and deployment follow CLAUDE.md's
-development cycle (no approval, superseded 2026-10-21).
+starts in another session; implementation commits follow CLAUDE.md's development cycle
+(no approval). Deployment only when the human asks (2026-10-21).

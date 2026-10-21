@@ -19,6 +19,8 @@ items:
   - {id: db.funding_hold, area: db, stage: 5, table: funding_hold, title: "Retained funding holds"}
   - {id: db.funding_hold_source, area: db, stage: 5, table: funding_hold_source, title: "Pinned hold sources and combined usage bounds"}
   - {id: db.funding_command_hold, area: db, stage: 5, table: funding_command_hold, title: "Retained command ownership and hold retry identity"}
+  - {id: db.funding_hold_conversion, area: db, stage: 5, table: funding_hold_conversion, title: "Durable command hold conversion results"}
+  - {id: db.funding_conversion_source, area: db, stage: 5, table: funding_conversion_source, title: "Exact held source allocation identities"}
   - {id: db.subscriber_number, area: db, stage: 5, table: subscriber_number, title: "Subscriber-number inventory (TMF639)"}
   - {id: db.number_assignment, area: db, stage: 5, table: number_assignment, title: "Effective-dated number assignment history"}
   - {id: api.tmf639.hub.create, area: api, stage: 5, method: POST, path: "/tmf-api/resourceInventory/v5/hub", title: "TMF639 POST /hub"}

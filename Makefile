@@ -144,6 +144,16 @@ check: lint test docs-check web-lint web-test web-e2e ## Every local check (ci p
 	@echo "checked: lint, test, docs-check, web-lint, web-test and web-e2e passed"
 
 # The commit was tested by the pre-commit hook: deploying does not test again.
+deployed: ## Show the last deploy recorded by scripts/deploy.sh and the commits not deployed yet
+	@if [ ! -f .deployed ]; then \
+		echo "no deploy recorded on this workstation (.deployed is written by make deploy)"; \
+	else \
+		cat .deployed; \
+		echo "not deployed yet:"; \
+		git log --oneline "$$(sed -n 's/^commit=//p' .deployed)..HEAD" | sed 's/^/  /' | grep . \
+			|| echo "  (nothing - HEAD is deployed)"; \
+	fi
+
 verify: deploy ## Deploy and confirm the remote instance is healthy (health, smoke, UI, MCP)
 	@echo "verified: the remote instance is healthy"
 

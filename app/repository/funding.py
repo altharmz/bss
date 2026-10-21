@@ -12,6 +12,7 @@ from uuid import UUID
 import psycopg
 
 from app.billing.funding import InsufficientFunds, Source, SourceAmount, reconcile, select_sources
+from app.billing.settlement import StateChange
 from app.repository import billing
 
 
@@ -131,6 +132,110 @@ def reserve(
         )
     conn.execute("SET CONSTRAINTS funding_hold_bounds IMMEDIATE")
     conn.execute("SET CONSTRAINTS funding_hold_bounds DEFERRED")
+    return hold_id
+
+
+def convert_for_command(
+    conn: psycopg.Connection,
+    account_id: UUID,
+    bill_id: UUID,
+    *,
+    command_id: UUID,
+    converted_at: datetime,
+) -> UUID:
+    """Consume the command's exact held sources into one fully paid bill once.
+
+    Caller owns the transaction and creates the charge/bill in it. Acquire this
+    command identity before account/child locks, as with reserve_for_command.
+    A committed retry returns the original hold; changing the target is refused.
+    Released holds cannot be consumed. No worker or public API calls this yet.
+    """
+    if not isinstance(command_id, UUID):
+        raise ValueError("command identity must be a UUID")
+    conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+        (f"funding-command:{command_id}",),
+    )
+    account = billing.load_account(conn, account_id)
+    row = conn.execute(
+        "SELECT h.id, h.amount, h.held_at, h.released_at, c.customer_bill_id"
+        " FROM funding_command_hold o JOIN funding_hold h ON h.id = o.hold_id"
+        " LEFT JOIN funding_hold_conversion c ON c.hold_id = h.id"
+        " WHERE o.command_id = %s AND o.billing_account_id = %s",
+        (command_id, account_id),
+    ).fetchone()
+    if row is None:
+        raise ValueError("unknown funding command for account")
+    hold_id, amount, held_at, released_at, target = row
+    if target is not None:
+        if target != bill_id:
+            raise ValueError("funding conversion target mismatch")
+        return hold_id
+    if released_at is not None:
+        raise ValueError("released funding hold cannot be converted")
+    if converted_at < held_at:
+        raise ValueError("conversion precedes funding hold")
+    bill = conn.execute(
+        "SELECT amount_due, state FROM customer_bill"
+        " WHERE id = %s AND billing_account_id = %s FOR UPDATE",
+        (bill_id, account_id),
+    ).fetchone()
+    if bill is None or bill[0] != amount or bill[1] not in ("sent", "settled"):
+        raise ValueError("conversion requires a matching issued bill")
+    if conn.execute(
+        "SELECT 1 FROM bill_allocation WHERE customer_bill_id = %s", (bill_id,)
+    ).fetchone():
+        raise ValueError("conversion bill already has allocations")
+    # Release first so even an already-immediate combined bound sees each source
+    # only once. The savepoint rolls back all writes if any later step fails.
+    with conn.transaction():
+        conn.execute("SET CONSTRAINTS funding_conversion_bounds DEFERRED")
+        release(conn, account_id, hold_id, released_at=converted_at, command_id=command_id)
+        conn.execute(
+            "INSERT INTO funding_hold_conversion"
+            " (hold_id, billing_account_id, customer_bill_id, converted_at)"
+            " VALUES (%s, %s, %s, %s)",
+            (hold_id, account_id, bill_id, converted_at),
+        )
+        for source_id, payment_id, credit_id, source_amount in conn.execute(
+            "SELECT id, payment_id, credit_bill_id, amount FROM funding_hold_source"
+            " WHERE hold_id = %s ORDER BY id",
+            (hold_id,),
+        ).fetchall():
+            allocation_id = conn.execute(
+                "INSERT INTO bill_allocation"
+                " (billing_account_id, currency, customer_bill_id, payment_id, credit_bill_id,"
+                " amount, kind, allocated_at) VALUES (%s, %s, %s, %s, %s, %s, 'automatic', %s)"
+                " RETURNING id",
+                (
+                    account_id,
+                    account.currency,
+                    bill_id,
+                    payment_id,
+                    credit_id,
+                    source_amount,
+                    converted_at,
+                ),
+            ).fetchone()[0]
+            conn.execute(
+                "INSERT INTO funding_conversion_source"
+                " (hold_source_id, hold_id, allocation_id, billing_account_id)"
+                " VALUES (%s, %s, %s, %s)",
+                (source_id, hold_id, allocation_id, account_id),
+            )
+        if bill[1] != "settled":
+            billing.record_bill_state(
+                conn, StateChange(bill_id, bill[1], "settled"), now=converted_at, cause="run"
+            )
+        conn.execute(
+            "SET CONSTRAINTS funding_conversion_bounds, funding_hold_bounds,"
+            " bill_allocation_bounds IMMEDIATE"
+        )
+        conn.execute(
+            "SET CONSTRAINTS funding_conversion_bounds, funding_hold_bounds,"
+            " bill_allocation_bounds DEFERRED"
+        )
+        load(conn, account_id)
     return hold_id
 
 

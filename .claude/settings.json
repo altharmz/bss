@@ -44,7 +44,8 @@
       "Bash(pnpm:*)",
       "Bash(yarn:*)",
       "Bash(corepack:*)",
-      "Edit(./design-ref/**)"
+      "Edit(./design-ref/**)",
+      "Edit(./.deployed)"
     ]
   },
   "hooks": {

@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0036**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0037**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -45,6 +45,8 @@ PostgreSQL schema at Alembic head **0036**, read from `pg_catalog` of a throwawa
 | [`funding_hold`](funding_hold.md) | billing | Internal source-pinned funding hold foundation; no public API. |
 | [`funding_hold_source`](funding_hold_source.md) | billing | Internal source-pinned funding hold foundation; no public API. |
 | [`funding_command_hold`](funding_command_hold.md) | billing | Retained internal command-to-hold retry identity; no public API or worker caller. |
+| [`funding_hold_conversion`](funding_hold_conversion.md) | billing | Retained internal command hold conversion; no runtime caller. |
+| [`funding_conversion_source`](funding_conversion_source.md) | billing | Retained internal command hold conversion; no runtime caller. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
 | [`worker_request`](worker_request.md) | worker | The admin UI's queue for the billing worker (ours): catch-up and retry requests. The API only inserts; the worker picks them up oldest first. |
 | [`event_subscription`](event_subscription.md) | events | TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their deliveries. |
@@ -108,6 +110,8 @@ flowchart LR
     funding_hold[funding_hold]
     funding_hold_source[funding_hold_source]
     funding_command_hold[funding_command_hold]
+    funding_hold_conversion[funding_hold_conversion]
+    funding_conversion_source[funding_conversion_source]
   end
   subgraph area_worker["Billing worker (ours)"]
     billing_run_account[billing_run_account]
@@ -158,7 +162,14 @@ flowchart LR
   event_delivery -->|"subscription_id"| event_subscription
   financial_account -->|"party_id"| party
   funding_command_hold -->|"hold_id, billing_account_id"| funding_hold
+  funding_conversion_source -->|"allocation_id"| bill_allocation
+  funding_conversion_source -->|"hold_id, billing_account_id"| funding_hold_conversion
+  funding_conversion_source -->|"hold_id"| funding_hold_conversion
+  funding_conversion_source -->|"hold_source_id"| funding_hold_source
   funding_hold -->|"billing_account_id"| billing_account
+  funding_hold_conversion -->|"customer_bill_id, billing_account_id"| customer_bill
+  funding_hold_conversion -->|"hold_id, billing_account_id"| funding_hold
+  funding_hold_conversion -->|"hold_id"| funding_command_hold
   funding_hold_source -->|"credit_bill_id, billing_account_id"| customer_bill
   funding_hold_source -->|"hold_id, billing_account_id"| funding_hold
   funding_hold_source -->|"payment_id, billing_account_id"| payment
@@ -789,6 +800,18 @@ erDiagram
     uuid hold_id FK
     uuid billing_account_id FK
   }
+  funding_hold_conversion {
+    uuid hold_id PK,FK
+    uuid billing_account_id FK
+    uuid customer_bill_id FK
+    timestamptz converted_at
+  }
+  funding_conversion_source {
+    uuid hold_source_id PK,FK
+    uuid hold_id FK
+    uuid allocation_id FK
+    uuid billing_account_id FK
+  }
   billing_account {
     uuid id PK
   }
@@ -799,6 +822,7 @@ erDiagram
     uuid id PK
   }
   applied_customer_billing_rate |o--o{ applied_customer_billing_rate : "refunds_rate_id, product_id"
+  bill_allocation ||--o{ funding_conversion_source : "allocation_id"
   bill_presentation_media ||--o{ account_presentation_media : "media_id"
   billing_account ||--o{ account_presentation_media : "billing_account_id"
   billing_account ||--o{ applied_customer_billing_rate : "billing_account_id, currency"
@@ -818,8 +842,14 @@ erDiagram
   customer_bill |o--o{ refund_source : "credit_bill_id, billing_account_id"
   customer_bill ||--o{ bill_allocation : "customer_bill_id, billing_account_id"
   customer_bill ||--o{ customer_bill_state_change : "customer_bill_id"
+  customer_bill ||--o{ funding_hold_conversion : "customer_bill_id, billing_account_id"
+  funding_command_hold ||--o{ funding_hold_conversion : "hold_id"
   funding_hold ||--o{ funding_command_hold : "hold_id, billing_account_id"
+  funding_hold ||--o{ funding_hold_conversion : "hold_id, billing_account_id"
   funding_hold ||--o{ funding_hold_source : "hold_id, billing_account_id"
+  funding_hold_conversion ||--o{ funding_conversion_source : "hold_id"
+  funding_hold_conversion ||--o{ funding_conversion_source : "hold_id, billing_account_id"
+  funding_hold_source ||--o{ funding_conversion_source : "hold_source_id"
   payment |o--o{ bill_allocation : "payment_id, billing_account_id"
   payment |o--o{ funding_hold_source : "payment_id, billing_account_id"
   payment |o--o{ refund : "payment_id, billing_account_id"

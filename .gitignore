@@ -1,6 +1,9 @@
 .env
 .env.prod
 .env.smoke
+# make deploy: the last deployed commit; written only by scripts/deploy.sh
+.deployed
+.deployed.tmp
 __pycache__/
 *.pyc
 .pytest_cache/

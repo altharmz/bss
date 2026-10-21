@@ -122,7 +122,7 @@ a receipt asserted by an authorized operator.
 | N3: inventory | TMF639 CRUD, fields, paging, filters, PATCH formats and nested validation. Immutable number value and built-in specification; editable descriptions and lock/unlock. Delete only never-assigned numbers. Hubs, outbox events, MCP tools and contract tests. |
 | N4: orders | Built-in msisdn requirement, add/modify/release/cancel through effective-dated assignments and product lookup by realizingResource.id. Preserve existing unchecked documents on products whose specifications do not require numbers. |
 | N5: UI | Number inventory, create/search/lock, number selection in New subscriber, details and number changes through orders; pinned request tests and browser coverage. |
-| N6: release | Contract validation and release notes (operational recovery, rollback limits). Testing, commit, push and deploy follow CLAUDE.md's development cycle; no approval. |
+| N6: release | Contract validation and release notes (operational recovery, rollback limits). Testing, commit and push follow CLAUDE.md's development cycle; no approval. Deployment only when the human asks. |
 
 Read catalog, events, frontend and MCP decision records before their slices. Never bypass guards.
 

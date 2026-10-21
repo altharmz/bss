@@ -49,6 +49,10 @@ has 'docker[[:space:]]+compose([[:space:]]+-f[[:space:]]+[^[:space:]]+)*[[:space
 has 'docker[[:space:]]+compose[[:space:]].*(run|exec)[[:space:]].*[[:space:]](env|printenv)([[:space:]]|$)' &&
   block "printing a container's environment prints its secrets."
 
+# --- the deploy record is written only by scripts/deploy.sh (make deploy) ---
+has '(>|(^|[[:space:];&|])(tee|rm|mv|cp|ln|touch|truncate|sed[[:space:]]+-i[^[:space:]]*)[[:space:]])[^;&|]*\.deployed([^[:alnum:]_-]|$)' &&
+  block ".deployed is written only by make deploy; read it with make deployed."
+
 # --- the commit gate: tests always run before a commit ---
 # (cloud sessions have no Docker, so the hook cannot run there: docs/cloud.md)
 if ! $cloud; then

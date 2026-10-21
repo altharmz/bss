@@ -325,7 +325,8 @@ The commit is independent of an optional TAG override. A failed write/read or mi
 fails deployment. Dry runs and failures before service health do not update the file.
 Later API/web/MCP smoke failures leave the record of the newly running backend intact;
 the marker records running backend identity, not success of the entire release gate.
-No local deployed coverage file is written and no coverage percentages change.
+No local deployed coverage file is written and no coverage percentages change
+(superseded 2026-10-21, below).
 
 Local validation: Bash syntax check passes. Isolated execution of the applied
 record/read-back block passes an actual atomic write and read (including a custom
@@ -337,6 +338,20 @@ separately approved deployment.
 `make lint`, `make test` (1,405 passed) and `make decisions-check` pass. Corrected
 API notes were regenerated with `make docs`; a second generation left all 53 reference
 pages identical. Scope is unchanged.
+
+
+## Local deploy record (2026-10-21)
+
+The human: keep track of the deployed version in a file that only `make deploy` updates.
+`scripts/deploy.sh` writes `.deployed` in the workstation's repo (gitignored, never
+committed - a commit per deploy would make HEAD differ from what runs) right after the
+remote `DEPLOYED` matches: `commit`, `tag`, `subject`, `migration` (newest file in
+`alembic/versions/` of that commit, from git, not the working tree), `deployed_at` (UTC)
+and `checks=running`; after the last step it is rewritten with `checks=passed`. Written
+via a temp file and `mv`. `make deployed` prints it and `git log <commit>..HEAD`. Agents
+never write it: Claude's Edit deny rule, `.codex/patch-guard.sh` and a guard.sh rule
+against shell writes (cases in `guard-cases.txt`). The VPS's `~/bss/DEPLOYED` stays the
+authority; `.deployed` is the workstation's copy of the last deploy made from it.
 
 ## To port to vps-lab-template
 

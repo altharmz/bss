@@ -177,6 +177,8 @@ AREAS = {
         "funding_hold",
         "funding_hold_source",
         "funding_command_hold",
+        "funding_hold_conversion",
+        "funding_conversion_source",
     ),
     "worker": ("billing_run_account", "worker_request"),
     "events": ("event_subscription", "event", "event_delivery"),

@@ -10,6 +10,14 @@ allow	docker compose config --quiet
 allow	docker compose run --rm --no-deps web-offline sh -c "npm test"
 allow	make deploy
 allow	make verify
+allow	make deployed
+allow	cat .deployed
+allow	git log --oneline abc..HEAD > /tmp/x/deployed.txt
+block	echo commit=abc > .deployed
+block	printf 'checks=passed' >> ./.deployed
+block	sed -i s/running/passed/ .deployed
+block	rm .deployed
+block	cp /tmp/x .deployed
 allow	sed -n 1,80p .claude/hooks/guard.sh > /tmp/x
 allow	git commit --amend --no-edit -F m
 allow	echo hi > scripts/x.sh

@@ -3,7 +3,8 @@
 Simplified on 2026-10-20 (the human: keep only the really important rules; one local
 test run per development cycle; commit and push need no approval). Since 2026-10-21
 deploying is the human's call: the agent deploys only when asked and never asks or
-suggests it.
+suggests it; what is deployed is `make deployed`, a file only deploy.sh writes
+([infra.md](infra.md#local-deploy-record-2026-10-21)).
 
 ## Development cycle and gates
 

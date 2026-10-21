@@ -1,5 +1,33 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2b5: durable hold conversion (2026-10-21)
+
+Migration `0037` retains one conversion result per command-owned hold and target
+bill, plus one immutable allocation mapping per held source. Composite ownership
+keys and deferred checks require a released hold, matching conversion/release
+instants, a settled bill for exactly the held total, and allocations matching every
+pinned source and amount. Zero holds convert to zero bills without allocations.
+The checks also cover subsequent bill/allocation writes. Conversion history cannot
+be updated or deleted; downgrade refuses retained results. Existing holds survive
+an empty conversion migration round-trip.
+
+`convert_for_command` acquires the same command identity lock before account/child
+locks. It consumes only that command's outstanding hold, without re-quoting funds.
+The caller creates the charge and issued bill in its transaction; conversion writes
+allocations, bill state/history/events and the result together in a savepoint, then
+checks bounds and funding reconciliation. Failures restore the outstanding hold.
+Committed retries return the original hold without repeating financial or state
+writes; a changed target or account fails. A released hold cannot be converted.
+Conversion requires an unallocated issued bill; partial/multiple-bill conversions
+are outside this foundation. Allocations use the existing automatic kind and run
+state-change cause, since the future billing owner executes these commands.
+
+This introduces no API, worker caller or funded interval. Prepaid creation stays
+unavailable. Next: consuming-path integration around held sources, then the durable
+worker command/result journal, posting and recovery. Tests cover exact mixed-source
+conversion, zero totals, committed and concurrent retries, rollback, technical
+failure recovery, invalid requests, immutable history and migration retention.
+
 ## P2b4: command-owned hold retries (2026-10-21)
 
 Migration `0036` adds an immutable one-to-one internal command UUID/hold mapping.

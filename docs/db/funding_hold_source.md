@@ -49,3 +49,7 @@ Internal source-pinned funding hold foundation; no public API.
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT OR UPDATE ON funding_hold_source FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `funding_hold_bounds`: `CREATE CONSTRAINT TRIGGER funding_hold_bounds AFTER INSERT OR UPDATE ON funding_hold_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_hold_bounds()`
 - `funding_hold_retained`: `CREATE TRIGGER funding_hold_retained BEFORE DELETE OR UPDATE ON funding_hold_source FOR EACH ROW EXECUTE FUNCTION funding_hold_retained()`
+
+## Referenced by
+
+[`funding_conversion_source`](funding_conversion_source.md)

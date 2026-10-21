@@ -260,6 +260,24 @@ deployed_commit="$(rssh "cat ${REMOTE_DIR}/DEPLOYED")"
   || fail "deployed commit record does not match ${DEPLOY_COMMIT}"
 printf '    Deployed commit: %s (image %s:%s)\n' "${deployed_commit}" "${IMAGE_NAME}" "${TAG}"
 
+# The workstation's copy of the record (gitignored; `make deployed` shows it). Only this
+# script writes it: agents never record a deployment by hand (docs/decisions/harness.md).
+# Written now, when the VPS runs the new backend, with checks=running; the end of the
+# script sets checks=passed. checks=running afterwards means a later smoke failed.
+DEPLOYED_FILE=.deployed
+write_local_record() {
+  {
+    printf 'commit=%s\n' "${DEPLOY_COMMIT}"
+    printf 'tag=%s\n' "${TAG}"
+    printf 'subject=%s\n' "$(git log -1 --format=%s "${DEPLOY_COMMIT}")"
+    printf 'migration=%s\n' "$(git ls-tree --name-only "${DEPLOY_COMMIT}" alembic/versions/ | grep -E '/[0-9]+_[^/]*\.py$' | sort | tail -n 1 | xargs -r basename)"
+    printf 'deployed_at=%s\n' "${DEPLOYED_AT}"
+    printf 'checks=%s\n' "$1"
+  } > "${DEPLOYED_FILE}.tmp" && mv "${DEPLOYED_FILE}.tmp" "${DEPLOYED_FILE}"
+}
+DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+write_local_record running
+
 log "Remote smoke test"
 rssh "curl -fsS --max-time 5 http://127.0.0.1:18081/healthz" \
   || { rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2; fail "smoke test failed"; }
@@ -300,5 +318,7 @@ log "Pruning old ${IMAGE_NAME} images on ${REMOTE} (keeping ${KEEP_IMAGES}, noth
 rssh "docker images '${IMAGE_NAME}' --format '{{.ID}} {{.CreatedAt}}' \
   | sort -k2 -r | tail -n +$((KEEP_IMAGES + 1)) | awk '{print \$1}' \
   | xargs -r docker rmi" || true
+
+write_local_record passed
 
 log "Deployed ${IMAGE_NAME}:${TAG} — app at 127.0.0.1:18081 on ${REMOTE}, UI at ${WEB_URL}"

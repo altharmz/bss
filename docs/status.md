@@ -7,6 +7,14 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2b5 durable hold conversion (2026-10-21).** Migration `0037` retains command
+hold conversion results and exact source-to-allocation mappings. Conversion releases
+the hold, allocates its pinned sources and settles one matching bill atomically;
+retries return the original result. Failure restores the hold. Prepaid creation
+remains unavailable and no runtime caller is enabled. Next: consuming-path
+integration, durable worker posting and recovery. See the
+[P2b5 decision](decisions/prepaid.md#p2b5-durable-hold-conversion-2026-10-21).
+
 **P2b4 command-owned hold retries (2026-10-21).** Migration `0036` retains a
 one-to-one command/hold identity. Internal retries serialize before account locks,
 return the original hold after commit/release, and reject changed account/amount.

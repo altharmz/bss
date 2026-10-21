@@ -39,3 +39,7 @@ Retained internal command-to-hold retry identity; no public API or worker caller
 
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON funding_command_hold FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `funding_command_hold_retained`: `CREATE TRIGGER funding_command_hold_retained BEFORE DELETE OR UPDATE ON funding_command_hold FOR EACH ROW EXECUTE FUNCTION funding_hold_retained()`
+
+## Referenced by
+
+[`funding_hold_conversion`](funding_hold_conversion.md)

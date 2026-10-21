@@ -30,6 +30,7 @@ Internal source-pinned funding hold foundation; no public API.
 | `funding_hold_amount_check` | check | `CHECK (((amount >= (0)::numeric) AND (amount < 'Infinity'::numeric)))` |
 | `funding_hold_check` | check | `CHECK ((released_at >= held_at))` |
 | `funding_hold_pkey` | primary key | `PRIMARY KEY (id)` |
+| `funding_conversion_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_hold_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_hold_id_billing_account_id_key` | unique | `UNIQUE (id, billing_account_id)` |
 
@@ -44,9 +45,10 @@ Internal source-pinned funding hold foundation; no public API.
 ## Triggers
 
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT OR UPDATE ON funding_hold FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
+- `funding_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_conversion_bounds AFTER INSERT OR UPDATE ON funding_hold DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_conversion_bounds()`
 - `funding_hold_bounds`: `CREATE CONSTRAINT TRIGGER funding_hold_bounds AFTER INSERT OR UPDATE ON funding_hold DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_hold_bounds()`
 - `funding_hold_retained`: `CREATE TRIGGER funding_hold_retained BEFORE DELETE OR UPDATE ON funding_hold FOR EACH ROW EXECUTE FUNCTION funding_hold_retained()`
 
 ## Referenced by
 
-[`funding_command_hold`](funding_command_hold.md), [`funding_hold_source`](funding_hold_source.md)
+[`funding_command_hold`](funding_command_hold.md), [`funding_hold_conversion`](funding_hold_conversion.md), [`funding_hold_source`](funding_hold_source.md)
