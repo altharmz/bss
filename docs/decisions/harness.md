@@ -30,8 +30,8 @@ test run per development cycle; commit, push and deploy need no approval).
   (CLAUDE.md says it overrides them; the forward-looking ones were reworded). Extra runs
   (`make check`, `web-e2e`, `progress`, negative proofs) are the agent's call.
 - **Tests with every change** (the human, 2026-10-21): every new feature or bug fix
-  comes with a test that fails without it, shown by a targeted pytest run of that test
-  (never a full suite). A CLAUDE.md rule, not enforced by a hook.
+  comes with a test that fails without it; showing that is optional and uses a targeted
+  pytest run of that test, never a full suite. A CLAUDE.md rule, not enforced by a hook.
 - `make progress` runs only on request (it reruns the whole suite with recording, over
   10 minutes); scope.yaml entries are still added with the feature.
 - `make test` takes about 8 minutes (1,433 tests, 2026-10-20). Timing-based tests (`test_worker_heartbeat.py`, the thread
