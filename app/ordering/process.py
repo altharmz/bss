@@ -305,17 +305,19 @@ def _process(
     prepaid = account["rating_type"] == "prepaid"
     prepared = None
     if prepaid and not problems:
-        if start != today or any(i.action != "add" for i in request.items):
+        if any(i.action != "add" for i in request.items):
             problems.append(
                 Problem(
                     None,
                     "prepaidLifecycleUnavailable",
-                    "only immediate prepaid add orders are available",
+                    "only prepaid add orders are available",
                 )
             )
         else:
             try:
-                prepared = prepaid_orders.prepare(conn, request, account, quotes, start)
+                prepared = prepaid_orders.prepare(
+                    conn, request, account, quotes, start, future=start > today
+                )
             except InsufficientFunds as exc:
                 problems.append(Problem(None, "insufficientFunds", str(exc)))
     failing = {problem.item_id for problem in problems}

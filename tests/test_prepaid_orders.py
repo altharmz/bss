@@ -155,17 +155,66 @@ def test_draft_submission_reserves_only_on_submit(api, db_conn):
     assert db_conn.execute("SELECT count(*) FROM prepaid_command").fetchone() == (1,)
 
 
-def test_future_prepaid_start_stays_gated_until_scheduling_slice(api, db_conn):
-    off, acc = shop(api, db_conn, numbers=False)
-    body = apidata.order_body(acc, apidata.add_item(off))
-    body["requestedStartDate"] = (api.clock.now() + timedelta(days=1)).isoformat()
+def test_future_start_claims_without_funds_then_authorizes_after_shortfall(api, db_conn):
+    off, acc = shop(api, db_conn, funds="0")
+    item = apidata.add_item(off)
+    item["product"] = {"@type": "ProductRefOrValue", "realizingResource": refs(number(api)["id"])}
+    due = api.clock.now() + timedelta(days=1)
+    body = apidata.order_body(acc, item, requestedStartDate=due.isoformat())
     response = api.post(ORDER, body)
     assert response.status_code == 201, response.text
-    assert response.json()["state"] == "rejected"
-    assert response.json()["productOrderErrorMessage"][0]["code"] == "prepaidLifecycleUnavailable"
+    order = response.json()
+    assert order["state"] == "inProgress"
+    cmd_id = UUID(order["id"])
     assert db_conn.execute("SELECT count(*) FROM funding_hold").fetchone() == (0,)
-    assert db_conn.execute("SELECT count(*) FROM prepaid_command").fetchone() == (0,)
-    assert db_conn.execute("SELECT count(*) FROM product").fetchone() == (0,)
+    assert db_conn.execute("SELECT count(*) FROM number_assignment").fetchone() == (1,)
+    db_conn.commit()
+    assert dispatch(db_conn, api.clock.now()) == []
+    assert dispatch(db_conn, due) == [cmd_id]
+    assert commands.needs_topup(db_conn, cmd_id)["required"] == D(12)
+    assert db_conn.execute("SELECT count(*) FROM funded_interval").fetchone() == (0,)
+    make_payment(db_conn, dict(acc, currency="USD"), "12")
+    db_conn.commit()
+    assert dispatch(db_conn, due + timedelta(days=2)) == [cmd_id]
+    db_conn.commit()
+    assert api.get(order["href"]).json()["state"] == "completed"
+    assert db_conn.execute("SELECT lower(period) FROM funded_interval").fetchone() == (
+        (due + timedelta(days=2)).astimezone(TZ).date(),
+    )
+
+
+@pytest.mark.parametrize("future", [False, True])
+def test_cancel_before_first_grant_releases_funds_and_number(api, db_conn, future):
+    from tests.test_api_order_cancel import CANCEL, cancel_body
+
+    off, acc = shop(api, db_conn, funds="12")
+    item = apidata.add_item(off)
+    item["product"] = {"@type": "ProductRefOrValue", "realizingResource": refs(number(api)["id"])}
+    body = apidata.order_body(acc, item)
+    if future:
+        body["requestedStartDate"] = (api.clock.now() + timedelta(days=1)).isoformat()
+    order = api.post(ORDER, body).json()
+    assert order["state"] == "inProgress"
+    response = api.post(CANCEL, cancel_body(order))
+    assert response.status_code == 201, response.text
+    assert commands.get(db_conn, UUID(order["id"]))["result"] == {"outcome": "cancelled"}
+    assert funding.load(db_conn, UUID(acc["id"])).spendable == D(12)
+    assert db_conn.execute(
+        "SELECT count(*) FROM number_assignment WHERE cancelled_at IS NULL"
+    ).fetchone() == (0,)
+    db_conn.commit()
+    assert dispatch(db_conn, api.clock.now() + timedelta(days=2)) == []
+    assert api.get(order["href"]).json()["state"] == "cancelled"
+
+
+def test_cancel_after_first_grant_refused(api, db_conn):
+    from tests.test_api_order_cancel import CANCEL, cancel_body
+
+    off, acc = shop(api, db_conn, numbers=False)
+    order = purchase(api, off, acc, numbers=False)
+    dispatch(db_conn, api.clock.now())
+    db_conn.commit()
+    assert api.post(CANCEL, cancel_body(order)).status_code == 409
 
 
 def test_pending_purchase_crosses_midnight_with_accepted_money(api, db_conn):
@@ -273,3 +322,80 @@ def test_posting_failure_keeps_order_pending_and_hold_intact(api, db_conn, monke
     prepaid.post_interval(db_conn, cmd_id, now=api.clock.now(), tz=TZ)
     db_conn.commit()
     assert api.get(order["href"]).json()["state"] == "completed"
+
+
+def test_future_start_selects_authorization_price_and_tax(api, db_conn):
+    from psycopg.types.range import Range
+
+    from app.billing import entitlement
+    from app.repository import catalog
+
+    off, acc = shop(api, db_conn, funds="0", numbers=False)
+    due = api.clock.now() + timedelta(days=2)
+    response = api.post(
+        ORDER, apidata.order_body(acc, apidata.add_item(off), requestedStartDate=due.isoformat())
+    )
+    assert response.status_code == 201, response.text
+    old = db_conn.execute(
+        "SELECT id FROM product_offering_price WHERE product_offering_id = %s", (off["id"],)
+    ).fetchone()[0]
+    boundary = due - timedelta(days=1)
+    db_conn.execute(
+        "UPDATE product_offering_price SET valid_for = tstzrange(lower(valid_for), %s, '[)')"
+        " WHERE id = %s",
+        (boundary, old),
+    )
+    current = catalog.create_product_offering_price(
+        db_conn,
+        product_offering_id=UUID(off["id"]),
+        price_type="recurring",
+        amount=D(7),
+        currency="USD",
+        valid_for=Range(boundary, None, "[)"),
+        recurring_period="monthly",
+        details={"tax": [{"taxCategory": "VAT", "taxRate": 10}]},
+    )
+    db_conn.commit()
+    dispatch(db_conn, due)
+    product = prepaid.fetch_one(db_conn, "SELECT * FROM product")
+    account = prepaid.fetch_one(db_conn, "SELECT * FROM billing_account")
+    assert entitlement.view(db_conn, product, account, due.astimezone(TZ).date())["needs_topup"][
+        "required"
+    ] == D("7.70")
+    assert db_conn.execute("SELECT count(*) FROM funding_hold").fetchone() == (0,)
+    make_payment(db_conn, dict(acc, currency="USD"), "7.70")
+    db_conn.commit()
+    dispatch(db_conn, due)
+    grant = db_conn.execute(
+        "SELECT amount, tax_amount, quote->>'price_id' FROM funded_interval"
+    ).fetchone()
+    assert grant == (D(7), D("0.70"), str(current["id"]))
+
+
+@pytest.mark.parametrize("future", [False, True])
+def test_cancel_failure_rolls_back_claim_product_and_hold(api, db_conn, monkeypatch, future):
+    from tests.test_api_order_cancel import CANCEL, cancel_body
+
+    off, acc = shop(api, db_conn, funds="12")
+    item = apidata.add_item(off)
+    item["product"] = {"@type": "ProductRefOrValue", "realizingResource": refs(number(api)["id"])}
+    body = apidata.order_body(acc, item)
+    if future:
+        body["requestedStartDate"] = (api.clock.now() + timedelta(days=1)).isoformat()
+    order = api.post(ORDER, body).json()
+    original = commands.complete
+
+    def crash(*args, **kwargs):
+        original(*args, **kwargs)
+        raise RuntimeError("cancel crash")
+
+    monkeypatch.setattr(commands, "complete", crash)
+    response = api.post(CANCEL, cancel_body(order))
+    assert response.status_code == 500
+    assert api.get(order["href"]).json()["state"] == "inProgress"
+    assert commands.get(db_conn, UUID(order["id"]))["state"] == "pending"
+    assert db_conn.execute("SELECT status FROM product").fetchone() == ("pendingActive",)
+    assert db_conn.execute(
+        "SELECT count(*) FROM number_assignment WHERE cancelled_at IS NULL"
+    ).fetchone() == (1,)
+    assert funding.load(db_conn, UUID(acc["id"])).spendable == (D(12) if future else D(0))

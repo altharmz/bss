@@ -1,5 +1,24 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P3d: future starts and pre-grant cancellation (2026-10-21)
+
+Future add orders retain pendingActive products, number claims and an immutable
+product-set intent without reserving funds. The due worker resolves price and tax
+at the actual authorization date and reserves/posts the entire order atomically.
+A funding shortfall retains its reason, with no hold or partial grant; a later tick
+selects its own date and quote. Initial order price fields remain acceptance estimates;
+the funded interval and bill retain the actual authorization quote. Immediate starts
+continue to retain their accepted quote and money.
+
+Cancellation takes the command identity before any order/account/product locks,
+serializing it against posting. Before the first grant it cancels the complete tree,
+voids number claims and releases any command hold atomically. The journal records a
+completed business result with outcome `cancelled`; dispatch and posting replay do
+not purchase service. After a grant cancellation returns 409. No schema migration
+or public prepaid account creation is included. Tests cover no-funds scheduling,
+claims, due-date dispatch, actual-date price/tax selection, shortfall recovery,
+immediate/future cancellation, cancellation rollback and refusal after funding. P3e is next.
+
 ## P3c: immediate prepaid purchase lifecycle (2026-10-21)
 
 Immediate add-only prepaid orders quote full periods and account tax exemptions

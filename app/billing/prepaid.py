@@ -137,6 +137,57 @@ def _renewal_quote(conn, cmd, account, today, tz):
     )
 
 
+class FutureOrder(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    order_id: UUID
+    products: list[UUID] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def unique_products(self):
+        if len(set(self.products)) != len(self.products):
+            raise ValueError("duplicate future product")
+        return self
+
+
+def _future_quotes(conn, request, account, today, tz, due_date):
+    quotes = []
+    for product_id in sorted(request.products):
+        prod = fetch_one(conn, "SELECT * FROM product WHERE id = %s FOR UPDATE", (product_id,))
+        if prod is None or prod["billing_account_id"] != account.id:
+            raise ValueError("future product does not belong to account")
+        price = price_at(
+            Product(
+                prod["id"],
+                prod["product_offering_id"],
+                prod["status"],
+                prod["start_date"],
+                prod["termination_date"],
+            ),
+            today,
+            billing.load_recurring_prices(conn, [prod["product_offering_id"]]),
+            account.currency,
+            tz,
+        )
+        quotes.append(
+            IntervalQuote(
+                product_id=product_id,
+                offering_id=price.offering_id,
+                price_id=price.id,
+                currency=account.currency,
+                amount=price.amount,
+                taxes=[
+                    TaxQuote(category=t.category, rate=t.rate, amount=t.amount)
+                    for t in charge_taxes(price.amount, price, account, today, tz)
+                ],
+                anchor=due_date,
+                index=0,
+                unit=price.recurring_period,
+                length=price.recurring_period_length,
+            )
+        )
+    return quotes
+
+
 def post_interval(
     conn: psycopg.Connection, command_id: UUID, *, now: datetime, tz: ZoneInfo
 ) -> dict:
@@ -158,16 +209,27 @@ def post_interval(
             return cmd["result"]
         if cmd["kind"] not in {"order", "renewal"}:
             raise ValueError("interval posting requires an order or renewal command")
-        batch = "intervals" in cmd["request"]
+        future = "products" in cmd["request"]
+        batch = "intervals" in cmd["request"] or future
         if batch and cmd["kind"] != "order":
             raise ValueError("multi-product posting requires an order command")
-        order_id = OrderQuote.model_validate(cmd["request"]).order_id if batch else None
+        future_request = FutureOrder.model_validate(cmd["request"]) if future else None
+        order_id = (
+            future_request.order_id
+            if future
+            else OrderQuote.model_validate(cmd["request"]).order_id
+            if batch
+            else None
+        )
         account = billing.load_account(conn, cmd["billing_account_id"])
         state = fetch_one(conn, "SELECT * FROM billing_account WHERE id = %s", (account.id,))
         if state["rating_type"] != "prepaid" or state["state"] != "Active":
             raise ValueError("authorization requires an active prepaid account")
         renewal = cmd["kind"] == "renewal" and "previous_interval_id" in cmd["request"]
-        if renewal:
+        if future:
+            parsed = _future_quotes(conn, future_request, account, today, tz, cmd["due_date"])
+            originals = [q.model_dump(mode="json") for q in parsed]
+        elif renewal:
             parsed = [_renewal_quote(conn, cmd, account, today, tz)]
             originals = [parsed[0].model_dump(mode="json")]
         elif batch:
@@ -222,7 +284,7 @@ def post_interval(
             ):
                 raise ValueError("purchase command must match its entire pending order")
         total = sum((q[2] for q in accepted), Decimal(0))
-        if renewal:
+        if renewal or future:
             funding.reserve_for_command(conn, account.id, total, command_id=command_id, held_at=now)
         hold = fetch_one(
             conn,

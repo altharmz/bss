@@ -1,4 +1,4 @@
-"""Accept immediate prepaid purchases under command/account/catalog/number locks."""
+"""Accept immediate and future prepaid purchases under command/account/catalog/number locks."""
 
 from dataclasses import replace
 from decimal import Decimal
@@ -14,8 +14,8 @@ from app.repository import billing, funding, orders, products
 from app.repository import prepaid_commands as commands
 
 
-def prepare(conn, request, account, quotes, start):
-    """Validate full-period tax-inclusive funds before creating products or claims."""
+def prepare(conn, request, account, quotes, start, *, future=False):
+    """Validate immediate funds, or retain future product identities without a quote."""
     core = billing.core_account(account)
     prices = {
         p.id: p
@@ -25,6 +25,9 @@ def prepare(conn, request, account, quotes, start):
     for item in request.items:
         new = item.new_product or products.NewProduct(details=(item.details or {}).get("product"))
         new = replace(new, id=new.id or uuid4())
+        if future:
+            accepted[item.item_id] = (new, None)
+            continue
         price = prices[quotes[item.item_id]["id"]]
         quote = IntervalQuote(
             product_id=new.id,
@@ -44,6 +47,8 @@ def prepare(conn, request, account, quotes, start):
             length=price.recurring_period_length,
         )
         accepted[item.item_id] = (new, quote)
+    if future:
+        return accepted, None
     total = sum(
         (q.amount + sum((t.amount for t in q.taxes), Decimal(0)) for _, q in accepted.values()),
         Decimal(0),
@@ -55,9 +60,10 @@ def prepare(conn, request, account, quotes, start):
 def accept(conn, order, request, rows, prepared, command_id, start, now):
     """Caller transaction retains the hold, complete item tree and command together."""
     accepted, total = prepared
-    funding.reserve_for_command(
-        conn, order["billing_account_id"], total, command_id=command_id, held_at=now
-    )
+    if total is not None:
+        funding.reserve_for_command(
+            conn, order["billing_account_id"], total, command_id=command_id, held_at=now
+        )
     orders.set_order_state(conn, order["id"], "inProgress")
     for item in request.items:
         row = rows[item.item_id]
@@ -83,7 +89,13 @@ def accept(conn, order, request, rows, prepared, command_id, start, now):
         due_date=start,
         request={
             "order_id": str(order["id"]),
-            "intervals": [quote.model_dump(mode="json") for _, quote in accepted.values()],
+            **(
+                {"products": [str(new.id) for new, _ in accepted.values()]}
+                if total is None
+                else {
+                    "intervals": [quote.model_dump(mode="json") for _, quote in accepted.values()]
+                }
+            ),
         },
         now=now,
     )

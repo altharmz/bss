@@ -1,9 +1,10 @@
 """TMF622 cancelProductOrder: undo a completed order before any of it takes effect, or
 throw a draft away (it was never processed: nothing to undo).
 
-Orders are processed synchronously (app/ordering/process.py), so there is never an
-order in progress to stop. A cancellation instead undoes a completed order whose every
-effect is still in the future, in one transaction:
+Prepaid inProgress orders may be cancelled before their first grant, under the
+command identity lock: release money and number claims and retain a cancelled
+command result. Postpaid cancellation undoes a completed order whose every effect
+is still in the future, in one transaction:
 
 - add item: its product has not started (`created`/`pendingActive`, start after today)
   and nothing else ended it; the product is `cancelled` with zero billable days.
@@ -37,7 +38,8 @@ import psycopg
 from app.events import emit
 from app.ordering import numbers as number_orders
 from app.ordering.states import item_transition, order_transition
-from app.repository import billing, orders, parties, products
+from app.repository import billing, funding, orders, parties, products
+from app.repository import prepaid_commands as commands
 from app.repository._sql import Row, fetch_one
 
 NOT_STARTED = frozenset({"created", "pendingActive"})
@@ -156,11 +158,16 @@ def cancel_order(
 ) -> Row:
     """Cancel the order; returns the stored cancelProductOrder row. LookupError if the
     order does not exist, CancelRefused if it cannot be cancelled."""
+    # Posting takes command identity before account/product/order locks.
+    commands.lock_identity(conn, request.order_id)
+    command = commands.get(conn, request.order_id)
     order = orders.lock_order(conn, request.order_id)
     if order is None:
         raise LookupError(f"productOrder {request.order_id} does not exist")
     if order["state"] == "draft":
         return _cancel_draft(conn, order, request, now)
+    if command is not None:
+        return _cancel_prepaid(conn, order, command, request, now, today)
     if order["state"] != "completed":
         raise CancelRefused(
             f"productOrder {order['id']} is {order['state']}: only a completed order or a"
@@ -216,6 +223,42 @@ def cancel_order(
             emit.product(conn, product["id"], "StateChange", at=now, today=today)
         orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "cancelled"))
     number_orders.changed(conn, number_rows, old_numbers, now, today)
+    return _cancelled(conn, order, request, now)
+
+
+def _cancel_prepaid(conn, order, command, request, now, today):
+    if order["state"] != "inProgress" or command["state"] == "completed":
+        raise CancelRefused("prepaid order cannot be cancelled after its first grant")
+    parties.get_billing_account(conn, order["billing_account_id"], "update")
+    items = orders.items_of(conn, order["id"])
+    locked = products.lock_products(conn, [i["product_id"] for i in items])
+    if fetch_one(
+        conn, "SELECT id FROM funded_interval WHERE command_id = %s LIMIT 1", (command["id"],)
+    ):
+        raise CancelRefused("prepaid order already has a funded grant")
+    number_rows = number_orders.lock(conn, list(locked))
+    problem = number_orders.cancellation_problem(conn, items)
+    if problem:
+        raise CancelRefused(problem)
+    old_numbers = number_orders.before(conn, number_rows, today)
+    number_orders.cancel(conn, items, now)
+    hold = fetch_one(
+        conn, "SELECT hold_id FROM funding_command_hold WHERE command_id = %s", (command["id"],)
+    )
+    if hold:
+        funding.release(
+            conn,
+            order["billing_account_id"],
+            hold["hold_id"],
+            released_at=now,
+            command_id=command["id"],
+        )
+    for item in items:
+        products.cancel_unstarted(conn, item["product_id"])
+        orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "cancelled"))
+        emit.product(conn, item["product_id"], "StateChange", at=now, today=today)
+    number_orders.changed(conn, number_rows, old_numbers, now, today)
+    commands.complete(conn, command["id"], {"outcome": "cancelled"}, now=now)
     return _cancelled(conn, order, request, now)
 
 

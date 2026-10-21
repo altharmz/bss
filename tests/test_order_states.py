@@ -18,6 +18,7 @@ ORDER_ALLOWED = [
     ("acknowledged", "inProgress"),
     ("acknowledged", "rejected"),
     ("inProgress", "completed"),
+    ("inProgress", "cancelled"),  # prepaid purchase before its first grant
     ("completed", "cancelled"),  # cancelProductOrder
 ]
 ITEM_ALLOWED = [
@@ -25,6 +26,7 @@ ITEM_ALLOWED = [
     ("acknowledged", "rejected"),
     ("acknowledged", "cancelled"),
     ("inProgress", "completed"),
+    ("inProgress", "cancelled"),  # prepaid purchase before its first grant
     ("completed", "cancelled"),  # its order is cancelled
 ]
 
@@ -74,7 +76,6 @@ def test_forbidden_order_transitions(current, target):
     ("current", "target"),
     [
         ("acknowledged", "completed"),
-        ("inProgress", "cancelled"),
         ("inProgress", "rejected"),
         ("completed", "rejected"),
         ("cancelled", "inProgress"),

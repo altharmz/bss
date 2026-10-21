@@ -32,8 +32,15 @@ def view(conn, product, account, today):
         " WHERE c.state = 'pending' AND c.billing_account_id = %s AND ("
         " c.request->>'product_id' = %s OR c.request->>'previous_interval_id' = %s"
         " OR EXISTS (SELECT FROM jsonb_array_elements(COALESCE(c.request->'intervals', '[]')) q"
-        " WHERE q->>'product_id' = %s)) ORDER BY s.observed_at DESC LIMIT 1",
-        (account["id"], str(product["id"]), str(grant["id"]) if grant else "", str(product["id"])),
+        " WHERE q->>'product_id' = %s) OR c.request->'products' ? %s)"
+        " ORDER BY s.observed_at DESC LIMIT 1",
+        (
+            account["id"],
+            str(product["id"]),
+            str(grant["id"]) if grant else "",
+            str(product["id"]),
+            str(product["id"]),
+        ),
     )
     return {
         "status": status,
