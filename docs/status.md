@@ -7,6 +7,14 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2c3b4 actual-date renewal recovery (2026-10-21).** Internal renewal intents
+reference the latest funded interval. Authorization selects today's price/tax,
+reserves and posts atomically, preserves on-time anchors and resets late coverage
+to today without catch-up charges. Shortfalls and technical rollback retain no new
+hold; completed replay is stable. Prepaid creation remains unavailable. Next:
+worker dispatch and lifecycle integration; see
+[the decision](decisions/prepaid.md#p2c3b4-actual-date-renewal-recovery-2026-10-21).
+
 **P2c3b3 multi-product purchases (2026-10-21).** Migration `0041` retains one
 command hold's bill set and exact source splits. Internal posting now buys a whole
 initial-order quote set atomically, with a separate settled offCycle document and

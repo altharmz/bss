@@ -1,5 +1,34 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2c3b4: actual-date renewal recovery (2026-10-21)
+
+The internal poster accepts a renewal intent containing `previous_interval_id`.
+The retained interval must belong to the command account, be the product's latest
+grant, and end on the command due date. Under command/account/product locks the
+billing owner selects the recurring price and account tax exemptions at midnight
+of the actual authorization business date. It reserves the tax-inclusive total
+and posts the settled document, grant, conversion and completed result atomically.
+The immutable command keeps its intent; the grant keeps the resolved price/tax quote.
+
+An on-time renewal preserves the previous grant's actual anchor and increments its
+index when cadence is unchanged. A late renewal buys one full interval from today
+and resets anchor/index, regardless of how many periods were missed. A changed
+cadence also starts a new sequence. No waiting-gap charges or coverage are written.
+Missing/ambiguous prices remain technical errors. Insufficient funds raises the
+existing funding shortfall without retaining a hold or posting effects; the future
+dispatcher must persist its funding reason and retry eligible work on normal ticks.
+Technical rollback also discards the newly selected quote/hold, so a later attempt
+uses its own actual date. Completed replay returns the original result.
+
+Legacy held quote requests retain their date guard. This slice adds no producer,
+dispatcher, entitlement projection, lifecycle mutation or public API; prepaid
+creation remains unavailable. Suspended products/accounts remain ineligible until
+the later lifecycle integration distinguishes manual and funding causes. Offering
+change orders remain outside this primitive. Next: worker dispatch and lifecycle
+integration. Tests cover delayed/current-price selection, tax validity, changed
+cadence, month-end restoration, shortfall recovery, obsolete predecessors, replay
+and rollback.
+
 ## P2c3b3: atomic multi-product purchases (2026-10-21)
 
 Migration `0041` extends retained conversion with an immutable bill set and allows

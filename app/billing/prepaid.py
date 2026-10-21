@@ -1,7 +1,7 @@
 """Atomic prepaid purchase posting, called only by the billing owner.
 
-No producer or dispatcher yet. Immutable requests retain accepted single-product
-or multi-product quotes; retries never supply replacement amounts.
+No producer or dispatcher yet. Immutable requests retain accepted purchase quotes
+or renewal predecessor identities; callers never supply replacement retry amounts.
 """
 
 from calendar import monthrange
@@ -16,8 +16,8 @@ from psycopg.types.range import Range
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.billing import settlement
-from app.billing.core import tax_of
-from app.billing.model import AppliedTax, DateRange
+from app.billing.core import charge_taxes, price_at, tax_of
+from app.billing.model import AppliedTax, DateRange, Product
 from app.events import emit
 from app.repository import billing, funding, presentation
 from app.repository import prepaid_commands as commands
@@ -79,6 +79,63 @@ class OrderQuote(BaseModel):
         return self
 
 
+class RenewalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    previous_interval_id: UUID
+
+
+def _renewal_quote(conn, cmd, account, today, tz):
+    request = RenewalRequest.model_validate(cmd["request"])
+    previous = fetch_one(
+        conn, "SELECT * FROM funded_interval WHERE id = %s", (request.previous_interval_id,)
+    )
+    if previous is None or previous["billing_account_id"] != account.id:
+        raise ValueError("renewal requires an owned previous interval")
+    prod = fetch_one(
+        conn, "SELECT * FROM product WHERE id = %s FOR UPDATE", (previous["product_id"],)
+    )
+    latest = fetch_one(
+        conn,
+        "SELECT id FROM funded_interval WHERE product_id = %s ORDER BY upper(period) DESC LIMIT 1",
+        (prod["id"],),
+    )
+    if latest["id"] != previous["id"] or previous["period"].upper != cmd["due_date"]:
+        raise ValueError("renewal must follow the latest interval at its paid-through boundary")
+    price = price_at(
+        Product(
+            prod["id"],
+            prod["product_offering_id"],
+            prod["status"],
+            prod["start_date"],
+            prod["termination_date"],
+        ),
+        today,
+        billing.load_recurring_prices(conn, [prod["product_offering_id"]]),
+        account.currency,
+        tz,
+    )
+    old = IntervalQuote.model_validate(previous["quote"])
+    continuous = today == cmd["due_date"] and (old.unit, old.length) == (
+        price.recurring_period,
+        price.recurring_period_length,
+    )
+    return IntervalQuote(
+        product_id=prod["id"],
+        offering_id=price.offering_id,
+        price_id=price.id,
+        currency=account.currency,
+        amount=price.amount,
+        taxes=[
+            TaxQuote(category=t.category, rate=t.rate, amount=t.amount)
+            for t in charge_taxes(price.amount, price, account, today, tz)
+        ],
+        anchor=previous["anchor_date"] if continuous else today,
+        index=previous["interval_index"] + 1 if continuous else 0,
+        unit=price.recurring_period,
+        length=price.recurring_period_length,
+    )
+
+
 def post_interval(
     conn: psycopg.Connection, command_id: UUID, *, now: datetime, tz: ZoneInfo
 ) -> dict:
@@ -86,7 +143,8 @@ def post_interval(
 
     Caller owns the transaction and technical-error bookkeeping after rollback.
     Initial orders retain accepted money and buy coverage from today. Renewals
-    remain single-product and require authorization-date quotes.
+    remain single-product. Previous-interval requests select today's price/tax
+    and reserve funds atomically, including after an outage.
     """
     if not holds_ownership(conn):
         raise ValueError("prepaid posting requires billing ownership")
@@ -102,17 +160,21 @@ def post_interval(
         batch = "intervals" in cmd["request"]
         if batch and cmd["kind"] != "order":
             raise ValueError("multi-product posting requires an order command")
-        parsed = (
-            OrderQuote.model_validate(cmd["request"]).intervals
-            if batch
-            else [IntervalQuote.model_validate(cmd["request"])]
-        )
-        originals = cmd["request"]["intervals"] if batch else [cmd["request"]]
-        quotes = sorted(zip(parsed, originals, strict=True), key=lambda q: q[0].product_id)
         account = billing.load_account(conn, cmd["billing_account_id"])
         state = fetch_one(conn, "SELECT * FROM billing_account WHERE id = %s", (account.id,))
         if state["rating_type"] != "prepaid" or state["state"] != "Active":
             raise ValueError("authorization requires an active prepaid account")
+        renewal = cmd["kind"] == "renewal" and "previous_interval_id" in cmd["request"]
+        if renewal:
+            parsed = [_renewal_quote(conn, cmd, account, today, tz)]
+            originals = [parsed[0].model_dump(mode="json")]
+        elif batch:
+            parsed = OrderQuote.model_validate(cmd["request"]).intervals
+            originals = cmd["request"]["intervals"]
+        else:
+            parsed = [IntervalQuote.model_validate(cmd["request"])]
+            originals = [cmd["request"]]
+        quotes = sorted(zip(parsed, originals, strict=True), key=lambda q: q[0].product_id)
         accepted = []
         for quote, original_quote in quotes:
             period = quote.period()
@@ -140,13 +202,15 @@ def post_interval(
                 raise ValueError("product is not eligible on authorization date")
             total = quote.amount + sum((t.amount for t in quote.taxes), Decimal(0))
             accepted.append((quote, period, total, original_quote))
+        total = sum((q[2] for q in accepted), Decimal(0))
+        if renewal:
+            funding.reserve_for_command(conn, account.id, total, command_id=command_id, held_at=now)
         hold = fetch_one(
             conn,
             "SELECT h.* FROM funding_command_hold c JOIN funding_hold h ON h.id = c.hold_id"
             " WHERE c.command_id = %s AND c.billing_account_id = %s",
             (command_id, account.id),
         )
-        total = sum((q[2] for q in accepted), Decimal(0))
         if hold is None or hold["released_at"] is not None or hold["amount"] != total:
             raise ValueError("posting requires the exact outstanding command hold")
         run = commands.ensure_run(conn, command_id, run_date=today, now=now)
