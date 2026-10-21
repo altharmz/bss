@@ -39,6 +39,7 @@ agent - stay in [CLAUDE.md](../CLAUDE.md), the decisions and their rationale by 
 | [unattended-run.md](unattended-run.md) | log of one unattended agent work session (stage 5 checkpoint 6, stage 4 design) |
 | [cloud.md](cloud.md), [archive/cloud-coverage-report.md](archive/cloud-coverage-report.md) | working in a cloud session: what runs there and what does not |
 | [ui-mcp-gap-plan.md](ui-mcp-gap-plan.md) | **planned:** the API operations MCP reaches and the UI does not, and the slices to close the useful ones |
+| [mvno-plan.md](mvno-plan.md) | **planned:** MVNO features - IMSI change in scope; port-in/out, physical SIMs and provisioning not |
 
 ## Generated vs hand-written
 
