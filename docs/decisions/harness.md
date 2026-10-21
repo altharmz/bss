@@ -65,6 +65,10 @@ checklist (negative proofs, three test runs, a second local run before deploying
 `CLAUDE_PROJECT_DIR`, then the shared guard) for Bash and `.codex/patch-guard.sh` for
 `apply_patch` (never `.env*` or `design-ref/`). Both fail closed outside the repository.
 
+The user-level `~/.codex/rules/default.rules` allows every `make` target without approval
+(owner decision 2026-10-21). Codex matches a rule only against a plain command, so a
+`make test > log 2>&1` call misses it and prompts; AGENTS.md asks for bare `make` calls.
+
 ## Progress tracker
 
 `make progress` writes `docs/PROGRESS.md` (committed, plain Markdown) and
