@@ -7,6 +7,15 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2c1 durable command journal (2026-10-21).** Migration `0038` retains immutable
+requests and completed results, with technical backoff/manual retry and shared
+funding-command identity locking. Fourteen tests cover journal and funding atomicity,
+rollback/replay, concurrency, ownership and migration retention. No producer or
+dispatcher is enabled; prepaid creation stays unavailable. Next: isolate command
+billing-run identities, add posting/funded intervals, then worker dispatch/recovery
+and internal retry operations. See the
+[decision](decisions/prepaid.md#p2c1-durable-command-journal-foundation-2026-10-21).
+
 **P2b6 consuming-path integration (2026-10-21).** Settlement now selects around
 held payment/credit-note sources, including explicit lettering. Refunds use unheld
 source totals and the reconciled spendable ledger cap. No runtime caller creates

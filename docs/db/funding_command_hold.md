@@ -25,6 +25,7 @@ Retained internal command-to-hold retry identity; no public API or worker caller
 | Name | Kind | Definition |
 |---|---|---|
 | `funding_command_hold_pkey` | primary key | `PRIMARY KEY (command_id)` |
+| `prepaid_command_hold_owner` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_command_hold_hold_id_key` | unique | `UNIQUE (hold_id)` |
 
 ## Indexes
@@ -39,6 +40,7 @@ Retained internal command-to-hold retry identity; no public API or worker caller
 
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON funding_command_hold FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `funding_command_hold_retained`: `CREATE TRIGGER funding_command_hold_retained BEFORE DELETE OR UPDATE ON funding_command_hold FOR EACH ROW EXECUTE FUNCTION funding_hold_retained()`
+- `prepaid_command_hold_owner`: `CREATE CONSTRAINT TRIGGER prepaid_command_hold_owner AFTER INSERT ON funding_command_hold DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION prepaid_command_hold_owner()`
 
 ## Referenced by
 

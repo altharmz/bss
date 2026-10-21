@@ -147,6 +147,7 @@ def get_billing_account(
 ACCOUNT_HISTORY = {
     "fundingHold": ("funding_hold", "billing_account_id"),
     "prepaidBucket": ("prepaid_bucket", "billing_account_id"),
+    "prepaidCommand": ("prepaid_command", "billing_account_id"),
     "productOrder": ("product_order", "billing_account_id"),
     "product": ("product", "billing_account_id"),
     "appliedCustomerBillingRate": ("applied_customer_billing_rate", "billing_account_id"),

@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0037**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0038**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -45,6 +45,7 @@ PostgreSQL schema at Alembic head **0037**, read from `pg_catalog` of a throwawa
 | [`funding_hold`](funding_hold.md) | billing | Internal source-pinned funding hold foundation; no public API. |
 | [`funding_hold_source`](funding_hold_source.md) | billing | Internal source-pinned funding hold foundation; no public API. |
 | [`funding_command_hold`](funding_command_hold.md) | billing | Retained internal command-to-hold retry identity; no public API or worker caller. |
+| [`prepaid_command`](prepaid_command.md) | billing | Durable internal prepaid command journal; no runtime dispatcher or public API yet. Request and completed result are retained. |
 | [`funding_hold_conversion`](funding_hold_conversion.md) | billing | Retained internal command hold conversion; no runtime caller. |
 | [`funding_conversion_source`](funding_conversion_source.md) | billing | Retained internal command hold conversion; no runtime caller. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
@@ -110,6 +111,7 @@ flowchart LR
     funding_hold[funding_hold]
     funding_hold_source[funding_hold_source]
     funding_command_hold[funding_command_hold]
+    prepaid_command[prepaid_command]
     funding_hold_conversion[funding_hold_conversion]
     funding_conversion_source[funding_conversion_source]
   end
@@ -184,6 +186,7 @@ flowchart LR
   party_account -->|"party_id"| party
   payment -->|"billing_account_id"| billing_account
   prepaid_bucket -->|"billing_account_id, rating_type"| billing_account
+  prepaid_command -->|"billing_account_id"| billing_account
   product -->|"billing_account_id"| billing_account
   product -->|"created_by_item_id"| product_order_item
   product -->|"product_offering_id"| product_offering
@@ -800,6 +803,20 @@ erDiagram
     uuid hold_id FK
     uuid billing_account_id FK
   }
+  prepaid_command {
+    uuid id PK
+    uuid billing_account_id FK
+    text kind
+    date due_date
+    jsonb request
+    timestamptz created_at
+    text state
+    integer attempts
+    timestamptz attempted_at
+    timestamptz next_retry_at
+    jsonb result
+    text error
+  }
   funding_hold_conversion {
     uuid hold_id PK,FK
     uuid billing_account_id FK
@@ -832,6 +849,7 @@ erDiagram
   billing_account ||--o{ funding_hold : "billing_account_id, currency"
   billing_account ||--o{ payment : "billing_account_id, currency"
   billing_account ||--o{ prepaid_bucket : "billing_account_id, currency, rating_type"
+  billing_account ||--o{ prepaid_command : "billing_account_id"
   billing_account ||--o{ refund : "billing_account_id, currency"
   billing_run ||--o{ applied_customer_billing_rate : "billing_run_id"
   billing_run ||--o{ customer_bill : "billing_run_id"

@@ -19,6 +19,7 @@ items:
   - {id: db.funding_hold, area: db, stage: 5, table: funding_hold, title: "Retained funding holds"}
   - {id: db.funding_hold_source, area: db, stage: 5, table: funding_hold_source, title: "Pinned hold sources and combined usage bounds"}
   - {id: db.funding_command_hold, area: db, stage: 5, table: funding_command_hold, title: "Retained command ownership and hold retry identity"}
+  - {id: db.prepaid_command, area: db, stage: 5, table: prepaid_command, title: "Durable prepaid command requests, results and retry state"}
   - {id: db.funding_hold_conversion, area: db, stage: 5, table: funding_hold_conversion, title: "Durable command hold conversion results"}
   - {id: db.funding_conversion_source, area: db, stage: 5, table: funding_conversion_source, title: "Exact held source allocation identities"}
   - {id: db.subscriber_number, area: db, stage: 5, table: subscriber_number, title: "Subscriber-number inventory (TMF639)"}

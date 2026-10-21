@@ -69,7 +69,8 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 - `billing_account_mode_history`: `CREATE TRIGGER billing_account_mode_history BEFORE UPDATE OF rating_type ON billing_account FOR EACH ROW EXECUTE FUNCTION billing_account_mode_history()`
 - `billing_account_set_updated_at`: `CREATE TRIGGER billing_account_set_updated_at BEFORE UPDATE ON billing_account FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
 - `funding_hold_mode_history`: `CREATE TRIGGER funding_hold_mode_history BEFORE UPDATE OF rating_type ON billing_account FOR EACH ROW EXECUTE FUNCTION funding_hold_mode_history()`
+- `prepaid_command_mode_history`: `CREATE TRIGGER prepaid_command_mode_history BEFORE UPDATE OF rating_type ON billing_account FOR EACH ROW EXECUTE FUNCTION prepaid_command_mode_history()`
 
 ## Referenced by
 
-[`account_presentation_media`](account_presentation_media.md), [`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`funding_hold`](funding_hold.md), [`payment`](payment.md), [`prepaid_bucket`](prepaid_bucket.md), [`product`](product.md), [`product_order`](product_order.md), [`refund`](refund.md)
+[`account_presentation_media`](account_presentation_media.md), [`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`funding_hold`](funding_hold.md), [`payment`](payment.md), [`prepaid_bucket`](prepaid_bucket.md), [`prepaid_command`](prepaid_command.md), [`product`](product.md), [`product_order`](product_order.md), [`refund`](refund.md)

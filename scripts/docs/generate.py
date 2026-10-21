@@ -177,6 +177,7 @@ AREAS = {
         "funding_hold",
         "funding_hold_source",
         "funding_command_hold",
+        "prepaid_command",
         "funding_hold_conversion",
         "funding_conversion_source",
     ),

@@ -1,5 +1,40 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2c1: durable command journal foundation (2026-10-21)
+
+Migration `0038` adds `prepaid_command`: immutable account/kind/due-date/request
+and acceptance instant, retained completed result, and technical retry state.
+Internal kinds are order, renewal and transfer; producers will validate their
+kind-specific request documents when they land. This foundation has no producer,
+dispatcher, public/internal API or billing-run change. Prepaid creation stays gated.
+
+Repository operations share the funding-command advisory identity and acquire it
+before account/child locks. Enqueue replays the stored command, including after
+completion; changed account, kind, due date or request is refused. A rolled-back
+enqueue consumes no identity. Existing command holds must share the journal account,
+enforced in either insertion order; legacy foundation holds remain valid without a
+journal. Command history independently prevents mode changes, owner changes and
+deletion even without a bucket, payment or hold. Downgrade refuses any retained
+command, including a completed business refusal.
+
+Execution eligibility checks the due business date and technical backoff. There is
+no persisted running state: the identity lock lives through the transaction; death
+before commit leaves the prior command and funding state. Completion writes its
+result in the caller's financial/event transaction. Technical failure must be
+recorded in a fresh transaction after rollback, retains holds and schedules retries
+after one minute, five minutes, then hourly. Manual retry only accepts
+failedTechnical and retains the original identity/request and attempt count.
+Business refusal is a completed result, not a technical failure. The journal keeps
+the last technical error and cumulative attempt count, not a per-attempt log.
+
+Fourteen tests cover replay/conflicts, rollback, exact-source conversion and result
+atomicity, retry backoff/manual retry, due dates, concurrent identity locking, hold
+ownership, retained request/result and account history, populated upgrade/downgrade
+and downgrade refusal. The existing non-superuser migration proof covers `0038`.
+Next: command billing-run identity isolation, posting/funded intervals, then owner
+dispatch/recovery and internal retry operations. This slice does not implement
+those runtime recovery paths.
+
 ## P2b6: consuming paths respect held sources (2026-10-21)
 
 Settlement snapshots carry outstanding holds separately from consumed amounts.
