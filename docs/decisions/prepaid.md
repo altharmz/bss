@@ -1,5 +1,25 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P2b6: consuming paths respect held sources (2026-10-21)
+
+Settlement snapshots carry outstanding holds separately from consumed amounts.
+Automatic settlement and explicit payment items use only the unheld remainder of
+each payment or issued credit note; bill outstanding totals remain unchanged.
+Funding reconciliation continues to count allocations/payouts as consumption and
+holds separately, so neither is subtracted twice.
+
+Refunds settle around holds first, then cap payouts by both eligible unheld sources
+and the reconciled spendable ledger balance. Payment-specific refunds retain their
+source restriction. This protects funds reserved on other sources even when unpaid
+obligations remain. Release makes the exact sources eligible again. Existing account
+locks and combined database bounds continue to serialize all consuming paths.
+
+No schema or public contract changes, worker command, or runtime hold creator is
+introduced; prepaid creation remains unavailable. Tests cover automatic settlement
+around mixed payment/credit-note holds, explicit refusal without allocations, and
+unrestricted/payment-specific refund limits and release. Next: durable worker
+commands, posting and recovery.
+
 ## P2b5: durable hold conversion (2026-10-21)
 
 Migration `0037` retains one conversion result per command-owned hold and target

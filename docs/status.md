@@ -7,6 +7,12 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P2b6 consuming-path integration (2026-10-21).** Settlement now selects around
+held payment/credit-note sources, including explicit lettering. Refunds use unheld
+source totals and the reconciled spendable ledger cap. No runtime caller creates
+holds and prepaid creation stays unavailable. Next: durable worker commands,
+posting and recovery. See the [decision](decisions/prepaid.md#p2b6-consuming-paths-respect-held-sources-2026-10-21).
+
 **P2b5 durable hold conversion (2026-10-21).** Migration `0037` retains command
 hold conversion results and exact source-to-allocation mappings. Conversion releases
 the hold, allocates its pinned sources and settles one matching bill atomically;

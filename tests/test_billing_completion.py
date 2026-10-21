@@ -45,6 +45,27 @@ def payout_body(account, value=20, **over):
     }
 
 
+@pytest.mark.parametrize("restricted", [False, True])
+def test_refund_preserves_reserved_credit(api, db_conn, restricted):
+    from app.repository import funding
+    from tests.factories import NOW
+
+    account = apidata.account(api)
+    payment = pay(api, account, 100, date(2026, 12, 1)).json()
+    hold = funding.reserve(db_conn, UUID(account["id"]), Decimal("60"), held_at=NOW)
+    db_conn.commit()
+    extra = {"payment": {"id": payment["id"]}} if restricted else {}
+    refused = api.post(REFUND, payout_body(account, 41, **extra))
+    assert refused.status_code == 409, refused.text
+    response = api.post(REFUND, payout_body(account, 40, **extra))
+    assert response.status_code == 201, response.text
+    assert funding.load(db_conn, UUID(account["id"])).spendable == 0
+    funding.release(db_conn, UUID(account["id"]), hold, released_at=NOW)
+    db_conn.commit()
+    response = api.post(REFUND, payout_body(account, 60, **extra))
+    assert response.status_code == 201, response.text
+
+
 def run(worker, api, day):
     api.clock.set(at(day))
     bill_date(worker, day, clock=api.clock, tz=TZ, trigger="scheduled")

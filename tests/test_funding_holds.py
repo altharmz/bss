@@ -16,6 +16,47 @@ from tests.test_funding_db import billed_charge
 from tests.test_settlement_db import allocate, make_payment
 
 
+def test_settlement_skips_mixed_held_sources_and_release_restores_them(db_conn):
+    from tests.test_settlement_db import settle_account
+
+    w = world(db_conn)
+    make_payment(db_conn, w.account, "6")
+    billed_charge(db_conn, w, date(2025, 12, 1), "1")
+    billed_charge(db_conn, w, date(2026, 1, 1), "-20", "settled")
+    hold = funding.reserve(db_conn, w.account["id"], D("12"), held_at=NOW)
+    billed_charge(db_conn, w, date(2026, 2, 1), "20")
+    result = settle_account(db_conn, w.account)
+    assert sum(a.amount for a in result.allocations) == D("14")
+    assert all(a.payment_id is None for a in result.allocations)
+    db_conn.commit()
+    funding.release(db_conn, w.account["id"], hold, released_at=NOW)
+    result = settle_account(db_conn, w.account)
+    assert sum(a.amount for a in result.allocations) == D("7")
+    db_conn.commit()
+    assert funding.load(db_conn, w.account["id"]).spendable == D("5")
+
+
+def test_explicit_settlement_refuses_held_payment(db_conn):
+    from app.billing.adapter import settle_account
+    from app.billing.settlement import ExceedsPayment, ExplicitItem
+    from app.repository import billing
+
+    w = world(db_conn)
+    payment = make_payment(db_conn, w.account, "30")
+    funding.reserve(db_conn, w.account["id"], D("20"), held_at=NOW)
+    bill = billed_charge(db_conn, w, date(2026, 1, 1), "15")
+    with pytest.raises(ExceedsPayment):
+        settle_account(
+            db_conn,
+            billing.load_account(db_conn, w.account["id"]),
+            now=NOW,
+            cause="payment",
+            explicit=(ExplicitItem(bill["id"], D("11")),),
+            explicit_payment_id=payment["id"],
+        )
+    assert db_conn.execute("SELECT count(*) FROM bill_allocation").fetchone() == (0,)
+
+
 def test_hold_mixed_sources_and_release_once(db_conn):
     w = world(db_conn)
     billed_charge(db_conn, w, date(2026, 1, 1), "10")

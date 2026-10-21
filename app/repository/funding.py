@@ -1,6 +1,6 @@
 """Legacy funding snapshot, serialized with settlement by the account row lock.
 
-No runtime consumers yet. Call within a transaction; the lock is retained
+Refunds use the reconciled spendable cap. Call within a transaction; the lock is retained
 until it ends. Unissued credits cannot fund purchases and fail reconciliation closed.
 """
 

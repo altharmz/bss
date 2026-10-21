@@ -68,6 +68,10 @@ slips against these rules; it is a pattern matcher, not a security boundary
   `frontend/` or `spec/` is staged, `docs-check` when the generated docs' sources are;
   nothing for a Markdown-only commit) and is that run. Commit and push when you judge
   the change ready - no approval needed.
+- **Commit granularity:** one commit per finished slice (code, tests, migration,
+  generated docs together). Fold status, hand-off and process/CLAUDE.md edits into
+  the next slice commit or one batched commit; amend or squash unpushed commits
+  instead of stacking fix-ups (pushed history stays untouched).
 - **Deploying is the human's decision.** Never run `make deploy`/`make verify`/`/ship` on
   your own, and never ask or suggest whether to deploy; the human deploys manually or asks
   you to, then use `/ship` and do not re-run tests first. What is deployed: `make
@@ -104,9 +108,9 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   `0034` for account mode and stable prepaid bucket/accumulation identities;
   prepaid creation remains unavailable. P2b3 adds retained source-pinned holds and
   combined allocation/payout/hold bounds in migration `0035`, with no runtime callers.
-  P2b4 adds retained command-owned hold retry identities in migration `0036`,
-  still without runtime callers. Next: durable consumption, consuming-path
-  integration and worker recovery.
+  P2b5 adds durable hold conversion in migration `0037`. P2b6 makes settlement
+  and refunds select around held sources. No runtime caller creates holds yet.
+  Next: durable worker commands, posting and recovery.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).

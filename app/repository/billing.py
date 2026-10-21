@@ -960,7 +960,10 @@ def load_settlement(
                coalesce((SELECT sum(amount) FROM bill_allocation
                          WHERE credit_bill_id = b.id), 0)
                + coalesce((SELECT sum(amount) FROM refund_source
-                           WHERE credit_bill_id = b.id), 0) AS credit_used
+                           WHERE credit_bill_id = b.id), 0) AS credit_used,
+               coalesce((SELECT sum(s.amount) FROM funding_hold_source s
+                         JOIN funding_hold h ON h.id = s.hold_id
+                         WHERE s.credit_bill_id = b.id AND h.released_at IS NULL), 0) AS held
         FROM customer_bill b WHERE b.billing_account_id = %s ORDER BY b.bill_date
         """,
         (account_id,),
@@ -972,7 +975,10 @@ def load_settlement(
                coalesce((SELECT sum(amount) FROM bill_allocation
                          WHERE payment_id = p.id), 0)
                + coalesce((SELECT sum(amount) FROM refund_source
-                           WHERE payment_id = p.id), 0) AS used
+                           WHERE payment_id = p.id), 0) AS used,
+               coalesce((SELECT sum(s.amount) FROM funding_hold_source s
+                         JOIN funding_hold h ON h.id = s.hold_id
+                         WHERE s.payment_id = p.id AND h.released_at IS NULL), 0) AS held
         FROM payment p WHERE p.billing_account_id = %s AND p.status = 'done'
         ORDER BY p.received_at, p.id
         """,
@@ -987,12 +993,17 @@ def load_settlement(
                 state=r["state"],
                 allocated=r["allocated"],
                 credit_used=r["credit_used"],
+                held=r["held"],
             )
             for r in bills
         ),
         tuple(
             settlement.Payment(
-                id=r["id"], received_at=r["received_at"], amount=r["amount"], used=r["used"]
+                id=r["id"],
+                received_at=r["received_at"],
+                amount=r["amount"],
+                used=r["used"],
+                held=r["held"],
             )
             for r in payments
         ),

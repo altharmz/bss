@@ -38,7 +38,7 @@ from app.api.payment import (
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.adapter import settle_account
 from app.events import emit
-from app.repository import billing, parties, refunds
+from app.repository import billing, funding, parties, refunds
 
 router = APIRouter(prefix=BASE)
 # Documents to us, as a payment's (`take_documents`); `description` is a column.
@@ -173,7 +173,7 @@ def create_refund(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> 
             ]
         available = min(
             sum((left for _, _, left in sources), Decimal(0)),
-            max(billing.account_balance(conn, account.id), Decimal(0)),
+            max(funding.load(conn, account.id).spendable, Decimal(0)),
         )
         if data.total_amount.value > available:
             raise conflict(f"refund exceeds refundable credit {available}")

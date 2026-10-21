@@ -69,6 +69,7 @@ class Bill:
     state: BillState
     allocated: Decimal = ZERO  # applied to this bill (positive bills only)
     credit_used: Decimal = ZERO  # applied from this bill (credit notes only)
+    held: Decimal = ZERO
 
     @property
     def remaining(self) -> Decimal:
@@ -83,7 +84,7 @@ class Bill:
         """Unused credit of an issued credit note; zero for anything else."""
         if not self.is_credit_note or self.state != "settled":
             return ZERO
-        return -self.amount_due - self.credit_used
+        return -self.amount_due - self.credit_used - self.held
 
     @property
     def is_open(self) -> bool:
@@ -96,10 +97,11 @@ class Payment:
     received_at: datetime
     amount: Decimal
     used: Decimal = ZERO
+    held: Decimal = ZERO
 
     @property
     def left(self) -> Decimal:
-        return self.amount - self.used
+        return self.amount - self.used - self.held
 
 
 @dataclass(frozen=True)
