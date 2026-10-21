@@ -72,8 +72,8 @@ slips against these rules; it is a pattern matcher, not a security boundary
   judge it worth its time. This section overrides process steps in older plans and
   hand-offs (separate commit/deploy approvals, three backend passes, release proofs).
 - Every new feature or bug fix comes with a test that fails without it. To show that
-  (optional), use a targeted run only (`docker compose run --rm app pytest tests/<file>.py -k <name>`, the
-  failing test before the fix or with the change reverted), never with a full suite.
+  (optional), run only that test - `docker compose run --rm app pytest tests/<file>.py
+  -k <name>` before the fix or with the change reverted - never a full suite.
 - Propose a plan before a data-model change or a large design change; otherwise act.
 - Before saying "it works on the server", deploy (`make deploy` reports health and smoke).
 - When a container misbehaves, read `make logs` before changing code.
