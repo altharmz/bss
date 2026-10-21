@@ -16,7 +16,18 @@ the prorated first charge or a lifetime total. Catalog changes do not rewrite a
 quote. Deletes have no quote, and old orders without recorded quotes and rejected
 orders omit it. `tests/test_api_read_completeness.py` verifies exact totals and history.
 
-Orders are the only way to create or terminate products. POST processes the order
+**Prepaid immediate starts (P3c).** An immediate add-only order checks the combined
+full-period tax-inclusive cost under the account lock. Shortfall returns a stored
+rejected order (`insufficientFunds`) without a hold, product, number claim or command.
+Acceptance returns `inProgress` with `pendingActive` products, claimed numbers and
+one retained command hold. Worker posting completes the entire tree and its settled
+offCycle documents/grants atomically, with TMF622/637 StateChange events. Technical
+failure retains the pending tree and hold; completed replay emits nothing twice.
+Drafts reserve only when submitted. Future prepaid starts and other lifecycle actions
+remain rejected until their slices land; public prepaid account creation stays gated.
+See `tests/test_prepaid_orders.py`.
+
+Orders are the only way to create or terminate products. Postpaid POST processes the order
 **synchronously, in the request's transaction** (`app/ordering/process.py`,
 `place_order`). PATCH changes `description`, `category`, `priority` (0..4),
 `externalId[]` and the documents (note, relatedParty, channel, quote, ...; POST accepts

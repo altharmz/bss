@@ -507,6 +507,9 @@ def patch_product(
         current = products.get_product(conn, uid)
         if current is None:
             raise not_found("product", product_id)
+        account = parties.get_billing_account(conn, current["billing_account_id"])
+        if account["rating_type"] == "prepaid":
+            billing.load_account(conn, account["id"])
         before = product_body(conn, current, today)
         if current.get("requires_msisdn") and "realizingResource" in documents:
             raise conflict("realizingResource: change subscriber numbers through a product order")

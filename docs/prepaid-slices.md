@@ -29,10 +29,12 @@ Status: `done` · `next` · `todo` · `split` (see the sub-rows)
 | P2c1–P2c3b4 | Command journal, command runs, funded intervals, atomic single- and multi-product posting, delayed starts, actual-date renewal recovery (`0038`–`0041`). |
 | P2c4a–P2c4b | Worker dispatch with technical retries; retained funding shortfalls (`0042`). |
 
-What exists: the billing owner can **post** a prepaid purchase or renewal exactly once
-from a queued command. What is missing: nothing **creates** commands. No order,
-renewal or action produces them, no product state reflects them, no public API
-exposes balances, and daily billing does not yet know about prepaid accounts.
+What exists: immediate prepaid add orders reserve funds and queue commands; the
+billing owner posts them exactly once and completes the full product/order tree.
+Entitlement follows funded coverage, independently of manual/account suspension;
+daily recurring billing excludes prepaid. What is missing: future-start and renewal
+producers, remaining lifecycle actions and public balance operations. Public prepaid
+account creation remains gated until P5a.
 
 ## Remaining
 
@@ -42,8 +44,8 @@ exposes balances, and daily billing does not yet know about prepaid accounts.
 |---|---|---|---|
 | P3a | Daily-run isolation | The daily run posts no recurring ABR or `onCycle` bill for a prepaid account's products. On-demand bills on prepaid collect only existing unbilled ABRs and otherwise reject. Postpaid counts, cutoffs and replay are unchanged. | done: Isolate prepaid accounts from daily recurring billing |
 | P3b | Entitlement and suspension causes | Migration for a persisted manual-suspension cause. One effective-state function (terminated > manual/account suspended > active inside a grant > pendingActive > funding-suspended) uses the injected clock. Internal product view adds `authorizedAt`, `paidThrough`, cause, `needs_topup`. The worker stores and emits a funding-suspended transition when it observes one; GET emits nothing. | done: Project prepaid entitlement and independent suspension causes |
-| P3c | Immediate prepaid start | TMF622 POST on a prepaid account either rejects `insufficientFunds` (no hold, claim or product) or atomically holds the tax-inclusive total, claims numbers, creates `pendingActive` products and queues one command, with the order `inProgress`. The worker's posting completes items, products and order with TMF622/637 events. Multi-item orders are all-or-nothing. | next |
-| P3d | Future starts and pre-grant cancellation | A future order claims numbers with no hold; at the due date the command authorizes from that day's funds and price; a shortfall leaves it pending with a reason. `cancelProductOrder` before the first grant cancels the command and releases holds and claims; after a grant it returns 409. | todo |
+| P3c | Immediate prepaid start | TMF622 POST on a prepaid account either rejects `insufficientFunds` (no hold, claim or product) or atomically holds the tax-inclusive total, claims numbers, creates `pendingActive` products and queues one command, with the order `inProgress`. The worker's posting completes items, products and order with TMF622/637 events. Multi-item orders are all-or-nothing. | done: Accept and complete immediate prepaid purchase orders |
+| P3d | Future starts and pre-grant cancellation | A future order claims numbers with no hold; at the due date the command authorizes from that day's funds and price; a shortfall leaves it pending with a reason. `cancelProductOrder` before the first grant cancels the command and releases holds and claims; after a grant it returns 409. | next |
 | P3e | Renewal and resumption producer | Due renewals are produced in due-date, then product order, under the account lock. A shortfall makes the product funding-suspended at `paidThrough`. A later credit (payment now; top-up after P4d) resumes on the next tick, with a once-per-business-date rescan as the fallback. Manual suspension and Suspended/Closed accounts block renewal. | todo |
 | **✓** | **Checkpoint 1**: purchase → renew → run out → top up → resume works end to end in tests. Re-estimate P3f–P7. | | |
 | P3f | Manual suspend/resume and account state | A suspend order keeps the paid interval. Resume reuses a live grant or queues authorization from today. Suspended accounts allow only cleanup orders. Closing an account with held money, unfinished commands or live products returns 409. | todo |

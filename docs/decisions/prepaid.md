@@ -1,5 +1,31 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P3c: immediate prepaid purchase lifecycle (2026-10-21)
+
+Immediate add-only prepaid orders quote full periods and account tax exemptions
+under the account/catalog locks. Acceptance checks the combined tax-inclusive
+spendable amount before writing products or number claims. Shortfalls store a
+rejected order with `insufficientFunds` and no hold, command, product or claim.
+The command shares its order UUID. Accepted tax exemptions remain in its immutable
+quote and the order price projection. Successful acceptance retains one exact-source
+command hold, the complete quote set, pendingActive products and number claims,
+with every item and order inProgress.
+Draft submission follows the same path; drafts reserve nothing.
+
+The billing owner validates the command against its complete pending order before
+posting. Exact-source conversion, all grants/documents, active products, completed
+items/order and TMF622/637 StateChange events commit in the existing posting
+savepoint. Failure leaves the accepted reservation and pending tree intact; replay
+returns the retained result without duplicate lifecycle events. Delayed dispatch
+keeps accepted money and buys actual-date coverage. Funding-suspended renewals can
+post when funded; the independent manual cause still blocks them.
+
+Future starts and other prepaid lifecycle actions are rejected until their owning
+slices land. Public prepaid account creation remains a 422. Tests cover flat/nested
+multi-item starts, exact funds and tax shortfall, zero-price purchases, acceptance
+and posting rollback, replay, draft submission, delayed dispatch and concurrent
+purchases. Next is P3d: future starts and pre-grant cancellation.
+
 ## P3b: entitlement and independent suspension causes (2026-10-21)
 
 Migration `0043` retains manual suspension separately from prepaid funding expiry.

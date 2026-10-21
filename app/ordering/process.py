@@ -1,5 +1,6 @@
 """Processing a product order (TMF622): validate, then execute or reject, synchronously
-and on one connection - the caller's transaction covers all of it.
+and on one connection - the caller's transaction covers acceptance. Prepaid immediate
+adds retain funds and a pending item tree for atomic billing-owner completion.
 
 Two kinds of "no":
 - OrderRefused: the order cannot even be stored (it references a billing account,
@@ -32,16 +33,18 @@ order with none of them is refused. Items that name another account are rejected
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import psycopg
 
+from app.billing.funding import InsufficientFunds
 from app.config import settings
 from app.events import emit
 from app.ordering import numbers as number_orders
+from app.ordering import prepaid as prepaid_orders
 from app.ordering.states import item_transition, order_transition
-from app.repository import billing, catalog, orders, parties, products
+from app.repository import billing, catalog, orders, parties, prepaid_commands, products
 from app.repository._sql import Row
 
 # Product statuses after which a product can no longer be deleted.
@@ -257,10 +260,20 @@ def _process(
             "an order needs a billingAccount: on the order, on an item, or through the"
             " product of a modify, delete or noChange item"
         )
-    # FOR KEY SHARE until commit: a concurrent delete of the account waits for this order
-    account = parties.get_billing_account(conn, account_id, "key share")
+    # A fresh command identity precedes account/child locks. The account lock
+    # serializes quote/reservation against payments, refunds and other purchases.
+    probe = parties.get_billing_account(conn, account_id)
+    if probe is None:
+        raise OrderRefused(f"billingAccount {account_id} does not exist")
+    is_prepaid = probe["rating_type"] == "prepaid"
+    command_id = (draft_id or request.order_id or uuid4()) if is_prepaid else None
+    if command_id is not None:
+        prepaid_commands.lock_identity(conn, command_id)
+    account = parties.get_billing_account(conn, account_id, "update" if is_prepaid else "key share")
     if account is None:
         raise OrderRefused(f"billingAccount {account_id} does not exist")
+    if probe["rating_type"] != account["rating_type"]:
+        raise OrderRefused("billing account mode changed; retry the order")
     for item in request.items:
         offering_id = item.product_offering_id
         # FOR SHARE until commit: a concurrent price or offering delete waits for this
@@ -289,6 +302,22 @@ def _process(
     problems += [
         Problem(*p) for p in number_orders.validate(conn, request, locked, number_rows, start)
     ]
+    prepaid = account["rating_type"] == "prepaid"
+    prepared = None
+    if prepaid and not problems:
+        if start != today or any(i.action != "add" for i in request.items):
+            problems.append(
+                Problem(
+                    None,
+                    "prepaidLifecycleUnavailable",
+                    "only immediate prepaid add orders are available",
+                )
+            )
+        else:
+            try:
+                prepared = prepaid_orders.prepare(conn, request, account, quotes, start)
+            except InsufficientFunds as exc:
+                problems.append(Problem(None, "insufficientFunds", str(exc)))
     failing = {problem.item_id for problem in problems}
 
     def initial(item: ItemRequest) -> str:
@@ -306,7 +335,7 @@ def _process(
     if draft_id is None:
         order = orders.create_order(
             conn,
-            id=request.order_id,
+            id=request.order_id or command_id,
             billing_account_id=account["id"],
             order_date=now,
             requested_start_date=start,
@@ -327,7 +356,10 @@ def _process(
         _reject(conn, order, rows, problems, now)
     else:
         old_numbers = number_orders.before(conn, number_rows, today)
-        _execute(conn, order, request, rows, start, today, locked, now)
+        if prepaid:
+            prepaid_orders.accept(conn, order, request, rows, prepared, command_id, start, now)
+        else:
+            _execute(conn, order, request, rows, start, today, locked, now)
         number_orders.changed(conn, number_rows, old_numbers, now, today)
     return order["id"]
 

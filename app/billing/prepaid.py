@@ -1,6 +1,6 @@
 """Atomic prepaid purchase posting, called only by the billing owner.
 
-No producer yet. Immutable requests retain accepted purchase quotes
+Immediate-order acceptance and renewal requests retain accepted purchase quotes
 or renewal predecessor identities; callers never supply replacement retry amounts.
 """
 
@@ -19,7 +19,7 @@ from app.billing import settlement
 from app.billing.core import charge_taxes, price_at, tax_of
 from app.billing.model import AppliedTax, DateRange, Product
 from app.events import emit
-from app.repository import billing, funding, presentation
+from app.repository import billing, funding, orders, presentation, products
 from app.repository import prepaid_commands as commands
 from app.repository._sql import fetch_one, jsonb, returning
 from app.worker.db import holds_ownership
@@ -71,6 +71,7 @@ class IntervalQuote(BaseModel):
 class OrderQuote(BaseModel):
     model_config = ConfigDict(extra="forbid")
     intervals: list[IntervalQuote] = Field(min_length=1)
+    order_id: UUID | None = None
 
     @model_validator(mode="after")
     def unique_products(self):
@@ -160,6 +161,7 @@ def post_interval(
         batch = "intervals" in cmd["request"]
         if batch and cmd["kind"] != "order":
             raise ValueError("multi-product posting requires an order command")
+        order_id = OrderQuote.model_validate(cmd["request"]).order_id if batch else None
         account = billing.load_account(conn, cmd["billing_account_id"])
         state = fetch_one(conn, "SELECT * FROM billing_account WHERE id = %s", (account.id,))
         if state["rating_type"] != "prepaid" or state["state"] != "Active":
@@ -192,12 +194,11 @@ def post_interval(
             )
             if prod is None or prod["billing_account_id"] != account.id:
                 raise ValueError("quote product does not belong to account")
-            if prod["manually_suspended"] or prod["status"] in {
-                "suspended",
-                "terminated",
-                "cancelled",
-                "aborted",
-            }:
+            if (
+                (prod["status"] == "suspended" and not renewal)
+                or prod["manually_suspended"]
+                or prod["status"] in {"terminated", "cancelled", "aborted"}
+            ):
                 raise ValueError("product lifecycle prevents authorization")
             if prod["product_offering_id"] != quote.offering_id:
                 raise ValueError("offering changes require the lifecycle posting extension")
@@ -207,6 +208,19 @@ def post_interval(
                 raise ValueError("product is not eligible on authorization date")
             total = quote.amount + sum((t.amount for t in quote.taxes), Decimal(0))
             accepted.append((quote, period, total, original_quote))
+        order = None
+        if order_id is not None:
+            orders.lock_order(conn, order_id)
+            order = orders.get_order(conn, order_id)
+            if (
+                order_id != cmd["id"]
+                or order is None
+                or order["billing_account_id"] != account.id
+                or order["state"] != "inProgress"
+                or any(i["action"] != "add" or i["state"] != "inProgress" for i in order["items"])
+                or {i["product_id"] for i in order["items"]} != {q[0].product_id for q in accepted}
+            ):
+                raise ValueError("purchase command must match its entire pending order")
         total = sum((q[2] for q in accepted), Decimal(0))
         if renewal:
             funding.reserve_for_command(conn, account.id, total, command_id=command_id, held_at=now)
@@ -239,6 +253,8 @@ def post_interval(
             funding.convert_for_command(
                 conn, account.id, UUID(result["bill_id"]), command_id=command_id, converted_at=now
             )
+        if order is not None:
+            _complete_order(conn, order, now, today)
         conn.execute(
             "UPDATE billing_run SET status = 'completed', finished_at = %s, heartbeat_at = %s"
             " WHERE id = %s",
@@ -313,3 +329,24 @@ def _post_purchase(conn, cmd, account, run, quote, period, total, original_quote
         "applied_rate_id": str(abr["id"]),
         "run_id": str(run["id"]),
     }
+
+
+def _complete_order(conn, order, now, today):
+    from app.api.ordering import order_body
+    from app.ordering.states import item_transition, order_transition
+
+    for item in order["items"]:
+        products.set_product_status(conn, item["product_id"], "active")
+        orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "completed"))
+        emit.product(conn, item["product_id"], "StateChange", at=now, today=today)
+    orders.set_order_state(
+        conn, order["id"], order_transition(order["state"], "completed"), completion_date=now
+    )
+    emit.emit(
+        conn,
+        "TMF622",
+        "productOrder",
+        "StateChange",
+        lambda: order_body(conn, orders.get_order(conn, order["id"])),
+        at=now,
+    )

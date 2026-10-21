@@ -1,7 +1,8 @@
 """State machine of product orders and their items (TMF622), as a pure function.
 
 Only the transitions this service performs are allowed - a subset of the TMF622 state
-model. Orders are processed synchronously:
+model. Postpaid orders are processed synchronously; prepaid purchase acceptance
+retains inProgress until the billing owner completes posting:
 
     draft -> acknowledged                        (PATCH state; then processed as below)
     acknowledged -> inProgress -> completed      (every item valid)
@@ -15,7 +16,7 @@ Items follow their order; when an order is rejected, the items that were fine ar
 
 The other states of TMF622 (pending, held, failed, partial, assessingCancellation,
 pendingCancellation, inProgress.accepted) belong to asynchronous fulfilment: processing
-here is synchronous and all-or-nothing, so they are never reached.
+is all-or-nothing, so they are never reached.
 """
 
 ORDER_TRANSITIONS: dict[str, frozenset[str]] = {

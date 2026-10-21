@@ -63,7 +63,7 @@ from app.events import emit
 from app.ordering import cancel as cancellation
 from app.ordering import process
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
-from app.repository import billing, catalog, orders, parties
+from app.repository import billing, catalog, orders, parties, prepaid_commands
 from app.repository._sql import Row
 
 router = APIRouter(prefix=BASE)
@@ -381,9 +381,15 @@ def _check_items_server_set(sent: list[ItemSent], body: dict[str, Any]) -> None:
                 )
 
 
-def _quoted_taxes(conn: psycopg.Connection, item: Row) -> tuple[Tax, ...]:
+def _quoted_taxes(conn: psycopg.Connection, item: Row, account: Row | None) -> tuple[Tax, ...]:
     """The tax items of the price an item was quoted at: they cannot change once the
     offering is ordered (a price's tax is part of its charge)."""
+    if account is not None and account["rating_type"] == "prepaid":
+        command = prepaid_commands.get(conn, item["product_order_id"])
+        if command is not None:
+            for quote in command["request"].get("intervals", []):
+                if quote["product_id"] == str(item["product_id"]):
+                    return tuple(Tax(t["category"], Decimal(t["rate"])) for t in quote["taxes"])
     price = catalog.get_product_offering_price(conn, item["quoted_price_id"])
     assert price is not None  # foreign key
     return billing.price_taxes(price["details"])
@@ -444,7 +450,7 @@ def _item_body(
         body["productOrderItem"] = [_item_body(conn, item, account, children) for item in nested]
     body["@type"] = "ProductOrderItem"
     if row["quoted_price_id"] is not None:
-        taxes = _quoted_taxes(conn, row)
+        taxes = _quoted_taxes(conn, row, account)
         price = monthly_price(
             row["quoted_amount"],
             row["quoted_currency"],
@@ -502,7 +508,7 @@ def order_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
     total = None
     if row["state"] == "completed" and adds and all(i["quoted_price_id"] for i in adds):
         assert account is not None  # a processed order has one
-        taxes = [_quoted_taxes(conn, i) for i in adds]
+        taxes = [_quoted_taxes(conn, i, account) for i in adds]
         rates = {total_rate(t) for t in taxes}
         # one price for all items: the total comes from it, in its unit
         prices = {(i["quoted_price_id"], i["quoted_price_name"]) for i in adds}

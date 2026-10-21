@@ -206,13 +206,33 @@ def test_no_unbilled_charges_rejects_without_empty_bill(api, worker):
 def test_prepaid_daily_isolation_and_existing_charge_demand(api, worker, db_conn, existing_charge):
     from psycopg.types.range import Range
 
+    from app.repository import orders
+    from tests.factories import product as make_product
+
     account = apidata.account(api)
     db_conn.execute(
         "UPDATE billing_account SET rating_type = 'prepaid' WHERE id = %s", (account["id"],)
     )
     db_conn.commit()
     offering = apidata.sellable_offering(api, value=310)
-    product = add(api, account, offering, date(2026, 12, 2), on=at(date(2026, 12, 2)))
+    # A live product without purchasing through the P3c hold/command lifecycle:
+    # this test isolates daily billing and collection of pre-existing charges.
+    now = at(date(2026, 12, 2))
+    api.clock.set(now)
+    product = make_product(db_conn, UUID(account["id"]), UUID(offering["id"]), now.date())
+    item = orders.get_order_item(db_conn, product["created_by_item_id"])
+    orders.set_order_item_product(db_conn, item["id"], product["id"])
+    orders.set_order_item_state(db_conn, item["id"], "completed")
+    orders.set_order_state(db_conn, item["product_order_id"], "completed", completion_date=now)
+    assert (
+        len(
+            billing.load_products(
+                db_conn, UUID(account["id"]), visible_before=now + timedelta(days=1)
+            )
+        )
+        == 1
+    )
+    db_conn.commit()
     request = demand(api, account)
     run(worker, api, date(2026, 12, 3))
     assert api.get(apidata.RATE).json() == []
@@ -221,7 +241,7 @@ def test_prepaid_daily_isolation_and_existing_charge_demand(api, worker, db_conn
         daily = billing.get_run(db_conn, date(2026, 12, 3))
         billing.insert_abr(
             db_conn,
-            product_id=UUID(product["id"]),
+            product_id=product["id"],
             billing_account_id=UUID(account["id"]),
             charge_type="recurring",
             amount=Decimal("7.00"),

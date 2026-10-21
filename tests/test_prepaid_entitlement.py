@@ -15,6 +15,7 @@ from app.worker.prepaid import observe_entitlements
 from tests.factories import NOW
 from tests.test_events import stored, subscribe
 from tests.test_prepaid_posting import TZ, post, prepared
+from tests.test_prepaid_renewal import renewal
 
 
 def test_manual_cause_migration_preserves_suspended_history(temp_db_url):
@@ -87,3 +88,17 @@ def test_expiry_read_is_pure_worker_persists_once(db_conn, api):
     assert events[0][1]["event"]["product"]["status"] == "suspended"
     grant = {"period": type("Period", (), {"lower": NOW.date(), "upper": paid["paidThrough"]})()}
     assert effective_state(prod, acc, grant, paid["paidThrough"])[1] == "funding"
+
+
+def test_observed_funding_suspension_does_not_block_funded_renewal(db_conn):
+    _, cmd, _, now = renewal(db_conn)
+    db_conn.commit()
+    observe_entitlements(db_conn, clock=FixedClock(now), tz=TZ)
+    assert db_conn.execute("SELECT status FROM product").fetchone() == ("suspended",)
+    db_conn.execute("UPDATE product SET manually_suspended = true")
+    with pytest.raises(ValueError, match="lifecycle"):
+        post(db_conn, cmd, now)
+    db_conn.execute("UPDATE product SET manually_suspended = false")
+    post(db_conn, cmd, now)
+    observe_entitlements(db_conn, clock=FixedClock(now), tz=TZ)
+    assert db_conn.execute("SELECT status FROM product").fetchone() == ("active",)

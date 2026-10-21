@@ -7,6 +7,17 @@ written in CLAUDE.md, so they are rewritten to `../` here.
 
 ## Next session
 
+**P3b/P3c entitlement and immediate purchases (2026-10-21).** Migration `0043`
+separates manual suspension from funding expiry. Internal product reads expose
+actual authorization, paid-through, cause and needs-top-up; the worker stores and
+emits observed state transitions. Immediate add-only prepaid orders atomically
+reserve their tax-inclusive total, claim numbers and queue one command with
+pendingActive products. Posting completes the full item tree, products, order,
+financial effects and TMF622/637 events together. Replay and failure recovery retain
+accepted identities and funds. Drafts reserve only on submission. Public prepaid
+creation remains gated; next is P3d, future starts and pre-grant cancellation.
+See [the tracker](prepaid-slices.md) and [decision](decisions/prepaid.md).
+
 **P2c4a retained-command dispatch (2026-10-21).** Worker ticks now attempt queued
 purchase/renewal commands under billing ownership, in ordered account passes.
 Atomic posting rollback precedes durable technical diagnostics/backoff. Funding

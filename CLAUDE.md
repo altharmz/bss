@@ -107,29 +107,17 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
 
 ## Current state (2026-10-21)
 
-- **Deployed:** see `make deployed`. **Built:** P1 adds migration
-  `0034` for account mode and stable prepaid bucket/accumulation identities;
-  prepaid creation remains unavailable. P2b3 adds retained source-pinned holds and
-  combined allocation/payout/hold bounds in migration `0035`, with no runtime callers.
-  P2b5 adds durable hold conversion in migration `0037`. P2b6 makes settlement
-  and refunds select around held sources. No runtime caller creates holds yet.
-  P2c1 adds the durable command request/result and technical-retry journal in
-  migration `0038`, without a runtime producer or dispatcher. Command run
-  identities are isolated in P2c2 (migration `0039`). P2c3a retains immutable funded
-  intervals with matching command/run/charge identities (migration `0040`), with no
-  entitlement projection. P2c3b1 adds internal atomic single-product posting and
-  document projection, with no producer/dispatcher. P2c3b2 recovers delayed accepted
-  starts with original money and actual-date coverage. P2c3b3 adds atomic multi-product
-  purchase posting and exact-source multi-bill conversion (migration `0041`). Next:
-  P2c3b4 adds actual-date renewal price/tax selection and atomic recovery. P2c4a
-  dispatches queued purchase/renewal commands with durable technical retries.
-  P2c4b retains funding shortfall amounts and decision instants in migration `0042`,
-  without technical backoff.
+- **Deployed:** see `make deployed`. **Built:** prepaid foundations P1–P2c4b
+  (`0034`–`0042`) retain source-pinned funding, command retries, funded intervals and
+  atomic posting. P3a isolates daily prepaid billing. P3b adds effective entitlement
+  and independent manual suspension (`0043`). P3c accepts immediate prepaid add
+  orders with tax-inclusive holds and number claims, and completes their full
+  product/order tree atomically in the worker. Public prepaid creation stays gated.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).
-- **Next:** prepaid slice P3c, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
-  (24 slices; prepaid creation stays a 422 until P5a) - [scope](docs/prepaid-plan.md),
+- **Next:** prepaid slice P3d, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
+  (prepaid creation stays a 422 until P5a) - [scope](docs/prepaid-plan.md),
   [decision](docs/decisions/prepaid.md).
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21
   ([frontend.md](docs/decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21));

@@ -63,6 +63,12 @@ sessions, including the current one. See [users and sessions](../decisions/users
 | `POST /billingRun/catchUp {upTo}` | **queues** a catch-up - the API never bills. `upTo` after the business date, or today before `BILLING_RUN_AT`: 422. 202 `{request, dates}`; 200 `{dates: []}` and nothing queued when nothing is due | `::test_catch_up_is_refused_before_the_run_is_due`, `::test_catch_up_queues_a_request_and_says_which_dates`, `::test_catch_up_when_nothing_is_due_queues_nothing` |
 | `POST /billingRun/{id}/retry` | queues a retry of a failed run; 409 if the run is not failed or a retry is already queued; 202 `{request}` | `::test_retry_queues_a_request_for_a_failed_run_once`, `::test_only_a_failed_run_can_be_retried` |
 
+Prepaid products additionally expose `authorizedAt`, exclusive `paidThrough`,
+`suspensionCause` (manual/account/funding) and retained `needs_topup` amounts and
+observation instant. Their effective status follows the injected business date;
+reads never write or emit expiry events. The worker persists observed transitions.
+`nextChargeDate` is their paid-through boundary. See `tests/test_prepaid_entitlement.py`.
+
 The admin UI's Billing runs screen uses all five billing-run endpoints (see
 [ui.md](../ui.md#billing-runs-uibillingrunslist-uibillingrunscatchup-uibillingrunsretry---screensbillingrunstsx));
 `tests/test_ui_requests.py` replays its catch-up and retry requests against the real
