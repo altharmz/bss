@@ -453,6 +453,7 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_adjust_balance": {"adjust_id": world["adjust"]["id"]},
         "get_reserve_balance": {"reserve_id": world["reserve"]["id"]},
         "get_transfer_balance": {"transfer_id": world["transfer"]["id"]},
+        "get_history": {"history_id": world["topup"]["id"]},
         "get_accumulated_balance": {"balance_id": str(world["bucket"]["accumulated_balance_id"])},
         "get_hub_resource": {"hub_id": world["resource_hub"]["id"]},
         "get_bill_format": {"format_id": world["format"]["id"]},

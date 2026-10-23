@@ -18,6 +18,7 @@ from app.api import (
     classification,
     customer,
     errors,
+    history,
     hub,
     inventory,
     on_demand,
@@ -56,6 +57,7 @@ def install(app: FastAPI) -> None:
         adjust,
         reserve,
         transfer,
+        history,
     ):
         app.include_router(module.router)
     app.include_router(account.schema_router)

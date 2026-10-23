@@ -61,13 +61,7 @@ SPECS = (
 # Resources (first path segment) whose operations are not implemented yet: each is one
 # "endpoint absent" line, and the attribute probes skip it. Remove a resource here when
 # its routes land, which enables those probes.
-PENDING = {
-    "TMF654": frozenset(
-        {
-            "balanceActionHistory",
-        }
-    ),
-}
+PENDING: dict[str, frozenset[str]] = {}
 NESTED = "nested"
 PARTS = (*SPECS, NESTED)
 # probe_nested_reads' lines: one level into a response attribute

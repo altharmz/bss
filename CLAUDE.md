@@ -122,12 +122,12 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   P4c serves TMF654 bucket/accumulatedBalance reads and the TMF654 hub. P4d adds
   `topupBalance` and the top-up every direct payment on a prepaid account records. P4e adds
   `adjustBalance` (credit, debit limited to spendable funds, exact-source cancellation). P4f adds `reserveBalance` operator holds that lapse before
-  any later spend. P4g accepts `transferBalance` (hold + queued command). P4h1 completes fee-free transfers in the worker. P4h2 posts transfer fees as one-time charges (`0047`: a fee ABR has no product).
+  any later spend. P4g accepts `transferBalance` (hold + queued command). P4h1 completes fee-free transfers in the worker. P4h2 posts transfer fees as one-time charges (`0047`: a fee ABR has no product). P4i serves `balanceActionHistory` and pins the 12 events and held-funds refunds.
   Public prepaid creation stays gated.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).
-- **Next:** prepaid slice P4i, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
+- **Next:** checkpoint 2, then P5a and down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
   (prepaid creation stays a 422 until P5a) - [scope](docs/prepaid-plan.md),
   [decision](docs/decisions/prepaid.md).
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21

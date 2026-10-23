@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/prepayBalanceManagement/v4`
 - Contract: [`spec/TMF654-PrepayBalance-v4.0.0.swagger.json`](../../spec/TMF654-PrepayBalance-v4.0.0.swagger.json) - Prepay Balance Management version 4.0.0; the spec's server URL is `/tmf-api/prepayBalanceManagement/v4`
-- Operations exposed: 26
+- Operations exposed: 28
 
 
 ## Operations
@@ -18,6 +18,8 @@
 | DELETE | `/tmf-api/prepayBalanceManagement/v4/adjustBalance/{adjust_id}` | path: `adjust_id` | - | 204 (no body) | [`app/api/balance.py`](../../app/api/balance.py) |
 | GET | `/tmf-api/prepayBalanceManagement/v4/adjustBalance/{adjust_id}` | path: `adjust_id`; query: `fields` | - | 200 `AdjustBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
 | PATCH | `/tmf-api/prepayBalanceManagement/v4/adjustBalance/{adjust_id}` | path: `adjust_id`; query: `fields`; body: `application/merge-patch+json` | `AdjustBalance_Update` | 200 `AdjustBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
+| GET | `/tmf-api/prepayBalanceManagement/v4/balanceActionHistory` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `bucket.id`, `id`, `partyAccount.id`, `receiverBucket.id`, `status` | - | 200 `array of BalanceActionHistory` | [`app/api/balance.py`](../../app/api/balance.py) |
+| GET | `/tmf-api/prepayBalanceManagement/v4/balanceActionHistory/{history_id}` | path: `history_id`; query: `fields` | - | 200 `BalanceActionHistory` | [`app/api/balance.py`](../../app/api/balance.py) |
 | GET | `/tmf-api/prepayBalanceManagement/v4/bucket` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `id`, `partyAccount.id`, `status`, `usageType` | - | 200 `array of Bucket` | [`app/api/balance.py`](../../app/api/balance.py) |
 | GET | `/tmf-api/prepayBalanceManagement/v4/bucket/{bucket_id}` | path: `bucket_id`; query: `fields` | - | 200 `Bucket` | [`app/api/balance.py`](../../app/api/balance.py) |
 | POST | `/tmf-api/prepayBalanceManagement/v4/hub` | query: `fields`; body: `application/json` | `EventSubscriptionInput` | 201 `EventSubscription` | [`app/api/hub.py`](../../app/api/hub.py) |
@@ -43,7 +45,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF654-P
 
 ## Coverage of the spec
 
-- Resources of the spec that are **not implemented**: `/balanceActionHistory`, `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
+- Resources of the spec that are **not implemented**: `/listener` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
 ## Behaviour and deviations

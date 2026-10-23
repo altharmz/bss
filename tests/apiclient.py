@@ -59,6 +59,7 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
             "adjustBalance": "AdjustBalance",
             "reserveBalance": "ReserveBalance",
             "transferBalance": "TransferBalance",
+            "balanceActionHistory": "BalanceActionHistory",
         },
     ),
     "/tmf-api/productInventory/v5": ("TMF637", {"product": "Product"}),
@@ -190,7 +191,16 @@ class TmfClient:
             self._validate(api, schema, body, partial)
 
     def _validate(self, api: str, schema: str, body: dict[str, Any], partial: bool) -> None:
-        contract.assert_valid(api, schema, body, partial=partial)
+        if schema == "BalanceActionHistory":
+            # the schema's one exception: only a transfer has a receiver number
+            problems = [
+                p
+                for p in contract.balance_history_errors(body["@type"], body)
+                if not (partial and p.endswith("is a required property") and p.startswith("<root>"))
+            ]
+            assert not problems, "history entry does not conform:\n  " + "\n  ".join(problems)
+        else:
+            contract.assert_valid(api, schema, body, partial=partial)
         if api == "TMF666" and schema == "BillingAccount" and not partial:
             # A TMF extension: the body must name the schema of its additions, the app
             # must serve it, and the body must satisfy it. (A fields= selection leaves

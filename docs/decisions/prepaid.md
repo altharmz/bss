@@ -1127,3 +1127,38 @@ not prorated). No mapper treats non-recurring as refund any more. The UI shows
 `Transfer fee` for a charge without an offering. The daily run never reads a prepaid
 account's ABRs (P3a), so a fee cannot disturb it. Tests:
 `tests/test_transfer_completion.py`.
+
+## P4i: balanceActionHistory, events, refunds (2026-10-23)
+
+`GET /balanceActionHistory` and `/{id}` (`app/api/history.py`, no migration) read the same
+`balance_action` table without a kind filter, oldest first, so every top-up (including the
+one a direct payment records), reservation (owned holds too), adjustment and transfer is
+listed exactly once, whatever its status; a reversal is not an action and a cancel only
+changes the entry's status. Decisions the spec leaves open:
+
+- The entry id equals its action id; `href` names the history. `@type` is the action's
+  subclass (`TopupBalance`...) with `@baseType: BalanceActionHistory`, so the kind is
+  readable without an extra attribute. The body is the action's own body, so every
+  attribute the action returns appears and nothing is invented.
+- The one schema exception is unchanged: `receiverLogicalResource` (required by the schema)
+  is given only by a transfer, which takes it in its request. The test client validates
+  history entries with `contract.balance_history_errors(kind)`, status stays required.
+- Filters: `id`, `status`, `bucket.id`, `receiverBucket.id`, `partyAccount.id`; paging and
+  `fields=` as elsewhere. Read-only: the spec defines no write.
+- The gap lock loses the two "endpoint absent" lines and `PENDING` is empty; the attribute
+  probe adds the vouchers/auto-top-up attributes and the nested echoes of client references
+  (channel, logicalResource href/name, bucket name) as accepted deviations.
+
+Events: all twelve names were registered since P4c; P4i adds a test that sends eleven
+(Create, Failure and Cancel of top-up, adjustment and reservation; Create and Failure of
+transfer) and checks every stored payload against its listener schema. The twelfth,
+`TransferBalanceCancelEvent`, stays registered but is never sent (a transfer is final).
+
+Refunds: a cash refund was already capped by the reconciled spendable balance, which
+excludes held funds (`create_refund` takes the minimum of the sources and
+`funding.load(...).spendable`); P4i pins it at the API with an operator hold: with 50
+topped up and 30 reserved, 21 is a 409 and 20 is accepted. Refunds stay a recorded
+TMF676 refund, not a balance action, and so are not in the history (plan: "Cash refund").
+
+The MCP registry must name every operation, so P4i adds the read tools `list_history` and
+`get_history` (184 tools, 85 with read scope); the remaining prepaid tooling is P5b.

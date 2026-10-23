@@ -17,10 +17,7 @@
 # transfers validate against the unchanged schema. No fictitious receiver is added.
 # Events: register all declared names; TransferBalanceCancelEvent is unreachable.
 # Listener paths are subscriber endpoints, not BSS operations or missing endpoints.
-# TMF654 balanceActionHistory: 2 absent endpoints (tests/tmf_gaps.py PENDING).
 # Buckets, accumulated balances and the hub use the attribute probes.
-TMF654 GET /balanceActionHistory endpoint absent
-TMF654 GET /balanceActionHistory/{id} endpoint absent
 
 # accepted deviations: gaps kept on purpose, each with its reason (docs/decisions/tmf-api.md,
 # "The last gaps"). The probe still finds them; the lock is exact.
@@ -66,6 +63,19 @@ TMF639 POST /resource requires value
 # TMF654 adjustBalance: relatedParty is not in the Create schema and the owner is already on
 # the bucket and the partyAccount; recurring adjustments are a 422 (never returned). P4e.
 TMF654 GET /adjustBalance/{id} missing relatedParty
+# TMF654 balanceActionHistory: an entry is its action's body, so it lacks what the action
+# lacks (vouchers and automatic top-ups are a 422). Its references echo what the client sent
+# (channel, logicalResource) or are ours (a bucket has no name). P4i.
+TMF654 GET /balanceActionHistory/{id} missing bucket.name
+TMF654 GET /balanceActionHistory/{id} missing channel.href
+TMF654 GET /balanceActionHistory/{id} missing logicalResource.href
+TMF654 GET /balanceActionHistory/{id} missing logicalResource.name
+TMF654 GET /balanceActionHistory/{id} missing numberOfPeriods
+TMF654 GET /balanceActionHistory/{id} missing receiverBucket.name
+TMF654 GET /balanceActionHistory/{id} missing receiverLogicalResource.href
+TMF654 GET /balanceActionHistory/{id} missing receiverLogicalResource.name
+TMF654 GET /balanceActionHistory/{id} missing recurringPeriod
+TMF654 GET /balanceActionHistory/{id} missing voucher
 TMF654 GET /bucket/{id} missing confirmationDate
 TMF654 GET /bucket/{id} missing requestedDate
 TMF654 GET /bucket/{id} missing validFor.endDateTime

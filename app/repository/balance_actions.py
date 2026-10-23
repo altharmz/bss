@@ -75,10 +75,11 @@ def insert_topup(
 
 
 def get(
-    conn: psycopg.Connection, action_id: UUID, *, lock: bool = False, kind: str = "topup"
+    conn: psycopg.Connection, action_id: UUID, *, lock: bool = False, kind: str | None = "topup"
 ) -> Row | None:
-    query = "SELECT * FROM balance_action WHERE id = %s AND kind = %s"
-    return fetch_one(conn, query + (" FOR UPDATE" if lock else ""), (action_id, kind))
+    """The action; of `kind`, or of any kind when `kind` is None (the history)."""
+    query = "SELECT * FROM balance_action WHERE id = %s AND (%s::text IS NULL OR kind = %s)"
+    return fetch_one(conn, query + (" FOR UPDATE" if lock else ""), (action_id, kind, kind))
 
 
 def page(
@@ -87,14 +88,16 @@ def page(
     offset: int,
     limit: int,
     *,
-    kind: str = "topup",
+    kind: str | None = "topup",
 ) -> tuple[list[Row], int]:
-    """Actions of `kind` matching every `column = value` of `where`, oldest first."""
-    conditions = [sql.SQL("kind = %s")] + [
-        sql.SQL("{}::text = %s").format(sql.Identifier(column)) for column in where
-    ]
-    clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
-    params = [kind, *(str(value) for value in where.values())]
+    """Actions of `kind` (any kind when None) matching every `column = value` of `where`,
+    oldest first."""
+    conditions = [sql.SQL("{}::text = %s").format(sql.Identifier(c)) for c in where]
+    params = [str(value) for value in where.values()]
+    if kind is not None:
+        conditions.insert(0, sql.SQL("kind = %s"))
+        params.insert(0, kind)
+    clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions) if conditions else sql.SQL("")
     total = fetch_one(conn, sql.SQL("SELECT count(*) AS n FROM balance_action") + clause, params)
     assert total is not None
     rows = fetch_all(

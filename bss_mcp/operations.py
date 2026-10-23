@@ -180,6 +180,12 @@ OPERATIONS: dict[str, Op] = {
     "delete_adjust_balance": Op(
         "Delete a failed adjustment; a completed or cancelled one is history."
     ),
+    "list_history": Op(
+        "History of every top-up, reservation, adjustment and transfer, each once with its action's"
+        " id; filter by status, bucket.id, receiverBucket.id or partyAccount.id.",
+        query=LIST,
+    ),
+    "get_history": Op("One balance action's history entry.", query=FIELDS),
     "list_reserve_balances": Op(
         "Operator holds on prepaid funds; filter by status, bucket.id or partyAccount.id.",
         query=LIST,
