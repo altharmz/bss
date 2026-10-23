@@ -1,7 +1,7 @@
 """Processing a product order (TMF622): validate, then execute or reject, synchronously
 and on one connection - the caller's transaction covers acceptance. Prepaid immediate
-adds retain funds and a pending item tree for atomic billing-owner completion; prepaid
-suspend/resume orders complete at once (app/ordering/prepaid.py).
+adds and terminations retain a pending item tree for atomic billing-owner completion;
+prepaid suspend/resume orders complete at once (app/ordering/prepaid.py).
 
 Two kinds of "no":
 - OrderRefused: the order cannot even be stored (it references a billing account,
@@ -361,6 +361,8 @@ def _process(
         old_numbers = number_orders.before(conn, number_rows, today)
         if prepaid and purchase:
             prepaid_orders.accept(conn, order, request, rows, prepared, command_id, start, now)
+        elif prepaid and all(i.action == "delete" for i in request.items):
+            prepaid_orders.terminate(conn, order, request, rows, command_id, start, today, now)
         elif prepaid:
             prepaid_orders.change_statuses(conn, order, request, rows, renewals, today, now)
         else:

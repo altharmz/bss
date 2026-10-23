@@ -1,5 +1,29 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P3g: termination credits (2026-10-23)
+
+A prepaid order of delete items only ends its products on the requested business
+date (today or later; the date itself is excluded) and releases their numbers then.
+Acceptance writes no money: the products are `terminated`, or `pendingTerminate`
+until a future date, and the order stays `inProgress` with one `order` command due
+on that date. A product without a first grant is `productNotStarted` (cancel its
+purchase instead); deletes mixed with other actions stay
+`prepaidLifecycleUnavailable`. A Suspended account may terminate (cleanup). Once
+accepted, a prepaid termination cannot be cancelled (409).
+
+The billing owner posts the command: each grant still covering the date credits its
+unused dates, by difference as postpaid refunds do: the net for the used dates is
+rounded once and the credit is that minus the charge, tax lines likewise at the
+charge's rates. A same-day termination credits the whole interval, an expired one
+nothing; a charge is credited at most once. Each credit is a `refund` ABR of the
+command run with a settled `offCycle` credit note dated on posting, which is the
+spendable source; nothing is spendable before. Products, items and order complete
+with TMF637/622 events in the same transaction. A renewal of an ended product is
+retired (completed `cancelled`, `productEnded`, any owned hold released once)
+instead of staying pending, so the account can close; this replaces P3e's
+"pending and unattempted" for ended products. The observer keeps
+`pendingTerminate` inside a live grant. No migration. P3h is next.
+
 ## P3f: manual suspension, resumption and account state (2026-10-23)
 
 Prepaid modify items with `product.status` complete synchronously on the order's

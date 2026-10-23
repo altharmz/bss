@@ -13,7 +13,8 @@ def effective_state(product, account, grant, today):
     if account["state"] != "Active":
         return "suspended", "account"
     if grant is not None and grant["period"].lower <= today < grant["period"].upper:
-        return "active", None
+        # an accepted termination keeps service until its date
+        return ("active" if product["termination_date"] is None else "pendingTerminate"), None
     if grant is None:
         return "pendingActive", None
     return "suspended", "funding"

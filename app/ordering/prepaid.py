@@ -1,9 +1,12 @@
 """Accept immediate and future prepaid purchases under command/account/catalog/number locks,
-and apply manual suspension/resumption orders.
+apply manual suspension/resumption orders and accept terminations.
 
 A suspend order keeps the paid interval and its charge; at expiry it blocks renewal.
 A resume order reuses a still-live grant, or queues the renewal of the expired one,
 which authorizes from today. Status changes take effect on the order's day only.
+A termination ends the product and releases its number at the requested date; its
+command, due that day, has the billing owner credit the unused dates
+(app/billing/termination.py) and complete the order.
 """
 
 from dataclasses import replace
@@ -38,11 +41,20 @@ def lock_renewals(conn, product_ids):
 
 
 def problems(conn, request, account, start, today):
-    """Prepaid orders purchase, or suspend/resume today; a non-Active account only suspends."""
+    """Prepaid orders purchase, terminate, or suspend/resume today; a non-Active account
+    only suspends and terminates."""
     if all(item.action == "add" for item in request.items):
         return []
+    if all(item.action == "delete" for item in request.items):
+        return _not_started(conn, request)
     if any(item.action != "modify" or item.product_status is None for item in request.items):
-        return [(None, "prepaidLifecycleUnavailable", "prepaid orders purchase, suspend or resume")]
+        return [
+            (
+                None,
+                "prepaidLifecycleUnavailable",
+                "prepaid orders purchase, terminate, suspend or resume",
+            )
+        ]
     if start != today:
         return [(None, "prepaidLifecycleUnavailable", "prepaid status changes take effect today")]
     found = []
@@ -54,16 +66,49 @@ def problems(conn, request, account, start, today):
                 f"billing account is {account['state']}: only suspensions and cleanup orders",
             )
         )
+    return found + _not_started(conn, request)
+
+
+def _not_started(conn, request):
+    return [
+        (
+            item.item_id,
+            "productNotStarted",
+            "the prepaid product has no funded grant yet: cancel its order instead",
+        )
+        for item in request.items
+        if entitlement.latest_grant(conn, item.product_id) is None
+    ]
+
+
+def terminate(conn, order, request, rows, command_id, start, today, now):
+    """End the products on `start` and queue the credit command due that day; the order
+    stays inProgress until the billing owner posts it."""
+    orders.set_order_state(conn, order["id"], order_transition(order["state"], "inProgress"))
     for item in request.items:
-        if entitlement.latest_grant(conn, item.product_id) is None:
-            found.append(
-                (
-                    item.item_id,
-                    "productNotStarted",
-                    "the prepaid product has no funded grant yet: cancel its order instead",
-                )
-            )
-    return found
+        row = rows[item.item_id]
+        orders.set_order_item_state(conn, row["id"], item_transition(row["state"], "inProgress"))
+        numbers.execute(conn, item, item.product_id, row["id"], start, now)
+        products.terminate_product(
+            conn,
+            item.product_id,
+            termination_date=start,
+            terminated_by_item_id=row["id"],
+            status="terminated" if start <= today else "pendingTerminate",
+        )
+        emit.product(conn, item.product_id, "StateChange", at=now, today=today)
+    commands.enqueue(
+        conn,
+        command_id,
+        order["billing_account_id"],
+        kind="order",
+        due_date=start,
+        request={
+            "order_id": str(order["id"]),
+            "terminations": [str(item.product_id) for item in request.items],
+        },
+        now=now,
+    )
 
 
 def restore_status(conn, product_id, account, today):

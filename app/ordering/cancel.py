@@ -3,10 +3,10 @@ throw a draft away (it was never processed: nothing to undo).
 
 Prepaid inProgress orders may be cancelled before their first grant, under the
 command identity lock: release money and number claims and retain a cancelled
-command result. A prepaid status order is undone like a postpaid one; its product
-gets back the manual cause and effective status the earlier changes left. Postpaid
-cancellation undoes a completed order whose every effect
-is still in the future, in one transaction:
+command result. A prepaid termination cannot be cancelled once accepted. A prepaid
+status order is undone like a postpaid one; its product gets back the manual cause
+and effective status the earlier changes left. Postpaid cancellation undoes a
+completed order whose every effect is still in the future, in one transaction:
 
 - add item: its product has not started (`created`/`pendingActive`, start after today)
   and nothing else ended it; the product is `cancelled` with zero billable days.
@@ -233,6 +233,8 @@ def cancel_order(
 
 
 def _cancel_prepaid(conn, order, command, request, now, today):
+    if "terminations" in command["request"]:
+        raise CancelRefused("a prepaid termination cannot be cancelled once accepted")
     if order["state"] != "inProgress" or command["state"] == "completed":
         raise CancelRefused("prepaid order cannot be cancelled after its first grant")
     parties.get_billing_account(conn, order["billing_account_id"], "update")

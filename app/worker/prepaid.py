@@ -14,9 +14,10 @@ import psycopg
 from app.billing import entitlement
 from app.billing.funding import InsufficientFunds
 from app.billing.prepaid import post_interval
+from app.billing.termination import post_termination
 from app.clock import Clock
 from app.events import emit
-from app.repository import billing
+from app.repository import billing, funding
 from app.repository import prepaid_commands as commands
 from app.repository._sql import fetch_all, fetch_one
 from app.repository.prepaid_commands import renewal_id
@@ -90,17 +91,33 @@ def produce_renewals(
     return produced
 
 
-def _renewal_blocked(conn, cmd) -> bool:
-    """Manual/account suspension and ended products leave a renewal pending, unattempted."""
+def _renewal_blocked(conn, cmd, today) -> str | None:
+    """Manual/account suspension leaves a renewal pending, unattempted ("blocked");
+    an ended product retires it ("ended")."""
     row = fetch_one(
         conn,
-        "SELECT a.state <> 'Active' OR p.manually_suspended"
-        " OR p.status IN ('terminated', 'cancelled', 'aborted') AS blocked"
+        "SELECT p.status IN ('terminated', 'cancelled', 'aborted')"
+        " OR p.termination_date <= %s AS ended,"
+        " a.state <> 'Active' OR p.manually_suspended AS blocked"
         " FROM funded_interval f JOIN product p ON p.id = f.product_id"
         " JOIN billing_account a ON a.id = f.billing_account_id WHERE f.id::text = %s",
-        (cmd["request"].get("previous_interval_id"),),
+        (today, cmd["request"].get("previous_interval_id")),
     )
-    return row is not None and row["blocked"]
+    if row is None:
+        return None
+    return "ended" if row["ended"] else "blocked" if row["blocked"] else None
+
+
+def _retire(conn, cmd, now):
+    """A renewal of an ended product completes as cancelled, releasing any owned hold."""
+    hold = fetch_one(
+        conn, "SELECT hold_id FROM funding_command_hold WHERE command_id = %s", (cmd["id"],)
+    )
+    if hold is not None:
+        funding.release(
+            conn, cmd["billing_account_id"], hold["hold_id"], released_at=now, command_id=cmd["id"]
+        )
+    commands.complete(conn, cmd["id"], {"outcome": "cancelled", "reason": "productEnded"}, now=now)
 
 
 def process_commands(
@@ -115,8 +132,9 @@ def process_commands(
 
     Funding shortfalls retain a needs-top-up reason and remain pending. They are
     attempted again after a later credit (a payment or a released hold) or on a
-    later business date, never as technical failures. Unsupported transfer
-    commands are left to their future dispatcher.
+    later business date, never as technical failures. A renewal of an ended product
+    is retired at once. Unsupported transfer commands are left to their future
+    dispatcher.
     """
     ensure_ownership(conn)
     now = clock.now()
@@ -124,12 +142,14 @@ def process_commands(
         conn,
         "SELECT c.* FROM prepaid_command c LEFT JOIN funded_interval f"
         " ON f.id::text = c.request->>'previous_interval_id'"
+        " LEFT JOIN product p ON p.id = f.product_id"
         " LEFT JOIN LATERAL (SELECT observed_at FROM prepaid_funding_shortfall"
         " WHERE command_id = c.id ORDER BY observed_at DESC LIMIT 1) s ON true"
         " WHERE c.state <> 'completed'"
         " AND c.kind IN ('order', 'renewal') AND c.due_date <= %(today)s"
         " AND (c.next_retry_at IS NULL OR c.next_retry_at <= %(now)s)"
         " AND (s.observed_at IS NULL OR c.attempted_at > s.observed_at"
+        " OR p.termination_date <= %(today)s"
         " OR (s.observed_at AT TIME ZONE %(tz)s)::date < %(today)s"
         " OR EXISTS (SELECT FROM payment p WHERE p.billing_account_id = c.billing_account_id"
         " AND p.status = 'done' AND p.received_at > s.observed_at)"
@@ -158,10 +178,16 @@ def process_commands(
                     current["next_retry_at"] is not None and current["next_retry_at"] > now
                 ):
                     continue
-                if current["kind"] == "renewal" and _renewal_blocked(conn, current):
-                    continue
+                if current["kind"] == "renewal":
+                    blocked = _renewal_blocked(conn, current, now.astimezone(tz).date())
+                    if blocked == "ended":
+                        _retire(conn, current, now)
+                        attempted.append(cmd["id"])
+                    if blocked is not None:
+                        continue
+                post = post_termination if "terminations" in current["request"] else post_interval
                 try:
-                    post_interval(conn, cmd["id"], now=now, tz=tz)
+                    post(conn, cmd["id"], now=now, tz=tz)
                 except InsufficientFunds as shortfall:
                     commands.record_shortfall(
                         conn,

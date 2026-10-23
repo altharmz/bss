@@ -163,5 +163,9 @@ def test_suspension_causes_block_production_and_dispatch(db_conn, block):
     [produced] = produce(db_conn, now)
     db_conn.execute(BLOCKS[block])
     db_conn.commit()
+    if block == "terminated":  # an ended product retires its renewal (P3g)
+        assert dispatch(db_conn, now) == [produced]
+        assert commands.get(db_conn, produced)["result"]["outcome"] == "cancelled"
+        return
     assert dispatch(db_conn, now) == []
     assert commands.get(db_conn, produced)["attempts"] == 0

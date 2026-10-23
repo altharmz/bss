@@ -430,7 +430,7 @@ def _segment_diff(
     diff = expected - actual
     if diff == 0:
         for refund in refunds:
-            if refund.taxes != _refund_taxes(charge, expected):
+            if refund.taxes != refund_taxes(charge.taxes, expected):
                 raise InconsistentState(
                     f"refund {refund.id}: taxes {refund.taxes} do not match charge {charge.id}"
                 )
@@ -452,7 +452,7 @@ def _segment_diff(
         unbilled,
         offering_id,
         refunds_id=charge.id,
-        taxes=_refund_taxes(charge, expected),
+        taxes=refund_taxes(charge.taxes, expected),
     )
 
 
@@ -469,11 +469,11 @@ def _check_charge_taxes(charge: StoredAbr, price: Price) -> None:
         )
 
 
-def _refund_taxes(charge: StoredAbr, expected: Decimal) -> tuple[AppliedTax, ...]:
+def refund_taxes(lines: tuple[AppliedTax, ...], expected: Decimal) -> tuple[AppliedTax, ...]:
     """Per tax line of the charge: the tax of the expected net minus the tax charged."""
     return tuple(
         AppliedTax(line.category, line.rate, tax_of(expected, line.rate) - line.amount)
-        for line in charge.taxes
+        for line in lines
     )
 
 
