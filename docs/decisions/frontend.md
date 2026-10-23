@@ -56,6 +56,33 @@ and frontend-only: TMF622 `GET /productOrder` already filters by `state` and
   `tests/test_ui_requests.py` replays the GET filters against the backend. The e2e opens
   `/orders` and one dialog read-only.
 
+## P6a: account mode and the prepaid card (2026-10-23)
+
+No backend change. `Account.ratingType` comes from the TMF666 body (a missing one is an
+error like any other attribute).
+
+- **Creation.** New subscriber has an Account mode switch (Postpaid default, Prepaid).
+  `ratingType: "prepaid"` is sent only for prepaid, so a postpaid body is byte-for-byte what
+  it was; a prepaid account hides the credit limit field and sends none (a positive limit
+  is a 422). Edit does not change the mode (the backend allows only postpaid to prepaid
+  before history, never back).
+- **List.** An Account mode filter (All / Postpaid / Prepaid, with counts) next to the state
+  filter; a prepaid row says "· prepaid" in the name cell. No new column: a dedicated one
+  would have changed every existing row assertion for little gain.
+- **Card.** For a prepaid account the KPI strip drops Credit limit, Available incl. credit
+  and "In arrears", and shows five figures that are never merged: **Ledger** (TMF666
+  `currentBalance`, may go below zero), **Available** and **Reserved** (TMF654 bucket
+  `remainingValue` = ledger - holds, `reservedValue`; read by `partyAccount.id`; the ledger is
+  not recomputed from them), **Paid through** (earliest `paidThrough` of the open products,
+  from the internal product view) and **Shortfall** (largest `needs_topup.shortfall` among
+  products, with required/available, the product count and the distinct `suspensionCause`s
+  in words). A failing bucket shows an alert in the strip and the rest of the card works.
+  A postpaid card makes no TMF654 request. The bucket types are hand-written in
+  `api/bss.ts` (TMF654 is a Swagger 2 file the type generator does not cover).
+- **Not here.** Money forms (P6b), transfer, pending polling and technical retry (P6c), and
+  the prepaid preview inside Add product (the internal `firstCharge` already carries
+  required/available/shortfall) are later slices.
+
 ## N5: subscriber-number UI (2026-10-21)
 
 `/numbers` lists and searches inventory, creates strictly formatted E.164 digits,

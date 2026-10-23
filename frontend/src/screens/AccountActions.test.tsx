@@ -12,6 +12,7 @@ const account: Account = {
   id: A,
   name: 'Olga main',
   state: 'Closed',
+  ratingType: 'postpaid',
   customerId: 'c1',
   customerName: 'Olga',
   cycleDay: 1,

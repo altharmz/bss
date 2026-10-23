@@ -540,6 +540,37 @@ def test_new_subscriber_as_the_ui_creates_it(api):
     assert org.status_code == 201, org.text
 
 
+def test_new_prepaid_subscriber_as_the_ui_creates_it(api):
+    """createSubscriber() with the prepaid mode: ratingType in the body, no credit limit; the
+    card then reads the account's bucket by partyAccount.id (TMF654)."""
+    party = api.post_raw(
+        f"{PARTY}/individual", '{"@type":"Individual","givenName":"Olga","familyName":"K"}'
+    )
+    customer = api.post_raw(
+        CUSTOMERS,
+        '{"@type":"Customer","name":"Olga K","status":"Active",'
+        f'"engagedParty":{{"id":"{party.json()["id"]}","@type":"PartyRef",'
+        '"@referredType":"Individual"}}',
+    )
+    assert customer.status_code == 201, customer.text
+    account = api.post_raw(
+        ACCOUNTS,
+        '{"@type":"BssBillingAccount","name":"Olga K main","billCycleDay":1,"currency":"USD",'
+        '"ratingType":"prepaid","relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef",'
+        f'"role":"customer","partyOrPartyRole":{{"id":"{customer.json()["id"]}",'
+        '"name":"Olga K","@type":"PartyRoleRef","@referredType":"Customer"}}]}',
+    )
+    assert account.status_code == 201, account.text
+    assert account.json()["ratingType"] == "prepaid"
+    buckets = api.get(
+        "/tmf-api/prepayBalanceManagement/v4/bucket"
+        f"?partyAccount.id={account.json()['id']}&offset=0&limit=100"
+    )
+    assert buckets.status_code == 200 and len(buckets.json()) == 1
+    bucket = decimals(buckets)[0]
+    assert (bucket["remainingValue"]["amount"], bucket["reservedValue"]["amount"]) == (0, 0)
+
+
 def test_edit_subscriber_as_the_ui_patches_it(api):
     """updateSubscriber(): merge patches of only the changed attributes; the credit limit as
     an exact token or null."""

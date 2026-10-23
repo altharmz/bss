@@ -84,6 +84,7 @@ export function accountBody(
     href: `${ACCOUNTS}/${id}`,
     name: `${customer.name} main`,
     state: 'Active',
+    ratingType: 'postpaid',
     relatedParty: [
       {
         role: 'customer',

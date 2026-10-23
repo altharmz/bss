@@ -39,6 +39,7 @@ export const PATHS = {
   cancellations: '/tmf-api/productOrderingManagement/v5/cancelProductOrder',
   internal: '/internal/v1/billingAccount',
   runs: '/internal/v1/billingRun',
+  buckets: '/tmf-api/prepayBalanceManagement/v4/bucket',
 };
 
 export type AccountProduct = Internal['schemas']['AccountProduct'];
@@ -57,7 +58,11 @@ function need<T>(value: T | undefined | null, what: string): T {
 type BillingAccountBody = T666['schemas']['BillingAccount'] & {
   billCycleDay?: number;
   currency?: string;
+  ratingType?: string;
 };
+
+/** The account's rating mode (docs/decisions/prepaid.md); chosen at creation. */
+export type RatingMode = 'postpaid' | 'prepaid';
 
 export type AccountState = 'Active' | 'Suspended' | 'Closed';
 
@@ -65,6 +70,7 @@ export interface Account {
   id: string;
   name: string;
   state: AccountState;
+  ratingType: RatingMode;
   customerId: string;
   customerName: string;
   cycleDay: number;
@@ -90,6 +96,7 @@ export function toAccount(body: BillingAccountBody): Account {
     id: need(body.id, 'id'),
     name: need(body.name, 'name'),
     state: need(body.state, 'state') as AccountState,
+    ratingType: need(body.ratingType, 'ratingType') as RatingMode,
     customerId: need(customer.id, 'customer id'),
     customerName: need(customer.name, 'customer name'),
     cycleDay: need(body.billCycleDay, 'billCycleDay'),
@@ -105,6 +112,36 @@ export async function loadAccounts(signal: AbortSignal): Promise<Account[]> {
 
 export async function loadAccount(id: string, signal: AbortSignal): Promise<Account> {
   return toAccount(await getJson<BillingAccountBody>(`${PATHS.accounts}/${id}`, signal));
+}
+
+// --- prepaid balance (TMF654 v4 bucket, docs/decisions/prepaid.md#p4c) ---
+
+/** A prepaid account's funds, kept distinct: the ledger is what the account holds,
+ * reserved the outstanding holds, available (spendable) = ledger - reserved, unclamped. */
+export interface PrepaidBalance {
+  ledgerCents: number;
+  reservedCents: number;
+  availableCents: number;
+}
+
+interface BucketBody {
+  remainingValue?: { amount?: number; units?: string };
+  reservedValue?: { amount?: number; units?: string };
+}
+
+export async function loadPrepaidBalance(
+  accountId: string,
+  signal: AbortSignal,
+): Promise<PrepaidBalance> {
+  const buckets = await getAll<BucketBody>(`${PATHS.buckets}?partyAccount.id=${accountId}`, signal);
+  const bucket = need(buckets[0], 'prepaid bucket');
+  const available = toCents(need(bucket.remainingValue?.amount, 'remainingValue'));
+  const reserved = toCents(need(bucket.reservedValue?.amount, 'reservedValue'));
+  return {
+    availableCents: available,
+    reservedCents: reserved,
+    ledgerCents: available + reserved,
+  };
 }
 
 // --- financial accounts (TMF666): read-only in the UI (docs/decisions/accounts.md) ---
@@ -200,7 +237,8 @@ export interface NewSubscriber {
   accountName: string;
   cycleDay: number; // 1..28
   currency: string;
-  creditLimit: string | null; // canonical decimal string, or none
+  creditLimit: string | null; // canonical decimal string, or none (always none when prepaid)
+  ratingType: RatingMode;
 }
 
 export function partyName(form: {
@@ -264,6 +302,8 @@ export async function createSubscriber(form: NewSubscriber): Promise<string> {
     name: form.accountName.trim(),
     billCycleDay: form.cycleDay,
     currency: form.currency,
+    // sent only for prepaid: a postpaid body stays what it always was (the default)
+    ...(form.ratingType === 'prepaid' ? { ratingType: 'prepaid' } : {}),
     relatedParty: [
       {
         '@type': 'RelatedPartyRefOrPartyRoleRef',

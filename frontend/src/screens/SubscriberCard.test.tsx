@@ -763,3 +763,102 @@ describe('edit subscriber', () => {
     expect(save.disabled).toBe(true);
   });
 });
+
+describe('prepaid card', () => {
+  const BUCKETS = `GET /tmf-api/prepayBalanceManagement/v4/bucket?partyAccount.id=${A}&offset=0&limit=100`;
+  const PREPAID = accountBody(
+    A,
+    { id: C, name: 'Olga Kuznetsova' },
+    {
+      ratingType: 'prepaid',
+      accountBalance: [
+        { balanceType: 'currentBalance', amount: usd(120), '@type': 'AccountBalance' },
+      ],
+    },
+  );
+  const bucket = (remaining: number, reserved: number) => () =>
+    json(
+      [
+        {
+          remainingValue: { amount: remaining, units: 'USD' },
+          reservedValue: { amount: reserved, units: 'USD' },
+        },
+      ],
+      { total: 1 },
+    );
+  const prepaidProduct = (id: string, over: Record<string, unknown>) =>
+    product(id, { paidThrough: '2026-10-20', suspensionCause: null, needs_topup: null, ...over });
+
+  it('keeps ledger, available, reserved, paid-through and shortfall distinct', async () => {
+    backend(
+      {
+        [BUCKETS]: bucket(100.5, 19.5),
+        [`GET ${INTERNAL}/products`]: () =>
+          json(
+            [
+              prepaidProduct(P1, { nextChargeDate: '2026-10-20' }),
+              prepaidProduct(P3, {
+                paidThrough: '2026-10-12',
+                suspensionCause: 'funding',
+                nextChargeDate: '2026-10-12',
+                needs_topup: {
+                  required: 30,
+                  available: 12.25,
+                  shortfall: 17.75,
+                  observedAt: '2026-10-12T00:30:00Z',
+                },
+              }),
+            ],
+            { total: 2 },
+          ),
+      },
+      PREPAID,
+    );
+    await open();
+    const kpis = panel('Billing account');
+    const figure = (label: string) =>
+      (within(kpis).getByText(label).parentElement as HTMLElement).textContent;
+    expect(await within(kpis).findByText('100.50')).toBeTruthy();
+    expect(figure('Ledger')).toContain('120.00');
+    expect(figure('Available')).toContain('100.50');
+    expect(figure('Reserved')).toContain('19.50');
+    expect(await within(kpis).findByText('2026-10-12')).toBeTruthy(); // the earliest
+    expect(figure('Paid through')).toContain('2026-10-12');
+    expect(figure('Shortfall')).toContain('17.75');
+    expect(figure('Shortfall')).toContain('needs top-up: renewal needs 30.00, available 12.25');
+    expect(figure('Shortfall')).toContain('Suspension: funding ran out');
+    // none of the postpaid-only figures
+    expect(within(kpis).queryByText('Credit limit')).toBeNull();
+    expect(within(kpis).queryByText('Available incl. credit')).toBeNull();
+    expect(within(kpis).queryByText('In arrears')).toBeNull();
+  });
+
+  it('shows no shortfall for a funded account, and a debt as negative available', async () => {
+    backend(
+      {
+        [BUCKETS]: bucket(-5, 0),
+        [`GET ${INTERNAL}/products`]: () => json([prepaidProduct(P1, {})], { total: 1 }),
+      },
+      PREPAID,
+    );
+    await open();
+    const kpis = panel('Billing account');
+    expect((await within(kpis).findByText('−5.00')).className).toContain('negative');
+    expect(await within(kpis).findByText('None')).toBeTruthy();
+    expect(within(kpis).getByText('2026-10-20')).toBeTruthy();
+  });
+
+  it('reports a failing bucket without taking the card down', async () => {
+    backend({ [BUCKETS]: () => tmfError(503, 'Unavailable') }, PREPAID);
+    await open();
+    expect(await within(panel('Billing account')).findByRole('alert')).toBeTruthy();
+    expect(within(panel('Billing account')).getByText('Ledger')).toBeTruthy();
+  });
+
+  it('asks nothing of TMF654 for a postpaid account', async () => {
+    const { fetchMock } = backend();
+    await open();
+    await within(panel('Billing account')).findByText('Credit limit');
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('prepayBalance'))).toBe(false);
+  });
+});

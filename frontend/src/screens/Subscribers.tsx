@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { loadSubscribers, type Account, type AccountState } from '../api/bss';
+import { loadSubscribers, type Account, type AccountState, type RatingMode } from '../api/bss';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
 import { hrefOf, useRouter } from '../app/router';
@@ -27,6 +27,12 @@ export const COLUMNS: Column[] = [
 
 type StateFilter = 'All' | AccountState;
 const STATES: StateFilter[] = ['All', 'Active', 'Suspended', 'Closed'];
+type ModeFilter = 'All' | RatingMode;
+const MODES: { key: ModeFilter; label: string }[] = [
+  { key: 'All', label: 'All' },
+  { key: 'postpaid', label: 'Postpaid' },
+  { key: 'prepaid', label: 'Prepaid' },
+];
 
 function matches(account: Account, query: string): boolean {
   const q = query.trim().toLowerCase();
@@ -44,6 +50,7 @@ export function SubscribersScreen() {
   const { navigate } = useRouter();
   const [query, setQuery] = useState('');
   const [state, setState] = useState<StateFilter>('All');
+  const [mode, setMode] = useState<ModeFilter>('All');
   const subscribers = useResource('subscribers', loadSubscribers);
   const [creating, setCreating] = useState(false);
   const toast = useToast();
@@ -51,10 +58,13 @@ export function SubscribersScreen() {
   const accounts = subscribers.status === 'ok' ? subscribers.data.accounts : [];
   const countOf = (filter: StateFilter) =>
     filter === 'All' ? accounts.length : accounts.filter((a) => a.state === filter).length;
+  const modeCount = (filter: ModeFilter) =>
+    filter === 'All' ? accounts.length : accounts.filter((a) => a.ratingType === filter).length;
   const negative = accounts.filter((a) => a.balanceCents < 0).length;
   const reset = () => {
     setQuery('');
     setState('All');
+    setMode('All');
   };
 
   return (
@@ -96,6 +106,16 @@ export function SubscribersScreen() {
             ...(subscribers.status === 'ok' ? { count: countOf(key) } : {}),
           }))}
         />
+        <Segmented
+          label="Account mode"
+          value={mode}
+          onChange={setMode}
+          options={MODES.map(({ key, label }) => ({
+            key,
+            label,
+            ...(subscribers.status === 'ok' ? { count: modeCount(key) } : {}),
+          }))}
+        />
         <span className="right">
           Negative balance: <span className="neg-count">{formatInt(negative)}</span>
         </span>
@@ -112,7 +132,12 @@ export function SubscribersScreen() {
           }}
           total={(data) => data.accounts.length}
           rows={(data) =>
-            data.accounts.filter((a) => (state === 'All' || a.state === state) && matches(a, query))
+            data.accounts.filter(
+              (a) =>
+                (state === 'All' || a.state === state) &&
+                (mode === 'All' || a.ratingType === mode) &&
+                matches(a, query),
+            )
           }
           onResetFilters={reset}
         >
@@ -143,6 +168,12 @@ export function SubscribersScreen() {
                             <span className="bss-name">{account.customerName}</span>
                             {(perCustomer.get(account.customerId) ?? 0) > 1 && (
                               <span className="bss-secondary"> · {account.name}</span>
+                            )}
+                            {account.ratingType === 'prepaid' && (
+                              <span className="bss-secondary" data-ui="ui.subscribers.prepaid">
+                                {' '}
+                                · prepaid
+                              </span>
                             )}
                           </div>
                         ),

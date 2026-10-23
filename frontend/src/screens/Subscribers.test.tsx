@@ -119,6 +119,33 @@ describe('subscribers list', () => {
     expect(screen.getByText('Showing 1 of 4')).toBeTruthy();
   });
 
+  it('shows the account mode and filters by it, with counts', async () => {
+    const rows = [
+      ...ROWS,
+      accountBody(
+        '55555555-0000-4000-8000-0000000000a5',
+        { id: 'dddd4444-0000-4000-8000-000000000004', name: 'Dmitri Sokolov' },
+        { ratingType: 'prepaid' },
+      ),
+    ];
+    backend(() => json(rows, { total: rows.length }));
+    await open();
+    await screen.findByText('Ivan Petrov');
+    expect(screen.getAllByText('· prepaid')).toHaveLength(1);
+    const group = screen.getByRole('group', { name: 'Account mode' });
+    expect(
+      within(group)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['All5', 'Postpaid4', 'Prepaid1']);
+    fireEvent.click(within(group).getByRole('button', { name: /^Prepaid/ }));
+    expect(dataRows()).toHaveLength(1);
+    expect(rowOf(/Dmitri Sokolov/)?.textContent).toContain('prepaid');
+    fireEvent.click(within(group).getByRole('button', { name: /^Postpaid/ }));
+    expect(dataRows()).toHaveLength(4);
+    expect(screen.getByText('Showing 4 of 5')).toBeTruthy();
+  });
+
   it('searches names and subscriber numbers, and resets when nothing matches', async () => {
     backend();
     await open();
@@ -258,6 +285,34 @@ describe('new subscriber', () => {
           '"creditLimit":{"unit":"USD","value":1500.50}}',
       ],
     ]);
+  });
+
+  it('creates a prepaid account: the mode is sent, the credit limit is not offered', async () => {
+    const { fetchMock } = backend(undefined, {
+      [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),
+      [`POST ${CUSTOMERS}`]: () => json({ id: NEW_CUSTOMER }, { status: 201 }),
+      [`POST ${ACCOUNTS}`]: () => json({ id: NEW_ACCOUNT }, { status: 201 }),
+      [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: pending,
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: '+ New subscriber' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
+    fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
+    fireEvent.change(within(dialog).getByLabelText('Credit limit, USD (optional)'), {
+      target: { value: '10' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Prepaid' }));
+    expect(within(dialog).queryByLabelText('Credit limit, USD (optional)')).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
+    await screen.findByRole('status');
+    const account = bodies(fetchMock)[2];
+    expect(account?.[1]).toBe(
+      '{"@type":"BssBillingAccount","name":"Olga K main","billCycleDay":1,"currency":"USD",' +
+        '"ratingType":"prepaid","relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef",' +
+        `"role":"customer","partyOrPartyRole":{"id":"${NEW_CUSTOMER}",` +
+        '"name":"Olga K","@type":"PartyRoleRef","@referredType":"Customer"}}]}',
+    );
   });
 
   it('creates an organization without a credit limit', async () => {

@@ -9,6 +9,7 @@ import {
   type AccountState,
   type CustomerStatus,
   type PartyKind,
+  type RatingMode,
   type SubscriberProfile,
 } from '../api/bss';
 import { explain } from '../api/client';
@@ -52,6 +53,11 @@ const KINDS: { key: PartyKind; label: string }[] = [
   { key: 'Organization', label: 'Organization' },
 ];
 
+const MODES: { key: RatingMode; label: string }[] = [
+  { key: 'postpaid', label: 'Postpaid' },
+  { key: 'prepaid', label: 'Prepaid' },
+];
+
 export function NewSubscriberModal({
   onClose,
   onCreated,
@@ -67,6 +73,7 @@ export function NewSubscriberModal({
   const [accountName, setAccountName] = useState('');
   const [cycleDay, setCycleDay] = useState('1');
   const [limit, setLimit] = useState('');
+  const [mode, setMode] = useState<RatingMode>('postpaid');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [initialProduct, setInitialProduct] = useState(false);
@@ -78,7 +85,9 @@ export function NewSubscriberModal({
       ? givenName.trim() !== '' && familyName.trim() !== ''
       : organizationName.trim() !== '';
   const day = cycleDayOf(cycleDay);
-  const credit = limitOf(limit);
+  const prepaid = mode === 'prepaid';
+  // a prepaid account has no credit: the field is hidden and nothing is sent
+  const credit = prepaid ? { ok: true, value: null } : limitOf(limit);
   const effectiveAccountName = accountName.trim() || `${name} main`;
   const valid = named && day !== null && credit.ok;
 
@@ -96,6 +105,7 @@ export function NewSubscriberModal({
         cycleDay: day,
         currency: context.currency,
         creditLimit: credit.value,
+        ratingType: mode,
       });
       if (initialProduct) setCreatedId(accountId);
       else onCreated(accountId, name);
@@ -132,7 +142,8 @@ export function NewSubscriberModal({
     >
       <div className="bss-modal-body">
         <section>
-          <Segmented label="Subscriber type" value={kind} onChange={setKind} options={KINDS} />
+          <Segmented label="Subscriber type" value={kind} onChange={setKind} options={KINDS} />{' '}
+          <Segmented label="Account mode" value={mode} onChange={setMode} options={MODES} />
         </section>
         <section className="bss-form">
           {kind === 'Individual' ? (
@@ -167,15 +178,23 @@ export function NewSubscriberModal({
               onChange={(e) => setCycleDay(e.target.value)}
             />
           </Field>
-          <Field label={`Credit limit, ${context.currency} (optional)`}>
-            <TextInput mono width={160} value={limit} onChange={(e) => setLimit(e.target.value)} />
-          </Field>
+          {!prepaid && (
+            <Field label={`Credit limit, ${context.currency} (optional)`}>
+              <TextInput
+                mono
+                width={160}
+                value={limit}
+                onChange={(e) => setLimit(e.target.value)}
+              />
+            </Field>
+          )}
           {day === null && <div className="bss-inline-error">The cycle day is 1 to 28.</div>}
           {!credit.ok && (
             <div className="bss-inline-error">Enter a credit limit with at most 2 decimals.</div>
           )}
           <div className="caption">
             Currency {context.currency}. The cycle day and the currency cannot be changed later.
+            {prepaid && ' A prepaid account spends only funds it holds; it takes no credit limit.'}
           </div>
           <label>
             <input

@@ -80,7 +80,7 @@ through TMF666 since P5a.
 |---|---|---|---|
 | P5a | Enable prepaid accounts | TMF666 POST/PATCH accept `prepaid` (PATCH only before history); 622/637/678 references match; a positive `creditLimit` is 422; internal previews show required/available/shortfall. Postpaid suite unchanged. | done: Enable prepaid accounts on TMF666 |
 | P5b | MCP for prepaid | Read/write tools for TMF654 and previews, an explicit `idempotency_key` argument, decimal strings. `make mcp-smoke` covers one top-up and one purchase. | done: Add idempotency_key to prepaid MCP tools |
-| P6a | UI: mode and prepaid card | Mode selected at creation and shown in a filter. The card shows ledger, available, reserved, paid-through and shortfall cause, kept distinct. Both time zones. | todo |
+| P6a | UI: mode and prepaid card | Mode selected at creation and shown in a filter. The card shows ledger, available, reserved, paid-through and shortfall cause, kept distinct. Both time zones. | done: Add account mode and prepaid card to the UI |
 | P6b | UI: top-up, adjustment, hold | Forms with one Idempotency-Key per submission and a same-key retry on an uncertain response. Bodies pinned in frontend and backend tests. | todo |
 | P6c | UI: transfer, pending, retry | Transfer by number with a finality confirmation. Pending order/transfer polling (5 s, 3 min cap). Technical retry is shown separately from needs-top-up. | todo |
 | P7 | Release validation | Mixed-mode demo seed; `make check` + `web-e2e`; recovery runbook and the migration rollback barrier (`0034`+) documented; release evidence file like the subscriber-number one. | todo |

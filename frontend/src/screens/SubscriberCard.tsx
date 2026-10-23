@@ -3,6 +3,7 @@ import {
   loadAccount,
   loadCharges,
   loadCustomerStatus,
+  loadPrepaidBalance,
   loadProducts,
   loadSettlement,
   loadTransactions,
@@ -11,6 +12,7 @@ import {
   type Account,
   type AccountProduct,
   type AccountSettlement,
+  type PrepaidBalance,
 } from '../api/bss';
 import { explain } from '../api/client';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
@@ -129,6 +131,11 @@ function Card({
   const settlement = useResource(`settlement:${account.id}:${version}`, (signal) =>
     loadSettlement(account.id, signal),
   );
+  const balance = useResource(`prepaid:${account.id}:${version}`, (signal) =>
+    account.ratingType === 'prepaid'
+      ? loadPrepaidBalance(account.id, signal)
+      : Promise.resolve(null),
+  );
   const bills = useBills(account, version);
   const canAdd = account.state === 'Active';
   const activeOfferings = new Set(
@@ -181,6 +188,11 @@ function Card({
         today={context.businessDate}
         settlement={settlement.status === 'ok' ? settlement.data : null}
         onChanged={reload}
+        prepaid={
+          account.ratingType === 'prepaid' ? (
+            <PrepaidFigures balance={balance} products={products} />
+          ) : null
+        }
       />
 
       <Panel
@@ -290,11 +302,13 @@ function BillingAccountPanel({
   today,
   settlement,
   onChanged,
+  prepaid,
 }: {
   account: Account;
   today: string;
   settlement: AccountSettlement | null;
   onChanged: () => void;
+  prepaid: ReactNode;
 }) {
   const negative = account.balanceCents < 0;
   const available =
@@ -319,11 +333,14 @@ function BillingAccountPanel({
     >
       <div className="bss-kpis">
         <div className="bss-kpi">
-          <div className="label">Balance</div>
+          <div className="label">{prepaid ? 'Ledger' : 'Balance'}</div>
           <div className={`value strong${negative ? ' negative' : ''}`}>
             {formatCents(account.balanceCents)}
           </div>
-          {negative && <div className="caption negative">In arrears</div>}
+          {negative && (
+            <div className="caption negative">{prepaid ? 'Below zero' : 'In arrears'}</div>
+          )}
+          {prepaid && <div className="caption">Prepaid</div>}
         </div>
         <div className="bss-kpi">
           <div className="label">Currency</div>
@@ -334,18 +351,24 @@ function BillingAccountPanel({
           <div className="value">Day {account.cycleDay}</div>
           <div className="caption">next cycle {nextCycleDate(today, account.cycleDay)}</div>
         </div>
-        <div className="bss-kpi">
-          <div className="label">Credit limit</div>
-          <div className="value">
-            {account.creditLimitCents === null ? '—' : formatCents(account.creditLimitCents)}
-          </div>
-        </div>
-        <div className="bss-kpi">
-          <div className="label">Available incl. credit</div>
-          <div className={`value${available !== null && available < 0 ? ' negative' : ''}`}>
-            {available === null ? '—' : formatCents(available)}
-          </div>
-        </div>
+        {prepaid ? (
+          prepaid
+        ) : (
+          <>
+            <div className="bss-kpi">
+              <div className="label">Credit limit</div>
+              <div className="value">
+                {account.creditLimitCents === null ? '—' : formatCents(account.creditLimitCents)}
+              </div>
+            </div>
+            <div className="bss-kpi">
+              <div className="label">Available incl. credit</div>
+              <div className={`value${available !== null && available < 0 ? ' negative' : ''}`}>
+                {available === null ? '—' : formatCents(available)}
+              </div>
+            </div>
+          </>
+        )}
         <div className="bss-kpi">
           <div className="label">Due on bills</div>
           <div className="value">
@@ -370,6 +393,99 @@ function BillingAccountPanel({
         </div>
       </div>
     </Panel>
+  );
+}
+
+const CAUSE_LABEL: Record<string, string> = {
+  funding: 'funding ran out',
+  manual: 'suspended by the operator',
+  account: 'the account is not active',
+};
+
+/** The prepaid KPIs. Ledger (the account's), available (ledger less holds, from the TMF654
+ * bucket), reserved (holds) and paid-through / shortfall (per product, from the account's
+ * product view) are four different things and never merged. */
+function PrepaidFigures({
+  balance,
+  products,
+}: {
+  balance: ResourceWithRetry<PrepaidBalance | null>;
+  products: ResourceWithRetry<AccountProduct[]>;
+}) {
+  const figures = balance.status === 'ok' ? balance.data : null;
+  const rows = products.status === 'ok' ? products.data : null;
+  const dates = (rows ?? []).flatMap((p) => (p.paidThrough ? [p.paidThrough] : [])).sort();
+  const short = (rows ?? []).filter((p) => p.needs_topup);
+  const worst = short.reduce<AccountProduct | null>(
+    (best, p) =>
+      best === null ||
+      toCents(p.needs_topup?.shortfall ?? 0) > toCents(best.needs_topup?.shortfall ?? 0)
+        ? p
+        : best,
+    null,
+  );
+  const causes = [
+    ...new Set((rows ?? []).flatMap((p) => (p.suspensionCause ? [p.suspensionCause] : []))),
+  ];
+  return (
+    <>
+      <div className="bss-kpi" data-ui="ui.subscriber.prepaid.available">
+        <div className="label">Available</div>
+        <div
+          className={`value${figures !== null && figures.availableCents < 0 ? ' negative' : ''}`}
+        >
+          {balance.status === 'error'
+            ? '—'
+            : figures === null
+              ? '…'
+              : formatCents(figures.availableCents)}
+        </div>
+        <div className="caption">ledger less holds</div>
+      </div>
+      <div className="bss-kpi" data-ui="ui.subscriber.prepaid.reserved">
+        <div className="label">Reserved</div>
+        <div className="value">
+          {balance.status === 'error'
+            ? '—'
+            : figures === null
+              ? '…'
+              : formatCents(figures.reservedCents)}
+        </div>
+        <div className="caption">holds not spent yet</div>
+        {balance.status === 'error' && (
+          <div className="bss-inline-error" role="alert">
+            Failed to load the prepaid balance ({balance.error.message})
+          </div>
+        )}
+      </div>
+      <div className="bss-kpi" data-ui="ui.subscriber.prepaid.paidThrough">
+        <div className="label">Paid through</div>
+        <div className="value">{rows === null ? '…' : (dates[0] ?? '—')}</div>
+        <div className="caption">earliest of its products, service ends here</div>
+      </div>
+      <div className="bss-kpi" data-ui="ui.subscriber.prepaid.shortfall">
+        <div className="label">Shortfall</div>
+        <div className={`value${worst ? ' negative' : ''}`}>
+          {rows === null
+            ? '…'
+            : worst?.needs_topup
+              ? formatCents(toCents(worst.needs_topup.shortfall))
+              : 'None'}
+        </div>
+        {worst?.needs_topup && (
+          <div className="caption negative">
+            needs top-up: renewal needs {formatCents(toCents(worst.needs_topup.required))},
+            available {formatCents(toCents(worst.needs_topup.available))}
+            {short.length > 1 ? ` · ${short.length} products` : ''}
+          </div>
+        )}
+        {causes.length > 0 && (
+          <div className="caption">
+            Suspension: {causes.map((c) => CAUSE_LABEL[c] ?? c).join(', ')}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
