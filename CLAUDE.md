@@ -114,11 +114,12 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   orders with tax-inclusive holds and number claims, and completes their full
   product/order tree atomically in the worker. P3d adds future-start intents and
   pre-grant cancellation. P3e produces renewals at paid-through and resumes after a
-  credit (checkpoint 1). Public prepaid creation stays gated.
+  credit (checkpoint 1). P3f adds manual suspend/resume orders and the prepaid close
+  guard. Public prepaid creation stays gated.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).
-- **Next:** prepaid slice P3f, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
+- **Next:** prepaid slice P3g, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
   (prepaid creation stays a 422 until P5a) - [scope](docs/prepaid-plan.md),
   [decision](docs/decisions/prepaid.md).
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21

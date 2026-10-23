@@ -6,7 +6,7 @@ diagnostics commit with the pass after that savepoint has rolled back.
 """
 
 import logging
-from uuid import UUID, uuid5
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import psycopg
@@ -19,13 +19,11 @@ from app.events import emit
 from app.repository import billing
 from app.repository import prepaid_commands as commands
 from app.repository._sql import fetch_all, fetch_one
+from app.repository.prepaid_commands import renewal_id
 from app.worker.process import Checkpoint, Heartbeat
 from app.worker.runs import ensure_ownership
 
 log = logging.getLogger("app.worker")
-
-# Renewal identity derives from its predecessor grant, so production is idempotent.
-RENEWAL_NAMESPACE = UUID("6f1c0b7e-3d4a-5e8b-9c2d-1a7f4e6b8c90")
 
 # A product's latest grant ended on or before today, with nothing blocking renewal
 # and no renewal produced for it yet. Manual and account suspension block renewal.
@@ -42,10 +40,6 @@ _DUE_RENEWALS = (
     " AND (%(account)s::uuid IS NULL OR g.billing_account_id = %(account)s)"
     " ORDER BY g.billing_account_id, g.due, g.product_id"
 )
-
-
-def renewal_id(interval_id: UUID) -> UUID:
-    return uuid5(RENEWAL_NAMESPACE, str(interval_id))
 
 
 def produce_renewals(

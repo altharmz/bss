@@ -1,17 +1,131 @@
-"""Accept immediate and future prepaid purchases under command/account/catalog/number locks."""
+"""Accept immediate and future prepaid purchases under command/account/catalog/number locks,
+and apply manual suspension/resumption orders.
+
+A suspend order keeps the paid interval and its charge; at expiry it blocks renewal.
+A resume order reuses a still-live grant, or queues the renewal of the expired one,
+which authorizes from today. Status changes take effect on the order's day only.
+"""
 
 from dataclasses import replace
 from decimal import Decimal
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
+from app.billing import entitlement
 from app.billing.core import charge_taxes
 from app.billing.prepaid import IntervalQuote, TaxQuote
 from app.config import settings
 from app.events import emit
 from app.ordering import numbers
-from app.repository import billing, funding, orders, products
+from app.ordering.states import item_transition, order_transition
+from app.repository import billing, funding, orders, parties, products
 from app.repository import prepaid_commands as commands
+from app.repository._sql import fetch_all, fetch_one
+
+
+def lock_renewals(conn, product_ids):
+    """Before the account lock, as the producer: the renewal identities of the latest grants."""
+    rows = fetch_all(
+        conn,
+        "SELECT DISTINCT ON (product_id) id FROM funded_interval WHERE product_id = ANY(%s)"
+        " ORDER BY product_id, upper(period) DESC",
+        (list(product_ids),),
+    )
+    ids = sorted(commands.renewal_id(row["id"]) for row in rows)
+    for command_id in ids:
+        commands.lock_identity(conn, command_id)
+    return set(ids)
+
+
+def problems(conn, request, account, start, today):
+    """Prepaid orders purchase, or suspend/resume today; a non-Active account only suspends."""
+    if all(item.action == "add" for item in request.items):
+        return []
+    if any(item.action != "modify" or item.product_status is None for item in request.items):
+        return [(None, "prepaidLifecycleUnavailable", "prepaid orders purchase, suspend or resume")]
+    if start != today:
+        return [(None, "prepaidLifecycleUnavailable", "prepaid status changes take effect today")]
+    found = []
+    if account["state"] != "Active" and any(i.product_status == "active" for i in request.items):
+        found.append(
+            (
+                None,
+                "accountNotActive",
+                f"billing account is {account['state']}: only suspensions and cleanup orders",
+            )
+        )
+    for item in request.items:
+        if entitlement.latest_grant(conn, item.product_id) is None:
+            found.append(
+                (
+                    item.item_id,
+                    "productNotStarted",
+                    "the prepaid product has no funded grant yet: cancel its order instead",
+                )
+            )
+    return found
+
+
+def restore_status(conn, product_id, account, today):
+    """After a cancelled status change: the latest applied change's manual cause and the
+    effective status. True if the status changed."""
+    before = products.get_product(conn, product_id)["status"]
+    latest = fetch_one(
+        conn,
+        "SELECT status FROM product_status_change WHERE product_id = %s"
+        " AND applied_at IS NOT NULL ORDER BY change_date DESC LIMIT 1",
+        (product_id,),
+    )
+    conn.execute(
+        "UPDATE product SET manually_suspended = %s WHERE id = %s",
+        (latest is not None and latest["status"] == "suspended", product_id),
+    )
+    product = products.get_product(conn, product_id)
+    status = entitlement.view(conn, product, account, today)["status"]
+    products.set_product_status(conn, product_id, status)
+    return status != before
+
+
+def change_statuses(conn, order, request, rows, renewals, today, now):
+    """Set or lift the manual cause; the stored status follows effective entitlement."""
+    account = parties.get_billing_account(conn, order["billing_account_id"])
+    state = order_transition(order["state"], "inProgress")
+    orders.set_order_state(conn, order["id"], state)
+    for item in request.items:
+        row = rows[item.item_id]
+        progress = item_transition(row["state"], "inProgress")
+        orders.set_order_item_state(conn, row["id"], progress)
+        before = products.get_product(conn, item.product_id)["status"]
+        products.change_status(
+            conn,
+            item.product_id,
+            change_date=today,
+            status=item.product_status,
+            changed_by_item_id=row["id"],
+            applied_at=now,
+        )
+        product = products.get_product(conn, item.product_id)
+        status = entitlement.view(conn, product, account, today)["status"]
+        products.set_product_status(conn, item.product_id, status)
+        grant = entitlement.latest_grant(conn, item.product_id)
+        renewal = commands.renewal_id(grant["id"])
+        resumed = item.product_status == "active"
+        if resumed and grant["period"].upper <= today and renewal in renewals:
+            commands.enqueue(
+                conn,
+                renewal,
+                account["id"],
+                kind="renewal",
+                due_date=grant["period"].upper,
+                request={"previous_interval_id": str(grant["id"])},
+                now=now,
+            )
+        if status != before:
+            emit.product(conn, item.product_id, "StateChange", at=now, today=today)
+        orders.set_order_item_state(conn, row["id"], item_transition(progress, "completed"))
+    orders.set_order_state(
+        conn, order["id"], order_transition(state, "completed"), completion_date=now
+    )
 
 
 def prepare(conn, request, account, quotes, start, *, future=False):

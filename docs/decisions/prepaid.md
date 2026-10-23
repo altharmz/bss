@@ -1,5 +1,29 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P3f: manual suspension, resumption and account state (2026-10-23)
+
+Prepaid modify items with `product.status` complete synchronously on the order's
+day; future-dated status changes and mixed purchase/status orders stay
+`prepaidLifecycleUnavailable`. A suspend order sets the manual cause and keeps the
+paid interval and its charge; at expiry the producer skips the product. A resume
+order lifts only the manual cause: inside a live grant the product is active again;
+after expiry it stays funding-suspended and the order queues the expired grant's
+renewal (the producer's identity, locked before the account), which posting
+authorizes from today. A funding suspension is not a manual one, so resuming it is
+`statusUnchanged`. A product without a first grant is `productNotStarted` (cancel
+its purchase instead). The stored status follows effective entitlement and a
+StateChange is emitted only when it changes.
+
+One status change per product and day stays the rule, so a same-day undo is
+cancelProductOrder, as for postpaid: it restores the latest applied change's manual
+cause and the effective status; a renewal queued by a cancelled resume stays
+pending, blocked by the restored cause. On a Suspended prepaid account a resume is
+`accountNotActive`; suspensions and cleanup (cancellation, P3g terminations) remain
+allowed. Closing a prepaid account is a 409 while it holds money, has unfinished
+commands or products not yet ended on today's business date; the remaining credit
+stays on the closed account. Postpaid suspension, cancellation and closing are
+unchanged. No migration. P3g is next.
+
 ## P3e: renewal and resumption producer (2026-10-23)
 
 Each worker tick, after operator requests, produces renewals before dispatching

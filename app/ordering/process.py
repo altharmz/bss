@@ -1,6 +1,7 @@
 """Processing a product order (TMF622): validate, then execute or reject, synchronously
 and on one connection - the caller's transaction covers acceptance. Prepaid immediate
-adds retain funds and a pending item tree for atomic billing-owner completion.
+adds retain funds and a pending item tree for atomic billing-owner completion; prepaid
+suspend/resume orders complete at once (app/ordering/prepaid.py).
 
 Two kinds of "no":
 - OrderRefused: the order cannot even be stored (it references a billing account,
@@ -267,8 +268,12 @@ def _process(
         raise OrderRefused(f"billingAccount {account_id} does not exist")
     is_prepaid = probe["rating_type"] == "prepaid"
     command_id = (draft_id or request.order_id or uuid4()) if is_prepaid else None
+    renewals = set()
     if command_id is not None:
         prepaid_commands.lock_identity(conn, command_id)
+        renewals = prepaid_orders.lock_renewals(
+            conn, [i.product_id for i in request.items if i.product_status == "active"]
+        )
     account = parties.get_billing_account(conn, account_id, "update" if is_prepaid else "key share")
     if account is None:
         raise OrderRefused(f"billingAccount {account_id} does not exist")
@@ -304,16 +309,12 @@ def _process(
     ]
     prepaid = account["rating_type"] == "prepaid"
     prepared = None
+    purchase = all(i.action == "add" for i in request.items)
     if prepaid and not problems:
-        if any(i.action != "add" for i in request.items):
-            problems.append(
-                Problem(
-                    None,
-                    "prepaidLifecycleUnavailable",
-                    "only prepaid add orders are available",
-                )
-            )
-        else:
+        problems += [
+            Problem(*p) for p in prepaid_orders.problems(conn, request, account, start, today)
+        ]
+        if purchase and not problems:
             try:
                 prepared = prepaid_orders.prepare(
                     conn, request, account, quotes, start, future=start > today
@@ -358,8 +359,10 @@ def _process(
         _reject(conn, order, rows, problems, now)
     else:
         old_numbers = number_orders.before(conn, number_rows, today)
-        if prepaid:
+        if prepaid and purchase:
             prepaid_orders.accept(conn, order, request, rows, prepared, command_id, start, now)
+        elif prepaid:
+            prepaid_orders.change_statuses(conn, order, request, rows, renewals, today, now)
         else:
             _execute(conn, order, request, rows, start, today, locked, now)
         number_orders.changed(conn, number_rows, old_numbers, now, today)

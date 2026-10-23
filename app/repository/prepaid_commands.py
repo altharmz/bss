@@ -9,11 +9,18 @@ technical failure only in a fresh transaction after rolling back those effects.
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid5
 
 import psycopg
 
 from app.repository._sql import Row, fetch_one, jsonb, returning
+
+# Renewal identity derives from its predecessor grant, so production is idempotent.
+RENEWAL_NAMESPACE = UUID("6f1c0b7e-3d4a-5e8b-9c2d-1a7f4e6b8c90")
+
+
+def renewal_id(interval_id: UUID) -> UUID:
+    return uuid5(RENEWAL_NAMESPACE, str(interval_id))
 
 
 def get(conn: psycopg.Connection, command_id: UUID) -> Row | None:

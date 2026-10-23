@@ -1,6 +1,6 @@
 """Parties (TMF632), customers (TMF629) and billing accounts (TMF666)."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -206,3 +206,22 @@ def update_billing_account(
     conn: psycopg.Connection, account_id: UUID, changes: dict[str, Any]
 ) -> Row:
     return update_by_id(conn, "billing_account", account_id, with_details(changes))
+
+
+def prepaid_close_blockers(conn: psycopg.Connection, account_id: UUID, today: date) -> list[str]:
+    """What keeps a prepaid account from closing: held money, unfinished commands and
+    products not yet ended on `today`. Call with the account locked FOR UPDATE."""
+    row = conn.execute(
+        """
+        SELECT (SELECT count(*) FROM funding_hold WHERE billing_account_id = %(id)s
+                   AND released_at IS NULL AND amount > 0),
+               (SELECT count(*) FROM prepaid_command WHERE billing_account_id = %(id)s
+                   AND state <> 'completed'),
+               (SELECT count(*) FROM product WHERE billing_account_id = %(id)s
+                   AND status NOT IN ('terminated', 'cancelled', 'aborted')
+                   AND (termination_date IS NULL OR termination_date > %(today)s))
+        """,
+        {"id": account_id, "today": today},
+    ).fetchone()
+    names = ("held funds", "unfinished prepaid commands", "products not yet ended")
+    return [f"{count} {name}" for count, name in zip(row, names, strict=True) if count]

@@ -33,7 +33,9 @@ What exists: immediate and future prepaid add orders reserve funds and queue com
 billing owner posts them exactly once and completes the full product/order tree.
 The worker produces renewals at paid-through; a shortfall suspends the product and
 a later credit resumes it. Entitlement follows funded coverage, independently of
-manual/account suspension; daily recurring billing excludes prepaid. What is missing:
+manual/account suspension; daily recurring billing excludes prepaid. Manual
+suspend/resume orders keep the paid interval and reuse or renew the grant; closing
+a prepaid account requires everything ended. What is missing:
 remaining lifecycle actions and public balance operations. Public prepaid
 account creation remains gated until P5a.
 
@@ -49,8 +51,8 @@ account creation remains gated until P5a.
 | P3d | Future starts and pre-grant cancellation | A future order claims numbers with no hold; at the due date the command authorizes from that day's funds and price; a shortfall leaves it pending with a reason. `cancelProductOrder` before the first grant cancels the command and releases holds and claims; after a grant it returns 409. | done: Schedule prepaid purchases and cancel before first grant |
 | P3e | Renewal and resumption producer | Due renewals are produced in due-date, then product order, under the account lock. A shortfall makes the product funding-suspended at `paidThrough`. A later credit (payment now; top-up after P4d) resumes on the next tick, with a once-per-business-date rescan as the fallback. Manual suspension and Suspended/Closed accounts block renewal. | done: Produce prepaid renewals and resume after a credit |
 | **✓** | **Checkpoint 1**: purchase → renew → run out → top up → resume works end to end in tests. Re-estimate P3f–P7. | | done: `test_purchase_renew_run_out_top_up_resume` (payment as the credit until P4d) |
-| P3f | Manual suspend/resume and account state | A suspend order keeps the paid interval. Resume reuses a live grant or queues authorization from today. Suspended accounts allow only cleanup orders. Closing an account with held money, unfinished commands or live products returns 409. | next |
-| P3g | Termination credits | Termination at the requested business date credits each affected charge's unused dates with the original net/tax rounding, at most what is still uncredited. The billing owner writes the credit ABR, the `offCycle` credit document and the source credit. Owned holds are released once and the number is released. A same-day termination is a full credit; an expired interval gets none. *Highest uncertainty: split g1 (credit primitive) / g2 (order integration) if needed.* | todo |
+| P3f | Manual suspend/resume and account state | A suspend order keeps the paid interval. Resume reuses a live grant or queues authorization from today. Suspended accounts allow only cleanup orders. Closing an account with held money, unfinished commands or live products returns 409. | done: Suspend and resume prepaid products by order |
+| P3g | Termination credits | Termination at the requested business date credits each affected charge's unused dates with the original net/tax rounding, at most what is still uncredited. The billing owner writes the credit ABR, the `offCycle` credit document and the source credit. Owned holds are released once and the number is released. A same-day termination is a full credit; an expired interval gets none. *Highest uncertainty: split g1 (credit primitive) / g2 (order integration) if needed.* | next |
 | P3h | Offering change at renewal | A change order is accepted only at `paidThrough` (409 otherwise). It is persisted as a pending change and applied only by a funded renewal. Without funds it stays pending and suspended, with no fallback to the old plan. Resumption uses the new offering. Number and offering changes are allowed together at the boundary. | todo |
 | P3i | Internal command operations | GET `/internal/v1/prepaid/command`, GET `/{id}` and POST `/{id}/retry` (202, or 409 unless `failedTechnical`), in the internal contract, with read/write MCP tools. `make docs`. | todo |
 

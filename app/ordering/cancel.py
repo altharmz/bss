@@ -3,7 +3,9 @@ throw a draft away (it was never processed: nothing to undo).
 
 Prepaid inProgress orders may be cancelled before their first grant, under the
 command identity lock: release money and number claims and retain a cancelled
-command result. Postpaid cancellation undoes a completed order whose every effect
+command result. A prepaid status order is undone like a postpaid one; its product
+gets back the manual cause and effective status the earlier changes left. Postpaid
+cancellation undoes a completed order whose every effect
 is still in the future, in one transaction:
 
 - add item: its product has not started (`created`/`pendingActive`, start after today)
@@ -37,6 +39,7 @@ import psycopg
 
 from app.events import emit
 from app.ordering import numbers as number_orders
+from app.ordering import prepaid as prepaid_orders
 from app.ordering.states import item_transition, order_transition
 from app.repository import billing, funding, orders, parties, products
 from app.repository import prepaid_commands as commands
@@ -203,7 +206,10 @@ def cancel_order(
         product = locked[item["product_id"]]
         if item["action"] == "modify" and item["product_status"] is not None:
             change = products.undo_status_change(conn, item["id"])
-            if change["applied_at"] is not None:
+            if change["applied_at"] is not None and account["rating_type"] == "prepaid":
+                if prepaid_orders.restore_status(conn, product["id"], account, today):
+                    emit.product(conn, product["id"], "StateChange", at=now, today=today)
+            elif change["applied_at"] is not None:
                 products.restore_applied_status(conn, product["id"])
                 emit.product(conn, product["id"], "StateChange", at=now, today=today)
         elif item["action"] == "modify":

@@ -17,6 +17,9 @@ customer, which changes only while the account has no history (app/api/accounts.
 422. contact, taxExemption, paymentPlan, paymentStatus, ... are documents: stored as
 sent, checked against the spec.
 
+Closing a prepaid account (state Closed) is a 409 while it holds money, has unfinished
+prepaid commands or products not yet ended: they are ended by order first.
+
 `billCycleDay` is fixed after creation for now (PATCH is a 409): how a change treats the
 current billing period is an open question for stage 3.
 
@@ -71,6 +74,7 @@ from app.api.common import (
     ref,
     take_id,
     take_server_set,
+    to_billing_date,
     utc,
     with_meta,
     without_nulls,
@@ -671,6 +675,14 @@ def patch_account(
             raise not_found("billingAccount", account_id)
         before = account_body(conn, current)
         check_server_set(server_set, before)
+        if current["rating_type"] == "prepaid" and data.state == "Closed" != current["state"]:
+            blockers = parties.prepaid_close_blockers(conn, uid, to_billing_date(clock.now()))
+            if blockers:
+                raise conflict(
+                    "a prepaid account closes only without "
+                    + ", ".join(blockers)
+                    + ": terminate or cancel them by order first"
+                )
         old = emit.before(conn, API, "billingAccount", lambda: before)
         changes = columns(
             data,

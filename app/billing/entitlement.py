@@ -19,12 +19,16 @@ def effective_state(product, account, grant, today):
     return "suspended", "funding"
 
 
-def view(conn, product, account, today):
-    grant = fetch_one(
+def latest_grant(conn, product_id):
+    return fetch_one(
         conn,
         "SELECT * FROM funded_interval WHERE product_id = %s ORDER BY upper(period) DESC LIMIT 1",
-        (product["id"],),
+        (product_id,),
     )
+
+
+def view(conn, product, account, today):
+    grant = latest_grant(conn, product["id"])
     status, cause = effective_state(product, account, grant, today)
     shortfall = fetch_one(
         conn,
