@@ -73,20 +73,27 @@ def insert_topup(
     )
 
 
-def get(conn: psycopg.Connection, action_id: UUID, *, lock: bool = False) -> Row | None:
-    query = "SELECT * FROM balance_action WHERE id = %s AND kind = 'topup'"
-    return fetch_one(conn, query + (" FOR UPDATE" if lock else ""), (action_id,))
+def get(
+    conn: psycopg.Connection, action_id: UUID, *, lock: bool = False, kind: str = "topup"
+) -> Row | None:
+    query = "SELECT * FROM balance_action WHERE id = %s AND kind = %s"
+    return fetch_one(conn, query + (" FOR UPDATE" if lock else ""), (action_id, kind))
 
 
 def page(
-    conn: psycopg.Connection, where: dict[str, Any], offset: int, limit: int
+    conn: psycopg.Connection,
+    where: dict[str, Any],
+    offset: int,
+    limit: int,
+    *,
+    kind: str = "topup",
 ) -> tuple[list[Row], int]:
-    """Top-ups matching every `column = value` of `where`, oldest first."""
-    conditions = [sql.SQL("kind = 'topup'")] + [
+    """Actions of `kind` matching every `column = value` of `where`, oldest first."""
+    conditions = [sql.SQL("kind = %s")] + [
         sql.SQL("{}::text = %s").format(sql.Identifier(column)) for column in where
     ]
     clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
-    params = [str(value) for value in where.values()]
+    params = [kind, *(str(value) for value in where.values())]
     total = fetch_one(conn, sql.SQL("SELECT count(*) AS n FROM balance_action") + clause, params)
     assert total is not None
     rows = fetch_all(
@@ -99,10 +106,12 @@ def page(
     return rows, total["n"]
 
 
-def set_descriptive(conn: psycopg.Connection, action_id: UUID, changes: dict[str, Any]) -> Row:
+def set_descriptive(
+    conn: psycopg.Connection, action_id: UUID, changes: dict[str, Any], *, kind: str = "topup"
+) -> Row:
     """Edit `reason` and `description`, the only columns a PATCH may change besides status."""
     if not changes:
-        row = get(conn, action_id)
+        row = get(conn, action_id, kind=kind)
         assert row is not None
         return row
     assignments = sql.SQL(", ").join(
@@ -160,6 +169,116 @@ def cancel_topup(conn: psycopg.Connection, action: Row, *, operator: str, now: d
             now,
         ),
     )
+    return returning(
+        conn,
+        "UPDATE balance_action SET status = 'cancelled', cancelled_at = %s WHERE id = %s"
+        " RETURNING *",
+        (now, action["id"]),
+    )
+
+
+# The funding_consumption column that names a source of each kind.
+SOURCE_COLUMN = {
+    "payment": "payment_id",
+    "creditNote": "credit_bill_id",
+    "adjustment": "funding_source_id",
+    "transfer": "funding_source_id",
+    "reversal": "funding_source_id",
+}
+
+
+def insert_adjustment(
+    conn: psycopg.Connection,
+    bucket: Row,
+    *,
+    request: dict[str, Any],
+    amount: Decimal,
+    operator: str,
+    now: datetime,
+    reason: str | None,
+    description: str | None,
+    sources: tuple = (),
+    failure: str | None = None,
+) -> Row:
+    """A completed signed adjustment, or a failed one (`failure`). A credit introduces one
+    adjustment source, available now; a debit consumes exactly `sources` (the funding plan's
+    SourceAmounts, summing to -amount)."""
+    row = returning(
+        conn,
+        "INSERT INTO balance_action (kind, status, billing_account_id, currency, bucket_id,"
+        " request, amount, reason, description, failure_reason, operator, requested_at,"
+        " confirmed_at)"
+        " VALUES ('adjustment', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+        (
+            "failed" if failure else "completed",
+            bucket["billing_account_id"],
+            bucket["currency"],
+            bucket["id"],
+            jsonb(request),
+            amount,
+            reason,
+            description,
+            failure,
+            operator,
+            now,
+            now,
+        ),
+    )
+    if failure:
+        return row
+    if amount > 0:
+        conn.execute(
+            "INSERT INTO funding_source (kind, billing_account_id, currency, action_id, amount,"
+            " available_at) VALUES ('adjustment', %s, %s, %s, %s, %s)",
+            (row["billing_account_id"], row["currency"], row["id"], amount, now),
+        )
+    for source in sources:
+        conn.execute(
+            sql.SQL(
+                "INSERT INTO funding_consumption (billing_account_id, action_id, {}, amount,"
+                " consumed_at) VALUES (%s, %s, %s, %s, %s)"
+            ).format(sql.Identifier(SOURCE_COLUMN[source.kind])),
+            (row["billing_account_id"], row["id"], source.id, source.amount, now),
+        )
+    return row
+
+
+def cancel_adjustment(
+    conn: psycopg.Connection, action: Row, *, operator: str, now: datetime
+) -> Row:
+    """Append the compensating entries of a completed adjustment and mark it cancelled. A
+    credit's reversal consumes its own source (the caller then runs `check_bounds`, which
+    refuses it once spent or held); a debit's restores every source it consumed, once, as
+    a `reversal` source each."""
+    conn.execute(
+        "INSERT INTO balance_action_reversal"
+        " (action_id, billing_account_id, currency, amount, operator, reversed_at)"
+        " VALUES (%s, %s, %s, %s, %s, %s)",
+        (
+            action["id"],
+            action["billing_account_id"],
+            action["currency"],
+            -action["amount"],
+            operator,
+            now,
+        ),
+    )
+    if action["amount"] > 0:
+        conn.execute(
+            "INSERT INTO funding_consumption (billing_account_id, action_id, reversal_action_id,"
+            " funding_source_id, amount, consumed_at)"
+            " SELECT billing_account_id, action_id, action_id, id, amount, %s"
+            " FROM funding_source WHERE action_id = %s AND kind = 'adjustment'",
+            (now, action["id"]),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO funding_source (kind, billing_account_id, currency, action_id,"
+            " consumption_id, amount, available_at)"
+            " SELECT 'reversal', billing_account_id, %s, action_id, id, amount, %s"
+            " FROM funding_consumption WHERE action_id = %s AND reversal_action_id IS NULL",
+            (action["currency"], now, action["id"]),
+        )
     return returning(
         conn,
         "UPDATE balance_action SET status = 'cancelled', cancelled_at = %s WHERE id = %s"

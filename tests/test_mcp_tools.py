@@ -361,6 +361,14 @@ def world(api, db_conn) -> dict[str, Any]:
         },
     ).json()
     assert (topup.get("status"), refused.get("status")) == ("completed", "failed"), (topup, refused)
+    adjusts = f"{BALANCE}/adjustBalance"
+    adjust_body = {k: v for k, v in topup_body.items() if k != "partyAccount"}
+    adjust = api.post(adjusts, {**adjust_body, "amount": {"amount": 3, "units": "USD"}}).json()
+    # a debit above the spendable funds: refused, stored failed
+    refused_adjust = api.post(
+        adjusts, {**adjust_body, "amount": {"amount": -499, "units": "USD"}}
+    ).json()
+    assert (adjust.get("status"), refused_adjust.get("status")) == ("completed", "failed")
     command = commands.enqueue(
         db_conn,
         uuid4(),
@@ -376,6 +384,8 @@ def world(api, db_conn) -> dict[str, Any]:
         "bucket": prepaid_bucket,
         "topup": topup,
         "refused_topup": refused,
+        "adjust": adjust,
+        "refused_adjust": refused_adjust,
         "number": number,
         "resource_hub": resource_hub,
         "hub": hub,
@@ -413,6 +423,7 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_resource": {"resource_id": world["number"]["id"]},
         "get_bucket": {"bucket_id": str(world["bucket"]["id"])},
         "get_topup_balance": {"topup_id": world["topup"]["id"]},
+        "get_adjust_balance": {"adjust_id": world["adjust"]["id"]},
         "get_accumulated_balance": {"balance_id": str(world["bucket"]["accumulated_balance_id"])},
         "get_hub_resource": {"hub_id": world["resource_hub"]["id"]},
         "get_bill_format": {"format_id": world["format"]["id"]},
@@ -682,6 +693,22 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         {"topup_id": new_topup["id"], "body": {"status": "cancelled", "reason": "Entered twice"}},
     )
     call("delete_topup_balance", {"topup_id": world["refused_topup"]["id"]}, expected=(204,))
+    new_adjust = call(
+        "create_adjust_balance",
+        {
+            "body": {
+                "usageType": "monetary",
+                "amount": {"amount": "-1.50", "units": "USD"},
+                "bucket": {"id": str(world["bucket"]["id"])},
+            }
+        },
+    )
+    assert new_adjust["status"] == "completed"
+    call(
+        "patch_adjust_balance",
+        {"adjust_id": new_adjust["id"], "body": {"status": "cancelled", "reason": "Wrong account"}},
+    )
+    call("delete_adjust_balance", {"adjust_id": world["refused_adjust"]["id"]}, expected=(204,))
     call("patch_bill", {"bill_id": world["bill"]["id"], "body": {"state": "onHold"}})
     call(
         "price_change",

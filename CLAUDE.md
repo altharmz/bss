@@ -120,12 +120,13 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   P4a adds the `balance_action` schema and adjustment/transfer/reversal sources (`0045`).
   P4b adds the Idempotency-Key response journal on the order POST (`0046`).
   P4c serves TMF654 bucket/accumulatedBalance reads and the TMF654 hub. P4d adds
-  `topupBalance` and the top-up every direct payment on a prepaid account records.
+  `topupBalance` and the top-up every direct payment on a prepaid account records. P4e adds
+  `adjustBalance` (credit, debit limited to spendable funds, exact-source cancellation).
   Public prepaid creation stays gated.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).
-- **Next:** prepaid slice P4e, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
+- **Next:** prepaid slice P4f, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
   (prepaid creation stays a 422 until P5a) - [scope](docs/prepaid-plan.md),
   [decision](docs/decisions/prepaid.md).
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21

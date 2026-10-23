@@ -17,23 +17,18 @@
 # transfers validate against the unchanged schema. No fictitious receiver is added.
 # Events: register all declared names; TransferBalanceCancelEvent is unreachable.
 # Listener paths are subscriber endpoints, not BSS operations or missing endpoints.
-# TMF654 balance actions and history: 17 absent endpoints (tests/tmf_gaps.py PENDING).
+# TMF654 balance actions and history: 12 absent endpoints (tests/tmf_gaps.py PENDING).
 # Buckets, accumulated balances and the hub use the attribute probes.
-TMF654 DELETE /adjustBalance/{id} endpoint absent
 TMF654 DELETE /reserveBalance/{id} endpoint absent
 TMF654 DELETE /transferBalance/{id} endpoint absent
-TMF654 GET /adjustBalance endpoint absent
-TMF654 GET /adjustBalance/{id} endpoint absent
 TMF654 GET /balanceActionHistory endpoint absent
 TMF654 GET /balanceActionHistory/{id} endpoint absent
 TMF654 GET /reserveBalance endpoint absent
 TMF654 GET /reserveBalance/{id} endpoint absent
 TMF654 GET /transferBalance endpoint absent
 TMF654 GET /transferBalance/{id} endpoint absent
-TMF654 PATCH /adjustBalance/{id} endpoint absent
 TMF654 PATCH /reserveBalance/{id} endpoint absent
 TMF654 PATCH /transferBalance/{id} endpoint absent
-TMF654 POST /adjustBalance endpoint absent
 TMF654 POST /reserveBalance endpoint absent
 TMF654 POST /transferBalance endpoint absent
 
@@ -78,6 +73,9 @@ TMF639 POST /resource requires value
 # requestedDate/confirmationDate (balance actions carry theirs). Monetary credit does not
 # expire: validFor starts at the bucket's creation and has no end; a closed account's
 # bucket stays readable as expired. See docs/decisions/prepaid.md (P4c).
+# TMF654 adjustBalance: relatedParty is not in the Create schema and the owner is already on
+# the bucket and the partyAccount; recurring adjustments are a 422 (never returned). P4e.
+TMF654 GET /adjustBalance/{id} missing relatedParty
 TMF654 GET /bucket/{id} missing confirmationDate
 TMF654 GET /bucket/{id} missing requestedDate
 TMF654 GET /bucket/{id} missing validFor.endDateTime

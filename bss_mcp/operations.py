@@ -24,6 +24,7 @@ from app.api.accounts import (
     PartyAccountCreate,
     PartyAccountPatch,
 )
+from app.api.adjust import AdjustCreate, AdjustPatch
 from app.api.bill import BillPatch
 from app.api.catalog import (
     OfferingCreate,
@@ -157,6 +158,26 @@ OPERATIONS: dict[str, Op] = {
         body=TopupPatch,
     ),
     "delete_topup_balance": Op("Delete a failed top-up; a completed or cancelled one is history."),
+    "list_adjust_balances": Op(
+        "Balance adjustments (signed corrections); filter by status, bucket.id or partyAccount.id.",
+        query=LIST,
+    ),
+    "get_adjust_balance": Op("One balance adjustment.", query=FIELDS),
+    "create_adjust_balance": Op(
+        "Correct a prepaid bucket: a positive amount credits it, a negative one debits it, limited"
+        " to the spendable funds. Monetary only, exact cents in the bucket currency; a refusal"
+        " (closed account, debit above the spendable funds) is stored failed with 201.",
+        body=AdjustCreate,
+    ),
+    "patch_adjust_balance": Op(
+        "status cancelled reverses a completed adjustment (a credit only while its money is"
+        " unspent and unheld, 409 otherwise); reason and description may change; the rest must"
+        " repeat as stored.",
+        body=AdjustPatch,
+    ),
+    "delete_adjust_balance": Op(
+        "Delete a failed adjustment; a completed or cancelled one is history."
+    ),
     # --- TMF620 product catalog ---
     "list_categories": Op("Categories and their offerings and child categories.", query=LIST),
     "get_category": Op("One category.", query=FIELDS),

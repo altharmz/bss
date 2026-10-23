@@ -22,7 +22,7 @@
   (bucket) and `id`, `partyAccount.id` (accumulatedBalance), with standard paging and
   `fields`.
 - POST/DELETE `/hub` subscribe to the twelve balance-action events (v4
-  EventSubscription: no href, no `@type`). Adjustment, reservation and transfer actions
+  EventSubscription: no href, no `@type`). Reservation and transfer actions
   and `balanceActionHistory` are not implemented yet; their endpoints answer 404
   (`tests/tmf-gaps.txt`).
 
@@ -53,5 +53,26 @@
 - DELETE removes only a failed top-up (409 otherwise) and retires its idempotency key.
 - Lists filter by `id`, `status`, `bucket.id` and `partyAccount.id`.
 
-Tests: `tests/test_api_balance.py`, `tests/test_api_topup.py`, `tests/test_api_hub.py`,
+### adjustBalance
+
+- POST corrects a bucket by a signed `amount` (`{amount, units}`, exact nonzero cents in the
+  bucket's currency, `usageType: monetary`, `bucket`; no `partyAccount`, the owner follows
+  the bucket). Positive credits it with one adjustment source, spendable at once. Negative
+  debits it, limited to the spendable funds (ledger less holds and unpaid charges), and
+  consumes specific sources in funding order (payments, credit notes, then adjustment,
+  transfer and reversal sources). `adjustType` is `oneTime` (`recurring` is a 422).
+  `Idempotency-Key` replays the stored 201; a different body is 409.
+- A refusal (a closed account, a debit above the spendable funds, a number or product that
+  is not the account's) is stored `failed`, answered 201, with `AdjustBalanceFailureEvent`.
+  Malformed or unknown references, units other than the bucket's and a zero amount are 4xx
+  and store nothing.
+- PATCH requires `status`. `cancelled` reverses a completed adjustment by appending a
+  compensating entry: a credit's source is consumed, so it is refused (409) once spent,
+  allocated or held; a debit restores each source it consumed, once, as a spendable
+  reversal source. `reason` and `description` may change; everything else may only be
+  repeated (409 otherwise). `AdjustBalanceCancelEvent` follows a cancellation.
+- DELETE removes only a failed adjustment (409 otherwise) and retires its idempotency key.
+- Lists filter by `id`, `status`, `bucket.id` and `partyAccount.id`.
+
+Tests: `tests/test_api_balance.py`, `tests/test_api_topup.py`, `tests/test_api_adjust.py`, `tests/test_api_hub.py`,
 `tests/test_mcp_tools.py`; the gap ledger locks the absent endpoints and the deviations.

@@ -98,6 +98,34 @@ Gap ledger: automatic top-up, voucher and `relatedParty` are recorded as accepte
 deviations; the top-up endpoints leave `PENDING`. MCP: five tools (`*_topup_balance`),
 over HTTP without the idempotency header.
 
+## P4e: adjustments (2026-10-23)
+
+`adjustBalance` has all five operations (`app/api/adjust.py`; the row functions sit with the
+top-up's in `app/repository/balance_actions.py`, whose `get`/`page` now take a `kind`), no
+migration. The amount is signed and nonzero. A credit inserts a completed `adjustment` action
+and its one `adjustment` funding source (available at the injected clock's instant). A debit
+quotes `funding.plan` under the account lock (so it is limited to L - H less unpaid charges,
+the same rule a purchase obeys) and writes one `funding_consumption` per planned source, in
+funding order: payments, credit notes, then adjustment, transfer and reversal sources. A debit
+above the spendable funds is a business refusal: stored `failed` with 201 and a Failure event,
+like the top-up's; so is a Closed account (either direction).
+
+Cancellation (completed -> cancelled only) appends `balance_action_reversal` and flips the
+status. A credit's reversal consumes its own source, and the deferred 0045 bounds check, run
+immediately, refuses it with 409 when any of it was spent, allocated, paid out or held. A
+debit's reversal inserts one `reversal` source per original consumption (same amount,
+`consumption_id` = that consumption), so each consumed source is restored exactly once and the
+money is spendable again; a debit is always cancellable. Repeating `cancelled` only edits
+descriptions. `reason`/`description` are the only other editable fields. Create, Cancel and
+Failure events carry the GET body; both POSTs take an Idempotency-Key and DELETE of a failed
+one tombstones it.
+
+TMF654 AdjustBalance_Create skips `partyAccount`: the owner follows the bucket, and a sent
+`partyAccount` is a 400 (unknown attribute). `adjustType` is returned as `oneTime`; `recurring`
+is a 422. `relatedParty` is recorded as an accepted deviation. MCP: five tools
+(`*_adjust_balance`); the five endpoints leave the gap ledger's pending list. The topup module's
+reference check is shared (`topup.check_references`).
+
 ## P4a: balance action and source schema (2026-10-23)
 
 Migration `0045` adds `balance_action`: kind (topup/reservation/adjustment/transfer),

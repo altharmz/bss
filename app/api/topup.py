@@ -218,11 +218,10 @@ def _unknown(name: str, ids: list[UUID]) -> Exception:
     return unprocessable(f"{name} {', '.join(map(str, ids))} does not exist")
 
 
-def _check_references(conn, data: TopupCreate, bucket: Row, today) -> str | None:
+def check_references(conn, data, bucket: Row, today) -> str | None:
     """422 for a reference that is malformed, unknown or contradicts another; otherwise
-    the refusal (None: accepted) for a valid reference that is not the account's."""
-    if data.party_account.id != bucket["billing_account_id"]:
-        raise unprocessable("partyAccount must be the billing account that owns the bucket")
+    the refusal (None: accepted) for a valid reference that is not the account's. `data`
+    is any create model with amount, product and logical_resource."""
     if data.amount.units != bucket["currency"]:
         raise unprocessable(
             f"amount.units {data.amount.units} does not match the bucket's currency"
@@ -359,7 +358,9 @@ def create_topup_balance(
         account = parties.get_billing_account(conn, bucket["billing_account_id"], "update")
         assert account is not None  # foreign key
         bucket = repo.bucket(conn, data.bucket.id) or bucket  # its state, under the lock
-        refused = _check_references(conn, data, bucket, clock.today())
+        if data.party_account.id != bucket["billing_account_id"]:
+            raise unprocessable("partyAccount must be the billing account that owns the bucket")
+        refused = check_references(conn, data, bucket, clock.today())
         common = {
             "request": body_sent,
             "amount": data.amount.amount,

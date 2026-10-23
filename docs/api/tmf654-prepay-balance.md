@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/prepayBalanceManagement/v4`
 - Contract: [`spec/TMF654-PrepayBalance-v4.0.0.swagger.json`](../../spec/TMF654-PrepayBalance-v4.0.0.swagger.json) - Prepay Balance Management version 4.0.0; the spec's server URL is `/tmf-api/prepayBalanceManagement/v4`
-- Operations exposed: 11
+- Operations exposed: 16
 
 
 ## Operations
@@ -13,6 +13,11 @@
 |---|---|---|---|---|---|
 | GET | `/tmf-api/prepayBalanceManagement/v4/accumulatedBalance` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `id`, `partyAccount.id` | - | 200 `array of AccumulatedBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
 | GET | `/tmf-api/prepayBalanceManagement/v4/accumulatedBalance/{balance_id}` | path: `balance_id`; query: `fields` | - | 200 `AccumulatedBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
+| GET | `/tmf-api/prepayBalanceManagement/v4/adjustBalance` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `bucket.id`, `id`, `partyAccount.id`, `status` | - | 200 `array of AdjustBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
+| POST | `/tmf-api/prepayBalanceManagement/v4/adjustBalance` | query: `fields`; body: `application/json` | `AdjustBalance_Create` | 201 `AdjustBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
+| DELETE | `/tmf-api/prepayBalanceManagement/v4/adjustBalance/{adjust_id}` | path: `adjust_id` | - | 204 (no body) | [`app/api/balance.py`](../../app/api/balance.py) |
+| GET | `/tmf-api/prepayBalanceManagement/v4/adjustBalance/{adjust_id}` | path: `adjust_id`; query: `fields` | - | 200 `AdjustBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
+| PATCH | `/tmf-api/prepayBalanceManagement/v4/adjustBalance/{adjust_id}` | path: `adjust_id`; query: `fields`; body: `application/merge-patch+json` | `AdjustBalance_Update` | 200 `AdjustBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
 | GET | `/tmf-api/prepayBalanceManagement/v4/bucket` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `id`, `partyAccount.id`, `status`, `usageType` | - | 200 `array of Bucket` | [`app/api/balance.py`](../../app/api/balance.py) |
 | GET | `/tmf-api/prepayBalanceManagement/v4/bucket/{bucket_id}` | path: `bucket_id`; query: `fields` | - | 200 `Bucket` | [`app/api/balance.py`](../../app/api/balance.py) |
 | POST | `/tmf-api/prepayBalanceManagement/v4/hub` | query: `fields`; body: `application/json` | `EventSubscriptionInput` | 201 `EventSubscription` | [`app/api/hub.py`](../../app/api/hub.py) |
@@ -28,7 +33,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF654-P
 
 ## Coverage of the spec
 
-- Resources of the spec that are **not implemented**: `/adjustBalance`, `/balanceActionHistory`, `/listener`, `/reserveBalance`, `/transferBalance` (`/listener/*` is the client's side: hubs subscribe, this service sends).
+- Resources of the spec that are **not implemented**: `/balanceActionHistory`, `/listener`, `/reserveBalance`, `/transferBalance` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
 ## Behaviour and deviations
@@ -55,7 +60,7 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF654-P
   (bucket) and `id`, `partyAccount.id` (accumulatedBalance), with standard paging and
   `fields`.
 - POST/DELETE `/hub` subscribe to the twelve balance-action events (v4
-  EventSubscription: no href, no `@type`). Adjustment, reservation and transfer actions
+  EventSubscription: no href, no `@type`). Reservation and transfer actions
   and `balanceActionHistory` are not implemented yet; their endpoints answer 404
   (`tests/tmf-gaps.txt`).
 
@@ -86,7 +91,28 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF654-P
 - DELETE removes only a failed top-up (409 otherwise) and retires its idempotency key.
 - Lists filter by `id`, `status`, `bucket.id` and `partyAccount.id`.
 
-Tests: `tests/test_api_balance.py`, `tests/test_api_topup.py`, `tests/test_api_hub.py`,
+### adjustBalance
+
+- POST corrects a bucket by a signed `amount` (`{amount, units}`, exact nonzero cents in the
+  bucket's currency, `usageType: monetary`, `bucket`; no `partyAccount`, the owner follows
+  the bucket). Positive credits it with one adjustment source, spendable at once. Negative
+  debits it, limited to the spendable funds (ledger less holds and unpaid charges), and
+  consumes specific sources in funding order (payments, credit notes, then adjustment,
+  transfer and reversal sources). `adjustType` is `oneTime` (`recurring` is a 422).
+  `Idempotency-Key` replays the stored 201; a different body is 409.
+- A refusal (a closed account, a debit above the spendable funds, a number or product that
+  is not the account's) is stored `failed`, answered 201, with `AdjustBalanceFailureEvent`.
+  Malformed or unknown references, units other than the bucket's and a zero amount are 4xx
+  and store nothing.
+- PATCH requires `status`. `cancelled` reverses a completed adjustment by appending a
+  compensating entry: a credit's source is consumed, so it is refused (409) once spent,
+  allocated or held; a debit restores each source it consumed, once, as a spendable
+  reversal source. `reason` and `description` may change; everything else may only be
+  repeated (409 otherwise). `AdjustBalanceCancelEvent` follows a cancellation.
+- DELETE removes only a failed adjustment (409 otherwise) and retires its idempotency key.
+- Lists filter by `id`, `status`, `bucket.id` and `partyAccount.id`.
+
+Tests: `tests/test_api_balance.py`, `tests/test_api_topup.py`, `tests/test_api_adjust.py`, `tests/test_api_hub.py`,
 `tests/test_mcp_tools.py`; the gap ledger locks the absent endpoints and the deviations.
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf654-prepay-balance.md`](../../scripts/docs/api-notes/tmf654-prepay-balance.md).

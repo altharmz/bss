@@ -64,7 +64,6 @@ SPECS = (
 PENDING = {
     "TMF654": frozenset(
         {
-            "adjustBalance",
             "reserveBalance",
             "transferBalance",
             "balanceActionHistory",
@@ -373,6 +372,17 @@ def _prepaid(api: Any, cust: dict[str, Any]) -> None:
     paid = apidata.payment(api, acc, 50)
     with psycopg.connect(settings.database_url) as conn:
         factories.payment_hold(conn, acc["id"], paid["id"], 10, api.clock.now())
+    bucket = api.get(f"/tmf-api/prepayBalanceManagement/v4/bucket?partyAccount.id={acc['id']}")
+    adjusted = api.post(
+        "/tmf-api/prepayBalanceManagement/v4/adjustBalance",
+        {
+            "@type": "AdjustBalance",
+            "amount": {"amount": 5, "units": "USD"},
+            "usageType": "monetary",
+            "bucket": {"id": bucket.json()[0]["id"]},
+        },
+    )
+    assert adjusted.status_code == 201, adjusted.text
 
 
 def _versioned_offering(api: Any) -> dict[str, Any]:

@@ -56,6 +56,7 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
             "bucket": "Bucket",
             "accumulatedBalance": "AccumulatedBalance",
             "topupBalance": "TopupBalance",
+            "adjustBalance": "AdjustBalance",
         },
     ),
     "/tmf-api/productInventory/v5": ("TMF637", {"product": "Product"}),

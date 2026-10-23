@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from app.api import (
     account,
     accounts,
+    adjust,
     balance,
     bill,
     catalog,
@@ -50,6 +51,7 @@ def install(app: FastAPI) -> None:
         resource_inventory,
         balance,
         topup,
+        adjust,
     ):
         app.include_router(module.router)
     app.include_router(account.schema_router)
