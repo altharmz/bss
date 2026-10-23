@@ -36,7 +36,8 @@ a later credit resumes it. Entitlement follows funded coverage, independently of
 manual/account suspension; daily recurring billing excludes prepaid. Manual
 suspend/resume orders keep the paid interval and reuse or renew the grant; closing
 a prepaid account requires everything ended. Termination orders end products on
-their date; the billing owner credits unused dates with a settled credit note. What is missing:
+their date; the billing owner credits unused dates with a settled credit note. An
+offering change waits for the next renewal and applies only when funded (`0044`). What is missing:
 remaining lifecycle actions and public balance operations. Public prepaid
 account creation remains gated until P5a.
 
@@ -54,8 +55,8 @@ account creation remains gated until P5a.
 | **✓** | **Checkpoint 1**: purchase → renew → run out → top up → resume works end to end in tests. Re-estimate P3f–P7. | | done: `test_purchase_renew_run_out_top_up_resume` (payment as the credit until P4d) |
 | P3f | Manual suspend/resume and account state | A suspend order keeps the paid interval. Resume reuses a live grant or queues authorization from today. Suspended accounts allow only cleanup orders. Closing an account with held money, unfinished commands or live products returns 409. | done: Suspend and resume prepaid products by order |
 | P3g | Termination credits | Termination at the requested business date credits each affected charge's unused dates with the original net/tax rounding, at most what is still uncredited. The billing owner writes the credit ABR, the `offCycle` credit document and the source credit. Owned holds are released once and the number is released. A same-day termination is a full credit; an expired interval gets none. *Highest uncertainty: split g1 (credit primitive) / g2 (order integration) if needed.* | done: Credit unused prepaid dates on termination |
-| P3h | Offering change at renewal | A change order is accepted only at `paidThrough` (409 otherwise). It is persisted as a pending change and applied only by a funded renewal. Without funds it stays pending and suspended, with no fallback to the old plan. Resumption uses the new offering. Number and offering changes are allowed together at the boundary. | next |
-| P3i | Internal command operations | GET `/internal/v1/prepaid/command`, GET `/{id}` and POST `/{id}/retry` (202, or 409 unless `failedTechnical`), in the internal contract, with read/write MCP tools. `make docs`. | todo |
+| P3h | Offering change at renewal | A change order is accepted only at `paidThrough` (409 otherwise). It is persisted as a pending change and applied only by a funded renewal. Without funds it stays pending and suspended, with no fallback to the old plan. Resumption uses the new offering. Number and offering changes are allowed together at the boundary. | done: Change prepaid offerings at the funded renewal |
+| P3i | Internal command operations | GET `/internal/v1/prepaid/command`, GET `/{id}` and POST `/{id}/retry` (202, or 409 unless `failedTechnical`), in the internal contract, with read/write MCP tools. `make docs`. | next |
 
 ### P4: TMF654 balances and actions
 

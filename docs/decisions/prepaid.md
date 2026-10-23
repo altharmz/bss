@@ -1,5 +1,31 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P3h: offering change at renewal (2026-10-23)
+
+A prepaid modify item with `productOffering` takes effect only at the next renewal:
+the latest grant's paid-through date, or today once that date has passed (a
+funding-suspended product). Any other date is a stored rejection
+`offeringChangeNotAtRenewal` (201, like every order rejection, rather than a bare
+409); a product without a first grant is `productNotStarted`, one with a set
+termination `productAlreadyEnded`. The order completes at once and retains the
+change in `product_offering_change`, with `effect_announced_at` NULL until applied.
+
+The renewal prices the product's offering on its own date, so the retained change
+is what it buys; a shortfall records the new plan's amount, leaves the product
+funding-suspended and the change pending, with no fallback to the old plan. A
+later funded renewal, including a resumption after a gap or a P3f resume, applies it
+in the posting transaction (`effect_announced_at`, TMF637 AttributeValueChange). The
+daily announcer skips prepaid changes. Before its date the change is cancelled like a
+postpaid one; afterwards it is refused. TMF637 shows the retained offering from its
+date even while unfunded (the internal pending-offering field belongs to P3i/P5).
+
+Migration `0044` relaxes the modify-item CHECK: one item may carry the offering and
+`realizingResource` together (a status change stays alone); its downgrade refuses
+while such items exist. Prepaid applies both at the boundary in one transaction; the
+number moves on that date whether or not the renewal is funded and is never
+repriced. Postpaid combined items are rejected `combinedChangeUnavailable`.
+Number-only prepaid changes stay `prepaidLifecycleUnavailable`. P3i is next.
+
 ## P3g: termination credits (2026-10-23)
 
 A prepaid order of delete items only ends its products on the requested business

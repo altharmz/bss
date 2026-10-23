@@ -2,6 +2,8 @@
 
 Immediate-order acceptance and renewal requests retain accepted purchase quotes
 or renewal predecessor identities; callers never supply replacement retry amounts.
+A renewal prices the product's offering on its date, so a change retained for it
+applies only once it is funded.
 """
 
 from calendar import monthrange
@@ -102,16 +104,18 @@ def _renewal_quote(conn, cmd, account, today, tz):
     )
     if latest["id"] != previous["id"] or previous["period"].upper != cmd["due_date"]:
         raise ValueError("renewal must follow the latest interval at its paid-through boundary")
+    # a change retained for this renewal prices it; there is no fallback to the old plan
+    offering_id = products.offering_on(conn, prod["id"], today)
     price = price_at(
         Product(
             prod["id"],
-            prod["product_offering_id"],
+            offering_id,
             prod["status"],
             prod["start_date"],
             prod["termination_date"],
         ),
         today,
-        billing.load_recurring_prices(conn, [prod["product_offering_id"]]),
+        billing.load_recurring_prices(conn, [offering_id]),
         account.currency,
         tz,
     )
@@ -262,8 +266,8 @@ def post_interval(
                 or prod["status"] in {"terminated", "cancelled", "aborted"}
             ):
                 raise ValueError("product lifecycle prevents authorization")
-            if prod["product_offering_id"] != quote.offering_id:
-                raise ValueError("offering changes require the lifecycle posting extension")
+            if products.offering_on(conn, prod["id"], period.start) != quote.offering_id:
+                raise ValueError("quote offering is not the product's on its start")
             if period.start < prod["start_date"] or (
                 prod["termination_date"] is not None and prod["termination_date"] <= period.start
             ):
@@ -317,6 +321,8 @@ def post_interval(
             )
         if order is not None:
             _complete_order(conn, order, now, today)
+        if renewal:
+            _apply_changes(conn, parsed[0].product_id, now, today)
         conn.execute(
             "UPDATE billing_run SET status = 'completed', finished_at = %s, heartbeat_at = %s"
             " WHERE id = %s",
@@ -391,6 +397,17 @@ def _post_purchase(conn, cmd, account, run, quote, period, total, original_quote
         "applied_rate_id": str(abr["id"]),
         "run_id": str(run["id"]),
     }
+
+
+def _apply_changes(conn, product_id, now, today):
+    """A funded renewal applies the offering change retained for it."""
+    applied = conn.execute(
+        "UPDATE product_offering_change SET effect_announced_at = %s"
+        " WHERE product_id = %s AND change_date <= %s AND effect_announced_at IS NULL",
+        (now, product_id, today),
+    ).rowcount
+    if applied:
+        emit.product(conn, product_id, "AttributeValueChange", at=now, today=today)
 
 
 def _complete_order(conn, order, now, today):

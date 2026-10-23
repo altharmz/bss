@@ -305,18 +305,13 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
     elif (
         item.product is None
         or item.product.id is None
-        or sum(
-            (
-                item.product_offering is not None,
-                item.product.status is not None,
-                item.product.realizing_resource is not None,
-            )
-        )
-        != 1
+        or (item.product_offering is None and item.product.realizing_resource is None)
+        == (item.product.status is None)
     ):
         raise unprocessable(
             f"item {item.id}: a modify item needs product and exactly one of productOffering,"
-            " product.status (suspended or active), or product.realizingResource"
+            " product.status (suspended or active), or product.realizingResource (a prepaid"
+            " renewal may change productOffering and product.realizingResource together)"
         )
     if item.product and item.product.realizing_resource is not None:
         values, problems = specschema.check(

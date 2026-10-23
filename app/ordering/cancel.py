@@ -129,6 +129,9 @@ def _modify_problem(
     day = change["change_date"]
     if day <= today:
         return f"the offering change took effect on {day}"
+    if product.get("rating_type") == "prepaid":
+        # only its funded renewal applies it, never before its day
+        return None
     # Use the old schedule just before the change, whose charge may have been cut.
     mid_period = (
         billing.product_period(conn, product, day - timedelta(days=1), cycle_day).end != day
@@ -187,7 +190,7 @@ def cancel_order(
         problem = _item_problem(
             conn,
             item,
-            product | {"currency": account["currency"]},
+            product | {"currency": account["currency"], "rating_type": account["rating_type"]},
             today,
             account["bill_cycle_day"],
         )

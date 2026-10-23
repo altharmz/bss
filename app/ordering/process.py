@@ -1,7 +1,8 @@
 """Processing a product order (TMF622): validate, then execute or reject, synchronously
 and on one connection - the caller's transaction covers acceptance. Prepaid immediate
 adds and terminations retain a pending item tree for atomic billing-owner completion;
-prepaid suspend/resume orders complete at once (app/ordering/prepaid.py).
+prepaid suspend/resume orders and renewal offering changes complete at once
+(app/ordering/prepaid.py).
 
 Two kinds of "no":
 - OrderRefused: the order cannot even be stored (it references a billing account,
@@ -363,6 +364,8 @@ def _process(
             prepaid_orders.accept(conn, order, request, rows, prepared, command_id, start, now)
         elif prepaid and all(i.action == "delete" for i in request.items):
             prepaid_orders.terminate(conn, order, request, rows, command_id, start, today, now)
+        elif prepaid and all(i.product_offering_id is not None for i in request.items):
+            prepaid_orders.change_offerings(conn, order, request, rows, start, today, now)
         elif prepaid:
             prepaid_orders.change_statuses(conn, order, request, rows, renewals, today, now)
         else:
@@ -409,6 +412,17 @@ def _item_problems(
     if item.action == "modify" and item.product_status is not None:
         return _status_problems(conn, item, account, start, locked)
     if item.action == "modify":
+        if (
+            item.product_offering_id is not None
+            and number_orders.references(item) is not None
+            and account["rating_type"] != "prepaid"
+        ):
+            return [
+                (
+                    "combinedChangeUnavailable",
+                    "change the offering and the number in separate orders",
+                )
+            ]
         if item.product_offering_id is None and number_orders.references(item) is not None:
             product = locked[item.product_id]
             if product["billing_account_id"] != account["id"]:
@@ -467,6 +481,8 @@ def _modify_problems(
                 + (f" and ends on {ends}, on or before {start}" if ends else ""),
             )
         ]
+    if ends is not None and account["rating_type"] == "prepaid":
+        return [("productAlreadyEnded", f"the prepaid product ends on {ends}")]
     # The termination may already have refunded part of D's period; the change would cut
     # the same charge again (one refund per charge, billing-core.md#offering-changes-2026-10-18)
     if (

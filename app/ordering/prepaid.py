@@ -1,5 +1,6 @@
 """Accept immediate and future prepaid purchases under command/account/catalog/number locks,
-apply manual suspension/resumption orders and accept terminations.
+apply manual suspension/resumption orders, accept terminations and retain offering
+changes for the next renewal.
 
 A suspend order keeps the paid interval and its charge; at expiry it blocks renewal.
 A resume order reuses a still-live grant, or queues the renewal of the expired one,
@@ -41,18 +42,20 @@ def lock_renewals(conn, product_ids):
 
 
 def problems(conn, request, account, start, today):
-    """Prepaid orders purchase, terminate, or suspend/resume today; a non-Active account
-    only suspends and terminates."""
+    """Prepaid orders purchase, terminate, change the offering at renewal, or
+    suspend/resume today; a non-Active account only suspends and terminates."""
     if all(item.action == "add" for item in request.items):
         return []
     if all(item.action == "delete" for item in request.items):
         return _not_started(conn, request)
+    if all(item.action == "modify" and item.product_offering_id for item in request.items):
+        return _not_at_renewal(conn, request, start, today)
     if any(item.action != "modify" or item.product_status is None for item in request.items):
         return [
             (
                 None,
                 "prepaidLifecycleUnavailable",
-                "prepaid orders purchase, terminate, suspend or resume",
+                "prepaid orders purchase, terminate, change offering, suspend or resume",
             )
         ]
     if start != today:
@@ -79,6 +82,52 @@ def _not_started(conn, request):
         for item in request.items
         if entitlement.latest_grant(conn, item.product_id) is None
     ]
+
+
+def _not_at_renewal(conn, request, start, today):
+    """An offering (and number) change takes effect at the next renewal: the latest
+    grant's paid-through date, or today once that has passed."""
+    found = _not_started(conn, request)
+    for item in request.items:
+        grant = entitlement.latest_grant(conn, item.product_id)
+        if grant is None:
+            continue
+        boundary = max(grant["period"].upper, today)
+        if start != boundary:
+            found.append(
+                (
+                    item.item_id,
+                    "offeringChangeNotAtRenewal",
+                    f"a prepaid offering changes at its renewal on {boundary}",
+                )
+            )
+    return found
+
+
+def change_offerings(conn, order, request, rows, start, today, now):
+    """Retain each change for the renewal on `start`; only a funded renewal applies it
+    (app/billing/prepaid.py). A number change takes effect on `start` regardless."""
+    state = order_transition(order["state"], "inProgress")
+    orders.set_order_state(conn, order["id"], state)
+    for item in request.items:
+        row = rows[item.item_id]
+        progress = item_transition(row["state"], "inProgress")
+        orders.set_order_item_state(conn, row["id"], progress)
+        products.change_offering(
+            conn,
+            item.product_id,
+            change_date=start,
+            product_offering_id=item.product_offering_id,
+            changed_by_item_id=row["id"],
+        )
+        if numbers.references(item) is not None:
+            numbers.execute(conn, item, item.product_id, row["id"], start, now)
+            if start <= today:
+                emit.product(conn, item.product_id, "AttributeValueChange", at=now, today=today)
+        orders.set_order_item_state(conn, row["id"], item_transition(progress, "completed"))
+    orders.set_order_state(
+        conn, order["id"], order_transition(state, "completed"), completion_date=now
+    )
 
 
 def terminate(conn, order, request, rows, command_id, start, today, now):
