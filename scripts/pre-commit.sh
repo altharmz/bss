@@ -37,19 +37,21 @@ run() {
 # being committed: no unstaged change to a tracked file, and no untracked file where code
 # lives. Otherwise a commit could pass on content it does not contain (a file left out of
 # `git add` but present on disk) - or fail on content it does not contain.
-if ! git diff --quiet; then
-  { printf 'Unstaged changes to tracked files:\n'; git diff --name-only | sed 's/^/  /'; } |
-    tee -a "$log" >&2
-  fail "the commit would not contain what the checks test - stage them (git add) or set them aside (git stash push --keep-index)"
-fi
-untracked="$(git ls-files --others --exclude-standard -- app tests frontend spec)"
-if [[ -n "$untracked" ]]; then
-  { printf 'Untracked files under app/, tests/, frontend/ or spec/:\n'
-    printf '%s\n' "$untracked" | sed 's/^/  /'; } | tee -a "$log" >&2
-  fail "the checks would see files the commit does not contain - add them, delete them, or ignore them"
-fi
-
-staged="$(git diff --cached --name-only)"
+check_tree() {
+  if ! git diff --quiet; then
+    { printf 'Unstaged changes to tracked files:\n'; git diff --name-only | sed 's/^/  /'; } |
+      tee -a "$log" >&2
+    fail "the commit would not contain what the checks test - stage them (git add) or set them aside (git stash push --keep-index)"
+  fi
+  untracked="$(git ls-files --others --exclude-standard -- app tests frontend spec)"
+  if [[ -n "$untracked" ]]; then
+    { printf 'Untracked files under app/, tests/, frontend/ or spec/:\n'
+      printf '%s\n' "$untracked" | sed 's/^/  /'; } | tee -a "$log" >&2
+    fail "the checks would see files the commit does not contain - add them, delete them, or ignore them"
+  fi
+  staged="$(git diff --cached --name-only)"
+}
+check_tree
 
 # Markdown only: nothing to lint or test. Not spec/ (tests read spec/README.md) or
 # scripts/docs/ (the API notes are sources of the generated docs).
@@ -59,15 +61,18 @@ if [[ -n "$staged" ]] && ! grep -vE '\.md$' <<<"$staged" | grep -q . &&
   exit 0
 fi
 
-# One run at a time on this machine: two suites side by side (two sessions committing at
-# once, 2026-10-23) took 12.5 minutes instead of 5 and failed the timing-sensitive
-# worker tests. The lock is in the common git directory, so every worktree shares it, and
-# it is released when the hook and the checks it started end, killed or not. 30 minutes
-# at most: a run never takes that long, so a holder that old is stuck.
+# One run at a time per repository (all its worktrees: the lock is in the common git
+# directory): two suites side by side (two sessions committing at once, 2026-10-23) took
+# 12.5 minutes instead of 5 and failed the timing-sensitive worker tests. The lock is
+# released when the hook and the checks it started end, killed or not. 30 minutes at
+# most: a run never takes that long, so a holder that old is stuck. After a wait the
+# tree is checked again: a session sharing this checkout may have changed it meanwhile.
 exec 9>>"$(git rev-parse --path-format=absolute --git-common-dir)/pre-commit.lock"
 if ! flock -n 9; then
   echo "pre-commit: another commit's checks are running - waiting for them" | tee -a "$log"
-  flock -w 1800 9 || fail "another commit's checks still hold the lock after 30 minutes"
+  flock -w "${PRE_COMMIT_LOCK_WAIT:-1800}" 9 ||
+    fail "another commit's checks still hold the lock after ${PRE_COMMIT_LOCK_WAIT:-1800} s"
+  check_tree
 fi
 
 # run gives every check </dev/null: docker compose run only allocates a pty when stdin is

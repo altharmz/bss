@@ -63,6 +63,7 @@ mcp-token-revoke: ## Revoke a local MCP static token (ID=<id>) or OAuth grant (G
 
 test: ## Run the test suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the scripts' own cases
 	./scripts/test-billing-status-check.sh
+	./scripts/test-pre-commit-lock.sh
 	docker compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) app pytest -n auto
 
 seed: ## LOCAL demo data through the public TMF API (tests/seed.py); refuses APP_ENV=prod; a second run is a no-op
