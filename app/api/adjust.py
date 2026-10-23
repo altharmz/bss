@@ -230,6 +230,7 @@ def create_adjust_balance(
         amount = data.amount.amount
         sources = ()
         if not refused and amount < 0:
+            repo.release_expired(conn, bucket["billing_account_id"], now)
             sources, refused = _debit_plan(conn, bucket["billing_account_id"], -amount)
         row = repo.insert_adjustment(
             conn,

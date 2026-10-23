@@ -126,6 +126,30 @@ is a 422. `relatedParty` is recorded as an accepted deviation. MCP: five tools
 (`*_adjust_balance`); the five endpoints leave the gap ledger's pending list. The topup module's
 reference check is shared (`topup.check_references`).
 
+## P4f: operator holds (2026-10-23)
+
+`reserveBalance` is the client-created hold; no migration. A created hold is a
+`reservation` `balance_action` on a plain `funding_hold` (never command-owned), status
+`created` while the hold is outstanding, `cancelled` once released, `failed` for a refusal.
+0045's checks already tie the status to the hold. `completed` and a command-owned hold
+belong to the owned reservations a later slice may project; PATCH/DELETE answer 409 for them.
+
+The end is the request's `validFor.endDateTime`, read back with `balance_actions.expiry`
+(creation refuses an unparseable or past end; a zone-less one is UTC). Half-open: at the end
+instant the hold has lapsed. `release_expired(conn, account, now)` runs under the account's
+row lock at every place that spends: `settle_account` (so payments, refunds, bill payment
+and the billing run), the prepaid order's funding check, the worker's interval posting,
+adjust debits, a new hold, and PATCH. `release_all_expired` is the worker's sweep at the top
+of `process_commands`, so a lapse is released within a wake-up even with no spend, and the
+released hold re-opens a command's shortfall scan. Reads do not release (no lock, no clock
+write): between the end and the next spend a GET can show `created` while the money is
+already spendable.
+
+A hold is limited to the spendable funds (the same plan a debit uses), positive, and in the
+bucket's currency. `amount` is required although the schema leaves it optional (accepted
+deviation, with `relatedParty`). Suspended accounts may hold; a Closed one is a stored
+refusal. Tests: `tests/test_api_reserve.py`.
+
 ## P4a: balance action and source schema (2026-10-23)
 
 Migration `0045` adds `balance_action`: kind (topup/reservation/adjustment/transfer),

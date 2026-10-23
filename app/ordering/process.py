@@ -318,7 +318,7 @@ def _process(
         if purchase and not problems:
             try:
                 prepared = prepaid_orders.prepare(
-                    conn, request, account, quotes, start, future=start > today
+                    conn, request, account, quotes, start, now, future=start > today
                 )
             except InsufficientFunds as exc:
                 problems.append(Problem(None, "insufficientFunds", str(exc)))

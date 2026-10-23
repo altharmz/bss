@@ -22,7 +22,7 @@ from app.config import settings
 from app.events import emit
 from app.ordering import numbers
 from app.ordering.states import item_transition, order_transition
-from app.repository import billing, funding, orders, parties, products
+from app.repository import balance_actions, billing, funding, orders, parties, products
 from app.repository import prepaid_commands as commands
 from app.repository._sql import fetch_all, fetch_one
 
@@ -222,7 +222,7 @@ def change_statuses(conn, order, request, rows, renewals, today, now):
     )
 
 
-def prepare(conn, request, account, quotes, start, *, future=False):
+def prepare(conn, request, account, quotes, start, now, *, future=False):
     """Validate immediate funds, or retain future product identities without a quote."""
     core = billing.core_account(account)
     prices = {
@@ -261,6 +261,7 @@ def prepare(conn, request, account, quotes, start, *, future=False):
         (q.amount + sum((t.amount for t in q.taxes), Decimal(0)) for _, q in accepted.values()),
         Decimal(0),
     )
+    balance_actions.release_expired(conn, account["id"], now)
     funding.plan(conn, account["id"], total)
     return accepted, total
 

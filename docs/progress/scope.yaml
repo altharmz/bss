@@ -51,6 +51,11 @@ items:
   - {id: api.tmf654.adjustBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/adjustBalance/{id}", title: "TMF654 PATCH /adjustBalance/{id}"}
   - {id: api.tmf654.adjustBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/adjustBalance/{id}", title: "TMF654 GET /adjustBalance/{id}"}
   - {id: api.tmf654.adjustBalance.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/adjustBalance/{id}", title: "TMF654 DELETE /adjustBalance/{id}"}
+  - {id: api.tmf654.reserveBalance.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance", title: "TMF654 GET /reserveBalance"}
+  - {id: api.tmf654.reserveBalance.create, area: api, stage: 5, method: POST, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance", title: "TMF654 POST /reserveBalance"}
+  - {id: api.tmf654.reserveBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{id}", title: "TMF654 PATCH /reserveBalance/{id}"}
+  - {id: api.tmf654.reserveBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{id}", title: "TMF654 GET /reserveBalance/{id}"}
+  - {id: api.tmf654.reserveBalance.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{id}", title: "TMF654 DELETE /reserveBalance/{id}"}
   - {id: api.tmf654.transferBalance.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/transferBalance", title: "TMF654 GET /transferBalance"}
   - {id: api.tmf654.transferBalance.create, area: api, stage: 5, method: POST, path: "/tmf-api/prepayBalanceManagement/v4/transferBalance", title: "TMF654 POST /transferBalance"}
   - {id: api.tmf654.transferBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/transferBalance/{id}", title: "TMF654 PATCH /transferBalance/{id}"}

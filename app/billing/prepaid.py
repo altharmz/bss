@@ -21,7 +21,7 @@ from app.billing import settlement
 from app.billing.core import charge_taxes, price_at, tax_of
 from app.billing.model import AppliedTax, DateRange, Product
 from app.events import emit
-from app.repository import billing, funding, orders, presentation, products
+from app.repository import balance_actions, billing, funding, orders, presentation, products
 from app.repository import prepaid_commands as commands
 from app.repository._sql import fetch_one, jsonb, returning
 from app.worker.db import holds_ownership
@@ -226,6 +226,7 @@ def post_interval(
             else None
         )
         account = billing.load_account(conn, cmd["billing_account_id"])
+        balance_actions.release_expired(conn, account.id, now)
         state = fetch_one(conn, "SELECT * FROM billing_account WHERE id = %s", (account.id,))
         if state["rating_type"] != "prepaid" or state["state"] != "Active":
             raise ValueError("authorization requires an active prepaid account")

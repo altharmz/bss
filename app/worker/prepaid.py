@@ -17,7 +17,7 @@ from app.billing.prepaid import post_interval
 from app.billing.termination import post_termination
 from app.clock import Clock
 from app.events import emit
-from app.repository import billing, funding
+from app.repository import balance_actions, billing, funding
 from app.repository import prepaid_commands as commands
 from app.repository._sql import fetch_all, fetch_one
 from app.repository.prepaid_commands import renewal_id
@@ -138,6 +138,7 @@ def process_commands(
     """
     ensure_ownership(conn)
     now = clock.now()
+    balance_actions.release_all_expired(conn, now)
     candidates = fetch_all(
         conn,
         "SELECT c.* FROM prepaid_command c LEFT JOIN funded_interval f"

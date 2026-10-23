@@ -64,7 +64,6 @@ SPECS = (
 PENDING = {
     "TMF654": frozenset(
         {
-            "reserveBalance",
             "transferBalance",
             "balanceActionHistory",
         }
@@ -383,6 +382,17 @@ def _prepaid(api: Any, cust: dict[str, Any]) -> None:
         },
     )
     assert adjusted.status_code == 201, adjusted.text
+    held = api.post(
+        "/tmf-api/prepayBalanceManagement/v4/reserveBalance",
+        {
+            "@type": "ReserveBalance",
+            "amount": {"amount": 2, "units": "USD"},
+            "usageType": "monetary",
+            "bucket": {"id": bucket.json()[0]["id"]},
+            "partyAccount": {"id": acc["id"]},
+        },
+    )
+    assert held.status_code == 201, held.text
 
 
 def _versioned_offering(api: Any) -> dict[str, Any]:

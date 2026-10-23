@@ -5,7 +5,7 @@ combined-bounds check of 0045 is deferred, so a caller that wants a 409 instead 
 commit-time failure calls `check_bounds` after writing.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -13,6 +13,7 @@ from uuid import UUID
 import psycopg
 from psycopg import sql
 
+from app.repository import billing, funding
 from app.repository._sql import Row, fetch_all, fetch_one, jsonb, returning
 
 
@@ -294,3 +295,108 @@ def delete_failed(conn: psycopg.Connection, action_id: UUID) -> None:
 def check_bounds(conn: psycopg.Connection) -> None:
     """Run the deferred ledger checks now (psycopg.errors.CheckViolation when broken)."""
     conn.execute("SET CONSTRAINTS balance_ledger_bounds IMMEDIATE")
+
+
+# --- operator holds (reserveBalance) ---------------------------------------------------
+
+
+def expiry(request: dict[str, Any]) -> datetime | None:
+    """The instant an operator hold lapses: the request's `validFor.endDateTime`, as sent
+    (a zone-less one is UTC). The API accepts only values this parses."""
+    end = (request.get("validFor") or {}).get("endDateTime")
+    if not end:
+        return None
+    at = datetime.fromisoformat(end)
+    return at if at.tzinfo else at.replace(tzinfo=UTC)
+
+
+def insert_reservation(
+    conn: psycopg.Connection,
+    bucket: Row,
+    *,
+    request: dict[str, Any],
+    amount: Decimal,
+    operator: str,
+    now: datetime,
+    reason: str | None,
+    description: str | None,
+    hold_id: UUID | None = None,
+    failure: str | None = None,
+) -> Row:
+    """A created operator hold on `hold_id`, or a failed one (`failure`, no hold)."""
+    return returning(
+        conn,
+        "INSERT INTO balance_action (kind, status, billing_account_id, currency, bucket_id,"
+        " request, amount, reason, description, failure_reason, operator, requested_at,"
+        " confirmed_at, hold_id)"
+        " VALUES ('reservation', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        " RETURNING *",
+        (
+            "failed" if failure else "created",
+            bucket["billing_account_id"],
+            bucket["currency"],
+            bucket["id"],
+            jsonb(request),
+            amount,
+            reason,
+            description,
+            failure,
+            operator,
+            now,
+            now if failure else None,
+            hold_id,
+        ),
+    )
+
+
+def cancel_reservation(conn: psycopg.Connection, action: Row, *, now: datetime) -> Row:
+    """Release a created operator hold and mark it cancelled, under the account lock."""
+    funding.release(conn, action["billing_account_id"], action["hold_id"], released_at=now)
+    return returning(
+        conn,
+        "UPDATE balance_action SET status = 'cancelled', cancelled_at = %s WHERE id = %s"
+        " RETURNING *",
+        (now, action["id"]),
+    )
+
+
+def _lapsed(conn: psycopg.Connection, now: datetime, account_id: UUID | None) -> list[Row]:
+    rows = fetch_all(
+        conn,
+        "SELECT * FROM balance_action WHERE kind = 'reservation' AND status = 'created'"
+        " AND command_id IS NULL AND (%(a)s::uuid IS NULL OR billing_account_id = %(a)s)"
+        " ORDER BY requested_at, id",
+        {"a": account_id},
+    )
+    return [r for r in rows if (end := expiry(r["request"])) is not None and end <= now]
+
+
+def release_expired(conn: psycopg.Connection, account_id: UUID, now: datetime) -> list[Row]:
+    """Release the account's operator holds whose end has passed (half-open: at the end
+    instant it has lapsed), each once, sending a Cancel event. Call under the account's
+    row lock, before anything that spends: a lapsed hold must not keep money back."""
+    from app.events import emit  # emit imports no API at load time; the body is built lazily
+
+    released = []
+    for action in _lapsed(conn, now, account_id):
+        row = cancel_reservation(conn, action, now=now)
+
+        def build(row=row) -> dict[str, Any]:
+            from app.api.reserve import reserve_body
+
+            return reserve_body(conn, row)
+
+        emit.emit(conn, "TMF654", "reserveBalance", "Cancel", build, at=now)
+        released.append(row)
+    return released
+
+
+def release_all_expired(conn: psycopg.Connection, now: datetime) -> int:
+    """The worker's sweep: release every lapsed operator hold, one account transaction
+    each. Returns how many were released."""
+    count = 0
+    for account_id in dict.fromkeys(r["billing_account_id"] for r in _lapsed(conn, now, None)):
+        with conn.transaction():
+            billing.load_account(conn, account_id)
+            count += len(release_expired(conn, account_id, now))
+    return count

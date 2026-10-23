@@ -17,19 +17,14 @@
 # transfers validate against the unchanged schema. No fictitious receiver is added.
 # Events: register all declared names; TransferBalanceCancelEvent is unreachable.
 # Listener paths are subscriber endpoints, not BSS operations or missing endpoints.
-# TMF654 balance actions and history: 12 absent endpoints (tests/tmf_gaps.py PENDING).
+# TMF654 balance actions and history: 7 absent endpoints (tests/tmf_gaps.py PENDING).
 # Buckets, accumulated balances and the hub use the attribute probes.
-TMF654 DELETE /reserveBalance/{id} endpoint absent
 TMF654 DELETE /transferBalance/{id} endpoint absent
 TMF654 GET /balanceActionHistory endpoint absent
 TMF654 GET /balanceActionHistory/{id} endpoint absent
-TMF654 GET /reserveBalance endpoint absent
-TMF654 GET /reserveBalance/{id} endpoint absent
 TMF654 GET /transferBalance endpoint absent
 TMF654 GET /transferBalance/{id} endpoint absent
-TMF654 PATCH /reserveBalance/{id} endpoint absent
 TMF654 PATCH /transferBalance/{id} endpoint absent
-TMF654 POST /reserveBalance endpoint absent
 TMF654 POST /transferBalance endpoint absent
 
 # accepted deviations: gaps kept on purpose, each with its reason (docs/decisions/tmf-api.md,
@@ -79,6 +74,9 @@ TMF654 GET /adjustBalance/{id} missing relatedParty
 TMF654 GET /bucket/{id} missing confirmationDate
 TMF654 GET /bucket/{id} missing requestedDate
 TMF654 GET /bucket/{id} missing validFor.endDateTime
+# TMF654 reserveBalance: the Create schema leaves amount optional, but a hold without an amount
+# holds nothing, so it is required (422); relatedParty is as for adjustBalance. P4f.
+TMF654 GET /reserveBalance/{id} missing relatedParty
 # TMF654 topupBalance: automatic top-ups and vouchers need payment collection and voucher
 # management this BSS does not have (422, never returned); relatedParty is not in the Create
 # schema and the owner is already on the bucket and the partyAccount. P4d.
@@ -86,6 +84,7 @@ TMF654 GET /topupBalance/{id} missing numberOfPeriods
 TMF654 GET /topupBalance/{id} missing recurringPeriod
 TMF654 GET /topupBalance/{id} missing relatedParty
 TMF654 GET /topupBalance/{id} missing voucher
+TMF654 POST /reserveBalance requires amount
 # accountBalance: one current balance per currency - the balance now, with no period.
 TMF666 GET /billingAccount/{id} missing accountBalance.validFor
 # billDocument: the document is embedded (content); it has no address of its own (href,

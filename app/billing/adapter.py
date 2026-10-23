@@ -17,7 +17,7 @@ from app.billing.core import add_month, compute, cycle_period
 from app.billing.model import Account, BillingResult, BillingState
 from app.config import settings
 from app.events import emit
-from app.repository import billing, presentation
+from app.repository import balance_actions, billing, presentation
 
 
 def visible_before(run_date: date, tz: ZoneInfo) -> datetime:
@@ -94,6 +94,7 @@ def settle_account(
 ) -> settlement.Settlement:
     """Apply the account's unused credit to its open bills and write the result. The
     caller holds the billing account's row lock (`billing.load_account`)."""
+    balance_actions.release_expired(conn, account.id, now)  # a lapsed hold keeps nothing back
     bills, payments = billing.load_settlement(conn, account.id)
     result = settlement.settle(bills, payments, explicit, explicit_payment_id)
     billing.write_settlement(conn, account, result, now=now, cause=cause)

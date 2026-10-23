@@ -45,6 +45,7 @@ from app.api.party import IndividualCreate, IndividualPatch, OrganizationCreate,
 from app.api.payment import PaymentCreate
 from app.api.presentation import FormatCreate, FormatPatch, MediaCreate, MediaPatch
 from app.api.refunds import RefundCreate
+from app.api.reserve import ReserveCreate, ReservePatch
 from app.api.resource_inventory import ResourceCreate, ResourcePatch
 from app.api.topup import TopupCreate, TopupPatch
 from app.internal.billing_runs import OUTCOMES, CatchUp
@@ -177,6 +178,26 @@ OPERATIONS: dict[str, Op] = {
     ),
     "delete_adjust_balance": Op(
         "Delete a failed adjustment; a completed or cancelled one is history."
+    ),
+    "list_reserve_balances": Op(
+        "Operator holds on prepaid funds; filter by status, bucket.id or partyAccount.id.",
+        query=LIST,
+    ),
+    "get_reserve_balance": Op("One operator hold.", query=FIELDS),
+    "create_reserve_balance": Op(
+        "Hold an amount of a prepaid bucket's spendable funds so nothing can spend it, until"
+        " it is cancelled or validFor.endDateTime passes. Monetary only, exact cents in the"
+        " bucket currency; a refusal (closed account, amount above the spendable funds) is"
+        " stored failed with 201.",
+        body=ReserveCreate,
+    ),
+    "patch_reserve_balance": Op(
+        "status cancelled releases a created hold (one an order or renewal owns is 409); reason"
+        " is required and may change with description; the rest must repeat as stored.",
+        body=ReservePatch,
+    ),
+    "delete_reserve_balance": Op(
+        "Delete a failed hold; cancel a created one instead, a cancelled one is history."
     ),
     # --- TMF620 product catalog ---
     "list_categories": Op("Categories and their offerings and child categories.", query=LIST),
