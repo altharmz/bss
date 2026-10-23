@@ -29,6 +29,7 @@ from app.api import (
     reserve,
     resource_inventory,
     topup,
+    transfer,
 )
 
 
@@ -54,6 +55,7 @@ def install(app: FastAPI) -> None:
         topup,
         adjust,
         reserve,
+        transfer,
     ):
         app.include_router(module.router)
     app.include_router(account.schema_router)

@@ -22,9 +22,8 @@
   (bucket) and `id`, `partyAccount.id` (accumulatedBalance), with standard paging and
   `fields`.
 - POST/DELETE `/hub` subscribe to the twelve balance-action events (v4
-  EventSubscription: no href, no `@type`). Transfer actions
-  and `balanceActionHistory` are not implemented yet; their endpoints answer 404
-  (`tests/tmf-gaps.txt`).
+  EventSubscription: no href, no `@type`). `balanceActionHistory` is not implemented yet; its
+  endpoints answer 404 (`tests/tmf-gaps.txt`).
 
 ### topupBalance
 
@@ -94,6 +93,33 @@
 - DELETE removes only a failed hold (409 otherwise) and retires its idempotency key.
 - Lists filter by `id`, `status`, `bucket.id` and `partyAccount.id`.
 
+### transferBalance
+
+- POST moves nothing: it validates both sides under the two accounts' row locks (taken in id
+  order), holds the sender's `amount` plus an originator-paid `transferCost` (the receiver
+  pays it from the incoming amount, so only the `amount` is held then), queues one `transfer`
+  command and answers 201 `created`. The billing worker completes it later (not yet built),
+  so the sender's `remainingValue` drops and `reservedValue` rises by the hold while the
+  ledger stays put. `Idempotency-Key` replays the stored 201.
+- Required: `reason`, `channel`, `logicalResource` (sender numbers, all of the sender
+  account), `receiverLogicalResource`, `amount`, `usageType`, `bucket`, `receiverBucket` and
+  `receiverBucketUsageType` (monetary only). `transferCost` is `{unit, value}` in the same
+  currency, absent meaning zero; a receiver-paid one may not exceed `amount` (422).
+  `costOwner` defaults to `originator`; both are always returned. `partyAccount` is the
+  sender's.
+- A refusal is stored `failed`, answered 201, with `TransferBalanceFailureEvent`, and holds
+  and queues nothing; `description` states why: `sameBucket`, `currency` (the receiver
+  bucket's differs), a number or product that is not its account's, a closed receiver, a
+  closed or suspended sender (a suspended receiver still receives), or too few spendable
+  funds for the amount and fee. An unknown bucket, number or product is a 4xx and stores
+  nothing.
+- A transfer is final: the v4 update has no status, so nothing cancels it; a correction is a
+  new opposite transfer. PATCH requires `reason`, `channel`, `logicalResource` and
+  `receiverLogicalResource`; only `reason` changes, everything else may only be repeated (409
+  otherwise). `TransferBalanceCancelEvent` is never sent.
+- DELETE removes only a failed transfer (409 otherwise) and retires its idempotency key.
+- Lists filter by `id`, `status`, `bucket.id`, `receiverBucket.id` and `partyAccount.id`.
+
 Tests: `tests/test_api_balance.py`, `tests/test_api_topup.py`, `tests/test_api_adjust.py`,
-`tests/test_api_reserve.py`, `tests/test_api_hub.py`,
+`tests/test_api_reserve.py`, `tests/test_api_transfer.py`, `tests/test_api_hub.py`,
 `tests/test_mcp_tools.py`; the gap ledger locks the absent endpoints and the deviations.

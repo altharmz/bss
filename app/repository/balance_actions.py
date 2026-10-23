@@ -288,6 +288,59 @@ def cancel_adjustment(
     )
 
 
+def insert_transfer(
+    conn: psycopg.Connection,
+    bucket: Row,
+    receiver: Row,
+    *,
+    action_id: UUID,
+    request: dict[str, Any],
+    amount: Decimal,
+    cost: Decimal,
+    cost_owner: str,
+    operator: str,
+    now: datetime,
+    reason: str | None,
+    description: str | None,
+    hold_id: UUID | None = None,
+    command_id: UUID | None = None,
+    failure: str | None = None,
+) -> Row:
+    """An accepted transfer (`created`: its principal hold and worker command, nothing
+    moved yet) or a refused one (`failure`, neither). `receiver` is the receiving bucket."""
+    return returning(
+        conn,
+        "INSERT INTO balance_action (id, kind, status, billing_account_id, currency, bucket_id,"
+        " request, amount, transfer_cost, cost_owner, receiver_bucket_id,"
+        " receiver_billing_account_id, receiver_currency, reason, description, failure_reason,"
+        " operator, requested_at, confirmed_at, hold_id, command_id)"
+        " VALUES (%s, 'transfer', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,"
+        " %s, %s, %s) RETURNING *",
+        (
+            action_id,
+            "failed" if failure else "created",
+            bucket["billing_account_id"],
+            bucket["currency"],
+            bucket["id"],
+            jsonb(request),
+            amount,
+            cost,
+            cost_owner,
+            receiver["id"],
+            receiver["billing_account_id"],
+            receiver["currency"],
+            reason,
+            description,
+            failure,
+            operator,
+            now,
+            now if failure else None,
+            hold_id,
+            command_id,
+        ),
+    )
+
+
 def delete_failed(conn: psycopg.Connection, action_id: UUID) -> None:
     conn.execute("DELETE FROM balance_action WHERE id = %s AND status = 'failed'", (action_id,))
 

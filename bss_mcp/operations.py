@@ -48,6 +48,7 @@ from app.api.refunds import RefundCreate
 from app.api.reserve import ReserveCreate, ReservePatch
 from app.api.resource_inventory import ResourceCreate, ResourcePatch
 from app.api.topup import TopupCreate, TopupPatch
+from app.api.transfer import TransferCreate, TransferPatch
 from app.internal.billing_runs import OUTCOMES, CatchUp
 from app.internal.catalog import PriceChange
 from app.internal.prepaid_commands import STATES
@@ -199,6 +200,26 @@ OPERATIONS: dict[str, Op] = {
     "delete_reserve_balance": Op(
         "Delete a failed hold; cancel a created one instead, a cancelled one is history."
     ),
+    "list_transfer_balances": Op(
+        "Credit transfers between prepaid buckets; filter by status, bucket.id,"
+        " receiverBucket.id or partyAccount.id.",
+        query=LIST,
+    ),
+    "get_transfer_balance": Op("One credit transfer.", query=FIELDS),
+    "create_transfer_balance": Op(
+        "Move credit from one prepaid bucket to another (same currency, both prepaid). The"
+        " sender's amount plus an originator-paid transferCost is held and the billing worker"
+        " completes the transfer later, so it is answered created. Final: there is no cancel;"
+        " correct it with a new opposite transfer. A refusal (same bucket, currency, a number"
+        " that is not the account's, too few spendable funds) is stored failed with 201.",
+        body=TransferCreate,
+    ),
+    "patch_transfer_balance": Op(
+        "Only reason changes; reason, channel, logicalResource and receiverLogicalResource are"
+        " required and the rest must repeat as stored. There is no status.",
+        body=TransferPatch,
+    ),
+    "delete_transfer_balance": Op("Delete a failed transfer; an accepted one is final."),
     # --- TMF620 product catalog ---
     "list_categories": Op("Categories and their offerings and child categories.", query=LIST),
     "get_category": Op("One category.", query=FIELDS),

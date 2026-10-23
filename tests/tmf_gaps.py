@@ -64,7 +64,6 @@ SPECS = (
 PENDING = {
     "TMF654": frozenset(
         {
-            "transferBalance",
             "balanceActionHistory",
         }
     ),
@@ -393,6 +392,31 @@ def _prepaid(api: Any, cust: dict[str, Any]) -> None:
         },
     )
     assert held.status_code == 201, held.text
+    # a transfer to a second prepaid account; the number is nobody's, so it is stored failed
+    number = _created(
+        api,
+        "/tmf-api/resourceInventory/v5/resource",
+        {"@type": "LogicalResource", "name": "Transfer number", "value": "12025550199"},
+    )
+    other = apidata.account(api, cust, name="Prepaid receiver", description="Probe receiver")
+    with psycopg.connect(settings.database_url) as conn:
+        receiver = factories.prepaid_bucket(conn, other["id"], api.clock.now())
+    moved = api.post(
+        "/tmf-api/prepayBalanceManagement/v4/transferBalance",
+        {
+            "@type": "TransferBalance",
+            "reason": "Probe transfer",
+            "channel": {"id": "probe", "name": "Probe"},
+            "logicalResource": [{"id": number["id"]}],
+            "receiverLogicalResource": {"id": number["id"]},
+            "amount": {"amount": 1, "units": "USD"},
+            "usageType": "monetary",
+            "bucket": {"id": bucket.json()[0]["id"]},
+            "receiverBucket": {"id": str(receiver["id"])},
+            "receiverBucketUsageType": "monetary",
+        },
+    )
+    assert moved.status_code == 201, moved.text
 
 
 def _versioned_offering(api: Any) -> dict[str, Any]:

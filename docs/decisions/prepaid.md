@@ -1031,3 +1031,34 @@ checking full equality and preserving measured evidence allowed the standard ren
 to pass. All number items are implemented/tested and nothing is unscoped. The 28
 TMF654 operations remain planned. No runtime, migration or deployment change is part
 of N6; shipping follows the normal cycle (commit, push, deploy, no approval).
+
+## P4g: transfer acceptance (2026-10-23)
+
+`transferBalance` is accepted without moving money; no migration. A POST locks the sender's
+and the receiver's billing accounts in id order (so opposite transfers cannot deadlock),
+releases the sender's lapsed holds, validates, and either stores a `failed` refusal or does
+three writes in one transaction: a `transfer` `prepaid_command` (due today, request
+`{action_id}`), a command-owned `funding_hold` of the amount plus an originator-paid fee
+(`reserve_for_command`; a receiver-paid fee holds the amount alone), and the `created`
+`balance_action` that names both (0045's checks tie the hold to the amount and fee). The
+command is created after the account locks: its identity is a fresh UUID nobody else can
+contend for. The worker's dispatcher still ignores `transfer` commands (P4h completes them),
+so an accepted transfer waits `created`, holding its money, until then. The funds check
+runs first (`funding.plan`) so a shortfall writes nothing.
+
+Refusals, all stored failed (201, Failure event, `description` states why; the client's
+required `reason` stays in `reason`): `sameBucket`, `currency` (the receiver bucket's
+differs), a sender or receiver number or product that is not the account's, a Closed
+receiver, a Closed or Suspended sender (a Suspended receiver still receives), and an
+amount-plus-fee above the spendable funds. A bucket exists only on a prepaid account (a
+foreign key on the mode), so a postpaid receiver is an unknown bucket, a 422, and there is
+no separate `mode` refusal. A receiver-paid fee above the amount, a fee in another currency,
+a non-monetary usage type and any unknown reference are 422 and store nothing.
+
+The fee is the exact tax-inclusive Money supplied, absent meaning 0.00 with `originator`; both
+are always returned. `balance_action_retained` keeps the stored request immutable, so PATCH
+changes `reason` only: `channel`, `requestor` and `receiver`, which the plan would allow to
+change, must be repeated as stored (409). `status`, `validFor`, `description`, `partyAccount`
+and the dates, which TransferBalance_Update skips, may be echoed back equal. There is no
+cancelling and no `TransferBalanceCancelEvent`. DELETE removes only a failed transfer. Five
+MCP tools. Tests: `tests/test_api_transfer.py`.

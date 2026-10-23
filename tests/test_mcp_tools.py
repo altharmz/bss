@@ -375,6 +375,23 @@ def world(api, db_conn) -> dict[str, Any]:
         reserves, {**topup_body, "amount": {"amount": 499, "units": "USD"}}
     ).json()
     assert (reserve.get("status"), refused_reserve.get("status")) == ("created", "failed")
+    receiver_account = apidata.account(api, name="Prepaid receiver")
+    receiver_bucket = factories.prepaid_bucket(db_conn, receiver_account["id"], api.clock.now())
+    db_conn.commit()
+    transfer_body = {
+        "reason": "MCP transfer",
+        "channel": {"id": "mcp", "name": "MCP"},
+        "logicalResource": [{"id": number["id"]}],
+        "receiverLogicalResource": {"id": number["id"]},
+        "amount": {"amount": 1, "units": "USD"},
+        "usageType": "monetary",
+        "bucket": {"id": str(prepaid_bucket["id"])},
+        "receiverBucket": {"id": str(receiver_bucket["id"])},
+        "receiverBucketUsageType": "monetary",
+    }
+    # the number is nobody's: refused, stored failed
+    transfer = api.post(f"{BALANCE}/transferBalance", transfer_body).json()
+    assert transfer.get("status") == "failed", transfer
     command = commands.enqueue(
         db_conn,
         uuid4(),
@@ -394,6 +411,8 @@ def world(api, db_conn) -> dict[str, Any]:
         "refused_adjust": refused_adjust,
         "reserve": reserve,
         "refused_reserve": refused_reserve,
+        "transfer": transfer,
+        "transfer_body": transfer_body,
         "number": number,
         "resource_hub": resource_hub,
         "hub": hub,
@@ -433,6 +452,7 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "get_topup_balance": {"topup_id": world["topup"]["id"]},
         "get_adjust_balance": {"adjust_id": world["adjust"]["id"]},
         "get_reserve_balance": {"reserve_id": world["reserve"]["id"]},
+        "get_transfer_balance": {"transfer_id": world["transfer"]["id"]},
         "get_accumulated_balance": {"balance_id": str(world["bucket"]["accumulated_balance_id"])},
         "get_hub_resource": {"hub_id": world["resource_hub"]["id"]},
         "get_bill_format": {"format_id": world["format"]["id"]},
@@ -735,6 +755,24 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         {"reserve_id": new_reserve["id"], "body": {"status": "cancelled", "reason": "Not needed"}},
     )
     call("delete_reserve_balance", {"reserve_id": world["refused_reserve"]["id"]}, expected=(204,))
+    new_transfer = call(
+        "create_transfer_balance",
+        {"body": {**world["transfer_body"], "amount": {"amount": "2.50", "units": "USD"}}},
+    )
+    assert new_transfer["status"] == "failed"
+    call(
+        "patch_transfer_balance",
+        {
+            "transfer_id": new_transfer["id"],
+            "body": {
+                "reason": "Corrected",
+                "channel": world["transfer_body"]["channel"],
+                "logicalResource": world["transfer_body"]["logicalResource"],
+                "receiverLogicalResource": world["transfer_body"]["receiverLogicalResource"],
+            },
+        },
+    )
+    call("delete_transfer_balance", {"transfer_id": world["transfer"]["id"]}, expected=(204,))
     call("patch_bill", {"bill_id": world["bill"]["id"], "body": {"state": "onHold"}})
     call(
         "price_change",
