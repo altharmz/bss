@@ -98,6 +98,13 @@ def test_request_hash_ignores_key_order_and_number_spelling():
     assert a != idempotency.request_hash([("fields", "id")], {"a": D("11"), "b": []})
 
 
+def test_request_hash_reads_an_integer_and_a_decimal_as_one_number():
+    ten = idempotency.request_hash([], {"a": 10, "b": [{"v": 7}]})
+    assert ten == idempotency.request_hash([], {"a": D("10.00"), "b": [{"v": D("7.0")}]})
+    assert ten != idempotency.request_hash([], {"a": True, "b": [{"v": 7}]})  # a bool is no 1
+    assert idempotency.request_hash([], {"a": 1}) != idempotency.request_hash([], {"a": True})
+
+
 def test_keys_are_scoped_by_operator_method_and_route(db_conn):
     for operator, route in (("i.petrova", "/a"), ("mcp:bot", "/a"), ("i.petrova", "/b")):
         assert idempotency.begin(db_conn, operator, "POST", route, "k", HASH) is None

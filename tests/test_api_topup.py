@@ -15,7 +15,7 @@ from app.worker import loop
 from tests import apidata
 from tests.apiclient import decimals
 from tests.factories import NOW, payment_hold, prepaid_bucket
-from tests.test_events import subscribe, types
+from tests.test_events import stored, subscribe, types
 from tests.test_number_persistence import number as unassigned_number
 from tests.test_prepaid_orders import purchase, shop
 from tests.test_prepaid_renewal_producer import tick
@@ -104,6 +104,11 @@ def test_a_top_up_credits_the_bucket_with_its_payment(api, db_conn):
     assert remaining(api, acc) == current_balance(api, acc) == D("50.25")
     assert types(db_conn, "TMF654") == ["TopupBalanceCreateEvent"]
     assert types(db_conn, "TMF676") == ["PaymentCreateEvent"]
+    # both are v4 APIs: the v4 notification structure, not v5's id/timeOccurred/@type
+    for api_name in ("TMF654", "TMF676"):
+        (_, payload), *_ = stored(db_conn, api_name)
+        assert set(payload) == {"eventId", "eventTime", "eventType", "event"}
+    assert set(stored(db_conn, "TMF654")[0][1]["event"]) == {"topupBalance"}
 
     listed = api.get(TOPUP, params={"partyAccount.id": acc.id, "status": "completed"})
     assert [t["id"] for t in listed.json()] == [topup["id"]]
@@ -229,13 +234,21 @@ def test_a_held_or_allocated_top_up_cannot_be_cancelled(api, db_conn):
     assert funding.load(db_conn, UUID(acc.id)).spendable == 0
 
 
-def test_a_top_up_whose_money_was_spent_stays(api, db_conn):
+def test_a_top_up_whose_money_was_spent_stays(api, db_conn, monkeypatch):
+    monkeypatch.setattr(loop, "scheduled", lambda *args: SimpleNamespace(gap=None, dates=[]))
     off, acc = prepaid(api, db_conn)
     topup = post(api, acc, 24).json()
+    url = f"{TOPUP}/{topup['id']}"
     purchase(api, off, acc)
-    response = api.patch(f"{TOPUP}/{topup['id']}", {"status": "cancelled"})
+    # held for the accepted order ...
+    assert api.patch(url, {"status": "cancelled"}).status_code == 409
+    # ... and, once the worker posted it, allocated to the bills it paid
+    tick(db_conn, api.clock.now())
+    assert db_conn.execute("SELECT count(*) FROM bill_allocation").fetchone()[0] > 0
+    response = api.patch(url, {"status": "cancelled"})
     assert response.status_code == 409, response.text
     assert db_conn.execute("SELECT count(*) FROM balance_action_reversal").fetchone() == (0,)
+    assert db_conn.execute("SELECT status FROM balance_action").fetchone() == ("completed",)
 
 
 def test_patch_changes_only_descriptions_and_repeats_the_rest(api, db_conn):
@@ -257,6 +270,8 @@ def test_patch_changes_only_descriptions_and_repeats_the_rest(api, db_conn):
 
 def test_a_failed_top_up_cannot_be_cancelled_and_a_completed_one_not_deleted(api, db_conn):
     _, acc = prepaid(api, db_conn)
+    completed = post(api, acc).json()
+    assert api.delete(f"{TOPUP}/{completed['id']}").status_code == 409
     db_conn.execute("UPDATE billing_account SET state = 'Closed' WHERE id = %s", (acc.id,))
     db_conn.commit()
     failed = post(api, acc).json()
@@ -267,7 +282,7 @@ def test_the_same_key_and_body_replay_one_top_up(api, db_conn):
     _, acc = prepaid(api, db_conn)
     key = {"Idempotency-Key": "topup-1"}
     first = post(api, acc, 10, headers=key)
-    again = post(api, acc, 10, headers=key)
+    again = post(api, acc, 10.00, headers=key)
     assert first.status_code == again.status_code == 201
     assert again.json() == first.json()
     assert again.headers["Location"] == first.headers["Location"]

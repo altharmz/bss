@@ -55,7 +55,7 @@ by decision (TMF637 product writes, billingCycleSpecification writes, PATCH prod
 - **Fan-out at write time:** one delivery per live hub of the API that wants the type; a
   hub created later never receives older events. DELETE /hub drops its pending ones.
 - **Envelope:** v5 `Event`: `id` = `eventId`, `eventTime` = `timeOccurred`,
-  `eventType`, `event: {<resource>: body}`, `@type` = the event type. TMF676 (v4):
+  `eventType`, `event: {<resource>: body}`, `@type` = the event type. TMF676 and TMF654 (v4):
   `eventId`, `eventTime`, `eventType`, `event`. The body is the resource as the API
   answers it (a Delete: as it was just before). Stored with `tmfjson` and sent as the
   stored JSON text, so money stays an exact number (never a float).

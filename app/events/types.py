@@ -108,3 +108,7 @@ EVENT_TYPES: dict[str, frozenset[str]] = {
         for kind in ("Create", "Failure", "Cancel")
     ),
 }
+
+# The v4 APIs: their hub is an EventSubscription and their events keep the v4 notification
+# structure (eventId, eventTime, eventType, event; no id, timeOccurred or @type).
+V4_APIS = frozenset({"TMF676", "TMF654"})

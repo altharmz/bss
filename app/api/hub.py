@@ -32,11 +32,10 @@ from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import bad_request, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.events import callbacks
-from app.events.types import BASES, EVENT_TYPES
+from app.events.types import BASES, EVENT_TYPES, V4_APIS
 from app.repository import events, hubs
 from app.repository._sql import Row
 
-V4 = frozenset({"TMF676", "TMF654"})
 ATTRIBUTES = ("callback", "query")
 
 
@@ -65,12 +64,12 @@ def event_types(api: str, query: str | None) -> list[str] | None:
 
 def hub_body(api: str, row: Row) -> dict[str, Any]:
     body: dict[str, Any] = {"id": str(row["id"])}
-    if api not in V4:
+    if api not in V4_APIS:
         body["href"] = f"{BASES[api]}/hub/{row['id']}"
     body["callback"] = row["callback"]
     if row["query"] is not None:
         body["query"] = row["query"]
-    if api not in V4:
+    if api not in V4_APIS:
         body["@type"] = "Hub"
     return body | meta_body(row)
 
@@ -97,7 +96,7 @@ def _create(api: str, data: HubIn, tx: Tx, clock) -> TmfJSONResponse:
         )
         row = with_meta(conn, "event_subscription", row, data)
     hub = hub_body(api, row)
-    if api in V4:  # no href to point a Location at
+    if api in V4_APIS:  # no href to point a Location at
         return TmfJSONResponse(hub, status_code=201)
     return created(hub)
 

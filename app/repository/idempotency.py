@@ -42,8 +42,8 @@ def _normal(value: Any) -> Any:
         return {k: _normal(value[k]) for k in sorted(value)}
     if isinstance(value, list):
         return [_normal(v) for v in value]
-    if isinstance(value, Decimal):
-        return format(value.normalize(), "f")
+    if isinstance(value, (int, Decimal)) and not isinstance(value, bool):
+        return format(Decimal(value).normalize(), "f")
     return value
 
 

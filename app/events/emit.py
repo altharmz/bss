@@ -18,7 +18,7 @@ from typing import Any
 
 import psycopg
 
-from app.events.types import EVENT_TYPES
+from app.events.types import EVENT_TYPES, V4_APIS
 from app.repository import events as repo
 
 # Nothing from app.api at import time: the API modules import this one, and importing
@@ -36,9 +36,9 @@ def event_name(resource: str, kind: str) -> str:
 def envelope(
     api: str, event_type: str, resource: str, body: Body, event_id: uuid.UUID, at: datetime
 ) -> Body:
-    """The event as POSTed: TMF v5 Event (TMF676: its v4 notification structure)."""
+    """The event as POSTed: TMF v5 Event (v4 APIs: their v4 notification structure)."""
     when = at.astimezone(UTC)  # as app.api.common.utc; tmfjson writes it as the API does
-    if api == "TMF676":
+    if api in V4_APIS:
         return {
             "eventId": str(event_id),
             "eventTime": when,

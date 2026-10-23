@@ -79,10 +79,24 @@ is never touched and no refund exists. Repeating `cancelled` only edits descript
 PATCHes may change `reason`/`description`; any other attribute must equal the stored value
 (409). Create and Cancel events carry the same body a GET returns.
 
+Events. TMF654 is a v4 API, so its events keep the v4 notification structure (`eventId`,
+`eventTime`, `eventType`, `event`) like TMF676's; `app/events/types.py` holds the one
+`V4_APIS` set that the envelope and the hub share. P4c's hub was v4 but P4d's first events
+went out in the v5 shape (the Swagger 2 schema tolerates the extras); fixed with a test that
+pins the top-level keys.
+
+Idempotency hash. The P4b request hash now reads an integer and a decimal as one number
+(`10` = `10.00`, as its docstring promised; a bool stays distinct). Migration `0046` is on
+the VPS, so a key stored before this fix whose body had an integer answers a retry with 409
+instead of a replay; prepaid creation is gated and keys are short-lived retries.
+
+Closed accounts. `/topupBalance` stores a refusal on a Closed account (`failed`), but a
+direct payment to a Closed prepaid account is recorded as a completed top-up: a failed
+top-up cannot link a payment (0045), and the payment already happened.
+
 Gap ledger: automatic top-up, voucher and `relatedParty` are recorded as accepted
 deviations; the top-up endpoints leave `PENDING`. MCP: five tools (`*_topup_balance`),
-over HTTP without the idempotency header. Known and left alone: the P4b request hash keeps
-`10` and `10.0` apart (an int is not normalized), so only a byte-for-byte retry replays.
+over HTTP without the idempotency header.
 
 ## P4a: balance action and source schema (2026-10-23)
 
