@@ -6,6 +6,7 @@ diagnostics commit with the pass after that savepoint has rolled back.
 """
 
 import logging
+from decimal import Decimal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -133,8 +134,8 @@ def process_commands(
     Funding shortfalls retain a needs-top-up reason and remain pending. They are
     attempted again after a later credit (a payment or a released hold) or on a
     later business date, never as technical failures. A renewal of an ended product
-    is retired at once. Unsupported transfer commands are left to their future
-    dispatcher.
+    is retired at once. Fee-free transfers complete in their own pass afterwards
+    (`process_transfers`); a transfer with a fee waits for its fee posting (P4h2).
     """
     ensure_ownership(conn)
     now = clock.now()
@@ -204,7 +205,142 @@ def process_commands(
                 attempted.append(cmd["id"])
         if heartbeat is not None:
             heartbeat()
+    attempted += process_transfers(
+        conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
+    )
     return attempted
+
+
+_DUE_TRANSFERS = (
+    "SELECT c.id, a.id AS action_id, a.billing_account_id AS sender,"
+    " a.receiver_billing_account_id AS receiver FROM prepaid_command c"
+    " JOIN balance_action a ON a.command_id = c.id"
+    " WHERE c.kind = 'transfer' AND c.state <> 'completed' AND a.status = 'created'"
+    " AND a.transfer_cost = 0 AND c.due_date <= %(today)s"
+    " AND (c.next_retry_at IS NULL OR c.next_retry_at <= %(now)s) ORDER BY c.created_at, c.id"
+)
+
+
+def process_transfers(
+    conn: psycopg.Connection,
+    *,
+    clock: Clock,
+    tz: ZoneInfo,
+    checkpoint: Checkpoint | None = None,
+    heartbeat: Heartbeat | None = None,
+) -> list[UUID]:
+    """Complete each due fee-free transfer in one transaction of its own.
+
+    Lock order is the API's: command identity, then the sender's and the receiver's
+    accounts in id order, so opposite transfers (and the API) cannot deadlock. A fee
+    transfer is left queued until its fee posting exists.
+    """
+    ensure_ownership(conn)
+    now = clock.now()
+    due = fetch_all(conn, _DUE_TRANSFERS, {"today": now.astimezone(tz).date(), "now": now})
+    done = []
+    for row in due:
+        if checkpoint is not None and checkpoint():
+            break
+        try:
+            with conn.transaction():
+                commands.lock_identity(conn, row["id"])
+                for account_id in sorted({row["sender"], row["receiver"]}):
+                    billing.load_account(conn, account_id)
+                now = clock.now()
+                current = commands.get(conn, row["id"])
+                if current["state"] == "completed" or (
+                    current["next_retry_at"] is not None and current["next_retry_at"] > now
+                ):
+                    continue
+                with conn.transaction():
+                    _complete_transfer(conn, current, row["action_id"], now)
+        except Exception as error:
+            log.exception("transfer command %s failed", row["id"])
+            with conn.transaction():
+                commands.lock_identity(conn, row["id"])
+                commands.fail(conn, row["id"], str(error) or type(error).__name__, now=clock.now())
+        done.append(row["id"])
+        if heartbeat is not None:
+            heartbeat()
+    return done
+
+
+def _revalidation(conn, action, hold) -> str | None:
+    """Why a transfer accepted earlier can no longer be completed (None: it can)."""
+    states = {
+        r["id"]: r
+        for r in fetch_all(
+            conn,
+            "SELECT id, state::text AS state, currency, rating_type FROM billing_account"
+            " WHERE id = ANY(%s)",
+            ([action["billing_account_id"], action["receiver_billing_account_id"]],),
+        )
+    }
+    sender, receiver = (
+        states[action["billing_account_id"]],
+        states[action["receiver_billing_account_id"]],
+    )
+    if sender["state"] != "Active":
+        return f"the sending account is {sender['state']}"
+    if receiver["state"] == "Closed":
+        return "the receiving account is closed"
+    if "prepaid" != sender["rating_type"] or "prepaid" != receiver["rating_type"]:
+        return "an account is no longer prepaid"
+    if sender["currency"] != receiver["currency"]:
+        return "currency: the accounts' currencies differ"
+    if hold is None or hold["released_at"] is not None or hold["amount"] != action["amount"]:
+        return "the transfer's hold is no longer outstanding"
+    return None
+
+
+def _complete_transfer(conn, cmd, action_id, now) -> None:
+    from app.api.transfer import API, RESOURCE, transfer_body
+
+    balance_actions.release_expired(conn, cmd["billing_account_id"], now)
+    action = balance_actions.get(conn, action_id, lock=True, kind="transfer")
+    if action is None or action["command_id"] != cmd["id"]:
+        raise ValueError("transfer command does not match its action")
+    if action["status"] != "created":
+        raise ValueError("transfer is not awaiting completion")
+    hold = fetch_one(conn, "SELECT * FROM funding_hold WHERE id = %s", (action["hold_id"],))
+    reason = _revalidation(conn, action, hold)
+    sender = action["billing_account_id"]
+    if reason is not None:
+        funding.release(conn, sender, action["hold_id"], released_at=now, command_id=cmd["id"])
+        row = balance_actions.fail_transfer(conn, action["id"], reason, now=now)
+        emit.emit(conn, API, RESOURCE, "Failure", lambda: transfer_body(conn, row), at=now)
+        commands.complete(conn, cmd["id"], {"outcome": "failed", "reason": reason}, now=now)
+        return
+    sources = conn.execute(
+        "SELECT payment_id, credit_bill_id, funding_source_id, amount FROM funding_hold_source"
+        " WHERE hold_id = %s ORDER BY id",
+        (action["hold_id"],),
+    ).fetchall()
+    if sum((s[3] for s in sources), Decimal(0)) != action["amount"]:
+        raise ValueError("the transfer's hold does not cover its principal")
+    conn.execute("SET CONSTRAINTS ALL DEFERRED")
+    funding.release(conn, sender, action["hold_id"], released_at=now, command_id=cmd["id"])
+    for payment_id, credit_id, source_id, amount in sources:
+        conn.execute(
+            "INSERT INTO funding_consumption (billing_account_id, action_id, payment_id,"
+            " credit_bill_id, funding_source_id, amount, consumed_at)"
+            " VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (sender, action["id"], payment_id, credit_id, source_id, amount, now),
+        )
+    conn.execute(
+        "INSERT INTO funding_source (kind, billing_account_id, currency, action_id, amount,"
+        " available_at) VALUES ('transfer', %s, %s, %s, %s, %s)",
+        (action["receiver_billing_account_id"], action["receiver_currency"], action["id"],
+         action["amount"], now),
+    )  # fmt: skip
+    balance_actions.complete_transfer(conn, action["id"], now=now)
+    conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    conn.execute("SET CONSTRAINTS ALL DEFERRED")
+    funding.load(conn, sender)
+    funding.load(conn, action["receiver_billing_account_id"])
+    result = {"outcome": "completed", "action_id": str(action["id"])}
+    commands.complete(conn, cmd["id"], result, now=now)
 
 
 def observe_entitlements(conn, *, clock, tz, checkpoint=None, heartbeat=None):

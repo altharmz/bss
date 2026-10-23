@@ -1,5 +1,6 @@
 """P4g: TMF654 transferBalance acceptance - validation under both account locks, the sender's
-hold and one queued `transfer` command. Nothing moves until the worker completes it (P4h).
+hold and one queued `transfer` command. Nothing moves until the worker completes it (P4h1;
+with a fee, P4h2).
 
 Every response is checked against the vendored schema by the `api` client."""
 
@@ -129,15 +130,15 @@ def test_an_accepted_transfer_holds_principal_and_fee_and_moves_nothing(api, db_
     assert api.get(f"{BASE}/reserveBalance/{moved['id']}").status_code == 404
 
 
-def test_the_worker_leaves_an_accepted_transfer_for_its_completion(api, db_conn):
+def test_the_worker_leaves_an_accepted_fee_transfer_for_its_fee_posting(api, db_conn):
     tx, rx = pair(api, db_conn)
-    moved = post(api, tx, rx, 10).json()
+    moved = post(api, tx, rx, 10, transferCost={"unit": "USD", "value": 1}).json()
     tick(db_conn, api.clock.now())
     assert api.get(f"{TRANSFER}/{moved['id']}").json()["status"] == "created"
     assert db_conn.execute(
         "SELECT state, attempts FROM prepaid_command WHERE kind = 'transfer'"
     ).fetchone() == ("pending", 0)
-    assert remaining(api, tx) == D(40) and remaining(api, rx) == D(8)
+    assert remaining(api, tx) == D(39) and remaining(api, rx) == D(8)
 
 
 def test_a_receiver_paid_fee_holds_only_the_principal(api, db_conn):

@@ -1062,3 +1062,31 @@ change, must be repeated as stored (409). `status`, `validFor`, `description`, `
 and the dates, which TransferBalance_Update skips, may be echoed back equal. There is no
 cancelling and no `TransferBalanceCancelEvent`. DELETE removes only a failed transfer. Five
 MCP tools. Tests: `tests/test_api_transfer.py`.
+
+## P4h1: transfer completion without a fee (2026-10-23)
+
+P4h is split. P4h1 (no migration) has the worker complete a transfer whose fee is zero
+(`app/worker/prepaid.py` `process_transfers`, run at the end of `process_commands`). Per
+transfer, in one transaction: the command-identity advisory lock, then the sender's and
+the receiver's accounts in id order (the API's order, so the worker, the API and opposite
+transfers cannot deadlock). Under the locks the action is revalidated: both accounts
+prepaid and in the same currency, the sender Active, the receiver not Closed, the hold
+still outstanding. Success consumes exactly the hold's sources into `funding_consumption`
+rows (the hold is released first, as in conversion), adds the receiver's one `transfer`
+`funding_source` (available at the worker's clock), sets `completed` and `confirmed_at`,
+completes the command and reconciles both accounts (`funding.load`) with the deferred
+0045 bounds forced immediate, all inside a savepoint. A failed revalidation releases the
+hold, stores the action `failed` with `failure_reason`, sends a Failure event and completes
+the command with outcome `failed`. A technical error rolls the savepoint back (money,
+hold and action untouched) and records `failedTechnical` with the usual backoff. No
+cancellation, no completion event (none exists). A transfer with a fee is not picked up:
+it stays `created` and queued, holding its money, until P4h2. Sender number/product
+ownership is not re-checked at completion (acceptance checked it; neither can move away
+while the product lives, and the money, not the number, is what moves).
+
+P4h2 (migration `0047`): nullable `applied_customer_billing_rate.product_id`, new
+`charge_type` `oneTime`, a unique nullable `balance_action_id` foreign key, a one-day
+half-open period, checks scoped by charge type, TMF678 omitting `product` when null,
+internal mappers that treat non-recurring as refund fixed, and a bill presentation line
+without a product. It will then post the fee charge and the settled `offCycle` bill in
+the same completion. Tests: `tests/test_transfer_completion.py`.

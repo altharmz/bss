@@ -341,6 +341,26 @@ def insert_transfer(
     )
 
 
+def complete_transfer(conn: psycopg.Connection, action_id: UUID, *, now: datetime) -> Row:
+    """The worker moved the principal: created -> completed."""
+    return returning(
+        conn,
+        "UPDATE balance_action SET status = 'completed', confirmed_at = %s WHERE id = %s"
+        " AND kind = 'transfer' AND status = 'created' RETURNING *",
+        (now, action_id),
+    )
+
+
+def fail_transfer(conn: psycopg.Connection, action_id: UUID, reason: str, *, now: datetime) -> Row:
+    """Revalidation refused an accepted transfer: created -> failed, its hold already released."""
+    return returning(
+        conn,
+        "UPDATE balance_action SET status = 'failed', failure_reason = %s, confirmed_at = %s"
+        " WHERE id = %s AND kind = 'transfer' AND status = 'created' RETURNING *",
+        (reason, now, action_id),
+    )
+
+
 def delete_failed(conn: psycopg.Connection, action_id: UUID) -> None:
     conn.execute("DELETE FROM balance_action WHERE id = %s AND status = 'failed'", (action_id,))
 
