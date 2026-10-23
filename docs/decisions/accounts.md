@@ -152,10 +152,11 @@ is taken on POST and PATCH and returned; TMF666 has no gap lines left. The three
 - **`paymentStatus` is a record**, not derived: both `_FVO` and `_MVO` let a client write
   it, and the spec's examples (`In Arrears`, `In Collection`) name collection states that
   bills cannot tell. Overdue stays display only (bills.md).
-- **`ratingType` is always `postpaid`**: billing has no prepaid mode, so another value is
-  a 422 (as values a cycle specification cannot honour), `null` too. A
-  `BillingAccountRef.ratingType` in an order, a product or an on-demand bill is accepted
-  only as `postpaid` (`RatedBillingAccountRef`); TMF676's v4 `AccountRef` has none.
+- **`ratingType` is `postpaid` (default) or `prepaid`** (since P5a, see
+  [prepaid.md](prepaid.md#p5a-enable-prepaid-accounts-2026-10-23)); `null` and other
+  values are a 422. A `BillingAccountRef.ratingType` in an order, a product or an
+  on-demand bill is accepted only when it equals the account's mode
+  (`RatedBillingAccountRef`, `account.check_rated`); TMF676's v4 `AccountRef` has none.
 - **`billCycleDay` and `currency` are optional on POST** (`BillingAccount_FVO` requires
   only `name`, `relatedParty`, `@type`). `billCycleDay` defaults to the day of the
   creation date in BILLING_TZ, 29-31 as 28 (anniversary billing); `currency` to the

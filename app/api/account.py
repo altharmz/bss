@@ -13,9 +13,11 @@ the TMF extension pattern (`@type` names the subclass, `@baseType` the TMF class
 
 `relatedParty` holds parties in any role; exactly one has role `customer` - the owning
 customer, which changes only while the account has no history (app/api/accounts.py).
-`ratingType` is always `postpaid`: billing has no prepaid mode, so another value is a
-422. contact, taxExemption, paymentPlan, paymentStatus, ... are documents: stored as
-sent, checked against the spec.
+`ratingType` is `postpaid` (the default) or `prepaid` (docs/decisions/prepaid.md): a
+prepaid account gets its one TMF654 bucket at creation, takes no positive creditLimit
+(422), and switches mode by PATCH only while it has no history (409).
+contact, taxExemption, paymentPlan, paymentStatus, ... are documents:
+stored as sent, checked against the spec.
 
 Closing a prepaid account (state Closed) is a 409 while it holds money, has unfinished
 prepaid commands or products not yet ended: they are ended by order first.
@@ -126,9 +128,7 @@ EXTENSION_SCHEMA: dict[str, Any] = {
 }
 
 AccountState = Literal["Active", "Suspended", "Closed"]
-# Billing has no prepaid mode (docs/decisions/accounts.md, "Account attributes")
-RatingType = Literal["postpaid"]
-RATING_TYPE = "postpaid"
+RatingType = Literal["postpaid", "prepaid"]
 # Documents to us: stored as sent (checked against the spec), no behaviour.
 DOCUMENTS = (
     "accountRelationship",
@@ -430,10 +430,13 @@ class AccountPatch(AccountDocuments):
     financial_account: FinancialAccountRef | None = None
 
 
-def _credit_limit(limit: Money | None, currency: str) -> Any:
-    """The column value for a creditLimit: in the account's currency, never negative."""
+def _credit_limit(limit: Money | None, currency: str, rating_type: str = "postpaid") -> Any:
+    """The column value for a creditLimit: in the account's currency, never negative,
+    and none above zero on a prepaid account (an overdraft that mode cannot honour)."""
     if limit is None:
         return None
+    if rating_type == "prepaid" and limit.value > 0:
+        raise unprocessable("creditLimit must not be positive on a prepaid account")
     if limit.unit != currency:
         raise unprocessable(
             f"creditLimit.unit must be the account's currency {currency}, not {limit.unit}"
@@ -479,7 +482,20 @@ def account_href(account_id: Any) -> str:
 def account_ref(row: Row) -> dict[str, Any]:
     """The v5 BillingAccountRef (TMF622/637/678) also carries the account's ratingType."""
     body = ref("BillingAccount", account_href(row["id"]), row["id"], row["name"])
-    return body | {"ratingType": RATING_TYPE}
+    return body | {"ratingType": row["rating_type"]}
+
+
+def check_rated(conn: psycopg.Connection, reference: Any) -> None:
+    """A BillingAccountRef that states a ratingType must state the account's mode (an
+    account that does not exist is for the caller to refuse)."""
+    if reference is None or reference.rating_type is None:
+        return
+    row = parties.get_billing_account(conn, reference.id)
+    if row is not None and row["rating_type"] != reference.rating_type:
+        raise unprocessable(
+            f"billingAccount {reference.id}: ratingType is {row['rating_type']},"
+            f" not {reference.rating_type}"
+        )
 
 
 def customer_party(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
@@ -513,7 +529,7 @@ def account_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "href": account_href(row["id"]),
         "name": row["name"],
         **without_nulls({"description": row["description"], "accountType": row["account_type"]}),
-        "ratingType": RATING_TYPE,
+        "ratingType": row["rating_type"],
         "state": row["state"],
         "billStructure": {
             **structure_body(conn, row["id"]),
@@ -603,6 +619,7 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
     )
     # the creation day: an account opened on the 31st starts its periods on the 28th
     bill_cycle_day = data.bill_cycle_day or min(clock.today().day, 28)
+    rating_type = data.rating_type or "postpaid"
     with tx() as conn:
         # FOR KEY SHARE until commit: a concurrent delete of the customer waits for this
         customer = parties.get_customer(conn, customer_id, "key share")
@@ -621,10 +638,13 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
             currency=currency,
             bill_cycle_day=bill_cycle_day,
             state=data.state,
-            credit_limit=_credit_limit(data.credit_limit, currency),
+            credit_limit=_credit_limit(data.credit_limit, currency, rating_type),
+            rating_type=rating_type,
             opened_at=clock.now(),
             id=uid,
         )
+        if rating_type == "prepaid":
+            parties.create_bucket(conn, row["id"], clock.now())
         row = parties.update_billing_account(
             conn,
             row["id"],
@@ -689,8 +709,19 @@ def patch_account(
             exclude=document_columns(DOCUMENTS)
             | {"credit_limit", "bill_structure", "financial_account", "rating_type"},
         )
+        mode = data.rating_type or current["rating_type"]
+        if mode != current["rating_type"]:
+            counts = count_references(conn, uid, parties.ACCOUNT_HISTORY)
+            if any(counts.values()):
+                raise conflict(
+                    "ratingType cannot change once the account has history (a prepaid"
+                    " account always has its bucket): open a new account in the other mode"
+                )
+            changes["rating_type"] = mode
         if "credit_limit" in data.model_fields_set:  # null removes it
-            changes["credit_limit"] = _credit_limit(data.credit_limit, current["currency"])
+            changes["credit_limit"] = _credit_limit(data.credit_limit, current["currency"], mode)
+        elif mode == "prepaid" and (current["credit_limit"] or 0) > 0:
+            raise unprocessable("creditLimit must not be positive on a prepaid account")
         owner = _owner_of(conn, current)
         if party is not None and related is not None:
             customer = _change_customer(conn, current, party)
@@ -710,6 +741,8 @@ def patch_account(
         if documents:
             changes["details"] = merge_documents(current["details"], documents)
         row = parties.update_billing_account(conn, uid, changes)
+        if mode != current["rating_type"] and mode == "prepaid":
+            parties.create_bucket(conn, uid, clock.now())
         if data.bill_structure is not None:
             presentation.set_preferences(conn, uid, data.bill_structure)
             row = parties.get_billing_account(conn, uid)

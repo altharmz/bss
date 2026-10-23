@@ -24,7 +24,7 @@ from fastapi import APIRouter, Request, Response
 from pydantic import AwareDatetime, Field
 
 from app.api import listing, specschema
-from app.api.account import account_ref
+from app.api.account import account_ref, check_rated
 from app.api.catalog import BASE as CATALOG_BASE
 from app.api.common import (
     ProductOfferingRef,
@@ -334,6 +334,19 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
     )
 
 
+def _rated_refs(data: OrderIn | OrderPatch) -> list[RatedBillingAccountRef | None]:
+    """The order's account reference and every item's (nested ones too)."""
+    found = [data.billing_account]
+
+    def walk(items: list[OrderItemIn] | None) -> None:
+        for item in items or ():
+            found.append(item.billing_account)
+            walk(item.product_order_item)
+
+    walk(data.product_order_item)
+    return found
+
+
 def _stored_request(conn: psycopg.Connection, order: Row) -> OrderRequest:
     """What a draft holds, as a request."""
     items = orders.items_of(conn, order["id"])
@@ -631,6 +644,8 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
                     headers={"Location": replay.location} if replay.location else None,
                 )
         claim_id(conn, "product_order", uid)
+        for reference in _rated_refs(data):
+            check_rated(conn, reference)
         try:
             order_id = place_order(conn, order_request, now=clock.now(), today=clock.today())
         except OrderRefused as exc:
@@ -710,6 +725,8 @@ def patch_order(
 def _replace_draft(
     conn: psycopg.Connection, current: Row, data: OrderPatch, sent: list[ItemSent]
 ) -> None:
+    for reference in _rated_refs(data):
+        check_rated(conn, reference)
     held = _stored_request(conn, current)
     given = data.model_fields_set
     requested = data.requested_start_date

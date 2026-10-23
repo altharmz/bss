@@ -223,15 +223,16 @@ def test_currency_defaults_to_the_credit_limit_else_the_default_currency(api):
     assert api.post(ACCOUNT, contradicting).status_code == 422
 
 
-def test_rating_type_is_postpaid(api):
+def test_rating_type_is_postpaid_by_default_and_cannot_be_removed(api):
     acc = apidata.account(api)
+    assert acc["ratingType"] == "postpaid"
     assert api.patch(acc["href"], {"ratingType": "postpaid"}).status_code == 200
-    for value in ("prepaid", None):
-        assert api.patch(acc["href"], {"ratingType": value}).status_code == 422, value
+    assert api.patch(acc["href"], {"ratingType": None}).status_code == 422
+    assert api.patch(acc["href"], {"ratingType": "hybrid"}).status_code == 422
     offering = apidata.sellable_offering(api)
     ref = {"id": acc["id"], "@type": "BillingAccountRef", "ratingType": "prepaid"}
     body = apidata.order_body(acc, apidata.add_item(offering), billingAccount=ref)
-    assert api.post(ORDER, body).status_code == 422
+    assert api.post(ORDER, body).status_code == 422  # the account is postpaid
     body["billingAccount"]["ratingType"] = "postpaid"
     assert api.post(ORDER, body).status_code == 201
 

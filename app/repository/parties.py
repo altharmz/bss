@@ -112,11 +112,12 @@ def create_billing_account(
     opened_at: datetime,
     state: str = "Active",
     credit_limit: Decimal | None = None,
+    rating_type: str = "postpaid",
     id: UUID | None = None,
 ) -> Row:
     """`opened_at` comes from the injected clock (not the database's now()): a billing run
     for D covers the accounts opened before 00:00 of D."""
-    return returning(
+    row = returning(
         conn,
         """
         INSERT INTO billing_account
@@ -133,6 +134,20 @@ def create_billing_account(
             None if credit_limit is None else money(credit_limit),
             opened_at,
         ),
+    )
+    if rating_type != "postpaid":
+        # not in the INSERT: migration tests call this on schemas older than 0034
+        row = update_billing_account(conn, row["id"], {"rating_type": rating_type})
+    return row
+
+
+def create_bucket(conn: psycopg.Connection, account_id: UUID, at: datetime) -> Row:
+    """The one TMF654 bucket (and accumulatedBalance) identity of a prepaid account."""
+    return returning(
+        conn,
+        "INSERT INTO prepaid_bucket (billing_account_id, currency, created_at)"
+        " SELECT id, currency, %s FROM billing_account WHERE id = %s RETURNING *",
+        (at, account_id),
     )
 
 

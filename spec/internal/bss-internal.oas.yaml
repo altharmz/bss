@@ -113,7 +113,9 @@ paths:
       description: >-
         Runs the stage 3 billing core on the hypothetical product. The charge is written by
         the billing run of chargeRunDate = max(startDate, businessDate + 1) and lands on the
-        bill of billDate, the first cycle day on or after chargeRunDate.
+        bill of billDate, the first cycle day on or after chargeRunDate. On a prepaid account
+        the first interval starts on startDate and is paid in full at once: the answer adds
+        required, available and shortfall.
       parameters:
         - {$ref: '#/components/parameters/Id'}
         - name: productOffering.id
@@ -766,7 +768,18 @@ components:
         creditLimit: {$ref: '#/components/schemas/NullableMoney'}
         exceedsCreditLimit:
           type: boolean
-          description: balanceAfter < -creditLimit. Informational; ordering never checks it.
+          description: >-
+            balanceAfter < -creditLimit. Informational; ordering never checks it. On a
+            prepaid account: the first interval is not fully covered (shortfall > 0).
+        required:
+          description: Prepaid accounts only. The first interval with its taxes, to be held.
+          allOf: [{$ref: '#/components/schemas/Money'}]
+        available:
+          description: Prepaid accounts only. Spendable funds now (ledger minus holds, never below zero).
+          allOf: [{$ref: '#/components/schemas/Money'}]
+        shortfall:
+          description: Prepaid accounts only. What is missing to start the purchase now; zero when covered.
+          allOf: [{$ref: '#/components/schemas/Money'}]
     AccountProduct:
       type: object
       additionalProperties: false

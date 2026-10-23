@@ -17,8 +17,8 @@ number per such product (today's assignment, else its next accepted claim, so a
 scheduled number change does not count twice); `isShared` means more than one number.
 `partyAccount` carries the account's description and state, `relatedParty` its customer.
 The v4 `accumulatedBalance.logicalResource` is a single reference, given only when
-exactly one number is funded. Reads never create a bucket; until P5a only factories
-write `prepaid_bucket`.
+exactly one number is funded. Reads never create a bucket; account creation (P5a) and
+the PATCH to prepaid write `prepaid_bucket`.
 
 Accepted deviations (gap ledger): a bucket is never a deduction, so no
 `requestedDate`/`confirmationDate`; monetary credit does not expire, so `validFor` has
@@ -56,7 +56,7 @@ on the next tick with no worker change.
 
 A direct done payment on a prepaid account that has a bucket records exactly one completed
 top-up (request synthesized, description naming the payment) and sends TopupBalanceCreate;
-a prepaid account without a bucket (test fixtures until P5a) records none. `post_payment`
+a prepaid account without a bucket (only test fixtures: P5a creates it with the account) records none. `post_payment`
 takes `record_topup=False` from the top-up API itself, which makes its own action: no
 loop. Both POSTs take an Idempotency-Key (`idempotency.header`/`replayed` were added next to
 the P4b helpers); DELETE of a failed top-up tombstones the key.
@@ -1162,3 +1162,37 @@ TMF676 refund, not a balance action, and so are not in the history (plan: "Cash 
 
 The MCP registry must name every operation, so P4i adds the read tools `list_history` and
 `get_history` (184 tools, 85 with read scope); the remaining prepaid tooling is P5b.
+
+## P5a: enable prepaid accounts (2026-10-23)
+
+TMF666 POST and PATCH accept `ratingType: prepaid`; the 422 gate is gone. No migration
+(`0034` already holds the mode, the bucket and the history trigger).
+
+- **Creation.** POST inserts the account with its mode and, in the same transaction, its
+  one `prepaid_bucket` (the TMF654 bucket and accumulatedBalance identities). An absent
+  `ratingType` is `postpaid`; `null` stays a 422 on PATCH.
+- **creditLimit.** A positive value on a prepaid account is a 422 on POST and PATCH (zero
+  and null are fine); switching to prepaid with a positive stored limit is a 422 unless the
+  same PATCH removes it. The currency still defaults from a limit's unit.
+- **Switching mode.** PATCH may move postpaid to prepaid only on an account with no history
+  (`parties.ACCOUNT_HISTORY` counts, as DELETE does); anything else is a 409. Decision the
+  plan left open: the bucket is history and is immutable, so a prepaid account can never go
+  back to postpaid (409); a repeat of the current value is a 200. Because the bucket
+  counts as history, a prepaid account cannot be deleted either (close it).
+- **References.** `RatedBillingAccountRef.ratingType` accepts both values and must equal
+  the referenced account's mode (422 otherwise), checked on order POST (order, items and
+  nested items), draft replace, product POST and PATCH, and on-demand bill POST.
+  `account_ref` answers the stored mode in every TMF622/637/678 body.
+- **Internal preview.** `firstCharge` on a prepaid account does not run the postpaid core
+  (which bills nothing for prepaid): the first interval starts on `startDate`, is paid in
+  full with its taxes (`IntervalQuote`, the same quote a purchase holds), `prorated` is
+  false, `next` null, `chargeRunDate = billDate = max(startDate, today)`, `balance` the
+  ledger, `balanceAfter` ledger minus the interval, `exceedsCreditLimit` means
+  shortfall > 0. It adds optional `required`, `available` (spendable, never below zero) and
+  `shortfall` Money fields, absent on postpaid; the OAS lists them as optional so the
+  postpaid contract and the generated types stay valid. The funds shown are today's even
+  for a future start (a future order holds nothing).
+
+Tests: `tests/test_api_prepaid_accounts.py`. TEST-CHANGE: the two tests that asserted the
+gate (`test_rating_type_is_postpaid`, the `ratingType: prepaid` validation row) now assert
+the new contract.

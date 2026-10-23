@@ -4,6 +4,7 @@ billing core where it is a billing rule - so the UI never re-implements billing 
 
 import re
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -19,11 +20,12 @@ from app.api.inventory import product_href
 from app.api.listing import parse_page
 from app.api.tmfjson import TmfJSONResponse
 from app.billing import entitlement
-from app.billing.core import compute, cycle_period, price_at, product_charge_period
+from app.billing.core import charge_taxes, compute, cycle_period, price_at, product_charge_period
 from app.billing.model import Account, BillingState, DateRange, MissingPrice, Price, Product
+from app.billing.prepaid import IntervalQuote, TaxQuote
 from app.config import settings
 from app.internal.context import no_query
-from app.repository import billing, catalog, parties, products
+from app.repository import billing, catalog, funding, parties, products
 from app.repository._sql import Row
 
 BASE = "/internal/v1/billingAccount"
@@ -138,6 +140,15 @@ def first_charge(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> 
             abrs=(),
             bills=(),
         )
+        if row["rating_type"] == "prepaid":
+            try:
+                price = price_at(product, start, state.prices, account.currency, tz)
+            except MissingPrice:
+                raise unprocessable(
+                    f"productOffering {offering['name']} has no recurring price in"
+                    f" {account.currency} valid on {start}"
+                ) from None
+            return _prepaid_first_charge(conn, row, offering, start, price, account, today)
         try:
             [charge] = compute(state, start, tz).abrs
             price = price_at(product, start, state.prices, account.currency, tz)
@@ -182,6 +193,69 @@ def first_charge(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> 
             "balanceAfter": money(after, account.currency),
             "creditLimit": None if limit is None else money(limit, account.currency),
             "exceedsCreditLimit": limit is not None and after < -limit,
+        }
+    )
+
+
+def _prepaid_first_charge(
+    conn: psycopg.Connection,
+    row: Row,
+    offering: Row,
+    start: date,
+    price: Price,
+    account: Account,
+    today: date,
+) -> TmfJSONResponse:
+    """A prepaid purchase pays its first interval in full, tax included, from the funds
+    left after holds, and the interval starts on the start date (anniversary periods:
+    nothing is prorated). `required`, `available` and `shortfall` are the extra
+    fields; the postpaid ones keep their meaning with `balanceAfter` = ledger minus the
+    interval. A start after today holds nothing at order time; the figures then show
+    today's funds."""
+    tz = ZoneInfo(settings.billing_tz)
+    taxes = charge_taxes(price.amount, price, account, start, tz)
+    quote = IntervalQuote(
+        product_id=NO_PRODUCT,
+        offering_id=price.offering_id,
+        price_id=price.id,
+        currency=account.currency,
+        amount=price.amount,
+        taxes=[TaxQuote(category=t.category, rate=t.rate, amount=t.amount) for t in taxes],
+        anchor=start,
+        index=0,
+        unit=price.recurring_period,
+        length=price.recurring_period_length,
+    )
+    period = quote.period()
+    required = price.amount + sum((t.amount for t in taxes), Decimal(0))
+    snapshot = funding.load(conn, row["id"])
+    available = max(Decimal(0), snapshot.spendable)
+    shortfall = max(Decimal(0), required - available)
+    currency = account.currency
+    run_date = max(start, today)
+    return TmfJSONResponse(
+        {
+            "billingAccount": {"id": str(row["id"])},
+            "productOffering": {"id": str(offering["id"]), "name": offering["name"]},
+            "startDate": start,
+            "period": _range(period),
+            "cyclePeriod": _range(period),
+            "billableDays": period.days,
+            "periodDays": period.days,
+            "prorated": False,
+            "price": money(price.amount, price.currency),
+            **_cadence(price),
+            "amount": money(required, currency),
+            "chargeRunDate": run_date,
+            "billDate": run_date,
+            "next": None,
+            "balance": money(snapshot.ledger, currency),
+            "balanceAfter": money(snapshot.ledger - required, currency),
+            "creditLimit": None,
+            "exceedsCreditLimit": shortfall > 0,
+            "required": money(required, currency),
+            "available": money(available, currency),
+            "shortfall": money(shortfall, currency),
         }
     )
 

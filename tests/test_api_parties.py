@@ -196,7 +196,7 @@ def test_balance_is_payments_minus_charges_positive_means_credit(api):
         ({"state": "Open"}, 422),
         ({"relatedParty": []}, 422),
         ({"accountBalance": []}, 422),  # the server's: a new account has a zero balance
-        ({"ratingType": "prepaid"}, 422),  # billing has no prepaid mode
+        ({"ratingType": "hybrid"}, 422),
         ({"contact": [{"@type": "Contact"}]}, 422),  # Contact_FVO requires contactType
         ({"paymentPlan": [{"@type": "PaymentPlan", "fee": 1}]}, 400),
     ],

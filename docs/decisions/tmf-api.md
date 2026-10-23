@@ -221,7 +221,7 @@ Slice 5 of "Following TMF" (TMF666), migration `0023`, 375 lines left: recorded 
 accounts, [accounts.md, "Account attributes"](accounts.md#account-attributes-2026-10-18).
 `relatedParty` holds parties in any role around one resolved anchor (customer / owner),
 the descriptive attributes are slice 4's documents, `paymentStatus` is a record,
-`ratingType` always `postpaid`, `billCycleDay`/`currency` optional.
+`ratingType` `postpaid` or `prepaid` (P5a), `billCycleDay`/`currency` optional.
 
 ### Catalog attributes (2026-10-18)
 
@@ -384,7 +384,7 @@ reason. What the implementation decided beyond the plan:
 - **Prices in TMF622/637:** `priceAlteration` is always `[]` (billing applies none);
   `unitOfMeasure` is the catalog price's Quantity as text (TMF622/637 type it a string);
   `orderTotalPrice` names the order's account and, when every add item has the same
-  price, that price and unit. Every `BillingAccountRef` states `ratingType: postpaid`.
+  price, that price and unit. Every `BillingAccountRef` states the account's `ratingType`.
 - **TMF676:** `paymentMethod` is stored as sent (validated against
   `PaymentMethodRefOrValue`) and answered as sent; the model still reads its name and
   @type. `account.description` is stored beside the reference.

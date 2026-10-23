@@ -16,7 +16,7 @@ Account documents (contact, taxExemption, paymentPlan, defaultPaymentMethod,
 paymentStatus and writable accountRelationship, where defined by the spec) are
 validated against the vendored schemas, replaced as a whole by merge patch and
 removed by null. Financial account relationships remain derived. paymentStatus is a
-client-maintained record; ratingType is always postpaid (422 for another value).
+client-maintained record; ratingType is postpaid (default) or prepaid (a prepaid account gets its TMF654 bucket at creation, takes no positive creditLimit, and changes mode only before history).
 Billing uses billing-account taxExemption certificates by taxType; other account
 documents are informational. See [account attributes](../decisions/accounts.md#account-attributes-2026-10-18).
 Tests: `tests/test_api_account_attributes.py` covers document round trips, defaults,

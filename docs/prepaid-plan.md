@@ -117,7 +117,7 @@ and the conditional history response exception. The business scope exclusions ar
 
 | Spec element | Prepaid meaning |
 |---|---|
-| TMF666 `BillingAccount.ratingType` | `prepaid` or `postpaid` (today: always `postpaid`, anything else 422). Settable on POST; PATCH only before financial or product history (409 otherwise). |
+| TMF666 `BillingAccount.ratingType` | `prepaid` or `postpaid` (before P5a: always `postpaid`, anything else 422). Settable on POST; PATCH only before financial or product history (409 otherwise). |
 | TMF622/637/678 `BillingAccountRef.ratingType` | Accepted when it equals the referenced account's value, as `postpaid` is today; a mismatch stays a 422. |
 | TMF666 `creditLimit` | A prepaid account may carry none or zero; a positive value is a 422 (an overdraft this mode cannot honour, the reasoning that refuses `ratingType: prepaid` today). |
 | TMF666 `accountBalance[]` | Unchanged entry: one `currentBalance` per currency, now payments + adjustments ± transfers - ABRs. Spendable and reserved amounts live on the TMF654 bucket, not in invented `balanceType`s. |

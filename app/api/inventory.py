@@ -26,7 +26,7 @@ from pydantic import AwareDatetime, Field
 from pydantic.alias_generators import to_camel
 
 from app.api import listing
-from app.api.account import account_ref
+from app.api.account import account_ref, check_rated
 from app.api.catalog import OfferingRef, check_version, offering_ref, specification_ref
 from app.api.common import (
     RatedBillingAccountRef,
@@ -428,6 +428,7 @@ def create_product(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
     item = ItemRequest("1", "add", product_offering_id=data.product_offering.id, new_product=chosen)
     with tx() as conn:
         _check_offering_version(conn, data.product_offering)
+        check_rated(conn, data.billing_account)
         claim_id(conn, "product", uid)
         order = _place(
             conn,
@@ -515,6 +516,7 @@ def patch_product(
             raise conflict("realizingResource: change subscriber numbers through a product order")
         check_server_set(server_set, before)
         _check_fixed(data, current)
+        check_rated(conn, data.billing_account if "billing_account" in sent else None)
         old = emit.before(conn, API, "product", lambda: before)
         row = current
         if documents or "name" in sent:

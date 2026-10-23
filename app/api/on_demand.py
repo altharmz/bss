@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 from psycopg.errors import UniqueViolation
 
 from app.api import listing
-from app.api.account import account_ref
+from app.api.account import account_ref, check_rated
 from app.api.bill import BASE, bill_href
 from app.api.common import (
     RatedBillingAccountRef,
@@ -127,6 +127,7 @@ def create_bill_demand(
         # FOR KEY SHARE until commit: a concurrent delete of the account waits for this
         if parties.get_billing_account(conn, data.billing_account.id, "key share") is None:
             raise unprocessable("billingAccount does not exist")
+        check_rated(conn, data.billing_account)
         claim_id(conn, "customer_bill_on_demand", uid)
         now = clock.now()
         try:

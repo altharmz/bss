@@ -88,10 +88,11 @@ class BillingAccountRef(Ref):
 
 
 class RatedBillingAccountRef(BillingAccountRef):
-    """The v5 specs' BillingAccountRef also states the account's ratingType: every
-    account here is postpaid (docs/decisions/accounts.md), so another one is a 422."""
+    """The v5 specs' BillingAccountRef also states the account's ratingType: when sent
+    it must be the account's mode (docs/decisions/accounts.md), else a 422
+    (`account.check_rated`)."""
 
-    rating_type: Literal["postpaid"] | None = None
+    rating_type: Literal["postpaid", "prepaid"] | None = None
 
 
 class CustomerRef(Ref):

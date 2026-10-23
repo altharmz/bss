@@ -11,8 +11,8 @@ Rules:
   `git log` subject) and its decision entry. Nothing else marks a slice done.
 - A slice is done when its "Done when" line holds and has tests. A new test must fail
   without the slice (CLAUDE.md).
-- `ratingType: prepaid` returns 422 until **P5a**. Before P5a, tests build prepaid
-  accounts with factories, as they do now.
+- `ratingType: prepaid` is accepted since **P5a**; older tests still build prepaid
+  accounts with factories.
 - If a slice proves too large, split it into `P3g1`/`P3g2` rows here. Do not widen
   its scope.
 - Re-estimate at each **checkpoint** row and record the new range below.
@@ -38,8 +38,8 @@ suspend/resume orders keep the paid interval and reuse or renew the grant; closi
 a prepaid account requires everything ended. Termination orders end products on
 their date; the billing owner credits unused dates with a settled credit note. An
 offering change waits for the next renewal and applies only when funded (`0044`). What is missing:
-remaining lifecycle actions and public balance operations. Public prepaid
-account creation remains gated until P5a.
+MCP tools, UI and release validation (P5b-P7). Prepaid accounts can be created
+through TMF666 since P5a.
 
 ## Remaining
 
@@ -72,13 +72,13 @@ account creation remains gated until P5a.
 | P4h1 | Transfer completion, no fee | The worker moves principal of a fee-free transfer (consumes the hold's sources, adds the receiver's `transfer` source) and completes the action atomically under the command-identity lock then both account locks in id order. Revalidation failure fails it and releases the hold. No cancellation. Deadlock races in both directions. No migration. | done: Complete fee-free transfers in the worker |
 | P4h2 | Transfer fee posting | Migration `0047`: nullable `applied_customer_billing_rate.product_id`, new `charge_type` `oneTime`, unique nullable `balance_action_id` FK, one-day half-open period, checks scoped by charge type; TMF678 omits `product` when null; internal mappers stop treating non-recurring as refund; bill presentation line without a product. The worker then posts the fee charge and settled `offCycle` bill for either fee owner (receiver fee ≤ principal) in the same completion; fee transfers wait queued until then. | done: Post transfer fees as one-time charges |
 | P4i | History, events, refunds | `balanceActionHistory` lists every action once (with the single documented schema exception). All 12 event names are registered and payloads validate. Prepaid cash refunds are limited to funds left after holds. The gap lock and `tests/tmf-gaps.txt` are updated. | done: Add balanceActionHistory and pin events and refunds |
-| **✓** | **Checkpoint 2**: every TMF654 operation is live behind factories. Re-estimate P5–P7. | | next |
+| **✓** | **Checkpoint 2**: every TMF654 operation is live behind factories. Re-estimate P5–P7. | | done: P4a-P4i took 11 commits for 9 rows (P4h split in two); estimate recorded 2026-10-23 below |
 
 ### P5–P7: Enablement, UI, release
 
 | ID | Slice | Done when | Status |
 |---|---|---|---|
-| P5a | Enable prepaid accounts | TMF666 POST/PATCH accept `prepaid` (PATCH only before history); 622/637/678 references match; a positive `creditLimit` is 422; internal previews show required/available/shortfall. Postpaid suite unchanged. | todo |
+| P5a | Enable prepaid accounts | TMF666 POST/PATCH accept `prepaid` (PATCH only before history); 622/637/678 references match; a positive `creditLimit` is 422; internal previews show required/available/shortfall. Postpaid suite unchanged. | done: Enable prepaid accounts on TMF666 |
 | P5b | MCP for prepaid | Read/write tools for TMF654 and previews, an explicit `idempotency_key` argument, decimal strings. `make mcp-smoke` covers one top-up and one purchase. | todo |
 | P6a | UI: mode and prepaid card | Mode selected at creation and shown in a filter. The card shows ledger, available, reserved, paid-through and shortfall cause, kept distinct. Both time zones. | todo |
 | P6b | UI: top-up, adjustment, hold | Forms with one Idempotency-Key per submission and a same-key retry on an uncertain response. Bodies pinned in frontend and backend tests. | todo |
@@ -91,3 +91,4 @@ account creation remains gated until P5a.
 |---|---|---|
 | 2026-10-21 | 24 rows, expect 24–30 commits | Past slices split roughly 1.3× (P2c3b → 4). Most likely splits: P3c, P3g, P4h. |
 | 2026-10-23 | 19 rows, expect 19–23 commits | Checkpoint 1: P3a–P3e took one commit each, no splits. P3g and P4h remain the likely splits. |
+| 2026-10-23 (checkpoint 2) | 6 rows after P5a (P5b, P6a-c, P7), expect 6-8 commits | P4a-P4i took 11 commits for 9 rows (only P4h split). P5a took one commit, no migration. P6b and P6c (idempotent forms, polling) are the likely splits; P5b and P7 stay single. |
