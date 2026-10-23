@@ -34,6 +34,13 @@ Index: [README.md](README.md).
   is NOT NULL; termination records `terminated_by_item_id`.
 - **Only the billing run writes ABRs** (`applied_customer_billing_rate.billing_run_id` is
   NOT NULL).
+- **ABR rules are scoped by `charge_type`** (migration `0047`). `recurring` and `refund`
+  require a product and an offering; a `oneTime` rate (a prepaid transfer's fee, TMF678
+  `appliedBillingCharge`) has neither, carries a unique `balance_action_id` as its
+  identity (one fee per transfer), is positive and covers one day (`abr_fee_scope`,
+  `abr_fee_amount`). `abr_one_per_start` and `abr_grant_identity` ignore null products
+  (NULLs are distinct), which is right: a fee is unique by its action. Code that joins an
+  ABR to its product or offering must use a left join.
 - **Half-open ranges everywhere.** `valid_for` is `tstzrange [start, end)`, NULL upper =
   open-ended (TMF TimePeriod without endDateTime). Billing periods are `daterange [start,
   end)`. `product.termination_date` is exclusive. Billability is driven by dates, not

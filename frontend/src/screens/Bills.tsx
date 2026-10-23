@@ -229,7 +229,7 @@ function BillBody({
         {bill.charges.map((c) => (
           <div key={c.id} className="bss-line">
             <span>
-              {c.productOffering.name}{' '}
+              {c.productOffering?.name ?? 'Transfer fee'}{' '}
               <span className="bss-secondary num">
                 {c.period.start} – {lastDay(c.period.end)}
               </span>

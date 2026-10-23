@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0046**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0047**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -149,6 +149,7 @@ flowchart LR
   account_presentation_media -->|"media_id"| bill_presentation_media
   app_session -->|"username"| app_user
   app_user_audit -->|"username"| app_user
+  applied_customer_billing_rate -->|"balance_action_id"| balance_action
   applied_customer_billing_rate -->|"billing_account_id"| billing_account
   applied_customer_billing_rate -->|"billing_run_id"| billing_run
   applied_customer_billing_rate -->|"customer_bill_id, billing_account_id"| customer_bill
@@ -685,6 +686,7 @@ erDiagram
     jsonb applied_tax
     numeric tax_amount
     uuid product_offering_id FK
+    uuid balance_action_id FK
   }
   customer_bill {
     uuid id PK
@@ -973,6 +975,7 @@ erDiagram
   }
   applied_customer_billing_rate |o--o{ applied_customer_billing_rate : "refunds_rate_id, product_id"
   applied_customer_billing_rate ||--o{ funded_interval : "applied_rate_id, product_id, billing_account_id, billing_run_id, period, currency, amount, tax_amount, charge_type"
+  balance_action |o--o{ applied_customer_billing_rate : "balance_action_id"
   balance_action ||--o{ balance_action_reversal : "action_id, billing_account_id, currency"
   balance_action ||--o{ funding_consumption : "action_id, billing_account_id"
   balance_action ||--o{ funding_source : "action_id"
@@ -1031,9 +1034,9 @@ erDiagram
   prepaid_command |o--o{ billing_run : "command_id"
   prepaid_command ||--o{ funded_interval : "command_id, billing_account_id, command_kind"
   prepaid_command ||--o{ prepaid_funding_shortfall : "command_id"
-  product ||--o{ applied_customer_billing_rate : "product_id, billing_account_id"
+  product |o--o{ applied_customer_billing_rate : "product_id, billing_account_id"
   product ||--o{ funded_interval : "product_id, billing_account_id"
-  product_offering ||--o{ applied_customer_billing_rate : "product_offering_id"
+  product_offering |o--o{ applied_customer_billing_rate : "product_offering_id"
   refund ||--o{ refund_source : "refund_id, billing_account_id"
 ```
 
@@ -1183,7 +1186,7 @@ TMF-derived enums are verbatim from `spec/` (camelCase included) and locked by `
 | `billing_run_trigger` | `scheduled`, `catchUp`, `retry` | [`billing_run.trigger`](billing_run.md) |
 | `catalog_job_kind` | `ImportJob`, `ExportJob` | [`catalog_job.kind`](catalog_job.md) |
 | `catalog_job_status` | `Succeeded`, `Failed` | [`catalog_job.status`](catalog_job.md) |
-| `charge_type` | `recurring`, `refund` | [`applied_customer_billing_rate.charge_type`](applied_customer_billing_rate.md), [`funded_interval.charge_type`](funded_interval.md) |
+| `charge_type` | `recurring`, `refund`, `oneTime` | [`applied_customer_billing_rate.charge_type`](applied_customer_billing_rate.md), [`funded_interval.charge_type`](funded_interval.md) |
 | `customer_bill_on_demand_state_type` | `inProgress`, `rejected`, `done`, `terminatedWithError` | [`customer_bill_on_demand.state`](customer_bill_on_demand.md) |
 | `customer_bill_state_type` | `new`, `onHold`, `validated`, `sent`, `settled`, `partiallyPaid` | [`customer_bill.state`](customer_bill.md), [`customer_bill_state_change.from_state`](customer_bill_state_change.md), [`customer_bill_state_change.to_state`](customer_bill_state_change.md) |
 | `customer_status` | `Created`, `Active`, `Inactive` | [`customer.status`](customer.md) |

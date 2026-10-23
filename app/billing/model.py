@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-AbrKind = Literal["recurring", "refund"]
+AbrKind = Literal["recurring", "refund", "oneTime"]
 
 
 class BillingError(Exception):

@@ -1043,7 +1043,7 @@ three writes in one transaction: a `transfer` `prepaid_command` (due today, requ
 `balance_action` that names both (0045's checks tie the hold to the amount and fee). The
 command is created after the account locks: its identity is a fresh UUID nobody else can
 contend for. The worker's dispatcher still ignores `transfer` commands (P4h completes them),
-so an accepted transfer waits `created`, holding its money, until then. The funds check
+so an accepted transfer waits `created`, holding its money, until then (done: P4h1, P4h2). The funds check
 runs first (`funding.plan`) so a shortfall writes nothing.
 
 Refusals, all stored failed (201, Failure event, `description` states why; the client's
@@ -1080,13 +1080,50 @@ hold, stores the action `failed` with `failure_reason`, sends a Failure event an
 the command with outcome `failed`. A technical error rolls the savepoint back (money,
 hold and action untouched) and records `failedTechnical` with the usual backoff. No
 cancellation, no completion event (none exists). A transfer with a fee is not picked up:
-it stays `created` and queued, holding its money, until P4h2. Sender number/product
+it stayed `created` and queued, holding its money, until P4h2 ([below](#p4h2-transfer-fee-posting-2026-10-23)). Sender number/product
 ownership is not re-checked at completion (acceptance checked it; neither can move away
 while the product lives, and the money, not the number, is what moves).
 
-P4h2 (migration `0047`): nullable `applied_customer_billing_rate.product_id`, new
-`charge_type` `oneTime`, a unique nullable `balance_action_id` foreign key, a one-day
-half-open period, checks scoped by charge type, TMF678 omitting `product` when null,
-internal mappers that treat non-recurring as refund fixed, and a bill presentation line
-without a product. It will then post the fee charge and the settled `offCycle` bill in
-the same completion. Tests: `tests/test_transfer_completion.py`.
+## P4h2: transfer fee posting (2026-10-23)
+
+Migration `0047` (0045 untouched). TMF678 makes `product` optional on an
+AppliedCustomerBillingRate and `appliedBillingRateType` a free string, so a fee needs no
+product: `charge_type` gains `oneTime`; `product_id` and `product_offering_id` become
+nullable, null exactly for `oneTime`; a unique nullable `balance_action_id` foreign key is
+the fee's identity; `abr_fee_scope` and `abr_fee_amount` scope the rules by type (a fee is
+positive, over a one-day half-open period, `refunds_rate_id` null). Recurring and refund
+rates still require both references; `abr_recurring_amount`, `abr_one_per_start` and
+`abr_grant_identity` stay correct because NULLs are distinct. The enum value is compared as
+text in the checks (a new value cannot be used where it is added). Downgrade refuses while
+a fee exists. Data-model rules: [data-model.md](data-model.md).
+
+`app/worker/prepaid.py` now completes every due transfer. Fee posting is
+`app/billing/transfer_fee.py` `post_fee`, the billing-owner path (like the P3g credit):
+the transfer command's retained run, one `oneTime` ABR and one `offCycle` bill dated and
+covering the posting day, issued then settled from exactly the sources named, the
+TMF678 `Create` event, and the run completed, all inside the completion savepoint (one
+transaction with the locks of P4h1; any error rolls the fee back with the money and the
+retry posts it once). The fee has no rate: `transferCost` is one tax-inclusive Money and
+belongs to no price, so it is posted as is (net = transferCost, no tax lines, tax 0)
+instead of being split with an invented rate.
+
+Who pays. Originator: the hold (principal plus fee) is released, then its sources are
+walked in id order; the first `amount` becomes `funding_consumption` and what remains of
+them is allocated to the fee bill (a source straddling the boundary gives a consumption
+and an allocation). Receiver: the received `transfer` source (just inserted) is allocated
+the fee, so the receiver nets principal minus fee; fee <= principal is already refused at
+acceptance (422) and by 0045's check. The fee ABR and bill belong to the payer's account,
+the run to the sender's command. Revalidation compares the hold to principal plus an
+originator's fee.
+
+Surfaces. TMF678 `appliedCustomerBillingRate` maps `oneTime` to `appliedBillingCharge`
+and omits `product` when null (the response is checked against the vendored schema);
+the offering name of a fee is `Transfer fee` everywhere (`billing.FEE_NAME`: bill document
+line, ledger note, TMF678 `name`). Internal API: a `oneTime` rate is `kind: charge` with
+`product` and `productOffering` null (`spec/internal`, nullable); the bill, charges and
+ledger queries left-join the offering so the fee is never dropped and `balanceAfter`
+keeps matching the balance; a fee covers its one day (`billableDays` = `periodDays` = 1,
+not prorated). No mapper treats non-recurring as refund any more. The UI shows
+`Transfer fee` for a charge without an offering. The daily run never reads a prepaid
+account's ABRs (P3a), so a fee cannot disturb it. Tests:
+`tests/test_transfer_completion.py`.

@@ -148,7 +148,7 @@ def snapshot_bill(conn, bill_id, *, now):
         document["charges"] = [
             {
                 "id": str(a["id"]),
-                "name": a["offering_name"],
+                "name": a["offering_name"] or billing.FEE_NAME,
                 "amount": {"unit": a["currency"], "value": a["amount"]},
                 "taxIncludedAmount": {"unit": a["currency"], "value": billing.abr_total(a)},
                 "period": {"start": a["period"].lower, "end": a["period"].upper},

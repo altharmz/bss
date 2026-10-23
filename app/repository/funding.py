@@ -174,7 +174,7 @@ _HELD_SOURCES = (
 )
 
 
-def _allocate(conn, account_id, currency, bill_id, payment_id, credit_id, source_id, amount, at):
+def allocate(conn, account_id, currency, bill_id, payment_id, credit_id, source_id, amount, at):
     """Allocate exactly from a held source; names funding_source_id only when set (0045)."""
     column, source = (
         ("funding_source_id", source_id)
@@ -258,7 +258,7 @@ def convert_for_command(
         for source_id, payment_id, credit_id, source_amount, funding_id in conn.execute(
             _HELD_SOURCES, (hold_id,)
         ).fetchall():
-            allocation_id = _allocate(
+            allocation_id = allocate(
                 conn,
                 account_id,
                 account.currency,
@@ -379,7 +379,7 @@ def convert_bills_for_command(
             while remaining:
                 source_id, payment_id, credit_id, _, funding_id = sources[source_index]
                 take = min(remaining, source_left)
-                allocation_id = _allocate(
+                allocation_id = allocate(
                     conn,
                     account_id,
                     account.currency,

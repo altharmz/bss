@@ -59,6 +59,15 @@ function detail(over: Record<string, unknown> = {}) {
         product: { id: 'p1', href: '/p1' },
         productOffering: { id: 'o1', name: 'Mobile L' },
       },
+      {
+        id: 'r2',
+        href: '/r2',
+        kind: 'charge',
+        period: { start: '2026-09-02', end: '2026-09-03' },
+        amount: usd(1),
+        product: null, // a transfer fee has no product or offering
+        productOffering: null,
+      },
     ],
     sources: [
       {
@@ -202,6 +211,7 @@ describe('bills on the subscriber card', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Bill BL-B2000002' });
     expectUi('ui.subscriber.billDetail');
     expect(within(dialog).getByText('Mobile L')).toBeTruthy();
+    expect(within(dialog).getByText('Transfer fee')).toBeTruthy();
     expect(within(dialog).getByText('Payment · bankTransfer')).toBeTruthy();
     expect(within(dialog).getByText('automatic · 2026-09-05 12:00')).toBeTruthy(); // MSK
     expect(within(dialog).getByText('issued as new')).toBeTruthy();

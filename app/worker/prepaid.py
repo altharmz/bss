@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 
-from app.billing import entitlement
+from app.billing import entitlement, transfer_fee
 from app.billing.funding import InsufficientFunds
 from app.billing.prepaid import post_interval
 from app.billing.termination import post_termination
@@ -134,8 +134,8 @@ def process_commands(
     Funding shortfalls retain a needs-top-up reason and remain pending. They are
     attempted again after a later credit (a payment or a released hold) or on a
     later business date, never as technical failures. A renewal of an ended product
-    is retired at once. Fee-free transfers complete in their own pass afterwards
-    (`process_transfers`); a transfer with a fee waits for its fee posting (P4h2).
+    is retired at once. Transfers complete in their own pass afterwards
+    (`process_transfers`).
     """
     ensure_ownership(conn)
     now = clock.now()
@@ -216,7 +216,7 @@ _DUE_TRANSFERS = (
     " a.receiver_billing_account_id AS receiver FROM prepaid_command c"
     " JOIN balance_action a ON a.command_id = c.id"
     " WHERE c.kind = 'transfer' AND c.state <> 'completed' AND a.status = 'created'"
-    " AND a.transfer_cost = 0 AND c.due_date <= %(today)s"
+    " AND c.due_date <= %(today)s"
     " AND (c.next_retry_at IS NULL OR c.next_retry_at <= %(now)s) ORDER BY c.created_at, c.id"
 )
 
@@ -229,11 +229,10 @@ def process_transfers(
     checkpoint: Checkpoint | None = None,
     heartbeat: Heartbeat | None = None,
 ) -> list[UUID]:
-    """Complete each due fee-free transfer in one transaction of its own.
+    """Complete each due transfer, fee included, in one transaction of its own.
 
     Lock order is the API's: command identity, then the sender's and the receiver's
-    accounts in id order, so opposite transfers (and the API) cannot deadlock. A fee
-    transfer is left queued until its fee posting exists.
+    accounts in id order, so opposite transfers (and the API) cannot deadlock.
     """
     ensure_ownership(conn)
     now = clock.now()
@@ -254,7 +253,7 @@ def process_transfers(
                 ):
                     continue
                 with conn.transaction():
-                    _complete_transfer(conn, current, row["action_id"], now)
+                    _complete_transfer(conn, current, row["action_id"], now, tz)
         except Exception as error:
             log.exception("transfer command %s failed", row["id"])
             with conn.transaction():
@@ -289,12 +288,15 @@ def _revalidation(conn, action, hold) -> str | None:
         return "an account is no longer prepaid"
     if sender["currency"] != receiver["currency"]:
         return "currency: the accounts' currencies differ"
-    if hold is None or hold["released_at"] is not None or hold["amount"] != action["amount"]:
+    held = action["amount"] + (
+        action["transfer_cost"] if action["cost_owner"] == "originator" else Decimal(0)
+    )
+    if hold is None or hold["released_at"] is not None or hold["amount"] != held:
         return "the transfer's hold is no longer outstanding"
     return None
 
 
-def _complete_transfer(conn, cmd, action_id, now) -> None:
+def _complete_transfer(conn, cmd, action_id, now, tz) -> None:
     from app.api.transfer import API, RESOURCE, transfer_body
 
     balance_actions.release_expired(conn, cmd["billing_account_id"], now)
@@ -317,29 +319,52 @@ def _complete_transfer(conn, cmd, action_id, now) -> None:
         " WHERE hold_id = %s ORDER BY id",
         (action["hold_id"],),
     ).fetchall()
-    if sum((s[3] for s in sources), Decimal(0)) != action["amount"]:
-        raise ValueError("the transfer's hold does not cover its principal")
+    fee, receiver_pays = action["transfer_cost"], action["cost_owner"] == "receiver"
+    held = action["amount"] + (Decimal(0) if receiver_pays else fee)
+    if sum((s[3] for s in sources), Decimal(0)) != held:
+        raise ValueError("the transfer's hold does not cover its principal and fee")
     conn.execute("SET CONSTRAINTS ALL DEFERRED")
     funding.release(conn, sender, action["hold_id"], released_at=now, command_id=cmd["id"])
+    # The principal leaves the hold's sources first; whatever is left of them pays an
+    # originator's fee (a source straddling the boundary is split between the two).
+    principal, fee_parts = action["amount"], []
     for payment_id, credit_id, source_id, amount in sources:
-        conn.execute(
-            "INSERT INTO funding_consumption (billing_account_id, action_id, payment_id,"
-            " credit_bill_id, funding_source_id, amount, consumed_at)"
-            " VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (sender, action["id"], payment_id, credit_id, source_id, amount, now),
-        )
-    conn.execute(
+        take = min(principal, amount)
+        principal -= take
+        if take:
+            conn.execute(
+                "INSERT INTO funding_consumption (billing_account_id, action_id, payment_id,"
+                " credit_bill_id, funding_source_id, amount, consumed_at)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (sender, action["id"], payment_id, credit_id, source_id, take, now),
+            )
+        if amount > take:
+            fee_parts.append((payment_id, credit_id, source_id, amount - take))
+    received = conn.execute(
         "INSERT INTO funding_source (kind, billing_account_id, currency, action_id, amount,"
-        " available_at) VALUES ('transfer', %s, %s, %s, %s, %s)",
+        " available_at) VALUES ('transfer', %s, %s, %s, %s, %s) RETURNING id",
         (action["receiver_billing_account_id"], action["receiver_currency"], action["id"],
          action["amount"], now),
-    )  # fmt: skip
+    ).fetchone()[0]  # fmt: skip
     balance_actions.complete_transfer(conn, action["id"], now=now)
+    result = {"outcome": "completed", "action_id": str(action["id"])}
+    if fee > 0:
+        payer = action["receiver_billing_account_id"] if receiver_pays else sender
+        result |= transfer_fee.post_fee(
+            conn,
+            command_id=cmd["id"],
+            action_id=action["id"],
+            payer_id=payer,
+            currency=action["currency"],
+            fee=fee,
+            parts=[(None, None, received, fee)] if receiver_pays else fee_parts,
+            now=now,
+            today=now.astimezone(tz).date(),
+        )
     conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
     conn.execute("SET CONSTRAINTS ALL DEFERRED")
     funding.load(conn, sender)
     funding.load(conn, action["receiver_billing_account_id"])
-    result = {"outcome": "completed", "action_id": str(action["id"])}
     commands.complete(conn, cmd["id"], result, now=now)
 
 

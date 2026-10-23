@@ -12,6 +12,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import psycopg
+from psycopg import sql
 from psycopg.types.json import Jsonb
 from psycopg.types.range import Range
 
@@ -437,10 +438,14 @@ def retarget_blocked(
     )
 
 
+# The name a oneTime rate (a transfer fee) bills under: it has no product or offering.
+FEE_NAME = "Transfer fee"
+
+
 def insert_abr(
     conn: psycopg.Connection,
     *,
-    product_id: UUID,
+    product_id: UUID | None,
     billing_account_id: UUID,
     charge_type: str,
     amount: Decimal,
@@ -452,48 +457,39 @@ def insert_abr(
     customer_bill_id: UUID | None = None,
     taxes: tuple[AppliedTax, ...] = (),
     product_offering_id: UUID | None = None,
+    balance_action_id: UUID | None = None,
 ) -> Row:
     """Insert an applied customer billing rate; `applied_at` (TMF678 date) is the injected
     clock of the run's attempt. Overlaps are rejected by the database (EXCLUDE
     constraint) - note that ON CONFLICT with a target cannot catch those. Tax lines are
     written only when there are some (tests insert ABRs into schemas before 0025), the
     offering only when given (else, from 0027, a trigger takes the product's on the
-    period's first day)."""
-    values = (
-        product_id,
-        billing_account_id,
-        charge_type,
-        money(amount),
-        currency,
-        period,
-        billing_run_id,
-        applied_at,
-        refunds_rate_id,
-        customer_bill_id,
+    period's first day), the balance action only when given (a oneTime transfer fee, from
+    0047, which has no product)."""
+    columns = {
+        "product_id": product_id,
+        "billing_account_id": billing_account_id,
+        "charge_type": charge_type,
+        "amount": money(amount),
+        "currency": currency,
+        "period": period,
+        "billing_run_id": billing_run_id,
+        "applied_at": applied_at,
+        "refunds_rate_id": refunds_rate_id,
+        "customer_bill_id": customer_bill_id,
+    }
+    if product_offering_id is not None:
+        columns["product_offering_id"] = product_offering_id
+    if balance_action_id is not None:
+        columns["balance_action_id"] = balance_action_id
+    row = returning(
+        conn,
+        sql.SQL("INSERT INTO applied_customer_billing_rate ({}) VALUES ({}) RETURNING *").format(
+            sql.SQL(", ").join(map(sql.Identifier, columns)),
+            sql.SQL(", ").join([sql.Placeholder()] * len(columns)),
+        ),
+        tuple(columns.values()),
     )
-    if product_offering_id is None:
-        row = returning(
-            conn,
-            """
-            INSERT INTO applied_customer_billing_rate
-                (product_id, billing_account_id, charge_type, amount, currency, period,
-                 billing_run_id, applied_at, refunds_rate_id, customer_bill_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
-            """,
-            values,
-        )
-    else:
-        row = returning(
-            conn,
-            """
-            INSERT INTO applied_customer_billing_rate
-                (product_id, billing_account_id, charge_type, amount, currency, period,
-                 billing_run_id, applied_at, refunds_rate_id, customer_bill_id,
-                 product_offering_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *
-            """,
-            (*values, product_offering_id),
-        )
     if not taxes:
         return row
     return returning(
@@ -1256,7 +1252,7 @@ def bill_charges(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
         """
         SELECT a.*, o.id AS offering_id, o.name AS offering_name
         FROM applied_customer_billing_rate a
-        JOIN product_offering o ON o.id = a.product_offering_id
+        LEFT JOIN product_offering o ON o.id = a.product_offering_id
         WHERE a.customer_bill_id = %s
         ORDER BY lower(a.period), a.charge_type, a.id
         """,
@@ -1353,7 +1349,7 @@ def page_account_charges(
         FROM applied_customer_billing_rate a
         LEFT JOIN applied_customer_billing_rate c ON c.id = a.refunds_rate_id
         JOIN billing_run r ON r.id = a.billing_run_id
-        JOIN product_offering o ON o.id = a.product_offering_id
+        LEFT JOIN product_offering o ON o.id = a.product_offering_id
         WHERE a.billing_account_id = %s
         ORDER BY r.run_date DESC, lower(a.period) DESC, a.charge_type, a.id DESC
         OFFSET %s LIMIT %s
@@ -1386,14 +1382,14 @@ def page_account_transactions(
         conn,
         """
         WITH ledger AS (
-            SELECT a.id, CASE a.charge_type WHEN 'recurring' THEN 'charge' ELSE 'refund' END
+            SELECT a.id, CASE a.charge_type WHEN 'refund' THEN 'refund' ELSE 'charge' END
                        AS kind,
                    -(a.amount + a.tax_amount) AS amount, r.run_date AS day, 0 AS rank,
                    a.applied_at AS at,
-                   o.name AS note, a.period
+                   coalesce(o.name, %(fee)s) AS note, a.period
             FROM applied_customer_billing_rate a
             JOIN billing_run r ON r.id = a.billing_run_id
-            JOIN product_offering o ON o.id = a.product_offering_id
+            LEFT JOIN product_offering o ON o.id = a.product_offering_id
             WHERE a.billing_account_id = %(account)s
             UNION ALL
             SELECT id, 'payment', amount, (received_at AT TIME ZONE %(tz)s)::date, 1,
@@ -1415,7 +1411,7 @@ def page_account_transactions(
         ORDER BY day DESC, rank DESC, at DESC, (kind = 'payout') DESC, id DESC
         OFFSET %(offset)s LIMIT %(limit)s
         """,
-        {"account": account_id, "tz": tz, "offset": offset, "limit": limit},
+        {"account": account_id, "tz": tz, "fee": FEE_NAME, "offset": offset, "limit": limit},
     )
     total = fetch_one(
         conn,

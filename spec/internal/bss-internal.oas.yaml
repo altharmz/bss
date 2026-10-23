@@ -689,8 +689,8 @@ components:
               kind: {type: string, enum: [charge, refund]}
               period: {$ref: '#/components/schemas/DateRange'}
               amount: {$ref: '#/components/schemas/Money'}
-              product: {$ref: '#/components/schemas/Link'}
-              productOffering: {$ref: '#/components/schemas/Named'}
+              product: {$ref: '#/components/schemas/NullableLink'}
+              productOffering: {$ref: '#/components/schemas/NullableNamed'}
         sources:
           description: What paid the bill, in the order it was applied.
           type: array
@@ -824,8 +824,8 @@ components:
         amount:
           description: With its taxes (the ABR's taxIncludedAmount) - a refund is negative.
           allOf: [{$ref: '#/components/schemas/Money'}]
-        product: {$ref: '#/components/schemas/Link'}
-        productOffering: {$ref: '#/components/schemas/Named'}
+        product: {$ref: '#/components/schemas/NullableLink'}  # null: a transfer fee
+        productOffering: {$ref: '#/components/schemas/NullableNamed'}  # null: a transfer fee
         bill: {$ref: '#/components/schemas/NullableLink'}
     Transaction:
       type: object

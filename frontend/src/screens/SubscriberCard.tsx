@@ -536,7 +536,7 @@ function History({ account, version }: { account: Account; version: number }) {
                 <span className="num">
                   {c.period.start} – {lastDay(c.period.end)}
                 </span>
-                <div className="bss-secondary">{c.productOffering.name}</div>
+                <div className="bss-secondary">{c.productOffering?.name ?? 'Transfer fee'}</div>
               </div>
             ),
             days: c.prorated ? (

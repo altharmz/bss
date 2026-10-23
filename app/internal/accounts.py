@@ -301,6 +301,8 @@ def charges(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
         rows, total = billing.page_account_charges(conn, row["id"], offset=offset, limit=limit)
         periods = {}
         for a in rows:
+            if a["product_id"] is None:
+                continue  # a transfer fee covers its one day: no cycle to prorate against
             product = products.get_product(conn, a["product_id"])
             assert product is not None
             periods[a["id"]] = billing.product_period(
@@ -312,20 +314,24 @@ def charges(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
     items = []
     for a in rows:
         covered = DateRange(a["period"].lower, a["period"].upper)
-        cycle = periods[a["id"]]
+        cycle = periods.get(a["id"], covered)
         items.append(
             {
                 "id": str(a["id"]),
                 "href": f"{bill.BASE}/appliedCustomerBillingRate/{a['id']}",
-                "kind": "charge" if a["charge_type"] == "recurring" else "refund",
+                "kind": "refund" if a["charge_type"] == "refund" else "charge",
                 "runDate": a["run_date"],
                 "period": _range(covered),
                 "billableDays": covered.days,
                 "periodDays": cycle.days,
                 "prorated": covered.days < cycle.days,
                 "amount": money(billing.abr_total(a), a["currency"]),
-                "product": {"id": str(a["product_id"]), "href": product_href(a["product_id"])},
-                "productOffering": {"id": str(a["offering_id"]), "name": a["offering_name"]},
+                "product": None
+                if a["product_id"] is None
+                else {"id": str(a["product_id"]), "href": product_href(a["product_id"])},
+                "productOffering": None
+                if a["offering_id"] is None
+                else {"id": str(a["offering_id"]), "name": a["offering_name"]},
                 "bill": None
                 if a["customer_bill_id"] is None
                 else {

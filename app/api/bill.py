@@ -1,8 +1,9 @@
 """TMF678 Customer Bill Management v5: customerBill and appliedCustomerBillingRate.
 
 Only the billing run creates bills and ABRs (stage 3/4), so both lists are empty until
-then. `charge_type` maps to the spec's appliedBillingRateType: recurring ->
-appliedBillingCharge, refund -> appliedBillingCredit.
+then. `charge_type` maps to the spec's appliedBillingRateType: recurring and oneTime (a
+transfer fee, which has no product, so `product` is omitted) -> appliedBillingCharge,
+refund -> appliedBillingCredit.
 
 A bill's state moves with its settlement (docs/archive/bill-lifecycle-design.md, section 6):
 the run issues it (new -> validated -> sent), allocations make it partiallyPaid or
@@ -61,7 +62,11 @@ router = APIRouter(prefix=BASE)
 # TMF676 lives in app/api/payment.py, which imports this module for its paymentItem.
 PAYMENT_BASE = "/tmf-api/payment/v4"
 
-RATE_TYPE = {"recurring": "appliedBillingCharge", "refund": "appliedBillingCredit"}
+RATE_TYPE = {
+    "recurring": "appliedBillingCharge",
+    "oneTime": "appliedBillingCharge",
+    "refund": "appliedBillingCredit",
+}
 
 BILL_ATTRIBUTES = (
     "billDate",
@@ -204,7 +209,11 @@ def _document_body(row: Row) -> dict[str, Any]:
 
 
 def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
-    offering = catalog.get_product_offering(conn, row["product_offering_id"])
+    offering = (
+        catalog.get_product_offering(conn, row["product_offering_id"])
+        if row["product_offering_id"]
+        else {"name": billing.FEE_NAME}  # a transfer fee has no offering
+    )
     assert offering is not None  # foreign key
     bill_id = row["customer_bill_id"]
     period = row["period"]
@@ -237,7 +246,9 @@ def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
             "billingAccount": _account_ref(conn, row["billing_account_id"]),
             "product": ref(
                 "Product", product_href(row["product_id"]), row["product_id"], offering["name"]
-            ),
+            )
+            if row["product_id"]
+            else None,
             "@type": "AppliedCustomerBillingRate",
         }
     )
