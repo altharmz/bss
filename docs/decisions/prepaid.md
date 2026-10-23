@@ -44,6 +44,46 @@ forever. The header is optional and wired to `POST /productOrder` (any account m
 the balance-action POSTs reuse the helper in P4d-P4g. Downgrade refuses retained keys.
 Replays emit no events and post nothing; the internal command identity still guards posting.
 
+## P4d: top-ups (2026-10-23)
+
+`topupBalance` has all five operations (`app/api/topup.py`, `app/repository/balance_actions.py`),
+no migration. POST locks the bucket's account (as a payment does), records the payment
+through `payment.post_payment` (insert, settle, TMF676 Create) and then the completed
+`balance_action` that links it, so a top-up and a direct payment share one money path.
+`received_at` is the injected clock's, which is the credit signal the worker already scans
+(a done payment later than the shortfall), so a top-up resumes a funding-suspended renewal
+on the next tick with no worker change.
+
+A direct done payment on a prepaid account that has a bucket records exactly one completed
+top-up (request synthesized, description naming the payment) and sends TopupBalanceCreate;
+a prepaid account without a bucket (test fixtures until P5a) records none. `post_payment`
+takes `record_topup=False` from the top-up API itself, which makes its own action: no
+loop. Both POSTs take an Idempotency-Key (`idempotency.header`/`replayed` were added next to
+the P4b helpers); DELETE of a failed top-up tombstones the key.
+
+Refusals. A reference that cannot be stored or contradicts another is a 4xx with nothing
+stored: unknown bucket/product/number, a `partyAccount` that does not own the bucket, units
+other than the bucket's currency, non-monetary usage, automatic/voucher fields, amounts
+that are not positive exact cents. A valid reference that is not eligible is stored `failed`
+with 201 and a Failure event: a Closed account, a product that is not live on the account,
+a number it does not hold. Suspended accounts may be topped up. TopupBalance has no field
+for the refusal beyond `reason`, so `reason` is the client's when it sent one, else
+`failure_reason`; the stored `reason` column is never overwritten.
+
+Cancellation (PATCH `status: cancelled`, only completed -> cancelled) is refused with 409
+unless the payment has no bill allocation, payout, outstanding hold source or consumption.
+It appends `balance_action_reversal` (amount -X) and a `funding_consumption` of the payment
+(`reversal_action_id` = the action) and flips the status, then runs the deferred 0045
+ledger check immediately (a violation is a 409, never a commit-time 500). The payment row
+is never touched and no refund exists. Repeating `cancelled` only edits descriptions. Other
+PATCHes may change `reason`/`description`; any other attribute must equal the stored value
+(409). Create and Cancel events carry the same body a GET returns.
+
+Gap ledger: automatic top-up, voucher and `relatedParty` are recorded as accepted
+deviations; the top-up endpoints leave `PENDING`. MCP: five tools (`*_topup_balance`),
+over HTTP without the idempotency header. Known and left alone: the P4b request hash keeps
+`10` and `10.0` apart (an int is not normalized), so only a byte-for-byte retry replays.
+
 ## P4a: balance action and source schema (2026-10-23)
 
 Migration `0045` adds `balance_action`: kind (topup/reservation/adjustment/transfer),

@@ -52,7 +52,11 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
     "/tmf-api/payment/v4": ("TMF676", {"payment": "Payment", "refund": "Refund"}),
     "/tmf-api/prepayBalanceManagement/v4": (
         "TMF654",
-        {"bucket": "Bucket", "accumulatedBalance": "AccumulatedBalance"},
+        {
+            "bucket": "Bucket",
+            "accumulatedBalance": "AccumulatedBalance",
+            "topupBalance": "TopupBalance",
+        },
     ),
     "/tmf-api/productInventory/v5": ("TMF637", {"product": "Product"}),
     "/tmf-api/productOrderingManagement/v5": (

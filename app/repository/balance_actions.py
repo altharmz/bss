@@ -1,0 +1,177 @@
+"""TMF654 balance actions: the top-up lifecycle over `balance_action` (migration 0045).
+
+Every writer here runs under the prepaid account's row lock (`billing.load_account`). The
+combined-bounds check of 0045 is deferred, so a caller that wants a 409 instead of a
+commit-time failure calls `check_bounds` after writing.
+"""
+
+from datetime import datetime
+from decimal import Decimal
+from typing import Any
+from uuid import UUID
+
+import psycopg
+from psycopg import sql
+
+from app.repository._sql import Row, fetch_all, fetch_one, jsonb, returning
+
+
+def bucket(conn: psycopg.Connection, bucket_id: UUID) -> Row | None:
+    """The bucket with its account's state; the account is not locked."""
+    return fetch_one(
+        conn,
+        "SELECT b.id, b.billing_account_id, b.currency, a.state::text AS account_state,"
+        " a.name AS account_name FROM prepaid_bucket b"
+        " JOIN billing_account a ON a.id = b.billing_account_id WHERE b.id = %s",
+        (bucket_id,),
+    )
+
+
+def account_bucket(conn: psycopg.Connection, account_id: UUID) -> Row | None:
+    return fetch_one(
+        conn,
+        "SELECT id, billing_account_id, currency FROM prepaid_bucket WHERE billing_account_id = %s",
+        (account_id,),
+    )
+
+
+def insert_topup(
+    conn: psycopg.Connection,
+    bucket: Row,
+    *,
+    request: dict[str, Any],
+    amount: Decimal,
+    operator: str,
+    now: datetime,
+    reason: str | None,
+    description: str | None,
+    payment_id: UUID | None = None,
+    failure: str | None = None,
+) -> Row:
+    """A completed top-up recording `payment_id`, or a failed one (`failure`, no payment)."""
+    return returning(
+        conn,
+        "INSERT INTO balance_action (kind, status, billing_account_id, currency, bucket_id,"
+        " request, amount, reason, description, failure_reason, operator, requested_at,"
+        " confirmed_at, payment_id)"
+        " VALUES ('topup', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+        (
+            "failed" if failure else "completed",
+            bucket["billing_account_id"],
+            bucket["currency"],
+            bucket["id"],
+            jsonb(request),
+            amount,
+            reason,
+            description,
+            failure,
+            operator,
+            now,
+            now,
+            payment_id,
+        ),
+    )
+
+
+def get(conn: psycopg.Connection, action_id: UUID, *, lock: bool = False) -> Row | None:
+    query = "SELECT * FROM balance_action WHERE id = %s AND kind = 'topup'"
+    return fetch_one(conn, query + (" FOR UPDATE" if lock else ""), (action_id,))
+
+
+def page(
+    conn: psycopg.Connection, where: dict[str, Any], offset: int, limit: int
+) -> tuple[list[Row], int]:
+    """Top-ups matching every `column = value` of `where`, oldest first."""
+    conditions = [sql.SQL("kind = 'topup'")] + [
+        sql.SQL("{}::text = %s").format(sql.Identifier(column)) for column in where
+    ]
+    clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
+    params = [str(value) for value in where.values()]
+    total = fetch_one(conn, sql.SQL("SELECT count(*) AS n FROM balance_action") + clause, params)
+    assert total is not None
+    rows = fetch_all(
+        conn,
+        sql.SQL("SELECT * FROM balance_action")
+        + clause
+        + sql.SQL(" ORDER BY requested_at, id OFFSET %s LIMIT %s"),
+        [*params, offset, limit],
+    )
+    return rows, total["n"]
+
+
+def set_descriptive(conn: psycopg.Connection, action_id: UUID, changes: dict[str, Any]) -> Row:
+    """Edit `reason` and `description`, the only columns a PATCH may change besides status."""
+    if not changes:
+        row = get(conn, action_id)
+        assert row is not None
+        return row
+    assignments = sql.SQL(", ").join(
+        sql.SQL("{} = %s").format(sql.Identifier(column)) for column in changes
+    )
+    return returning(
+        conn,
+        sql.SQL("UPDATE balance_action SET {} WHERE id = %s RETURNING *").format(assignments),
+        [*changes.values(), action_id],
+    )
+
+
+def payment_in_use(conn: psycopg.Connection, payment_id: UUID) -> Decimal:
+    """What of a payment is allocated to bills, paid out, held or consumed."""
+    row = fetch_one(
+        conn,
+        "SELECT (SELECT coalesce(sum(amount), 0) FROM bill_allocation WHERE payment_id = %(p)s)"
+        " + (SELECT coalesce(sum(amount), 0) FROM refund_source WHERE payment_id = %(p)s)"
+        " + (SELECT coalesce(sum(s.amount), 0) FROM funding_hold_source s"
+        "    JOIN funding_hold h ON h.id = s.hold_id"
+        "    WHERE s.payment_id = %(p)s AND h.released_at IS NULL)"
+        " + (SELECT coalesce(sum(amount), 0) FROM funding_consumption WHERE payment_id = %(p)s)"
+        " AS used",
+        {"p": payment_id},
+    )
+    assert row is not None
+    return row["used"]
+
+
+def cancel_topup(conn: psycopg.Connection, action: Row, *, operator: str, now: datetime) -> Row:
+    """Append the compensating entries of a completed top-up and mark it cancelled. The
+    payment itself is never touched; the caller has checked it is entirely unused."""
+    conn.execute(
+        "INSERT INTO balance_action_reversal"
+        " (action_id, billing_account_id, currency, amount, operator, reversed_at)"
+        " VALUES (%s, %s, %s, %s, %s, %s)",
+        (
+            action["id"],
+            action["billing_account_id"],
+            action["currency"],
+            -action["amount"],
+            operator,
+            now,
+        ),
+    )
+    conn.execute(
+        "INSERT INTO funding_consumption (billing_account_id, action_id, reversal_action_id,"
+        " payment_id, amount, consumed_at) VALUES (%s, %s, %s, %s, %s, %s)",
+        (
+            action["billing_account_id"],
+            action["id"],
+            action["id"],
+            action["payment_id"],
+            action["amount"],
+            now,
+        ),
+    )
+    return returning(
+        conn,
+        "UPDATE balance_action SET status = 'cancelled', cancelled_at = %s WHERE id = %s"
+        " RETURNING *",
+        (now, action["id"]),
+    )
+
+
+def delete_failed(conn: psycopg.Connection, action_id: UUID) -> None:
+    conn.execute("DELETE FROM balance_action WHERE id = %s AND status = 'failed'", (action_id,))
+
+
+def check_bounds(conn: psycopg.Connection) -> None:
+    """Run the deferred ledger checks now (psycopg.errors.CheckViolation when broken)."""
+    conn.execute("SET CONSTRAINTS balance_ledger_bounds IMMEDIATE")

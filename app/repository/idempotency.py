@@ -14,9 +14,11 @@ from decimal import Decimal
 from typing import Any
 
 import psycopg
+from fastapi import Request
 
 from app.api import tmfjson
 from app.api.errors import bad_request, conflict
+from app.api.tmfjson import TmfJSONResponse
 from app.repository._sql import fetch_one, jsonb
 
 KEY = re.compile(r"[\x21-\x7e]{1,255}")
@@ -100,3 +102,17 @@ def tombstone(conn: psycopg.Connection, location: str, *, now: datetime) -> int:
         " AND tombstoned_at IS NULL",
         (now, location),
     ).rowcount
+
+
+def header(request: Request) -> str | None:
+    """The request's Idempotency-Key, checked; None when it sent none."""
+    key = request.headers.get("idempotency-key")
+    return None if key is None else check_key(key)
+
+
+def replayed(replay: Replay) -> TmfJSONResponse:
+    return TmfJSONResponse(
+        replay.response,
+        status_code=replay.status_code,
+        headers={"Location": replay.location} if replay.location else None,
+    )

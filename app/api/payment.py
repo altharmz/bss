@@ -12,6 +12,7 @@ response is every allocation from the payment, summed per bill - it grows when t
 payment's unused credit later pays bills issued after it.
 """
 
+import copy
 from decimal import Decimal
 from typing import Any
 
@@ -44,7 +45,7 @@ from app.api.tmfjson import TmfJSONResponse
 from app.billing import settlement
 from app.billing.adapter import settle_account
 from app.events import emit
-from app.repository import billing, parties, payments
+from app.repository import billing, idempotency, parties, payments
 from app.repository._sql import Row
 
 BASE = "/tmf-api/payment/v4"
@@ -283,18 +284,75 @@ def get_payment(payment_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
     return TmfJSONResponse(listing.select_fields(body, fields))
 
 
+def post_payment(
+    conn: psycopg.Connection,
+    account: Row,
+    data: PaymentCreate,
+    documents: dict[str, Any],
+    *,
+    now,
+    operator: str,
+    record_topup: bool = True,
+) -> tuple[Row, dict[str, Any]]:
+    """Record one received payment under the account's row lock, settle the account and
+    emit TMF676 Create. A prepaid account with a bucket also gets the completed top-up
+    that records this payment (`record_topup`; the top-up API makes its own), so
+    balanceActionHistory is complete whichever API took the money. The caller has checked
+    the account and currency and holds `account` FOR UPDATE.
+    """
+    # the billing account's row lock first, as bill_account and PATCH customerBill take it:
+    # a payment and a run (or two payments) never allocate the same credit
+    billing.load_account(conn, account["id"])
+    try:
+        row = payments.insert_payment(
+            conn,
+            billing_account_id=account["id"],
+            amount=data.total_amount.value,
+            tax_amount=data.tax,
+            currency=data.total_amount.unit,
+            received_at=now,
+            payment_method=data.payment_method.name or data.payment_method.at_type,
+            method_name=data.payment_method.name,
+            method_type=data.payment_method.at_type,
+            details=documents,
+        )
+    except pg_errors.ForeignKeyViolation:
+        # Backstop for the check by the caller: the composite FK (account, currency) is what
+        # actually guarantees one currency per account.
+        raise conflict("the payment's currency does not match the account's") from None
+    row = with_meta(conn, "payment", row, data)
+    _settle(conn, account["id"], row, data, now)
+    new = payment_body(conn, row)
+    emit.created(conn, "TMF676", "payment", new, at=now)
+    if record_topup and account["rating_type"] == "prepaid":
+        # imported here: app.api.topup imports this module
+        from app.api import topup
+
+        topup.record_payment(conn, row, new, operator=operator, now=now)
+    return row, new
+
+
 @router.post("/payment")
 def create_payment(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
+    body_sent = copy.deepcopy(body)  # the Idempotency-Key hash covers what the client sent
     check_type(body, "Payment")
     for name in ("status", "statusDate", "paymentDate"):
         if name in body:
             raise bad_request(f"{name} is read-only")
     documents, found = take_documents(body, DOCUMENTS, "Payment_Create")
     data, _ = parse_documented(PaymentCreate, body, (), "TMF676", "Payment_Create", found)
+    key = idempotency.header(request)
     with tx() as conn:
-        # FOR UPDATE, the lock load_account takes below: a concurrent delete of the account
-        # went first (422) or waits for this payment
+        if key is not None:
+            digest = idempotency.request_hash(list(request.query_params.multi_items()), body_sent)
+            replay = idempotency.begin(
+                conn, request.state.operator, "POST", request.url.path, key, digest
+            )
+            if replay is not None:
+                return idempotency.replayed(replay)
+        # FOR UPDATE, the lock load_account takes in post_payment: a concurrent delete of the
+        # account went first (422) or waits for this payment
         account = parties.get_billing_account(conn, data.account.id, "update")
         if account is None:
             raise unprocessable(f"account {data.account.id} does not exist")
@@ -303,29 +361,14 @@ def create_payment(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
                 f"totalAmount.unit {data.total_amount.unit} does not match the account's"
                 f" currency {account['currency']}"
             )
-        # the billing account's row lock first, as bill_account and PATCH customerBill
-        # take it: a payment and a run (or two payments) never allocate the same credit
-        billing.load_account(conn, account["id"])
         now = clock.now()
-        try:
-            row = payments.insert_payment(
-                conn,
-                billing_account_id=account["id"],
-                amount=data.total_amount.value,
-                tax_amount=data.tax,
-                currency=data.total_amount.unit,
-                received_at=now,
-                payment_method=data.payment_method.name or data.payment_method.at_type,
-                method_name=data.payment_method.name,
-                method_type=data.payment_method.at_type,
-                details=documents,
-            )
-        except pg_errors.ForeignKeyViolation:
-            # Backstop for the check above: the composite FK (account, currency) is what
-            # actually guarantees one currency per account.
-            raise conflict("the payment's currency does not match the account's") from None
-        row = with_meta(conn, "payment", row, data)
-        _settle(conn, account["id"], row, data, now)
-        new = payment_body(conn, row)
-        emit.created(conn, "TMF676", "payment", new, at=now)
-    return created(listing.select_fields(new, fields))
+        _, new = post_payment(
+            conn, account, data, documents, now=now, operator=request.state.operator
+        )
+        selected = listing.select_fields(new, fields)
+        if key is not None:
+            idempotency.store(
+                conn, request.state.operator, "POST", request.url.path, key, digest,
+                status_code=201, response=selected, location=new["href"], now=now,
+            )  # fmt: skip
+    return created(selected)

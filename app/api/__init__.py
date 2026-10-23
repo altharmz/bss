@@ -26,6 +26,7 @@ from app.api import (
     presentation,
     refunds,
     resource_inventory,
+    topup,
 )
 
 
@@ -48,6 +49,7 @@ def install(app: FastAPI) -> None:
         ordering,
         resource_inventory,
         balance,
+        topup,
     ):
         app.include_router(module.router)
     app.include_router(account.schema_router)

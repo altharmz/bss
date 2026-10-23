@@ -45,6 +45,7 @@ from app.api.payment import PaymentCreate
 from app.api.presentation import FormatCreate, FormatPatch, MediaCreate, MediaPatch
 from app.api.refunds import RefundCreate
 from app.api.resource_inventory import ResourceCreate, ResourcePatch
+from app.api.topup import TopupCreate, TopupPatch
 from app.internal.billing_runs import OUTCOMES, CatchUp
 from app.internal.catalog import PriceChange
 from app.internal.prepaid_commands import STATES
@@ -138,6 +139,24 @@ OPERATIONS: dict[str, Op] = {
     "get_accumulated_balance": Op(
         "One account's total prepaid balance over its buckets.", query=FIELDS
     ),
+    "list_topup_balances": Op(
+        "Top-ups: money received on a prepaid bucket (payments to a prepaid account appear here"
+        " too); filter by status, bucket.id or partyAccount.id.",
+        query=LIST,
+    ),
+    "get_topup_balance": Op("One top-up.", query=FIELDS),
+    "create_topup_balance": Op(
+        "Record money received on a prepaid bucket: creates its done TMF676 payment in the same"
+        " transaction. Monetary only, exact cents in the bucket currency; a refusal (closed"
+        " account, number not the account's) is stored failed with 201.",
+        body=TopupCreate,
+    ),
+    "patch_topup_balance": Op(
+        "status cancelled reverses a completed top-up whose money is unspent and unheld (409"
+        " otherwise); reason and description may change; the rest must repeat as stored.",
+        body=TopupPatch,
+    ),
+    "delete_topup_balance": Op("Delete a failed top-up; a completed or cancelled one is history."),
     # --- TMF620 product catalog ---
     "list_categories": Op("Categories and their offerings and child categories.", query=LIST),
     "get_category": Op("One category.", query=FIELDS),

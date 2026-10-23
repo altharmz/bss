@@ -4,7 +4,7 @@
 
 - Base path here: `/tmf-api/prepayBalanceManagement/v4`
 - Contract: [`spec/TMF654-PrepayBalance-v4.0.0.swagger.json`](../../spec/TMF654-PrepayBalance-v4.0.0.swagger.json) - Prepay Balance Management version 4.0.0; the spec's server URL is `/tmf-api/prepayBalanceManagement/v4`
-- Operations exposed: 6
+- Operations exposed: 11
 
 
 ## Operations
@@ -17,13 +17,18 @@
 | GET | `/tmf-api/prepayBalanceManagement/v4/bucket/{bucket_id}` | path: `bucket_id`; query: `fields` | - | 200 `Bucket` | [`app/api/balance.py`](../../app/api/balance.py) |
 | POST | `/tmf-api/prepayBalanceManagement/v4/hub` | query: `fields`; body: `application/json` | `EventSubscriptionInput` | 201 `EventSubscription` | [`app/api/hub.py`](../../app/api/hub.py) |
 | DELETE | `/tmf-api/prepayBalanceManagement/v4/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/hub.py`](../../app/api/hub.py) |
+| GET | `/tmf-api/prepayBalanceManagement/v4/topupBalance` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `bucket.id`, `id`, `partyAccount.id`, `status` | - | 200 `array of TopupBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
+| POST | `/tmf-api/prepayBalanceManagement/v4/topupBalance` | query: `fields`; body: `application/json` | `TopupBalance_Create` | 201 `TopupBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
+| DELETE | `/tmf-api/prepayBalanceManagement/v4/topupBalance/{topup_id}` | path: `topup_id` | - | 204 (no body) | [`app/api/balance.py`](../../app/api/balance.py) |
+| GET | `/tmf-api/prepayBalanceManagement/v4/topupBalance/{topup_id}` | path: `topup_id`; query: `fields` | - | 200 `TopupBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
+| PATCH | `/tmf-api/prepayBalanceManagement/v4/topupBalance/{topup_id}` | path: `topup_id`; query: `fields`; body: `application/merge-patch+json` | `TopupBalance_Update` | 200 `TopupBalance` | [`app/api/balance.py`](../../app/api/balance.py) |
 
 Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF654-PrepayBalance-v4.0.0.swagger.json`](../../spec/TMF654-PrepayBalance-v4.0.0.swagger.json). Every response in the test suite is validated against them by `tests/apiclient.py` (2xx: the resource schema; anything else: `Error`).
 
 
 ## Coverage of the spec
 
-- Resources of the spec that are **not implemented**: `/adjustBalance`, `/balanceActionHistory`, `/listener`, `/reserveBalance`, `/topupBalance`, `/transferBalance` (`/listener/*` is the client's side: hubs subscribe, this service sends).
+- Resources of the spec that are **not implemented**: `/adjustBalance`, `/balanceActionHistory`, `/listener`, `/reserveBalance`, `/transferBalance` (`/listener/*` is the client's side: hubs subscribe, this service sends).
 
 
 ## Behaviour and deviations
@@ -50,12 +55,39 @@ Schema names refer to `components/schemas` (or `definitions`) of [`spec/TMF654-P
   (bucket) and `id`, `partyAccount.id` (accumulatedBalance), with standard paging and
   `fields`.
 - POST/DELETE `/hub` subscribe to the twelve balance-action events (v4
-  EventSubscription: no href, no `@type`). The actions that emit them (top-up,
-  adjustment, reservation, transfer) and `balanceActionHistory` are not implemented yet;
-  their endpoints answer 404 (`tests/tmf-gaps.txt`).
+  EventSubscription: no href, no `@type`). Adjustment, reservation and transfer actions
+  and `balanceActionHistory` are not implemented yet; their endpoints answer 404
+  (`tests/tmf-gaps.txt`).
 
-Tests: `tests/test_api_balance.py`, `tests/test_api_hub.py`, `tests/test_mcp_tools.py`;
-the gap ledger locks the absent endpoints and the bucket's deviations.
+### topupBalance
+
+- POST records money received on a bucket: `amount` (`{amount, units}`, exact cents in the
+  bucket's currency), `usageType: monetary`, `bucket` and `partyAccount` (which must own the
+  bucket). It creates the TMF676 payment (`done`, settled like any payment) and the
+  completed top-up in one transaction and answers 201 with `status: completed`. Without
+  `paymentMethod` the payment is named `Unspecified recorded receipt`: a receipt asserted by
+  the operator, never implied to be collected money. `logicalResource[]`/`product[]` must be
+  the account's live numbers/products. `Idempotency-Key` replays the stored 201; a different
+  body is 409.
+- A business refusal (a closed account, a number or product that is not the account's) is
+  stored `failed`, answered 201, and sends `TopupBalanceFailureEvent`; no payment exists.
+  `reason` stays the client's; a refused top-up without one states why. Suspended accounts
+  may be topped up. Malformed or unknown references, a currency mismatch, `usageType` other
+  than `monetary`, `isAutoTopup: true`, `recurringPeriod`, `numberOfPeriods` and `voucher`
+  are 4xx and store nothing.
+- A payment POSTed straight to a prepaid account (with a bucket) records exactly one
+  completed top-up, so the top-up list is complete whichever API took the money. It does
+  not call the top-up API, and a replayed payment (same `Idempotency-Key`) records no second.
+- PATCH requires `status`. `cancelled` reverses a completed top-up only while its payment
+  is entirely unspent, unallocated and unheld (409 otherwise) by appending a compensating
+  entry; the payment stays `done` and no payout is invented. `reason` and `description` may
+  change; everything else may only be repeated (409 otherwise). A failed, cancelled or
+  final top-up cannot change status. `TopupBalanceCancelEvent` follows a cancellation.
+- DELETE removes only a failed top-up (409 otherwise) and retires its idempotency key.
+- Lists filter by `id`, `status`, `bucket.id` and `partyAccount.id`.
+
+Tests: `tests/test_api_balance.py`, `tests/test_api_topup.py`, `tests/test_api_hub.py`,
+`tests/test_mcp_tools.py`; the gap ledger locks the absent endpoints and the deviations.
 
 In these notes `::test_name` is a test in the test file named last before it. Hand-written: [`scripts/docs/api-notes/tmf654-prepay-balance.md`](../../scripts/docs/api-notes/tmf654-prepay-balance.md).
 

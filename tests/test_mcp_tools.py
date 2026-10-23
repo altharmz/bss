@@ -34,6 +34,7 @@ from tests.test_api_bill_settlement import account_with_bills, bills, pay
 from tests.test_billing_db import at, run_row
 from tests.timeline import iso, midnight
 
+BALANCE = "/tmf-api/prepayBalanceManagement/v4"
 SCOPE = Path("docs/progress/scope.yaml")
 
 
@@ -342,6 +343,24 @@ def world(api, db_conn) -> dict[str, Any]:
     ).json()
     prepaid_account = apidata.account(api, name="Prepaid")
     prepaid_bucket = factories.prepaid_bucket(db_conn, prepaid_account["id"], api.clock.now())
+    db_conn.commit()  # the API reads the bucket in its own transaction
+    topups = f"{BALANCE}/topupBalance"
+    topup_body = {
+        "usageType": "monetary",
+        "bucket": {"id": str(prepaid_bucket["id"])},
+        "partyAccount": {"id": prepaid_account["id"]},
+    }
+    topup = api.post(topups, {**topup_body, "amount": {"amount": 10, "units": "USD"}}).json()
+    # a number that is not the account's: refused, stored failed
+    refused = api.post(
+        topups,
+        {
+            **topup_body,
+            "amount": {"amount": 5, "units": "USD"},
+            "logicalResource": [{"id": number["id"]}],
+        },
+    ).json()
+    assert (topup.get("status"), refused.get("status")) == ("completed", "failed"), (topup, refused)
     command = commands.enqueue(
         db_conn,
         uuid4(),
@@ -355,6 +374,8 @@ def world(api, db_conn) -> dict[str, Any]:
     return {
         "command": command,
         "bucket": prepaid_bucket,
+        "topup": topup,
+        "refused_topup": refused,
         "number": number,
         "resource_hub": resource_hub,
         "hub": hub,
@@ -391,6 +412,7 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
     by_id = {
         "get_resource": {"resource_id": world["number"]["id"]},
         "get_bucket": {"bucket_id": str(world["bucket"]["id"])},
+        "get_topup_balance": {"topup_id": world["topup"]["id"]},
         "get_accumulated_balance": {"balance_id": str(world["bucket"]["accumulated_balance_id"])},
         "get_hub_resource": {"hub_id": world["resource_hub"]["id"]},
         "get_bill_format": {"format_id": world["format"]["id"]},
@@ -643,6 +665,23 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
             }
         },
     )
+    new_topup = call(
+        "create_topup_balance",
+        {
+            "body": {
+                "usageType": "monetary",
+                "amount": {"amount": "7.50", "units": "USD"},
+                "bucket": {"id": str(world["bucket"]["id"])},
+                "partyAccount": {"id": world["topup"]["partyAccount"]["id"]},
+            }
+        },
+    )
+    assert new_topup["status"] == "completed"
+    call(
+        "patch_topup_balance",
+        {"topup_id": new_topup["id"], "body": {"status": "cancelled", "reason": "Entered twice"}},
+    )
+    call("delete_topup_balance", {"topup_id": world["refused_topup"]["id"]}, expected=(204,))
     call("patch_bill", {"bill_id": world["bill"]["id"], "body": {"state": "onHold"}})
     call(
         "price_change",

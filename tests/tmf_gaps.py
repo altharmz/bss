@@ -64,7 +64,6 @@ SPECS = (
 PENDING = {
     "TMF654": frozenset(
         {
-            "topupBalance",
             "adjustBalance",
             "reserveBalance",
             "transferBalance",

@@ -16,10 +16,10 @@ One page per API, generated from `app.openapi()` (what the app really serves) an
 | [TMF678 Customer Bill Management](tmf678-customer-bill.md) | v5 | `/tmf-api/customerBillManagement/v5` | 12 | [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml) |
 | [Internal API (admin UI)](internal.md) | v1 | `/internal/v1` | 23 | [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) |
 | [TMF639 Resource Inventory](tmf639-resource-inventory.md) | v5 | `/tmf-api/resourceInventory/v5` | 8 | [`spec/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml`](../../spec/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml) |
-| [TMF654 Prepay Balance Management](tmf654-prepay-balance.md) | v4 | `/tmf-api/prepayBalanceManagement/v4` | 6 | [`spec/TMF654-PrepayBalance-v4.0.0.swagger.json`](../../spec/TMF654-PrepayBalance-v4.0.0.swagger.json) |
+| [TMF654 Prepay Balance Management](tmf654-prepay-balance.md) | v4 | `/tmf-api/prepayBalanceManagement/v4` | 11 | [`spec/TMF654-PrepayBalance-v4.0.0.swagger.json`](../../spec/TMF654-PrepayBalance-v4.0.0.swagger.json) |
 | [Service endpoints](service.md) | - | - | 3 | - |
 
-170 operations in total.
+175 operations in total.
 
 ## Conventions
 
