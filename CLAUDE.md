@@ -105,18 +105,20 @@ Unknown attributes are a 400; the contract is the vendored specs in `spec/`, nev
 billing run creates ABRs and bills. Node runs only in containers on the workstation; the
 UI's write requests are pinned on both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
-## Current state (2026-10-21)
+## Current state (2026-10-23)
 
 - **Deployed:** see `make deployed`. **Built:** prepaid foundations P1–P2c4b
   (`0034`–`0042`) retain source-pinned funding, command retries, funded intervals and
   atomic posting. P3a isolates daily prepaid billing. P3b adds effective entitlement
   and independent manual suspension (`0043`). P3c accepts immediate prepaid add
   orders with tax-inclusive holds and number claims, and completes their full
-  product/order tree atomically in the worker. P3d adds future-start intents and pre-grant cancellation. Public prepaid creation stays gated.
+  product/order tree atomically in the worker. P3d adds future-start intents and
+  pre-grant cancellation. P3e produces renewals at paid-through and resumes after a
+  credit (checkpoint 1). Public prepaid creation stays gated.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).
-- **Next:** prepaid slice P3e, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
+- **Next:** prepaid slice P3f, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
   (prepaid creation stays a 422 until P5a) - [scope](docs/prepaid-plan.md),
   [decision](docs/decisions/prepaid.md).
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21

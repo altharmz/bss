@@ -29,11 +29,12 @@ Status: `done` · `next` · `todo` · `split` (see the sub-rows)
 | P2c1–P2c3b4 | Command journal, command runs, funded intervals, atomic single- and multi-product posting, delayed starts, actual-date renewal recovery (`0038`–`0041`). |
 | P2c4a–P2c4b | Worker dispatch with technical retries; retained funding shortfalls (`0042`). |
 
-What exists: immediate prepaid add orders reserve funds and queue commands; the
+What exists: immediate and future prepaid add orders reserve funds and queue commands; the
 billing owner posts them exactly once and completes the full product/order tree.
-Entitlement follows funded coverage, independently of manual/account suspension;
-daily recurring billing excludes prepaid. What is missing: renewal
-producers, remaining lifecycle actions and public balance operations. Public prepaid
+The worker produces renewals at paid-through; a shortfall suspends the product and
+a later credit resumes it. Entitlement follows funded coverage, independently of
+manual/account suspension; daily recurring billing excludes prepaid. What is missing:
+remaining lifecycle actions and public balance operations. Public prepaid
 account creation remains gated until P5a.
 
 ## Remaining
@@ -46,9 +47,9 @@ account creation remains gated until P5a.
 | P3b | Entitlement and suspension causes | Migration for a persisted manual-suspension cause. One effective-state function (terminated > manual/account suspended > active inside a grant > pendingActive > funding-suspended) uses the injected clock. Internal product view adds `authorizedAt`, `paidThrough`, cause, `needs_topup`. The worker stores and emits a funding-suspended transition when it observes one; GET emits nothing. | done: Project prepaid entitlement and independent suspension causes |
 | P3c | Immediate prepaid start | TMF622 POST on a prepaid account either rejects `insufficientFunds` (no hold, claim or product) or atomically holds the tax-inclusive total, claims numbers, creates `pendingActive` products and queues one command, with the order `inProgress`. The worker's posting completes items, products and order with TMF622/637 events. Multi-item orders are all-or-nothing. | done: Accept and complete immediate prepaid purchase orders |
 | P3d | Future starts and pre-grant cancellation | A future order claims numbers with no hold; at the due date the command authorizes from that day's funds and price; a shortfall leaves it pending with a reason. `cancelProductOrder` before the first grant cancels the command and releases holds and claims; after a grant it returns 409. | done: Schedule prepaid purchases and cancel before first grant |
-| P3e | Renewal and resumption producer | Due renewals are produced in due-date, then product order, under the account lock. A shortfall makes the product funding-suspended at `paidThrough`. A later credit (payment now; top-up after P4d) resumes on the next tick, with a once-per-business-date rescan as the fallback. Manual suspension and Suspended/Closed accounts block renewal. | next |
-| **✓** | **Checkpoint 1**: purchase → renew → run out → top up → resume works end to end in tests. Re-estimate P3f–P7. | | |
-| P3f | Manual suspend/resume and account state | A suspend order keeps the paid interval. Resume reuses a live grant or queues authorization from today. Suspended accounts allow only cleanup orders. Closing an account with held money, unfinished commands or live products returns 409. | todo |
+| P3e | Renewal and resumption producer | Due renewals are produced in due-date, then product order, under the account lock. A shortfall makes the product funding-suspended at `paidThrough`. A later credit (payment now; top-up after P4d) resumes on the next tick, with a once-per-business-date rescan as the fallback. Manual suspension and Suspended/Closed accounts block renewal. | done: Produce prepaid renewals and resume after a credit |
+| **✓** | **Checkpoint 1**: purchase → renew → run out → top up → resume works end to end in tests. Re-estimate P3f–P7. | | done: `test_purchase_renew_run_out_top_up_resume` (payment as the credit until P4d) |
+| P3f | Manual suspend/resume and account state | A suspend order keeps the paid interval. Resume reuses a live grant or queues authorization from today. Suspended accounts allow only cleanup orders. Closing an account with held money, unfinished commands or live products returns 409. | next |
 | P3g | Termination credits | Termination at the requested business date credits each affected charge's unused dates with the original net/tax rounding, at most what is still uncredited. The billing owner writes the credit ABR, the `offCycle` credit document and the source credit. Owned holds are released once and the number is released. A same-day termination is a full credit; an expired interval gets none. *Highest uncertainty: split g1 (credit primitive) / g2 (order integration) if needed.* | todo |
 | P3h | Offering change at renewal | A change order is accepted only at `paidThrough` (409 otherwise). It is persisted as a pending change and applied only by a funded renewal. Without funds it stays pending and suspended, with no fallback to the old plan. Resumption uses the new offering. Number and offering changes are allowed together at the boundary. | todo |
 | P3i | Internal command operations | GET `/internal/v1/prepaid/command`, GET `/{id}` and POST `/{id}/retry` (202, or 409 unless `failedTechnical`), in the internal contract, with read/write MCP tools. `make docs`. | todo |
@@ -84,3 +85,4 @@ account creation remains gated until P5a.
 | Date | Remaining | Note |
 |---|---|---|
 | 2026-10-21 | 24 rows, expect 24–30 commits | Past slices split roughly 1.3× (P2c3b → 4). Most likely splits: P3c, P3g, P4h. |
+| 2026-10-23 | 19 rows, expect 19–23 commits | Checkpoint 1: P3a–P3e took one commit each, no splits. P3g and P4h remain the likely splits. |

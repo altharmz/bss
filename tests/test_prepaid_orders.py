@@ -11,7 +11,7 @@ from psycopg import sql
 
 from app.billing import prepaid
 from app.ordering.process import ItemRequest, OrderRequest, place_order
-from app.repository import funding
+from app.repository import funding, payments
 from app.repository import prepaid_commands as commands
 from app.worker import db as worker_db
 from tests import apidata, timeline
@@ -363,9 +363,17 @@ def test_future_start_selects_authorization_price_and_tax(api, db_conn):
         "required"
     ] == D("7.70")
     assert db_conn.execute("SELECT count(*) FROM funding_hold").fetchone() == (0,)
-    make_payment(db_conn, dict(acc, currency="USD"), "7.70")
+    # A credit received after the shortfall wakes the command on the same day.
+    payments.insert_payment(
+        db_conn,
+        billing_account_id=UUID(acc["id"]),
+        amount=D("7.70"),
+        currency="USD",
+        received_at=due + timedelta(minutes=1),
+        payment_method="cash",
+    )
     db_conn.commit()
-    dispatch(db_conn, due)
+    dispatch(db_conn, due + timedelta(minutes=2))
     grant = db_conn.execute(
         "SELECT amount, tax_amount, quote->>'price_id' FROM funded_interval"
     ).fetchone()

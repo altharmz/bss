@@ -1,5 +1,29 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P3e: renewal and resumption producer (2026-10-23)
+
+Each worker tick, after operator requests, produces renewals before dispatching
+commands and observing entitlement. A renewal is due when a product's latest grant
+ends on or before today, its prepaid account is Active, it is neither manually
+suspended nor ended, and no renewal exists for that grant. The command id is a
+UUIDv5 of the predecessor grant, so production is idempotent without a migration.
+Per account, identities are locked before the account, candidates are revalidated
+under the lock and queued in due-date, then product order. A late producer keeps the
+paid-through due date; posting then buys one full interval from today (P2c3b4).
+
+A shortfall leaves the renewal pending with its reason; entitlement already ends at
+paid-through and the worker stores the funding suspension. A pending command with a
+recorded shortfall is attempted again only after a later payment or released hold
+on its account, or on a later business date (the fallback rescan that also picks up
+price changes), not on every tick. P4d top-ups must join that credit signal. Manual
+suspension, a Suspended/Closed account or an ended product leaves a produced renewal
+pending and unattempted rather than a technical failure. A funded resumption makes
+the product active again in the same tick. No schema, API or public prepaid creation
+change. Tests cover the checkpoint flow end to end (purchase, renewal of one product
+while the other runs out, same-day quiet, next-day rescan, payment wake-up and gap-free
+resumption with TMF637 events), idempotent late production and each blocking cause.
+Checkpoint 1 holds; P3f is next.
+
 ## P3d: future starts and pre-grant cancellation (2026-10-21)
 
 Future add orders retain pendingActive products, number claims and an immutable

@@ -10,7 +10,8 @@ was down (the 03:00 reboot, a deploy):
 3. before a new scheduled date, the runs that failed because of accounts are retried
    once (D-W17) - the operator's retry is for immediacy;
 4. those dates, in order, with the scheduled trigger;
-5. the UI's queued requests;
+5. the UI's queued requests, then prepaid work: due renewals are produced, retained
+   commands dispatched and entitlement transitions observed (app/worker/prepaid.py);
 6. the due event deliveries to hub callbacks (app/events/deliver.py), then the purge of
    events delivered more than 30 days ago.
 
@@ -31,7 +32,7 @@ from app.clock import Clock
 from app.events import deliver
 from app.repository import billing
 from app.worker.plan import scheduled
-from app.worker.prepaid import observe_entitlements, process_commands
+from app.worker.prepaid import observe_entitlements, process_commands, produce_renewals
 from app.worker.process import (
     Checkpoint,
     Heartbeat,
@@ -57,6 +58,7 @@ class Tick:
     retried: list[date] = field(default_factory=list)
     billed: list[date] = field(default_factory=list)
     requests: list[UUID] = field(default_factory=list)
+    prepaid_renewals: list[UUID] = field(default_factory=list)
     prepaid_commands: list[UUID] = field(default_factory=list)
     deliveries: int = 0  # event POSTs tried (step 6)
     stopped: bool = False
@@ -119,6 +121,9 @@ def tick(
                 break
             result.billed.append(run_date)
         result.requests = process_requests(
+            conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
+        )
+        result.prepaid_renewals = produce_renewals(
             conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
         )
         result.prepaid_commands = process_commands(
