@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0045**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0046**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -57,6 +57,7 @@ PostgreSQL schema at Alembic head **0045**, read from `pg_catalog` of a throwawa
 | [`funding_consumption`](funding_consumption.md) | billing | Exact source amounts consumed by debits, outgoing transfer principal and credit reversals. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
 | [`worker_request`](worker_request.md) | worker | The admin UI's queue for the billing worker (ours): catch-up and retry requests. The API only inserts; the worker picks them up oldest first. |
+| [`idempotency_key`](idempotency_key.md) | worker | Stored success response of a request carrying an Idempotency-Key, per operator, method and route. |
 | [`event_subscription`](event_subscription.md) | events | TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their deliveries. |
 | [`event`](event.md) | events | TMF events some hub wanted, as sent; stored in the transaction of the change. |
 | [`event_delivery`](event_delivery.md) | events | One event to one subscription: pending until the worker delivers it or gives up. |
@@ -132,6 +133,7 @@ flowchart LR
   subgraph area_worker["Billing worker (ours)"]
     billing_run_account[billing_run_account]
     worker_request[worker_request]
+    idempotency_key[idempotency_key]
   end
   subgraph area_events["Event notifications (TMF hubs)"]
     event_subscription[event_subscription]
@@ -1063,6 +1065,18 @@ erDiagram
     text requested_by
     timestamptz picked_at
     timestamptz done_at
+  }
+  idempotency_key {
+    text operator PK
+    text method PK
+    text route PK
+    text key PK
+    text request_hash
+    integer status_code
+    jsonb response
+    text location
+    timestamptz created_at
+    timestamptz tombstoned_at
   }
   billing_account {
     uuid id PK

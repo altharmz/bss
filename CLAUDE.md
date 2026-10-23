@@ -118,11 +118,12 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   guard. P3g credits unused dates on termination. P3h applies offering changes at a
   funded renewal (`0044`). P3i exposes internal command list/detail/retry with MCP tools.
   P4a adds the `balance_action` schema and adjustment/transfer/reversal sources (`0045`).
+  P4b adds the Idempotency-Key response journal on the order POST (`0046`).
   Public prepaid creation stays gated.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).
-- **Next:** prepaid slice P4b, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
+- **Next:** prepaid slice P4c, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
   (prepaid creation stays a 422 until P5a) - [scope](docs/prepaid-plan.md),
   [decision](docs/decisions/prepaid.md).
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21

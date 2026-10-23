@@ -189,7 +189,7 @@ AREAS = {
         "funding_source",
         "funding_consumption",
     ),
-    "worker": ("billing_run_account", "worker_request"),
+    "worker": ("billing_run_account", "worker_request", "idempotency_key"),
     "events": ("event_subscription", "event", "event_delivery"),
     "users": ("app_user", "app_session", "app_user_audit"),
 }

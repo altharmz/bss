@@ -26,6 +26,7 @@ items:
   - {id: db.funding_conversion_source, area: db, stage: 5, table: funding_conversion_source, title: "Exact held source allocation identities"}
   - {id: db.balance_action, area: db, stage: 5, table: balance_action, title: "TMF654 balance actions (top-up, reservation, adjustment, transfer)"}
   - {id: db.balance_action_reversal, area: db, stage: 5, table: balance_action_reversal, title: "Unique compensating reversal of a cancelled action"}
+  - {id: db.idempotency_key, area: db, stage: 5, table: idempotency_key, title: "Idempotency-Key response journal with tombstones"}
   - {id: db.funding_source, area: db, stage: 5, table: funding_source, title: "Adjustment, received-transfer and reversal funding sources"}
   - {id: db.funding_consumption, area: db, stage: 5, table: funding_consumption, title: "Source consumption by debits, transfers and reversals"}
   - {id: db.subscriber_number, area: db, stage: 5, table: subscriber_number, title: "Subscriber-number inventory (TMF639)"}

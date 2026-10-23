@@ -63,7 +63,7 @@ from app.events import emit
 from app.ordering import cancel as cancellation
 from app.ordering import process
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
-from app.repository import billing, catalog, orders, parties, prepaid_commands
+from app.repository import billing, catalog, idempotency, orders, parties, prepaid_commands
 from app.repository._sql import Row
 
 router = APIRouter(prefix=BASE)
@@ -597,6 +597,7 @@ def get_order(order_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
 @router.post("/productOrder")
 def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
+    body_sent = copy.deepcopy(body)  # the hash covers what the client sent, before parsing
     check_type(body, "ProductOrder")
     if body.get("productOrderItem") == []:
         raise bad_request("an order needs at least one productOrderItem")
@@ -615,7 +616,20 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
         draft=data.requested_initial_state == "draft",
         details=merge_documents({}, documents) or None,
     )
+    key = request.headers.get("idempotency-key")
+    if key is not None:
+        idempotency.check_key(key)
+        operator = request.state.operator
+        digest = idempotency.request_hash(list(request.query_params.multi_items()), body_sent)
     with tx() as conn:
+        if key is not None:
+            replay = idempotency.begin(conn, operator, "POST", request.url.path, key, digest)
+            if replay is not None:
+                return TmfJSONResponse(
+                    replay.response,
+                    status_code=replay.status_code,
+                    headers={"Location": replay.location} if replay.location else None,
+                )
         claim_id(conn, "product_order", uid)
         try:
             order_id = place_order(conn, order_request, now=clock.now(), today=clock.today())
@@ -631,7 +645,13 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
         _check_items_server_set(sent, new)
         # processed at once: one Create carrying the final state (completed or rejected)
         emit.created(conn, API, "productOrder", new, at=clock.now())
-    return created(listing.select_fields(new, fields))
+        selected = listing.select_fields(new, fields)
+        if key is not None:
+            idempotency.store(
+                conn, operator, "POST", request.url.path, key, digest,
+                status_code=201, response=selected, location=new["href"], now=clock.now(),
+            )  # fmt: skip
+    return created(selected)
 
 
 @router.patch("/productOrder/{order_id}")
@@ -741,6 +761,7 @@ def delete_order(order_id: str, request: Request, tx: Tx, clock: ClockDep) -> Re
             )
         emit.deleted(conn, API, "productOrder", lambda: order_body(conn, row), at=clock.now())
         orders.delete_unexecuted(conn, uid)
+        idempotency.tombstone(conn, order_href(uid), now=clock.now())
     return Response(status_code=204)
 
 

@@ -1,5 +1,21 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P4b: Idempotency-Key journal (2026-10-23)
+
+Migration `0046` adds `idempotency_key`, keyed by operator (user or MCP principal),
+method, route and key (1-255 visible ASCII, else 400). It stores the SHA-256 of the
+normalized query and body (key order and number spelling do not matter), the success
+status, response body and Location. `app/repository/idempotency.py`: `begin` takes a
+transaction advisory lock on the key and returns the stored response, 409 for another
+request under the same key; `store` writes in the request's own transaction, so a
+rollback or any 4xx/5xx leaves no key and concurrent duplicates queue, then replay.
+Only committed 2xx responses are kept (a stored `rejected` order is a 201 and replays).
+Rows are retained; the single allowed change is a one-time `tombstoned_at`, set by the
+delete of the resource named in the stored Location, after which the key answers 409
+forever. The header is optional and wired to `POST /productOrder` (any account mode);
+the balance-action POSTs reuse the helper in P4d-P4g. Downgrade refuses retained keys.
+Replays emit no events and post nothing; the internal command identity still guards posting.
+
 ## P4a: balance action and source schema (2026-10-23)
 
 Migration `0045` adds `balance_action`: kind (topup/reservation/adjustment/transfer),
