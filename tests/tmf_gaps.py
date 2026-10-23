@@ -34,24 +34,46 @@ from datetime import timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
+import psycopg
 from fastapi.testclient import TestClient
 
 from app.api import common
-from tests import apidata, contract, timeline
+from app.config import settings
+from tests import apidata, contract, factories, timeline
 from tests.apiclient import APIS, MERGE_PATCH
 from tests.seed import seed
 
 CONTROL = "zzProbe"
 # The specs' base paths are ours, per API (tests/apiclient.py)
 BASES = {spec: base for base, (spec, _) in APIS.items()}
-SPECS = ("TMF620", "TMF622", "TMF629", "TMF632", "TMF637", "TMF639", "TMF666", "TMF676", "TMF678")
-# Contract-only APIs: endpoint gaps until implementation starts. Move each API into
-# SPECS and APIS when its routes land, enabling the existing attribute probes too.
-PENDING_BASES = {
-    "TMF654": "/tmf-api/prepayBalanceManagement/v4",
+SPECS = (
+    "TMF620",
+    "TMF622",
+    "TMF629",
+    "TMF632",
+    "TMF637",
+    "TMF639",
+    "TMF654",
+    "TMF666",
+    "TMF676",
+    "TMF678",
+)
+# Resources (first path segment) whose operations are not implemented yet: each is one
+# "endpoint absent" line, and the attribute probes skip it. Remove a resource here when
+# its routes land, which enables those probes.
+PENDING = {
+    "TMF654": frozenset(
+        {
+            "topupBalance",
+            "adjustBalance",
+            "reserveBalance",
+            "transferBalance",
+            "balanceActionHistory",
+        }
+    ),
 }
 NESTED = "nested"
-PARTS = (*SPECS, *PENDING_BASES, NESTED)
+PARTS = (*SPECS, NESTED)
 # probe_nested_reads' lines: one level into a response attribute
 _NESTED_LINE = re.compile(r"\S+ GET \S+ missing \S+\.\S+")
 
@@ -72,16 +94,20 @@ def server_path(doc: dict[str, Any]) -> str:
     return urlsplit(url).path
 
 
+def is_pending(api: str, path: str) -> bool:
+    return path.split("/")[1] in PENDING.get(api, ())
+
+
 def pending_operations(spec: str | None = None):
-    for api, base in PENDING_BASES.items():
+    for api in PENDING:
         if spec is not None and api != spec:
             continue
         for path, item in contract.spec(api)["paths"].items():
-            if path.startswith("/listener/"):
+            if not is_pending(api, path):
                 continue
             for method in ("get", "post", "patch", "delete"):
                 if method in item:
-                    yield api, base, method.upper(), path
+                    yield api, BASES[api], method.upper(), path
 
 
 def probe_pending_operations(client: TestClient, spec: str | None = None) -> list[str]:
@@ -143,7 +169,7 @@ def _element(api: str, schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def request_schema(api: str, operation: dict[str, Any]) -> dict[str, Any] | None:
-    if api == "TMF676":  # Swagger 2: a body parameter
+    if "swagger" in contract.spec(api):  # Swagger 2 (the v4 APIs): a body parameter
         for parameter in operation.get("parameters", ()):
             if parameter.get("in") == "body":
                 return parameter["schema"]
@@ -159,7 +185,7 @@ def write_operations() -> Iterator[tuple[str, str, str, dict[str, Any]]]:
     """(api, method, spec path, request schema) of every POST and PATCH."""
     for api in SPECS:
         for path, item in contract.spec(api)["paths"].items():
-            if path.startswith("/listener/"):
+            if path.startswith("/listener/") or is_pending(api, path):
                 continue
             for method in ("post", "patch"):
                 if method in item:
@@ -311,6 +337,7 @@ def populate(api: Any) -> None:
     }
     account_api = "/tmf-api/accountManagement/v5"
     export = _created(api, f"{apidata.CATALOG}/exportJob", {"@type": "ExportJob"})
+    _prepaid(api, cust)
     for url, body in (
         (
             "/tmf-api/resourceInventory/v5/resource",
@@ -336,6 +363,17 @@ def populate(api: Any) -> None:
 
 
 _BILL_API = "/tmf-api/customerBillManagement/v5"
+
+
+def _prepaid(api: Any, cust: dict[str, Any]) -> None:
+    """A prepaid bucket with a payment and an outstanding hold (TMF654 reads). Prepaid
+    accounts cannot be created through the API yet, so the mode is set in the database."""
+    acc = apidata.account(api, cust, name="Prepaid probe", description="Probe prepaid account")
+    with psycopg.connect(settings.database_url) as conn:
+        factories.prepaid_bucket(conn, acc["id"], api.clock.now())
+    paid = apidata.payment(api, acc, 50)
+    with psycopg.connect(settings.database_url) as conn:
+        factories.payment_hold(conn, acc["id"], paid["id"], 10, api.clock.now())
 
 
 def _versioned_offering(api: Any) -> dict[str, Any]:
@@ -490,7 +528,7 @@ def probe_base_paths(spec: str | None = None) -> list[str]:
     """The API name and version of the spec's own server URL (`servers`, v4 `basePath`)
     are ours. The prefix before them is the deployment's apiRoot."""
     lines = []
-    for api, base in {**BASES, **PENDING_BASES}.items():
+    for api, base in BASES.items():
         if spec is not None and api != spec:
             continue
         doc = contract.spec(api)

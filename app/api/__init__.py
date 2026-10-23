@@ -1,4 +1,5 @@
-"""TMF Open API surface (v5; TMF676 Payment is v4). See docs/decisions/tmf-api.md.
+"""TMF Open API surface (v5; TMF676 Payment and TMF654 Prepay Balance are v4).
+See docs/decisions/tmf-api.md.
 
 Each API is one module with its router, request models and row -> body mapping. Handlers
 open exactly one database transaction per request (app.api.deps.Tx).
@@ -9,6 +10,7 @@ from fastapi import FastAPI
 from app.api import (
     account,
     accounts,
+    balance,
     bill,
     catalog,
     catalog_jobs,
@@ -45,6 +47,7 @@ def install(app: FastAPI) -> None:
         on_demand,
         ordering,
         resource_inventory,
+        balance,
     ):
         app.include_router(module.router)
     app.include_router(account.schema_router)

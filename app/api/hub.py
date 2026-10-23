@@ -5,8 +5,8 @@ A hub names a `callback` and, optionally, a `query` choosing event types:
 `eventType=A` or `eventType=A,B`, names of the API's own listener events (anything else
 is a 400). Without a query it receives every event of its API. The callback is checked
 by app/events/callbacks.py (422 if refused). A hub id belongs to the API that created
-it: another API's /hub answers 404 for it, as it does for a deleted one. TMF676 is v4:
-its hub is an EventSubscription (no href, no @type).
+it: another API's /hub answers 404 for it, as it does for a deleted one. TMF676 and
+TMF654 are v4: their hub is an EventSubscription (no href, no @type).
 
 Handlers are named <verb>_hub_<api> - the operationIds, and so the MCP tool names, are
 the function names and must be unique.
@@ -36,7 +36,7 @@ from app.events.types import BASES, EVENT_TYPES
 from app.repository import events, hubs
 from app.repository._sql import Row
 
-V4 = frozenset({"TMF676"})
+V4 = frozenset({"TMF676", "TMF654"})
 ATTRIBUTES = ("callback", "query")
 
 
@@ -139,6 +139,7 @@ HUB_APIS = (
     ("TMF666", "account"),
     ("TMF676", "payment"),
     ("TMF678", "bill"),
+    ("TMF654", "balance"),
 )
 _routers = {api: APIRouter(prefix=BASES[api]) for api, _ in HUB_APIS}
 ROUTERS = list(_routers.values())
@@ -257,3 +258,14 @@ def create_hub_bill(body: JsonBody, request: Request, tx: Tx, clock: ClockDep):
 @_routers["TMF678"].delete("/hub/{hub_id}", **GONE)
 def delete_hub_bill(hub_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
     return _delete("TMF678", hub_id, request, tx, clock)
+
+
+@_routers["TMF654"].post("/hub", **HUB)
+def create_hub_balance(body: JsonBody, request: Request, tx: Tx, clock: ClockDep):
+    _checked(body, request)
+    return _create("TMF654", parse(HubIn, body, read_only=READ_ONLY), tx, clock)
+
+
+@_routers["TMF654"].delete("/hub/{hub_id}", **GONE)
+def delete_hub_balance(hub_id: str, request: Request, tx: Tx, clock: ClockDep) -> Response:
+    return _delete("TMF654", hub_id, request, tx, clock)

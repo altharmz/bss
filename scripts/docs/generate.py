@@ -104,6 +104,13 @@ APIS = (
         "TMF639",
         "v5",
     ),
+    Api(
+        "tmf654-prepay-balance",
+        "TMF654 Prepay Balance Management",
+        "/tmf-api/prepayBalanceManagement/v4",
+        "TMF654",
+        "v4",
+    ),
     Api("service", "Service endpoints", "", None, "-"),
 )
 
@@ -121,6 +128,8 @@ NO_SPEC = {
 # Where each operation's handler lives (for the "Code" column).
 HANDLERS = {
     "/tmf-api/resourceInventory/v5/hub": "app/api/hub.py",
+    "/tmf-api/prepayBalanceManagement/v4/hub": "app/api/hub.py",
+    "/tmf-api/prepayBalanceManagement/v4": "app/api/balance.py",
     "/tmf-api/resourceInventory/v5": "app/api/resource_inventory.py",
     "/tmf-api/productCatalogManagement/v5/category": "app/api/classification.py",
     "/tmf-api/productCatalogManagement/v5/productCatalog": "app/api/classification.py",

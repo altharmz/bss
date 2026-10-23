@@ -16,6 +16,7 @@ BASES: dict[str, str] = {
     "TMF666": "/tmf-api/accountManagement/v5",
     "TMF676": "/tmf-api/payment/v4",
     "TMF678": "/tmf-api/customerBillManagement/v5",
+    "TMF654": "/tmf-api/prepayBalanceManagement/v4",
 }
 
 _CRUD = ("AttributeValueChange", "Create", "Delete", "StateChange")
@@ -98,5 +99,12 @@ EVENT_TYPES: dict[str, frozenset[str]] = {
             "CustomerBillOnDemandStateChangeEvent",
             "CustomerBillStateChangeEvent",
         }
+    ),
+    # Create, Failure and Cancel of each balance action; a transfer is final, so
+    # TransferBalanceCancelEvent is never sent.
+    "TMF654": frozenset(
+        f"{action}{kind}Event"
+        for action in ("TopupBalance", "AdjustBalance", "ReserveBalance", "TransferBalance")
+        for kind in ("Create", "Failure", "Cancel")
     ),
 }

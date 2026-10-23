@@ -28,7 +28,7 @@ from app.repository import prepaid_commands as commands
 from bss_mcp import tools
 from bss_mcp.operations import AUTH_OPERATIONS, EXCLUDED, OPERATIONS, Op
 from bss_mcp.tools import DriftError, generate
-from tests import apidata, docs_collect
+from tests import apidata, docs_collect, factories
 from tests.apidata import CATALOG
 from tests.test_api_bill_settlement import account_with_bills, bills, pay
 from tests.test_billing_db import at, run_row
@@ -341,10 +341,7 @@ def world(api, db_conn) -> dict[str, Any]:
         },
     ).json()
     prepaid_account = apidata.account(api, name="Prepaid")
-    db_conn.execute(
-        "UPDATE billing_account SET rating_type = 'prepaid' WHERE id = %s",
-        (prepaid_account["id"],),
-    )
+    prepaid_bucket = factories.prepaid_bucket(db_conn, prepaid_account["id"], api.clock.now())
     command = commands.enqueue(
         db_conn,
         uuid4(),
@@ -357,6 +354,7 @@ def world(api, db_conn) -> dict[str, Any]:
     db_conn.commit()
     return {
         "command": command,
+        "bucket": prepaid_bucket,
         "number": number,
         "resource_hub": resource_hub,
         "hub": hub,
@@ -392,6 +390,8 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
     acc, offering = world["account"]["id"], world["offering"]["id"]
     by_id = {
         "get_resource": {"resource_id": world["number"]["id"]},
+        "get_bucket": {"bucket_id": str(world["bucket"]["id"])},
+        "get_accumulated_balance": {"balance_id": str(world["bucket"]["accumulated_balance_id"])},
         "get_hub_resource": {"hub_id": world["resource_hub"]["id"]},
         "get_bill_format": {"format_id": world["format"]["id"]},
         "get_bill_media": {"media_id": world["media"]["id"]},

@@ -4,7 +4,7 @@
 # requires (we require, the spec does not), missing (never returned; "a.b": one level into
 # a returned value), content-type (415), base path. Behaviour gaps (states, rewrites,
 # order) are in docs/tmf-gap-analysis.md.
-# Restrictions for the new contracts (TMF639 implemented, TMF654 planned):
+# Restrictions for the new contracts (TMF639 implemented, TMF654 reads and hub implemented):
 # TMF639: LogicalResource/msisdn only; other subclasses and non-number states are
 # excluded from number inventory. Assigned numbers use busy; quarantine uses the
 # free-string allocationStatus, never a new usageState enum.
@@ -17,20 +17,16 @@
 # transfers validate against the unchanged schema. No fictitious receiver is added.
 # Events: register all declared names; TransferBalanceCancelEvent is unreachable.
 # Listener paths are subscriber endpoints, not BSS operations or missing endpoints.
-# Contract-only TMF654: 28 absent endpoints. TMF639 uses the attribute probes.
+# TMF654 balance actions and history: 22 absent endpoints (tests/tmf_gaps.py PENDING).
+# Buckets, accumulated balances and the hub use the attribute probes.
 TMF654 DELETE /adjustBalance/{id} endpoint absent
-TMF654 DELETE /hub/{id} endpoint absent
 TMF654 DELETE /reserveBalance/{id} endpoint absent
 TMF654 DELETE /topupBalance/{id} endpoint absent
 TMF654 DELETE /transferBalance/{id} endpoint absent
-TMF654 GET /accumulatedBalance endpoint absent
-TMF654 GET /accumulatedBalance/{id} endpoint absent
 TMF654 GET /adjustBalance endpoint absent
 TMF654 GET /adjustBalance/{id} endpoint absent
 TMF654 GET /balanceActionHistory endpoint absent
 TMF654 GET /balanceActionHistory/{id} endpoint absent
-TMF654 GET /bucket endpoint absent
-TMF654 GET /bucket/{id} endpoint absent
 TMF654 GET /reserveBalance endpoint absent
 TMF654 GET /reserveBalance/{id} endpoint absent
 TMF654 GET /topupBalance endpoint absent
@@ -42,7 +38,6 @@ TMF654 PATCH /reserveBalance/{id} endpoint absent
 TMF654 PATCH /topupBalance/{id} endpoint absent
 TMF654 PATCH /transferBalance/{id} endpoint absent
 TMF654 POST /adjustBalance endpoint absent
-TMF654 POST /hub endpoint absent
 TMF654 POST /reserveBalance endpoint absent
 TMF654 POST /topupBalance endpoint absent
 TMF654 POST /transferBalance endpoint absent
@@ -84,6 +79,13 @@ TMF639 POST /resource refused proceduralStatus
 TMF639 POST /resource refused unknownStatus
 TMF639 POST /resource requires name
 TMF639 POST /resource requires value
+# TMF654 bucket: a view of the account's funding ledger, never a deduction, so it has no
+# requestedDate/confirmationDate (balance actions carry theirs). Monetary credit does not
+# expire: validFor starts at the bucket's creation and has no end; a closed account's
+# bucket stays readable as expired. See docs/decisions/prepaid.md (P4c).
+TMF654 GET /bucket/{id} missing confirmationDate
+TMF654 GET /bucket/{id} missing requestedDate
+TMF654 GET /bucket/{id} missing validFor.endDateTime
 # accountBalance: one current balance per currency - the balance now, with no period.
 TMF666 GET /billingAccount/{id} missing accountBalance.validFor
 # billDocument: the document is embedded (content); it has no address of its own (href,

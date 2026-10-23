@@ -79,6 +79,7 @@ FAMILIES = {
     "/tmf-api/customer/v5": "TMF629 Customer",
     "/tmf-api/accountManagement/v5": "TMF666 Account",
     "/tmf-api/payment/v4": "TMF676 Payment (v4)",
+    "/tmf-api/prepayBalanceManagement/v4": "TMF654 Prepay Balance (v4)",
     "/tmf-api/productInventory/v5": "TMF637 Product Inventory",
     "/tmf-api/customerBillManagement/v5": "TMF678 Customer Bill",
     "/tmf-api/productOrderingManagement/v5": "TMF622 Product Ordering",
@@ -119,6 +120,23 @@ OPERATIONS: dict[str, Op] = {
     ),
     "delete_resource": Op(
         "Delete a never-assigned number; any retained assignment history gives 409."
+    ),
+    # --- TMF654 prepaid balances ---
+    "list_buckets": Op(
+        "Prepaid monetary buckets, one per prepaid account and currency: remainingValue"
+        " (spendable), reservedValue (held); filter by partyAccount.id, status or usageType.",
+        query=LIST,
+    ),
+    "get_bucket": Op(
+        "One prepaid bucket with spendable and held amounts, live products and numbers.",
+        query=FIELDS,
+    ),
+    "list_accumulated_balances": Op(
+        "Total prepaid balance per account and currency; filter by partyAccount.id.",
+        query=LIST,
+    ),
+    "get_accumulated_balance": Op(
+        "One account's total prepaid balance over its buckets.", query=FIELDS
     ),
     # --- TMF620 product catalog ---
     "list_categories": Op("Categories and their offerings and child categories.", query=LIST),

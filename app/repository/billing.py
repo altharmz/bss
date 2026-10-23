@@ -600,19 +600,7 @@ def account_balance(conn: psycopg.Connection, billing_account_id: UUID) -> Decim
 
     There is deliberately no balance column: it is always computed.
     """
-    row = fetch_one(
-        conn,
-        """
-        SELECT
-            (SELECT coalesce(sum(amount), 0) FROM payment
-             WHERE billing_account_id = %(id)s AND status = 'done')
-          - (SELECT coalesce(sum(amount + tax_amount), 0) FROM applied_customer_billing_rate
-             WHERE billing_account_id = %(id)s)
-          - (SELECT coalesce(sum(amount), 0) FROM refund
-             WHERE billing_account_id = %(id)s) AS balance
-        """,
-        {"id": billing_account_id},
-    )
+    row = fetch_one(conn, f"SELECT {PAYMENTS_LESS_CHARGES} AS balance", {"id": billing_account_id})
     assert row is not None
     if not has_balance_ledger(conn):
         return row["balance"]
@@ -622,6 +610,15 @@ def account_balance(conn: psycopg.Connection, billing_account_id: UUID) -> Decim
     )
 
 
+# Ledger L before balance actions: done payments less tax-inclusive ABRs and payouts.
+PAYMENTS_LESS_CHARGES = """
+    (SELECT coalesce(sum(amount), 0) FROM payment
+     WHERE billing_account_id = %(id)s AND status = 'done')
+  - (SELECT coalesce(sum(amount + tax_amount), 0) FROM applied_customer_billing_rate
+     WHERE billing_account_id = %(id)s)
+  - (SELECT coalesce(sum(amount), 0) FROM refund
+     WHERE billing_account_id = %(id)s)
+"""
 # Ledger L entries of balance actions (0045): signed adjustments (also once cancelled, with
 # their compensating reversal), reversals, and completed transfers in and out. A top-up's
 # ledger entry is its payment; reservations hold funds without changing L.

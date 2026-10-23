@@ -50,6 +50,10 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
         },
     ),
     "/tmf-api/payment/v4": ("TMF676", {"payment": "Payment", "refund": "Refund"}),
+    "/tmf-api/prepayBalanceManagement/v4": (
+        "TMF654",
+        {"bucket": "Bucket", "accumulatedBalance": "AccumulatedBalance"},
+    ),
     "/tmf-api/productInventory/v5": ("TMF637", {"product": "Product"}),
     "/tmf-api/productOrderingManagement/v5": (
         "TMF622",
@@ -67,7 +71,7 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
 }
 # every API has a hub: Hub in v5, EventSubscription in TMF676 v4
 for _base, (_spec, _resources) in APIS.items():
-    _resources["hub"] = "EventSubscription" if _spec == "TMF676" else "Hub"
+    _resources["hub"] = "EventSubscription" if _spec in ("TMF676", "TMF654") else "Hub"
 # Our internal API (spec/internal/bss-internal.oas.yaml): spec path -> response schema
 # (of the items, for a list).
 INTERNAL_BASE = "/internal/v1"

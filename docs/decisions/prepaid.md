@@ -1,5 +1,33 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P4c: balance read API (2026-10-23)
+
+TMF654 now serves `bucket` and `accumulatedBalance` list/retrieve (`app/api/balance.py`,
+`app/repository/buckets.py`) and POST/DELETE `/hub`, with six MCP tools. A bucket is a
+view of the `prepaid_bucket` identity: `remainingValue` = L - H, `reservedValue` = H,
+both quantized cents in the account currency; L is the TMF666 `currentBalance` query
+(now shared as `billing.PAYMENTS_LESS_CHARGES` + `BALANCE_ACTION_LEDGER`) and H the
+unreleased hold sources, read in one statement without the account lock: a GET neither
+locks nor reconciles (so it cannot fail like `funding.load` would), and a test checks
+the figures equal `funding.load`'s spendable/reserved on a ledger with top-ups, credit,
+debit, transfer, reversal and a hold. L - H is not clamped, so a debt stays visible.
+Status follows the account (Active/Suspended/Closed -> active/suspended/expired).
+`product[]` uses the close guard's "not yet ended" predicate; `logicalResource[]` is one
+number per such product (today's assignment, else its next accepted claim, so a
+scheduled number change does not count twice); `isShared` means more than one number.
+`partyAccount` carries the account's description and state, `relatedParty` its customer.
+The v4 `accumulatedBalance.logicalResource` is a single reference, given only when
+exactly one number is funded. Reads never create a bucket; until P5a only factories
+write `prepaid_bucket`.
+
+Accepted deviations (gap ledger): a bucket is never a deduction, so no
+`requestedDate`/`confirmationDate`; monetary credit does not expire, so `validFor` has
+no end. The hub is a v4 EventSubscription; `EVENT_TYPES` now lists the twelve action
+events so subscriptions can name them, while P4d-P4i emit them. The gap probe tracks
+pending operations per resource (`tests/tmf_gaps.py` PENDING: 22 action/history
+endpoints), detects Swagger 2 request schemas by document instead of by TMF676, and its
+nested probe populates a prepaid bucket with a payment and a hold through the database.
+
 ## P4b: Idempotency-Key journal (2026-10-23)
 
 Migration `0046` adds `idempotency_key`, keyed by operator (user or MCP principal),

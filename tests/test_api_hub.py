@@ -15,7 +15,7 @@ import yaml
 from app.config import settings
 from app.events import callbacks
 from app.events.types import BASES, EVENT_TYPES
-from tests import apidata, tmf_gaps
+from tests import apidata
 
 APIS = sorted(BASES)
 CALLBACK = "http://listener.test/events"
@@ -42,18 +42,9 @@ def spec_events() -> dict[str, set[str]]:
 
 
 def test_the_event_types_are_the_specs_listener_events():
-    # N1 vendors TMF654 before its hub exists. Lock its planned names too,
-    # without exposing subscriptions or claiming runtime event coverage early.
-    pending = {
-        "TMF654": {
-            f"{kind}{event}Event"
-            for kind in ("TopupBalance", "AdjustBalance", "ReserveBalance", "TransferBalance")
-            for event in ("Create", "Failure", "Cancel")
-        },
-    }
-    assert set(pending) == set(tmf_gaps.PENDING_BASES)
-    assert not set(pending) & set(EVENT_TYPES)
-    assert {**{api: set(types) for api, types in EVENT_TYPES.items()}, **pending} == spec_events()
+    # P4c: TMF654's hub subscribes to all twelve names before the actions emit them.
+    assert {api: set(types) for api, types in EVENT_TYPES.items()} == spec_events()
+    assert len(EVENT_TYPES["TMF654"]) == 12
 
 
 @pytest.mark.parametrize("name", APIS)
@@ -65,7 +56,7 @@ def test_create_and_delete_a_hub(api, name):
     assert created.status_code == 201, created.text
     body = created.json()
     assert body["callback"] == CALLBACK and body["query"].startswith("eventType=")
-    if name == "TMF676":  # v4 EventSubscription: no href, no @type
+    if name in ("TMF676", "TMF654"):  # v4 EventSubscription: no href, no @type
         assert set(body) == {"id", "callback", "query"}
     else:
         assert body["href"] == f"{base}/hub/{body['id']}" == created.headers["location"]

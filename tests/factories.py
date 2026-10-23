@@ -111,3 +111,31 @@ def charge(
 
 def days(start: date, end: date) -> Range:
     return Range(start, end, "[)")
+
+
+def prepaid_bucket(conn: psycopg.Connection, account_id, at: datetime) -> Row:
+    """Make a history-free account prepaid with its one bucket (prepaid creation through
+    the API waits for P5a)."""
+    conn.execute("UPDATE billing_account SET rating_type = 'prepaid' WHERE id = %s", (account_id,))
+    row = conn.execute(
+        "INSERT INTO prepaid_bucket (billing_account_id, currency, created_at)"
+        " SELECT id, currency, %s FROM billing_account WHERE id = %s"
+        " RETURNING id, accumulated_balance_id",
+        (at, account_id),
+    ).fetchone()
+    return {"id": row[0], "accumulated_balance_id": row[1]}
+
+
+def payment_hold(conn: psycopg.Connection, account_id, payment_id, amount, at: datetime):
+    """An outstanding hold of `amount` on one payment."""
+    hold = conn.execute(
+        "INSERT INTO funding_hold (billing_account_id, currency, amount, held_at)"
+        " SELECT id, currency, %s, %s FROM billing_account WHERE id = %s RETURNING id",
+        (amount, at, account_id),
+    ).fetchone()[0]
+    conn.execute(
+        "INSERT INTO funding_hold_source (hold_id, billing_account_id, payment_id, amount)"
+        " VALUES (%s, %s, %s, %s)",
+        (hold, account_id, payment_id, amount),
+    )
+    return hold
