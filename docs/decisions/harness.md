@@ -22,7 +22,11 @@ suggests it; what is deployed is `make deployed`, a file only deploy.sh writes
   tree is exactly what is committed (no unstaged tracked changes, no untracked files under
   `app/`, `tests/`, `frontend/`, `spec/`) - a commit once passed while missing two
   functions that were only on disk. Full output of every run: `.git/pre-commit-logs/`
-  (last 10). The guard blocks skipping it locally; cloud sessions, which have no Docker,
+  (last 10). One run at a time per machine (2026-10-23): the checks take an `flock` on
+  `pre-commit.lock` in the common git directory (all worktrees), and a second commit
+  waits for it (30 minutes at most) - two sessions committing at once had run two
+  suites side by side, 12.5 minutes instead of 5, with the worker heartbeat tests
+  failing on timing. The guard blocks skipping it locally; cloud sessions, which have no Docker,
   commit without the hook and run the checks of [docs/cloud.md](../cloud.md) instead.
 - **Pre-push hook** (`scripts/pre-push.sh`): scans only the commits being pushed and
   their added lines; refuses a bcrypt hash without the marker `pre-push: allow-dummy-hash`,

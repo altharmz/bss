@@ -59,6 +59,17 @@ if [[ -n "$staged" ]] && ! grep -vE '\.md$' <<<"$staged" | grep -q . &&
   exit 0
 fi
 
+# One run at a time on this machine: two suites side by side (two sessions committing at
+# once, 2026-10-23) took 12.5 minutes instead of 5 and failed the timing-sensitive
+# worker tests. The lock is in the common git directory, so every worktree shares it, and
+# it is released when the hook and the checks it started end, killed or not. 30 minutes
+# at most: a run never takes that long, so a holder that old is stuck.
+exec 9>>"$(git rev-parse --path-format=absolute --git-common-dir)/pre-commit.lock"
+if ! flock -n 9; then
+  echo "pre-commit: another commit's checks are running - waiting for them" | tee -a "$log"
+  flock -w 1800 9 || fail "another commit's checks still hold the lock after 30 minutes"
+fi
+
 # run gives every check </dev/null: docker compose run only allocates a pty when stdin is
 # actually a tty, so this keeps the hook from ever blocking on stdin in a non-interactive
 # context (GUI clients, editors) as well as a plain terminal commit.

@@ -28,7 +28,6 @@ import contextlib
 import json
 import os
 import sys
-import uuid
 
 import psycopg
 import pytest
@@ -38,6 +37,7 @@ from psycopg import sql
 
 from alembic import command
 from app.config import settings
+from tests import scratch_db
 
 
 def openapi_operations() -> list[dict[str, str]]:
@@ -52,7 +52,7 @@ def openapi_operations() -> list[dict[str, str]]:
 
 def tables_at_head() -> list[str]:
     admin = settings.database_url
-    name = f"vpslab_progress_{uuid.uuid4().hex[:8]}"
+    name = scratch_db.name("progress")
     ident = sql.Identifier(name)
     with psycopg.connect(admin, autocommit=True) as conn:
         conn.execute(sql.SQL("CREATE DATABASE {}").format(ident))

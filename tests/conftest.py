@@ -1,6 +1,5 @@
 import os
 import time
-import uuid
 from collections.abc import Iterator
 from functools import cache
 
@@ -12,6 +11,7 @@ from psycopg import sql
 
 from alembic import command
 from app.config import settings
+from tests import scratch_db
 
 # Hypothesis profiles, picked by HYPOTHESIS_PROFILE (the Makefile sets it): `dev` for make
 # test and the pre-commit hook, `ci` for make verify. No example database: /app is not
@@ -75,6 +75,17 @@ def _record_written_tables(url: str) -> None:
         _tables.update(row[0] for row in rows)
 
 
+def pytest_sessionstart(session) -> None:
+    """Drops the databases earlier runs left behind (tests/scratch_db.py). Once per run:
+    not in the xdist workers, which start while their controller's session is open."""
+    if hasattr(session.config, "workerinput"):
+        return
+    try:
+        scratch_db.drop_stale(ADMIN_URL)
+    except psycopg.OperationalError:
+        pass  # no database server: the tests that need one say so themselves
+
+
 @pytest.fixture(autouse=True)
 def _progress_record(request) -> Iterator[None]:
     """Autouse, so it is set up first and torn down last - after the test database has
@@ -115,7 +126,7 @@ def _drop_database(name: str) -> None:
 def temp_db_url(monkeypatch) -> Iterator[str]:
     """An EMPTY throwaway database with DATABASE_URL pointed at it. For tests that run
     real migrations themselves; everything else wants `db_conn`."""
-    test_db = f"vpslab_test_{uuid.uuid4().hex[:8]}"
+    test_db = scratch_db.name("test")
     test_url = _create_database(test_db)
     monkeypatch.setenv("DATABASE_URL", test_url)
     try:
@@ -129,7 +140,7 @@ def template_db() -> Iterator[str]:
     """Migrated to head once per session. Test databases are cloned from it with
     CREATE DATABASE ... TEMPLATE, which copies files instead of replaying migrations.
     Nothing may stay connected to it: Postgres refuses to clone a database in use."""
-    name = f"vpslab_template_{uuid.uuid4().hex[:8]}"
+    name = scratch_db.name("template")
     url = _create_database(name)
     previous = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = url  # alembic/env.py reads it
@@ -149,7 +160,7 @@ def template_db() -> Iterator[str]:
 @pytest.fixture
 def migrated_db_url(template_db, monkeypatch) -> Iterator[str]:
     """A throwaway database at migration head, cloned from the session template."""
-    test_db = f"vpslab_test_{uuid.uuid4().hex[:8]}"
+    test_db = scratch_db.name("test")
     test_url = _create_database(test_db, template=template_db)
     monkeypatch.setenv("DATABASE_URL", test_url)
     try:

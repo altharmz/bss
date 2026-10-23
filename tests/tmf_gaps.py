@@ -22,9 +22,12 @@ Behaviour - states reached, values rewritten, order kept - is not probed here; t
 gaps are listed in docs/tmf-gap-analysis.md.
 
 `tests/test_tmf_gaps.py` compares the result with `tests/tmf-gaps.txt`; closing a gap
-means removing its line there.
+means removing its line there. It runs in parts (`PARTS`, `part_of`) that xdist spreads
+over its workers: one per API on an empty database, and `nested`, which alone needs the
+populated one. Every line starts with its API, so the parts never overlap.
 """
 
+import re
 import uuid
 from collections.abc import Iterator
 from datetime import timedelta
@@ -47,6 +50,15 @@ SPECS = ("TMF620", "TMF622", "TMF629", "TMF632", "TMF637", "TMF639", "TMF666", "
 PENDING_BASES = {
     "TMF654": "/tmf-api/prepayBalanceManagement/v4",
 }
+NESTED = "nested"
+PARTS = (*SPECS, *PENDING_BASES, NESTED)
+# probe_nested_reads' lines: one level into a response attribute
+_NESTED_LINE = re.compile(r"\S+ GET \S+ missing \S+\.\S+")
+
+
+def part_of(line: str) -> str:
+    """The part of `gaps` that reports `line`: `nested`, else the API it starts with."""
+    return NESTED if _NESTED_LINE.fullmatch(line) else line.split(" ", 1)[0]
 
 
 def server_path(doc: dict[str, Any]) -> str:
@@ -60,8 +72,10 @@ def server_path(doc: dict[str, Any]) -> str:
     return urlsplit(url).path
 
 
-def pending_operations():
+def pending_operations(spec: str | None = None):
     for api, base in PENDING_BASES.items():
+        if spec is not None and api != spec:
+            continue
         for path, item in contract.spec(api)["paths"].items():
             if path.startswith("/listener/"):
                 continue
@@ -70,9 +84,9 @@ def pending_operations():
                     yield api, base, method.upper(), path
 
 
-def probe_pending_operations(client: TestClient) -> list[str]:
+def probe_pending_operations(client: TestClient, spec: str | None = None) -> list[str]:
     lines = []
-    for api, base, method, path in pending_operations():
+    for api, base, method, path in pending_operations(spec):
         url = base + path.replace("{id}", str(uuid.uuid4()))
         response = client.request(method, url, json={})
         assert response.status_code == 404, (
@@ -250,9 +264,11 @@ def _probe_writes(
     return lines
 
 
-def probe_reads(client: TestClient) -> list[str]:
+def probe_reads(client: TestClient, spec: str | None = None) -> list[str]:
     lines = []
     for api in SPECS:
+        if spec is not None and api != spec:
+            continue
         for resource, schema_name in APIS[BASES[api]][1].items():
             url = f"{BASES[api]}/{resource}/{uuid.uuid4()}"
             label = f"{api} GET /{resource}/{{id}}"
@@ -447,11 +463,13 @@ def _send_get(client: TestClient, url: str) -> tuple[int, str]:
     return response.status_code, message
 
 
-def probe_patch_formats(client: TestClient) -> list[str]:
+def probe_patch_formats(client: TestClient, spec: str | None = None) -> list[str]:
     """Every content type a spec's PATCH lists must reach the body's validation (the
     control attribute refused), not a 415."""
     lines = []
     for api in SPECS:
+        if spec is not None and api != spec:
+            continue
         for path, item in contract.spec(api)["paths"].items():
             if "patch" not in item or "requestBody" not in item["patch"]:
                 continue
@@ -468,11 +486,13 @@ def probe_patch_formats(client: TestClient) -> list[str]:
     return lines
 
 
-def probe_base_paths() -> list[str]:
+def probe_base_paths(spec: str | None = None) -> list[str]:
     """The API name and version of the spec's own server URL (`servers`, v4 `basePath`)
     are ours. The prefix before them is the deployment's apiRoot."""
     lines = []
     for api, base in {**BASES, **PENDING_BASES}.items():
+        if spec is not None and api != spec:
+            continue
         doc = contract.spec(api)
         path = server_path(doc).strip("/")
         tail = "/".join(path.split("/")[-2:])
@@ -481,15 +501,26 @@ def probe_base_paths() -> list[str]:
     return lines
 
 
-def gaps(api: Any) -> list[str]:
-    """`api`: a TmfClient with a clock (the `api` fixture) on an empty database. The
-    writes are probed first, on the empty database; then it is populated for the nested
-    reads."""
+def _operations(spec: str | None = None, method: str | None = None) -> frozenset[str]:
+    return frozenset(
+        f"{a} {m} {p}"
+        for a, m, p, _ in write_operations()
+        if (spec is None or a == spec) and (method is None or m == method)
+    )
+
+
+def gaps(api: Any, part: str) -> list[str]:
+    """The lines of one of `PARTS`. `api`: a TmfClient with a clock (the `api` fixture)
+    on an empty database. An API's part probes it on that empty database. `nested`
+    probes the POSTs there first (the nested reads need their verdicts and server-set
+    attributes), then populates it for the nested reads."""
     client = api.client
-    server_set: set[str] = set()
-    writes = probe_writes(client, server_set)
-    found = writes + probe_reads(client) + probe_patch_formats(client)
-    found += probe_pending_operations(client)
-    populate(api)
-    found += probe_nested_reads(client, writes, server_set)
-    return sorted(set(found + probe_base_paths()))
+    if part == NESTED:
+        server_set: set[str] = set()
+        writes = probe_writes(client, server_set, only=_operations(method="POST"))
+        populate(api)
+        return sorted(set(probe_nested_reads(client, writes, server_set)))
+    found = probe_writes(client, only=_operations(part))
+    found += probe_reads(client, part) + probe_patch_formats(client, part)
+    found += probe_pending_operations(client, part) + probe_base_paths(part)
+    return sorted(set(found))

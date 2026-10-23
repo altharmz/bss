@@ -8,6 +8,8 @@ reason; the probe still finds them, so they are locked the same way.
 
 from pathlib import Path
 
+import pytest
+
 from tests import apidata, tmf_gaps
 
 GAPS_FILE = Path(__file__).resolve().parent / "tmf-gaps.txt"
@@ -32,9 +34,11 @@ def recorded() -> list[str]:
     return gaps + deviations
 
 
-def test_the_gap_list_is_the_recorded_one(api):
-    found = tmf_gaps.gaps(api)
-    expected = recorded()
+@pytest.mark.parametrize("part", tmf_gaps.PARTS)
+def test_the_gap_list_is_the_recorded_one(api, part):
+    # in parts, so xdist runs them side by side (the whole probe took over a minute)
+    found = tmf_gaps.gaps(api, part)
+    expected = [line for line in recorded() if tmf_gaps.part_of(line) == part]
     closed = sorted(set(expected) - set(found))
     opened = sorted(set(found) - set(expected))
     assert not closed and not opened, (
@@ -79,6 +83,14 @@ def test_the_probe_finds_a_missing_nested_attribute(api, monkeypatch):
     assert line not in tmf_gaps.probe_nested_reads(api.client, [], server_set, only)
     with_control(monkeypatch)
     assert line in tmf_gaps.probe_nested_reads(api.client, [], server_set, only)
+
+
+def test_every_recorded_line_belongs_to_a_part():
+    # a line no part reports would never be compared
+    assert {tmf_gaps.part_of(line) for line in recorded()} <= set(tmf_gaps.PARTS)
+    assert tmf_gaps.part_of("TMF666 GET /billingAccount/{id} missing contact.zzProbe") == "nested"
+    assert tmf_gaps.part_of("TMF666 GET /billingAccount/{id} missing zzProbe") == "TMF666"
+    assert tmf_gaps.part_of("TMF654 GET /topupBalance endpoint absent") == "TMF654"
 
 
 def test_the_recorded_list_is_sorted_and_unique():

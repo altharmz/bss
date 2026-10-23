@@ -28,7 +28,7 @@ from app.worker import db as worker_db
 from app.worker import process
 from app.worker.process import DateRun, bill_date, retry_run
 from app.worker.runs import start_run
-from tests import apidata, timeline
+from tests import apidata, scratch_db, timeline
 from tests.conftest import _create_database, _drop_database, install_test_user
 from tests.factories import MSK, account, rejected
 from tests.timeline import TZ, iso, midnight
@@ -59,7 +59,7 @@ def worker(migrated_db_url):
 
 @pytest.fixture
 def control_db_url(template_db):
-    name = f"vpslab_test_{uuid.uuid4().hex[:8]}"
+    name = scratch_db.name("test")
     url = _create_database(name, template=template_db)
     try:
         with psycopg.connect(url) as conn:

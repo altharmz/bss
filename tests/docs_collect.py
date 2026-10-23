@@ -27,7 +27,6 @@ import contextlib
 import json
 import os
 import sys
-import uuid
 from typing import Any
 
 import psycopg
@@ -38,6 +37,7 @@ from psycopg import sql
 
 from alembic import command
 from app.config import settings
+from tests import scratch_db
 from tests.contract import SPEC_DIR, SPEC_FILES
 
 METHODS = ("get", "post", "put", "patch", "delete")
@@ -230,7 +230,7 @@ def _rows(conn: psycopg.Connection, query: str, *args: Any) -> list[dict[str, An
 
 def database_catalog() -> dict[str, Any]:
     admin = settings.database_url
-    name = f"vpslab_docs_{uuid.uuid4().hex[:8]}"
+    name = scratch_db.name("docs")
     ident = sql.Identifier(name)
     with psycopg.connect(admin, autocommit=True) as conn:
         conn.execute(sql.SQL("CREATE DATABASE {}").format(ident))

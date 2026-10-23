@@ -36,7 +36,10 @@ and the API name/version of each spec's server URL (`base path`). A control attr
 must be refused at each probed place, else the place is reported `unprobed`.
 `tests/test_tmf_gaps.py` requires the result to equal `tests/tmf-gaps.txt` line for line
 (831 lines on 2026-10-17): a slice that closes a gap removes its lines, and nothing opens
-unnoticed. Behaviour the probe cannot see - states never reached, values rewritten
+unnoticed. It runs in parts that xdist spreads over its workers (2026-10-23: the whole
+probe was one 65 s test at the end of the run): one per API on the empty database, and
+`nested`, which alone populates it. Every line starts with its API, so the parts never
+overlap, and a test checks that every recorded line belongs to one. Behaviour the probe cannot see - states never reached, values rewritten
 (`paymentMethod.@type`), item order, nested response attributes - is listed in the gap
 analysis. Negative proofs: accepting `description` on POST customer fails the lock with
 that line "closed"; a broken control check fails both probe tests.

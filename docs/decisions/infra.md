@@ -130,7 +130,10 @@ would attach the prod container to both `lab` and `shared`).
 - Python 3.12, `ruff` for lint and format, `pytest` for tests.
 - `make test` runs the suite in parallel (`pytest -n auto`, pytest-xdist). Tests share
   nothing: each worker migrates its own template database and every test gets its own
-  clone, dropped afterwards (a run leaves no `vpslab_%` database behind). Hypothesis
+  clone, dropped afterwards. A run cut short (a killed hook) cannot drop its own, so
+  the names carry their creation time (`tests/scratch_db.py`) and every test session
+  first drops the `vpslab_%` databases older than 6 hours that nobody is connected to
+  (2026-10-23: 37 had piled up). Hypothesis
   examples per property come from a profile selected by `HYPOTHESIS_PROFILE`: `dev` (50)
   for `make test` and the pre-commit hook, `ci` (200) for `make verify` (a target-specific
   variable in the Makefile). Plain `pytest` without the variable uses `dev`.
