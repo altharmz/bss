@@ -1196,3 +1196,9 @@ TMF666 POST and PATCH accept `ratingType: prepaid`; the 422 gate is gone. No mig
 Tests: `tests/test_api_prepaid_accounts.py`. TEST-CHANGE: the two tests that asserted the
 gate (`test_rating_type_is_postpaid`, the `ratingType: prepaid` validation row) now assert
 the new contract.
+
+## P5b: MCP (2026-10-23)
+
+See [mcp.md](mcp.md#p5b-mcp-for-prepaid-2026-10-23): the six journaled POST tools take an
+optional `idempotency_key` (the `Idempotency-Key` header); `make mcp-smoke` records one
+top-up and one future-start purchase locally.

@@ -40,9 +40,10 @@ class Bss:
         params: dict[str, str] | None = None,
         body: bytes | None = None,
         content_type: str | None = None,
+        headers: dict[str, str] | None = None,
     ) -> httpx2.Response:
         # X-Remote-User: who did it, for the app's operator (display and bill history)
-        headers = {"X-Remote-User": principal, "Accept": "application/json"}
+        headers = {**(headers or {}), "X-Remote-User": principal, "Accept": "application/json"}
         if self.service_secret:
             headers["X-Bss-Service"] = self.service_secret
         if content_type:

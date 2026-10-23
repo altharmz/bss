@@ -52,6 +52,16 @@ FIELDS_ARG: dict[str, Any] = {
     "type": "string",
     "description": "Comma-separated top-level attributes to return (id, href, @type always are).",
 }
+IDEMPOTENCY_ARG: dict[str, Any] = {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 255,
+    "pattern": r"^[\x21-\x7e]+$",
+    "description": (
+        "Idempotency-Key: send the same key and body again to get the first answer back"
+        " instead of a second action; the same key with a different body is a 409."
+    ),
+}
 
 
 class DriftError(RuntimeError):
@@ -68,6 +78,7 @@ class Tool:
     query: dict[str, Any] = field(default_factory=dict)  # name -> schema (filters: object)
     required_query: tuple[str, ...] = ()
     body_extra: dict[str, Any] = field(default_factory=dict)
+    idempotent: bool = False
     input_schema: dict[str, Any] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -78,6 +89,8 @@ class Tool:
             required.append(name)
         properties.update(self.query)
         required += self.required_query
+        if self.idempotent:
+            properties["idempotency_key"] = IDEMPOTENCY_ARG
         if self.body is not None:
             properties["body"] = schema.model_schema(self.body)
             properties["body"]["properties"].update(self.body_extra)
@@ -111,12 +124,16 @@ class Tool:
             wire = schema.to_wire(arguments["body"], self.input_schema["properties"]["body"])
             body = dumps(wire).encode()
             content_type = MERGE_PATCH if self.method == "PATCH" else "application/json"
+        headers = {}
+        if self.idempotent and "idempotency_key" in arguments:
+            headers["Idempotency-Key"] = str(arguments["idempotency_key"])
         return {
             "method": self.method,
             "path": path,
             "params": params,
             "body": body,
             "content_type": content_type,
+            "headers": headers,
         }
 
 
@@ -248,6 +265,11 @@ async def generate(app: Any) -> dict[str, Tool]:
             description += (
                 " JSON merge patch: send only what changes; null removes an optional attribute."
             )
+        if op.idempotent:
+            description += (
+                " Takes an optional idempotency_key (the Idempotency-Key header): retry with the"
+                " same key after a timeout and the first answer is replayed, nothing repeats."
+            )
         if o["method"] != "GET":
             description += " Changes data (write scope)."
         if op.body is not None and "decimal" in json.dumps(schema.model_schema(op.body)):
@@ -261,5 +283,6 @@ async def generate(app: Any) -> dict[str, Tool]:
             query=query,
             required_query=op.required,
             body_extra=op.body_extra,
+            idempotent=op.idempotent,
         )
     return tools

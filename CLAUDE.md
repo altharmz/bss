@@ -125,11 +125,13 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   any later spend. P4g accepts `transferBalance` (hold + queued command). P4h1 completes fee-free transfers in the worker. P4h2 posts transfer fees as one-time charges (`0047`: a fee ABR has no product). P4i serves `balanceActionHistory` and pins the 12 events and held-funds refunds.
   P4h-P4i complete transfers with fees and add history, events and refunds. P5a enables
   prepaid accounts on TMF666 (bucket at creation, no positive creditLimit, mode fixed
-  after history) and adds required/available/shortfall to the first-charge preview.
+  after history) and adds required/available/shortfall to the first-charge preview. P5b gives the six
+  journaled POST tools (`create_order`, `create_payment`, topup/adjust/reserve/transfer) an explicit
+  `idempotency_key`; `make mcp-smoke` runs one top-up and one purchase.
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).
-- **Next:** prepaid slice P5b, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
+- **Next:** prepaid slice P6a, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
   - [scope](docs/prepaid-plan.md),
   [decision](docs/decisions/prepaid.md).
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21

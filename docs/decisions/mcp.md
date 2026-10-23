@@ -216,3 +216,34 @@ values) and refuses to start without `MCP_USERS`.
 - **Not tried against the hosted clients yet** - they need the deployed instance. The
   client instructions in docs/mcp.md follow each client's documented setup; the OAuth
   flow itself is proven with the official SDK client.
+
+## P5b: MCP for prepaid (2026-10-23)
+
+The TMF654 read/write tools and the internal previews (`first_charge`, the prepaid
+command tools) existed since P4a-P4i because every API operation is a tool; P5b adds what
+the plan still asked for.
+
+- **`idempotency_key`** is an optional top-level argument (not inside `body`) of exactly
+  the six POSTs whose handler keeps an Idempotency-Key journal: `create_order`,
+  `create_payment`, `create_topup_balance`, `create_adjust_balance`,
+  `create_reserve_balance`, `create_transfer_balance`. The registry marks them with
+  `Op(idempotent=True)`; the connector sends the value as the `Idempotency-Key` header
+  (`Bss.request(headers=...)`) and the app's journal does the rest (same key and body:
+  the first answer; same key, other body: 409). The schema is 1-255 visible ASCII, so a
+  malformed key is refused before the app. No key means no journal, as over HTTP. The
+  journal is scoped by operator, and the connector's operator is `mcp:<token name>`.
+  Any new journaled POST must set `idempotent=True` (tests/test_mcp_prepaid.py pins the
+  list). It is optional, not required: the API does not require it either.
+- **Decimal strings** needed nothing new: the TMF654 amounts are `Quantity` strings and a
+  JSON number with a fraction is already refused by the connector.
+- **`make mcp-smoke`** runs the old no-credential checks, then
+  `scripts/mcp-prepaid-smoke.py`: it creates a throwaway local write token, builds a plan,
+  customer and prepaid account through the tools, records one top-up (20.00) and one
+  future-start purchase (the offering cannot start in the past, so the plan starts at the
+  next UTC midnight and the order is requested for noon the day after), each sent twice
+  with its key to prove the replay, and revokes the token. The script refuses any host
+  but localhost, and `deploy.sh` still runs only the credential-free `mcp-smoke.sh`.
+  Decision: the local app never accepted the connector (compose passed no
+  `BSS_SERVICE_SECRET`), so `compose.override.yaml` now passes `BSS_SERVICE_SECRET`
+  (from `.env`, same value for app and mcp) to both; with it empty the prepaid part
+  prints SKIPPED and the target still passes.

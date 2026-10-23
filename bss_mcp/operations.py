@@ -105,6 +105,8 @@ class Op:
     no_body: bool = False
     body_extra: dict[str, Any] = field(default_factory=dict)
     filters: dict[str, Any] = field(default_factory=dict)
+    # a POST whose handler replays a stored success for the same Idempotency-Key header
+    idempotent: bool = False
 
 
 OPERATIONS: dict[str, Op] = {
@@ -153,6 +155,7 @@ OPERATIONS: dict[str, Op] = {
         " transaction. Monetary only, exact cents in the bucket currency; a refusal (closed"
         " account, number not the account's) is stored failed with 201.",
         body=TopupCreate,
+        idempotent=True,
     ),
     "patch_topup_balance": Op(
         "status cancelled reverses a completed top-up whose money is unspent and unheld (409"
@@ -170,6 +173,7 @@ OPERATIONS: dict[str, Op] = {
         " to the spendable funds. Monetary only, exact cents in the bucket currency; a refusal"
         " (closed account, debit above the spendable funds) is stored failed with 201.",
         body=AdjustCreate,
+        idempotent=True,
     ),
     "patch_adjust_balance": Op(
         "status cancelled reverses a completed adjustment (a credit only while its money is"
@@ -197,6 +201,7 @@ OPERATIONS: dict[str, Op] = {
         " bucket currency; a refusal (closed account, amount above the spendable funds) is"
         " stored failed with 201.",
         body=ReserveCreate,
+        idempotent=True,
     ),
     "patch_reserve_balance": Op(
         "status cancelled releases a created hold (one an order or renewal owns is 409); reason"
@@ -219,6 +224,7 @@ OPERATIONS: dict[str, Op] = {
         " correct it with a new opposite transfer. A refusal (same bucket, currency, a number"
         " that is not the account's, too few spendable funds) is stored failed with 201.",
         body=TransferCreate,
+        idempotent=True,
     ),
     "patch_transfer_balance": Op(
         "Only reason changes; reason, channel, logicalResource and receiverLogicalResource are"
@@ -489,6 +495,7 @@ OPERATIONS: dict[str, Op] = {
         " its currency; it settles the account's bills at once (oldest first, or the bills"
         " named in paymentItem). Taxes are out of scope. Payments are never changed.",
         body=PaymentCreate,
+        idempotent=True,
     ),
     # --- TMF637 product inventory ---
     "list_products": Op(
@@ -556,6 +563,7 @@ OPERATIONS: dict[str, Op] = {
         " state rejected with productOrderErrorMessage (still 201); a malformed order is a"
         " 4xx and stores nothing.",
         body=OrderIn,
+        idempotent=True,
     ),
     "patch_order": Op(
         "Change what describes an order: description, category, priority (0 highest ..4),"

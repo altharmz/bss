@@ -25,6 +25,9 @@ services:
       APP_ENV: dev
       LOG_LEVEL: debug
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/${POSTGRES_DB:-app}
+      # the mcp service's credential (empty: it never authenticates; make mcp-smoke then
+      # skips its prepaid part). Same value for app and mcp, set in .env.
+      BSS_SERVICE_SECRET: ${BSS_SERVICE_SECRET:-}
     depends_on:
       db:
         condition: service_healthy
@@ -79,6 +82,7 @@ services:
       MCP_STORE: /data/mcp.db
       # name:<scrypt hash>[,name:<hash>] - the OAuth login (slice 2); in .env, never committed
       MCP_USERS: ${MCP_USERS:-}
+      BSS_SERVICE_SECRET: ${BSS_SERVICE_SECRET:-}
     depends_on:
       app:
         condition: service_healthy

@@ -38,8 +38,16 @@ shell: ## Shell inside the running app container
 psql: ## psql in the local database, through compose exec (the db port is not published)
 	docker compose exec db sh -c 'exec psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
-mcp-smoke: ## Discovery, 401 and carve-out checks against the local mcp service (http://localhost:8090)
+mcp-smoke: ## Discovery/401/carve-out checks, then one prepaid top-up and purchase, against the local mcp service (http://localhost:8090)
 	./scripts/mcp-smoke.sh http://localhost:8090 local
+	@# the prepaid part needs a write credential: a throwaway local token, revoked afterwards
+	@set -e; out="$$(mktemp)"; err="$$(mktemp)"; trap 'rm -f "$$out" "$$err"' EXIT; \
+	docker compose run --rm -T --no-deps mcp python -m bss_mcp.tokens create "smoke-$$$$" --scope write >"$$out" 2>"$$err"; \
+	id="$$(sed -n 's/^id \([^ ]*\) .*/\1/p' "$$err" | head -1)"; \
+	[ -n "$$id" ] || { echo 'mcp-smoke: could not create the local smoke token' >&2; exit 1; }; \
+	status=0; MCP_SMOKE_TOKEN="$$(head -1 "$$out")" python3 scripts/mcp-prepaid-smoke.py http://localhost:8090 || status=$$?; \
+	docker compose run --rm -T --no-deps mcp python -m bss_mcp.tokens revoke "$$id" >/dev/null 2>&1; \
+	exit $$status
 
 mcp-token-create: ## Local MCP static token, printed once: make mcp-token-create NAME=ci SCOPE=read|write
 	@if [ -z "$(NAME)" ] || [ -z "$(SCOPE)" ]; then \
