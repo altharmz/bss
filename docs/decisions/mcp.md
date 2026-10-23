@@ -25,11 +25,11 @@ required keys. Shared attribute names can name alternative FVO shapes; these are
 and runtime spec validation remains authoritative. Full polymorphic schemas are not
 inlined. TMF622's lenient `externalId` model is unchanged.
 
-Server instructions name the write-scope and read-scope tool counts (156 and 71 since
-prepaid P3i added the three prepaid command tools), the API families, and searching by
-family when a client's discovery layer shows fewer. The inventory family no longer says
-read-only. The counts live in `bss_mcp/server.py` and are checked against the generated
-tools in tests, which is the source of truth when this record falls behind.
+Server instructions name the write-scope and read-scope tool counts, the API families,
+and searching by family when a client's discovery layer shows fewer. The inventory
+family no longer says read-only. The counts live only in `bss_mcp/server.py`, where a
+test checks them against the generated tools; this record deliberately does not repeat
+them, so adding a tool needs no edit here.
 The human subsequently approved same-day status undo and future-product termination
 (slices B/C); their decisions are recorded in `tmf-api.md` and `worker.md`.
 
