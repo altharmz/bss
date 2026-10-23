@@ -89,6 +89,9 @@ INTERNAL: dict[str, str] = {
     "/billingRun/{id}/accounts": "RunAccount",
     "/billingRun/catchUp": "CatchUp",
     "/billingRun/{id}/retry": "RetryQueued",
+    "/prepaid/command": "PrepaidCommand",
+    "/prepaid/command/{id}": "PrepaidCommand",
+    "/prepaid/command/{id}/retry": "PrepaidCommand",
 }
 # Our own JSON Schemas for TMF extensions, served outside the TMF resource paths.
 SCHEMA_PREFIX = "/tmf-api/schema/"
@@ -192,6 +195,10 @@ class TmfClient:
     def _locate(path: str) -> tuple[str, str | None, str | None, str]:
         if path.startswith(INTERNAL_BASE + "/"):
             parts = path[len(INTERNAL_BASE) + 1 :].split("/")
+            if parts[:2] == ["prepaid", "command"]:  # a two-segment collection
+                spec_path = "/prepaid/command" + ("/{id}" if len(parts) > 2 else "")
+                spec_path += "".join(f"/{part}" for part in parts[3:])
+                return "INTERNAL", "prepaid", INTERNAL.get(spec_path), spec_path
             if len(parts) == 3:  # /<resource>/{id}/<view or action>
                 parts[1] = "{id}"
             elif len(parts) == 2 and "/" + "/".join(parts) not in INTERNAL:

@@ -45,3 +45,7 @@ Stable TMF654 bucket and accumulatedBalance identities for one prepaid account/c
 ## Triggers
 
 - `prepaid_bucket_immutable`: `CREATE TRIGGER prepaid_bucket_immutable BEFORE DELETE OR UPDATE ON prepaid_bucket FOR EACH ROW EXECUTE FUNCTION prepaid_bucket_immutable()`
+
+## Referenced by
+
+[`balance_action`](balance_action.md)

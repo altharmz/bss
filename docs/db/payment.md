@@ -46,6 +46,7 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 | `payment_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `payment_tax_within_amount` | check | `CHECK (((tax_amount >= (0)::numeric) AND (tax_amount <= amount)))` |
 | `payment_pkey` | primary key | `PRIMARY KEY (id)` |
+| `balance_ledger_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_hold_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `payment_id_billing_account_id_key` | unique | `UNIQUE (id, billing_account_id)` |
 
@@ -59,10 +60,11 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 
 ## Triggers
 
+- `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON payment DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
 - `funding_hold_bounds`: `CREATE CONSTRAINT TRIGGER funding_hold_bounds AFTER INSERT OR UPDATE ON payment DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_hold_bounds()`
 - `funding_source_account_lock`: `CREATE TRIGGER funding_source_account_lock BEFORE UPDATE ON payment FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `payment_set_updated_at`: `CREATE TRIGGER payment_set_updated_at BEFORE UPDATE ON payment FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
 
 ## Referenced by
 
-[`bill_allocation`](bill_allocation.md), [`funding_hold_source`](funding_hold_source.md), [`refund`](refund.md), [`refund_source`](refund_source.md)
+[`balance_action`](balance_action.md), [`bill_allocation`](bill_allocation.md), [`funding_consumption`](funding_consumption.md), [`funding_hold_source`](funding_hold_source.md), [`refund`](refund.md), [`refund_source`](refund_source.md)

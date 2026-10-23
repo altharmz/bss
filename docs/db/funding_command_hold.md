@@ -27,6 +27,7 @@ Retained internal command-to-hold retry identity; no public API or worker caller
 | `funding_command_hold_pkey` | primary key | `PRIMARY KEY (command_id)` |
 | `prepaid_command_hold_owner` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_command_hold_hold_id_key` | unique | `UNIQUE (hold_id)` |
+| `funding_command_hold_identity` | unique | `UNIQUE (command_id, hold_id)` |
 
 ## Indexes
 
@@ -34,6 +35,7 @@ Retained internal command-to-hold retry identity; no public API or worker caller
 |---|---|---|
 | `funding_command_hold_billing_account_id_idx` | `CREATE INDEX funding_command_hold_billing_account_id_idx ON funding_command_hold USING btree (billing_account_id)` | no |
 | `funding_command_hold_hold_id_key` | `CREATE UNIQUE INDEX funding_command_hold_hold_id_key ON funding_command_hold USING btree (hold_id)` | yes |
+| `funding_command_hold_identity` | `CREATE UNIQUE INDEX funding_command_hold_identity ON funding_command_hold USING btree (command_id, hold_id)` | yes |
 | `funding_command_hold_pkey` | `CREATE UNIQUE INDEX funding_command_hold_pkey ON funding_command_hold USING btree (command_id)` | yes |
 
 ## Triggers
@@ -44,4 +46,4 @@ Retained internal command-to-hold retry identity; no public API or worker caller
 
 ## Referenced by
 
-[`funding_hold_conversion`](funding_hold_conversion.md)
+[`balance_action`](balance_action.md), [`funding_hold_conversion`](funding_hold_conversion.md)

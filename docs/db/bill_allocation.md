@@ -20,6 +20,7 @@ An amount applied to a customer bill (ours; TMF678 appliedPayment, TMF676 paymen
 | `amount` | `numeric(12,2)` | no |  | numeric(12,2), exact (never float); Positive. |
 | `kind` | `bill_allocation_kind` (enum, see [README](README.md#enums)) | no |  | automatic (oldest open bill first) or explicit (TMF676 paymentItem). |
 | `allocated_at` | `timestamp with time zone` | no |  | When it was applied (injected clock). |
+| `funding_source_id` | `uuid` | yes |  | Adjustment, received-transfer or reversal source; exclusive with payment_id and credit_bill_id. |
 
 ## Foreign keys
 
@@ -28,6 +29,7 @@ An amount applied to a customer bill (ours; TMF678 appliedPayment, TMF676 paymen
 | `billing_account_id`, `currency` | [`billing_account`](billing_account.md) (id, currency) | `bill_allocation_billing_account_id_currency_fkey` |
 | `credit_bill_id`, `billing_account_id` | [`customer_bill`](customer_bill.md) (id, billing_account_id) | `bill_allocation_credit_bill_id_billing_account_id_fkey` |
 | `customer_bill_id`, `billing_account_id` | [`customer_bill`](customer_bill.md) (id, billing_account_id) | `bill_allocation_customer_bill_id_billing_account_id_fkey` |
+| `funding_source_id`, `billing_account_id` | [`funding_source`](funding_source.md) (id, billing_account_id) | `bill_allocation_funding_source_id_billing_account_id_fkey` |
 | `payment_id`, `billing_account_id` | [`payment`](payment.md) (id, billing_account_id) | `bill_allocation_payment_id_billing_account_id_fkey` |
 
 ## Constraints
@@ -36,8 +38,9 @@ An amount applied to a customer bill (ours; TMF678 appliedPayment, TMF676 paymen
 |---|---|---|
 | `bill_allocation_amount_positive` | check | `CHECK ((amount > (0)::numeric))` |
 | `bill_allocation_not_from_itself` | check | `CHECK ((credit_bill_id <> customer_bill_id))` |
-| `bill_allocation_one_source` | check | `CHECK ((num_nonnulls(payment_id, credit_bill_id) = 1))` |
+| `bill_allocation_one_source` | check | `CHECK ((num_nonnulls(payment_id, credit_bill_id, funding_source_id) = 1))` |
 | `bill_allocation_pkey` | primary key | `PRIMARY KEY (id)` |
+| `balance_ledger_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `bill_allocation_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `credit_usage_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_batch_conversion_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
@@ -51,11 +54,13 @@ An amount applied to a customer bill (ours; TMF678 appliedPayment, TMF676 paymen
 | `bill_allocation_billing_account_id_idx` | `CREATE INDEX bill_allocation_billing_account_id_idx ON bill_allocation USING btree (billing_account_id)` | no |
 | `bill_allocation_credit_bill_id_idx` | `CREATE INDEX bill_allocation_credit_bill_id_idx ON bill_allocation USING btree (credit_bill_id)` | no |
 | `bill_allocation_customer_bill_id_idx` | `CREATE INDEX bill_allocation_customer_bill_id_idx ON bill_allocation USING btree (customer_bill_id)` | no |
+| `bill_allocation_funding_source_id_idx` | `CREATE INDEX bill_allocation_funding_source_id_idx ON bill_allocation USING btree (funding_source_id) WHERE (funding_source_id IS NOT NULL)` | no |
 | `bill_allocation_payment_id_idx` | `CREATE INDEX bill_allocation_payment_id_idx ON bill_allocation USING btree (payment_id)` | no |
 | `bill_allocation_pkey` | `CREATE UNIQUE INDEX bill_allocation_pkey ON bill_allocation USING btree (id)` | yes |
 
 ## Triggers
 
+- `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON bill_allocation DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
 - `bill_allocation_bounds`: `CREATE CONSTRAINT TRIGGER bill_allocation_bounds AFTER INSERT ON bill_allocation DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION bill_allocation_bounds()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON bill_allocation FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `credit_usage_bounds`: `CREATE CONSTRAINT TRIGGER credit_usage_bounds AFTER INSERT ON bill_allocation DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION credit_usage_bounds()`

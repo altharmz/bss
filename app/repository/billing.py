@@ -614,7 +614,34 @@ def account_balance(conn: psycopg.Connection, billing_account_id: UUID) -> Decim
         {"id": billing_account_id},
     )
     assert row is not None
-    return row["balance"]
+    if not has_balance_ledger(conn):
+        return row["balance"]
+    return (
+        row["balance"]
+        + conn.execute(BALANCE_ACTION_LEDGER, {"id": billing_account_id}).fetchone()[0]
+    )
+
+
+# Ledger L entries of balance actions (0045): signed adjustments (also once cancelled, with
+# their compensating reversal), reversals, and completed transfers in and out. A top-up's
+# ledger entry is its payment; reservations hold funds without changing L.
+BALANCE_ACTION_LEDGER = """
+    SELECT
+        (SELECT coalesce(sum(amount), 0) FROM balance_action WHERE billing_account_id = %(id)s
+         AND kind = 'adjustment' AND status IN ('completed', 'cancelled'))
+      + (SELECT coalesce(sum(amount), 0) FROM balance_action_reversal
+         WHERE billing_account_id = %(id)s)
+      + (SELECT coalesce(sum(amount), 0) FROM balance_action
+         WHERE receiver_billing_account_id = %(id)s AND kind = 'transfer' AND status = 'completed')
+      - (SELECT coalesce(sum(amount), 0) FROM balance_action
+         WHERE billing_account_id = %(id)s AND kind = 'transfer' AND status = 'completed')
+"""
+
+
+def has_balance_ledger(conn: psycopg.Connection) -> bool:
+    """Whether the schema has balance actions and their sources (0045); older-schema
+    migration tests run these repositories before it."""
+    return conn.execute("SELECT to_regclass('funding_consumption') IS NOT NULL").fetchone()[0]
 
 
 def get_abr(conn: psycopg.Connection, abr_id: UUID) -> Row | None:
@@ -971,7 +998,13 @@ def load_settlement(
 ) -> tuple[tuple[settlement.Bill, ...], tuple[settlement.Payment, ...]]:
     """Every bill of the account with what was applied to it (or, for a credit note, from
     it), and every received payment with what was applied from it. The caller holds the
-    billing account's row lock (`load_account`), so nothing moves under it."""
+    billing account's row lock (`load_account`), so nothing moves under it. Debits,
+    outgoing transfers and reversals (funding_consumption) count as used too."""
+    consumed = (
+        ""
+        if not has_balance_ledger(conn)
+        else (" + coalesce((SELECT sum(amount) FROM funding_consumption WHERE {} = {}.id), 0)")
+    )
     bills = fetch_all(
         conn,
         """
@@ -981,12 +1014,12 @@ def load_settlement(
                coalesce((SELECT sum(amount) FROM bill_allocation
                          WHERE credit_bill_id = b.id), 0)
                + coalesce((SELECT sum(amount) FROM refund_source
-                           WHERE credit_bill_id = b.id), 0) AS credit_used,
+                           WHERE credit_bill_id = b.id), 0){credit_consumed} AS credit_used,
                coalesce((SELECT sum(s.amount) FROM funding_hold_source s
                          JOIN funding_hold h ON h.id = s.hold_id
                          WHERE s.credit_bill_id = b.id AND h.released_at IS NULL), 0) AS held
         FROM customer_bill b WHERE b.billing_account_id = %s ORDER BY b.bill_date
-        """,
+        """.replace("{credit_consumed}", consumed.format("credit_bill_id", "b")),
         (account_id,),
     )
     payments = fetch_all(
@@ -996,13 +1029,13 @@ def load_settlement(
                coalesce((SELECT sum(amount) FROM bill_allocation
                          WHERE payment_id = p.id), 0)
                + coalesce((SELECT sum(amount) FROM refund_source
-                           WHERE payment_id = p.id), 0) AS used,
+                           WHERE payment_id = p.id), 0){payment_consumed} AS used,
                coalesce((SELECT sum(s.amount) FROM funding_hold_source s
                          JOIN funding_hold h ON h.id = s.hold_id
                          WHERE s.payment_id = p.id AND h.released_at IS NULL), 0) AS held
         FROM payment p WHERE p.billing_account_id = %s AND p.status = 'done'
         ORDER BY p.received_at, p.id
-        """,
+        """.replace("{payment_consumed}", consumed.format("payment_id", "p")),
         (account_id,),
     )
     return (

@@ -30,6 +30,7 @@ Internal source-pinned funding hold foundation; no public API.
 | `funding_hold_amount_check` | check | `CHECK (((amount >= (0)::numeric) AND (amount < 'Infinity'::numeric)))` |
 | `funding_hold_check` | check | `CHECK ((released_at >= held_at))` |
 | `funding_hold_pkey` | primary key | `PRIMARY KEY (id)` |
+| `balance_ledger_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_batch_conversion_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_conversion_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_hold_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
@@ -45,6 +46,7 @@ Internal source-pinned funding hold foundation; no public API.
 
 ## Triggers
 
+- `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON funding_hold DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT OR UPDATE ON funding_hold FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `funding_batch_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_batch_conversion_bounds AFTER INSERT OR UPDATE ON funding_hold DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_batch_conversion_bounds()`
 - `funding_conversion_bounds`: `CREATE CONSTRAINT TRIGGER funding_conversion_bounds AFTER INSERT OR UPDATE ON funding_hold DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_conversion_bounds()`
@@ -53,4 +55,4 @@ Internal source-pinned funding hold foundation; no public API.
 
 ## Referenced by
 
-[`funding_command_hold`](funding_command_hold.md), [`funding_hold_conversion`](funding_hold_conversion.md), [`funding_hold_source`](funding_hold_source.md)
+[`balance_action`](balance_action.md), [`funding_command_hold`](funding_command_hold.md), [`funding_hold_conversion`](funding_hold_conversion.md), [`funding_hold_source`](funding_hold_source.md)

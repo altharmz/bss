@@ -145,6 +145,7 @@ def get_billing_account(
 # What a billing account's history is made of: while any of these refers to it, the
 # account stays (close it instead). Only its presentation preferences go with it.
 ACCOUNT_HISTORY = {
+    "balanceAction": ("balance_action", "billing_account_id"),
     "fundingHold": ("funding_hold", "billing_account_id"),
     "prepaidBucket": ("prepaid_bucket", "billing_account_id"),
     "prepaidCommand": ("prepaid_command", "billing_account_id"),

@@ -17,12 +17,14 @@ TMF676 recorded refund and its consumed credit.
 | `payment_id` | `uuid` | yes |  | Payment credit source; exclusive with credit_bill_id. |
 | `credit_bill_id` | `uuid` | yes |  | Issued negative bill credit source. |
 | `amount` | `numeric(12,2)` | no |  | Positive credit consumed by payout. |
+| `funding_source_id` | `uuid` | yes |  | Adjustment, received-transfer or reversal source; exclusive with payment_id and credit_bill_id. |
 
 ## Foreign keys
 
 | Columns | References | Name |
 |---|---|---|
 | `credit_bill_id`, `billing_account_id` | [`customer_bill`](customer_bill.md) (id, billing_account_id) | `refund_source_credit_bill_id_billing_account_id_fkey` |
+| `funding_source_id`, `billing_account_id` | [`funding_source`](funding_source.md) (id, billing_account_id) | `refund_source_funding_source_id_billing_account_id_fkey` |
 | `payment_id`, `billing_account_id` | [`payment`](payment.md) (id, billing_account_id) | `refund_source_payment_id_billing_account_id_fkey` |
 | `refund_id`, `billing_account_id` | [`refund`](refund.md) (id, billing_account_id) | `refund_source_refund_id_billing_account_id_fkey` |
 
@@ -31,8 +33,9 @@ TMF676 recorded refund and its consumed credit.
 | Name | Kind | Definition |
 |---|---|---|
 | `refund_source_amount_check` | check | `CHECK ((amount > (0)::numeric))` |
-| `refund_source_check` | check | `CHECK ((num_nonnulls(payment_id, credit_bill_id) = 1))` |
+| `refund_source_check` | check | `CHECK ((num_nonnulls(payment_id, credit_bill_id, funding_source_id) = 1))` |
 | `refund_source_pkey` | primary key | `PRIMARY KEY (id)` |
+| `balance_ledger_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `credit_usage_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_hold_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 
@@ -41,12 +44,14 @@ TMF676 recorded refund and its consumed credit.
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `refund_source_credit_bill_id_idx` | `CREATE INDEX refund_source_credit_bill_id_idx ON refund_source USING btree (credit_bill_id)` | no |
+| `refund_source_funding_source_id_idx` | `CREATE INDEX refund_source_funding_source_id_idx ON refund_source USING btree (funding_source_id) WHERE (funding_source_id IS NOT NULL)` | no |
 | `refund_source_payment_id_idx` | `CREATE INDEX refund_source_payment_id_idx ON refund_source USING btree (payment_id)` | no |
 | `refund_source_pkey` | `CREATE UNIQUE INDEX refund_source_pkey ON refund_source USING btree (id)` | yes |
 | `refund_source_refund_id_idx` | `CREATE INDEX refund_source_refund_id_idx ON refund_source USING btree (refund_id)` | no |
 
 ## Triggers
 
+- `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON refund_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON refund_source FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `credit_usage_bounds`: `CREATE CONSTRAINT TRIGGER credit_usage_bounds AFTER INSERT ON refund_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION credit_usage_bounds()`
 - `funding_hold_bounds`: `CREATE CONSTRAINT TRIGGER funding_hold_bounds AFTER INSERT OR UPDATE ON refund_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_hold_bounds()`

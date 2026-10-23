@@ -10,6 +10,7 @@ from decimal import Decimal
 from uuid import UUID
 
 import psycopg
+from psycopg import sql
 
 from app.billing.funding import InsufficientFunds, Source, SourceAmount, reconcile, select_sources
 from app.billing.settlement import StateChange
@@ -24,6 +25,11 @@ class Snapshot:
     ledger: Decimal
     unpaid_obligations: Decimal
     spendable: Decimal
+
+    @property
+    def reserved(self) -> Decimal:
+        """Outstanding holds H (TMF654 reservedValue); spendable is then L - H."""
+        return sum((s.held for s in self.sources), Decimal(0))
 
 
 @dataclass(frozen=True)
@@ -50,7 +56,9 @@ def plan(conn: psycopg.Connection, account_id: UUID, amount: Decimal) -> Plan:
 
 
 def load(conn: psycopg.Connection, account_id: UUID) -> Snapshot:
-    """Load and reconcile existing payment/credit-note funding without changing it.
+    """Load and reconcile payment, credit-note, adjustment, transfer and reversal
+    funding without changing it. Debits, outgoing transfers and reversals consume
+    sources like payouts and allocations (funding_consumption).
 
     Obligations include held and unissued positive bills as well as unbilled ABRs.
     Allocations reduce obligations and sources together; payouts reduce sources and
@@ -71,15 +79,36 @@ def load(conn: psycopg.Connection, account_id: UUID) -> Snapshot:
         for b in bills
         if b.is_credit_note and b.state == "settled"
     )
+    if billing.has_balance_ledger(conn):
+        sources += tuple(
+            Source(kind, source_id, available_at, amount, consumed)
+            for kind, source_id, available_at, amount, consumed in conn.execute(
+                "SELECT f.kind, f.id, f.available_at, f.amount,"
+                " (SELECT coalesce(sum(amount), 0) FROM bill_allocation"
+                "  WHERE funding_source_id = f.id)"
+                " + (SELECT coalesce(sum(amount), 0) FROM refund_source"
+                "    WHERE funding_source_id = f.id)"
+                " + (SELECT coalesce(sum(amount), 0) FROM funding_consumption"
+                "    WHERE funding_source_id = f.id)"
+                " FROM funding_source f WHERE f.billing_account_id = %s",
+                (account_id,),
+            )
+        )
+    kinds = {s.id: s.kind for s in sources if s.kind not in ("payment", "creditNote")}
     held = {}
-    for payment_id, credit_id, amount in conn.execute(
-        "SELECT s.payment_id, s.credit_bill_id, sum(s.amount)"
-        " FROM funding_hold_source s JOIN funding_hold h ON h.id = s.hold_id"
+    for payment_id, credit_id, source_id, amount in conn.execute(
+        "SELECT s.payment_id, s.credit_bill_id, (to_jsonb(s)->>'funding_source_id')::uuid AS f,"
+        " sum(s.amount) FROM funding_hold_source s JOIN funding_hold h ON h.id = s.hold_id"
         " WHERE h.billing_account_id = %s AND h.released_at IS NULL"
-        " GROUP BY s.payment_id, s.credit_bill_id",
+        " GROUP BY s.payment_id, s.credit_bill_id, f",
         (account_id,),
     ):
-        held[("payment", payment_id) if payment_id else ("creditNote", credit_id)] = amount
+        if payment_id:
+            held["payment", payment_id] = amount
+        elif credit_id:
+            held["creditNote", credit_id] = amount
+        else:
+            held[kinds[source_id], source_id] = amount
     sources = tuple(replace(s, held=held.get((s.kind, s.id), Decimal(0))) for s in sources)
     unbilled = conn.execute(
         "SELECT coalesce(sum(amount + tax_amount), 0)"
@@ -119,20 +148,49 @@ def reserve(
     ).fetchone()[0]
     for source in result.sources:
         conn.execute(
-            "INSERT INTO funding_hold_source"
-            " (hold_id, billing_account_id, payment_id, credit_bill_id, amount)"
-            " VALUES (%s, %s, %s, %s, %s)",
-            (
-                hold_id,
-                account_id,
-                source.id if source.kind == "payment" else None,
-                source.id if source.kind == "creditNote" else None,
-                source.amount,
-            ),
+            sql.SQL(
+                "INSERT INTO funding_hold_source (hold_id, billing_account_id, {}, amount)"
+                " VALUES (%s, %s, %s, %s)"
+            ).format(sql.Identifier(_SOURCE_COLUMN[source.kind])),
+            (hold_id, account_id, source.id, source.amount),
         )
     conn.execute("SET CONSTRAINTS funding_hold_bounds IMMEDIATE")
     conn.execute("SET CONSTRAINTS funding_hold_bounds DEFERRED")
     return hold_id
+
+
+# The column naming a source of each kind; the last three exist from 0045.
+_SOURCE_COLUMN = {
+    "payment": "payment_id",
+    "creditNote": "credit_bill_id",
+    "adjustment": "funding_source_id",
+    "transfer": "funding_source_id",
+    "reversal": "funding_source_id",
+}
+# Held sources with their column, readable on schemas before and after 0045.
+_HELD_SOURCES = (
+    "SELECT id, payment_id, credit_bill_id, amount, (to_jsonb(s)->>'funding_source_id')::uuid"
+    " FROM funding_hold_source s WHERE hold_id = %s ORDER BY id"
+)
+
+
+def _allocate(conn, account_id, currency, bill_id, payment_id, credit_id, source_id, amount, at):
+    """Allocate exactly from a held source; names funding_source_id only when set (0045)."""
+    column, source = (
+        ("funding_source_id", source_id)
+        if source_id
+        else ("payment_id", payment_id)
+        if payment_id
+        else ("credit_bill_id", credit_id)
+    )
+    return conn.execute(
+        sql.SQL(
+            "INSERT INTO bill_allocation"
+            " (billing_account_id, currency, customer_bill_id, {}, amount, kind, allocated_at)"
+            " VALUES (%s, %s, %s, %s, %s, 'automatic', %s) RETURNING id"
+        ).format(sql.Identifier(column)),
+        (account_id, currency, bill_id, source, amount, at),
+    ).fetchone()[0]
 
 
 def convert_for_command(
@@ -197,26 +255,20 @@ def convert_for_command(
             " VALUES (%s, %s, %s, %s)",
             (hold_id, account_id, bill_id, converted_at),
         )
-        for source_id, payment_id, credit_id, source_amount in conn.execute(
-            "SELECT id, payment_id, credit_bill_id, amount FROM funding_hold_source"
-            " WHERE hold_id = %s ORDER BY id",
-            (hold_id,),
+        for source_id, payment_id, credit_id, source_amount, funding_id in conn.execute(
+            _HELD_SOURCES, (hold_id,)
         ).fetchall():
-            allocation_id = conn.execute(
-                "INSERT INTO bill_allocation"
-                " (billing_account_id, currency, customer_bill_id, payment_id, credit_bill_id,"
-                " amount, kind, allocated_at) VALUES (%s, %s, %s, %s, %s, %s, 'automatic', %s)"
-                " RETURNING id",
-                (
-                    account_id,
-                    account.currency,
-                    bill_id,
-                    payment_id,
-                    credit_id,
-                    source_amount,
-                    converted_at,
-                ),
-            ).fetchone()[0]
+            allocation_id = _allocate(
+                conn,
+                account_id,
+                account.currency,
+                bill_id,
+                payment_id,
+                credit_id,
+                funding_id,
+                source_amount,
+                converted_at,
+            )
             conn.execute(
                 "INSERT INTO funding_conversion_source"
                 " (hold_source_id, hold_id, allocation_id, billing_account_id)"
@@ -306,11 +358,7 @@ def convert_bills_for_command(
         "SELECT 1 FROM bill_allocation WHERE customer_bill_id = ANY(%s)", (targets,)
     ).fetchone():
         raise ValueError("conversion bill already has allocations")
-    sources = conn.execute(
-        "SELECT id, payment_id, credit_bill_id, amount FROM funding_hold_source"
-        " WHERE hold_id = %s ORDER BY id",
-        (hold_id,),
-    ).fetchall()
+    sources = conn.execute(_HELD_SOURCES, (hold_id,)).fetchall()
     with conn.transaction():
         conn.execute("SET CONSTRAINTS funding_batch_conversion_bounds DEFERRED")
         release(conn, account_id, hold_id, released_at=converted_at, command_id=command_id)
@@ -329,23 +377,19 @@ def convert_bills_for_command(
             )
             remaining = bill_amount
             while remaining:
-                source_id, payment_id, credit_id, _ = sources[source_index]
+                source_id, payment_id, credit_id, _, funding_id = sources[source_index]
                 take = min(remaining, source_left)
-                allocation_id = conn.execute(
-                    "INSERT INTO bill_allocation"
-                    " (billing_account_id, currency, customer_bill_id, payment_id, credit_bill_id,"
-                    " amount, kind, allocated_at) VALUES (%s,%s,%s,%s,%s,%s,'automatic',%s)"
-                    " RETURNING id",
-                    (
-                        account_id,
-                        account.currency,
-                        bill_id,
-                        payment_id,
-                        credit_id,
-                        take,
-                        converted_at,
-                    ),
-                ).fetchone()[0]
+                allocation_id = _allocate(
+                    conn,
+                    account_id,
+                    account.currency,
+                    bill_id,
+                    payment_id,
+                    credit_id,
+                    funding_id,
+                    take,
+                    converted_at,
+                )
                 conn.execute(
                     "INSERT INTO funding_conversion_source"
                     " (hold_source_id, hold_id, allocation_id, billing_account_id)"

@@ -16,12 +16,14 @@ Internal source-pinned funding hold foundation; no public API.
 | `payment_id` | `uuid` | yes |  | Payment source, exclusive with credit_bill_id. |
 | `credit_bill_id` | `uuid` | yes |  | Settled negative bill source, exclusive with payment_id. |
 | `amount` | `numeric(12,2)` | no |  | Exact positive amount pinned to the source. |
+| `funding_source_id` | `uuid` | yes |  | Adjustment, received-transfer or reversal source; exclusive with payment_id and credit_bill_id. |
 
 ## Foreign keys
 
 | Columns | References | Name |
 |---|---|---|
 | `credit_bill_id`, `billing_account_id` | [`customer_bill`](customer_bill.md) (id, billing_account_id) | `funding_hold_source_credit_bill_id_billing_account_id_fkey` |
+| `funding_source_id`, `billing_account_id` | [`funding_source`](funding_source.md) (id, billing_account_id) | `funding_hold_source_funding_source_id_billing_account_id_fkey` |
 | `hold_id`, `billing_account_id` | [`funding_hold`](funding_hold.md) (id, billing_account_id) | `funding_hold_source_hold_id_billing_account_id_fkey` |
 | `payment_id`, `billing_account_id` | [`payment`](payment.md) (id, billing_account_id) | `funding_hold_source_payment_id_billing_account_id_fkey` |
 
@@ -30,8 +32,9 @@ Internal source-pinned funding hold foundation; no public API.
 | Name | Kind | Definition |
 |---|---|---|
 | `funding_hold_source_amount_check` | check | `CHECK (((amount > (0)::numeric) AND (amount < 'Infinity'::numeric)))` |
-| `funding_hold_source_check` | check | `CHECK ((num_nonnulls(payment_id, credit_bill_id) = 1))` |
+| `funding_hold_source_check` | check | `CHECK ((num_nonnulls(payment_id, credit_bill_id, funding_source_id) = 1))` |
 | `funding_hold_source_pkey` | primary key | `PRIMARY KEY (id)` |
+| `balance_ledger_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 | `funding_hold_bounds` | t | `TRIGGER DEFERRABLE INITIALLY DEFERRED` |
 
 ## Indexes
@@ -39,13 +42,16 @@ Internal source-pinned funding hold foundation; no public API.
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `funding_hold_source_credit_bill_id_idx` | `CREATE INDEX funding_hold_source_credit_bill_id_idx ON funding_hold_source USING btree (credit_bill_id)` | no |
+| `funding_hold_source_funding_source_id_idx` | `CREATE INDEX funding_hold_source_funding_source_id_idx ON funding_hold_source USING btree (funding_source_id) WHERE (funding_source_id IS NOT NULL)` | no |
 | `funding_hold_source_hold_id_credit_bill_id_idx` | `CREATE UNIQUE INDEX funding_hold_source_hold_id_credit_bill_id_idx ON funding_hold_source USING btree (hold_id, credit_bill_id) WHERE (credit_bill_id IS NOT NULL)` | no |
+| `funding_hold_source_hold_id_funding_source_id_idx` | `CREATE UNIQUE INDEX funding_hold_source_hold_id_funding_source_id_idx ON funding_hold_source USING btree (hold_id, funding_source_id) WHERE (funding_source_id IS NOT NULL)` | no |
 | `funding_hold_source_hold_id_payment_id_idx` | `CREATE UNIQUE INDEX funding_hold_source_hold_id_payment_id_idx ON funding_hold_source USING btree (hold_id, payment_id) WHERE (payment_id IS NOT NULL)` | no |
 | `funding_hold_source_payment_id_idx` | `CREATE INDEX funding_hold_source_payment_id_idx ON funding_hold_source USING btree (payment_id)` | no |
 | `funding_hold_source_pkey` | `CREATE UNIQUE INDEX funding_hold_source_pkey ON funding_hold_source USING btree (id)` | yes |
 
 ## Triggers
 
+- `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON funding_hold_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT OR UPDATE ON funding_hold_source FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `funding_hold_bounds`: `CREATE CONSTRAINT TRIGGER funding_hold_bounds AFTER INSERT OR UPDATE ON funding_hold_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_hold_bounds()`
 - `funding_hold_retained`: `CREATE TRIGGER funding_hold_retained BEFORE DELETE OR UPDATE ON funding_hold_source FOR EACH ROW EXECUTE FUNCTION funding_hold_retained()`

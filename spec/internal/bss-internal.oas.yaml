@@ -347,6 +347,63 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+  /prepaid/command:
+    get:
+      summary: Prepaid commands, newest acceptance first (P3i).
+      description: >-
+        The internal prepaid command journal: order, renewal and transfer commands with
+        their internal state (pending, completed, failedTechnical - not TMF enums), outcome,
+        technical error, current needs-top-up reason, attempt times and linked order,
+        products, run and bills. Filter by billing account and state.
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - name: billingAccount.id
+          in: query
+          schema: {type: string, format: uuid}
+        - name: state
+          in: query
+          schema: {type: string, enum: [pending, completed, failedTechnical]}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PrepaidCommand'}
+        '400': {$ref: '#/components/responses/Error'}
+  /prepaid/command/{id}:
+    get:
+      summary: One prepaid command.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PrepaidCommand'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /prepaid/command/{id}/retry:
+    post:
+      summary: Return a failedTechnical prepaid command to pending.
+      description: >-
+        No body. The API never posts: the command keeps its identity, request, hold and
+        attempt count, and the billing worker attempts it on its next tick. 202 with the
+        command; 409 unless it is failedTechnical.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PrepaidCommand'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
     AppSession:
@@ -909,3 +966,53 @@ components:
       required: [request]
       properties:
         request: {$ref: '#/components/schemas/WorkerRequest'}
+    PrepaidCommand:
+      type: object
+      additionalProperties: false
+      required: [id, kind, state, billingAccount, dueDate, createdAt, attempts, attemptedAt,
+                 nextRetryAt, outcome, reason, error, needs_topup, productOrder, products,
+                 billingRun, bills]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [order, renewal, transfer]}
+        state:
+          description: Internal recovery state, not a TMF enum.
+          type: string
+          enum: [pending, completed, failedTechnical]
+        billingAccount: {$ref: '#/components/schemas/Named'}
+        dueDate: {$ref: '#/components/schemas/BusinessDate'}
+        createdAt: {type: string, format: date-time}
+        attempts:
+          type: integer
+          minimum: 0
+          description: Committed success or technical-failure decisions; kept across retries.
+        attemptedAt: {$ref: '#/components/schemas/NullableDateTime'}
+        nextRetryAt:
+          description: Automatic technical retry eligibility; set only when failedTechnical.
+          allOf: [{$ref: '#/components/schemas/NullableDateTime'}]
+        outcome:
+          type: string
+          nullable: true
+          description: The completed result's outcome (funded, terminated, cancelled).
+        reason: {type: string, nullable: true, description: The completed result's reason}
+        error: {type: string, nullable: true, description: Last technical failure}
+        needs_topup:
+          description: The latest funding shortfall, only while pending.
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [required, available, shortfall, observedAt]
+          properties:
+            required: {type: number}
+            available: {type: number}
+            shortfall: {type: number}
+            observedAt: {type: string, format: date-time}
+        productOrder: {$ref: '#/components/schemas/NullableLink'}
+        products:
+          type: array
+          items: {$ref: '#/components/schemas/Link'}
+        billingRun: {$ref: '#/components/schemas/NullableRunRef'}
+        bills:
+          description: Bills and credit notes posted by the command's run.
+          type: array
+          items: {$ref: '#/components/schemas/Link'}

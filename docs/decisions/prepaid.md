@@ -1,5 +1,65 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## P4a: balance action and source schema (2026-10-23)
+
+Migration `0045` adds `balance_action`: kind (topup/reservation/adjustment/transfer),
+TMF654 status, the original checked request, Decimal amount (and transfer cost/owner),
+bucket and receiver bucket (composite keys enforce account, currency and prepaid mode),
+reason/description (editable), a separate `failure_reason` set exactly when failed,
+operator, requested/confirmed/cancelled instants, and unique links to its done payment
+(top-up), hold (reservation, accepted transfer) and command (owned reservation or
+transfer; the hold must be that command's). Per-kind CHECKs encode the decided rules:
+top-ups/adjustments are never `created`, transfers never `cancelled`, a receiver-paid
+fee is at most the principal, an accepted transfer needs another same-currency bucket
+(a refusal such as `sameBucket` is still storable). Money, references and final
+statuses are immutable; only failed actions may be deleted (tombstones are P4b's).
+
+`balance_action_reversal` is the compensating ledger entry, at most one per action
+(primary key). `funding_source` adds the adjustment, received-transfer and reversal
+source kinds; `funding_consumption` records exact source use by debits, outgoing
+principal and credit reversals. Allocations, payouts and hold sources gain a
+`funding_source_id` beside payment/credit note. One deferred check bounds every source
+by allocations + payouts + outstanding holds + consumption, and ties each action to its
+entries: a debit or completed transfer consumes exactly its amount, a credit or
+received transfer introduces exactly one source, a cancelled top-up/positive credit's
+reversal consumes that original source, a cancelled debit restores each consumed
+source once as a `reversal` source, holds follow the action status, and an operator
+hold is never command-owned. Downgrade refuses any retained action or source.
+
+`account_balance` (L, TMF666 `currentBalance`) adds signed adjustments, reversals and
+completed transfers in/out; settlement and funding snapshots count consumption, and
+holds/conversions carry the new source column. Repositories detect the 0045 schema so
+older-schema proofs keep working. `Snapshot.reserved` is H; spendable is L - H.
+A hypothesis test drives top-ups, credits, debits, payouts, holds/releases, transfers
+and reversals on two accounts with unbilled charges and checks L, H and L - H against
+an independent oracle (and that funding refusals happen exactly when the oracle says).
+Open for later slices: the TMF654 projection of `failure_reason`, operator-hold expiry
+(P4f), transfer fee posting (P4h) and the internal bill view's source label for the
+new kinds. No API or worker change.
+
+## P3i: internal command operations (2026-10-23)
+
+The internal contract gains `GET /internal/v1/prepaid/command` (newest acceptance
+first, `offset`/`limit`, equality filters `billingAccount.id` and `state`),
+`GET /prepaid/command/{id}` and `POST /prepaid/command/{id}/retry`, with MCP tools
+`list_prepaid_commands`, `get_prepaid_command` (read scope) and
+`retry_prepaid_command` (write scope). `PrepaidCommand` shows kind, internal state
+(not a TMF enum), due date, acceptance/attempt/next-retry times, the cumulative attempt
+count, the completed result's `outcome`/`reason`, the technical `error`, and
+`needs_topup` (same shape as on account products) only while pending. Links are
+derived, not stored: the order of an order command, products from the request
+(quotes, future products, terminations, a renewal's predecessor grant) and the
+command's grants, its billing run and that run's bills and credit notes. Reads take
+no identity or ownership lock.
+
+Retry takes no body and **never posts**: it calls the journal's `retry` (identity
+lock, state recheck), keeping identity, request, hold and attempt count, clearing
+the error and backoff; the dispatcher attempts it on its next tick even inside the
+automatic backoff. 202 with the command; 409 unless failedTechnical, also when the
+injected clock precedes its recorded history. No worker request row is used, since
+command dispatch already scans pending commands. No balance-action link exists yet
+(P4a); the internal pending-offering product field stays with P5. No migration.
+
 ## P3h: offering change at renewal (2026-10-23)
 
 A prepaid modify item with `productOffering` takes effect only at the next renewal:

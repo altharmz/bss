@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0044**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0045**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -51,6 +51,10 @@ PostgreSQL schema at Alembic head **0044**, read from `pg_catalog` of a throwawa
 | [`funding_hold_conversion`](funding_hold_conversion.md) | billing | Retained internal command hold conversion; no runtime caller. |
 | [`funding_conversion_source`](funding_conversion_source.md) | billing | Retained internal command hold conversion; no runtime caller. |
 | [`funding_conversion_bill`](funding_conversion_bill.md) | billing | Immutable bill set consuming one command hold atomically; legacy single-bill conversions retain their original target. |
+| [`balance_action`](balance_action.md) | billing | TMF654 top-up, reservation, adjustment and transfer actions; balanceActionHistory is their projection. Money and references are immutable; only failed actions may be deleted. |
+| [`balance_action_reversal`](balance_action_reversal.md) | billing | Compensating ledger entry of a cancelled top-up or adjustment; at most one per action. |
+| [`funding_source`](funding_source.md) | billing | Credit sources beside payments and credit notes: positive adjustments, received transfers and restored debit sources. Bounded with allocations, payouts, holds and consumption. |
+| [`funding_consumption`](funding_consumption.md) | billing | Exact source amounts consumed by debits, outgoing transfer principal and credit reversals. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
 | [`worker_request`](worker_request.md) | worker | The admin UI's queue for the billing worker (ours): catch-up and retry requests. The API only inserts; the worker picks them up oldest first. |
 | [`event_subscription`](event_subscription.md) | events | TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their deliveries. |
@@ -120,6 +124,10 @@ flowchart LR
     funding_hold_conversion[funding_hold_conversion]
     funding_conversion_source[funding_conversion_source]
     funding_conversion_bill[funding_conversion_bill]
+    balance_action[balance_action]
+    balance_action_reversal[balance_action_reversal]
+    funding_source[funding_source]
+    funding_consumption[funding_consumption]
   end
   subgraph area_worker["Billing worker (ours)"]
     billing_run_account[billing_run_account]
@@ -145,9 +153,17 @@ flowchart LR
   applied_customer_billing_rate -->|"product_id, billing_account_id"| product
   applied_customer_billing_rate -->|"product_offering_id"| product_offering
   applied_customer_billing_rate -->|"refunds_rate_id, product_id"| applied_customer_billing_rate
+  balance_action -->|"bucket_id, billing_account_id"| prepaid_bucket
+  balance_action -->|"command_id"| prepaid_command
+  balance_action -->|"command_id, hold_id"| funding_command_hold
+  balance_action -->|"hold_id, billing_account_id"| funding_hold
+  balance_action -->|"payment_id, billing_account_id"| payment
+  balance_action -->|"receiver_bucket_id, receiver_billing_account_id, receiver_currency"| prepaid_bucket
+  balance_action_reversal -->|"action_id, billing_account_id"| balance_action
   bill_allocation -->|"billing_account_id"| billing_account
   bill_allocation -->|"credit_bill_id, billing_account_id"| customer_bill
   bill_allocation -->|"customer_bill_id, billing_account_id"| customer_bill
+  bill_allocation -->|"funding_source_id, billing_account_id"| funding_source
   bill_allocation -->|"payment_id, billing_account_id"| payment
   billing_account -->|"bill_format_id"| bill_format
   billing_account -->|"customer_id"| customer
@@ -176,6 +192,11 @@ flowchart LR
   funded_interval -->|"command_id, billing_account_id, command_kind"| prepaid_command
   funded_interval -->|"product_id, billing_account_id"| product
   funding_command_hold -->|"hold_id, billing_account_id"| funding_hold
+  funding_consumption -->|"action_id, billing_account_id"| balance_action
+  funding_consumption -->|"credit_bill_id, billing_account_id"| customer_bill
+  funding_consumption -->|"funding_source_id, billing_account_id"| funding_source
+  funding_consumption -->|"payment_id, billing_account_id"| payment
+  funding_consumption -->|"reversal_action_id, billing_account_id"| balance_action_reversal
   funding_conversion_bill -->|"customer_bill_id, billing_account_id"| customer_bill
   funding_conversion_bill -->|"hold_id, billing_account_id"| funding_hold_conversion
   funding_conversion_source -->|"allocation_id"| bill_allocation
@@ -187,8 +208,12 @@ flowchart LR
   funding_hold_conversion -->|"hold_id, billing_account_id"| funding_hold
   funding_hold_conversion -->|"hold_id"| funding_command_hold
   funding_hold_source -->|"credit_bill_id, billing_account_id"| customer_bill
+  funding_hold_source -->|"funding_source_id, billing_account_id"| funding_source
   funding_hold_source -->|"hold_id, billing_account_id"| funding_hold
   funding_hold_source -->|"payment_id, billing_account_id"| payment
+  funding_source -->|"action_id"| balance_action
+  funding_source -->|"billing_account_id"| billing_account
+  funding_source -->|"consumption_id, billing_account_id"| funding_consumption
   number_assignment -->|"assigned_by_item_id"| product_order_item
   number_assignment -->|"cancelled_by_item_id"| product_order_item
   number_assignment -->|"ended_by_item_id"| product_order_item
@@ -224,6 +249,7 @@ flowchart LR
   refund -->|"billing_account_id"| billing_account
   refund -->|"payment_id, billing_account_id"| payment
   refund_source -->|"credit_bill_id, billing_account_id"| customer_bill
+  refund_source -->|"funding_source_id, billing_account_id"| funding_source
   refund_source -->|"payment_id, billing_account_id"| payment
   refund_source -->|"refund_id, billing_account_id"| refund
   worker_request -->|"run_id"| billing_run
@@ -702,6 +728,7 @@ erDiagram
     numeric amount
     bill_allocation_kind kind
     timestamptz allocated_at
+    uuid funding_source_id FK
   }
   customer_bill_state_change {
     uuid id PK
@@ -739,6 +766,7 @@ erDiagram
     uuid payment_id FK
     uuid credit_bill_id FK
     numeric amount
+    uuid funding_source_id FK
   }
   customer_bill_on_demand {
     uuid id PK
@@ -815,6 +843,7 @@ erDiagram
     uuid payment_id FK
     uuid credit_bill_id FK
     numeric amount
+    uuid funding_source_id FK
   }
   funding_command_hold {
     uuid command_id PK
@@ -877,6 +906,60 @@ erDiagram
     uuid hold_id FK
     uuid billing_account_id FK
   }
+  balance_action {
+    uuid id PK
+    text kind
+    text status
+    uuid billing_account_id FK
+    text currency FK
+    uuid bucket_id FK
+    jsonb request
+    numeric amount
+    numeric transfer_cost
+    text cost_owner
+    uuid receiver_bucket_id FK
+    uuid receiver_billing_account_id FK
+    text receiver_currency FK
+    text reason
+    text description
+    text failure_reason
+    text operator
+    timestamptz requested_at
+    timestamptz confirmed_at
+    timestamptz cancelled_at
+    uuid payment_id FK
+    uuid hold_id FK
+    uuid command_id FK
+  }
+  balance_action_reversal {
+    uuid action_id PK,FK
+    uuid billing_account_id FK
+    text currency FK
+    numeric amount
+    text operator
+    timestamptz reversed_at
+  }
+  funding_source {
+    uuid id PK
+    text kind
+    uuid billing_account_id FK
+    text currency FK
+    uuid action_id FK
+    uuid consumption_id FK
+    numeric amount
+    timestamptz available_at
+  }
+  funding_consumption {
+    uuid id PK
+    uuid billing_account_id FK
+    uuid action_id FK
+    uuid reversal_action_id FK
+    uuid payment_id FK
+    uuid credit_bill_id FK
+    uuid funding_source_id FK
+    numeric amount
+    timestamptz consumed_at
+  }
   billing_account {
     uuid id PK
   }
@@ -888,6 +971,10 @@ erDiagram
   }
   applied_customer_billing_rate |o--o{ applied_customer_billing_rate : "refunds_rate_id, product_id"
   applied_customer_billing_rate ||--o{ funded_interval : "applied_rate_id, product_id, billing_account_id, billing_run_id, period, currency, amount, tax_amount, charge_type"
+  balance_action ||--o{ balance_action_reversal : "action_id, billing_account_id, currency"
+  balance_action ||--o{ funding_consumption : "action_id, billing_account_id"
+  balance_action ||--o{ funding_source : "action_id"
+  balance_action_reversal |o--o{ funding_consumption : "reversal_action_id, billing_account_id"
   bill_allocation ||--o{ funding_conversion_source : "allocation_id"
   bill_presentation_media ||--o{ account_presentation_media : "media_id"
   billing_account ||--o{ account_presentation_media : "billing_account_id"
@@ -897,6 +984,7 @@ erDiagram
   billing_account ||--o{ customer_bill_on_demand : "billing_account_id"
   billing_account ||--o{ funded_interval : "billing_account_id, currency, rating_type"
   billing_account ||--o{ funding_hold : "billing_account_id, currency"
+  billing_account ||--o{ funding_source : "billing_account_id, currency"
   billing_account ||--o{ payment : "billing_account_id, currency"
   billing_account ||--o{ prepaid_bucket : "billing_account_id, currency, rating_type"
   billing_account ||--o{ prepaid_command : "billing_account_id"
@@ -907,13 +995,17 @@ erDiagram
   customer_bill |o--o{ applied_customer_billing_rate : "customer_bill_id, billing_account_id"
   customer_bill |o--o{ bill_allocation : "credit_bill_id, billing_account_id"
   customer_bill |o--o{ customer_bill_on_demand : "customer_bill_id"
+  customer_bill |o--o{ funding_consumption : "credit_bill_id, billing_account_id"
   customer_bill |o--o{ funding_hold_conversion : "customer_bill_id, billing_account_id"
   customer_bill |o--o{ funding_hold_source : "credit_bill_id, billing_account_id"
   customer_bill |o--o{ refund_source : "credit_bill_id, billing_account_id"
   customer_bill ||--o{ bill_allocation : "customer_bill_id, billing_account_id"
   customer_bill ||--o{ customer_bill_state_change : "customer_bill_id"
   customer_bill ||--o{ funding_conversion_bill : "customer_bill_id, billing_account_id"
+  funding_command_hold |o--o{ balance_action : "command_id, hold_id"
   funding_command_hold ||--o{ funding_hold_conversion : "hold_id"
+  funding_consumption |o--o{ funding_source : "consumption_id, billing_account_id"
+  funding_hold |o--o{ balance_action : "hold_id, billing_account_id"
   funding_hold ||--o{ funding_command_hold : "hold_id, billing_account_id"
   funding_hold ||--o{ funding_hold_conversion : "hold_id, billing_account_id"
   funding_hold ||--o{ funding_hold_source : "hold_id, billing_account_id"
@@ -921,10 +1013,19 @@ erDiagram
   funding_hold_conversion ||--o{ funding_conversion_source : "hold_id"
   funding_hold_conversion ||--o{ funding_conversion_source : "hold_id, billing_account_id"
   funding_hold_source ||--o{ funding_conversion_source : "hold_source_id"
+  funding_source |o--o{ bill_allocation : "funding_source_id, billing_account_id"
+  funding_source |o--o{ funding_consumption : "funding_source_id, billing_account_id"
+  funding_source |o--o{ funding_hold_source : "funding_source_id, billing_account_id"
+  funding_source |o--o{ refund_source : "funding_source_id, billing_account_id"
+  payment |o--o{ balance_action : "payment_id, billing_account_id"
   payment |o--o{ bill_allocation : "payment_id, billing_account_id"
+  payment |o--o{ funding_consumption : "payment_id, billing_account_id"
   payment |o--o{ funding_hold_source : "payment_id, billing_account_id"
   payment |o--o{ refund : "payment_id, billing_account_id"
   payment |o--o{ refund_source : "payment_id, billing_account_id"
+  prepaid_bucket |o--o{ balance_action : "receiver_bucket_id, receiver_billing_account_id, receiver_currency"
+  prepaid_bucket ||--o{ balance_action : "bucket_id, billing_account_id, currency"
+  prepaid_command |o--o{ balance_action : "command_id"
   prepaid_command |o--o{ billing_run : "command_id"
   prepaid_command ||--o{ funded_interval : "command_id, billing_account_id, command_kind"
   prepaid_command ||--o{ prepaid_funding_shortfall : "command_id"

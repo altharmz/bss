@@ -47,6 +47,7 @@ from app.api.refunds import RefundCreate
 from app.api.resource_inventory import ResourceCreate, ResourcePatch
 from app.internal.billing_runs import OUTCOMES, CatchUp
 from app.internal.catalog import PriceChange
+from app.internal.prepaid_commands import STATES
 
 # Not tools: the same list as docs/progress/scope.yaml `excluded` (area api).
 EXCLUDED = {("GET", "/")}
@@ -532,6 +533,19 @@ OPERATIONS: dict[str, Op] = {
         body=CatchUp,
     ),
     "retry": Op("Queue a retry of a failed billing run (409 if it is not failed).", no_body=True),
+    "list_prepaid_commands": Op(
+        "Prepaid order, renewal and transfer commands, newest first: internal state"
+        " (pending, completed, failedTechnical), outcome, technical error, needs-top-up"
+        " amounts and the linked order, products, run and bills.",
+        query=PAGE,
+        extra={"billingAccount.id": UUID_ARG, "state": {"type": "string", "enum": list(STATES)}},
+    ),
+    "get_prepaid_command": Op("One prepaid command with its state, outcome and links."),
+    "retry_prepaid_command": Op(
+        "Return a failedTechnical prepaid command to pending with the same identity, request"
+        " and hold; the worker attempts it within a minute (409 unless failedTechnical).",
+        no_body=True,
+    ),
     "bill_detail": Op(
         "A bill with its charges, payments and state history (who held or released it)."
     ),

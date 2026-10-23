@@ -24,6 +24,10 @@ items:
   - {id: db.funding_hold_conversion, area: db, stage: 5, table: funding_hold_conversion, title: "Durable command hold conversion results"}
   - {id: db.funding_conversion_bill, area: db, stage: 5, table: funding_conversion_bill, title: "Retained multi-product conversion bill sets"}
   - {id: db.funding_conversion_source, area: db, stage: 5, table: funding_conversion_source, title: "Exact held source allocation identities"}
+  - {id: db.balance_action, area: db, stage: 5, table: balance_action, title: "TMF654 balance actions (top-up, reservation, adjustment, transfer)"}
+  - {id: db.balance_action_reversal, area: db, stage: 5, table: balance_action_reversal, title: "Unique compensating reversal of a cancelled action"}
+  - {id: db.funding_source, area: db, stage: 5, table: funding_source, title: "Adjustment, received-transfer and reversal funding sources"}
+  - {id: db.funding_consumption, area: db, stage: 5, table: funding_consumption, title: "Source consumption by debits, transfers and reversals"}
   - {id: db.subscriber_number, area: db, stage: 5, table: subscriber_number, title: "Subscriber-number inventory (TMF639)"}
   - {id: db.number_assignment, area: db, stage: 5, table: number_assignment, title: "Effective-dated number assignment history"}
   - {id: api.tmf639.hub.create, area: api, stage: 5, method: POST, path: "/tmf-api/resourceInventory/v5/hub", title: "TMF639 POST /hub"}
@@ -278,6 +282,9 @@ items:
   - {id: api.internal.billingRunAccounts.list, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}/accounts", title: "A run's per-account outcomes"}
   - {id: api.internal.billingRun.catchUp, area: api, stage: 4, method: POST, path: /internal/v1/billingRun/catchUp, title: "Queue a catch-up to a date"}
   - {id: api.internal.billingRun.retry, area: api, stage: 4, method: POST, path: "/internal/v1/billingRun/{run_id}/retry", title: "Queue a retry of a failed run"}
+  - {id: api.internal.prepaidCommand.list, area: api, stage: 5, method: GET, path: /internal/v1/prepaid/command, title: "List prepaid commands with state, outcome and links"}
+  - {id: api.internal.prepaidCommand.get, area: api, stage: 5, method: GET, path: "/internal/v1/prepaid/command/{command_id}", title: "Get a prepaid command"}
+  - {id: api.internal.prepaidCommand.retry, area: api, stage: 5, method: POST, path: "/internal/v1/prepaid/command/{command_id}/retry", title: "Return a failedTechnical prepaid command to pending"}
 
   # ---------------- api: service ----------------
   - {id: api.service.healthz, area: api, stage: template, method: GET, path: /healthz, title: "Liveness with a database check"}

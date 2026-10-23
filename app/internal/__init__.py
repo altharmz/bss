@@ -10,9 +10,17 @@ spec/internal/bss-internal.oas.yaml; tests validate every response against it.
 
 from fastapi import FastAPI
 
-from app.internal import accounts, billing_runs, bills, catalog, context, users
+from app.internal import (
+    accounts,
+    billing_runs,
+    bills,
+    catalog,
+    context,
+    prepaid_commands,
+    users,
+)
 
 
 def install(app: FastAPI) -> None:
-    for module in (context, accounts, catalog, billing_runs, bills, users):
+    for module in (context, accounts, catalog, billing_runs, prepaid_commands, bills, users):
         app.include_router(module.router)
