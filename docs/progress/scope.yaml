@@ -327,6 +327,8 @@ items:
   - {id: ui.subscriber.prepaid.transfer.confirm, area: ui, stage: 5, title: "Transfer finality confirmation step"}
   - {id: ui.subscriber.prepaid.orderWatch, area: ui, stage: 5, title: "Accepted prepaid order followed through its command: waiting, scheduled, needs top-up, technical failure"}
   - {id: ui.subscriber.prepaid.failedCommands, area: ui, stage: 5, title: "Needs-attention panel of technically failed prepaid commands with Retry"}
+  - {id: ui.subscriber.prepaid.history, area: ui, stage: 5, title: "Balance actions panel: TMF654 balanceActionHistory of the account and transfers it received"}
+  - {id: ui.subscriber.prepaid.historyDetail, area: ui, stage: 5, title: "Balance action dialog: one action fetched fresh, with transfer parties and cost"}
   - {id: ui.addProduct.prepaidPreview, area: ui, stage: 5, title: "Prepaid first-charge preview in Add product: to pay, available, shortfall, ledger after"}
   - {id: ui.addProduct.topUpShortfall, area: ui, stage: 5, title: "Top up the shortfall from Add product: opens the Top-up form with the amount typed in"}
   - {id: ui.subscriber.refunds, area: ui, stage: 5, title: "Recorded refund history with payout metadata"}

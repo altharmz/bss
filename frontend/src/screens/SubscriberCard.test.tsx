@@ -14,6 +14,7 @@ const P2 = 'p0000002-0000-4000-8000-000000000002';
 const P3 = 'p0000003-0000-4000-8000-000000000003';
 const ORDERS = '/tmf-api/productOrderingManagement/v5/productOrder';
 const INTERNAL = `/internal/v1/billingAccount/${A}`;
+const HISTORY = '/tmf-api/prepayBalanceManagement/v4/balanceActionHistory';
 const usd = (value: number) => ({ unit: 'USD', value });
 
 const ACCOUNT = accountBody(
@@ -162,6 +163,9 @@ function backend(routes: Record<string, Handler> = {}, account: object = ACCOUNT
     // asked only of a prepaid account: no command failed technically
     [`GET /internal/v1/prepaid/command?billingAccount.id=${A}&state=failedTechnical&offset=0&limit=100`]:
       () => json([], { total: 0 }),
+    // asked only of a prepaid account: no balance actions yet
+    [`GET ${HISTORY}?partyAccount.id=${A}&offset=0&limit=100`]: () => json([], { total: 0 }),
+    [`GET ${HISTORY}?receiverBucket.id=${BUCKET}&offset=0&limit=100`]: () => json([], { total: 0 }),
     [billsUrl(A)]: () => json([], { total: 0 }),
     [`GET /tmf-api/payment/v4/refund?account.id=${A}&offset=0&limit=100`]: () =>
       json([], { total: 0 }),
@@ -1711,5 +1715,288 @@ describe('prepaid first-charge preview in Add product', () => {
     expect(within(dialog).queryByText('Shortfall')).toBeNull();
     expect(within(dialog).queryByText(/Insufficient funds/)).toBeNull();
     expect(document.querySelector('[data-ui="ui.addProduct.topUpShortfall"]')).toBeNull();
+  });
+});
+
+describe('prepaid balance actions', () => {
+  const PREPAY = '/tmf-api/prepayBalanceManagement/v4';
+  const B = 'bbbb7777-0000-4000-8000-0000000000b7';
+  const RX_BUCKET = 'bbbb6666-0000-4000-8000-0000000000b6';
+  const OWN = `GET ${HISTORY}?partyAccount.id=${A}&offset=0&limit=100`;
+  const RECEIVED = `GET ${HISTORY}?receiverBucket.id=${BUCKET}&offset=0&limit=100`;
+  const PREPAID = accountBody(
+    A,
+    { id: C, name: 'Olga Kuznetsova' },
+    { ratingType: 'prepaid', accountBalance: [{ amount: usd(120), '@type': 'AccountBalance' }] },
+  );
+  const party = { id: A, name: 'Olga Kuznetsova', '@referredType': 'BillingAccount' };
+  const action = (id: string, type: string, status: string, requested: string, over = {}) => ({
+    id,
+    '@type': type,
+    status,
+    requestedDate: requested,
+    partyAccount: party,
+    bucket: { id: BUCKET },
+    usageType: 'monetary',
+    ...over,
+  });
+  const money = (value: number) => ({ amount: value, units: 'USD' });
+  const T1 = 'a1000000-0000-4000-8000-000000000001';
+  const T2 = 'a2000000-0000-4000-8000-000000000002';
+  const T3 = 'a3000000-0000-4000-8000-000000000003';
+  const T4 = 'a4000000-0000-4000-8000-000000000004';
+  const T5 = 'a5000000-0000-4000-8000-000000000005';
+  const T6 = 'a6000000-0000-4000-8000-000000000006';
+  const T7 = 'a7000000-0000-4000-8000-000000000007';
+  const topup = action(T1, 'TopupBalance', 'completed', '2026-10-01T05:00:00Z', {
+    amount: money(50),
+    reason: 'Cash at the desk',
+    confirmationDate: '2026-10-01T05:00:01Z',
+    paymentMethod: { id: 'cash', name: 'cash' },
+  });
+  const debit = action(T2, 'AdjustBalance', 'completed', '2026-10-01T06:00:00Z', {
+    amount: money(-5),
+    reason: 'Correction',
+  });
+  const credit = action(T3, 'AdjustBalance', 'cancelled', '2026-10-01T05:30:00Z', {
+    amount: money(7),
+  });
+  const hold = action(T4, 'ReserveBalance', 'created', '2026-10-01T07:00:00Z', {
+    amount: money(10),
+    reason: 'Pre-authorisation',
+    validFor: { endDateTime: '2026-10-02T07:00:00Z' },
+  });
+  const sent = action(T5, 'TransferBalance', 'completed', '2026-10-01T08:00:00Z', {
+    amount: money(30),
+    receiverBucket: { id: RX_BUCKET },
+    transferCost: { unit: 'USD', value: 1 },
+    costOwner: 'originator',
+    reason: 'Customer requested credit transfer',
+    confirmationDate: '2026-10-01T08:00:05Z',
+  });
+  const received = action(T6, 'TransferBalance', 'completed', '2026-10-01T04:00:00Z', {
+    amount: money(12),
+    partyAccount: { id: B, name: 'Ivan Sidorov', '@referredType': 'BillingAccount' },
+    bucket: { id: RX_BUCKET },
+    receiverBucket: { id: BUCKET },
+    transferCost: { unit: 'USD', value: 0 },
+    costOwner: 'originator',
+  });
+  const refused = action(T7, 'AdjustBalance', 'failed', '2026-10-01T03:00:00Z', {
+    amount: money(-500),
+    reason: 'Insufficient spendable funds',
+  });
+  const bucket = () =>
+    json([{ id: BUCKET, remainingValue: money(100), reservedValue: money(10) }], { total: 1 });
+  const list =
+    (...bodies: object[]) =>
+    () =>
+      json(bodies, { total: bodies.length });
+  const routes = (over: Record<string, Handler> = {}): Record<string, Handler> => ({
+    [`GET ${PREPAY}/bucket?partyAccount.id=${A}&offset=0&limit=100`]: bucket,
+    [OWN]: list(topup, debit, credit, hold, sent, refused),
+    [RECEIVED]: list(received, hold),
+    [`GET ${PREPAY}/bucket/${RX_BUCKET}`]: () =>
+      json({ id: RX_BUCKET, partyAccount: { id: B, name: 'Ivan Sidorov' } }),
+    ...over,
+  });
+  const rowsOf = () =>
+    within(document.querySelector('[data-ui="ui.subscriber.prepaid.history"]') as HTMLElement)
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) => r.textContent ?? '');
+
+  it('merges the account and received-transfer requests, de-duplicated and newest first', async () => {
+    const { calls } = backend(routes(), PREPAID);
+    await open();
+    expect(panel('Balance actions')).toBeTruthy();
+    await waitFor(() => expect(rowsOf()).toHaveLength(7));
+    expect(calls).toContain(OWN);
+    expect(calls).toContain(RECEIVED);
+    const rows = rowsOf();
+    expect(
+      rows.map(
+        (r) => r.match(/Top-up|Credit adj|Debit adj|Hold|Transfer \w+ [\w ]+?(?=[+−-]|\d)/)?.[0],
+      ),
+    ).toEqual([
+      'Transfer to Ivan Sidorov',
+      'Hold',
+      'Debit adj',
+      'Credit adj',
+      'Top-up',
+      'Transfer from Ivan Sidorov',
+      'Debit adj',
+    ]);
+    expectUi('ui.subscriber.prepaid.history');
+    // requested is the business date and time (Europe/Moscow, +03:00)
+    expect(rows[0]).toContain('2026-10-01 11:00');
+  });
+
+  it('signs amounts from this account and states every status', async () => {
+    backend(routes(), PREPAID);
+    await open();
+    await waitFor(() => expect(rowsOf()).toHaveLength(7));
+    const [toIvan, held, debit, cancelledCredit, topup, fromIvan, refused] = rowsOf();
+    expect(toIvan).toContain('−30.00');
+    expect(toIvan).toContain('Completed');
+    expect(held).toContain('Held');
+    expect(held).toContain('10.00');
+    expect(held).not.toContain('−10.00');
+    expect(held).not.toContain('+10.00');
+    expect(debit).toContain('−5.00');
+    expect(cancelledCredit).toContain('+7.00');
+    expect(cancelledCredit).toContain('Cancelled');
+    expect(topup).toContain('+50.00');
+    expect(topup).toContain('Cash at the desk');
+    expect(fromIvan).toContain('+12.00');
+    expect(refused).toContain('Refused');
+    expect(refused).toContain('Insufficient spendable funds');
+  });
+
+  it('labels a released hold and a pending transfer', async () => {
+    backend(
+      routes({
+        [OWN]: list(
+          { ...hold, status: 'cancelled' },
+          { ...sent, status: 'created', confirmationDate: undefined },
+        ),
+        [RECEIVED]: list(),
+      }),
+      PREPAID,
+    );
+    await open();
+    await waitFor(() => expect(rowsOf()).toHaveLength(2));
+    expect(rowsOf()[0]).toContain('Pending');
+    expect(rowsOf()[1]).toContain('Released');
+  });
+
+  it('opens the detail fetched fresh, with links to both cards and the transfer cost', async () => {
+    const { calls } = backend(
+      routes({ [`GET ${HISTORY}/${T5}`]: () => json({ ...sent, description: 'Fresh copy' }) }),
+      PREPAID,
+    );
+    await open();
+    await waitFor(() => expect(rowsOf()).toHaveLength(7));
+    fireEvent.click(within(panel('Balance actions')).getByText('Transfer to Ivan Sidorov'));
+    const detail = await screen.findByRole('dialog', { name: 'Balance action' });
+    expectUi('ui.subscriber.prepaid.historyDetail');
+    expect(await within(detail).findByText('Fresh copy')).toBeTruthy();
+    expect(calls).toContain(`GET ${HISTORY}/${T5}`);
+    expect(within(detail).getByText('A5000000')).toBeTruthy();
+    expect(within(detail).getByText('Customer requested credit transfer')).toBeTruthy();
+    expect(within(detail).getByRole('link', { name: 'Ivan Sidorov' }).getAttribute('href')).toBe(
+      `/subscribers/${B}`,
+    );
+    expect(within(detail).getByRole('link', { name: 'Olga Kuznetsova' }).getAttribute('href')).toBe(
+      `/subscribers/${A}`,
+    );
+    expect(within(detail).getByText('1.00')).toBeTruthy();
+    expect(within(detail).getByText('originator')).toBeTruthy();
+  });
+
+  it('shows the payment method of a top-up and the expiry of a hold', async () => {
+    backend(
+      routes({
+        [`GET ${HISTORY}/${T1}`]: () => json(topup),
+        [`GET ${HISTORY}/${T4}`]: () => json(hold),
+      }),
+      PREPAID,
+    );
+    await open();
+    await waitFor(() => expect(rowsOf()).toHaveLength(7));
+    fireEvent.click(within(panel('Balance actions')).getByText('Top-up'));
+    const first = await screen.findByRole('dialog', { name: 'Balance action' });
+    expect(await within(first).findByText('Payment method')).toBeTruthy();
+    expect(within(first).getAllByText('cash').length).toBeGreaterThan(0);
+    fireEvent.click(within(first).getByRole('button', { name: 'Close' }));
+    fireEvent.click(within(panel('Balance actions')).getByText('Hold'));
+    const second = await screen.findByRole('dialog', { name: 'Balance action' });
+    expect(await within(second).findByText('2026-10-02 10:00')).toBeTruthy();
+  });
+
+  it('says so when there are no balance actions, and when loading fails', async () => {
+    backend(routes({ [OWN]: list(), [RECEIVED]: list() }), PREPAID);
+    await open();
+    await waitFor(() =>
+      expect(within(panel('Balance actions')).getByText('No balance actions')).toBeTruthy(),
+    );
+  });
+
+  it('reports a failing history request in place and keeps the card', async () => {
+    backend(routes({ [OWN]: () => tmfError(500, 'database is down') }), PREPAID);
+    await open();
+    await waitFor(() =>
+      expect(
+        within(panel('Balance actions')).getByText('Failed to load the balance actions'),
+      ).toBeTruthy(),
+    );
+    expect(screen.getByRole('heading', { name: /Olga Kuznetsova/ })).toBeTruthy();
+  });
+
+  it('reloads the panel after a money form', async () => {
+    const { fetchMock } = backend(
+      routes({
+        [`POST ${PREPAY}/topupBalance`]: () =>
+          json({ id: 'x1', status: 'completed' }, { status: 201 }),
+      }),
+      PREPAID,
+    );
+    await open();
+    await waitFor(() => expect(rowsOf()).toHaveLength(7));
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Top up' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Top up' }));
+    const form = await screen.findByRole('dialog', { name: 'Top up' });
+    fireEvent.change(within(form).getByLabelText('Amount'), { target: { value: '5' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'cash' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Top up' }));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(([url]) => String(url).startsWith(`${HISTORY}?partyAccount`)),
+      ).toHaveLength(2),
+    );
+  });
+
+  it('makes no TMF654 history request for a postpaid card', async () => {
+    const { calls } = backend();
+    await open();
+    await waitFor(() => expect(screen.getByText('Transaction history')).toBeTruthy());
+    expect(screen.queryByText('Balance actions')).toBeNull();
+    expect(calls.filter((c) => c.includes('prepayBalanceManagement'))).toEqual([]);
+  });
+
+  it('labels the new transaction types', async () => {
+    const entry = (id: string, type: string, note: string) => ({
+      id,
+      href: `/${id}`,
+      type,
+      date: '2026-10-01',
+      note,
+      period: null,
+      amount: usd(1),
+      balanceAfter: usd(1),
+    });
+    backend(
+      routes({
+        [`GET ${INTERNAL}/transactions?limit=20`]: () =>
+          json(
+            [
+              entry('e1', 'transferOut', 'To Ivan Sidorov'),
+              entry('e2', 'transferIn', 'From Ivan Sidorov'),
+              entry('e3', 'reversal', 'Cancelled adjustment'),
+              entry('e3', 'adjustment', 'Correction'),
+            ],
+            { total: 4 },
+          ),
+      }),
+      PREPAID,
+    );
+    await open();
+    const tx = panel('Transaction history');
+    for (const label of ['Transfer out', 'Transfer in', 'Reversal', 'Adjustment'])
+      expect(await within(tx).findByText(label)).toBeTruthy();
   });
 });

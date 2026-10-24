@@ -122,6 +122,17 @@ API: `GET .../billingAccount/{id}`, `GET /tmf-api/customer/v5/customer/{id}`,
 `GET /internal/v1/billingAccount/{id}/products`, `.../charges?limit=20`,
 `.../transactions?limit=20`.
 
+### Balance actions (`ui.subscriber.prepaid.history`, `ui.subscriber.prepaid.historyDetail`) - `screens/PrepaidHistory.tsx`
+
+Prepaid cards only, above Charge history. Lists the account's top-ups, holds, adjustments and
+transfers (requested time, action, signed amount, status, note), newest first; the account's
+own actions and the transfers it received are merged and de-duplicated. A row opens a dialog
+fetched fresh: id, kind, status, amount, dates, reason, description, payment method, hold expiry,
+sender and receiver with links to their cards, transfer cost and who pays it, product. Reloads
+with the card. Transaction history also lists Adjustment, Reversal, Transfer in/out.
+API: `GET /tmf-api/prepayBalanceManagement/v4/balanceActionHistory?partyAccount.id=` and
+`?receiverBucket.id=`, `.../balanceActionHistory/{id}`, `.../bucket/{id}` (receiver name).
+
 ### Deactivate a product (`ui.subscriber.deactivate`)
 
 A destructive button per product with an inline confirm. It places a **TMF622 order with

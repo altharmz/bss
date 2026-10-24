@@ -4,15 +4,28 @@
 
 These decisions were made under the human's delegation of 2026-10-24
 ([next-slices-design.md](../next-slices-design.md)):
-- **Slice 2:** the internal transactions list adds balance-action ledger entries
-  (adjustments, reversals, transfers in and out), so that its newest `balanceAfter`
-  equals L.
 - **Slice 4:** the internal products view gains `pendingChanges`.
 - **Slice 8:** dated prepaid suspend/resume runs through an `order` command due on its
   date. A failed revalidation reaches TMF622 `failed`. Number-only changes run as on
   postpaid.
 
 Each slice replaces this note with its own entry when built.
+
+## Slice 2: transactions include balance actions (2026-10-24)
+
+Bug fix, no migration; built as designed ([next-slices-design.md](../next-slices-design.md)
+section 2). On a prepaid account the internal `transactions` list (and its count) now
+includes the four ledger entries of `BALANCE_ACTION_LEDGER`: `adjustment` (completed or
+cancelled, signed, note = reason else "Adjustment"), `reversal` (note "Cancelled top-up" or
+"Cancelled adjustment"), `transferIn` ("From {sender}") and `transferOut` ("To {receiver}"),
+so the newest `balanceAfter` equals `account_balance`. They are guarded by
+`has_balance_ledger`. Fees are already ABRs and a top-up is its payment; holds stay out.
+`Transaction.type` in the internal contract gained the four values; a new entry's `href` is
+its `balanceActionHistory` resource. A reversal shares its action's `id`, so a list can hold
+two entries with one id (the UI keys rows by type and id). Test:
+`tests/test_internal_transactions_prepaid.py` (top-up purchase, credit, debit, cancelled
+adjustment, transfer out with a fee, transfer in; counts, notes, newest balance equals the
+ledger on both accounts; a postpaid list is unchanged).
 
 ## P4c: balance read API (2026-10-23)
 

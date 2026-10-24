@@ -29,6 +29,7 @@ import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
 import { ProductNumber } from './ProductNumber';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
+import { BalanceActions } from './PrepaidHistory';
 import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
 import { FailedCommands, OrderWatch } from './PrepaidOrderWatch';
 import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
@@ -72,6 +73,10 @@ const TYPE_LABEL: Record<string, string> = {
   refund: 'Refund',
   payment: 'Payment',
   payout: 'Refund paid out',
+  adjustment: 'Adjustment',
+  reversal: 'Reversal',
+  transferIn: 'Transfer in',
+  transferOut: 'Transfer out',
 };
 
 export function SubscriberCardScreen({ accountId }: { accountId: string }) {
@@ -329,6 +334,10 @@ function Card({
         onCompleted={reload}
       />
       <RefundsPanel accountId={account.id} version={version} />
+
+      {account.ratingType === 'prepaid' && (
+        <BalanceActions balance={balance} accountId={account.id} version={version} />
+      )}
 
       <div className="bss-two-col">
         <History account={account} version={version} />
@@ -799,6 +808,7 @@ function History({ account, version }: { account: Account; version: number }) {
           columns={TX_COLUMNS}
           errorTitle="Failed to load transactions"
           empty={{ title: 'No transactions', text: 'No payments or charges on this account.' }}
+          keyOf={(t) => `${t.type}:${t.id}`}
           render={(t) => ({
             date: t.date,
             type: (
@@ -822,7 +832,9 @@ function SimpleList<T extends { id: string }>({
   errorTitle,
   empty,
   render,
+  keyOf = (row) => row.id,
 }: {
+  keyOf?: (row: T) => string;
   resource: ResourceWithRetry<T[]>;
   columns: Column[];
   errorTitle: string;
@@ -839,7 +851,9 @@ function SimpleList<T extends { id: string }>({
       rows={(data) => data}
       onResetFilters={() => {}}
     >
-      {(rows) => rows.map((row) => <TableRow key={row.id} columns={columns} cells={render(row)} />)}
+      {(rows) =>
+        rows.map((row) => <TableRow key={keyOf(row)} columns={columns} cells={render(row)} />)
+      }
     </ListState>
   );
 }

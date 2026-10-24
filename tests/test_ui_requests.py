@@ -691,6 +691,47 @@ def test_prepaid_transfer_as_the_ui_sends_it(api, db_conn):
     assert stored["description"] and stored["description"] != stored["reason"]
 
 
+def test_balance_action_history_reads_as_the_ui_makes_them(api, db_conn):
+    """loadBalanceActions() / loadBalanceAction() (api/history.ts), pinned in
+    SubscriberCard.test.tsx:
+    the sender's card asks by partyAccount.id, the receiver's also by receiverBucket.id (the
+    transfer it received), the receiving account is named through its bucket, and one action
+    is fetched by id for the detail dialog."""
+    tx, rx = pair(api, db_conn)
+    prepay = "/tmf-api/prepayBalanceManagement/v4"
+    moved = api.post(
+        f"{prepay}/transferBalance",
+        {
+            "@type": "TransferBalance",
+            "reason": "Customer asked",
+            "channel": {"id": "admin-ui", "name": "Admin UI"},
+            "logicalResource": [{"id": str(tx.number)}],
+            "receiverLogicalResource": {"id": str(rx.number)},
+            "amount": {"amount": 10, "units": "USD"},
+            "usageType": "monetary",
+            "bucket": {"id": tx.bucket},
+            "receiverBucket": {"id": rx.bucket},
+            "receiverBucketUsageType": "monetary",
+        },
+        headers={"Idempotency-Key": "ui-history-1"},
+    ).json()
+    assert "id" in moved, moved
+    history = f"{prepay}/balanceActionHistory"
+    sent = api.get(f"{history}?partyAccount.id={tx.id}&offset=0&limit=100")
+    assert [a["id"] for a in sent.json()] == [moved["id"]]
+    assert sent.json()[0]["@type"] == "TransferBalance"
+    assert sent.json()[0]["receiverBucket"]["id"] == rx.bucket
+    owner = api.get(f"{prepay}/bucket/{rx.bucket}").json()["partyAccount"]
+    assert owner["id"] == rx.id and owner["name"]
+    got = api.get(f"{history}?receiverBucket.id={rx.bucket}&offset=0&limit=100")
+    assert [a["id"] for a in got.json()] == [moved["id"]]
+    assert got.json()[0]["partyAccount"]["id"] == tx.id  # the sender, named for the receiver
+    assert api.get(f"{history}?receiverBucket.id={tx.bucket}&offset=0&limit=100").json() == []
+    one = api.get(f"{history}/{moved['id']}").json()
+    assert one["transferCost"]["value"] == 0 and one["costOwner"] == "originator"
+    assert one["status"] == "created" and one["requestedDate"]
+
+
 def test_prepaid_order_and_command_reads_as_the_ui_makes_them(api, db_conn, monkeypatch):
     """OrderWatch / FailedCommands (api/commands.ts): a prepaid add answers `inProgress`, the UI
     follows it through the command that has the order's id, lists an account's technically

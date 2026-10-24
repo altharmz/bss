@@ -25,6 +25,26 @@ the amount prefilled and the top-up body pinned (the POST itself is already repl
 Deviation: the first product of a new subscriber (`SubscriberForms.tsx`) has no card behind
 it, so there the warning shows without the Top-up button (`onTopUp` is optional).
 
+## Slice 2: Balance actions panel (2026-10-24)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 2; the backend
+half is in [prepaid.md](prepaid.md#slice-2-transactions-include-balance-actions-2026-10-24)).
+`PrepaidHistory.tsx` and `api/history.ts`: the **Balance actions** panel
+(`ui.subscriber.prepaid.history`, prepaid cards only, above Charge history) merges
+`balanceActionHistory?partyAccount.id=` and `?receiverBucket.id=` (both `getAll`), de-duplicates
+by id and sorts by `requestedDate` descending; a row opens **Balance action**
+(`ui.subscriber.prepaid.historyDetail`), fetched fresh. The panel reloads with the card's
+`version`; a postpaid card makes no TMF654 request. `TYPE_LABEL` gained the four new types.
+Tests: `SubscriberCard.test.tsx` (request pair, order, signs and labels, detail fetch and links,
+payment method and expiry, empty, error, reload after a top-up, postpaid, transaction labels) and
+`tests/test_ui_requests.py::test_balance_action_history_reads_as_the_ui_makes_them` (the reads replayed).
+Deviations (the code differs from the design's facts):
+- A transfer body names only `receiverBucket`, not the receiving account, so the receiver
+  ("Transfer to {name}", the dialog's To link) is resolved with one `GET bucket/{id}` per distinct
+  receiver bucket of the sent transfers (a failure falls back to "another account").
+- The detail shows the product by name or short id without a link: there is no product screen.
+- A transfer or other action still `created` reads "Pending" (the design names Held only for holds).
+
 ## Sidebar grouped by TMF area; global Orders screen (2026-10-21)
 
 Decided by the human on 2026-10-21. Nothing is implemented yet. It replaces the single "Operations"

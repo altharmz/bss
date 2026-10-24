@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 import psycopg
 from fastapi import APIRouter, Request
 
-from app.api import bill, payment
+from app.api import balance, bill, payment
 from app.api.common import money, parse_id
 from app.api.deps import ClockDep, Tx
 from app.api.errors import bad_request, not_found, unprocessable
@@ -417,11 +417,19 @@ def charges(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
     return _page(items, total)
 
 
+def _transaction_href(t: Row) -> str:
+    if t["kind"] == "payment":
+        return f"{payment.BASE}/payment/{t['id']}"
+    if t["kind"] in ("adjustment", "reversal", "transferIn", "transferOut"):
+        return f"{balance.BASE}/balanceActionHistory/{t['id']}"
+    return f"{bill.BASE}/appliedCustomerBillingRate/{t['id']}"
+
+
 @router.get("/{account_id}/transactions")
 def transactions(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
-    """Charges, refunds and payments with the balance after each, newest first. Positive
-    = credit to the customer, as in accountBalance; the newest balanceAfter is the
-    account's balance."""
+    """Charges, refunds, payments and, on a prepaid account, balance actions with the balance
+    after each, newest first. Positive = credit to the customer, as in accountBalance; the
+    newest balanceAfter is the account's balance."""
     offset, limit = parse_page(request)
     with tx() as conn:
         row = _account(conn, account_id)
@@ -432,9 +440,7 @@ def transactions(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
     items = [
         {
             "id": str(t["id"]),
-            "href": f"{payment.BASE}/payment/{t['id']}"
-            if t["kind"] == "payment"
-            else f"{bill.BASE}/appliedCustomerBillingRate/{t['id']}",
+            "href": _transaction_href(t),
             "type": t["kind"],
             "date": t["day"],
             "note": t["note"],

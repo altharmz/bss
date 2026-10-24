@@ -847,13 +847,13 @@ components:
       properties:
         id: {type: string, format: uuid}
         href: {type: string}
-        type: {type: string, enum: [charge, refund, payment, payout]}
+        type: {type: string, enum: [charge, refund, payment, payout, adjustment, reversal, transferIn, transferOut]}
         date:
           description: A charge's or refund's billing run date; a payment's date.
           allOf: [{$ref: '#/components/schemas/BusinessDate'}]
         note:
           type: string
-          description: The offering name for a charge or refund; the payment method for a payment.
+          description: The offering name for a charge or refund; the payment method for a payment; the reason (else "Adjustment") for an adjustment; "Cancelled top-up" or "Cancelled adjustment" for a reversal; "From {account}" or "To {account}" for a transfer.
         period:
           description: Null for a payment.
           type: object

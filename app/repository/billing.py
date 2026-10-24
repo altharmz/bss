@@ -1365,6 +1365,44 @@ def page_account_charges(
     return rows, total["n"]
 
 
+# The balance-action arms of the transaction ledger (the four entries of
+# BALANCE_ACTION_LEDGER): signed adjustments, reversals, completed transfers in and out.
+BALANCE_ACTION_ARMS = """
+            UNION ALL
+            SELECT id, 'adjustment', amount, (confirmed_at AT TIME ZONE %(tz)s)::date, 1,
+                   confirmed_at, coalesce(reason, 'Adjustment'), NULL
+            FROM balance_action WHERE billing_account_id = %(account)s
+              AND kind = 'adjustment' AND status IN ('completed', 'cancelled')
+            UNION ALL
+            SELECT r.action_id, 'reversal', r.amount, (r.reversed_at AT TIME ZONE %(tz)s)::date, 1,
+                   r.reversed_at, CASE a.kind WHEN 'topup' THEN 'Cancelled top-up'
+                                   ELSE 'Cancelled adjustment' END, NULL
+            FROM balance_action_reversal r JOIN balance_action a ON a.id = r.action_id
+            WHERE r.billing_account_id = %(account)s
+            UNION ALL
+            SELECT a.id, 'transferIn', a.amount, (a.confirmed_at AT TIME ZONE %(tz)s)::date, 1,
+                   a.confirmed_at, 'From ' || s.name, NULL
+            FROM balance_action a JOIN billing_account s ON s.id = a.billing_account_id
+            WHERE a.receiver_billing_account_id = %(account)s
+              AND a.kind = 'transfer' AND a.status = 'completed'
+            UNION ALL
+            SELECT a.id, 'transferOut', -a.amount, (a.confirmed_at AT TIME ZONE %(tz)s)::date, 1,
+                   a.confirmed_at, 'To ' || t.name, NULL
+            FROM balance_action a JOIN billing_account t ON t.id = a.receiver_billing_account_id
+            WHERE a.billing_account_id = %(account)s
+              AND a.kind = 'transfer' AND a.status = 'completed'
+"""
+BALANCE_ACTION_COUNT = """
+    SELECT (SELECT count(*) FROM balance_action WHERE billing_account_id = %(account)s
+            AND kind = 'adjustment' AND status IN ('completed', 'cancelled'))
+         + (SELECT count(*) FROM balance_action_reversal WHERE billing_account_id = %(account)s)
+         + (SELECT count(*) FROM balance_action WHERE kind = 'transfer' AND status = 'completed'
+            AND receiver_billing_account_id = %(account)s)
+         + (SELECT count(*) FROM balance_action WHERE kind = 'transfer' AND status = 'completed'
+            AND billing_account_id = %(account)s)
+"""
+
+
 def page_account_transactions(
     conn: psycopg.Connection, account_id: UUID, *, tz: str, offset: int, limit: int
 ) -> tuple[list[Row], int]:
@@ -1378,6 +1416,7 @@ def page_account_transactions(
     entry's own timestamp and id. The balance after the newest entry is the account
     balance.
     """
+    arms = BALANCE_ACTION_ARMS if has_balance_ledger(conn) else ""
     rows = fetch_all(
         conn,
         """
@@ -1400,6 +1439,7 @@ def page_account_transactions(
             SELECT id, 'payout', -amount, (refunded_at AT TIME ZONE %(tz)s)::date, 1,
                    refunded_at, coalesce(method_name, method_type), NULL
             FROM refund WHERE billing_account_id = %(account)s
+            --ARMS--
         ),
         running AS (
             SELECT *, sum(amount) OVER (
@@ -1410,7 +1450,7 @@ def page_account_transactions(
         SELECT * FROM running
         ORDER BY day DESC, rank DESC, at DESC, (kind = 'payout') DESC, id DESC
         OFFSET %(offset)s LIMIT %(limit)s
-        """,
+        """.replace("--ARMS--", arms),
         {"account": account_id, "tz": tz, "fee": FEE_NAME, "offset": offset, "limit": limit},
     )
     total = fetch_one(
@@ -1425,4 +1465,7 @@ def page_account_transactions(
         {"account": account_id},
     )
     assert total is not None
-    return rows, total["n"]
+    n = total["n"]
+    if arms:
+        n += conn.execute(BALANCE_ACTION_COUNT, {"account": account_id}).fetchone()[0]
+    return rows, n
