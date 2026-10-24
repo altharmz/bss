@@ -42,16 +42,20 @@ def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
     assert seeding.seed(api, api.clock, TODAY) is True
     before = counts(db_conn)
     assert before["product_offering"] == 4
-    assert before["billing_account"] == 7
-    assert before["billing_run"] == seeding.START_DAYS  # one per day up to today
+    assert before["billing_account"] == 9
+    # one daily run per day up to today, plus the prepaid commands' own runs
+    assert db_conn.execute("SELECT count(*) FROM billing_run WHERE kind = 'daily'").fetchone() == (
+        seeding.START_DAYS,
+    )
+    assert before["billing_run"] > seeding.START_DAYS
     # every run went through the worker: completed, one ok outcome per member account
-    # (all 7 accounts are opened on the seed's first day, before the first run)
+    # (all 9 accounts are opened on the seed's first day, before the first run)
     statuses = db_conn.execute("SELECT DISTINCT status FROM billing_run").fetchall()
     assert statuses == [("completed",)]
     outcomes = db_conn.execute(
         "SELECT status, count(*) FROM billing_run_account GROUP BY status"
     ).fetchall()
-    assert outcomes == [("ok", seeding.START_DAYS * 7)]
+    assert outcomes == [("ok", seeding.START_DAYS * 9)]
     assert before["applied_customer_billing_rate"] > 0 and before["customer_bill"] > 0
     assert before["payment"] > 0
 
@@ -97,18 +101,44 @@ def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
     # one of the simulated days (tests/seed.py, `seed`)
     start = TODAY - timedelta(days=seeding.START_DAYS)
     runs = db_conn.execute(
-        "SELECT a.applied_at, r.run_date FROM applied_customer_billing_rate a"
+        "SELECT a.applied_at, r.run_date, r.kind FROM applied_customer_billing_rate a"
         " JOIN billing_run r ON r.id = a.billing_run_id"
     ).fetchall()
-    assert runs and all(applied == seeding.at(day, 0, 30) for applied, day in runs)
+    # a daily run is written at 00:30; a prepaid command (a purchase, a renewal) by the
+    # worker pass at 11:00 of the day it posted
+    assert runs and all(
+        applied == (seeding.at(day, 0, 30) if kind == "daily" else seeding.at(day, 11))
+        for applied, day, kind in runs
+    )
     rates = all_of(api, RATE)
     assert len(rates) == len(runs)
-    assert {r["date"] for r in rates} == {z(applied) for applied, _ in runs}
+    assert {r["date"] for r in rates} == {z(applied) for applied, _, _ in runs}
     products = all_of(api, PRODUCT)
     created = {datetime.fromisoformat(p["creationDate"]) for p in products}
     days = {c.astimezone(seeding.TZ).date() for c in created}
     assert all(c.astimezone(seeding.TZ).hour == 10 for c in created)
     assert min(days) > start and max(days) <= TODAY
+
+    # the prepaid account: topped up, bought a product, renewed from funds
+    pavel = next(a for a in accounts if a["name"] == "Pavel Orlov main")
+    assert pavel["ratingType"] == "prepaid"
+    assert db_conn.execute(
+        "SELECT count(*) FROM product WHERE billing_account_id = %s AND status = 'active'",
+        (pavel["id"],),
+    ).fetchone() == (1,)
+    intervals = db_conn.execute(
+        "SELECT count(*) FROM funded_interval WHERE billing_account_id = %s", (pavel["id"],)
+    ).fetchone()[0]
+    assert intervals >= 3, intervals  # the purchase and renewals, one after running out
+    # Vera ran out: her product is suspended and the renewal waits for a top-up
+    vera = next(a for a in accounts if a["name"] == "Vera Lebedeva main")
+    assert db_conn.execute(
+        "SELECT status FROM product WHERE billing_account_id = %s", (vera["id"],)
+    ).fetchall() == [("suspended",)]
+    assert db_conn.execute(
+        "SELECT count(*) FROM prepaid_command WHERE state = 'pending' AND billing_account_id = %s",
+        (vera["id"],),
+    ).fetchone() == (1,)
 
     # a second run is a no-op
     assert seeding.seed(api, api.clock, TODAY) is False

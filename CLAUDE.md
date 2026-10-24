@@ -135,9 +135,8 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).
-- **Next:** prepaid slice P7 (release validation), then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
-  - [scope](docs/prepaid-plan.md),
-  [decision](docs/decisions/prepaid.md).
+- **Next:** the prepaid tracker is complete (P7: mixed-mode seed, runbook, [release evidence](docs/prepaid-release.md));
+  [tracker](docs/prepaid-slices.md), [scope](docs/prepaid-plan.md), [decision](docs/decisions/prepaid.md). Next is the backlog below.
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21
   ([frontend.md](docs/decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21));
   UI vs MCP gap slices 2 and 4 ([plan](docs/ui-mcp-gap-plan.md));

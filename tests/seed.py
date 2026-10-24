@@ -32,6 +32,7 @@ from app.clock import FixedClock, SystemClock
 from app.config import settings
 from app.repository import billing
 from app.worker import db as worker_db
+from app.worker.prepaid import observe_entitlements, process_commands, produce_renewals
 from app.worker.process import bill_date
 from tests import apidata
 from tests.apidata import ACCOUNT, CATALOG, CUSTOMER
@@ -81,6 +82,7 @@ class AccountPlan:
     organization: bool
     cycle_day: int
     credit_limit: str | None
+    prepaid: bool = False
 
 
 ACCOUNTS_PLAN = [
@@ -91,6 +93,10 @@ ACCOUNTS_PLAN = [
     AccountPlan("olga", "Olga Kuznetsova", False, 28, "500"),  # never pays: negative
     AccountPlan("dmitry", "Dmitry Sokolov", False, 1, None),  # terminated, then Closed
     AccountPlan("elena", "Elena Morozova", False, 20, None),  # joins today
+    # prepaid: tops up, buys, renews from funds, runs out, tops up again
+    AccountPlan("pavel", "Pavel Orlov", False, 1, None, prepaid=True),
+    # prepaid, ran out: her renewal waits for a top-up
+    AccountPlan("vera", "Vera Lebedeva", False, 1, None, prepaid=True),
 ]
 
 
@@ -191,11 +197,13 @@ def build_accounts(api: Api) -> dict[str, dict[str, Any]]:
         customer = api.post(
             CUSTOMER, apidata.customer_body(party, name=plan.customer, status="Active")
         )
-        extra = (
+        extra: dict[str, Any] = (
             {}
             if plan.credit_limit is None
             else {"creditLimit": {"unit": "USD", "value": int(plan.credit_limit)}}
         )
+        if plan.prepaid:
+            extra["ratingType"] = "prepaid"
         accounts[plan.key] = api.post(
             ACCOUNT,
             apidata.account_body(
@@ -205,12 +213,19 @@ def build_accounts(api: Api) -> dict[str, dict[str, Any]]:
     return accounts
 
 
-def order(api: Api, world: World, who: str, item: dict[str, Any], start: date | None) -> dict:
+def order(
+    api: Api,
+    world: World,
+    who: str,
+    item: dict[str, Any],
+    start: date | None,
+    state: str = "completed",
+) -> dict:
     body = apidata.order_body(world.accounts[who], item)
     if start is not None:
         body["requestedStartDate"] = iso_noon(start)
     placed = api.post(apidata.ORDER, body)
-    if placed["state"] != "completed":
+    if placed["state"] != state:
         raise SeedError(f"order for {who} was {placed['state']}: {placed}")
     return placed
 
@@ -218,6 +233,13 @@ def order(api: Api, world: World, who: str, item: dict[str, Any], start: date | 
 def add(api: Api, world: World, key: str, who: str, code: str, start: date) -> None:
     placed = order(api, world, who, apidata.add_item(world.offerings[code]), start)
     world.products[key] = api.get(placed["productOrderItem"][0]["product"]["href"])
+
+
+def add_prepaid(api: Api, world: World, who: str, code: str) -> None:
+    """An immediate prepaid purchase: accepted `inProgress`, completed by the worker's next
+    command pass (`settle_prepaid`)."""
+    item = apidata.add_item(world.offerings[code])
+    order(api, world, who, item, None, state="inProgress")
 
 
 def delete(api: Api, world: World, key: str, who: str, end: date | None = None) -> None:
@@ -299,6 +321,12 @@ def events(today: date, start: date) -> dict[date, Callable[[Api, World], None]]
     on(d(95), lambda a, w: pay(a, w, "romashka", 1300, "Bank transfer"))
     on(d(100), lambda a, w: delete(a, w, "ivan-mob", "ivan"))  # mid-period: a refund
     on(d(110), lambda a, w: pay(a, w, "romashka", 1300, "Bank transfer"))
+    on(d(4), lambda a, w: pay(a, w, "pavel", 600, "Bank card"))  # a top-up
+    on(d(5), lambda a, w: add_prepaid(a, w, "pavel", "MOB-S"))
+    on(d(75), lambda a, w: pay(a, w, "pavel", 300, "Bank card"))  # after running out: resumes
+    on(d(110), lambda a, w: pay(a, w, "pavel", 300, "Bank card"))  # resumes the lapsed renewal
+    on(d(70), lambda a, w: pay(a, w, "vera", 300, "Bank card"))
+    on(d(71), lambda a, w: add_prepaid(a, w, "vera", "MOB-S"))  # her renewal at d(101) finds 10
     # today: a product starting in 5 days, one starting today (charged by tomorrow's
     # run), and a termination ordered for 12 days from now (pendingTerminate)
     on(today, lambda a, w: add(a, w, "elena-mob", "elena", "MOB-S", today + timedelta(days=5)))
@@ -349,6 +377,14 @@ def run_billing(conn: psycopg.Connection, day: date, clock: FixedClock) -> None:
         raise SeedError(f"the billing run of {day} ended {run['status']}: {run['error']}")
 
 
+def settle_prepaid(conn: psycopg.Connection, clock: FixedClock) -> None:
+    """The worker's prepaid passes of the simulated moment: renewals, then the commands
+    (purchases, renewals, resumes) they and the day's orders queued."""
+    produce_renewals(conn, clock=clock, tz=TZ)
+    process_commands(conn, clock=clock, tz=TZ)
+    observe_entitlements(conn, clock=clock, tz=TZ)
+
+
 def seed(client: Any, clock: FixedClock, today: date) -> bool:
     """Seed through `client` (a TmfClient over the app whose clock is `clock`). Returns
     False if the data was already there."""
@@ -368,6 +404,8 @@ def seed(client: Any, clock: FixedClock, today: date) -> bool:
             if day in plan:
                 clock.set(at(day, 10))
                 plan[day](api, world)
+            clock.set(at(day, 11))
+            settle_prepaid(worker, clock)
             day += timedelta(days=1)
     return True
 

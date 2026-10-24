@@ -121,6 +121,37 @@ Production config, limits and the hard constraints of the VPS (VPN ports, no pru
 nothing published on 0.0.0.0): see
 CLAUDE.md, "Hard constraints". Never run `docker build` on the VPS.
 
+## Prepaid: recovery and rollback
+
+**Rollback barrier.** Migrations `0034`-`0047` carry the prepaid schema. Each downgrade
+refuses to run once the data it would lose exists: `0034` refuses any prepaid account or
+bucket (so the first prepaid account created on a deployed instance ends clean
+downgrade past `0033`); the later ones refuse retained holds, commands, command runs,
+funded intervals and service grants, shortfall observations, manual suspensions,
+balance actions, journal keys and transfer-fee charges. Do not delete history to make
+a downgrade pass. Rolling the image back never rolls the schema back: an older image
+over a newer schema is a manual, reviewed decision, and with prepaid history the
+supported recovery is forward (a fixed image), not `alembic downgrade`.
+
+**Stuck or failed commands** (read-only first; the UI shows the same on the account):
+
+1. `list_prepaid_commands` / `GET /internal/v1/prepaid/command?state=failedTechnical`
+   (and `state=pending`) name the commands that did not finish. A **pending** command
+   with `needs_topup` is not a fault: it completes after a credit (top-up, payment,
+   released hold) on a later worker tick.
+2. A **failedTechnical** command is retried by the worker with backoff; once the cause is
+   fixed, `retry_prepaid_command` (or the UI's Retry) clears the backoff. Retry never
+   posts: it re-queues the same identity, hold and request, so it cannot double-charge.
+3. An uncertain HTTP response to a top-up, adjustment, hold, transfer or order is resent
+   with the **same Idempotency-Key**; the response journal returns the first answer.
+   A new key is a new action.
+4. A held amount that must not wait (a lapsed operator hold, a cancelled order) is
+   released by the worker; reserve holds lapse before any later spend. Read
+   `balanceActionHistory` before correcting a balance, and correct with a new
+   adjustment or reversal, never by editing rows.
+5. After a VPS reboot nothing needs doing: the worker resumes pending commands and
+   renewals from the database on its first tick.
+
 ## Backups
 
 **Not part of this repository.** vps-infra dumps every database on the host, this one
