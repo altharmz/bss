@@ -17,6 +17,8 @@ from tests import apidata
 from tests.apiclient import decimals
 from tests.apidata import CATALOG, ORDER
 from tests.test_api_transfer import pair
+from tests.test_prepaid_command_api import failed
+from tests.test_prepaid_orders import purchase, shop
 from tests.test_prepaid_renewal_producer import tick
 from tests.test_worker_process import DEC1, DEC3, at, scenario, set_currency
 from tests.timeline import TZ
@@ -687,6 +689,42 @@ def test_prepaid_transfer_as_the_ui_sends_it(api, db_conn):
     stored = refused.json()
     assert stored["status"] == "failed" and stored["reason"] == "Customer asked"
     assert stored["description"] and stored["description"] != stored["reason"]
+
+
+def test_prepaid_order_and_command_reads_as_the_ui_makes_them(api, db_conn, monkeypatch):
+    """OrderWatch / FailedCommands (api/commands.ts): a prepaid add answers `inProgress`, the UI
+    follows it through the command that has the order's id, lists an account's technically
+    failed commands with the query it sends, and retries one with a POST without a body; a
+    second retry is the 409 it handles by looking again."""
+    off, account = shop(api, db_conn)
+    order = purchase(api, off, account)
+    assert order["state"] == "inProgress"
+    command = api.get(f"/internal/v1/prepaid/command/{order['id']}").json()
+    assert (command["id"], command["kind"], command["state"]) == (order["id"], "order", "pending")
+    # due today: the card's OrderWatch calls anything later "scheduled"
+    today = api.get("/internal/v1/context").json()["businessDate"]
+    assert command["needs_topup"] is None and command["dueDate"] == today
+
+    _, _, stuck = failed(db_conn, monkeypatch)
+    owner = db_conn.execute(
+        "SELECT billing_account_id FROM prepaid_command WHERE id = %s", (stuck["id"],)
+    ).fetchone()[0]
+    listed = api.get(
+        f"/internal/v1/prepaid/command?billingAccount.id={owner}&state=failedTechnical"
+        "&offset=0&limit=100"
+    )
+    assert [c["id"] for c in listed.json()] == [str(stuck["id"])]
+    assert listed.json()[0]["error"] and listed.json()[0]["nextRetryAt"]
+    assert (
+        api.get(
+            f"/internal/v1/prepaid/command?billingAccount.id={account['id']}&state=failedTechnical"
+        ).json()
+        == []
+    )
+    retried = api.request("POST", f"/internal/v1/prepaid/command/{stuck['id']}/retry")
+    assert retried.status_code == 202 and retried.json()["state"] == "pending"
+    again = api.request("POST", f"/internal/v1/prepaid/command/{stuck['id']}/retry")
+    assert again.status_code == 409
 
 
 def test_edit_subscriber_as_the_ui_patches_it(api):

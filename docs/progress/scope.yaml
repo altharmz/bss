@@ -324,6 +324,9 @@ items:
   - {id: ui.subscriber.prepaid.hold, area: ui, stage: 5, title: "Prepaid operator hold form with optional expiry"}
   - {id: ui.subscriber.prepaid.transfer, area: ui, stage: 5, title: "Prepaid transfer by number with a finality confirmation"}
   - {id: ui.subscriber.prepaid.transferWatch, area: ui, stage: 5, title: "Accepted transfer followed until the worker completes it"}
+  - {id: ui.subscriber.prepaid.transfer.confirm, area: ui, stage: 5, title: "Transfer finality confirmation step"}
+  - {id: ui.subscriber.prepaid.orderWatch, area: ui, stage: 5, title: "Accepted prepaid order followed through its command: waiting, scheduled, needs top-up, technical failure"}
+  - {id: ui.subscriber.prepaid.failedCommands, area: ui, stage: 5, title: "Needs-attention panel of technically failed prepaid commands with Retry"}
   - {id: ui.subscriber.refunds, area: ui, stage: 5, title: "Recorded refund history with payout metadata"}
   - {id: ui.subscriber.billNow, area: ui, stage: 5, title: "Request an on-demand bill"}
   - {id: ui.subscriber.billRequests, area: ui, stage: 5, title: "On-demand bill status and resulting bill"}

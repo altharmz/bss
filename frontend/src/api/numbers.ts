@@ -55,7 +55,7 @@ export function loadNumberProducts(id: string, signal: AbortSignal) {
 }
 
 export async function changeNumber(accountId: string, productId: string, numberId: string) {
-  return postJson<{ state: string; productOrderErrorMessage?: { reason?: string }[] }>(
+  return postJson<{ id: string; state: string; productOrderErrorMessage?: { reason?: string }[] }>(
     PATHS.orders,
     {
       '@type': 'ProductOrder',

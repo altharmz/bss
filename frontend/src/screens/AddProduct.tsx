@@ -17,6 +17,7 @@ import { formatAmount, formatCents, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Button, Modal, TextInput } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
+import type { PendingOrder } from '../api/commands';
 
 // Modal 5. The first-charge preview is the backend's dry run (the stage 3 core on the
 // hypothetical product): the UI shows what will be charged, it never computes it.
@@ -43,7 +44,7 @@ export function AddProductModal({
   account: Account;
   activeOfferingIds: Set<string>;
   onClose: () => void;
-  onOrdered: (message: string) => void;
+  onOrdered: (message: string, accepted?: PendingOrder) => void;
 }) {
   const context = useSystemContext();
   const today = context.businessDate;
@@ -103,6 +104,12 @@ export function AddProductModal({
           `${chosen.name} ordered · first charge ${formatAmount(first.amount.value)}` +
             ` ${first.amount.unit} in the run of ${first.chargeRunDate}`,
         );
+      } else if (result.state === 'inProgress') {
+        // a prepaid order: accepted, and the billing worker completes it (OrderWatch follows)
+        onOrdered(`${chosen.name} ordered: accepted, the billing worker completes it shortly`, {
+          id: result.id,
+          label: `Order for ${chosen.name}`,
+        });
       } else {
         setProblem(result.reasons.length ? result.reasons : [`The order was ${result.state}.`]);
       }

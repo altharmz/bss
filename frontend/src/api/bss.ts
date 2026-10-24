@@ -838,12 +838,14 @@ export async function setLifecycle(offeringId: string, status: Lifecycle): Promi
 type OrderBody = T622['schemas']['ProductOrder'];
 
 export interface OrderOutcome {
-  state: string; // completed | rejected
+  id: string;
+  state: string; // completed | inProgress (prepaid: the worker finishes it) | rejected
   reasons: string[]; // productOrderErrorMessage[].reason when rejected
 }
 
 function outcome(order: OrderBody): OrderOutcome {
   return {
+    id: order.id ?? '', // always sent; only an inProgress order is followed by it
     state: need(order.state, 'order state'),
     reasons: (order.productOrderErrorMessage ?? []).map((m) => m.reason ?? m.code ?? 'rejected'),
   };

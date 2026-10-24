@@ -159,6 +159,9 @@ function backend(routes: Record<string, Handler> = {}, account: object = ACCOUNT
     [`GET ${INTERNAL}/charges?limit=20`]: () => json(CHARGES, { total: 2 }),
     [`GET ${INTERNAL}/transactions?limit=20`]: () => json(TRANSACTIONS, { total: 3 }),
     [`GET ${INTERNAL}/settlement`]: () => json(NO_SETTLEMENT),
+    // asked only of a prepaid account: no command failed technically
+    [`GET /internal/v1/prepaid/command?billingAccount.id=${A}&state=failedTechnical&offset=0&limit=100`]:
+      () => json([], { total: 0 }),
     [billsUrl(A)]: () => json([], { total: 0 }),
     [`GET /tmf-api/payment/v4/refund?account.id=${A}&offset=0&limit=100`]: () =>
       json([], { total: 0 }),
@@ -1286,5 +1289,252 @@ describe('prepaid transfer', () => {
     expect(review(form).disabled).toBe(false);
     type(form, 'Reason', ' ');
     expect(review(form).disabled).toBe(true);
+  });
+
+  it('refuses the account’s own number and another currency', async () => {
+    const { form } = await transferForm({
+      [`GET ${BILLING}/${B}`]: () => json(receiverAccount({ currency: 'EUR' })),
+      [`GET ${RESOURCES}?value=79991234000&offset=0&limit=100`]: () =>
+        json([{ id: N1, value: '79991234000' }], { total: 1 }),
+      [`GET ${PRODUCT_API}?realizingResource.id=${N1}&offset=0&limit=100`]: () =>
+        json([{ id: P1, status: 'active', billingAccount: { id: A } }], { total: 1 }),
+    });
+    await fill(form);
+    await within(form).findByText(/currency is EUR, not USD/);
+    expect(review(form).disabled).toBe(true);
+    // the sender's own number resolves to the sender's account
+    const own = '79991234000';
+    type(form, 'Receiver number', own);
+    press(form, 'Find');
+    await within(form).findByText(/belongs to this account/);
+    expect(review(form).disabled).toBe(true);
+  });
+});
+
+describe('prepaid orders and commands', () => {
+  const CMD = '/internal/v1/prepaid/command';
+  const ORDER_ID = 'a0000001-0000-4000-8000-0000000000a1';
+  const FAILED = `GET ${CMD}?billingAccount.id=${A}&state=failedTechnical&offset=0&limit=100`;
+  const PREPAID = accountBody(
+    A,
+    { id: C, name: 'Olga Kuznetsova' },
+    { ratingType: 'prepaid', accountBalance: [{ amount: usd(120), '@type': 'AccountBalance' }] },
+  );
+  const command = (over: Record<string, unknown> = {}) => ({
+    id: ORDER_ID,
+    kind: 'order',
+    state: 'pending',
+    billingAccount: { id: A, name: 'Olga' },
+    dueDate: '2026-10-01',
+    createdAt: '2026-10-01T06:00:00Z',
+    attempts: 0,
+    attemptedAt: null,
+    nextRetryAt: null,
+    outcome: null,
+    reason: null,
+    error: null,
+    needs_topup: null,
+    productOrder: null,
+    products: [],
+    billingRun: null,
+    bills: [],
+    ...over,
+  });
+  const inProgress = () =>
+    json({ id: ORDER_ID, state: 'inProgress', '@type': 'ProductOrder' }, { status: 201 });
+  const bucket = () =>
+    json(
+      [
+        {
+          id: BUCKET,
+          remainingValue: { amount: 100, units: 'USD' },
+          reservedValue: { amount: 0, units: 'USD' },
+        },
+      ],
+      { total: 1 },
+    );
+  const base = (routes: Record<string, Handler>) =>
+    backend(
+      {
+        [`GET /tmf-api/prepayBalanceManagement/v4/bucket?partyAccount.id=${A}&offset=0&limit=100`]:
+          bucket,
+        ...routes,
+      },
+      PREPAID,
+    );
+
+  /** Deactivate Mobile L: the prepaid account answers inProgress, the worker ends it. */
+  async function deactivate(routes: Record<string, Handler>) {
+    const stub = base({ [`POST ${ORDERS}`]: inProgress, ...routes });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
+    fireEvent.click(within(row).getByRole('button', { name: 'Yes' }));
+    return stub;
+  }
+
+  it('does not report an accepted prepaid order as a failure, and settles when the worker is done', async () => {
+    await deactivate({
+      [`GET ${CMD}/${ORDER_ID}`]: () =>
+        json(command({ state: 'completed', outcome: 'terminated' })),
+    });
+    expect(await screen.findByText('Deactivation of Mobile L ended')).toBeTruthy();
+    expect(screen.queryByText(/Rejected/)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('says a funding wait needs a top-up, apart from a technical failure', async () => {
+    await deactivate({
+      [`GET ${CMD}/${ORDER_ID}`]: () =>
+        json(
+          command({
+            needs_topup: {
+              required: 650,
+              available: 100,
+              shortfall: 550,
+              observedAt: '2026-10-01T06:00:00Z',
+            },
+          }),
+        ),
+    });
+    const note = await screen.findByText(/needs a top-up/);
+    expectUi('ui.subscriber.prepaid.orderWatch');
+    expect(note.parentElement?.textContent).toContain('requires 650.00');
+    expect(note.parentElement?.textContent).toContain('short 550.00');
+    expect(screen.queryByText(/technical/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry now' })).toBeNull();
+  });
+
+  it('says a future-dated order is scheduled instead of waiting for the worker', async () => {
+    await deactivate({
+      [`GET ${CMD}/${ORDER_ID}`]: () => json(command({ dueDate: '2026-10-06' })),
+    });
+    expect(await screen.findByText(/is scheduled for 2026-10-06/)).toBeTruthy();
+    expect(screen.queryByText(/waiting for the billing worker/)).toBeNull();
+  });
+
+  it('shows a technical failure with its error and retries it without a body', async () => {
+    let state = 'failedTechnical';
+    const { fetchMock } = await deactivate({
+      [`GET ${CMD}/${ORDER_ID}`]: () =>
+        json(
+          state === 'failedTechnical'
+            ? command({
+                state,
+                error: 'connection reset',
+                attempts: 1,
+                nextRetryAt: '2026-10-01T06:01:00Z',
+              })
+            : command(),
+        ),
+      [`POST ${CMD}/${ORDER_ID}/retry`]: () => {
+        state = 'pending';
+        return json(command(), { status: 202 });
+      },
+    });
+    await screen.findByText(/connection reset/);
+    expect(expectUi('ui.subscriber.prepaid.orderWatch').textContent).toContain(
+      'retries by itself after 2026-10-01 09:01',
+    );
+    expect(screen.queryByText(/needs a top-up/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
+    await screen.findByText(/waiting for the billing worker/);
+    const retry = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/retry'));
+    expect(retry?.[1]?.method).toBe('POST');
+    expect(retry?.[1]?.body).toBeUndefined();
+  });
+
+  it('looks again, without an error, when a retry finds the command already retried', async () => {
+    let calls = 0;
+    await deactivate({
+      [`GET ${CMD}/${ORDER_ID}`]: () =>
+        json(++calls === 1 ? command({ state: 'failedTechnical', error: 'boom' }) : command()),
+      [`POST ${CMD}/${ORDER_ID}/retry`]: () => tmfError(409, 'not failedTechnical'),
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry now' }));
+    await screen.findByText(/waiting for the billing worker/);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('lists the account’s technically failed commands and retries one', async () => {
+    let failed = [
+      command({
+        id: 'c0000001-0000-4000-8000-0000000000c1',
+        kind: 'renewal',
+        dueDate: '2026-09-28',
+        state: 'failedTechnical',
+        error: 'deadlock detected',
+      }),
+    ];
+    const { fetchMock } = base({
+      [FAILED]: () => json(failed, { total: failed.length }),
+      [`POST ${CMD}/c0000001-0000-4000-8000-0000000000c1/retry`]: () => {
+        failed = [];
+        return json(command(), { status: 202 });
+      },
+    });
+    await open();
+    const strip = await waitFor(() => expectUi('ui.subscriber.prepaid.failedCommands'));
+    expect(strip.textContent).toContain('The renewal due 2026-09-28');
+    expect(strip.textContent).toContain('deadlock detected');
+    fireEvent.click(within(strip).getByRole('button', { name: 'Retry now' }));
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.filter(([url]) => String(url).includes(FAILED.slice(4))),
+      ).toHaveLength(2),
+    );
+    await waitFor(() =>
+      expect(document.querySelector('[data-ui="ui.subscriber.prepaid.failedCommands"]')).toBeNull(),
+    );
+  });
+
+  it('shows no commands panel when nothing failed, and asks nothing of a postpaid account', async () => {
+    base({});
+    await open();
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Top up' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    expect(document.querySelector('[data-ui="ui.subscriber.prepaid.failedCommands"]')).toBeNull();
+    expect(screen.queryByText('Needs attention')).toBeNull();
+  });
+
+  it('accepts an inProgress add: closes the dialog and follows the order instead of showing a failure', async () => {
+    const offerings = [
+      {
+        id: O2,
+        name: 'Fiber 100',
+        externalIdentifier: [{ id: 'NET-100', externalIdentifierType: 'offeringCode' }],
+        productSpecification: { name: 'Home Internet' },
+        productOfferingPrice: [{ id: 'pr2' }],
+      },
+    ];
+    base({
+      'GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true&offset=0&limit=100':
+        () => json(offerings, { total: 1 }),
+      'GET /tmf-api/productCatalogManagement/v5/productOfferingPrice?priceType=recurring&offset=0&limit=100':
+        () =>
+          json(
+            [{ id: 'pr2', price: usd(650), validFor: { startDateTime: '2026-06-01T21:00:00Z' } }],
+            {
+              total: 1,
+            },
+          ),
+      [`GET ${INTERNAL}/firstCharge?productOffering.id=${O2}&startDate=2026-10-01`]: () =>
+        json(FIRST_CHARGE),
+      [`POST ${ORDERS}`]: inProgress,
+      [`GET ${CMD}/${ORDER_ID}`]: () => json(command({ state: 'completed', outcome: 'funded' })),
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: '+ Add product' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add product' });
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[0] as HTMLElement);
+    const activate = await within(dialog).findByRole('button', { name: /^Activate/ });
+    await waitFor(() => expect((activate as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(activate);
+    expect(await screen.findByText('Order for Fiber 100 completed')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByText(/The order was/)).toBeNull();
   });
 });

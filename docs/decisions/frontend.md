@@ -139,8 +139,35 @@ orders and the technical retry are P6c2. No backend change. A prepaid card heade
   5 s for at most 3 minutes from the submission (`usePolled`'s new `until`; the cap is a
   timer, not a clock read in render). `completed` and `failed` toast and reload the card.
   Past the cap it says the amount stays held and the worker completes it on its next wake-up,
-  and offers Check now; a failed look stops the polling and offers Check again. While one is
-  followed the Transfer button is disabled.
+  and offers Check now and Dismiss; a failed look stops the polling and offers Check again.
+  Transfer is disabled while a transfer is followed, so Dismiss frees it after a stall. The
+  followed work lives in `SubscriberCardScreen` as a list (`watched.ts`), and the route keys
+  the screen by account so one subscriber's watch never shows on another's card.
+
+## P6c2: pending prepaid orders and technical retry (2026-10-24)
+
+No backend change. A prepaid account answers an order POST with `inProgress` (the billing
+worker completes it), but Add product, Deactivate and the number change treated anything but
+`completed` as a failure, so every successful prepaid order was shown as an error. They now
+treat `inProgress` as accepted: the dialog closes, a toast says so, and `OrderWatch` follows
+the order through its command (a prepaid order's id is its command's id, `GET
+/internal/v1/prepaid/command/{id}`), polled like the transfer (5 s, 3 min cap, Dismiss).
+The three outcomes stay apart:
+
+- **Waiting** for the worker: polled. A command **scheduled** for a later date than the
+  business date says so and is not polled (a future-start order waits for its start).
+- **Needs top-up** (`needs_topup`): a funding wait, not a fault. It shows required, available
+  and short, says it completes once the account is funded, stops polling and offers Check now.
+  Renewals' shortfall stays in the shortfall KPI of the card.
+- **Technical failure** (`failedTechnical`): shows `error` and when the worker retries by
+  itself, with **Retry now** (`POST .../retry`, no body, 202). A 409 (already retried) just
+  looks again. A **Needs attention** panel lists the account's technically failed commands
+  (`?billingAccount.id=&state=failedTechnical`) of any kind, with the same Retry; it appears
+  only while there are some.
+
+A completed command settles the watch with the outcome (`funded` is "completed", `terminated`
+"ended"). Pinned in `SubscriberCard.test.tsx` and replayed in `test_ui_requests.py` (an order's
+id is its command's id; the list query; the retry and its 409).
 
 ## N5: subscriber-number UI (2026-10-21)
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { Account, PrepaidBalance } from '../api/bss';
 import { explain } from '../api/client';
 import {
@@ -15,20 +15,12 @@ import { accountLabel } from '../format/ids';
 import { formatCents, parseAmount, toCents } from '../format/money';
 import { Button, Modal, Panel, Segmented, TextInput } from '../ui/kit';
 import { uncertain, useSubmissionKey } from './submissionKey';
+import { POLL_MS, watch, type Watched } from './watched';
 
 // Transfer of prepaid funds to another subscriber, by number (docs/decisions/frontend.md
 // P6c1). Accepting a transfer moves nothing: the sender's funds are held and the billing
 // worker completes it within about a minute, so the card then watches it (TransferWatch).
 // A transfer is final: the confirmation step says so.
-
-export interface Watched {
-  id: string;
-  label: string;
-  until: number; // epoch ms: the polling stops here
-}
-
-export const POLL_MS = 5_000;
-export const POLL_CAP_MS = 3 * 60_000;
 
 export function PrepaidTransferModal({
   account,
@@ -118,11 +110,13 @@ export function PrepaidTransferModal({
         setProblem(stored.description ?? 'The transfer was refused.');
         return;
       }
-      onAccepted({
-        id: stored.id,
-        label: `${formatCents(cents)} ${account.currency} to ${receiver.digits}`,
-        until: Date.now() + POLL_CAP_MS,
-      });
+      onAccepted(
+        watch(
+          'transfer',
+          stored.id,
+          `${formatCents(cents)} ${account.currency} to ${receiver.digits}`,
+        ),
+      );
     } catch (error) {
       if (uncertain(error)) {
         setRetry(true);
@@ -309,9 +303,11 @@ export function PrepaidTransferModal({
 export function TransferWatch({
   watched,
   onSettled,
+  onDismiss,
 }: {
   watched: Watched;
   onSettled: (message: string) => void;
+  onDismiss: () => void;
 }) {
   const transfer = usePolled(
     `transfer:${watched.id}`,
@@ -322,12 +318,13 @@ export function TransferWatch({
   );
   const status = transfer.status === 'ok' ? transfer.data.status : null;
   const description = transfer.status === 'ok' ? transfer.data.description : null;
+  const settle = useEffectEvent(onSettled);
   useEffect(() => {
-    if (status === 'completed') onSettled(`Transfer of ${watched.label} completed`);
+    if (status === 'completed') settle(`Transfer of ${watched.label} completed`);
     else if (status === 'failed') {
-      onSettled(`Transfer of ${watched.label} failed: ${description ?? 'it was refused'}`);
+      settle(`Transfer of ${watched.label} failed: ${description ?? 'it was refused'}`);
     }
-  }, [status, description, watched.label, onSettled]);
+  }, [status, description, watched.label]);
 
   if (status === 'completed' || status === 'failed') return null;
   const late = status === 'created' && transfer.refreshError === null && transfer.capped;
@@ -348,6 +345,9 @@ export function TransferWatch({
             stays held and the worker completes it on its next wake-up.{' '}
             <Button small onClick={transfer.refresh}>
               Check now
+            </Button>{' '}
+            <Button small onClick={onDismiss}>
+              Dismiss
             </Button>
           </>
         ) : (

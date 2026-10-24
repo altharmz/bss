@@ -15,6 +15,7 @@ import {
   type PrepaidBalance,
 } from '../api/bss';
 import { explain } from '../api/client';
+import type { PendingOrder } from '../api/commands';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
@@ -29,7 +30,9 @@ import { AddProductModal } from './AddProduct';
 import { ProductNumber } from './ProductNumber';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
 import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
-import { PrepaidTransferModal, TransferWatch, type Watched } from './PrepaidTransfer';
+import { FailedCommands, OrderWatch } from './PrepaidOrderWatch';
+import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
+import { watch, type Watched } from './watched';
 import { AccountBills, RefundAction, RefundsPanel } from './AccountActions';
 import { EditSubscriberModal } from './SubscriberForms';
 import './screens.css';
@@ -74,16 +77,22 @@ const TYPE_LABEL: Record<string, string> = {
 export function SubscriberCardScreen({ accountId }: { accountId: string }) {
   const [version, setVersion] = useState(0); // bumped after an order: reload everything
   const toast = useToast();
-  // an accepted transfer is followed here, above the card, which unmounts while it reloads
-  const [watched, setWatched] = useState<Watched | null>(null);
+  // accepted transfers and prepaid orders are followed here, above the card, which unmounts
+  // while it reloads
+  const [watches, setWatches] = useState<Watched[]>([]);
   const reload = useCallback(() => setVersion((v) => v + 1), []);
+  const follow = useCallback((added: Watched) => setWatches((all) => [...all, added]), []);
+  const dismiss = useCallback(
+    (id: string) => setWatches((all) => all.filter((w) => w.id !== id)),
+    [],
+  );
   const settled = useCallback(
-    (message: string) => {
-      setWatched(null);
+    (id: string, message: string) => {
+      dismiss(id);
       toast(message);
       reload();
     },
-    [toast, reload],
+    [toast, reload, dismiss],
   );
   const account = useResource(`account:${accountId}:${version}`, (signal) =>
     loadAccount(accountId, signal),
@@ -114,14 +123,30 @@ export function SubscriberCardScreen({ accountId }: { accountId: string }) {
           />
         </Panel>
       )}
-      {watched !== null && <TransferWatch watched={watched} onSettled={settled} />}
+      {watches.map((w) =>
+        w.kind === 'transfer' ? (
+          <TransferWatch
+            key={w.id}
+            watched={w}
+            onSettled={(message) => settled(w.id, message)}
+            onDismiss={() => dismiss(w.id)}
+          />
+        ) : (
+          <OrderWatch
+            key={w.id}
+            watched={w}
+            onSettled={(message) => settled(w.id, message)}
+            onDismiss={() => dismiss(w.id)}
+          />
+        ),
+      )}
       {account.status === 'ok' && (
         <Card
           account={account.data}
           version={version}
           reload={reload}
-          transferWatched={watched !== null}
-          onTransfer={setWatched}
+          transferWatched={watches.some((w) => w.kind === 'transfer')}
+          onWatch={follow}
         />
       )}
     </div>
@@ -133,13 +158,13 @@ function Card({
   version,
   reload,
   transferWatched,
-  onTransfer,
+  onWatch,
 }: {
   account: Account;
   version: number;
   reload: () => void;
   transferWatched: boolean;
-  onTransfer: (watched: Watched) => void;
+  onWatch: (watched: Watched) => void;
 }) {
   const context = useSystemContext();
   const toast = useToast();
@@ -277,8 +302,9 @@ function Card({
                 key={product.id}
                 account={account}
                 product={product}
-                onDone={(message) => {
+                onDone={(message, accepted) => {
                   toast(message);
+                  if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
                   reload();
                 }}
               />
@@ -286,6 +312,10 @@ function Card({
           }
         </ListState>
       </Panel>
+
+      {account.ratingType === 'prepaid' && (
+        <FailedCommands accountId={account.id} version={version} onRetried={reload} />
+      )}
 
       <AccountBills
         account={account}
@@ -332,7 +362,7 @@ function Card({
           onClose={() => setTransferring(false)}
           onAccepted={(accepted) => {
             setTransferring(false);
-            onTransfer(accepted);
+            onWatch(accepted);
             reload();
           }}
         />
@@ -365,9 +395,10 @@ function Card({
           account={account}
           activeOfferingIds={activeOfferings}
           onClose={() => setAdding(false)}
-          onOrdered={(message) => {
+          onOrdered={(message, accepted) => {
             setAdding(false);
             toast(message);
+            if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
             reload();
           }}
         />
@@ -589,7 +620,7 @@ function ProductRow({
 }: {
   account: Account;
   product: AccountProduct;
-  onDone: (message: string) => void;
+  onDone: (message: string, accepted?: PendingOrder) => void;
 }) {
   const context = useSystemContext();
   const [confirming, setConfirming] = useState(false);
@@ -610,6 +641,12 @@ function ProductRow({
             ? `${name} cancelled before its start`
             : `${name} deactivated as of ${context.businessDate}`,
         );
+      } else if (result.state === 'inProgress') {
+        // a prepaid account: the billing worker ends the product (OrderWatch follows)
+        onDone(`${name}: deactivation accepted, the billing worker completes it shortly`, {
+          id: result.id,
+          label: `Deactivation of ${name}`,
+        });
       } else {
         setProblem(`Rejected: ${result.reasons.join(' ') || result.state}`);
         setConfirming(false);

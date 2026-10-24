@@ -36,7 +36,7 @@ function Screen() {
     case 'subscribers':
       return <SubscribersScreen />;
     case 'subscriber':
-      return <SubscriberCardScreen accountId={route.accountId} />;
+      return <SubscriberCardScreen key={route.accountId} accountId={route.accountId} />;
     case 'catalog':
       return <CatalogScreen />;
     case 'billingRuns':

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { components as T637 } from '../api/generated/tmf637';
 import { getJson, explain } from '../api/client';
+import type { PendingOrder } from '../api/commands';
 import { PATHS } from '../api/bss';
 import { changeNumber, requiresNumber } from '../api/numbers';
 import { useResource } from '../api/useResource';
@@ -15,7 +16,7 @@ export function ProductNumber({
 }: {
   accountId: string;
   productId: string;
-  onDone: (message: string) => void;
+  onDone: (message: string, accepted?: PendingOrder) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -44,7 +45,7 @@ function NumberModal({
   accountId: string;
   productId: string;
   onClose: () => void;
-  onDone: (message: string) => void;
+  onDone: (message: string, accepted?: PendingOrder) => void;
 }) {
   const product = useResource(`number-product:${productId}`, (signal) =>
     getJson<T637['schemas']['Product']>(`${PATHS.products}/${productId}`, signal),
@@ -74,6 +75,12 @@ function NumberModal({
       if (result.state === 'completed') {
         onClose();
         onDone('Subscriber number changed through an order');
+      } else if (result.state === 'inProgress') {
+        onClose();
+        onDone('Subscriber number change accepted, the billing worker completes it shortly', {
+          id: result.id,
+          label: 'Subscriber number change',
+        });
       } else
         setProblem(
           result.productOrderErrorMessage?.map((e) => e.reason).join(' ') ||

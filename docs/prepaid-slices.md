@@ -83,7 +83,7 @@ through TMF666 since P5a.
 | P6a | UI: mode and prepaid card | Mode selected at creation and shown in a filter. The card shows ledger, available, reserved, paid-through and shortfall cause, kept distinct. Both time zones. | done: Add account mode and prepaid card to the UI |
 | P6b | UI: top-up, adjustment, hold | Forms with one Idempotency-Key per submission and a same-key retry on an uncertain response. Bodies pinned in frontend and backend tests. | done: Add prepaid top-up, adjustment and hold forms to the UI |
 | P6c1 | UI: transfer and its polling | Transfer by number with a finality confirmation, the same-key retry, polling of the accepted transfer (5 s, 3 min cap). Bodies pinned in frontend and backend tests. | done: Add prepaid transfer to the UI |
-| P6c2 | UI: pending orders, technical retry | A pending prepaid order is not reported as an error (polled, 5 s, 3 min cap). Technical failure with Retry is shown separately from needs-top-up. | todo |
+| P6c2 | UI: pending orders, technical retry | A pending prepaid order is not reported as an error (polled, 5 s, 3 min cap). Technical failure with Retry is shown separately from needs-top-up. | done: Follow pending prepaid orders and retry technical failures in the UI |
 | P7 | Release validation | Mixed-mode demo seed; `make check` + `web-e2e`; recovery runbook and the migration rollback barrier (`0034`+) documented; release evidence file like the subscriber-number one. | todo |
 
 ## Estimate
@@ -93,4 +93,4 @@ through TMF666 since P5a.
 | 2026-10-21 | 24 rows, expect 24–30 commits | Past slices split roughly 1.3× (P2c3b → 4). Most likely splits: P3c, P3g, P4h. |
 | 2026-10-23 | 19 rows, expect 19–23 commits | Checkpoint 1: P3a–P3e took one commit each, no splits. P3g and P4h remain the likely splits. |
 | 2026-10-23 (checkpoint 2) | 6 rows after P5a (P5b, P6a-c, P7), expect 6-8 commits | P4a-P4i took 11 commits for 9 rows (only P4h split). P5a took one commit, no migration. P6b and P6c (idempotent forms, polling) are the likely splits; P5b and P7 stay single. |
-| 2026-10-24 (checkpoint 3) | 5 rows after P6b (P6c1, P6c2, P7 and P6c split), expect 3 more commits | P6c split as predicted: the transfer form and its polling (P6c1), then pending orders and technical retry (P6c2). |
+| 2026-10-24 (checkpoint 3) | 2 rows after P6c1 (P6c2, P7), expect 2-3 commits | P6c split as predicted: the transfer form and its polling (P6c1), then pending orders and technical retry (P6c2). P6c2 also repaired P6c1's loose ends (Dismiss after the cap, key per account) and the AddProduct misreport of every `inProgress` prepaid order. |

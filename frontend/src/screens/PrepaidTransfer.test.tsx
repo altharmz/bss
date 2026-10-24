@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { json, stubFetch, tmfError } from '../test/fetch';
-import { POLL_CAP_MS, TransferWatch } from './PrepaidTransfer';
+import { TransferWatch } from './PrepaidTransfer';
+import { POLL_CAP_MS, watch as follow } from './watched';
 
 const ID = 'f0000001-0000-4000-8000-000000000001';
 const URL = `GET /tmf-api/prepayBalanceManagement/v4/transferBalance/${ID}`;
@@ -23,13 +24,15 @@ const advance = (ms: number) =>
 
 function watch() {
   const onSettled = vi.fn();
+  const onDismiss = vi.fn();
   const view = render(
     <TransferWatch
-      watched={{ id: ID, label: '30.00 USD to 79991234001', until: Date.now() + POLL_CAP_MS }}
+      watched={follow('transfer', ID, '30.00 USD to 79991234001')}
       onSettled={onSettled}
+      onDismiss={onDismiss}
     />,
   );
-  return { onSettled, view };
+  return { onSettled, onDismiss, view };
 }
 
 describe('following an accepted transfer', () => {
@@ -70,7 +73,7 @@ describe('following an accepted transfer', () => {
   it('stops after three minutes, says the worker still finishes it, and checks on demand', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { calls } = stubFetch({ [URL]: () => json({ id: ID, status: 'created' }) });
-    const { onSettled, view } = watch();
+    const { onSettled, onDismiss, view } = watch();
     await advance(1); // the first answer arrives and arms the timer
     for (let at = 0; at < POLL_CAP_MS; at += 5_000) await advance(5_000); // a render between looks
     await until(() => screen.queryByText(/stays held/) !== null);
@@ -83,6 +86,8 @@ describe('following an accepted transfer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Check now' }));
     await until(() => calls.length > count);
     expect(onSettled).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(onDismiss).toHaveBeenCalledOnce();
     view.unmount();
     const last = calls.length;
     await advance(60_000);
