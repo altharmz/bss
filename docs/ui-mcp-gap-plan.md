@@ -1,8 +1,8 @@
 # UI vs MCP: operation gap and plan (2026-10-20)
 
-**Status: slice 1 implemented and validated locally; not committed or deployed.**
-The human approved the design below on 2026-10-20. Other slices still need design approval before
-implementation (workflow in [CLAUDE.md](../CLAUDE.md#working-style)).
+**Status (2026-10-24): slice 1 is done (refunds and on-demand bills are in the UI).
+The remaining slices moved to [next-slices.md](next-slices.md), which now
+tracks them.** The measurements below are from 2026-10-20 and are kept as history.
 
 ## How this was measured
 
