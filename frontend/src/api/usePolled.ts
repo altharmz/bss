@@ -6,10 +6,12 @@ import type { Resource } from './useResource';
 // background and keep showing the last data. While `active(data)`, it refreshes every
 // `intervalMs` (a timer armed after each answer, so requests never pile up). A failed
 // refresh keeps the data, stops the polling and is reported as `refreshError` until the
-// next refresh. retry() reloads from scratch; refresh() reloads in the background now.
+// next refresh. With `until` (epoch ms) it also stops once that time has passed and reports
+// `capped`: a bounded wait (a transfer the worker completes within minutes). retry() reloads from scratch; refresh() reloads in the background now.
 
 export type Polled<T> = Resource<T> & {
   refreshError: Error | null;
+  capped: boolean; // `until` has passed: polling stopped, the data may be out of date
   retry: () => void;
   refresh: () => void;
 };
@@ -28,6 +30,7 @@ export function usePolled<T>(
   load: (signal: AbortSignal) => Promise<T>,
   active: (data: T) => boolean,
   intervalMs: number,
+  until?: number,
 ): Polled<T> {
   const [attempt, setAttempt] = useState(0);
   const [tick, setTick] = useState(0);
@@ -39,6 +42,8 @@ export function usePolled<T>(
     version: 0,
     refreshError: null,
   });
+  const [cappedAt, setCappedAt] = useState<number | undefined>(undefined);
+  const capped = until !== undefined && cappedAt === until;
   const run = useEffectEvent((signal: AbortSignal) => load(signal));
 
   // the first load of a key (or a retry): from scratch
@@ -97,7 +102,10 @@ export function usePolled<T>(
   const current: State<T> =
     state.id === id ? state : { id, value: { status: 'loading' }, version: 0, refreshError: null };
   const polling =
-    current.value.status === 'ok' && current.refreshError === null && active(current.value.data);
+    current.value.status === 'ok' &&
+    current.refreshError === null &&
+    !capped &&
+    active(current.value.data);
 
   useEffect(() => {
     if (!polling) return;
@@ -105,7 +113,13 @@ export function usePolled<T>(
     return () => clearTimeout(timer);
   }, [polling, current.version, intervalMs]);
 
+  useEffect(() => {
+    if (until === undefined) return;
+    const timer = setTimeout(() => setCappedAt(until), Math.max(0, until - Date.now()));
+    return () => clearTimeout(timer);
+  }, [until]);
+
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const refresh = useCallback(() => setTick((n) => n + 1), []);
-  return { ...current.value, refreshError: current.refreshError, retry, refresh };
+  return { ...current.value, refreshError: current.refreshError, capped, retry, refresh };
 }

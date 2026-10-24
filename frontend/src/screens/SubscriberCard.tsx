@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import {
   loadAccount,
   loadCharges,
@@ -29,6 +29,7 @@ import { AddProductModal } from './AddProduct';
 import { ProductNumber } from './ProductNumber';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
 import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
+import { PrepaidTransferModal, TransferWatch, type Watched } from './PrepaidTransfer';
 import { AccountBills, RefundAction, RefundsPanel } from './AccountActions';
 import { EditSubscriberModal } from './SubscriberForms';
 import './screens.css';
@@ -72,6 +73,18 @@ const TYPE_LABEL: Record<string, string> = {
 
 export function SubscriberCardScreen({ accountId }: { accountId: string }) {
   const [version, setVersion] = useState(0); // bumped after an order: reload everything
+  const toast = useToast();
+  // an accepted transfer is followed here, above the card, which unmounts while it reloads
+  const [watched, setWatched] = useState<Watched | null>(null);
+  const reload = useCallback(() => setVersion((v) => v + 1), []);
+  const settled = useCallback(
+    (message: string) => {
+      setWatched(null);
+      toast(message);
+      reload();
+    },
+    [toast, reload],
+  );
   const account = useResource(`account:${accountId}:${version}`, (signal) =>
     loadAccount(accountId, signal),
   );
@@ -101,8 +114,15 @@ export function SubscriberCardScreen({ accountId }: { accountId: string }) {
           />
         </Panel>
       )}
+      {watched !== null && <TransferWatch watched={watched} onSettled={settled} />}
       {account.status === 'ok' && (
-        <Card account={account.data} version={version} reload={() => setVersion((v) => v + 1)} />
+        <Card
+          account={account.data}
+          version={version}
+          reload={reload}
+          transferWatched={watched !== null}
+          onTransfer={setWatched}
+        />
       )}
     </div>
   );
@@ -112,16 +132,21 @@ function Card({
   account,
   version,
   reload,
+  transferWatched,
+  onTransfer,
 }: {
   account: Account;
   version: number;
   reload: () => void;
+  transferWatched: boolean;
+  onTransfer: (watched: Watched) => void;
 }) {
   const context = useSystemContext();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState(false);
   const [money, setMoney] = useState<MoneyForm | null>(null);
+  const [transferring, setTransferring] = useState(false);
   const [openBill, setOpenBill] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const customerStatus = useResource(`customer:${account.customerId}:${version}`, (signal) =>
@@ -194,6 +219,16 @@ function Card({
                   </Button>{' '}
                 </span>
               ))}
+            {account.ratingType === 'prepaid' && (
+              <>
+                <Button
+                  onClick={() => setTransferring(true)}
+                  disabled={balance.status !== 'ok' || balance.data === null || transferWatched}
+                >
+                  Transfer
+                </Button>{' '}
+              </>
+            )}
             {addButton}
             {!canAdd && (
               <div className="caption">Unavailable for {account.state.toLowerCase()} accounts</div>
@@ -286,6 +321,18 @@ function Card({
           onDone={(message) => {
             setMoney(null);
             toast(message);
+            reload();
+          }}
+        />
+      )}
+      {transferring && balance.status === 'ok' && balance.data !== null && (
+        <PrepaidTransferModal
+          account={account}
+          balance={balance.data}
+          onClose={() => setTransferring(false)}
+          onAccepted={(accepted) => {
+            setTransferring(false);
+            onTransfer(accepted);
             reload();
           }}
         />

@@ -1098,3 +1098,193 @@ describe('prepaid money forms', () => {
     expect(screen.queryByRole('button', { name: 'Hold funds' })).toBeNull();
   });
 });
+
+describe('prepaid transfer', () => {
+  const PREPAY = '/tmf-api/prepayBalanceManagement/v4';
+  const RESOURCES = '/tmf-api/resourceInventory/v5/resource';
+  const PRODUCT_API = '/tmf-api/productInventory/v5/product';
+  const BILLING = '/tmf-api/accountManagement/v5/billingAccount';
+  const N1 = 'n0000001-0000-4000-8000-000000000001';
+  const N2 = 'n0000002-0000-4000-8000-000000000002';
+  const B = 'bbbb7777-0000-4000-8000-0000000000b7';
+  const RX_BUCKET = 'bbbb6666-0000-4000-8000-0000000000b6';
+  const TRANSFER = 'f0000001-0000-4000-8000-000000000001';
+  const SENDER = accountBody(
+    A,
+    { id: C, name: 'Olga Kuznetsova' },
+    { ratingType: 'prepaid', accountBalance: [{ amount: usd(120), '@type': 'AccountBalance' }] },
+  );
+  const receiverAccount = (over: Record<string, unknown> = {}) =>
+    accountBody(B, { id: 'cust-b', name: 'Ivan Sidorov' }, { ratingType: 'prepaid', ...over });
+  const bucketOf = (id: string, remaining: number, reserved: number) => () =>
+    json(
+      [
+        {
+          id,
+          remainingValue: { amount: remaining, units: 'USD' },
+          reservedValue: { amount: reserved, units: 'USD' },
+        },
+      ],
+      { total: 1 },
+    );
+  const stored =
+    (status: string, extra: Record<string, unknown> = {}) =>
+    () =>
+      json({ id: TRANSFER, status, ...extra }, { status: 201 });
+  const posts = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
+    fetchMock.mock.calls
+      .filter(([, init]) => init?.method === 'POST')
+      .map(([url, init]) => ({
+        url: String(url),
+        body: String(init?.body),
+        key: (init?.headers as Record<string, string>)['Idempotency-Key'] as string,
+      }));
+
+  const routes = (over: Record<string, Handler> = {}): Record<string, Handler> => ({
+    [`GET ${PREPAY}/bucket?partyAccount.id=${A}&offset=0&limit=100`]: bucketOf(BUCKET, 100.5, 19.5),
+    [`GET ${PRODUCT_API}?billingAccount.id=${A}&status=active&offset=0&limit=100`]: () =>
+      json([{ id: P1, realizingResource: [{ id: N1 }] }], { total: 1 }),
+    [`GET ${RESOURCES}/${N1}`]: () => json({ id: N1, value: '79991234000' }),
+    [`GET ${RESOURCES}?value=79991234001&offset=0&limit=100`]: () =>
+      json([{ id: N2, value: '79991234001' }], { total: 1 }),
+    [`GET ${PRODUCT_API}?realizingResource.id=${N2}&offset=0&limit=100`]: () =>
+      json([{ id: 'px', status: 'active', billingAccount: { id: B } }], { total: 1 }),
+    [`GET ${BILLING}/${B}`]: () => json(receiverAccount()),
+    [`GET ${PREPAY}/bucket?partyAccount.id=${B}&offset=0&limit=100`]: bucketOf(RX_BUCKET, 8, 0),
+    ...over,
+  });
+
+  async function transferForm(extra: Record<string, Handler> = {}) {
+    const stub = backend(routes(extra), SENDER);
+    await open();
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Transfer' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer' }));
+    const form = await screen.findByRole('dialog', { name: 'Transfer funds' });
+    expectUi('ui.subscriber.prepaid.transfer');
+    await within(form).findByRole('button', { name: '79991234000' });
+    return { ...stub, form };
+  }
+  const press = (scope: HTMLElement, name: string) =>
+    fireEvent.click(within(scope).getByRole('button', { name }));
+  const type = (scope: HTMLElement, label: string, value: string) =>
+    fireEvent.change(within(scope).getByLabelText(label), { target: { value } });
+  async function fill(form: HTMLElement, amount = '30', digits = '79991234001') {
+    type(form, 'Receiver number', digits);
+    press(form, 'Find');
+    await within(form).findByText(/Ivan Sidorov/);
+    type(form, 'Amount', amount);
+    type(form, 'Reason', ' Customer asked ');
+  }
+  const review = (form: HTMLElement) =>
+    within(form).getByRole('button', { name: 'Review transfer' }) as HTMLButtonElement;
+
+  it('is offered on a prepaid account only', async () => {
+    backend();
+    await open();
+    expect(screen.queryByRole('button', { name: 'Transfer' })).toBeNull();
+  });
+
+  it('confirms finality, sends the exact body under one key and follows it to completion', async () => {
+    const { fetchMock, form } = await transferForm({
+      [`POST ${PREPAY}/transferBalance`]: stored('created'),
+      [`GET ${PREPAY}/transferBalance/${TRANSFER}`]: () =>
+        json({ id: TRANSFER, status: 'completed' }),
+    });
+    await fill(form);
+    press(form, 'Review transfer');
+    expect(within(form).getByText(/A transfer is final/).textContent).toContain(
+      'cannot be cancelled',
+    );
+    expect(posts(fetchMock)).toEqual([]); // nothing is sent before the confirmation
+    press(form, 'Confirm transfer');
+    await screen.findByText('Transfer of 30.00 USD to 79991234001 completed');
+    const [sent, ...rest] = posts(fetchMock);
+    expect(rest).toEqual([]);
+    expect(sent?.url).toBe(`${PREPAY}/transferBalance`);
+    expect(sent?.body).toBe(
+      '{"@type":"TransferBalance","reason":"Customer asked",' +
+        '"channel":{"id":"admin-ui","name":"Admin UI"},' +
+        `"logicalResource":[{"id":"${N1}"}],"receiverLogicalResource":{"id":"${N2}"},` +
+        '"amount":{"amount":30.00,"units":"USD"},"usageType":"monetary",' +
+        `"bucket":{"id":"${BUCKET}"},"receiverBucket":{"id":"${RX_BUCKET}"},` +
+        '"receiverBucketUsageType":"monetary"}',
+    );
+    expect(sent?.key).toMatch(/^[\x21-\x7e]{1,255}$/);
+  });
+
+  it('shows a stored refusal by its description, not by the operator’s own reason', async () => {
+    const { form } = await transferForm({
+      [`POST ${PREPAY}/transferBalance`]: stored('failed', {
+        reason: 'Customer asked',
+        description: 'the receiver account is closed',
+      }),
+    });
+    await fill(form);
+    press(form, 'Review transfer');
+    press(form, 'Confirm transfer');
+    expect((await within(form).findByRole('alert')).textContent).toBe(
+      'the receiver account is closed',
+    );
+    expect(screen.queryByText(/accepted, waiting/)).toBeNull();
+  });
+
+  it('retries an uncertain outcome with the same key', async () => {
+    let calls = 0;
+    const { fetchMock, form } = await transferForm({
+      [`POST ${PREPAY}/transferBalance`]: () =>
+        ++calls === 1 ? tmfError(503, 'Unavailable') : stored('created')(),
+      [`GET ${PREPAY}/transferBalance/${TRANSFER}`]: () =>
+        json({ id: TRANSFER, status: 'completed' }),
+    });
+    await fill(form);
+    press(form, 'Review transfer');
+    press(form, 'Confirm transfer');
+    expect((await within(form).findByRole('alert')).textContent).toContain(
+      'Unsure whether it was recorded',
+    );
+    press(form, 'Retry');
+    await screen.findByText('Transfer of 30.00 USD to 79991234001 completed');
+    const [first, second] = posts(fetchMock);
+    expect(second?.key).toBe(first?.key);
+    expect(second?.body).toBe(first?.body);
+  });
+
+  it('refuses an unknown number before sending anything', async () => {
+    const { fetchMock, form } = await transferForm({
+      [`GET ${RESOURCES}?value=79990000000&offset=0&limit=100`]: () => json([], { total: 0 }),
+    });
+    type(form, 'Receiver number', '79990000000');
+    press(form, 'Find');
+    await within(form).findByText(/79990000000 is not in the number inventory/);
+    type(form, 'Amount', '10');
+    type(form, 'Reason', 'x');
+    expect(review(form).disabled).toBe(true);
+    expect(posts(fetchMock)).toEqual([]);
+  });
+
+  it('refuses a postpaid receiver', async () => {
+    const { form } = await transferForm({
+      [`GET ${BILLING}/${B}`]: () => json(receiverAccount({ ratingType: 'postpaid' })),
+      [`GET ${PREPAY}/bucket?partyAccount.id=${B}&offset=0&limit=100`]: () =>
+        json([], { total: 0 }),
+    });
+    await fill(form);
+    await within(form).findByText(/not prepaid/);
+    expect(review(form).disabled).toBe(true);
+  });
+
+  it('refuses an amount above the available funds and needs a reason', async () => {
+    const { form } = await transferForm();
+    await fill(form, '100.51'); // available is the bucket's remaining 100.50
+    expect(within(form).getByText(/at most the available 100\.50/)).toBeTruthy();
+    expect(review(form).disabled).toBe(true);
+    type(form, 'Amount', '100.50');
+    expect(review(form).disabled).toBe(false);
+    type(form, 'Reason', ' ');
+    expect(review(form).disabled).toBe(true);
+  });
+});

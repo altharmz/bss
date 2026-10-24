@@ -6,12 +6,13 @@ import {
   type BalanceActionKind,
   type PrepaidBalance,
 } from '../api/bss';
-import { ApiError, explain, newIdempotencyKey } from '../api/client';
+import { explain } from '../api/client';
 import { useSystemContext } from '../app/context';
 import { isIsoDate } from '../format/dates';
 import { accountLabel } from '../format/ids';
 import { formatCents, parseAmount, toCents } from '../format/money';
 import { Button, Modal, Segmented, TextInput } from '../ui/kit';
+import { uncertain, useSubmissionKey } from './submissionKey';
 
 // The money forms of a prepaid account: top-up, adjustment (credit or debit) and operator
 // hold (docs/decisions/prepaid.md P4d-P4f, frontend.md P6b). Each submission carries one
@@ -28,9 +29,6 @@ const TITLE: Record<MoneyForm, string> = {
   adjust: 'Adjust balance',
   hold: 'Hold funds',
 };
-
-const uncertain = (error: unknown) =>
-  !(error instanceof ApiError) || error.status === 0 || error.status >= 500;
 
 export function PrepaidMoneyModal({
   form,
@@ -56,8 +54,7 @@ export function PrepaidMoneyModal({
   const [problem, setProblem] = useState<string | null>(null);
   const [retry, setRetry] = useState(false);
   const saving = useRef(false);
-  // the key of the last uncertain submission, with the exact request it belongs to
-  const pending = useRef<{ key: string; body: string } | null>(null);
+  const submission = useSubmissionKey();
 
   const kind: BalanceActionKind = form === 'adjust' ? direction : form;
   const amount = parseAmount(amountText);
@@ -93,12 +90,10 @@ export function PrepaidMoneyModal({
       },
       context.timeZone,
     );
-    const same = pending.current !== null && pending.current.body === request.path + request.body;
-    const key = same && pending.current ? pending.current.key : newIdempotencyKey();
-    pending.current = { key, body: request.path + request.body };
+    const key = submission.keyFor(request.path + request.body);
     try {
       const stored = await submitBalanceAction(request, key);
-      pending.current = null;
+      submission.settle();
       if (stored.status === 'failed') {
         // a business refusal is stored: a new submission is a new action
         setRetry(false);
@@ -113,7 +108,7 @@ export function PrepaidMoneyModal({
           `${explain(error)}. Unsure whether it was recorded: retry sends it again safely.`,
         );
       } else {
-        pending.current = null;
+        submission.settle();
         setRetry(false);
         setProblem(explain(error));
       }

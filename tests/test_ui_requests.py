@@ -16,6 +16,8 @@ from app.worker.queue import process_requests
 from tests import apidata
 from tests.apiclient import decimals
 from tests.apidata import CATALOG, ORDER
+from tests.test_api_transfer import pair
+from tests.test_prepaid_renewal_producer import tick
 from tests.test_worker_process import DEC1, DEC3, at, scenario, set_currency
 from tests.timeline import TZ
 
@@ -629,6 +631,62 @@ def test_prepaid_money_forms_as_the_ui_sends_them(api):
     assert refused.status_code == 201, refused.text
     assert refused.json()["status"] == "failed" and refused.json()["reason"]
     assert remaining() == Decimal("1230.50")
+
+
+def test_prepaid_transfer_as_the_ui_sends_it(api, db_conn):
+    """transferRequest() and findReceiver() (api/transfer.ts), pinned in SubscriberCard.test.tsx:
+    the receiver is found by number (inventory value filter, the product's account, that
+    account's bucket); the exact body is accepted under an Idempotency-Key and a retry
+    replays; the card then polls until the worker completes it. A refusal is stored with
+    its explanation in `description`, while `reason` keeps the operator's own words."""
+    tx, rx = pair(api, db_conn)
+    prepay = "/tmf-api/prepayBalanceManagement/v4"
+    found = api.get("/tmf-api/resourceInventory/v5/resource?value=79991234001&offset=0&limit=100")
+    assert [n["id"] for n in found.json()] == [str(rx.number)]
+    products = api.get(
+        f"/tmf-api/productInventory/v5/product?realizingResource.id={rx.number}&offset=0&limit=100"
+    )
+    assert [p["billingAccount"]["id"] for p in products.json()] == [rx.id]
+    own = api.get(
+        f"/tmf-api/productInventory/v5/product?billingAccount.id={tx.id}&status=active"
+        "&offset=0&limit=100"
+    )
+    assert [r["id"] for p in own.json() for r in p["realizingResource"]] == [str(tx.number)]
+
+    def body(amount):
+        return (
+            '{"@type":"TransferBalance","reason":"Customer asked",'
+            '"channel":{"id":"admin-ui","name":"Admin UI"},'
+            f'"logicalResource":[{{"id":"{tx.number}"}}],'
+            f'"receiverLogicalResource":{{"id":"{rx.number}"}},'
+            f'"amount":{{"amount":{amount},"units":"USD"}},"usageType":"monetary",'
+            f'"bucket":{{"id":"{tx.bucket}"}},"receiverBucket":{{"id":"{rx.bucket}"}},'
+            '"receiverBucketUsageType":"monetary"}'
+        )
+
+    def post(text, key):
+        return api.request(
+            "POST",
+            f"{prepay}/transferBalance",
+            content=text,
+            headers={"Content-Type": "application/json", "Idempotency-Key": key},
+        )
+
+    first = post(body("30.00"), "ui-transfer-1")
+    assert first.status_code == 201, first.text
+    assert first.json()["status"] == "created"
+    again = post(body("30.00"), "ui-transfer-1")  # the uncertain-outcome retry
+    assert again.status_code == 201 and again.json()["id"] == first.json()["id"]
+    watched = f"{prepay}/transferBalance/{first.json()['id']}"
+    assert api.get(watched).json()["status"] == "created"
+    tick(db_conn, api.clock.now())
+    assert api.get(watched).json()["status"] == "completed"
+
+    refused = post(body("5000.00"), "ui-transfer-2")  # more than the sender can spend
+    assert refused.status_code == 201, refused.text
+    stored = refused.json()
+    assert stored["status"] == "failed" and stored["reason"] == "Customer asked"
+    assert stored["description"] and stored["description"] != stored["reason"]
 
 
 def test_edit_subscriber_as_the_ui_patches_it(api):

@@ -109,8 +109,38 @@ zones) and replayed against the real API in `tests/test_ui_requests.py`.
 - **Stored refusal.** A business refusal is a 201 whose `status` is `failed`: the form shows
   its `reason` as an error, shows no success toast, and does not reload the card.
 - **Not here.** Cancelling a top-up, adjustment or hold, and releasing a hold, are not in
-  this slice (the plan lists only the three creates); transfer, pending polling and technical
-  retry are P6c.
+  this slice (the plan lists only the three creates); transfer is P6c1, pending orders and
+  technical retry P6c2.
+
+## P6c1: transfer and its polling (2026-10-24)
+
+P6c is split: this slice is the transfer and the polling of the accepted transfer; pending
+orders and the technical retry are P6c2. No backend change. A prepaid card header gains
+**Transfer** (`PrepaidTransfer.tsx`, `api/transfer.ts`).
+
+- **By number.** The sender picks one of its own numbers (active products' resources); the
+  receiver is typed and looked up on **Find**: inventory `value=`, the non-terminated product
+  that uses the number, its billing account, that account's bucket. Refused before anything
+  is sent: an unknown or unused number, the same account, a postpaid receiver (no bucket),
+  another currency, an amount above the available funds, an empty reason (the API requires one).
+- **Finality.** The form's button is Review transfer; the confirmation step names amount,
+  numbers and receiver and says the transfer cannot be cancelled or edited, and only an
+  opposite transfer reverses it. Nothing is sent before Confirm.
+- **Body.** `TransferBalance` with `channel` `admin-ui`, `logicalResource`,
+  `receiverLogicalResource`, both buckets and `receiverBucketUsageType`; no `transferCost`
+  (absent means 0.00 paid by the originator, so the UI never posts a fee). Pinned in
+  `SubscriberCard.test.tsx` (both time zones) and replayed in `test_ui_requests.py`.
+- **Idempotency-Key.** The same discipline as P6b; its key bookkeeping now lives in
+  `submissionKey.ts`, shared by both forms.
+- **Refusal text.** A refused transfer is a stored 201 `failed`: its explanation is in
+  `description` (`reason` is the operator's own words), so the form shows `description`.
+- **Polling.** An accepted transfer is `created` until the worker's next wake-up. The screen
+  (above the card, which unmounts while it reloads) follows `GET transferBalance/{id}` every
+  5 s for at most 3 minutes from the submission (`usePolled`'s new `until`; the cap is a
+  timer, not a clock read in render). `completed` and `failed` toast and reload the card.
+  Past the cap it says the amount stays held and the worker completes it on its next wake-up,
+  and offers Check now; a failed look stops the polling and offers Check again. While one is
+  followed the Transfer button is disabled.
 
 ## N5: subscriber-number UI (2026-10-21)
 
