@@ -1,5 +1,13 @@
 # Frontend (admin UI, stage 5): decisions and conventions
 
+## Next slices 1-24: designed (2026-10-24)
+
+The human delegated every design decision on 2026-10-24. The UI for the remaining
+prepaid actions and for MCP parity is designed in
+[next-slices-design.md](../next-slices-design.md), and its progress is tracked in
+[next-slices.md](../next-slices.md). Slice 10 supersedes "No writes in this screen"
+below. Each slice adds its own entry here when built.
+
 ## Sidebar grouped by TMF area; global Orders screen (2026-10-21)
 
 Decided by the human on 2026-10-21. Nothing is implemented yet. It replaces the single "Operations"

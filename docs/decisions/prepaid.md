@@ -1,5 +1,19 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## Decided 2026-10-24, not built yet
+
+These decisions were made under the human's delegation of 2026-10-24
+([next-slices-design.md](../next-slices-design.md)):
+- **Slice 2:** the internal transactions list adds balance-action ledger entries
+  (adjustments, reversals, transfers in and out), so that its newest `balanceAfter`
+  equals L.
+- **Slice 4:** the internal products view gains `pendingChanges`.
+- **Slice 8:** dated prepaid suspend/resume runs through an `order` command due on its
+  date. A failed revalidation reaches TMF622 `failed`. Number-only changes run as on
+  postpaid.
+
+Each slice replaces this note with its own entry when built.
+
 ## P4c: balance read API (2026-10-23)
 
 TMF654 now serves `bucket` and `accumulatedBalance` list/retrieve (`app/api/balance.py`,
