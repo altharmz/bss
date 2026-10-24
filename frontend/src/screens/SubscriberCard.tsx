@@ -171,6 +171,7 @@ function Card({
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState(false);
   const [money, setMoney] = useState<MoneyForm | null>(null);
+  const [moneyAmount, setMoneyAmount] = useState<string | undefined>(undefined);
   const [transferring, setTransferring] = useState(false);
   const [openBill, setOpenBill] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -237,7 +238,10 @@ function Card({
               ).map(([form, label]) => (
                 <span key={form}>
                   <Button
-                    onClick={() => setMoney(form)}
+                    onClick={() => {
+                      setMoneyAmount(undefined);
+                      setMoney(form);
+                    }}
                     disabled={balance.status !== 'ok' || balance.data === null}
                   >
                     {label}
@@ -347,6 +351,7 @@ function Card({
           form={money}
           account={account}
           balance={balance.data}
+          {...(moneyAmount === undefined ? {} : { initialAmount: moneyAmount })}
           onClose={() => setMoney(null)}
           onDone={(message) => {
             setMoney(null);
@@ -395,6 +400,11 @@ function Card({
           account={account}
           activeOfferingIds={activeOfferings}
           onClose={() => setAdding(false)}
+          onTopUp={(amount) => {
+            setAdding(false);
+            setMoneyAmount(amount);
+            setMoney('topup');
+          }}
           onOrdered={(message, accepted) => {
             setAdding(false);
             toast(message);

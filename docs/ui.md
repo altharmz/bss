@@ -186,6 +186,12 @@ and billed, the following full period, balance after, and a credit-limit warning
 never blocks. Confirm places a TMF622 add order; a rejection shows its reasons. The copy
 follows the end-of-day rule: nothing is "charged on confirmation" - an order completed
 today is charged by the run of max(start, tomorrow).
+On a **prepaid** account (`ui.addProduct.prepaidPreview`) the preview shows period, price,
+"paid in full in advance", **To pay now** (or **To pay on {date}**), Available, Shortfall
+(only when > 0) and Ledger after (start today only). A shortfall with a start today adds a
+warning and **Top up {n}** (`ui.addProduct.topUpShortfall`), which closes this dialog and
+opens the card's Top-up form with the amount typed in; a future start only shows a hint.
+Submit stays enabled; the server's refusal shows as for any rejected order.
 API: `GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true`,
 `GET .../productOfferingPrice?priceType=recurring`,
 `GET /internal/v1/billingAccount/{id}/firstCharge?productOffering.id=&startDate=`,

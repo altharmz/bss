@@ -40,10 +40,14 @@ export function AddProductModal({
   activeOfferingIds,
   onClose,
   onOrdered,
+  onTopUp,
 }: {
   account: Account;
   activeOfferingIds: Set<string>;
   onClose: () => void;
+  /** Close Add product and open the card's Top-up form with this decimal amount typed in;
+   * absent where there is no card behind the dialog (a new subscriber's first product). */
+  onTopUp?: (amount: string) => void;
   onOrdered: (message: string, accepted?: PendingOrder) => void;
 }) {
   const context = useSystemContext();
@@ -237,7 +241,13 @@ export function AddProductModal({
             {offeringId === null ? (
               <div className="bss-hint">Select an offering to see the calculation</div>
             ) : (
-              <Preview preview={preview} account={account} />
+              <Preview
+                preview={preview}
+                account={account}
+                start={start}
+                today={today}
+                onTopUp={onTopUp}
+              />
             )}
           </div>
         </section>
@@ -249,9 +259,15 @@ export function AddProductModal({
 function Preview({
   preview,
   account,
+  start,
+  today,
+  onTopUp,
 }: {
   preview: ReturnType<typeof useResource<FirstCharge | null>>;
   account: Account;
+  start: string;
+  today: string;
+  onTopUp: ((amount: string) => void) | undefined;
 }) {
   if (preview.status === 'loading') return <div className="bss-hint">Calculating…</div>;
   if (preview.status === 'error') {
@@ -263,6 +279,9 @@ function Preview({
   }
   const p = preview.data;
   if (p === null) return <div className="bss-hint">Select an offering to see the calculation</div>;
+  if (account.ratingType === 'prepaid' && p.required !== undefined) {
+    return <PrepaidPreview p={p} start={start} today={today} onTopUp={onTopUp} />;
+  }
   const price = formatAmount(p.price.value);
   const after = toCents(p.balanceAfter.value);
   return (
@@ -319,5 +338,95 @@ function Preview({
         run at the earliest.
       </div>
     </>
+  );
+}
+
+// A prepaid account pays the whole first interval, taxes included, in advance (docs/decisions/
+// frontend.md, next-slices-design.md section 1). The figures are the backend's: required,
+// available, shortfall and balanceAfter; nothing here is computed except the comparison with 0
+// that decides which hint to show.
+function PrepaidPreview({
+  p,
+  start,
+  today,
+  onTopUp,
+}: {
+  p: FirstCharge;
+  start: string;
+  today: string;
+  onTopUp: ((amount: string) => void) | undefined;
+}) {
+  const now = start === today;
+  const cur = p.amount.unit;
+  const required = p.required ?? p.amount;
+  const shortfallCents = p.shortfall === undefined ? 0 : toCents(p.shortfall.value);
+  const short = shortfallCents > 0;
+  return (
+    <div data-ui="ui.addProduct.prepaidPreview">
+      <div className="bss-preview-grid">
+        <dl>
+          <dt>Period</dt>
+          <dd>
+            {p.period.start} – {lastDay(p.period.end)}
+          </dd>
+          <dt>Offering price</dt>
+          <dd>
+            {formatAmount(p.price.value)} {p.price.unit} / {p.recurringChargePeriod ?? 'mo'}
+          </dd>
+          <dt>Charging</dt>
+          <dd>paid in full in advance, no proration</dd>
+        </dl>
+        <dl>
+          <dt>{now ? 'To pay now' : `To pay on ${start}`}</dt>
+          <dd>
+            <span className="first" data-testid="prepaid-required">
+              {formatAmount(required.value)} {required.unit}
+            </span>
+          </dd>
+          <dt>Available</dt>
+          <dd>{p.available === undefined ? '—' : `${formatAmount(p.available.value)} ${cur}`}</dd>
+          {short && p.shortfall !== undefined && (
+            <>
+              <dt>Shortfall</dt>
+              <dd>
+                <Amount cents={-shortfallCents} currency={p.shortfall.unit} />
+              </dd>
+            </>
+          )}
+          {now && (
+            <>
+              <dt>Ledger after</dt>
+              <dd>
+                <Amount cents={toCents(p.balanceAfter.value)} currency={p.balanceAfter.unit} />
+              </dd>
+            </>
+          )}
+        </dl>
+      </div>
+      {short && now && (
+        <div className="bss-warning" role="note">
+          Insufficient funds: top up at least {formatCents(shortfallCents)} {cur}. The order is
+          refused until the account has the funds.{' '}
+          {onTopUp !== undefined && (
+            <Button
+              data-ui="ui.addProduct.topUpShortfall"
+              onClick={() => onTopUp(formatCents(shortfallCents).replace(/,/g, ''))}
+            >
+              Top up {formatCents(shortfallCents)}
+            </Button>
+          )}
+        </div>
+      )}
+      {short && !now && (
+        <div className="bss-hint" role="note">
+          Funds are checked on {start}; nothing is held now. Top up before then.
+        </div>
+      )}
+      <div className="footnote">
+        {now
+          ? 'Submitting holds the full interval with its taxes; the billing worker charges it and renews at the paid-through date while funds last.'
+          : `On ${start} the billing worker takes the interval from the funds available then.`}
+      </div>
+    </div>
   );
 }

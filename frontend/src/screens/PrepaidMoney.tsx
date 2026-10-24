@@ -34,17 +34,20 @@ export function PrepaidMoneyModal({
   form,
   account,
   balance,
+  initialAmount,
   onClose,
   onDone,
 }: {
   form: MoneyForm;
   account: Account;
   balance: PrepaidBalance;
+  /** A decimal string typed into the amount field when the form opens (Add product's shortfall). */
+  initialAmount?: string;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
   const context = useSystemContext();
-  const [amountText, setAmountText] = useState('');
+  const [amountText, setAmountText] = useState(initialAmount ?? '');
   const [direction, setDirection] = useState<'credit' | 'debit'>('credit');
   const [method, setMethod] = useState(METHODS[0] ?? 'cash');
   const [other, setOther] = useState('');

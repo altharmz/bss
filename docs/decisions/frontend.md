@@ -8,6 +8,23 @@ prepaid actions and for MCP parity is designed in
 [next-slices.md](../next-slices.md). Slice 10 supersedes "No writes in this screen"
 below. Each slice adds its own entry here when built.
 
+## Slice 1: prepaid first-charge preview in Add product (2026-10-24)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 1); frontend only,
+no new request (the internal `firstCharge` already carried `required`/`available`/`shortfall`).
+`Preview` in `AddProduct.tsx` branches on a prepaid account **and** `required` being present;
+the postpaid branch is unchanged. The prepaid branch shows period, price and "paid in full in
+advance"; To pay now (or To pay on the start date), Available, Shortfall (> 0 only) and Ledger
+after (start today only). A shortfall with a start today shows a warning and **Top up {n}**,
+which closes Add product and opens the card's Top-up form with the amount typed in
+(`PrepaidMoneyModal` gains `initialAmount`; `SubscriberCard` holds it). A future start shows
+the hint only. Markers `ui.addProduct.prepaidPreview`, `ui.addProduct.topUpShortfall`.
+Tests (`SubscriberCard.test.tsx`, both timezones): figures today and future, the handoff with
+the amount prefilled and the top-up body pinned (the POST itself is already replayed in
+`tests/test_ui_requests.py`), no shortfall when covered, one preview request.
+Deviation: the first product of a new subscriber (`SubscriberForms.tsx`) has no card behind
+it, so there the warning shows without the Top-up button (`onTopUp` is optional).
+
 ## Sidebar grouped by TMF area; global Orders screen (2026-10-21)
 
 Decided by the human on 2026-10-21. Nothing is implemented yet. It replaces the single "Operations"

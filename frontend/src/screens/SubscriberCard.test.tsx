@@ -1538,3 +1538,178 @@ describe('prepaid orders and commands', () => {
     expect(screen.queryByText(/The order was/)).toBeNull();
   });
 });
+
+describe('prepaid first-charge preview in Add product', () => {
+  const PREPAY = '/tmf-api/prepayBalanceManagement/v4';
+  const BUCKETS = `GET ${PREPAY}/bucket?partyAccount.id=${A}&offset=0&limit=100`;
+  const PREPAID = accountBody(
+    A,
+    { id: C, name: 'Olga Kuznetsova' },
+    { ratingType: 'prepaid', accountBalance: [{ amount: usd(120), '@type': 'AccountBalance' }] },
+  );
+  const OFFER = {
+    id: O2,
+    name: 'Fiber 100',
+    externalIdentifier: [{ id: 'NET-100', externalIdentifierType: 'offeringCode' }],
+    productSpecification: { name: 'Home Internet' },
+    productOfferingPrice: [{ id: 'pr2' }],
+  };
+  const firstCharge = (over: Record<string, unknown> = {}) => ({
+    ...FIRST_CHARGE,
+    period: { start: '2026-10-01', end: '2026-11-01' },
+    prorated: false,
+    billableDays: 31,
+    periodDays: 31,
+    amount: usd(780),
+    next: null,
+    balance: usd(120),
+    balanceAfter: usd(-660),
+    creditLimit: null,
+    exceedsCreditLimit: true,
+    required: usd(780),
+    available: usd(120),
+    shortfall: usd(660),
+    ...over,
+  });
+  const urlOf = (start: string) =>
+    `GET ${INTERNAL}/firstCharge?productOffering.id=${O2}&startDate=${start}`;
+
+  function stubbed(routes: Record<string, Handler>) {
+    return backend(
+      {
+        [BUCKETS]: () =>
+          json(
+            [
+              {
+                id: BUCKET,
+                remainingValue: { amount: 120, units: 'USD' },
+                reservedValue: { amount: 0, units: 'USD' },
+              },
+            ],
+            { total: 1 },
+          ),
+        'GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true&offset=0&limit=100':
+          () => json([OFFER], { total: 1 }),
+        'GET /tmf-api/productCatalogManagement/v5/productOfferingPrice?priceType=recurring&offset=0&limit=100':
+          () =>
+            json(
+              [
+                {
+                  id: 'pr2',
+                  price: usd(650),
+                  validFor: { startDateTime: '2026-06-01T21:00:00Z' },
+                },
+              ],
+              { total: 1 },
+            ),
+        ...routes,
+      },
+      PREPAID,
+    );
+  }
+
+  async function chooseOffering() {
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: '+ Add product' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add product' });
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[0] as HTMLElement);
+    return dialog;
+  }
+
+  it('shows to pay, available, shortfall and ledger after for a start today, with one preview request', async () => {
+    const { fetchMock } = stubbed({ [urlOf('2026-10-01')]: () => json(firstCharge()) });
+    const dialog = await chooseOffering();
+    await within(dialog).findByTestId('prepaid-required');
+    const box = expectUi('ui.addProduct.prepaidPreview');
+    expect(within(box).getByTestId('prepaid-required').textContent).toBe('780.00 USD');
+    const text = box.textContent ?? '';
+    expect(text).toContain('To pay now');
+    expect(text).toContain('paid in full in advance, no proration');
+    expect(text).toContain('2026-10-01 – 2026-10-31');
+    expect(text).toContain('Available120.00 USD');
+    expect(text).toContain('Shortfall');
+    expect(text).toContain('660.00');
+    expect(text).toContain('Ledger after');
+    expect(text).toContain('Submitting holds the full interval with its taxes');
+    expect(within(dialog).queryByTestId('first-charge')).toBeNull();
+    expect(within(dialog).getByText(/Insufficient funds: top up at least 660.00 USD/)).toBeTruthy();
+    // submit stays enabled with a shortfall
+    expect(
+      (within(dialog).getByRole('button', { name: 'Activate' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).includes('/firstCharge')),
+    ).toHaveLength(1);
+  });
+
+  it('hands the shortfall to the Top-up form, which sends it as the amount', async () => {
+    const { fetchMock } = stubbed({
+      [urlOf('2026-10-01')]: () => json(firstCharge({ shortfall: usd(1250.5) })),
+      [`POST ${PREPAY}/topupBalance`]: () =>
+        json({ id: 'x1', status: 'completed' }, { status: 201 }),
+    });
+    const dialog = await chooseOffering();
+    await within(dialog).findByTestId('prepaid-required');
+    const button = expectUi('ui.addProduct.topUpShortfall');
+    expect(button.textContent).toBe('Top up 1,250.50');
+    fireEvent.click(button);
+    expect(screen.queryByRole('dialog', { name: 'Add product' })).toBeNull();
+    const form = await screen.findByRole('dialog', { name: 'Top up' });
+    expect((within(form).getByLabelText('Amount') as HTMLInputElement).value).toBe('1250.50');
+    fireEvent.click(within(form).getByRole('button', { name: 'cash' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Top up' }));
+    await screen.findByRole('status');
+    const sent = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(String(sent?.[0])).toBe(`${PREPAY}/topupBalance`);
+    expect(String(sent?.[1]?.body)).toBe(
+      '{"@type":"TopupBalance","amount":{"amount":1250.50,"units":"USD"},"usageType":"monetary",' +
+        `"bucket":{"id":"${BUCKET}"},"partyAccount":{"id":"${A}","@referredType":"BillingAccount"},` +
+        '"paymentMethod":{"id":"cash","name":"cash"}}',
+    );
+  });
+
+  it('a future start shows a hint and no Top-up button, and no ledger after', async () => {
+    stubbed({
+      [urlOf('2026-10-01')]: () => json(firstCharge()),
+      [urlOf('2026-10-20')]: () =>
+        json(firstCharge({ period: { start: '2026-10-20', end: '2026-11-20' } })),
+    });
+    const dialog = await chooseOffering();
+    fireEvent.change(within(dialog).getByLabelText('Start date'), {
+      target: { value: '2026-10-20' },
+    });
+    await within(dialog).findByText('To pay on 2026-10-20');
+    expect(
+      within(dialog).getByText(
+        'Funds are checked on 2026-10-20; nothing is held now. Top up before then.',
+      ),
+    ).toBeTruthy();
+    expect(document.querySelector('[data-ui="ui.addProduct.topUpShortfall"]')).toBeNull();
+    expect(within(dialog).queryByText(/Insufficient funds/)).toBeNull();
+    expect(within(dialog).queryByText('Ledger after')).toBeNull();
+    expect(
+      within(dialog).getByText(
+        'On 2026-10-20 the billing worker takes the interval from the funds available then.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('shows no shortfall, warning or button when the funds cover the interval', async () => {
+    stubbed({
+      [urlOf('2026-10-01')]: () =>
+        json(
+          firstCharge({
+            available: usd(900),
+            shortfall: usd(0),
+            balanceAfter: usd(120),
+            exceedsCreditLimit: false,
+          }),
+        ),
+    });
+    const dialog = await chooseOffering();
+    await within(dialog).findByTestId('prepaid-required');
+    expect(within(dialog).queryByText('Shortfall')).toBeNull();
+    expect(within(dialog).queryByText(/Insufficient funds/)).toBeNull();
+    expect(document.querySelector('[data-ui="ui.addProduct.topUpShortfall"]')).toBeNull();
+  });
+});
