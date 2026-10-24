@@ -128,11 +128,12 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   after history) and adds required/available/shortfall to the first-charge preview. P5b gives the six
   journaled POST tools (`create_order`, `create_payment`, topup/adjust/reserve/transfer) an explicit
   `idempotency_key`; `make mcp-smoke` runs one top-up and one purchase. P6a adds the UI account-mode switch and
-  filter and the prepaid card (ledger, available, reserved, paid-through, shortfall).
+  filter and the prepaid card (ledger, available, reserved, paid-through, shortfall). P6b adds the
+  top-up, adjustment and hold forms (one Idempotency-Key per submission, same-key retry).
 - **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
   timezone, browser checks, lint and docs passed. All number scope items tested.
   [Release evidence](docs/subscriber-number-release.md).
-- **Next:** prepaid slice P6b, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
+- **Next:** prepaid slice P6c, then down the tracker [prepaid-slices.md](docs/prepaid-slices.md)
   - [scope](docs/prepaid-plan.md),
   [decision](docs/decisions/prepaid.md).
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21

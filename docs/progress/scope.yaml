@@ -319,6 +319,9 @@ items:
   - {id: ui.subscriber.billHold, area: ui, stage: 5, title: "Put a bill on hold / release it"}
   - {id: ui.subscriber.recordPayment, area: ui, stage: 5, title: "Record payment, optionally to chosen bills"}
   - {id: ui.subscriber.recordRefund, area: ui, stage: 5, title: "Record a payout from unused credit"}
+  - {id: ui.subscriber.prepaid.topup, area: ui, stage: 5, title: "Prepaid top-up form with an Idempotency-Key per submission"}
+  - {id: ui.subscriber.prepaid.adjust, area: ui, stage: 5, title: "Prepaid balance adjustment form, credit or debit"}
+  - {id: ui.subscriber.prepaid.hold, area: ui, stage: 5, title: "Prepaid operator hold form with optional expiry"}
   - {id: ui.subscriber.refunds, area: ui, stage: 5, title: "Recorded refund history with payout metadata"}
   - {id: ui.subscriber.billNow, area: ui, stage: 5, title: "Request an on-demand bill"}
   - {id: ui.subscriber.billRequests, area: ui, stage: 5, title: "On-demand bill status and resulting bill"}

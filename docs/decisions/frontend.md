@@ -83,6 +83,35 @@ error like any other attribute).
   the prepaid preview inside Add product (the internal `firstCharge` already carries
   required/available/shortfall) are later slices.
 
+## P6b: prepaid money forms (2026-10-24)
+
+No backend change. A prepaid card header offers **Top up**, **Adjust** and **Hold funds**
+(disabled until the bucket has loaded; the bucket's `id` is now read with the figures).
+`PrepaidMoney.tsx` is one modal for the three; the requests are built in one place
+(`balanceActionRequest` in `api/bss.ts`) and pinned in `SubscriberCard.test.tsx` (both time
+zones) and replayed against the real API in `tests/test_ui_requests.py`.
+
+- **Bodies.** Top-up: `TopupBalance` with `partyAccount`, `paymentMethod {id, name}` (TMF654's
+  `PaymentMethodRef` requires an `id`; the method name is both) and an optional `reason`.
+  Adjust: `AdjustBalance`, no `partyAccount` (the API refuses one); a debit is the same
+  amount sent negative (`jsonWithSignedAmount`), so the operator never types a sign. Hold:
+  `ReserveBalance` with `partyAccount` and, if a date is given, `validFor.endDateTime` =
+  midnight at the end of that business day in BILLING_TZ ("holds through" the date).
+  Amounts are verbatim exact tokens, as everywhere.
+- **Limits in the form.** A debit or hold above the available funds is refused before
+  anything is sent (the API would store a `failed` action); a hold date before the business
+  date is refused. Closed accounts are not special-cased: the API stores that refusal.
+- **Idempotency-Key.** One key per submission. After an uncertain outcome (no response, a
+  5xx) the button becomes Retry and the unchanged form is sent again with the **same** key,
+  so the server replays what it stored instead of acting twice. The key belongs to the exact
+  path + body: an edited form gets a new key (the same key with another body is a 409).
+  A success, a 4xx or a stored refusal ends the submission, so the next one has a new key.
+- **Stored refusal.** A business refusal is a 201 whose `status` is `failed`: the form shows
+  its `reason` as an error, shows no success toast, and does not reload the card.
+- **Not here.** Cancelling a top-up, adjustment or hold, and releasing a hold, are not in
+  this slice (the plan lists only the three creates); transfer, pending polling and technical
+  retry are P6c.
+
 ## N5: subscriber-number UI (2026-10-21)
 
 `/numbers` lists and searches inventory, creates strictly formatted E.164 digits,

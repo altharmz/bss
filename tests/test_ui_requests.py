@@ -571,6 +571,66 @@ def test_new_prepaid_subscriber_as_the_ui_creates_it(api):
     assert (bucket["remainingValue"]["amount"], bucket["reservedValue"]["amount"]) == (0, 0)
 
 
+def test_prepaid_money_forms_as_the_ui_sends_them(api):
+    """balanceActionRequest() (PrepaidMoney.tsx): the bodies pinned in SubscriberCard.test.tsx,
+    each under an Idempotency-Key. A retry of the same submission replays; a debit above the
+    spendable funds is a stored refusal (201, failed) the form shows as the reason."""
+    prepay = "/tmf-api/prepayBalanceManagement/v4"
+    account = apidata.account(api, ratingType="prepaid")
+    found = api.get(f"{prepay}/bucket?partyAccount.id={account['id']}&offset=0&limit=100")
+    bucket = found.json()[0]
+    owner = f'"partyAccount":{{"id":"{account["id"]}","@referredType":"BillingAccount"}}'
+    where = f'"bucket":{{"id":"{bucket["id"]}"}}'
+
+    def post(path, text, key):
+        return api.request(
+            "POST",
+            f"{prepay}/{path}",
+            content=text,
+            headers={"Content-Type": "application/json", "Idempotency-Key": key},
+        )
+
+    def remaining():
+        return decimals(api.get(f"{prepay}/bucket/{bucket['id']}"))["remainingValue"]["amount"]
+
+    topup = (
+        '{"@type":"TopupBalance","amount":{"amount":1250.50,"units":"USD"},'
+        f'"usageType":"monetary",{where},{owner},"paymentMethod":{{"id":"cash","name":"cash"}},'
+        '"reason":"Cash at the desk"}'
+    )
+    first = post("topupBalance", topup, "ui-topup-1")
+    assert first.status_code == 201, first.text
+    assert first.json()["status"] == "completed"
+    again = post("topupBalance", topup, "ui-topup-1")  # the uncertain-outcome retry
+    assert again.status_code == 201 and again.json()["id"] == first.json()["id"]
+    assert remaining() == Decimal("1250.50")
+
+    adjust = (
+        '{"@type":"AdjustBalance","amount":{"amount":%s,"units":"USD"},"usageType":"monetary",%s}'
+    )
+    credit = post("adjustBalance", adjust % ("12.50", where), "ui-adjust-1")
+    debit = post("adjustBalance", adjust % ("-12.50", where), "ui-adjust-2")
+    assert (credit.status_code, debit.status_code) == (201, 201), (credit.text, debit.text)
+    assert (credit.json()["status"], debit.json()["status"]) == ("completed", "completed")
+    assert remaining() == Decimal("1250.50")
+
+    hold = post(
+        "reserveBalance",
+        '{"@type":"ReserveBalance","amount":{"amount":20.00,"units":"USD"},'
+        f'"usageType":"monetary",{where},{owner},'
+        '"validFor":{"endDateTime":"2026-10-06T00:00:00+03:00"}}',
+        "ui-hold-1",
+    )
+    assert hold.status_code == 201, hold.text
+    assert hold.json()["status"] == "created"
+    assert remaining() == Decimal("1230.50")
+
+    refused = post("adjustBalance", adjust % ("-5000.00", where), "ui-adjust-3")
+    assert refused.status_code == 201, refused.text
+    assert refused.json()["status"] == "failed" and refused.json()["reason"]
+    assert remaining() == Decimal("1230.50")
+
+
 def test_edit_subscriber_as_the_ui_patches_it(api):
     """updateSubscriber(): merge patches of only the changed attributes; the credit limit as
     an exact token or null."""

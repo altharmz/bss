@@ -92,10 +92,14 @@ export async function request(
 
 /** POST a JSON body. The caller passes the JSON text when it must control number tokens
  * (amounts); otherwise an object is serialised here. */
-export async function postJson<T>(path: string, body: unknown): Promise<T> {
+export async function postJson<T>(
+  path: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+): Promise<T> {
   const response = await request('POST', path, {
     body: typeof body === 'string' ? body : JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
   });
   return (await response.json()) as T;
 }
@@ -125,6 +129,24 @@ export function jsonWithAmount(body: unknown, amount: string): string {
   if (text.split(AMOUNT_TOKEN).length !== 2)
     throw new Error('the body must hold AMOUNT exactly once');
   return text.replace(AMOUNT_TOKEN, amount);
+}
+
+/** jsonWithAmount for a signed amount ("-12.50"): an adjustment's debit is negative. */
+export function jsonWithSignedAmount(body: unknown, amount: string): string {
+  if (!/^-?\d{1,10}\.\d{2}$/.test(amount))
+    throw new RangeError(`not a canonical amount: ${amount}`);
+  const text = JSON.stringify(body);
+  if (text.split(AMOUNT_TOKEN).length !== 2)
+    throw new Error('the body must hold AMOUNT exactly once');
+  return text.replace(AMOUNT_TOKEN, amount);
+}
+
+/** A fresh Idempotency-Key (1-255 visible ASCII): one per submission, reused only to
+ * retry that same submission after an uncertain outcome. */
+export function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    return crypto.randomUUID();
+  return Array.from({ length: 4 }, () => Math.random().toString(16).slice(2, 10)).join('-');
 }
 
 /** The i-th amount slot for jsonWithAmounts (a body with several exact amounts). */

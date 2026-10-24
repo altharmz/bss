@@ -28,6 +28,7 @@ import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
 import { ProductNumber } from './ProductNumber';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
+import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
 import { AccountBills, RefundAction, RefundsPanel } from './AccountActions';
 import { EditSubscriberModal } from './SubscriberForms';
 import './screens.css';
@@ -120,6 +121,7 @@ function Card({
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState(false);
+  const [money, setMoney] = useState<MoneyForm | null>(null);
   const [openBill, setOpenBill] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const customerStatus = useResource(`customer:${account.customerId}:${version}`, (signal) =>
@@ -175,6 +177,23 @@ function Card({
             <Button onClick={() => setPaying(true)} disabled={bills.status !== 'ok'}>
               Record payment
             </Button>{' '}
+            {account.ratingType === 'prepaid' &&
+              (
+                [
+                  ['topup', 'Top up'],
+                  ['adjust', 'Adjust'],
+                  ['hold', 'Hold funds'],
+                ] as const
+              ).map(([form, label]) => (
+                <span key={form}>
+                  <Button
+                    onClick={() => setMoney(form)}
+                    disabled={balance.status !== 'ok' || balance.data === null}
+                  >
+                    {label}
+                  </Button>{' '}
+                </span>
+              ))}
             {addButton}
             {!canAdd && (
               <div className="caption">Unavailable for {account.state.toLowerCase()} accounts</div>
@@ -253,6 +272,19 @@ function Card({
           onClose={() => setPaying(false)}
           onRecorded={(message) => {
             setPaying(false);
+            toast(message);
+            reload();
+          }}
+        />
+      )}
+      {money !== null && balance.status === 'ok' && balance.data !== null && (
+        <PrepaidMoneyModal
+          form={money}
+          account={account}
+          balance={balance.data}
+          onClose={() => setMoney(null)}
+          onDone={(message) => {
+            setMoney(null);
             toast(message);
             reload();
           }}

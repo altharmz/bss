@@ -764,6 +764,8 @@ describe('edit subscriber', () => {
   });
 });
 
+const BUCKET = 'bbbb3333-0000-4000-8000-0000000000b3';
+
 describe('prepaid card', () => {
   const BUCKETS = `GET /tmf-api/prepayBalanceManagement/v4/bucket?partyAccount.id=${A}&offset=0&limit=100`;
   const PREPAID = accountBody(
@@ -780,6 +782,7 @@ describe('prepaid card', () => {
     json(
       [
         {
+          id: BUCKET,
           remainingValue: { amount: remaining, units: 'USD' },
           reservedValue: { amount: reserved, units: 'USD' },
         },
@@ -860,5 +863,238 @@ describe('prepaid card', () => {
     await open();
     await within(panel('Billing account')).findByText('Credit limit');
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('prepayBalance'))).toBe(false);
+  });
+});
+
+describe('prepaid money forms', () => {
+  const PREPAY = '/tmf-api/prepayBalanceManagement/v4';
+  const BUCKETS = `GET ${PREPAY}/bucket?partyAccount.id=${A}&offset=0&limit=100`;
+  const PREPAID = accountBody(
+    A,
+    { id: C, name: 'Olga Kuznetsova' },
+    {
+      ratingType: 'prepaid',
+      accountBalance: [
+        { balanceType: 'currentBalance', amount: usd(120), '@type': 'AccountBalance' },
+      ],
+    },
+  );
+  const bucket = () =>
+    json(
+      [
+        {
+          id: BUCKET,
+          remainingValue: { amount: 100.5, units: 'USD' },
+          reservedValue: { amount: 19.5, units: 'USD' },
+        },
+      ],
+      { total: 1 },
+    );
+  const stored = (status: string, reason?: string) => () =>
+    json({ id: 'x1', status, ...(reason ? { reason } : {}) }, { status: 201 });
+  const posts = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
+    fetchMock.mock.calls
+      .filter(([, init]) => init?.method === 'POST')
+      .map(([url, init]) => ({
+        url: String(url),
+        body: String(init?.body),
+        key: (init?.headers as Record<string, string>)['Idempotency-Key'] as string,
+      }));
+  const owner = `"partyAccount":{"id":"${A}","@referredType":"BillingAccount"}`;
+  const quantity = (value: string) => `"amount":{"amount":${value},"units":"USD"}`;
+
+  async function prepaid(routes: Record<string, Handler> = {}) {
+    const stub = backend({ [BUCKETS]: bucket, ...routes }, PREPAID);
+    await open();
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: 'Top up' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    return stub;
+  }
+  const dialog = (name: string) => screen.findByRole('dialog', { name });
+  const press = (scope: HTMLElement, name: string) =>
+    fireEvent.click(within(scope).getByRole('button', { name }));
+  const openForm = async (label: string) => {
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: label }) as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
+    press(document.body, label);
+  };
+  const type = (scope: HTMLElement, label: string, value: string) =>
+    fireEvent.change(within(scope).getByLabelText(label), { target: { value } });
+
+  it('tops up with the exact body and one Idempotency-Key, then reloads the card', async () => {
+    const { fetchMock } = await prepaid({ [`POST ${PREPAY}/topupBalance`]: stored('completed') });
+    press(document.body, 'Top up');
+    const form = await dialog('Top up');
+    expectUi('ui.subscriber.prepaid.topup');
+    type(form, 'Amount', '1,250.5');
+    type(form, 'Reason', ' Cash at the desk ');
+    press(form, 'cash');
+    press(form, 'Top up');
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Top up: 1,250.50 USD recorded',
+    );
+    const [sent, ...rest] = posts(fetchMock);
+    expect(rest).toEqual([]);
+    expect(sent?.url).toBe(`${PREPAY}/topupBalance`);
+    expect(sent?.body).toBe(
+      `{"@type":"TopupBalance",${quantity('1250.50')},"usageType":"monetary",` +
+        `"bucket":{"id":"${BUCKET}"},${owner},"paymentMethod":{"id":"cash","name":"cash"},` +
+        '"reason":"Cash at the desk"}',
+    );
+    expect(sent?.key).toMatch(/^[\x21-\x7e]{1,255}$/);
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/bucket?'))).toHaveLength(
+        2,
+      ),
+    );
+  });
+
+  it('adjusts: a credit is positive, a debit is the same amount negative, no partyAccount', async () => {
+    const { fetchMock } = await prepaid({ [`POST ${PREPAY}/adjustBalance`]: stored('completed') });
+    press(document.body, 'Adjust');
+    let form = await dialog('Adjust balance');
+    expectUi('ui.subscriber.prepaid.adjust');
+    type(form, 'Amount', '12.5');
+    press(form, 'Adjust balance');
+    await screen.findByRole('status');
+    await openForm('Adjust');
+    form = await dialog('Adjust balance');
+    press(form, 'Debit');
+    type(form, 'Amount', '12.50');
+    press(form, 'Adjust balance');
+    await waitFor(() => expect(posts(fetchMock)).toHaveLength(2));
+    const [credit, debit] = posts(fetchMock);
+    const head = (value: string) =>
+      `{"@type":"AdjustBalance",${quantity(value)},"usageType":"monetary","bucket":{"id":"${BUCKET}"}}`;
+    expect(credit?.body).toBe(head('12.50'));
+    expect(debit?.body).toBe(head('-12.50'));
+    expect(credit?.key).not.toBe(debit?.key); // two submissions, two keys
+  });
+
+  it("holds funds, optionally through a business date (the end is that date's close)", async () => {
+    const { fetchMock } = await prepaid({ [`POST ${PREPAY}/reserveBalance`]: stored('created') });
+    press(document.body, 'Hold funds');
+    const form = await dialog('Hold funds');
+    expectUi('ui.subscriber.prepaid.hold');
+    type(form, 'Amount', '20');
+    type(form, 'Hold expires on', '2026-09-30');
+    expect(within(form).getByText('Enter today or a later business date.')).toBeTruthy();
+    expect(
+      (within(form).getByRole('button', { name: 'Hold funds' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    type(form, 'Hold expires on', '2026-10-05');
+    press(form, 'Hold funds');
+    await screen.findByRole('status');
+    expect(posts(fetchMock)[0]?.body).toBe(
+      `{"@type":"ReserveBalance",${quantity('20.00')},"usageType":"monetary",` +
+        `"bucket":{"id":"${BUCKET}"},${owner},` +
+        '"validFor":{"endDateTime":"2026-10-06T00:00:00+03:00"}}',
+    );
+  });
+
+  it('refuses a debit or hold above the available funds before sending anything', async () => {
+    const { fetchMock } = await prepaid();
+    press(document.body, 'Hold funds');
+    const form = await dialog('Hold funds');
+    type(form, 'Amount', '100.51');
+    expect(within(form).getByText('Enter at most the available 100.50.')).toBeTruthy();
+    expect(
+      (within(form).getByRole('button', { name: 'Hold funds' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    type(form, 'Amount', '100.50');
+    expect(
+      (within(form).getByRole('button', { name: 'Hold funds' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    expect(posts(fetchMock)).toEqual([]);
+  });
+
+  it('retries an uncertain outcome with the same key, and a changed form with a new one', async () => {
+    let calls = 0;
+    const { fetchMock } = await prepaid({
+      [`POST ${PREPAY}/topupBalance`]: () =>
+        ++calls < 3 ? tmfError(503, 'Unavailable') : stored('completed')(),
+    });
+    press(document.body, 'Top up');
+    const form = await dialog('Top up');
+    type(form, 'Amount', '10');
+    press(form, 'Top up');
+    const alert = await within(form).findByRole('alert');
+    expect(alert.textContent).toContain('Unsure whether it was recorded');
+    press(form, 'Retry'); // unchanged: the same submission again
+    await waitFor(() => expect(posts(fetchMock)).toHaveLength(2));
+    await within(form).findByRole('alert');
+    type(form, 'Amount', '11'); // a different request must not reuse the key
+    press(form, 'Retry');
+    await screen.findByRole('status');
+    const [first, second, third] = posts(fetchMock);
+    expect(second?.key).toBe(first?.key);
+    expect(second?.body).toBe(first?.body);
+    expect(third?.key).not.toBe(first?.key);
+    expect(third?.body).toContain('11.00');
+  });
+
+  it('treats a network failure as uncertain too', async () => {
+    let calls = 0;
+    const { fetchMock } = await prepaid({
+      [`POST ${PREPAY}/topupBalance`]: () => {
+        if (++calls === 1) throw new TypeError('Failed to fetch');
+        return stored('completed')();
+      },
+    });
+    press(document.body, 'Top up');
+    const form = await dialog('Top up');
+    type(form, 'Amount', '10');
+    press(form, 'Top up');
+    await within(form).findByRole('alert');
+    press(form, 'Retry');
+    await screen.findByRole('status');
+    const [first, second] = posts(fetchMock);
+    expect(second?.key).toBe(first?.key);
+  });
+
+  it('shows a stored refusal as the reason and sends the next submission under a new key', async () => {
+    let calls = 0;
+    const { fetchMock } = await prepaid({
+      [`POST ${PREPAY}/adjustBalance`]: () =>
+        ++calls === 1 ? stored('failed', 'insufficient spendable funds')() : stored('completed')(),
+    });
+    press(document.body, 'Adjust');
+    const form = await dialog('Adjust balance');
+    press(form, 'Debit');
+    type(form, 'Amount', '50');
+    press(form, 'Adjust balance');
+    expect((await within(form).findByRole('alert')).textContent).toBe(
+      'insufficient spendable funds',
+    );
+    expect(screen.queryByRole('status')).toBeNull(); // nothing was recorded
+    press(form, 'Adjust balance');
+    await screen.findByRole('status');
+    const [first, second] = posts(fetchMock);
+    expect(second?.key).not.toBe(first?.key);
+  });
+
+  it('shows a definitive refusal and does not offer a blind retry', async () => {
+    await prepaid({ [`POST ${PREPAY}/topupBalance`]: () => tmfError(422, 'bad amount') });
+    press(document.body, 'Top up');
+    const form = await dialog('Top up');
+    type(form, 'Amount', '10');
+    press(form, 'Top up');
+    expect((await within(form).findByRole('alert')).textContent).toContain('bad amount');
+    expect(within(form).queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
+  it('offers no money forms on a postpaid account', async () => {
+    backend();
+    await open();
+    await within(panel('Billing account')).findByText('Credit limit');
+    expect(screen.queryByRole('button', { name: 'Top up' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Hold funds' })).toBeNull();
   });
 });

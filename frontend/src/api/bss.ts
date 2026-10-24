@@ -15,6 +15,7 @@ import {
   getPage,
   jsonWithAmount,
   jsonWithAmounts,
+  jsonWithSignedAmount,
   patchJson,
   postJson,
   request,
@@ -40,6 +41,9 @@ export const PATHS = {
   internal: '/internal/v1/billingAccount',
   runs: '/internal/v1/billingRun',
   buckets: '/tmf-api/prepayBalanceManagement/v4/bucket',
+  topups: '/tmf-api/prepayBalanceManagement/v4/topupBalance',
+  adjustments: '/tmf-api/prepayBalanceManagement/v4/adjustBalance',
+  reservations: '/tmf-api/prepayBalanceManagement/v4/reserveBalance',
 };
 
 export type AccountProduct = Internal['schemas']['AccountProduct'];
@@ -119,12 +123,14 @@ export async function loadAccount(id: string, signal: AbortSignal): Promise<Acco
 /** A prepaid account's funds, kept distinct: the ledger is what the account holds,
  * reserved the outstanding holds, available (spendable) = ledger - reserved, unclamped. */
 export interface PrepaidBalance {
+  bucketId: string;
   ledgerCents: number;
   reservedCents: number;
   availableCents: number;
 }
 
 interface BucketBody {
+  id?: string;
   remainingValue?: { amount?: number; units?: string };
   reservedValue?: { amount?: number; units?: string };
 }
@@ -138,10 +144,96 @@ export async function loadPrepaidBalance(
   const available = toCents(need(bucket.remainingValue?.amount, 'remainingValue'));
   const reserved = toCents(need(bucket.reservedValue?.amount, 'reservedValue'));
   return {
+    bucketId: need(bucket.id, 'bucket id'),
     availableCents: available,
     reservedCents: reserved,
     ledgerCents: available + reserved,
   };
+}
+
+// --- prepaid money forms (TMF654 topupBalance / adjustBalance / reserveBalance, P4d-P4f) ---
+
+export type BalanceActionKind = 'topup' | 'credit' | 'debit' | 'hold';
+
+export interface BalanceActionForm {
+  kind: BalanceActionKind;
+  accountId: string;
+  bucketId: string;
+  currency: string;
+  amount: string; // canonical decimal string, positive; a debit is sent negative
+  method: string; // top-up only: the payment method name
+  reason: string;
+  expiresOn: string | null; // hold only: last business day the hold lasts through
+}
+
+/** The exact request the form sends: path and JSON text (the amount as a verbatim token). */
+export function balanceActionRequest(form: BalanceActionForm, timeZone: string) {
+  const quantity = { amount: AMOUNT, units: form.currency };
+  const bucket = { id: form.bucketId };
+  const owner = { id: form.accountId, '@referredType': 'BillingAccount' };
+  const reason = form.reason.trim() ? { reason: form.reason.trim() } : {};
+  switch (form.kind) {
+    case 'topup':
+      return {
+        path: PATHS.topups,
+        body: jsonWithAmount(
+          {
+            '@type': 'TopupBalance',
+            amount: quantity,
+            usageType: 'monetary',
+            bucket,
+            partyAccount: owner,
+            paymentMethod: { id: form.method, name: form.method },
+            ...reason,
+          },
+          form.amount,
+        ),
+      };
+    case 'credit':
+    case 'debit':
+      return {
+        path: PATHS.adjustments,
+        body: jsonWithSignedAmount(
+          { '@type': 'AdjustBalance', amount: quantity, usageType: 'monetary', bucket, ...reason },
+          form.kind === 'debit' ? `-${form.amount}` : form.amount,
+        ),
+      };
+    case 'hold':
+      return {
+        path: PATHS.reservations,
+        body: jsonWithAmount(
+          {
+            '@type': 'ReserveBalance',
+            amount: quantity,
+            usageType: 'monetary',
+            bucket,
+            partyAccount: owner,
+            ...reason,
+            ...(form.expiresOn === null
+              ? {}
+              : { validFor: { endDateTime: midnightOf(addDays(form.expiresOn, 1), timeZone) } }),
+          },
+          form.amount,
+        ),
+      };
+  }
+}
+
+/** What the API stored: a business refusal (not enough spendable funds, a closed account)
+ * is a 201 whose status is `failed` and whose `reason` says why. */
+export interface BalanceActionResult {
+  status: string;
+  reason: string | null;
+}
+
+export async function submitBalanceAction(
+  request: { path: string; body: string },
+  key: string,
+): Promise<BalanceActionResult> {
+  const stored = await postJson<{ status?: string; reason?: string }>(request.path, request.body, {
+    'Idempotency-Key': key,
+  });
+  return { status: need(stored.status, 'status'), reason: stored.reason ?? null };
 }
 
 // --- financial accounts (TMF666): read-only in the UI (docs/decisions/accounts.md) ---
