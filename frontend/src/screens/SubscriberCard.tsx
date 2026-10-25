@@ -286,7 +286,7 @@ function Card({
         onChanged={reload}
         prepaid={
           account.ratingType === 'prepaid' ? (
-            <PrepaidFigures balance={balance} products={products} />
+            <PrepaidFigures accountId={account.id} balance={balance} products={products} />
           ) : null
         }
       />
@@ -553,9 +553,11 @@ const CAUSE_LABEL: Record<string, string> = {
  * bucket), reserved (holds) and paid-through / shortfall (per product, from the account's
  * product view) are four different things and never merged. */
 function PrepaidFigures({
+  accountId,
   balance,
   products,
 }: {
+  accountId: string;
   balance: ResourceWithRetry<PrepaidBalance | null>;
   products: ResourceWithRetry<AccountProduct[]>;
 }) {
@@ -631,6 +633,15 @@ function PrepaidFigures({
             Suspension: {causes.map((c) => CAUSE_LABEL[c] ?? c).join(', ')}
           </div>
         )}
+        <div className="caption">
+          <Link
+            className="bss-link"
+            data-ui="ui.subscriber.prepaid.commands"
+            href={`/prepaid-commands?account=${accountId}`}
+          >
+            Commands
+          </Link>
+        </div>
       </div>
     </>
   );

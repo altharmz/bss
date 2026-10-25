@@ -1,6 +1,7 @@
 import { getJson } from '../api/client';
 import { useResource } from '../api/useResource';
 import { BillingRunsScreen } from '../screens/BillingRuns';
+import { PrepaidCommandsScreen } from '../screens/PrepaidCommands';
 import { CatalogScreen } from '../screens/Catalog';
 import { FinancialAccountsScreen } from '../screens/FinancialAccounts';
 import { NotFoundScreen } from '../screens/placeholders';
@@ -41,6 +42,8 @@ function Screen() {
       return <CatalogScreen />;
     case 'billingRuns':
       return <BillingRunsScreen />;
+    case 'prepaidCommands':
+      return <PrepaidCommandsScreen />;
     case 'financialAccounts':
       return <FinancialAccountsScreen />;
     case 'notFound':

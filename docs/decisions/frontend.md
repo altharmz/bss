@@ -45,6 +45,25 @@ Deviations (the code differs from the design's facts):
 - The detail shows the product by name or short id without a link: there is no product screen.
 - A transfer or other action still `created` reads "Pending" (the design names Held only for holds).
 
+## Slice 6: Prepaid commands screen (2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 6), frontend only.
+Route `/prepaid-commands`, `screens/PrepaidCommands.tsx` (`ui.prepaidCommands`), sidebar item
+after Billing runs with a red `failed` badge from `?state=failedTechnical&limit=1` and
+`X-Total-Count` (`countFailedCommands`; refreshed after a Retry). List: pages of 50 as served,
+state filter, `?account=<id>` chip (`ui.prepaidCommands.accountChip`, removing it rewrites the URL).
+The row opens `ui.prepaidCommands.detail` (every field, `needs_topup` block, Retry
+`ui.prepaidCommands.retry` only for `failedTechnical`, 409 shown). The prepaid KPI area of the card
+links "Commands" (`ui.subscriber.prepaid.commands`). Tests: `PrepaidCommands.test.tsx` and the
+replay in `tests/test_ui_requests.py::test_prepaid_order_and_command_reads_as_the_ui_makes_them`
+(list query, badge, Retry POST).
+Deviations:
+- The API filter is `billingAccount.id` (the design's `account` is only the screen's URL parameter).
+- The chip shows the account name from a loaded row, else `BA-xxxxxxxx` (no extra account request).
+- Order and product links go to the card (no order dialog until slice 9, no product screen).
+- `stubFetch` now stubs the badge request with no failures by default, so existing tests did not
+  change; App.test's sidebar link list gained `/prepaid-commands` (TEST-CHANGE).
+
 ## Slice 5: Change offering (2026-10-25)
 
 Built as designed ([next-slices-design.md](../next-slices-design.md) section 5), frontend only.

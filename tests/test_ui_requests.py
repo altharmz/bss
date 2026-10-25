@@ -872,6 +872,21 @@ def test_prepaid_order_and_command_reads_as_the_ui_makes_them(api, db_conn, monk
         ).json()
         == []
     )
+    # the Prepaid commands screen (api/commands.ts): a page of 50 with the state and account
+    # filters, and the sidebar badge's one-row count read from X-Total-Count
+    page = api.get(
+        f"/internal/v1/prepaid/command?billingAccount.id={owner}&state=failedTechnical"
+        "&offset=0&limit=50"
+    )
+    assert [c["id"] for c in page.json()] == [str(stuck["id"])]
+    assert page.headers["X-Total-Count"] == "1"
+    badge = api.get("/internal/v1/prepaid/command?state=failedTechnical&limit=1")
+    assert len(badge.json()) == 1 and int(badge.headers["X-Total-Count"]) >= 1
+    everything = api.get("/internal/v1/prepaid/command?offset=0&limit=50")
+    assert everything.status_code == 200 and str(stuck["id"]) in [
+        c["id"] for c in everything.json()
+    ]
+    assert api.get("/internal/v1/prepaid/command?state=bogus").status_code == 400
     retried = api.request("POST", f"/internal/v1/prepaid/command/{stuck['id']}/retry")
     assert retried.status_code == 202 and retried.json()["state"] == "pending"
     again = api.request("POST", f"/internal/v1/prepaid/command/{stuck['id']}/retry")

@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import { loadRuns } from '../api/bss';
+import { countFailedCommands } from '../api/commands';
 import { getPage } from '../api/client';
 import { useResource } from '../api/useResource';
 import { formatInt } from '../format/money';
@@ -36,6 +37,14 @@ function useRunsNav(): { count: string; failed: boolean } {
   };
 }
 
+/** Whether any prepaid command failed technically. The Prepaid commands screen asks for a
+ * reload (useRefreshNav) after a retry. */
+function useCommandsNav(): boolean {
+  const version = useNavVersion();
+  const failed = useResource(`nav:commands:${version}`, countFailedCommands);
+  return failed.status === 'ok' && failed.data > 0;
+}
+
 interface NavItem {
   label: string;
   href: string;
@@ -51,6 +60,7 @@ export function Sidebar({ context }: { context: SystemContext }) {
   const financialAccounts = useCount(FINANCIAL_ACCOUNTS);
   const offerings = useCount(OFFERINGS);
   const runs = useRunsNav();
+  const commandsFailed = useCommandsNav();
   const items: NavItem[] = [
     { label: 'Numbers', href: '/numbers', count: '', active: (r) => r.name === 'numbers' },
     {
@@ -71,6 +81,13 @@ export function Sidebar({ context }: { context: SystemContext }) {
       count: runs.count,
       failed: runs.failed,
       active: (r) => r.name === 'billingRuns',
+    },
+    {
+      label: 'Prepaid commands',
+      href: '/prepaid-commands',
+      count: '',
+      failed: commandsFailed,
+      active: (r) => r.name === 'prepaidCommands',
     },
     {
       label: 'Financial accounts',

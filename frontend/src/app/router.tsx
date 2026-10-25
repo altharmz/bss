@@ -24,6 +24,7 @@ export type Route =
   | { name: 'subscriber'; accountId: string }
   | { name: 'catalog' }
   | { name: 'billingRuns' }
+  | { name: 'prepaidCommands' }
   | { name: 'financialAccounts' }
   | { name: 'notFound'; path: string };
 
@@ -39,6 +40,9 @@ export function parseRoute(path: string): Route {
   if (card?.[1]) return { name: 'subscriber', accountId: card[1].toLowerCase() };
   if (path === '/catalog' || path === '/catalog/') return { name: 'catalog' };
   if (path === '/billing-runs' || path === '/billing-runs/') return { name: 'billingRuns' };
+  if (path === '/prepaid-commands' || path === '/prepaid-commands/') {
+    return { name: 'prepaidCommands' };
+  }
   if (path === '/financial-accounts' || path === '/financial-accounts/') {
     return { name: 'financialAccounts' };
   }
@@ -63,6 +67,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/catalog';
     case 'billingRuns':
       return '/billing-runs';
+    case 'prepaidCommands':
+      return '/prepaid-commands';
     case 'financialAccounts':
       return '/financial-accounts';
   }

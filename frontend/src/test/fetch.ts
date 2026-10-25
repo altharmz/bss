@@ -38,6 +38,7 @@ export function tmfError(status: number, reason: string): Response {
 
 export function stubFetch(routes: Record<string, Handler>) {
   const calls: string[] = [];
+  routes = { [NAV_COMMANDS]: noCommands, ...routes };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     const key = `${init?.method ?? 'GET'} ${url}`;
@@ -57,6 +58,11 @@ export function stubFetch(routes: Record<string, Handler>) {
  * screen; tests that do not care stub it with no runs. */
 export const NAV_RUNS = 'GET /internal/v1/billingRun?limit=1';
 export const noRuns: Handler = () => json([], { total: 0 });
+
+/** The sidebar's Prepaid commands badge (failedTechnical, one row): stubbed with none by
+ * default in stubFetch; a test of the badge overrides it. */
+export const NAV_COMMANDS = 'GET /internal/v1/prepaid/command?state=failedTechnical&limit=1';
+export const noCommands: Handler = () => json([], { total: 0 });
 
 export const CONTEXT = {
   businessDate: '2026-10-01',

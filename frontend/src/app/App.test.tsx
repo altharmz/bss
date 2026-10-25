@@ -119,6 +119,7 @@ describe('shell', () => {
       '/subscribers',
       '/catalog',
       '/billing-runs',
+      '/prepaid-commands',
       '/financial-accounts',
     ]);
     expect(await within(nav).findByText('1,284')).toBeTruthy();

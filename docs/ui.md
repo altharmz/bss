@@ -271,6 +271,16 @@ API: `POST .../productOfferingPrice`, `POST .../productOffering`.
 (`frontend/src/screens/*.test.tsx`), and `tests/test_ui_requests.py` replays the same
 bodies against the real API.
 
+### Prepaid commands (`ui.prepaidCommands`, `ui.prepaidCommands.accountChip`, `ui.prepaidCommands.detail`, `ui.prepaidCommands.retry`) - `screens/PrepaidCommands.tsx`
+
+Route `/prepaid-commands`, sidebar after Billing runs with a red badge while any command is
+`failedTechnical`. Lists the internal prepaid command journal (id, kind, account, state, due date,
+attempts, next retry, result), 50 per page, filtered by state and by `?account=<id>` (a removable
+chip; the card's "Commands" link, `ui.subscriber.prepaid.commands`, sets it). A row opens every
+field and the `needs_topup` block (`ui.prepaidCommands.needsTopup`); **Retry** appears only for
+`failedTechnical` (POST `.../retry`, no body; a 409 is shown). Design:
+[next-slices-design.md](next-slices-design.md) section 6.
+
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
 
 Stage 4, slice g, from [archive/stage4-design.md](archive/stage4-design.md) section 7. **The worker alone

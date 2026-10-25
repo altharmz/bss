@@ -1,5 +1,5 @@
 import type { components as Internal } from './generated/internal';
-import { getAll, getJson, request } from './client';
+import { getAll, getJson, getPage, request } from './client';
 
 // Prepaid commands (internal API, docs/decisions/prepaid.md P3i): the worker's queue behind a
 // prepaid order, renewal or transfer. A prepaid order's id is its command's id.
@@ -24,6 +24,32 @@ export function loadFailedCommands(accountId: string, signal: AbortSignal) {
   return getAll<PrepaidCommand>(
     `${COMMANDS}?billingAccount.id=${accountId}&state=failedTechnical`,
     signal,
+  );
+}
+
+export type CommandState = PrepaidCommand['state'];
+export const COMMAND_STATES: CommandState[] = ['pending', 'completed', 'failedTechnical'];
+export const COMMAND_PAGE = 50;
+
+/** One page of the journal, newest first as served; `total` is every matching row. */
+export function loadCommandPage(
+  filter: { state: CommandState | null; account: string | null },
+  offset: number,
+  signal: AbortSignal,
+) {
+  const query = [
+    ...(filter.account !== null ? [`billingAccount.id=${filter.account}`] : []),
+    ...(filter.state !== null ? [`state=${filter.state}`] : []),
+    `offset=${offset}`,
+    `limit=${COMMAND_PAGE}`,
+  ];
+  return getPage<PrepaidCommand>(`${COMMANDS}?${query.join('&')}`, signal);
+}
+
+/** The sidebar badge: how many commands wait for an operator (failedTechnical). */
+export function countFailedCommands(signal: AbortSignal): Promise<number> {
+  return getPage<PrepaidCommand>(`${COMMANDS}?state=failedTechnical&limit=1`, signal).then(
+    (page) => page.total,
   );
 }
 

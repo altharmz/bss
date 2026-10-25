@@ -358,6 +358,12 @@ items:
   - {id: ui.billingRuns.list, area: ui, stage: 4, title: "Billing runs: latest run, history, failed badge in the nav"}
   - {id: ui.billingRuns.catchUp, area: ui, stage: 4, title: "Catch up to a date"}
   - {id: ui.billingRuns.retry, area: ui, stage: 4, title: "Retry a failed run"}
+  - {id: ui.prepaidCommands, area: ui, stage: 5, title: "Prepaid commands screen: list, state filter, paging, nav badge"}
+  - {id: ui.prepaidCommands.accountChip, area: ui, stage: 5, title: "Prepaid commands account filter chip"}
+  - {id: ui.prepaidCommands.detail, area: ui, stage: 5, title: "Prepaid command detail dialog"}
+  - {id: ui.prepaidCommands.needsTopup, area: ui, stage: 5, title: "Command needs-top-up block"}
+  - {id: ui.prepaidCommands.retry, area: ui, stage: 5, title: "Retry a failedTechnical command"}
+  - {id: ui.subscriber.prepaid.commands, area: ui, stage: 5, title: "Commands link in the prepaid KPI area"}
 
   # ---------------- worker: behaviour (stage 4) ----------------
   # Proven, not detected: an item is implemented and tested when at least one test marked
