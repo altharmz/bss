@@ -17,7 +17,7 @@ Tested means a passing component test saw the marker on screen (`expectUi`, see 
 | Part | Where | What |
 |---|---|---|
 | Routing | `frontend/src/app/router.tsx` | a minimal History-API router: `/subscribers`, `/subscribers/{accountId}`, `/catalog`, `/billing-runs` (not `/billing`, so it can never be confused with the app's `/billing-status`); `/` redirects to `/subscribers`; anything else is the not-found page. Deep links work because Caddy answers unknown paths with `index.html` |
-| Shell | `frontend/src/app/Shell.tsx` | sidebar (brand, environment tag, navigation "Operations", operator), top bar (breadcrumbs, business date, time zone) |
+| Shell | `frontend/src/app/Shell.tsx` | sidebar (brand, environment tag, navigation "Main" in three sections, operator), top bar (breadcrumbs, business date, time zone) |
 | System context | `frontend/src/app/context.tsx` | loads `GET /internal/v1/context` before any screen: no date can be shown without the business date and zone |
 | API client | `frontend/src/api/client.ts`, `bss.ts` | fetch wrapper; every failure is an `ApiError` whose message is the call ("GET /path -> 503 Service Unavailable"); `getAll` pages by 100; `useResource` = loading / error / ok + retry; `usePolled` = the same, refreshed in the background every few seconds while a predicate on the data holds (a failed refresh keeps the data and stops) |
 | Types | `frontend/scripts/gen-types.mjs` -> `src/api/generated/` (git-ignored) | generated from `spec/` (TMF620, 622, 637, 666 and the internal API) on every build, lint and test - never from FastAPI's `/openapi.json` |
@@ -44,11 +44,11 @@ its run count and badge whenever the latest run it shows changes.
 API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the count is its
 `X-Total-Count`).
 
-**Decided, not implemented yet (2026-10-21):** the sidebar becomes three sections:
-Customers (Subscribers), Products (Product catalog, Orders, Numbers) and Billing
-(Billing runs, Financial accounts without a count). A new read-only `/orders` screen is
-added. Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
-Update this section when the code lands.
+The sidebar is one `<nav aria-label="Main">` with three labelled sections
+(`ui.shell.section.customers|products|billing`): Customers (Subscribers), Products (Product
+catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Financial accounts
+without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
+(`X-Total-Count`). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
 
 ### Sign-in, operator menu and users
 
@@ -270,6 +270,16 @@ API: `POST .../productOfferingPrice`, `POST .../productOffering`.
 **The write requests are pinned on both sides**: component tests assert the exact bodies
 (`frontend/src/screens/*.test.tsx`), and `tests/test_ui_requests.py` replays the same
 bodies against the real API.
+
+### Orders (`ui.orders`, `ui.orders.accountChip`, `ui.orders.detail`, `ui.orders.items`, `ui.orders.cancellations`, `ui.orders.command`, `ui.orders.errors`) - `screens/Orders.tsx`
+
+Route `/orders`, read-only. TMF622 `productOrder` pages of 50 as served (oldest first), state
+filter, `?account=<id>` chip (the card's "Orders" link `ui.subscriber.orders`). Columns: order id,
+subscriber (links to the card), state, item actions, requested start, created, completed or
+cancelled. A row opens the dialog: header fields, items (action, offering, product, state,
+tax-included price), `productOrderErrorMessage`, the order's `cancelProductOrder` rows, and for an
+`inProgress` order with a prepaid command a link to `/prepaid-commands?account=`. Design:
+[next-slices-design.md](next-slices-design.md) section 9.
 
 ### Prepaid commands (`ui.prepaidCommands`, `ui.prepaidCommands.accountChip`, `ui.prepaidCommands.detail`, `ui.prepaidCommands.retry`) - `screens/PrepaidCommands.tsx`
 

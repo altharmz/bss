@@ -38,7 +38,7 @@ export function tmfError(status: number, reason: string): Response {
 
 export function stubFetch(routes: Record<string, Handler>) {
   const calls: string[] = [];
-  routes = { [NAV_COMMANDS]: noCommands, ...routes };
+  routes = { [NAV_COMMANDS]: noCommands, [NAV_ORDERS]: noOrders, ...routes };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     const key = `${init?.method ?? 'GET'} ${url}`;
@@ -63,6 +63,11 @@ export const noRuns: Handler = () => json([], { total: 0 });
  * default in stubFetch; a test of the badge overrides it. */
 export const NAV_COMMANDS = 'GET /internal/v1/prepaid/command?state=failedTechnical&limit=1';
 export const noCommands: Handler = () => json([], { total: 0 });
+
+/** The sidebar's Orders count (one row): stubbed with none by default in stubFetch. */
+export const NAV_ORDERS =
+  'GET /tmf-api/productOrderingManagement/v5/productOrder?limit=1&fields=id';
+export const noOrders: Handler = () => json([], { total: 0 });
 
 export const CONTEXT = {
   businessDate: '2026-10-01',

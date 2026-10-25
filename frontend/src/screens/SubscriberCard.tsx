@@ -465,6 +465,14 @@ function BillingAccountPanel({
       title="Billing account"
       right={
         <span className="bss-secondary">
+          <Link
+            className="bss-link"
+            data-ui="ui.subscriber.orders"
+            href={`/orders?account=${account.id}`}
+          >
+            Orders
+          </Link>
+          {' · '}
           {account.financialAccount !== null && (
             <span data-ui="ui.subscriber.financialAccount">
               Financial account{' '}

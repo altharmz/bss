@@ -1,7 +1,16 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { expectUi } from '../test/expectUi';
-import { CONTEXT, json, NAV_RUNS, pending, stubFetch, tmfError, type Handler } from '../test/fetch';
+import {
+  CONTEXT,
+  json,
+  NAV_ORDERS,
+  NAV_RUNS,
+  pending,
+  stubFetch,
+  tmfError,
+  type Handler,
+} from '../test/fetch';
 import { RUN } from '../test/fixtures';
 import { App } from './App';
 import { parseRoute } from './router';
@@ -20,8 +29,7 @@ function backend(
   latestRun: Handler = () => json([{ ...RUN, status: 'completed' }], { total: 9 }),
 ) {
   return stubFetch({
-    'GET /tmf-api/accountManagement/v5/financialAccount?limit=1&fields=id': () =>
-      json([], { total: 23 }),
+    [NAV_ORDERS]: () => json([], { total: 77 }),
     'GET /internal/v1/session': () =>
       json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
     'GET /internal/v1/context': context,
@@ -57,6 +65,7 @@ describe('routes', () => {
     ['/catalog', { name: 'catalog' }],
     ['/billing-runs', { name: 'billingRuns' }],
     ['/financial-accounts', { name: 'financialAccounts' }],
+    ['/orders', { name: 'orders' }],
     ['/billing', { name: 'notFound', path: '/billing' }], // not /billing: /billing-status
     ['/subscribers/nope', { name: 'notFound', path: '/subscribers/nope' }],
   ])('%s', (path, route) => {
@@ -73,7 +82,7 @@ describe('routes', () => {
   it('navigates in place on a nav click and follows the back button', async () => {
     backend();
     start('/subscribers');
-    const nav = await screen.findByRole('navigation', { name: 'Operations' });
+    const nav = await screen.findByRole('navigation', { name: 'Main' });
     fireEvent.click(within(nav).getByRole('link', { name: /Product catalog/ }));
     expect(window.location.pathname).toBe('/catalog');
     expect(await screen.findByRole('heading', { name: 'Product catalog' })).toBeTruthy();
@@ -84,7 +93,7 @@ describe('routes', () => {
   it('leaves modified clicks to the browser', async () => {
     backend();
     start('/subscribers');
-    const nav = await screen.findByRole('navigation', { name: 'Operations' });
+    const nav = await screen.findByRole('navigation', { name: 'Main' });
     fireEvent.click(within(nav).getByRole('link', { name: /Product catalog/ }), { ctrlKey: true });
     expect(window.location.pathname).toBe('/subscribers');
   });
@@ -107,25 +116,46 @@ describe('shell', () => {
   });
 
   it('has the environment tag, operator and counts, Billing runs included', async () => {
-    backend();
+    const { calls } = backend();
     start('/subscribers');
-    const nav = await screen.findByRole('navigation', { name: 'Operations' });
+    const nav = await screen.findByRole('navigation', { name: 'Main' });
     expectUi('ui.shell');
     expect(screen.getByText('PROD')).toBeTruthy();
     expect(screen.getAllByText('i.petrova').length).toBeGreaterThan(0);
     const links = within(nav).getAllByRole('link');
     expect(links.map((a) => a.getAttribute('href'))).toEqual([
-      '/numbers',
       '/subscribers',
       '/catalog',
+      '/orders',
+      '/numbers',
+      '/billing-runs',
+      '/prepaid-commands',
+      '/financial-accounts',
+    ]);
+    // three labelled sections in the TMF order, each item under its own label
+    const labels = Array.from(nav.children).map((el) =>
+      el.classList.contains('section') ? `# ${el.textContent}` : (el.getAttribute('href') ?? ''),
+    );
+    expect(labels).toEqual([
+      '# Customers',
+      '/subscribers',
+      '# Products',
+      '/catalog',
+      '/orders',
+      '/numbers',
+      '# Billing',
       '/billing-runs',
       '/prepaid-commands',
       '/financial-accounts',
     ]);
     expect(await within(nav).findByText('1,284')).toBeTruthy();
     expect(await within(nav).findByText('12')).toBeTruthy();
+    const orders = within(nav).getByRole('link', { name: /Orders/ });
+    expect(await within(orders).findByText('77')).toBeTruthy();
+    // Financial accounts is a read-only aggregate: no count, and no request for one
     const financial = within(nav).getByRole('link', { name: /Financial accounts/ });
-    expect(await within(financial).findByText('23')).toBeTruthy();
+    expect(financial.textContent).toBe('Financial accounts');
+    expect(calls.some((c) => c.includes('financialAccount'))).toBe(false);
     const runs = within(nav).getByRole('link', { name: /Billing runs/ });
     expect(await within(runs).findByText('9')).toBeTruthy(); // X-Total-Count of the runs
     expect(within(runs).queryByText('failed')).toBeNull();
@@ -141,7 +171,7 @@ describe('shell', () => {
       json([{ ...RUN, status: 'failed', failureKind: 'run' }], { total: 9 }),
     );
     start('/subscribers');
-    const nav = await screen.findByRole('navigation', { name: 'Operations' });
+    const nav = await screen.findByRole('navigation', { name: 'Main' });
     const runs = within(nav).getByRole('link', { name: /Billing runs/ });
     expect((await within(runs).findByText('failed')).className).toBe('badge');
     expect(within(runs).queryByText('9')).toBeNull();
@@ -150,7 +180,7 @@ describe('shell', () => {
   it('opens Billing runs from the navigation', async () => {
     backend();
     start('/subscribers');
-    const nav = await screen.findByRole('navigation', { name: 'Operations' });
+    const nav = await screen.findByRole('navigation', { name: 'Main' });
     fireEvent.click(within(nav).getByRole('link', { name: /Billing runs/ }));
     expect(window.location.pathname).toBe('/billing-runs');
     expect(await screen.findByRole('heading', { name: 'Billing runs' })).toBeTruthy();
@@ -170,7 +200,7 @@ describe('shell', () => {
     const back = await within(crumbs).findByRole('link', { name: 'Subscribers' });
     expect(back.getAttribute('href')).toBe('/subscribers');
     expect(within(crumbs).getByText('BA-1F3A9C2B')).toBeTruthy();
-    const nav = screen.getByRole('navigation', { name: 'Operations' });
+    const nav = screen.getByRole('navigation', { name: 'Main' });
     expect(
       within(nav)
         .getByRole('link', { name: /Subscribers/ })

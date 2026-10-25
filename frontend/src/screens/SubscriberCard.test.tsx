@@ -196,6 +196,13 @@ function productRow(name: string): HTMLElement {
 }
 
 describe('subscriber card', () => {
+  it('links the account to its orders', async () => {
+    backend({}, ACCOUNT);
+    await open();
+    const link = expectUi('ui.subscriber.orders');
+    expect(link.getAttribute('href')).toBe(`/orders?account=${ACCOUNT.id}`);
+  });
+
   it('links the account to its financial account', async () => {
     backend(
       {},

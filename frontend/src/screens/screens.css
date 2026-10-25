@@ -620,3 +620,24 @@
 .bss-field .label {
   color: var(--muted);
 }
+
+/* The order dialog's item and cancellation tables */
+.bss-subhead {
+  margin: 16px 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-2, inherit);
+}
+.bss-mini {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.bss-mini th,
+.bss-mini td {
+  text-align: left;
+  padding: 4px 8px 4px 0;
+  border-bottom: 1px solid var(--border, rgba(128, 128, 128, 0.25));
+}

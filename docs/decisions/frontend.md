@@ -45,6 +45,26 @@ Deviations (the code differs from the design's facts):
 - The detail shows the product by name or short id without a link: there is no product screen.
 - A transfer or other action still `created` reads "Pending" (the design names Held only for holds).
 
+## Slice 9: Sidebar sections and the global Orders screen (2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 9 and the 2026-10-21
+decision above), frontend only. One `<nav aria-label="Main">` holds the three sections (Customers,
+Products, Billing, in the design's item order; Financial accounts has no count and no count
+request). `/orders` is `screens/Orders.tsx` with `api/orders.ts`; the order dialog links an
+`inProgress` order to `/prepaid-commands?account=` when the journal (asked by
+`billingAccount.id`) holds a command with that order link; the card links `Orders`
+(`ui.subscriber.orders`). Tests: `Orders.test.tsx`, the sidebar and route tests in `App.test.tsx`,
+the card link test, and `tests/test_ui_requests.py::test_orders_screen_reads_as_the_ui_makes_them`.
+Deviations:
+- The nav's accessible name is "Main" (was "Operations"): App, FinancialAccounts tests and the e2e
+  smoke use it (TEST-CHANGE).
+- `stubFetch` stubs the Orders count with none by default (like the commands badge).
+- The list is oldest first, as the server orders it (no sort parameter); the caption says so.
+- The state filter offers the states this service reaches, not every TMF622 state.
+- The card's Orders link sits in the Billing account panel header, not beside the Bills heading.
+- The e2e smoke does not open `/orders` (not run in this slice); the browser check is left for a
+  later e2e pass.
+
 ## Slice 6: Prepaid commands screen (2026-10-25)
 
 Built as designed ([next-slices-design.md](../next-slices-design.md) section 6), frontend only.
@@ -60,7 +80,7 @@ replay in `tests/test_ui_requests.py::test_prepaid_order_and_command_reads_as_th
 Deviations:
 - The API filter is `billingAccount.id` (the design's `account` is only the screen's URL parameter).
 - The chip shows the account name from a loaded row, else `BA-xxxxxxxx` (no extra account request).
-- Order and product links go to the card (no order dialog until slice 9, no product screen).
+- Order and product links go to the card (no product screen; the order dialog came with slice 9, the links were not moved).
 - `stubFetch` now stubs the badge request with no failures by default, so existing tests did not
   change; App.test's sidebar link list gained `/prepaid-commands` (TEST-CHANGE).
 
@@ -135,7 +155,7 @@ Deviations (the code differs from the design's facts):
 
 ## Sidebar grouped by TMF area; global Orders screen (2026-10-21)
 
-Decided by the human on 2026-10-21. Nothing is implemented yet. It replaces the single "Operations"
+Decided by the human on 2026-10-21; built in slice 9 (entry below). It replaces the single "Operations"
 heading from the design handoff (`design-ref/`, which is left unedited). TMF does not
 define a UI menu. The groups follow the TMF Open API and ODA component areas
 instead: party/customer, product (catalog, ordering, inventory, resources) and billing

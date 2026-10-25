@@ -1103,3 +1103,42 @@ def test_prepaid_offering_change_as_the_ui_sends_it(api, db_conn):
     listing = f"/internal/v1/billingAccount/{account['id']}/products"
     row = next(p for p in api.get(listing).json() if p["id"] == product_id)
     assert [(c["kind"], c["date"]) for c in row["pendingChanges"]] == [("offering", day)]
+
+
+def test_orders_screen_reads_as_the_ui_makes_them(api):
+    """loadOrderPage() / loadCancellations() / countOrders() (api/orders.ts), pinned in
+    Orders.test.tsx: a page of 50 with the account and state filters, the one-row count
+    read from X-Total-Count, and an order's cancellations by productOrder.id. The screen
+    has no writes."""
+    offering = apidata.sellable_offering(api)
+    account = apidata.account(api)
+    api.clock.set(api.clock.now().replace(day=2))
+    added = api.post(
+        ORDER,
+        {
+            "@type": "ProductOrder",
+            "billingAccount": {"id": account["id"], "@type": "BillingAccountRef"},
+            "productOrderItem": [
+                {
+                    "@type": "ProductOrderItem",
+                    "id": "1",
+                    "action": "add",
+                    "productOffering": {"id": offering["id"], "@type": "ProductOfferingRef"},
+                }
+            ],
+        },
+    ).json()
+    page = api.get(f"{ORDER}?billingAccount.id={account['id']}&state=completed&offset=0&limit=50")
+    assert [o["id"] for o in page.json()] == [added["id"]] and page.headers["X-Total-Count"] == "1"
+    item = page.json()[0]["productOrderItem"][0]
+    assert item["productOffering"]["name"] and page.json()[0]["billingAccount"]["name"]
+    assert item["itemTotalPrice"][0]["price"]["taxIncludedAmount"]["value"] is not None
+    assert page.json()[0]["completionDate"] and page.json()[0]["creationDate"]
+    assert api.get(f"{ORDER}?state=rejected&offset=0&limit=50").json() == []
+    count = api.get(f"{ORDER}?limit=1&fields=id")
+    assert len(count.json()) == 1 and int(count.headers["X-Total-Count"]) >= 1
+    cancels = api.get(
+        "/tmf-api/productOrderingManagement/v5/cancelProductOrder"
+        f"?productOrder.id={added['id']}&offset=0&limit=100"
+    )
+    assert cancels.status_code == 200 and cancels.json() == []

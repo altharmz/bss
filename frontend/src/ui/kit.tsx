@@ -92,6 +92,9 @@ const TONES: Record<string, Tone> = {
   terminated: 'retired',
   cancelled: 'retired',
   aborted: 'retired',
+  // order state (TMF622); completed, failed and cancelled are above
+  rejected: 'failed',
+  inProgress: 'design',
   // a billing run's per-account outcome
   ok: 'active',
   blocked: 'inactive',

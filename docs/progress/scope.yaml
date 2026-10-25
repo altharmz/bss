@@ -365,6 +365,17 @@ items:
   - {id: ui.prepaidCommands.needsTopup, area: ui, stage: 5, title: "Command needs-top-up block"}
   - {id: ui.prepaidCommands.retry, area: ui, stage: 5, title: "Retry a failedTechnical command"}
   - {id: ui.subscriber.prepaid.commands, area: ui, stage: 5, title: "Commands link in the prepaid KPI area"}
+  - {id: ui.shell.section.customers, area: ui, stage: 5, title: "Sidebar section: Customers"}
+  - {id: ui.shell.section.products, area: ui, stage: 5, title: "Sidebar section: Products"}
+  - {id: ui.shell.section.billing, area: ui, stage: 5, title: "Sidebar section: Billing"}
+  - {id: ui.orders, area: ui, stage: 5, title: "Orders screen: global list, state filter, paging"}
+  - {id: ui.orders.accountChip, area: ui, stage: 5, title: "Orders account filter chip"}
+  - {id: ui.orders.detail, area: ui, stage: 5, title: "Order dialog"}
+  - {id: ui.orders.items, area: ui, stage: 5, title: "Order dialog items table"}
+  - {id: ui.orders.cancellations, area: ui, stage: 5, title: "Order dialog cancellations"}
+  - {id: ui.orders.command, area: ui, stage: 5, title: "Link from an in-progress order to its prepaid command"}
+  - {id: ui.orders.errors, area: ui, stage: 5, title: "Order dialog rejection reasons"}
+  - {id: ui.subscriber.orders, area: ui, stage: 5, title: "Orders link on the subscriber card"}
 
   # ---------------- worker: behaviour (stage 4) ----------------
   # Proven, not detected: an item is implemented and tested when at least one test marked

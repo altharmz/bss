@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { loadRuns } from '../api/bss';
 import { countFailedCommands } from '../api/commands';
+import { countOrders } from '../api/orders';
 import { getPage } from '../api/client';
 import { useResource } from '../api/useResource';
 import { formatInt } from '../format/money';
@@ -15,7 +16,6 @@ import { SignOut, useSession } from './session';
 // red "failed" badge instead when the latest run failed (README "Global Layout").
 
 const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount';
-const FINANCIAL_ACCOUNTS = '/tmf-api/accountManagement/v5/financialAccount';
 const OFFERINGS = '/tmf-api/productCatalogManagement/v5/productOffering';
 
 function useCount(path: string): string {
@@ -45,6 +45,11 @@ function useCommandsNav(): boolean {
   return failed.status === 'ok' && failed.data > 0;
 }
 
+function useOrderCount(): string {
+  const total = useResource('nav:orders', countOrders);
+  return total.status === 'ok' ? formatInt(total.data) : '';
+}
+
 interface NavItem {
   label: string;
   href: string;
@@ -57,43 +62,60 @@ export function Sidebar({ context }: { context: SystemContext }) {
   const session = useSession();
   const { route } = useRouter();
   const accounts = useCount(ACCOUNTS);
-  const financialAccounts = useCount(FINANCIAL_ACCOUNTS);
+  const orders = useOrderCount();
   const offerings = useCount(OFFERINGS);
   const runs = useRunsNav();
   const commandsFailed = useCommandsNav();
-  const items: NavItem[] = [
-    { label: 'Numbers', href: '/numbers', count: '', active: (r) => r.name === 'numbers' },
+  // Sections follow the TMF areas: party/customer, product, billing
+  const sections: { label: string; items: NavItem[] }[] = [
     {
-      label: 'Subscribers',
-      href: '/subscribers',
-      count: accounts,
-      active: (r) => r.name === 'subscribers' || r.name === 'subscriber',
+      label: 'Customers',
+      items: [
+        {
+          label: 'Subscribers',
+          href: '/subscribers',
+          count: accounts,
+          active: (r) => r.name === 'subscribers' || r.name === 'subscriber',
+        },
+      ],
     },
     {
-      label: 'Product catalog',
-      href: '/catalog',
-      count: offerings,
-      active: (r) => r.name === 'catalog',
+      label: 'Products',
+      items: [
+        {
+          label: 'Product catalog',
+          href: '/catalog',
+          count: offerings,
+          active: (r) => r.name === 'catalog',
+        },
+        { label: 'Orders', href: '/orders', count: orders, active: (r) => r.name === 'orders' },
+        { label: 'Numbers', href: '/numbers', count: '', active: (r) => r.name === 'numbers' },
+      ],
     },
     {
-      label: 'Billing runs',
-      href: '/billing-runs',
-      count: runs.count,
-      failed: runs.failed,
-      active: (r) => r.name === 'billingRuns',
-    },
-    {
-      label: 'Prepaid commands',
-      href: '/prepaid-commands',
-      count: '',
-      failed: commandsFailed,
-      active: (r) => r.name === 'prepaidCommands',
-    },
-    {
-      label: 'Financial accounts',
-      href: '/financial-accounts',
-      count: financialAccounts,
-      active: (r) => r.name === 'financialAccounts',
+      label: 'Billing',
+      items: [
+        {
+          label: 'Billing runs',
+          href: '/billing-runs',
+          count: runs.count,
+          failed: runs.failed,
+          active: (r) => r.name === 'billingRuns',
+        },
+        {
+          label: 'Prepaid commands',
+          href: '/prepaid-commands',
+          count: '',
+          failed: commandsFailed,
+          active: (r) => r.name === 'prepaidCommands',
+        },
+        {
+          label: 'Financial accounts',
+          href: '/financial-accounts',
+          count: '',
+          active: (r) => r.name === 'financialAccounts',
+        },
+      ],
     },
   ];
   return (
@@ -103,21 +125,27 @@ export function Sidebar({ context }: { context: SystemContext }) {
         <span className="name">BSS Console</span>
         <span className="env">{context.environment.toUpperCase()}</span>
       </div>
-      <nav className="bss-nav" aria-label="Operations">
-        <div className="section">Operations</div>
-        {items.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={item.active(route) ? 'page' : undefined}
-          >
-            {item.label}
-            {item.failed ? (
-              <span className="badge">failed</span>
-            ) : (
-              <span className="count">{item.count}</span>
-            )}
-          </Link>
+      <nav className="bss-nav" aria-label="Main">
+        {sections.map((section) => (
+          <Fragment key={section.label}>
+            <div className="section" data-ui={`ui.shell.section.${section.label.toLowerCase()}`}>
+              {section.label}
+            </div>
+            {section.items.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={item.active(route) ? 'page' : undefined}
+              >
+                {item.label}
+                {item.failed ? (
+                  <span className="badge">failed</span>
+                ) : (
+                  <span className="count">{item.count}</span>
+                )}
+              </Link>
+            ))}
+          </Fragment>
         ))}
       </nav>
       <div className="bss-operator">

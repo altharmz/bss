@@ -1,6 +1,7 @@
 import { getJson } from '../api/client';
 import { useResource } from '../api/useResource';
 import { BillingRunsScreen } from '../screens/BillingRuns';
+import { OrdersScreen } from '../screens/Orders';
 import { PrepaidCommandsScreen } from '../screens/PrepaidCommands';
 import { CatalogScreen } from '../screens/Catalog';
 import { FinancialAccountsScreen } from '../screens/FinancialAccounts';
@@ -40,6 +41,8 @@ function Screen() {
       return <SubscriberCardScreen key={route.accountId} accountId={route.accountId} />;
     case 'catalog':
       return <CatalogScreen />;
+    case 'orders':
+      return <OrdersScreen />;
     case 'billingRuns':
       return <BillingRunsScreen />;
     case 'prepaidCommands':

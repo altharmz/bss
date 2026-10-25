@@ -33,7 +33,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await expect(page.getByRole('heading', { name: 'Subscribers' })).toBeVisible();
   await expect(
     page
-      .getByRole('navigation', { name: 'Operations' })
+      .getByRole('navigation', { name: 'Main' })
       .getByRole('link', { name: /Financial accounts/ })
       .locator('.count'),
   ).toHaveText(/^\d[\d,]*$/);
@@ -53,7 +53,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await expect(numberDialog.getByRole('button', { name: 'Create number' })).toBeEnabled();
   await numberDialog.getByRole('button', { name: 'Cancel' }).click();
   await page
-    .getByRole('navigation', { name: 'Operations' })
+    .getByRole('navigation', { name: 'Main' })
     .getByRole('link', { name: /Subscribers/ })
     .click();
   await expect(page.getByRole('banner').getByText(context.businessDate)).toBeVisible();
@@ -100,7 +100,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await expect(dialog).toBeHidden();
 
   await page
-    .getByRole('navigation', { name: 'Operations' })
+    .getByRole('navigation', { name: 'Main' })
     .getByRole('link', { name: /Product catalog/ })
     .click();
   await expect(page.getByRole('heading', { name: 'Product catalog' })).toBeVisible();
@@ -121,7 +121,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   // billing runs: the seed billed every day, so there is a latest run and a history.
   // Read-only: nothing is caught up or retried here.
   await page
-    .getByRole('navigation', { name: 'Operations' })
+    .getByRole('navigation', { name: 'Main' })
     .getByRole('link', { name: /Billing runs/ })
     .click();
   await expect(page).toHaveURL(/\/billing-runs$/);
