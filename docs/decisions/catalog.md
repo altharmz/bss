@@ -383,3 +383,17 @@ delete availability, refusals) and
 `tests/test_ui_requests.py::test_category_and_catalog_writes_as_the_ui_sends_them`.
 Deviation: the server requires `validFor.startDateTime` whenever `validFor` is sent, so the dialog
 refuses a "Valid to" without "Valid from" (the refusal is certain).
+
+## UI: import and export jobs (slice 14, 2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 14), frontend only.
+Catalog tab **Import / export** (`ui.catalog.jobs`, `screens/CatalogJobs.tsx`, `api/catalogJobs.ts`):
+both job lists merged newest first; export dialog (scope select, then Download and Copy as import),
+import dialog (file or pasted JSON, `Failed` keeps the dialog open with the whole `errorLog`), and
+a job dialog with Delete ("Nothing it imported is undone."). The document is encoded as UTF-8
+base64 into the `data:` URL; the size check is 1,000,000 bytes of the text. Tests:
+`Catalog.test.tsx` ("import and export jobs": list, exact bodies including the base64 of fixtures,
+Blob and file name, size check, failed log, delete) and
+`tests/test_ui_requests.py::test_catalog_jobs_as_the_ui_sends_them` (export, then its import, is a
+no-op success, for both scopes). Deviations: "Everything" sends no `query` (an empty one is the
+same); the file name date is the job's creation business date, not the browser clock.

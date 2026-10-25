@@ -24,6 +24,7 @@ import { Button, Modal, PageTitle, Panel, Pill, Segmented, TextInput, useToast }
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { OfferingEditModal, PriceModal } from './OfferingEdit';
+import { JobsTab } from './CatalogJobs';
 import { CatalogsTab, CategoriesTab } from './Classification';
 import { SpecificationModal, SpecificationsTab } from './Specifications';
 import { checkOffering, type OfferingForm } from './newOffering';
@@ -34,7 +35,7 @@ import './screens.css';
 // offering's details, which carry the lifecycle step (In Design -> Active -> Retired):
 // the design's table has no room for an action column at 1280px.
 
-type Tab = 'offerings' | 'specifications' | 'categories' | 'catalogs';
+type Tab = 'offerings' | 'specifications' | 'categories' | 'catalogs' | 'jobs';
 type Filter = 'All' | Lifecycle;
 const FILTERS: Filter[] = ['All', 'In Design', 'Active', 'Retired'];
 
@@ -124,38 +125,41 @@ export function CatalogScreen() {
             { key: 'specifications', label: 'Specifications' },
             { key: 'categories', label: 'Categories' },
             { key: 'catalogs', label: 'Catalogs' },
+            { key: 'jobs', label: 'Import / export' },
           ]}
         />
       </div>
-      <div className="bss-toolbar">
-        <TextInput
-          width={300}
-          placeholder={
-            specs
-              ? 'Search by name or brand'
-              : offeringsTab
-                ? 'Search by code or name'
-                : 'Search by name'
-          }
-          aria-label={
-            specs ? 'Search specifications' : offeringsTab ? 'Search offerings' : `Search ${tab}`
-          }
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        {offeringsTab && (
-          <Segmented
-            label="Lifecycle status"
-            value={filter}
-            onChange={setFilter}
-            options={FILTERS.map((key) => ({
-              key,
-              label: key,
-              ...(catalog.status === 'ok' ? { count: countOf(key) } : {}),
-            }))}
+      {tab !== 'jobs' && (
+        <div className="bss-toolbar">
+          <TextInput
+            width={300}
+            placeholder={
+              specs
+                ? 'Search by name or brand'
+                : offeringsTab
+                  ? 'Search by code or name'
+                  : 'Search by name'
+            }
+            aria-label={
+              specs ? 'Search specifications' : offeringsTab ? 'Search offerings' : `Search ${tab}`
+            }
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
           />
-        )}
-      </div>
+          {offeringsTab && (
+            <Segmented
+              label="Lifecycle status"
+              value={filter}
+              onChange={setFilter}
+              options={FILTERS.map((key) => ({
+                key,
+                label: key,
+                ...(catalog.status === 'ok' ? { count: countOf(key) } : {}),
+              }))}
+            />
+          )}
+        </div>
+      )}
       {specs && (
         <div data-ui="ui.catalog.specifications">
           <SpecificationsTab
@@ -172,6 +176,7 @@ export function CatalogScreen() {
         <CategoriesTab offerings={catalog.status === 'ok' ? catalog.data : null} query={query} />
       )}
       {tab === 'catalogs' && <CatalogsTab query={query} />}
+      {tab === 'jobs' && <JobsTab />}
       {offeringsTab && (
         <Panel>
           <TableHead columns={cols} />

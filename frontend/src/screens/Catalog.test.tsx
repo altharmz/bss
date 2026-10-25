@@ -1345,3 +1345,238 @@ describe('categories and catalogs', () => {
     expect(bodyOf(fetchMock, 'DELETE')).toBeUndefined();
   });
 });
+
+describe('import and export jobs', () => {
+  const JOBS = `${CAT}/importJob?offset=0&limit=100`;
+  const EXPORTS = `${CAT}/exportJob?offset=0&limit=100`;
+  const CATALOG_LIST = `GET ${CAT}/productCatalog?offset=0&limit=100`;
+  const DOC = '{"@type":"BssCatalogDocument","version":1}';
+  const DOC_URL =
+    'data:application/json;base64,eyJAdHlwZSI6IkJzc0NhdGFsb2dEb2N1bWVudCIsInZlcnNpb24iOjF9';
+  const base = '/tmf-api/productCatalogManagement/v5';
+  const IMPORTS = [
+    {
+      id: 'i1',
+      status: 'Failed',
+      creationDate: '2026-10-20T09:00:00Z',
+      completionDate: '2026-10-20T09:00:01Z',
+      errorLog: 'category X: parents form a cycle\nsecond line',
+    },
+    { id: 'i2', status: 'Succeeded', creationDate: '2026-10-22T09:00:00Z' },
+  ];
+  const EXPORT_LIST = [
+    { id: 'e1', status: 'Succeeded', creationDate: '2026-10-21T09:00:00Z', url: DOC_URL },
+  ];
+  const routes = (more: Record<string, Handler> = {}) =>
+    backend({
+      [`GET ${JOBS}`]: () => json(IMPORTS, { total: IMPORTS.length }),
+      [`GET ${EXPORTS}`]: () => json(EXPORT_LIST, { total: EXPORT_LIST.length }),
+      [CATALOG_LIST]: () => json([{ id: 'k1', name: 'Retail' }], { total: 1 }),
+      ...more,
+    });
+  const bodyOf = (fetchMock: ReturnType<typeof stubFetch>['fetchMock'], method: string) => {
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === method);
+    return call?.[1]?.body === undefined ? undefined : JSON.parse(String(call[1].body));
+  };
+  async function openJobs() {
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Import / export' }));
+    await screen.findByText('3 jobs');
+  }
+
+  it('lists both kinds newest first with the first line of the error log', async () => {
+    routes();
+    await openJobs();
+    expectUi('ui.catalog.jobs');
+    const rows = screen
+      .getAllByRole('row')
+      .filter((r) => within(r).queryAllByRole('cell').length === 5)
+      .map((r) =>
+        within(r)
+          .getAllByRole('cell')
+          .map((c) => c.textContent),
+      );
+    expect(rows.map((r) => r[0])).toEqual(['Import', 'Export', 'Import']);
+    expect(rows[2]?.[1]).toBe('Failed');
+    expect(rows[2]?.[4]).toBe('category X: parents form a cycle');
+    expect(rows[0]?.[2]).toBe('2026-10-22 12:00:00');
+  });
+
+  it('exports with the exact body, then downloads and copies the document as an import', async () => {
+    const created: unknown[] = [];
+    const { fetchMock } = routes({
+      [`POST ${base}/exportJob`]: () => {
+        created.push(1);
+        return json(
+          { id: 'e9', status: 'Succeeded', creationDate: '2026-10-25T09:00:00Z', url: DOC_URL },
+          { status: 201 },
+        );
+      },
+    });
+    const blobs: Blob[] = [];
+    URL.createObjectURL = (blob: Blob | MediaSource) => {
+      blobs.push(blob as Blob);
+      return 'blob:x';
+    };
+    URL.revokeObjectURL = () => undefined;
+    const names: string[] = [];
+    const click = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+      names.push(this.download);
+    };
+    try {
+      await openJobs();
+      fireEvent.click(screen.getByRole('button', { name: 'Export...' }));
+      const dialog = screen.getByRole('dialog', { name: 'Export the catalog' });
+      expectUi('ui.catalog.export');
+      await within(dialog).findByRole('option', { name: 'Retail' });
+      fireEvent.change(within(dialog).getByLabelText('Scope'), { target: { value: 'k1' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Export' }));
+      fireEvent.click(await within(dialog).findByRole('button', { name: 'Download' }));
+      expect(bodyOf(fetchMock, 'POST')).toEqual({
+        '@type': 'ExportJob',
+        path: base,
+        contentType: 'application/json',
+        query: 'productCatalog.id=k1',
+      });
+      expect(names).toEqual(['bss-catalog-2026-10-25.json']);
+      expect(blobs[0]?.type).toBe('application/json');
+      expect(await blobs[0]?.text()).toBe(DOC);
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Copy as import' }));
+      const importing = screen.getByRole('dialog', { name: 'Import a catalog document' });
+      expect(
+        (within(importing).getByLabelText(/paste the document/i) as HTMLTextAreaElement).value,
+      ).toBe(DOC);
+    } finally {
+      HTMLAnchorElement.prototype.click = click;
+    }
+  });
+
+  it('exports everything with no query', async () => {
+    const { fetchMock } = routes({
+      [`POST ${base}/exportJob`]: () =>
+        json({ id: 'e9', status: 'Succeeded', url: DOC_URL }, { status: 201 }),
+    });
+    await openJobs();
+    fireEvent.click(screen.getByRole('button', { name: 'Export...' }));
+    const dialog = screen.getByRole('dialog', { name: 'Export the catalog' });
+    await within(dialog).findByRole('option', { name: 'Retail' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Export' }));
+    await within(dialog).findByRole('button', { name: 'Download' });
+    expect(bodyOf(fetchMock, 'POST')).toEqual({
+      '@type': 'ExportJob',
+      path: base,
+      contentType: 'application/json',
+    });
+  });
+
+  it('imports a pasted document as a base64 data URL', async () => {
+    const { fetchMock } = routes({
+      [`POST ${base}/importJob`]: () =>
+        json({ id: 'i9', status: 'Succeeded', url: DOC_URL }, { status: 201 }),
+    });
+    await openJobs();
+    fireEvent.click(screen.getByRole('button', { name: 'Import...' }));
+    const dialog = screen.getByRole('dialog', { name: 'Import a catalog document' });
+    expectUi('ui.catalog.import');
+    const button = within(dialog).getByRole('button', { name: 'Import' }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    const box = within(dialog).getByLabelText(/paste the document/i);
+    fireEvent.change(box, { target: { value: '{oops' } });
+    expect(within(dialog).getByText('The document is not valid JSON')).toBeTruthy();
+    expect(button.disabled).toBe(true);
+    fireEvent.change(box, { target: { value: DOC } });
+    fireEvent.click(button);
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Import job succeeded');
+    expect(bodyOf(fetchMock, 'POST')).toEqual({
+      '@type': 'ImportJob',
+      path: base,
+      contentType: 'application/json',
+      url: DOC_URL,
+    });
+  });
+
+  it('encodes non-ASCII text as UTF-8', async () => {
+    const { fetchMock } = routes({
+      [`POST ${base}/importJob`]: () => json({ id: 'i9', status: 'Succeeded' }, { status: 201 }),
+    });
+    await openJobs();
+    fireEvent.click(screen.getByRole('button', { name: 'Import...' }));
+    const dialog = screen.getByRole('dialog', { name: 'Import a catalog document' });
+    fireEvent.change(within(dialog).getByLabelText(/paste the document/i), {
+      target: { value: '{"name":"Тариф"}' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Import' }));
+    await screen.findByRole('status');
+    expect(bodyOf(fetchMock, 'POST').url).toBe(
+      'data:application/json;base64,eyJuYW1lIjoi0KLQsNGA0LjRhCJ9',
+    );
+  });
+
+  it('reads a chosen .json file into the box', async () => {
+    routes();
+    await openJobs();
+    fireEvent.click(screen.getByRole('button', { name: 'Import...' }));
+    const dialog = screen.getByRole('dialog', { name: 'Import a catalog document' });
+    const file = new File([DOC], 'catalog.json', { type: 'application/json' });
+    fireEvent.change(within(dialog).getByLabelText('JSON file'), { target: { files: [file] } });
+    await waitFor(() =>
+      expect(
+        (within(dialog).getByLabelText(/paste the document/i) as HTMLTextAreaElement).value,
+      ).toBe(DOC),
+    );
+  });
+
+  it('refuses a document over 1 MB without sending it', async () => {
+    const { fetchMock } = routes();
+    await openJobs();
+    fireEvent.click(screen.getByRole('button', { name: 'Import...' }));
+    const dialog = screen.getByRole('dialog', { name: 'Import a catalog document' });
+    fireEvent.change(within(dialog).getByLabelText(/paste the document/i), {
+      target: { value: JSON.stringify({ pad: 'x'.repeat(1_000_000) }) },
+    });
+    expect(within(dialog).getByText(/larger than 1,000,000 bytes/)).toBeTruthy();
+    expect(
+      (within(dialog).getByRole('button', { name: 'Import' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
+
+  it('shows the full error log of a failed import in the dialog', async () => {
+    routes({
+      [`POST ${base}/importJob`]: () =>
+        json(
+          { id: 'i9', status: 'Failed', errorLog: 'category X: nope\nmore detail' },
+          { status: 201 },
+        ),
+    });
+    await openJobs();
+    fireEvent.click(screen.getByRole('button', { name: 'Import...' }));
+    const dialog = screen.getByRole('dialog', { name: 'Import a catalog document' });
+    fireEvent.change(within(dialog).getByLabelText(/paste the document/i), {
+      target: { value: DOC },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Import' }));
+    const log = await within(dialog).findByRole('alert');
+    expect(log.textContent).toBe('category X: nope\nmore detail');
+    expectUi('ui.catalog.errorLog');
+  });
+
+  it('deletes a job record and says nothing imported is undone', async () => {
+    const { fetchMock } = routes({
+      [`DELETE ${base}/importJob/i1`]: () => new Response(null, { status: 204 }),
+    });
+    await openJobs();
+    const failed = screen.getByText('category X: parents form a cycle');
+    fireEvent.click(failed);
+    const dialog = screen.getByRole('dialog', { name: 'Import job' });
+    expectUi('ui.catalog.job');
+    expect(within(dialog).getByRole('alert').textContent).toContain('second line');
+    expectUi('ui.catalog.deleteJob');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(within(dialog).getByText(/Nothing it imported is undone/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Import job deleted');
+    expect(bodyOf(fetchMock, 'DELETE')).toBeUndefined();
+  });
+});

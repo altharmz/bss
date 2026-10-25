@@ -6,6 +6,7 @@ means. If the UI changes a body, change it here too.
 Context: business date 2026-10-01 in Europe/Moscow (+03:00), the api fixture's clock.
 """
 
+import base64
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -467,6 +468,61 @@ def test_category_and_catalog_writes_as_the_ui_sends_them(api):
     assert api.get(catalog["href"]).status_code == 404
     assert api.delete(child["href"]).status_code == 204
     assert api.delete(home["href"]).status_code == 204
+
+
+def test_catalog_jobs_as_the_ui_sends_them(api):
+    """exportBody(), importBody(), toDataUrl() and deleteJob(): bodies pinned in
+    Catalog.test.tsx. An export, then its import, is a no-op success."""
+    create_offering(api)
+    home = api.post(f"{CATALOG}/category", {"@type": "Category", "name": "Home"}).json()
+    k = api.post(
+        f"{CATALOG}/productCatalog",
+        {
+            "@type": "ProductCatalog",
+            "name": "Retail",
+            "category": [{"id": home["id"], "@type": "CategoryRef"}],
+        },
+    ).json()
+    prefix = "data:application/json;base64,"
+    for query in (None, f"productCatalog.id={k['id']}"):
+        body = {"@type": "ExportJob", "path": CATALOG, "contentType": "application/json"}
+        if query:
+            body["query"] = query
+        exported = api.post(f"{CATALOG}/exportJob", body)
+        assert exported.status_code == 201, exported.text
+        job = exported.json()
+        assert job["status"] == "Succeeded" and job["url"].startswith(prefix)
+        # the UI decodes the url into the downloaded file and pastes it back as text
+        text = base64.b64decode(job["url"][len(prefix) :]).decode()
+        replay = api.post(
+            f"{CATALOG}/importJob",
+            {
+                "@type": "ImportJob",
+                "path": CATALOG,
+                "contentType": "application/json",
+                "url": prefix + base64.b64encode(text.encode()).decode(),
+            },
+        )
+        assert replay.status_code == 201, replay.text
+        assert replay.json()["status"] == "Succeeded", replay.json()
+        assert api.delete(f"{CATALOG}/exportJob/{job['id']}").status_code == 204
+        assert api.delete(f"{CATALOG}/importJob/{replay.json()['id']}").status_code == 204
+    # a document the server refuses is a stored Failed job with its errorLog
+    bad = base64.b64encode(b'{"@type":"BssCatalogDocument","version":2}').decode()
+    failed = api.post(
+        f"{CATALOG}/importJob",
+        {
+            "@type": "ImportJob",
+            "path": CATALOG,
+            "contentType": "application/json",
+            "url": prefix + bad,
+        },
+    )
+    assert failed.status_code == 201
+    assert failed.json()["status"] == "Failed" and "version" in failed.json()["errorLog"]
+    listed = api.get(f"{CATALOG}/importJob?offset=0&limit=100")
+    assert [j["id"] for j in listed.json()] == [failed.json()["id"]]
+    assert api.delete(f"{CATALOG}/importJob/{failed.json()['id']}").status_code == 204
 
 
 def test_lifecycle_steps_are_merge_patches(api):

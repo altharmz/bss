@@ -271,6 +271,18 @@ type, lifecycle, validity and the root categories (roots only); Delete (`ui.cata
 is always offered.
 API: `POST|PATCH|DELETE .../category`, `.../productCatalog` (merge patch of changed fields only).
 
+### Import / export tab (`ui.catalog.jobs`) - `screens/CatalogJobs.tsx`
+
+One list of import and export jobs (newest first): kind, status, created, completed and the first
+line of the error log; a row opens the job (`ui.catalog.job`, full error log, Download for a
+succeeded export, Delete). **Export...** (`ui.catalog.export`) takes a scope (Everything or one
+catalog) and offers **Download** (`bss-catalog-<date>.json`) and **Copy as import** on success.
+**Import...** (`ui.catalog.import`) takes a `.json` file or pasted JSON (checked: valid JSON,
+at most 1,000,000 bytes) and shows a failed job's whole error log in the dialog
+(`ui.catalog.errorLog`). Delete (`ui.catalog.deleteJob`) removes the record only: "Nothing it
+imported is undone." No polling: a job finishes within its request.
+API: `GET|POST|DELETE .../importJob`, `.../exportJob`.
+
 ### Offering detail (`ui.catalog.offeringDetail`), lifecycle step (`ui.catalog.lifecycle`), change price (`ui.catalog.changePrice`)
 
 The detail dialog shows the offering and its recurring prices. The lifecycle button offers

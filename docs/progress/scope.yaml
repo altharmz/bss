@@ -374,6 +374,12 @@ items:
   - {id: ui.catalog.newCatalog, area: ui, stage: 5, title: "New product catalog"}
   - {id: ui.catalog.editCatalog, area: ui, stage: 5, title: "Edit a product catalog and its root categories"}
   - {id: ui.catalog.deleteCatalog, area: ui, stage: 5, title: "Delete a product catalog"}
+  - {id: ui.catalog.jobs, area: ui, stage: 5, title: "Catalog tab: import and export jobs"}
+  - {id: ui.catalog.export, area: ui, stage: 5, title: "Export the catalog (everything or one catalog), download, copy as import"}
+  - {id: ui.catalog.import, area: ui, stage: 5, title: "Import a catalog document (file or pasted JSON)"}
+  - {id: ui.catalog.job, area: ui, stage: 5, title: "Import or export job detail"}
+  - {id: ui.catalog.errorLog, area: ui, stage: 5, title: "Full error log of a failed job"}
+  - {id: ui.catalog.deleteJob, area: ui, stage: 5, title: "Delete a job record"}
   - {id: ui.billingRuns.list, area: ui, stage: 4, title: "Billing runs: latest run, history, failed badge in the nav"}
   - {id: ui.billingRuns.catchUp, area: ui, stage: 4, title: "Catch up to a date"}
   - {id: ui.billingRuns.retry, area: ui, stage: 4, title: "Retry a failed run"}
