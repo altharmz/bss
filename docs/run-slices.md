@@ -32,7 +32,10 @@ the local stack and the pre-commit lock.
 
 ## For each slice
 
-1. **Start one implementation subagent** with the prompt below.
+1. **Start one implementation subagent** with the prompt below. Replace N, and paste
+   into it the text of "Rules for every slice", "When the spec is wrong" and section N of
+   next-slices-design.md (nothing else from that file), so the subagent does not open the
+   whole design.
 2. **Check its report.** Do not trust it blindly:
    - `git log --oneline -3` shows the new commit, and `git status` is clean.
    - `git status -sb` shows that the push happened (no "ahead").
@@ -74,10 +77,22 @@ the local stack and the pre-commit lock.
 You are implementing slice N of docs/next-slices.md in /home/petrg/projects/bss.
 Every design decision is made; do not ask for approval, build what the design says.
 
-Read first: CLAUDE.md (hard constraints, working style, code rules); in
-docs/next-slices-design.md the sections "Rules for every slice", "When the spec is
-wrong" and section N; the decision files and code section N names. Look at the
-pattern sources the rules list before writing new components.
+Read first: CLAUDE.md (hard constraints, working style, code rules) and
+docs/patterns.md. The design sections for this slice are pasted below. Read the
+decision files and code they name; open the pattern sources the rules list only for
+what docs/patterns.md does not cover.
+
+Working rules (token cost):
+- Read with `grep -n` or line ranges (`sed -n a,bp`), not whole-file `cat`. Do not
+  re-read content you have not changed since you last read it.
+- Batch independent reads and checks into one turn (several tool calls in one message).
+- Run targeted tests for the files you touched (`make web-test`, single pytest files)
+  before the full pre-commit hook.
+- Run the hook in the background: start `git commit` with its output redirected to a
+  log file (Bash `run_in_background`), then poll that file in calls under 4 minutes
+  (e.g. `sleep 200; tail -5 <log>`), so the prompt cache stays warm. Do not run the hook
+  in the foreground with a short timeout.
+- If the slice changes a pattern in docs/patterns.md, update that file in the same commit.
 
 Build exactly section N, nothing more:
 - New tests that fail without the change; pin every write body in the component
