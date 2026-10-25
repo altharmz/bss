@@ -98,7 +98,8 @@ POST or PATCH naming the other `@type` is a 400. A list mixing resources would a
 that belong to other paths, and the billing account would need two shapes.
 
 **UI**: the Financial accounts screen lists contained party and settlement accounts by
-name and kind; they have no screen of their own, so they are not links.
+name and kind; they are not links. **Superseded 2026-10-25 (slice 17):** they have their own tabs
+(entry below).
 
 **Migration `0014`**: enum `party_account_kind` (`PartyAccount`, `SettlementAccount` - ours,
 equal to the `@type`) and table `party_account` with `kind`, the same columns as
@@ -214,3 +215,19 @@ it replaces "UI: read-only" above. `api/financial.ts`, `screens/FinancialForms.t
   loads charges and transactions itself and passes them to the history panels (same requests).
   The existing `editBackend` test helper stubs the new financial-accounts list (TEST-CHANGE).
 
+
+## UI: party and settlement accounts (slice 17, 2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 17), frontend only.
+The Financial accounts screen is titled **Accounts** (sidebar, crumb, heading) with tabs
+Financial, Party and Settlement; the route stays `/financial-accounts` (the router has no aliases).
+`api/financial.ts` takes the account kind (`@type` of the body, resource path); the forms in
+`screens/FinancialForms.tsx` serve all three. Party/settlement tabs have no balance column; Delete
+is always offered. The form adds the **Financial account** select (the owner's financial accounts
+plus None); changing the owner resets it to None, so a stale link to the old owner is never sent.
+Create sends `financialAccount` only when chosen; edit sends it (a ref or `null`) only when changed.
+- Tests: `PartyAccounts.test.tsx` (lists, both creates with their `@type`, edit/link/unlink bodies,
+  owner change with the server's 422, deletes) and
+  `tests/test_ui_requests.py::test_party_and_settlement_account_writes_as_the_ui_sends_them`.
+- Deviations: none. The sidebar label and heading tests of the financial screen changed to
+  "Accounts" (TEST-CHANGE).

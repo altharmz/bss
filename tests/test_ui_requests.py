@@ -1628,3 +1628,75 @@ def test_financial_account_writes_and_links_as_the_ui_sends_them(api):
     assert refused.status_code == 409 and "close it instead" in refused.json()["message"]
     assert api.delete(held["href"]).status_code == 204
     assert api.get(held["href"]).status_code == 404
+
+
+def test_party_and_settlement_account_writes_as_the_ui_sends_them(api):
+    """createBody(kind), patchBody() of api/financial.ts for both resources and the deletes:
+    bodies pinned in PartyAccounts.test.tsx."""
+    acc = "/tmf-api/accountManagement/v5"
+    org = apidata.organization(api, "Romashka LLC")
+    person = apidata.individual(api, "Olga", "Kuznetsova")
+    owner = {
+        "role": "owner",
+        "partyOrPartyRole": {"id": org["id"], "@type": "PartyRef", "@referredType": "Organization"},
+        "@type": "RelatedPartyRefOrPartyRoleRef",
+    }
+    owner_json = json.dumps(owner, separators=(",", ":"))
+    group = api.post(
+        f"{acc}/financialAccount",
+        {"@type": "FinancialAccount", "name": "Group", "relatedParty": [owner]},
+    ).json()
+    ref = {"id": group["id"], "@type": "FinancialAccountRef", "@referredType": "FinancialAccount"}
+    ref_json = json.dumps(ref, separators=(",", ":"))
+    # the lists of the tabs and of the link select
+    for url in (
+        f"{acc}/partyAccount?offset=0&limit=100",
+        f"{acc}/settlementAccount?offset=0&limit=100",
+        f"{acc}/financialAccount?relatedParty.id={org['id']}&offset=0&limit=100",
+    ):
+        assert api.get(url).status_code == 200, url
+    created = api.post_raw(
+        f"{acc}/partyAccount",
+        '{"@type":"PartyAccount","name":"Treasury","relatedParty":['
+        + owner_json
+        + '],"state":"Active","financialAccount":'
+        + ref_json
+        + "}",
+    )
+    assert created.status_code == 201, created.text
+    party = created.json()
+    assert party["@type"] == "PartyAccount" and party["financialAccount"]["id"] == group["id"]
+    settlement = api.post_raw(
+        f"{acc}/settlementAccount",
+        '{"@type":"SettlementAccount","name":"Payouts","relatedParty":['
+        + owner_json
+        + '],"state":"Active","creditLimit":{"unit":"EUR","value":10.00}}',
+    )
+    assert settlement.status_code == 201, settlement.text
+    assert settlement.json()["@type"] == "SettlementAccount"
+    assert "financialAccount" not in settlement.json()
+    # an edit: a cleared description and the link removed; then linked again
+    unlinked = api.patch_raw(party["href"], '{"description":null,"financialAccount":null}')
+    assert unlinked.status_code == 200, unlinked.text
+    assert "financialAccount" not in unlinked.json()
+    linked = api.patch_raw(settlement.json()["href"], '{"financialAccount":' + ref_json + "}")
+    assert linked.status_code == 200 and linked.json()["financialAccount"]["id"] == group["id"]
+    # a new owner without a link (the UI resets it)
+    new_owner = {
+        "role": "owner",
+        "partyOrPartyRole": {
+            "id": person["id"],
+            "@type": "PartyRef",
+            "@referredType": "Individual",
+        },
+        "@type": "RelatedPartyRefOrPartyRoleRef",
+    }
+    moved = api.patch(
+        settlement.json()["href"], {"relatedParty": [new_owner], "financialAccount": None}
+    )
+    assert moved.status_code == 200, moved.text
+    assert api.patch(party["href"], {"relatedParty": [new_owner]}).status_code == 200
+    # nothing refers to them: both delete
+    assert api.delete(party["href"]).status_code == 204
+    assert api.delete(settlement.json()["href"]).status_code == 204
+    assert api.get(party["href"]).status_code == 404

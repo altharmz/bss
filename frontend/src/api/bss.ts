@@ -32,6 +32,8 @@ import type { components as T678 } from './generated/tmf678';
 export const PATHS = {
   accounts: '/tmf-api/accountManagement/v5/billingAccount',
   financialAccounts: '/tmf-api/accountManagement/v5/financialAccount',
+  partyAccounts: '/tmf-api/accountManagement/v5/partyAccount',
+  settlementAccounts: '/tmf-api/accountManagement/v5/settlementAccount',
   customers: '/tmf-api/customer/v5/customer',
   products: '/tmf-api/productInventory/v5/product',
   offerings: '/tmf-api/productCatalogManagement/v5/productOffering',
@@ -243,15 +245,14 @@ export async function submitBalanceAction(
 
 export type ContainedKind = 'BillingAccount' | 'PartyAccount' | 'SettlementAccount';
 
-export interface FinancialAccount {
+/** What the financial, party and settlement accounts share. */
+export interface AccountRecord {
   id: string;
   name: string;
   state: AccountState;
   accountType: string | null;
   ownerName: string;
   ownerKind: string; // Individual | Organization
-  balances: { currency: string; cents: number }[]; // positive = in credit
-  contains: { id: string; name: string; kind: ContainedKind }[];
   description: string | null;
   /** the informational credit limit: canonical decimal string and currency */
   creditLimit: { value: string; unit: string } | null;
@@ -260,7 +261,18 @@ export interface FinancialAccount {
   otherParties: unknown[];
 }
 
-export function toFinancialAccount(body: T666['schemas']['FinancialAccount']): FinancialAccount {
+export interface FinancialAccount extends AccountRecord {
+  balances: { currency: string; cents: number }[]; // positive = in credit
+  contains: { id: string; name: string; kind: ContainedKind }[];
+}
+
+type AccountBody = Pick<
+  T666['schemas']['FinancialAccount'],
+  'id' | 'name' | 'state' | 'accountType' | 'description' | 'creditLimit' | 'relatedParty'
+>;
+
+/** What the financial, party and settlement account bodies share (the owner is its role). */
+function accountCore(body: AccountBody) {
   const owner = need(
     body.relatedParty?.find((party) => party.role === 'owner')?.partyOrPartyRole,
     'relatedParty owner',
@@ -282,6 +294,12 @@ export function toFinancialAccount(body: T666['schemas']['FinancialAccount']): F
             unit: need(body.creditLimit.unit, 'creditLimit unit'),
           },
     otherParties: (body.relatedParty ?? []).filter((party) => party.role !== 'owner'),
+  };
+}
+
+export function toFinancialAccount(body: T666['schemas']['FinancialAccount']): FinancialAccount {
+  return {
+    ...accountCore(body),
     balances: need(body.accountBalance, 'accountBalance').map((balance) => ({
       currency: need(balance.amount?.unit, 'balance unit'),
       cents: toCents(need(balance.amount?.value, 'balance value')),
@@ -295,6 +313,40 @@ export function toFinancialAccount(body: T666['schemas']['FinancialAccount']): F
       };
     }),
   };
+}
+
+/** A party or settlement account: the same record, no balance, one optional financial account. */
+export type PartyAccountKind = 'PartyAccount' | 'SettlementAccount';
+
+export interface PartyAccount extends AccountRecord {
+  kind: PartyAccountKind;
+  financial: { id: string; name: string } | null;
+}
+
+export function toPartyAccount(
+  body: T666['schemas']['PartyAccount'],
+  kind: PartyAccountKind,
+): PartyAccount {
+  return {
+    ...accountCore(body),
+    kind,
+    financial: body.financialAccount
+      ? {
+          id: need(body.financialAccount.id, 'financialAccount id'),
+          name: body.financialAccount.name ?? '',
+        }
+      : null,
+  };
+}
+
+export async function loadPartyAccounts(
+  kind: PartyAccountKind,
+  signal: AbortSignal,
+): Promise<PartyAccount[]> {
+  const path = kind === 'PartyAccount' ? PATHS.partyAccounts : PATHS.settlementAccounts;
+  return (await getAll<T666['schemas']['PartyAccount']>(path, signal)).map((body) =>
+    toPartyAccount(body, kind),
+  );
 }
 
 export async function loadFinancialAccounts(signal: AbortSignal): Promise<FinancialAccount[]> {

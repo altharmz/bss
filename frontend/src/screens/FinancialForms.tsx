@@ -1,14 +1,16 @@
 import { useState } from 'react';
-import type { AccountState, FinancialAccount } from '../api/bss';
+import type { AccountRecord, AccountState } from '../api/bss';
 import { explain } from '../api/client';
 import {
+  createAccount,
   createBody,
-  createFinancial,
-  deleteFinancial,
+  deleteAccount,
   formOf,
+  loadFinancialChoices,
   loadOwnerChoices,
+  patchAccount,
   patchBody,
-  patchFinancial,
+  type AccountKind,
   type FinancialForm,
   type OwnerChoice,
 } from '../api/financial';
@@ -25,6 +27,19 @@ import { uncertain } from './submissionKey';
 // After an uncertain result (no answer, 5xx) the dialog offers Refresh, never a retry.
 
 const STATES: AccountState[] = ['Active', 'Suspended', 'Closed'];
+
+// The party and settlement tabs reuse these dialogs (docs/next-slices-design.md section 17).
+const NAME: Record<AccountKind, string> = {
+  FinancialAccount: 'financial account',
+  PartyAccount: 'party account',
+  SettlementAccount: 'settlement account',
+};
+const MARKER: Record<AccountKind, string> = {
+  FinancialAccount: 'ui.financialAccounts',
+  PartyAccount: 'ui.accounts.party',
+  SettlementAccount: 'ui.accounts.settlement',
+};
+type Editable = AccountRecord & { financial?: { id: string; name: string } | null };
 
 /** Save/Delete outcome state shared by both dialogs. */
 function useWrite(onDone: (message: string) => void) {
@@ -75,18 +90,20 @@ function Footer({
 
 export function FinancialFormModal({
   account,
+  kind = 'FinancialAccount',
   onClose,
   onDone,
 }: {
   /** the account to edit; none = a new one */
-  account: FinancialAccount | null;
+  account: Editable | null;
+  kind?: AccountKind;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
   const owners = useResource('financial-owners', loadOwnerChoices);
-  const title = account ? `Edit ${account.name}` : 'New financial account';
+  const title = account ? `Edit ${account.name}` : `New ${NAME[kind]}`;
   return (
-    <Modal title={title} width={560} onClose={onClose} ui="ui.financialAccounts.form">
+    <Modal title={title} width={560} onClose={onClose} ui={`${MARKER[kind]}.form`}>
       {owners.status === 'loading' && (
         <div className="bss-modal-body">
           <SkeletonRows columns={[{ key: 'a', label: '', width: '1fr' }]} rows={5} />
@@ -102,7 +119,13 @@ export function FinancialFormModal({
         </div>
       )}
       {owners.status === 'ok' && (
-        <Body account={account} owners={owners.data} onClose={onClose} onDone={onDone} />
+        <Body
+          account={account}
+          kind={kind}
+          owners={owners.data}
+          onClose={onClose}
+          onDone={onDone}
+        />
       )}
     </Modal>
   );
@@ -110,11 +133,13 @@ export function FinancialFormModal({
 
 function Body({
   account,
+  kind,
   owners,
   onClose,
   onDone,
 }: {
-  account: FinancialAccount | null;
+  account: Editable | null;
+  kind: AccountKind;
   owners: OwnerChoice[];
   onClose: () => void;
   onDone: (message: string) => void;
@@ -130,17 +155,24 @@ function Body({
         creditLimit: null,
         currency: context.currency,
         state: 'Active',
+        financialId: null,
       };
   const [form, setForm] = useState(before);
   const [limitText, setLimitText] = useState(before.creditLimit ?? '');
   const write = useWrite(onDone);
   const set = (change: Partial<FinancialForm>) => setForm({ ...form, ...change });
+  const linkable = kind !== 'FinancialAccount';
+  const ownerId = form.owner?.id ?? '';
+  // the owner's financial accounts, loaded again when the owner changes
+  const financial = useResource(`financial-choices:${linkable ? ownerId : ''}`, (signal) =>
+    linkable && ownerId !== '' ? loadFinancialChoices(ownerId, signal) : Promise.resolve([]),
+  );
 
   const limit = limitText.trim() === '' ? { ok: true, value: null } : parse(limitText);
   const after: FinancialForm = { ...form, creditLimit: limit.value };
   const currencyOk = limit.value === null || /^[A-Z]{3}$/.test(form.currency);
   const valid = form.name.trim() !== '' && form.owner !== null && limit.ok && currencyOk;
-  const body = account ? patchBody(account, before, after) : createBody(after);
+  const body = account ? patchBody(account, before, after) : createBody(after, kind);
 
   return (
     <>
@@ -153,7 +185,13 @@ function Body({
             <select
               className="bss-input"
               value={form.owner?.id ?? ''}
-              onChange={(e) => set({ owner: owners.find((o) => o.id === e.target.value) ?? null })}
+              onChange={(e) =>
+                set({
+                  owner: owners.find((o) => o.id === e.target.value) ?? null,
+                  // a link belongs to one owner: a new owner starts without one
+                  ...(linkable ? { financialId: null } : {}),
+                })
+              }
             >
               {form.owner === null && <option value="">Choose a party</option>}
               {owners.map((o) => (
@@ -163,11 +201,50 @@ function Body({
               ))}
             </select>
           </Field>
-          {account && (
+          {account && !linkable && (
             <div className="caption">
               The owner cannot change while billing, party or settlement accounts link to this
               financial account; the server refuses it.
             </div>
+          )}
+          {linkable && (
+            <>
+              <Field label="Financial account">
+                <select
+                  className="bss-input"
+                  data-ui={`${MARKER[kind]}.financialLink`}
+                  value={form.financialId ?? ''}
+                  disabled={form.owner === null || financial.status === 'loading'}
+                  onChange={(e) => set({ financialId: e.target.value || null })}
+                >
+                  <option value="">None</option>
+                  {financial.status === 'ok' &&
+                    financial.data.map((choice) => (
+                      <option key={choice.id} value={choice.id}>
+                        {choice.name}
+                        {choice.state === 'Closed' ? ' (closed)' : ''}
+                      </option>
+                    ))}
+                  {form.financialId !== null &&
+                    form.financialId !== undefined &&
+                    !(
+                      financial.status === 'ok' &&
+                      financial.data.some((choice) => choice.id === form.financialId)
+                    ) && <option value={form.financialId}>Current financial account</option>}
+                </select>
+              </Field>
+              {financial.status === 'error' && (
+                <div className="bss-inline-error">
+                  Failed to load the owner's financial accounts: {explain(financial.error)}.{' '}
+                  <Button small onClick={financial.retry}>
+                    Retry
+                  </Button>
+                </div>
+              )}
+              <div className="caption">
+                Only financial accounts of the same owner can be linked; the server refuses others.
+              </div>
+            </>
           )}
           <Field label="Account type">
             <TextInput
@@ -219,10 +296,10 @@ function Body({
               body !== null &&
               void write.run(async () => {
                 if (account) {
-                  await patchFinancial(account.id, body);
+                  await patchAccount(kind, account.id, body);
                   return `${form.name.trim()} saved`;
                 }
-                await createFinancial(body);
+                await createAccount(kind, body);
                 return `${form.name.trim()} created`;
               })
             }
@@ -242,10 +319,12 @@ function parse(text: string): { ok: boolean; value: string | null } {
 
 export function DeleteFinancialModal({
   account,
+  kind = 'FinancialAccount',
   onClose,
   onDone,
 }: {
-  account: FinancialAccount;
+  account: AccountRecord;
+  kind?: AccountKind;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
@@ -255,7 +334,7 @@ export function DeleteFinancialModal({
       title={`Delete ${account.name}`}
       width={480}
       onClose={onClose}
-      ui="ui.financialAccounts.confirmDelete"
+      ui={`${MARKER[kind]}.confirmDelete`}
       footer={
         <Footer write={write} onRefresh={() => onDone('Refreshed')}>
           <Button onClick={onClose}>Cancel</Button>
@@ -264,7 +343,7 @@ export function DeleteFinancialModal({
             disabled={write.busy}
             onClick={() =>
               void write.run(async () => {
-                await deleteFinancial(account.id);
+                await deleteAccount(kind, account.id);
                 return `${account.name} deleted`;
               })
             }
@@ -275,7 +354,10 @@ export function DeleteFinancialModal({
       }
     >
       <div className="bss-modal-body">
-        <p>Deletes the financial account. No account links to it.</p>
+        <p>
+          Deletes the {NAME[kind]}.{' '}
+          {kind === 'FinancialAccount' ? 'No account links to it.' : 'Nothing refers to it.'}
+        </p>
       </div>
     </Modal>
   );

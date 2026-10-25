@@ -3,7 +3,7 @@
 // section 16; rules in docs/decisions/accounts.md.
 
 import { AMOUNT, getAll, jsonWithAmount, patchJson, postJson, request } from './client';
-import { PATHS, type AccountState, type FinancialAccount, type PartyKind } from './bss';
+import { PATHS, type AccountRecord, type AccountState, type PartyKind } from './bss';
 import { PARTY_PATH } from './parties';
 
 export interface OwnerChoice {
@@ -55,6 +55,15 @@ export async function loadFinancialChoices(
   }));
 }
 
+/** The three TMF666 account resources the Accounts screen writes. */
+export type AccountKind = 'FinancialAccount' | 'PartyAccount' | 'SettlementAccount';
+
+export const ACCOUNT_PATH: Record<AccountKind, string> = {
+  FinancialAccount: PATHS.financialAccounts,
+  PartyAccount: PATHS.partyAccounts,
+  SettlementAccount: PATHS.settlementAccounts,
+};
+
 export interface FinancialForm {
   name: string;
   owner: OwnerChoice | null;
@@ -63,10 +72,12 @@ export interface FinancialForm {
   creditLimit: string | null; // canonical decimal string, or none
   currency: string;
   state: AccountState;
+  /** party and settlement accounts: the financial account they link to (same owner) */
+  financialId?: string | null;
 }
 
 export function formOf(
-  account: FinancialAccount,
+  account: AccountRecord & { financial?: { id: string } | null },
   owner: OwnerChoice | null,
   defaultCurrency: string,
 ): FinancialForm {
@@ -78,8 +89,15 @@ export function formOf(
     creditLimit: account.creditLimit?.value ?? null,
     currency: account.creditLimit?.unit ?? defaultCurrency,
     state: account.state,
+    financialId: account.financial?.id ?? null,
   };
 }
+
+const financialRef = (id: string) => ({
+  id,
+  '@type': 'FinancialAccountRef',
+  '@referredType': 'FinancialAccount',
+});
 
 const ownerEntry = (owner: OwnerChoice) => ({
   role: 'owner',
@@ -88,15 +106,16 @@ const ownerEntry = (owner: OwnerChoice) => ({
 });
 
 /** The POST body (JSON text: the credit limit is an exact decimal token). */
-export function createBody(form: FinancialForm): string {
+export function createBody(form: FinancialForm, kind: AccountKind = 'FinancialAccount'): string {
   const body: Record<string, unknown> = {
-    '@type': 'FinancialAccount',
+    '@type': kind,
     name: form.name.trim(),
     relatedParty: form.owner ? [ownerEntry(form.owner)] : [],
     state: form.state,
   };
   if (form.accountType.trim()) body.accountType = form.accountType.trim();
   if (form.description.trim()) body.description = form.description.trim();
+  if (form.financialId) body.financialAccount = financialRef(form.financialId);
   if (form.creditLimit !== null) body.creditLimit = { unit: form.currency, value: AMOUNT };
   return form.creditLimit === null ? JSON.stringify(body) : jsonWithAmount(body, form.creditLimit);
 }
@@ -104,7 +123,7 @@ export function createBody(form: FinancialForm): string {
 /** The merge patch of only the changed fields; null = nothing changed. A cleared optional
  * field is sent as null. The owner is sent with the other related parties kept as loaded. */
 export function patchBody(
-  account: FinancialAccount,
+  account: AccountRecord,
   before: FinancialForm,
   after: FinancialForm,
 ): string | null {
@@ -117,6 +136,8 @@ export function patchBody(
   if (after.state !== before.state) body.state = after.state;
   if (after.owner && before.owner?.id !== after.owner.id)
     body.relatedParty = [ownerEntry(after.owner), ...account.otherParties];
+  if ((after.financialId ?? null) !== (before.financialId ?? null))
+    body.financialAccount = after.financialId ? financialRef(after.financialId) : null;
   const limitChanged =
     after.creditLimit !== before.creditLimit || after.currency !== before.currency;
   if (limitChanged) {
@@ -128,16 +149,16 @@ export function patchBody(
     : JSON.stringify(body);
 }
 
-export async function createFinancial(body: string): Promise<void> {
-  await postJson(PATHS.financialAccounts, body);
+export async function createAccount(kind: AccountKind, body: string): Promise<void> {
+  await postJson(ACCOUNT_PATH[kind], body);
 }
 
-export async function patchFinancial(id: string, body: string): Promise<void> {
-  await patchJson(`${PATHS.financialAccounts}/${id}`, body);
+export async function patchAccount(kind: AccountKind, id: string, body: string): Promise<void> {
+  await patchJson(`${ACCOUNT_PATH[kind]}/${id}`, body);
 }
 
-export async function deleteFinancial(id: string): Promise<void> {
-  await request('DELETE', `${PATHS.financialAccounts}/${id}`);
+export async function deleteAccount(kind: AccountKind, id: string): Promise<void> {
+  await request('DELETE', `${ACCOUNT_PATH[kind]}/${id}`);
 }
 
 export async function deleteBillingAccount(id: string): Promise<void> {

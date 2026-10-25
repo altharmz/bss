@@ -88,7 +88,7 @@ function backend(list: Handler) {
 async function open() {
   window.history.replaceState(null, '', '/financial-accounts');
   render(<App />);
-  return screen.findByRole('heading', { name: /Financial accounts/ });
+  return screen.findByRole('heading', { name: /^Accounts/ });
 }
 
 const rowOf = (name: string) =>
@@ -128,7 +128,7 @@ describe('financial accounts', () => {
     window.history.replaceState(null, '', '/nowhere'); // a screen that loads nothing
     render(<App />);
     const nav = await screen.findByRole('navigation', { name: 'Main' });
-    fireEvent.click(within(nav).getByRole('link', { name: /Financial accounts/ }));
+    fireEvent.click(within(nav).getByRole('link', { name: /^Accounts/ }));
     expect(await screen.findByText('No financial accounts yet')).toBeTruthy();
     expect(window.location.pathname).toBe('/financial-accounts');
   });

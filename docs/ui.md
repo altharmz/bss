@@ -46,7 +46,7 @@ API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the coun
 
 The sidebar is one `<nav aria-label="Main">` with three labelled sections
 (`ui.shell.section.customers|products|billing`): Customers (Subscribers, Parties), Products (Product
-catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Financial accounts
+catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Accounts
 without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
 (`X-Total-Count`). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
 
@@ -380,6 +380,18 @@ and **Delete** (only when nothing is linked; confirmation). Server refusals show
 after an uncertain result it offers Refresh. API: `POST|PATCH|DELETE .../financialAccount`,
 `GET .../individual|organization`. Design: [next-slices-design.md](next-slices-design.md)
 section 16.
+
+### Accounts: party and settlement tabs (`ui.accounts.party|settlement`) - `screens/FinancialAccounts.tsx`
+
+The Financial accounts screen is now **Accounts** (route `/financial-accounts`, kept) with tabs
+**Financial** (above), **Party** and **Settlement**. A party or settlement tab lists name, owner,
+type, state and financial account (no balance: they have no ledger) with **+ New party|settlement
+account**, row **Edit** and **Delete** (always offered; the server's refusal still shows). The form
+is the financial-account form plus a **Financial account** select of the owner's financial accounts
+(plus None; a new owner resets it). Markers `ui.accounts.party|settlement` with `.new`, `.form`,
+`.edit`, `.delete`, `.confirmDelete`, `.financialLink`. API: `GET|POST|PATCH|DELETE
+.../partyAccount|settlementAccount`, `GET .../financialAccount?relatedParty.id=`. Design:
+[next-slices-design.md](next-slices-design.md) section 17.
 
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
 

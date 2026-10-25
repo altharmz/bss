@@ -106,6 +106,20 @@ items:
   - {id: ui.financialAccounts.edit, area: ui, stage: 5, title: "Edit a financial account (owner, fields, state)"}
   - {id: ui.financialAccounts.delete, area: ui, stage: 5, title: "Delete a financial account with nothing linked"}
   - {id: ui.financialAccounts.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a financial account"}
+  - {id: ui.accounts.party, area: ui, stage: 5, title: "Accounts: party accounts tab"}
+  - {id: ui.accounts.party.new, area: ui, stage: 5, title: "New party account"}
+  - {id: ui.accounts.party.form, area: ui, stage: 5, title: "Party account create and edit dialog (with financial account link)"}
+  - {id: ui.accounts.party.edit, area: ui, stage: 5, title: "Edit a party account"}
+  - {id: ui.accounts.party.delete, area: ui, stage: 5, title: "Delete a party account"}
+  - {id: ui.accounts.party.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a party account"}
+  - {id: ui.accounts.party.financialLink, area: ui, stage: 5, title: "Link or unlink a financial account on a party account"}
+  - {id: ui.accounts.settlement, area: ui, stage: 5, title: "Accounts: settlement accounts tab"}
+  - {id: ui.accounts.settlement.new, area: ui, stage: 5, title: "New settlement account"}
+  - {id: ui.accounts.settlement.form, area: ui, stage: 5, title: "Settlement account create and edit dialog (with financial account link)"}
+  - {id: ui.accounts.settlement.edit, area: ui, stage: 5, title: "Edit a settlement account"}
+  - {id: ui.accounts.settlement.delete, area: ui, stage: 5, title: "Delete a settlement account"}
+  - {id: ui.accounts.settlement.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a settlement account"}
+  - {id: ui.accounts.settlement.financialLink, area: ui, stage: 5, title: "Link or unlink a financial account on a settlement account"}
   - {id: ui.subscriber.financialLink, area: ui, stage: 5, title: "Link or unlink a financial account in the subscriber Edit form"}
   - {id: ui.subscriber.delete, area: ui, stage: 5, title: "Delete a postpaid billing account without history"}
   - {id: ui.subscriber.deleteConfirm, area: ui, stage: 5, title: "Confirm deleting a billing account"}
