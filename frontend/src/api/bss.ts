@@ -1494,6 +1494,7 @@ export interface Bill {
   remainingCents: number;
   state: BillState;
   creditNote: boolean;
+  cycleId?: string | undefined; // the bill cycle (daily run) that issued it
 }
 
 export function toBill(body: T678['schemas']['CustomerBill'], timeZone: string): Bill {
@@ -1507,6 +1508,7 @@ export function toBill(body: T678['schemas']['CustomerBill'], timeZone: string):
     remainingCents: toCents(need(body.remainingAmount?.value, 'remainingAmount')),
     state: need(body.state, 'state'),
     creditNote: body.category === 'creditNote',
+    cycleId: body.billCycle?.id,
   };
 }
 

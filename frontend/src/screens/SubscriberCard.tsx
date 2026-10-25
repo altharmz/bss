@@ -458,6 +458,9 @@ function Card({
       {openBill !== null && (
         <BillDialog
           billId={openBill}
+          cycleId={
+            bills.status === 'ok' ? bills.data.find((b) => b.id === openBill)?.cycleId : undefined
+          }
           onClose={() => setOpenBill(null)}
           onChanged={(message) => {
             setOpenBill(null); // the card reloads as a whole, as after any change

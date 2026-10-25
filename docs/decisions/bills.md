@@ -89,3 +89,18 @@ the payment-vs-payment test - the foreign key already serializes a payment with 
   and reverted: newest-first allocation, holds not skipped, credit notes ignored,
   release to any open state, the trigger's bill bound doubled, the due date ignoring the
   configured term - each failed at least one test.
+
+## UI: global bills, bill cycles and rates (slice 20, 2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 20), frontend only.
+`screens/GlobalBills.tsx`, `screens/BillLinks.tsx` and `api/bills.ts`: the `/bills` screen
+(Billing > Bills) with Bills | Bill cycles tabs, a state filter (server), the `?account=` chip (sent
+as `billingAccount.id`) and a billing date (client side); a bill row opens the existing bill dialog
+(hold/release PATCH included), which now ends with **Related**: a **Bill cycle** button (when the bill
+has a `billCycle` ref) and **Rates** (`GET appliedCustomerBillingRate?bill.id=`, period, product,
+amount, tax; a row opens the raw GET). Both load only when opened. The card's bill dialog gets the same.
+Tests: `GlobalBills.test.tsx` and `tests/test_ui_requests.py::test_global_bill_cycle_and_rate_reads_as_the_ui_makes_them`.
+Deviations: the API has no `billingDate` filter on bills, so the date filter compares `billDate` on
+the loaded rows (bill cycles likewise, on their `billingDate`); a bill cycle is a daily run and has no
+account, so the cycles tab has name, billing date and payment due instead of an account column;
+"kind" is the bill's `runType`. TEST-CHANGE: the shell test's expected sidebar links gain `/bills`.

@@ -678,6 +678,8 @@ def test_catch_up_as_the_ui_sends_it(api, worker):
 
 PAYMENT = "/tmf-api/payment/v4/payment"
 BILL = "/tmf-api/customerBillManagement/v5/customerBill"
+CYCLES = "/tmf-api/customerBillManagement/v5/billCycle"
+RATES = "/tmf-api/customerBillManagement/v5/appliedCustomerBillingRate"
 
 
 def test_refund_and_bill_request_as_the_ui_sends_them(api):
@@ -764,6 +766,37 @@ def test_hold_and_release_as_the_ui_sends_them(api, db_conn):
     assert allowed == ["sent"]
     released = api.patch(f"{BILL}/{dec['id']}", {"state": allowed[0]})
     assert released.status_code == 200 and released.json()["state"] == "sent"
+
+
+def test_global_bill_cycle_and_rate_reads_as_the_ui_makes_them(api, db_conn):
+    """api/bills.ts, pinned in GlobalBills.test.tsx: the bill list by billingAccount.id and
+    state (paged by getAll; the billing date is applied client side), the bill's billCycle
+    ref and runType, the bill cycle list and GET, and the rates by bill.id with one rate."""
+    account, (dec, jan) = two_open_bills(api, db_conn)
+    a = account["id"]
+    page = "offset=0&limit=100"
+    mine = api.get(f"{BILL}?billingAccount.id={a}&state=sent&{page}")
+    assert {b["id"] for b in mine.json()} == {dec["id"], jan["id"]}
+    assert api.get(f"{BILL}?state=settled&{page}").json() == []
+    assert len(api.get(f"{BILL}?{page}").json()) >= 2
+    row = mine.json()[0]
+    assert row["billingAccount"]["id"] == a and row["billingAccount"]["name"]
+    assert row["billDate"] and row["runType"] in ("onCycle", "offCycle")
+    assert row["amountDue"]["unit"] == "USD"
+    cycle_id = row["billCycle"]["id"]
+
+    cycles = api.get(f"{CYCLES}?{page}")
+    assert cycle_id in {c["id"] for c in cycles.json()}
+    one = next(c for c in cycles.json() if c["id"] == cycle_id)
+    assert one["name"] and one["billingDate"] and one["paymentDueDate"]
+    assert api.get(f"{CYCLES}/{cycle_id}").json()["id"] == cycle_id
+
+    rates = api.get(f"{RATES}?bill.id={dec['id']}&{page}")
+    assert rates.status_code == 200 and rates.json()
+    rate = rates.json()[0]
+    assert rate["periodCoverage"]["startDateTime"] and rate["product"]["name"]
+    assert rate["taxExcludedAmount"]["unit"] == "USD" and "appliedTax" in rate
+    assert api.get(f"{RATES}/{rate['id']}").json()["id"] == rate["id"]
 
 
 # --- subscribers (frontend/src/screens/Subscribers.test.tsx, SubscriberCard.test.tsx) ---

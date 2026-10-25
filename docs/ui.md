@@ -47,7 +47,7 @@ API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the coun
 The sidebar is one `<nav aria-label="Main">` with three labelled sections
 (`ui.shell.section.customers|products|billing`): Customers (Subscribers, Parties), Products (Product
 catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Accounts,
-Payments, Billing settings, without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
+Bills, Payments, Billing settings, without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
 (`X-Total-Count`). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
 
 ### Sign-in, operator menu and users
@@ -408,6 +408,18 @@ of `billStructure` in the billing account PATCH (media as a whole list, the buil
 `.confirmDelete`. API: `GET|POST|PATCH|DELETE .../billingCycleSpecification|billFormat|
 billPresentationMedia`, `PATCH .../billingAccount/{id}`. Design:
 [next-slices-design.md](next-slices-design.md) section 18.
+
+### Bills (`ui.bills`) - `screens/GlobalBills.tsx`, `screens/BillLinks.tsx`
+
+Reads plus the existing bill dialog. Route `/bills`, sidebar Billing > Bills (no count): tabs **Bills** |
+**Bill cycles**. Bills: bill no., subscriber (link), billing date, state, amount due, kind (`runType`:
+onCycle/offCycle); filters: state (server), account chip (`?account=<id>`, sent as `billingAccount.id`,
+`ui.bills.accountChip`) and a billing date applied client side. A row opens the bill dialog (hold/release as
+on the card), whose **Related** section (`ui.bills.links`) has **Bill cycle** (`GET billCycle/{id}`,
+`ui.bills.cycleDetail`) and **Rates** (`GET appliedCustomerBillingRate?bill.id=`; a row opens
+`ui.bills.rateDetail`, the raw GET). The Bill cycles tab lists `GET billCycle` (name, billing date, payment
+due) with the same date filter and a detail dialog. API: `GET .../customerBillManagement/v5/customerBill|billCycle|
+appliedCustomerBillingRate`. Design: [next-slices-design.md](next-slices-design.md) section 20.
 
 ### Payments (`ui.payments`, `ui.subscriber.payments`) - `screens/Payments.tsx`
 

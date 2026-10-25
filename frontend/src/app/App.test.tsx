@@ -67,6 +67,7 @@ describe('routes', () => {
     ['/financial-accounts', { name: 'financialAccounts' }],
     ['/parties', { name: 'parties' }],
     ['/billing-settings', { name: 'billingSettings' }],
+    ['/bills', { name: 'bills' }],
     ['/payments', { name: 'payments' }],
     ['/orders', { name: 'orders' }],
     ['/billing', { name: 'notFound', path: '/billing' }], // not /billing: /billing-status
@@ -135,6 +136,7 @@ describe('shell', () => {
       '/billing-runs',
       '/prepaid-commands',
       '/financial-accounts',
+      '/bills',
       '/payments',
       '/billing-settings',
     ]);
@@ -154,6 +156,7 @@ describe('shell', () => {
       '/billing-runs',
       '/prepaid-commands',
       '/financial-accounts',
+      '/bills',
       '/payments',
       '/billing-settings',
     ]);

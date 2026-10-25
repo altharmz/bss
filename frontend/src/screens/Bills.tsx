@@ -19,6 +19,7 @@ import { Amount } from '../ui/Amount';
 import { Button, Modal, Panel, Pill, TextInput } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
+import { BillLinks } from './BillLinks';
 
 // The bill lifecycle on the subscriber card (docs/archive/bill-lifecycle-design.md 6.7): the
 // account's bills, a bill dialog with hold/release, and Record payment. Settlement is the
@@ -127,10 +128,12 @@ const CAUSE_LABEL: Record<string, string> = {
 
 export function BillDialog({
   billId,
+  cycleId,
   onClose,
   onChanged,
 }: {
   billId: string;
+  cycleId?: string | undefined;
   onClose: () => void;
   onChanged: (message: string) => void;
 }) {
@@ -154,7 +157,10 @@ export function BillDialog({
           <ErrorBlock title="Failed to load the bill" error={detail.error} onRetry={detail.retry} />
         )}
         {detail.status === 'ok' && (
-          <BillBody bill={detail.data} timeZone={context.timeZone} onChanged={onChanged} />
+          <>
+            <BillBody bill={detail.data} timeZone={context.timeZone} onChanged={onChanged} />
+            <BillLinks billId={billId} cycleId={cycleId} />
+          </>
         )}
       </div>
     </Modal>

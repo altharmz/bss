@@ -30,6 +30,7 @@ export type Route =
   | { name: 'parties' }
   | { name: 'billingSettings' }
   | { name: 'payments' }
+  | { name: 'bills' }
   | { name: 'notFound'; path: string };
 
 const SUBSCRIBER = /^\/subscribers\/([0-9a-fA-F-]{36})\/?$/;
@@ -56,6 +57,7 @@ export function parseRoute(path: string): Route {
     return { name: 'billingSettings' };
   }
   if (path === '/payments' || path === '/payments/') return { name: 'payments' };
+  if (path === '/bills' || path === '/bills/') return { name: 'bills' };
   return { name: 'notFound', path };
 }
 
@@ -89,6 +91,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/billing-settings';
     case 'payments':
       return '/payments';
+    case 'bills':
+      return '/bills';
   }
 }
 

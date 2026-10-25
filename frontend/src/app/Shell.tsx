@@ -117,6 +117,12 @@ export function Sidebar({ context }: { context: SystemContext }) {
           active: (r) => r.name === 'financialAccounts',
         },
         {
+          label: 'Bills',
+          href: '/bills',
+          count: '',
+          active: (r) => r.name === 'bills',
+        },
+        {
           label: 'Payments',
           href: '/payments',
           count: '',
