@@ -36,7 +36,7 @@ Status: `todo` · `next` · `done: <commit subject>` · `split`
 | 4 | Product actions: suspend, resume, end on a date; pending changes with Undo | backend (internal `pendingChanges`) + UI | Bodies for both modes are pinned and replayed. Pending changes show and can be undone. | done: Add product actions and pending changes: suspend, resume, end on a date |
 | 5 | Change offering (both modes) | UI | Postpaid any date from today. Prepaid fixed at `max(paidThrough, today)`. Pinned and replayed. | done: Add Change offering to product actions, both modes |
 | 6 | Prepaid commands screen | UI | List, filters, detail, and Retry only for `failedTechnical`, pinned. Sidebar badge. | done: Add the Prepaid commands screen with filters, detail, Retry and sidebar badge |
-| 7 | Prepaid browser check and release evidence | e2e | `make web-e2e` passes the prepaid steps. prepaid-release.md is updated. | todo |
+| 7 | Prepaid browser check and release evidence | e2e | `make web-e2e` passes the prepaid steps. prepaid-release.md is updated. | done: Add the prepaid browser check to the e2e smoke and update the release evidence |
 | 8 | Prepaid dated suspend/resume and number-only changes | backend + UI | A dated prepaid status change completes on its date through the worker. Number-only changes work. The UI date is editable. | todo |
 
 ## Phase B: every MCP function in the UI

@@ -4,6 +4,10 @@ import { identity, signIn } from './auth';
 // The e2e smoke over the seeded local stack (make seed): the built UI in a real browser,
 // the real API behind it. Billing data stays read-only; authentication uses disposable
 // local fixture identities, disabled and stripped of sessions after the run.
+//
+// Exception: the prepaid test below changes data (a 10.00 cash top-up and one order for
+// Pavel Orlov). That is accepted because this suite runs against a disposable seeded stack
+// (make web-e2e seeds it first; make clean && make up && make seed gives a fresh one).
 
 /** Everything that would mean the page is broken although it rendered. */
 function watch(page: Page): string[] {
@@ -132,6 +136,97 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await run.getByText('Close', { exact: true }).click(); // the footer button, not the ×
   await expect(run).toBeHidden();
 
+  expect(problems).toEqual([]);
+});
+
+test('prepaid: Pavel Orlov tops up and orders, Vera Lebedeva waits for funds, commands list', async ({
+  page,
+}) => {
+  await page.goto('/subscribers');
+  await signIn(page);
+  await expect(page.getByRole('heading', { name: 'Subscribers', exact: true })).toBeVisible();
+  const problems = watch(page);
+
+  // 1. the card: KPIs and balance action rows, one detail
+  await page.getByRole('row').filter({ hasText: 'Pavel Orlov' }).click();
+  await expect(page.getByRole('heading', { name: /Pavel Orlov/ })).toBeVisible();
+  const kpi = (label: string) =>
+    page.locator('.bss-kpi').filter({ has: page.getByText(label, { exact: true }) });
+  await expect(kpi('Ledger')).toBeVisible();
+  await expect(kpi('Available')).toBeVisible();
+  await expect(kpi('Paid through')).toContainText(/\d{4}-\d{2}-\d{2}/);
+  const history = page.locator('[data-ui="ui.subscriber.prepaid.history"]');
+  const actions = history.getByRole('row').filter({ hasText: /\d{4}-\d{2}-\d{2}/ });
+  await expect(actions.nth(2)).toBeVisible(); // at least three balance actions
+  await actions.first().click();
+  const detail = page.getByRole('dialog', { name: 'Balance action' });
+  await expect(detail.getByText('Kind', { exact: true })).toBeVisible();
+  await detail.getByRole('button', { name: 'Close' }).first().click();
+  await expect(detail).toBeHidden();
+
+  // 2. top up 10.00 by cash: the toast, then the ledger moves
+  const ledgerBefore = await kpi('Ledger').innerText();
+  await page.getByRole('button', { name: 'Top up', exact: true }).first().click();
+  const topup = page.getByRole('dialog', { name: 'Top up' });
+  await topup.getByLabel('Amount').fill('10.00');
+  await topup.getByRole('button', { name: 'cash', exact: true }).click();
+  await topup.getByRole('button', { name: 'Top up', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: /Top up: 10\.00 \w+ recorded/ }),
+  ).toBeVisible();
+  await expect(kpi('Ledger')).not.toHaveText(ledgerBefore);
+
+  // 3. add a product starting today: the prepaid preview, then the order is accepted
+  await page.getByRole('button', { name: '+ Add product' }).first().click();
+  const add = page.getByRole('dialog', { name: 'Add product' });
+  await add
+    .getByRole('radio')
+    .filter({ hasText: '/ mo' })
+    .filter({ hasNotText: 'already active' })
+    .first()
+    .click();
+  await expect(add.locator('[data-ui="ui.addProduct.prepaidPreview"]')).toBeVisible();
+  await expect(add.getByTestId('prepaid-required')).toContainText(/\d/);
+  const shortfall = add.locator('[data-ui="ui.addProduct.topUpShortfall"]');
+  if (await shortfall.isVisible()) {
+    // the order would be refused for lack of funds: top up the shortfall from here
+    await shortfall.click();
+    const more = page.getByRole('dialog', { name: 'Top up' });
+    await more.getByRole('button', { name: 'cash', exact: true }).click();
+    await more.getByRole('button', { name: 'Top up', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Top up' })).toBeHidden();
+    await page.getByRole('button', { name: '+ Add product' }).first().click();
+    await page
+      .getByRole('dialog', { name: 'Add product' })
+      .getByRole('radio')
+      .filter({ hasText: '/ mo' })
+      .filter({ hasNotText: 'already active' })
+      .first()
+      .click();
+  }
+  await page
+    .getByRole('dialog', { name: 'Add product' })
+    .getByRole('button', { name: 'Activate', exact: true })
+    .click();
+  // accepted: the worker completes it (OrderWatch follows; no worker runs inside the test)
+  await expect(
+    page.getByText(/ordered: accepted, the billing worker completes it shortly/),
+  ).toBeVisible();
+
+  // 4. Vera Lebedeva: funding-suspended product with the top-up link
+  await page.goto('/subscribers');
+  await page.getByRole('row').filter({ hasText: 'Vera Lebedeva' }).click();
+  await expect(page.getByRole('heading', { name: /Vera Lebedeva/ })).toBeVisible();
+  await expect(page.getByText(/Waiting for funds: short/)).toBeVisible();
+  await expect(page.getByText(/needs top-up/).first()).toBeVisible();
+  await expect(page.locator('[data-ui="ui.subscriber.topUpProduct"]').first()).toBeVisible();
+
+  // 5. the Prepaid commands list
+  await page.goto('/prepaid-commands');
+  await expect(page.getByRole('heading', { name: 'Prepaid commands' })).toBeVisible();
+  await expect(
+    page.locator('[data-ui="ui.prepaidCommands"]').getByRole('row').nth(1),
+  ).toBeVisible();
   expect(problems).toEqual([]);
 });
 

@@ -33,8 +33,17 @@ The recovery runbook and the downgrade barrier (`0034` onward refuse retained pr
 history) are in [operations.md](operations.md#prepaid-recovery-and-rollback). A schema
 rollback after prepaid use is not supported; recover forward.
 
+## Browser check
+
+2026-10-25: `make web-e2e` on the seeded stack passed all six Chromium smoke tests,
+including the new prepaid test ([slice 7](next-slices-design.md#7-prepaid-browser-check-and-release-evidence)):
+Pavel Orlov's card (Ledger, Available and Paid-through KPIs, three or more Balance action
+rows, one detail), a 10.00 cash top-up (toast, Ledger changes), Add product starting today
+with the prepaid preview and the accepted order (the worker does not run inside the test,
+so only the accepted text is asserted), Vera Lebedeva's funding-suspended product with the
+needs-top-up text and the Top up button, and the Prepaid commands list. The test leaves
+the data changed; the suite runs against a disposable seeded stack.
+
 ## Not covered
 
-- Browser checks of the prepaid UI beyond the existing component tests (the e2e smoke
-  does not open a prepaid card).
 - Deployment, and the VPS run of `make smoke`/`mcp-smoke` against prepaid.

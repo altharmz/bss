@@ -348,8 +348,9 @@ shows currently available unlocked stock; the server checks dates and quarantine
 `make web-test`: vitest, run twice - in UTC and with `TZ=America/New_York` - so every
 request body is proven independent of the browser's zone. `make web-lint`: tsc, eslint,
 prettier. `make web-e2e`: Playwright against the built UI and the seeded local stack,
-read-only, failing on any console error or 5xx (`frontend/e2e/smoke.spec.ts`; it also
-opens Billing runs and one run).
+failing on any console error or 5xx (`frontend/e2e/smoke.spec.ts`; it also
+opens Billing runs and one run). Billing data is read-only except the prepaid test, which
+tops up and orders for Pavel Orlov on the disposable seeded stack.
 
 - **Every request a component test makes must be stubbed** (`src/test/fetch.ts`): an
   unmatched one rejects (the UI shows a network error) *and* fails the test after it ends
