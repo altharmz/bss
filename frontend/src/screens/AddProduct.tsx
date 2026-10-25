@@ -5,17 +5,19 @@ import {
   loadFirstCharge,
   loadSellableOfferings,
   orderAdd,
+  replaceDraft,
   type Account,
   type FirstCharge,
 } from '../api/bss';
-import { explain } from '../api/client';
+import { ApiError, explain, newIdempotencyKey } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
+import { Link } from '../app/router';
 import { addDays, isIsoDate, lastDay } from '../format/dates';
 import { accountLabel } from '../format/ids';
 import { formatAmount, formatCents, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, Modal, TextInput } from '../ui/kit';
+import { Button, Modal, TextInput, useToast } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import type { PendingOrder } from '../api/commands';
 
@@ -35,8 +37,20 @@ function runOf(start: string, today: string): string {
   return start > today ? start : addDays(today, 1);
 }
 
+/** A draft being edited: Add product reopens with its offering, start date and number, and
+ * saves them back with a PATCH instead of placing an order. */
+export interface DraftToEdit {
+  orderId: string;
+  itemId: string;
+  offeringId: string;
+  start: string | null; // business date; null = none requested yet
+  numberId: string;
+}
+
 export function AddProductModal({
   account,
+  draft,
+  onDraftSaved,
   activeOfferingIds,
   onClose,
   onOrdered,
@@ -49,15 +63,22 @@ export function AddProductModal({
    * absent where there is no card behind the dialog (a new subscriber's first product). */
   onTopUp?: (amount: string) => void;
   onOrdered: (message: string, accepted?: PendingOrder) => void;
+  /** Edit this draft instead of placing a new order. */
+  draft?: DraftToEdit;
+  /** A draft was saved (new or edited); the caller closes or reloads. */
+  onDraftSaved?: () => void;
 }) {
   const context = useSystemContext();
+  const toast = useToast();
   const today = context.businessDate;
   const [filter, setFilter] = useState('');
-  const [offeringId, setOfferingId] = useState<string | null>(null);
-  const [start, setStart] = useState(today);
+  const [offeringId, setOfferingId] = useState<string | null>(draft?.offeringId ?? null);
+  const [start, setStart] = useState(
+    draft?.start != null && draft.start >= today ? draft.start : today,
+  );
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string[]>([]);
-  const [numberId, setNumberId] = useState('');
+  const [numberId, setNumberId] = useState(draft?.numberId ?? '');
   const [uncertain, setUncertain] = useState(false);
 
   const offerings = useResource('offerings', (signal) =>
@@ -90,6 +111,59 @@ export function AddProductModal({
   );
   const needsNumber = requirement.status === 'ok' && requirement.data;
   const ready = first !== null && requirement.status === 'ok' && (!needsNumber || numberId !== '');
+
+  const draftReady =
+    chosen !== undefined &&
+    startValid &&
+    requirement.status === 'ok' &&
+    (!needsNumber || numberId !== '');
+
+  async function saveDraft() {
+    if (offeringId === null || chosen === undefined) return;
+    setBusy(true);
+    setProblem([]);
+    try {
+      if (draft !== undefined) {
+        await replaceDraft(
+          draft.orderId,
+          offeringId,
+          start,
+          context.timeZone,
+          needsNumber ? numberId : undefined,
+          draft.itemId,
+        );
+        toast('Draft updated');
+      } else {
+        await orderAdd(
+          account.id,
+          offeringId,
+          start,
+          context.timeZone,
+          needsNumber ? numberId : undefined,
+          newIdempotencyKey(),
+        );
+        toast(
+          <>
+            Draft saved · <Link href={`/orders?account=${account.id}`}>Open in Orders</Link>
+          </>,
+        );
+      }
+      (onDraftSaved ?? onClose)();
+    } catch (error) {
+      setProblem([
+        draft !== undefined
+          ? explain(error)
+          : `${explain(error)}. Close and check Orders before saving again.`,
+      ]);
+      if (
+        draft === undefined &&
+        !(error instanceof ApiError && error.status < 500 && error.status > 0)
+      )
+        setUncertain(true);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function confirm() {
     if (first === null || offeringId === null || chosen === undefined) return;
@@ -127,7 +201,7 @@ export function AddProductModal({
 
   return (
     <Modal
-      title="Add product"
+      title={draft === undefined ? 'Add product' : 'Edit draft'}
       width={720}
       onClose={onClose}
       ui="ui.subscriber.addProduct"
@@ -140,13 +214,33 @@ export function AddProductModal({
             </div>
           )}
           <Button onClick={onClose}>Cancel</Button>
-          <Button
-            variant="primary"
-            disabled={!ready || busy || uncertain}
-            onClick={() => void confirm()}
-          >
-            {start === today ? 'Activate' : `Activate from ${start}`}
-          </Button>
+          {draft === undefined ? (
+            <>
+              <Button
+                data-ui="ui.addProduct.saveDraft"
+                disabled={!draftReady || busy || uncertain}
+                onClick={() => void saveDraft()}
+              >
+                Save as draft
+              </Button>
+              <Button
+                variant="primary"
+                disabled={!ready || busy || uncertain}
+                onClick={() => void confirm()}
+              >
+                {start === today ? 'Activate' : `Activate from ${start}`}
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="primary"
+              data-ui="ui.addProduct.saveDraftChanges"
+              disabled={!draftReady || busy}
+              onClick={() => void saveDraft()}
+            >
+              Save draft
+            </Button>
+          )}
         </>
       }
     >

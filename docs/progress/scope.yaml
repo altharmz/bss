@@ -376,6 +376,14 @@ items:
   - {id: ui.orders.command, area: ui, stage: 5, title: "Link from an in-progress order to its prepaid command"}
   - {id: ui.orders.errors, area: ui, stage: 5, title: "Order dialog rejection reasons"}
   - {id: ui.subscriber.orders, area: ui, stage: 5, title: "Orders link on the subscriber card"}
+  - {id: ui.orders.cancel, area: ui, stage: 5, title: "Cancel an order (cancelProductOrder) from its dialog"}
+  - {id: ui.orders.editDetails, area: ui, stage: 5, title: "Edit an order's description, priority and category"}
+  - {id: ui.orders.submitDraft, area: ui, stage: 5, title: "Submit a draft order"}
+  - {id: ui.orders.editDraft, area: ui, stage: 5, title: "Edit a draft: Add product reopens prefilled"}
+  - {id: ui.orders.deleteDraft, area: ui, stage: 5, title: "Delete a draft or rejected order"}
+  - {id: ui.orders.draftViaApi, area: ui, stage: 5, title: "Note on a draft of another shape: edit through the API"}
+  - {id: ui.addProduct.saveDraft, area: ui, stage: 5, title: "Save the Add product choice as a draft order"}
+  - {id: ui.addProduct.saveDraftChanges, area: ui, stage: 5, title: "Save changes to a draft from Add product"}
 
   # ---------------- worker: behaviour (stage 4) ----------------
   # Proven, not detected: an item is implemented and tested when at least one test marked

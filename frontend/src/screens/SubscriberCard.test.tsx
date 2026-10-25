@@ -524,6 +524,45 @@ describe('add product', () => {
     });
   });
 
+  it('saves the choice as a draft: requestedInitialState draft under an Idempotency-Key, a toast links to Orders', async () => {
+    const { fetchMock } = backend({
+      ...catalog,
+      [preview('2026-10-01')]: () => json(FIRST_CHARGE),
+      [`POST ${ORDERS}`]: () =>
+        json({ id: 'o', state: 'draft', '@type': 'ProductOrder' }, { status: 201 }),
+    });
+    const dialog = await openModal();
+    const save = within(dialog).getByRole('button', { name: 'Save as draft' });
+    expect(expectUi('ui.addProduct.saveDraft')).toBe(save);
+    expect((save as HTMLButtonElement).disabled).toBe(true); // no offering yet
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
+    await waitFor(() => expect((save as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(save);
+
+    const toast = await screen.findByRole('status');
+    expect(toast.textContent).toBe('Draft saved · Open in Orders');
+    expect(within(toast).getByRole('link').getAttribute('href')).toBe(`/orders?account=${A}`);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+      '@type': 'ProductOrder',
+      billingAccount: { id: A, '@type': 'BillingAccountRef' },
+      requestedStartDate: '2026-10-01T12:00:00+03:00',
+      requestedInitialState: 'draft',
+      productOrderItem: [
+        {
+          '@type': 'ProductOrderItem',
+          id: '1',
+          action: 'add',
+          productOffering: { id: O2, '@type': 'ProductOfferingRef' },
+        },
+      ],
+    });
+    expect((post?.[1]?.headers as Record<string, string>)['Idempotency-Key']).toMatch(
+      /^[\x21-\x7e]{8,}$/,
+    );
+  });
+
   it('lists sellable offerings, marks those already active, and previews from the backend', async () => {
     backend({ ...catalog, [preview('2026-10-01')]: () => json(FIRST_CHARGE) });
     const dialog = await openModal();

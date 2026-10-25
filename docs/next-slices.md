@@ -44,7 +44,7 @@ Status: `todo` · `next` · `done: <commit subject>` · `split`
 | # | Slice | Kind | Done when | Status |
 |---|---|---|---|---|
 | 9 | Sidebar sections and global Orders screen | UI | As in the 2026-10-21 decision, plus the design's additions. | done: Add sidebar sections and the global read-only Orders screen |
-| 10 | Order writes: cancel, drafts, order details | UI | Cancel, edit details, save/edit/submit/delete drafts, all pinned and replayed. | todo |
+| 10 | Order writes: cancel, drafts, order details | UI | Cancel, edit details, save/edit/submit/delete drafts, all pinned and replayed. | done: Add order cancel, details and draft writes to the order dialog |
 | 11 | Product specifications | UI | A spec can be created inside New offering and used at once. CRUD is pinned. | todo |
 | 12 | Offering and price detail, edit, delete | UI | Edits are pinned. Refusals are shown. The code edit keeps other identifiers. | todo |
 | 13 | Categories and product catalogs | UI | The tree, membership and catalogs are pinned. Cycles are excluded. | todo |

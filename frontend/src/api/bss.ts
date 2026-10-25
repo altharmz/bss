@@ -858,28 +858,87 @@ export function requestedDate(day: string, timeZone: string): string {
   return zonedDateTime(day, '12:00', timeZone);
 }
 
+function addItem(offeringId: string, numberId: string | undefined, id = '1') {
+  return {
+    '@type': 'ProductOrderItem',
+    id,
+    action: 'add',
+    productOffering: { id: offeringId, '@type': 'ProductOfferingRef' },
+    ...(numberId ? { product: numberProduct(numberId) } : {}),
+  };
+}
+
+/** Place an add order. With `draftKey` it is saved as a draft instead (TMF622
+ * requestedInitialState "draft", under that Idempotency-Key): nothing is processed. */
 export async function orderAdd(
   accountId: string,
   offeringId: string,
   startDate: string,
   timeZone: string,
   numberId?: string,
+  draftKey?: string,
 ): Promise<OrderOutcome> {
-  const order = await postJson<OrderBody>(PATHS.orders, {
-    '@type': 'ProductOrder',
-    billingAccount: { id: accountId, '@type': 'BillingAccountRef' },
+  const order = await postJson<OrderBody>(
+    PATHS.orders,
+    {
+      '@type': 'ProductOrder',
+      billingAccount: { id: accountId, '@type': 'BillingAccountRef' },
+      requestedStartDate: requestedDate(startDate, timeZone),
+      ...(draftKey !== undefined ? { requestedInitialState: 'draft' } : {}),
+      productOrderItem: [addItem(offeringId, numberId)],
+    },
+    draftKey !== undefined ? { 'Idempotency-Key': draftKey } : {},
+  );
+  return outcome(order);
+}
+
+/** Replace a draft's item and start date (TMF622 PATCH, each replaced whole). */
+export async function replaceDraft(
+  orderId: string,
+  offeringId: string,
+  startDate: string,
+  timeZone: string,
+  numberId: string | undefined,
+  itemId: string,
+): Promise<OrderOutcome> {
+  const order = await patchJson<OrderBody>(`${PATHS.orders}/${orderId}`, {
+    productOrderItem: [addItem(offeringId, numberId, itemId)],
     requestedStartDate: requestedDate(startDate, timeZone),
-    productOrderItem: [
-      {
-        '@type': 'ProductOrderItem',
-        id: '1',
-        action: 'add',
-        productOffering: { id: offeringId, '@type': 'ProductOfferingRef' },
-        ...(numberId ? { product: numberProduct(numberId) } : {}),
-      },
-    ],
   });
   return outcome(order);
+}
+
+/** Submit a draft: it is processed as an order placed now (completed, inProgress or rejected). */
+export async function submitDraft(orderId: string): Promise<OrderOutcome> {
+  return outcome(
+    await patchJson<OrderBody>(`${PATHS.orders}/${orderId}`, { state: 'acknowledged' }),
+  );
+}
+
+/** Delete a draft or rejected order (nothing refers to it). */
+export async function removeOrder(orderId: string): Promise<void> {
+  await request('DELETE', `${PATHS.orders}/${orderId}`);
+}
+
+/** Only the changed descriptive attributes; null removes one (JSON Merge Patch). */
+export interface OrderDetails {
+  description?: string | null;
+  priority?: string | null;
+  category?: string | null;
+}
+
+export async function patchOrderDetails(orderId: string, changes: OrderDetails): Promise<void> {
+  await patchJson(`${PATHS.orders}/${orderId}`, changes);
+}
+
+/** Cancel an order (TMF622 cancelProductOrder), with an optional reason. The server decides
+ * whether it can be cancelled (409 with its reasons). */
+export async function cancelOrder(orderId: string, reason?: string): Promise<void> {
+  await postJson(PATHS.cancellations, {
+    '@type': 'CancelProductOrder',
+    productOrder: { id: orderId, '@type': 'ProductOrderRef' },
+    ...(reason ? { cancellationReason: reason } : {}),
+  });
 }
 
 /** Deactivate = a delete item, effective today (no requestedStartDate). A started

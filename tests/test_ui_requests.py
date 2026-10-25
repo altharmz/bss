@@ -1142,3 +1142,80 @@ def test_orders_screen_reads_as_the_ui_makes_them(api):
         f"?productOrder.id={added['id']}&offset=0&limit=100"
     )
     assert cancels.status_code == 200 and cancels.json() == []
+
+
+def test_order_writes_replay_as_the_ui_sends_them(api):
+    """The order dialog's writes (api/bss.ts, pinned in Orders.test.tsx and
+    SubscriberCard.test.tsx): save as a draft under an Idempotency-Key, replace its item and
+    start date, change only some details (null removes one), submit with state acknowledged,
+    DELETE a draft, cancel an order with and without a reason."""
+    offering = apidata.sellable_offering(api)
+    account = apidata.account(api)
+    ref = {"id": account["id"], "@type": "BillingAccountRef"}
+
+    def item(item_id="1"):
+        return {
+            "@type": "ProductOrderItem",
+            "id": item_id,
+            "action": "add",
+            "productOffering": {"id": offering["id"], "@type": "ProductOfferingRef"},
+        }
+
+    draft_body = {
+        "@type": "ProductOrder",
+        "billingAccount": ref,
+        "requestedStartDate": "2026-10-05T12:00:00+03:00",
+        "requestedInitialState": "draft",
+        "productOrderItem": [item()],
+    }
+    first = api.post(ORDER, draft_body, headers={"Idempotency-Key": "ui-draft-key-0001"})
+    assert first.status_code == 201 and first.json()["state"] == "draft", first.text
+    again = api.post(ORDER, draft_body, headers={"Idempotency-Key": "ui-draft-key-0001"})
+    assert again.json()["id"] == first.json()["id"]
+    url = f"{ORDER}/{first.json()['id']}"
+
+    replaced = api.patch(
+        url,
+        {"productOrderItem": [item("1")], "requestedStartDate": "2026-10-06T12:00:00+03:00"},
+    )
+    assert replaced.status_code == 200, replaced.text
+    assert replaced.json()["state"] == "draft"
+    assert replaced.json()["requestedStartDate"] == "2026-10-05T21:00:00Z"  # 10-06 in +03:00
+
+    described = api.patch(url, {"description": "New text", "priority": "0", "category": "retail"})
+    assert described.status_code == 200 and described.json()["priority"] == "0"
+    cleared = api.patch(url, {"category": None})
+    assert cleared.status_code == 200 and "category" not in cleared.json()
+    assert cleared.json()["description"] == "New text"
+
+    submitted = api.patch(url, {"state": "acknowledged"})
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["state"] in ("completed", "inProgress", "rejected")
+
+    spare = api.post(ORDER, {**draft_body, "requestedStartDate": "2026-10-07T12:00:00+03:00"})
+    assert spare.status_code == 201
+    assert api.delete(f"{ORDER}/{spare.json()['id']}").status_code == 204
+    assert api.get(f"{ORDER}/{spare.json()['id']}").status_code == 404
+
+    cancels = "/tmf-api/productOrderingManagement/v5/cancelProductOrder"
+    other = api.post(ORDER, {**draft_body, "requestedStartDate": "2026-10-08T12:00:00+03:00"})
+    assert other.status_code == 201
+    plain = api.post(
+        cancels,
+        {
+            "@type": "CancelProductOrder",
+            "productOrder": {"id": other.json()["id"], "@type": "ProductOrderRef"},
+        },
+    )
+    assert plain.status_code == 201, plain.text
+    last = api.post(ORDER, {**draft_body, "requestedStartDate": "2026-10-09T12:00:00+03:00"})
+    with_reason = api.post(
+        cancels,
+        {
+            "@type": "CancelProductOrder",
+            "productOrder": {"id": last.json()["id"], "@type": "ProductOrderRef"},
+            "cancellationReason": "Customer left",
+        },
+    )
+    assert with_reason.status_code == 201, with_reason.text
+    assert with_reason.json()["cancellationReason"] == "Customer left"

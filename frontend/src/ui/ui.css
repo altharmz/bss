@@ -355,3 +355,7 @@
   font-size: var(--fs-13);
   box-shadow: var(--shadow-toast);
 }
+.bss-toast a {
+  color: inherit;
+  text-decoration: underline;
+}

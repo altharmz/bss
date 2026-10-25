@@ -225,12 +225,12 @@ export function Modal({
 // --- toast: one at a time, bottom right, hides after 3.2 s ---
 
 const TOAST_MS = 3200;
-const ToastContext = createContext<(message: string) => void>(() => {});
+const ToastContext = createContext<(message: ReactNode) => void>(() => {});
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<ReactNode>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const show = useCallback((text: string) => {
+  const show = useCallback((text: ReactNode) => {
     clearTimeout(timer.current);
     setMessage(text);
     timer.current = setTimeout(() => setMessage(null), TOAST_MS);
@@ -248,6 +248,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useToast(): (message: string) => void {
+export function useToast(): (message: ReactNode) => void {
   return useContext(ToastContext);
 }

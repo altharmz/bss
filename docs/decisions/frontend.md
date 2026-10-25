@@ -45,6 +45,28 @@ Deviations (the code differs from the design's facts):
 - The detail shows the product by name or short id without a link: there is no product screen.
 - A transfer or other action still `created` reads "Pending" (the design names Held only for holds).
 
+## Slice 10: Order writes: cancel, drafts, order details (2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 10), frontend only. It
+supersedes "No writes in this screen" of the 2026-10-21 decision: the human delegated the writes on
+2026-10-24 and TMF622 defines them for clients. The order dialog (`screens/Orders.tsx`) offers Cancel
+order (`cancelProductOrder` with the order and an optional reason), Edit details (PATCH of the changed
+description/category/priority, null for a cleared one), and for drafts Submit, Edit draft and Delete
+(Delete also on rejected). Add product gains Save as draft (`requestedInitialState: "draft"` under a
+fresh Idempotency-Key) and an edit mode (`DraftToEdit`, button Save draft) that PATCHes
+`productOrderItem` and `requestedStartDate`. `ToastProvider` now takes any node, for the toast link.
+Tests: `Orders.test.tsx` (actions per state, every body, 409/rejected/unsure messages, edit round
+trip, in-progress follow), `SubscriberCard.test.tsx` (save as draft body, header, toast), and
+`tests/test_ui_requests.py::test_order_writes_replay_as_the_ui_sends_them`.
+Deviations:
+- The toast after Save as draft links to `/orders?account=<id>`, not to the order: the Orders screen has
+  no per-order link.
+- A submitted prepaid draft that is `inProgress` is followed by the existing `OrderWatch`, shown above
+  the Orders list (the subscriber card's watch is not involved).
+- The Orders state filter already offered `draft`; nothing was added.
+- The Cancel POST and the PATCH/DELETE carry no Idempotency-Key (a repeat of a cancel is a 409); only the
+  draft POST does. An uncertain result shows "Unsure whether it was saved" with Refresh.
+
 ## Slice 9: Sidebar sections and the global Orders screen (2026-10-25)
 
 Built as designed ([next-slices-design.md](../next-slices-design.md) section 9 and the 2026-10-21
@@ -201,7 +223,8 @@ and frontend-only: TMF622 `GET /productOrder` already filters by `state` and
   offering, product link, item state, item price), `productOrderErrorMessage` when present,
   and the order's cancellations (`cancelProductOrder?productOrder.id=`), with date,
   state and reason.
-- **No writes in this screen.** Drafts (create, PATCH, submit, DELETE) and cancelling
+- **No writes in this screen** - superseded on 2026-10-25 by slice 10 (entry below): cancel,
+  edit details and drafts are in the order dialog. Drafts (create, PATCH, submit, DELETE) and cancelling
   stay in the API/MCP. "Undo deactivation" stays on the card. Modify orders (suspend,
   resume, change offering) remain gap slice 2.
 - Tests: component tests pin the list request (filters, paging), the account chip from

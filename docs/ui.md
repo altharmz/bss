@@ -220,7 +220,7 @@ API: GET/POST `/tmf-api/payment/v4/refund` (`account.id` list filter), GET/POST
 list filter). Both lists read all pages. Markers: `ui.subscriber.recordRefund`,
 `ui.subscriber.refunds`, `ui.subscriber.billNow`, `ui.subscriber.billRequests`.
 
-### Add product (`ui.subscriber.addProduct`) - `screens/AddProduct.tsx`
+### Add product (`ui.subscriber.addProduct`, `ui.addProduct.saveDraft`, `ui.addProduct.saveDraftChanges`) - `screens/AddProduct.tsx`
 
 Modal: 1. pick an Active, sellable offering (filterable list with code, specification and
 today's price); 2. start date (min = business date); 3. **first-charge preview computed by
@@ -273,13 +273,24 @@ bodies against the real API.
 
 ### Orders (`ui.orders`, `ui.orders.accountChip`, `ui.orders.detail`, `ui.orders.items`, `ui.orders.cancellations`, `ui.orders.command`, `ui.orders.errors`) - `screens/Orders.tsx`
 
-Route `/orders`, read-only. TMF622 `productOrder` pages of 50 as served (oldest first), state
+Route `/orders`. The list is read-only, the dialog writes (slice 10, below). TMF622 `productOrder` pages of 50 as served (oldest first), state
 filter, `?account=<id>` chip (the card's "Orders" link `ui.subscriber.orders`). Columns: order id,
 subscriber (links to the card), state, item actions, requested start, created, completed or
 cancelled. A row opens the dialog: header fields, items (action, offering, product, state,
 tax-included price), `productOrderErrorMessage`, the order's `cancelProductOrder` rows, and for an
 `inProgress` order with a prepaid command a link to `/prepaid-commands?account=`. Design:
 [next-slices-design.md](next-slices-design.md) section 9.
+
+Dialog writes (`ui.orders.cancel`, `ui.orders.editDetails`, `ui.orders.submitDraft`,
+`ui.orders.editDraft`, `ui.orders.deleteDraft`, `ui.orders.draftViaApi`; design section 10): **Cancel
+order** (completed, draft, inProgress) posts `cancelProductOrder` with the order and an optional
+reason, a 409 shows its reasons; **Edit details** PATCHes only the changed fields of description,
+category and priority (0 highest; a cleared one is sent as null); on a **draft**: **Submit** PATCHes
+`state: acknowledged` (completed, inProgress followed by the order watch above the list, or
+rejected with its reasons in the dialog), **Edit draft** (one `add` item only; other shapes show
+"Edit this draft through the API") reopens Add product prefilled and PATCHes `productOrderItem` and
+`requestedStartDate`, **Delete** (also on rejected orders) sends DELETE. After an uncertain
+result (no response or 5xx) the dialog says it is unsure and offers Refresh.
 
 ### Prepaid commands (`ui.prepaidCommands`, `ui.prepaidCommands.accountChip`, `ui.prepaidCommands.detail`, `ui.prepaidCommands.retry`) - `screens/PrepaidCommands.tsx`
 
