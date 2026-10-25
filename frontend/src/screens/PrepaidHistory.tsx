@@ -167,7 +167,7 @@ function ActionsPanel({
       {open !== null && (
         <ActionDialog
           id={open.id}
-          accountId={accountId}
+          load={(signal) => loadBalanceAction(open.id, accountId, signal)}
           onClose={() => setOpen(null)}
           onChanged={onChanged}
         />
@@ -180,21 +180,21 @@ function when(instant: string, timeZone: string): string {
   return `${businessDate(instant, timeZone)} ${clockTime(instant, timeZone).slice(0, 5)}`;
 }
 
-function ActionDialog({
+/** The Balance action dialog: the card's panel and the Balances screen both open it. `load`
+ * fetches the entry (the history for the card, the kind's GET on the Balances screen). */
+export function ActionDialog({
   id,
-  accountId,
+  load,
   onClose,
   onChanged,
 }: {
   id: string;
-  accountId: string;
+  load: (signal: AbortSignal) => Promise<BalanceAction>;
   onClose: () => void;
   onChanged: () => void;
 }) {
   const { timeZone } = useSystemContext();
-  const detail = useResource(`balance-action:${id}`, (signal) =>
-    loadBalanceAction(id, accountId, signal),
-  );
+  const detail = useResource(`balance-action:${id}`, load);
   const cards = (account: { id: string; name: string | null }) => (
     <Link className="bss-link" href={hrefOf({ name: 'subscriber', accountId: account.id })}>
       {who(account)}

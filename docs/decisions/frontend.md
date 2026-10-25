@@ -45,6 +45,30 @@ Deviations (the code differs from the design's facts):
 - The detail shows the product by name or short id without a link: there is no product screen.
 - A transfer or other action still `created` reads "Pending" (the design names Held only for holds).
 
+## Slice 22: Balances screen (TMF654 reads) (2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 22), frontend only.
+`screens/Balances.tsx` (route `/balances`, sidebar Billing > Balances) and `api/balances.ts`
+(buckets) and `api/history.ts` (`loadKindActions`, `loadKindAction`): five tabs, each with a status
+filter and an account chip (`partyAccount.id`). The buckets tab joins `GET bucket` with
+`GET accumulatedBalance` by account; the detail dialog reads both by id. The four action tabs read
+their kind's list; a row opens the kind's GET in the same Balance action dialog as the card, so the
+cancel, release, remove and note writes come with it. `ActionDialog` (`PrepaidHistory.tsx`) is now
+exported and takes a `load` function. The dialog is re-keyed after a write, so the detail and the
+list reload.
+Tests: `Balances.test.tsx` (the buckets join, status and chip filters, bucket detail, each kind's
+own list only, top-up cancel with its pinned PATCH body, transfer receiver named through its bucket),
+`tests/test_ui_requests.py::test_balances_screen_reads_as_the_ui_makes_them` (every query replayed).
+Deviations (the design's facts against the code and the vendored TMF654 spec):
+- The vendored `listBucket` declares no filter, but the server filters buckets by `status`,
+  `usageType`, `id` and `partyAccount.id` (`app/api/balance.py`); the screen uses the server's.
+  Follows the code, as the spec rule says.
+- The buckets table has a Total column: the accumulated balance the join supplies (the design named
+  remaining, reserved and status only).
+- A transfer row reads "Transfer to {receiver}" and resolves the receiver with one
+  `GET bucket/{id}` per distinct receiver bucket of the list (a failure shows "another account").
+- A hold row shows Held or Released, as on the card.
+
 ## Slice 21: Product and number inventory (2026-10-25)
 
 Built as designed ([next-slices-design.md](../next-slices-design.md) section 21), frontend only.

@@ -1145,6 +1145,66 @@ def test_balance_action_history_reads_as_the_ui_makes_them(api, db_conn):
     assert one["status"] == "created" and one["requestedDate"]
 
 
+def test_balances_screen_reads_as_the_ui_makes_them(api, db_conn):
+    """api/balances.ts and api/history.ts loadKind* of slice 22 (pinned in Balances.test.tsx):
+    the buckets tab joins the bucket list with the accumulated balances (all, or one account and
+    a status), a postpaid account has no bucket and never appears, a kind's list is filtered by
+    partyAccount.id and status, and the detail is the kind's GET with the receiver bucket
+    resolved for a transfer."""
+    tx, rx = pair(api, db_conn)
+    postpaid = apidata.account(api)  # no prepaid rating: no bucket
+    prepay = "/tmf-api/prepayBalanceManagement/v4"
+    moved = api.post(
+        f"{prepay}/transferBalance",
+        {
+            "@type": "TransferBalance",
+            "reason": "Customer asked",
+            "channel": {"id": "admin-ui", "name": "Admin UI"},
+            "logicalResource": [{"id": str(tx.number)}],
+            "receiverLogicalResource": {"id": str(rx.number)},
+            "amount": {"amount": 10, "units": "USD"},
+            "usageType": "monetary",
+            "bucket": {"id": tx.bucket},
+            "receiverBucket": {"id": rx.bucket},
+            "receiverBucketUsageType": "monetary",
+        },
+        headers={"Idempotency-Key": "ui-balances-1"},
+    ).json()
+    assert "id" in moved, moved
+    page = "offset=0&limit=100"
+    buckets = api.get(f"{prepay}/bucket?{page}").json()
+    assert {b["id"] for b in buckets} >= {tx.bucket, rx.bucket}
+    assert postpaid["id"] not in {b["partyAccount"]["id"] for b in buckets}
+    mine = api.get(f"{prepay}/bucket?partyAccount.id={tx.id}&status=active&{page}").json()
+    assert [b["id"] for b in mine] == [tx.bucket]
+    assert mine[0]["remainingValue"]["amount"] == 40
+    suspended = api.get(f"{prepay}/bucket?status=suspended&{page}").json()
+    assert all(b["status"] == "suspended" for b in suspended)
+    totals = api.get(f"{prepay}/accumulatedBalance?{page}").json()
+    assert {t["partyAccount"]["id"] for t in totals} >= {tx.id, rx.id}
+    one_total = api.get(f"{prepay}/accumulatedBalance?partyAccount.id={tx.id}&{page}").json()
+    assert [t["id"] for t in one_total] == [
+        next(t["id"] for t in totals if t["partyAccount"]["id"] == tx.id)
+    ]
+    assert api.get(f"{prepay}/bucket/{tx.bucket}").json()["partyAccount"]["id"] == tx.id
+    assert api.get(f"{prepay}/accumulatedBalance/{one_total[0]['id']}").status_code == 200
+    # each kind's list, by account and status; the transfer is the sender's, created
+    sent = api.get(f"{prepay}/transferBalance?partyAccount.id={tx.id}&{page}").json()
+    assert [t["id"] for t in sent] == [moved["id"]]
+    assert api.get(f"{prepay}/transferBalance?partyAccount.id={rx.id}&{page}").json() == []
+    created = api.get(f"{prepay}/transferBalance?status=created&{page}").json()
+    assert moved["id"] in {t["id"] for t in created}
+    assert api.get(f"{prepay}/transferBalance?status=failed&{page}").json() == []
+    for kind in ("topupBalance", "adjustBalance", "reserveBalance"):
+        assert api.get(f"{prepay}/{kind}?partyAccount.id={tx.id}&{page}").status_code == 200
+        assert api.get(f"{prepay}/{kind}?status=created&{page}").status_code == 200
+    # the detail: the transfer by id and its receiver bucket's owner (named through it)
+    one = api.get(f"{prepay}/transferBalance/{moved['id']}").json()
+    assert one["@type"] == "TransferBalance" and one["receiverBucket"]["id"] == rx.bucket
+    owner = api.get(f"{prepay}/bucket/{rx.bucket}").json()["partyAccount"]
+    assert owner["id"] == rx.id and owner["name"]
+
+
 def test_prepaid_order_and_command_reads_as_the_ui_makes_them(api, db_conn, monkeypatch):
     """OrderWatch / FailedCommands (api/commands.ts): a prepaid add answers `inProgress`, the UI
     follows it through the command that has the order's id, lists an account's technically

@@ -223,3 +223,55 @@ export async function editNote(
 export async function removeAction(kind: ActionKind, id: string): Promise<void> {
   await request('DELETE', `${WRITE_PATH[kind]}/${id}`);
 }
+
+/** Each action's own resolved view (`toAction`) for rows whose partyAccount is the sender.
+ * Only a transfer names a receiver we do not know: its receiver bucket is resolved once. */
+async function resolveActions(
+  bodies: HistoryBody[],
+  signal: AbortSignal,
+): Promise<BalanceAction[]> {
+  const buckets = [
+    ...new Set(
+      bodies.flatMap((b) =>
+        b['@type'] === 'TransferBalance' && b.receiverBucket?.id ? [b.receiverBucket.id] : [],
+      ),
+    ),
+  ];
+  const owners = new Map(
+    await Promise.all(buckets.map(async (id) => [id, await bucketOwner(id, signal)] as const)),
+  );
+  return bodies.map((body) =>
+    toAction(
+      body,
+      need(body.partyAccount?.id, 'partyAccount id'),
+      body.receiverBucket?.id ? (owners.get(body.receiverBucket.id) ?? null) : null,
+    ),
+  );
+}
+
+/** One kind's list (TMF654 topupBalance, adjustBalance, reserveBalance, transferBalance),
+ * filtered on the server by partyAccount.id and status, newest requested first. */
+export async function loadKindActions(
+  kind: ActionKind,
+  filter: { account: string | null; status: string | null },
+  signal: AbortSignal,
+): Promise<BalanceAction[]> {
+  const query = [
+    ...(filter.account !== null ? [`partyAccount.id=${filter.account}`] : []),
+    ...(filter.status !== null ? [`status=${filter.status}`] : []),
+  ];
+  const path = query.length ? `${WRITE_PATH[kind]}?${query.join('&')}` : WRITE_PATH[kind];
+  const bodies = await getAll<HistoryBody>(path, signal);
+  const actions = await resolveActions(bodies, signal);
+  return actions.sort((a, b) => b.requestedDate.localeCompare(a.requestedDate));
+}
+
+/** One action from its kind's GET (the Balances detail; the card reads the history instead). */
+export async function loadKindAction(
+  kind: ActionKind,
+  id: string,
+  signal: AbortSignal,
+): Promise<BalanceAction> {
+  const body = await getJson<HistoryBody>(`${WRITE_PATH[kind]}/${id}`, signal);
+  return need((await resolveActions([body], signal))[0], 'balance action');
+}

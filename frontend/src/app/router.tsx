@@ -32,6 +32,7 @@ export type Route =
   | { name: 'billingSettings' }
   | { name: 'payments' }
   | { name: 'bills' }
+  | { name: 'balances' }
   | { name: 'notFound'; path: string };
 
 const SUBSCRIBER = /^\/subscribers\/([0-9a-fA-F-]{36})\/?$/;
@@ -60,6 +61,7 @@ export function parseRoute(path: string): Route {
   }
   if (path === '/payments' || path === '/payments/') return { name: 'payments' };
   if (path === '/bills' || path === '/bills/') return { name: 'bills' };
+  if (path === '/balances' || path === '/balances/') return { name: 'balances' };
   return { name: 'notFound', path };
 }
 
@@ -97,6 +99,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/payments';
     case 'bills':
       return '/bills';
+    case 'balances':
+      return '/balances';
   }
 }
 

@@ -56,7 +56,7 @@ Status: `todo` · `next` · `done: <commit subject>` · `split`
 | 19 | Payments and refunds history | UI | The card panel and the global screen are pinned. | done: Add payments history panel and global Payments screen |
 | 20 | Global bills, bill cycles, rates | UI | The list, filters, cycle and rates views are pinned. | done: Add global Bills screen with bill cycles and rates |
 | 21 | Product and number inventory | UI | All product states are reachable. Number delete is pinned. | done: Add Products screen and number delete |
-| 22 | Balances screen (TMF654 reads) | UI | Every TMF654 list and GET is used. Details reuse slice 2/3. | todo |
+| 22 | Balances screen (TMF654 reads) | UI | Every TMF654 list and GET is used. Details reuse slice 2/3. | done: Add Balances screen over the TMF654 reads |
 | 23 | Event subscriptions (hubs) and System panel | backend (internal list + MCP tool) + UI | Hubs are listed, created and deleted for v4 and v5 APIs. The status panel renders. | todo |
 | 24 | Parity check | test | The test fails when an MCP operation has no UI call and no allowlist entry. The gap plan is closed. | todo |
 

@@ -47,7 +47,7 @@ API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the coun
 The sidebar is one `<nav aria-label="Main">` with three labelled sections
 (`ui.shell.section.customers|products|billing`): Customers (Subscribers, Parties), Products (Product
 catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Accounts,
-Bills, Payments, Billing settings, without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
+Bills, Payments, Balances, Billing settings, without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
 (`X-Total-Count`). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
 
 ### Sign-in, operator menu and users
@@ -440,6 +440,21 @@ above Recorded refunds; a row opens the payment read with `GET /payment/{id}`
 Subscribers link to their cards. API: `GET .../payment/v4/payment|refund?account.id=&status=` (paged
 100 at a time), `GET .../payment/{id}`. Design: [next-slices-design.md](next-slices-design.md)
 section 19.
+
+### Balances (`ui.balances`, `ui.balances.buckets|topups|adjustments|holds|transfers`, `ui.balances.bucketDetail`) - `screens/Balances.tsx`
+
+Reads only, TMF654. Route `/balances`, sidebar Billing > Balances (no count). Tabs **Buckets** |
+**Top-ups** | **Adjustments** | **Holds** | **Transfers**, each with a status filter
+(`ui.balances.status`; buckets: active, suspended, expired; actions: created, completed,
+cancelled, failed) and an account chip (`?account=<id>`, `ui.balances.accountChip`, sent as
+`partyAccount.id`). Buckets: `GET bucket` joined with `GET accumulatedBalance` by account
+(Subscriber, Remaining, Reserved, Total, Status); a row opens the bucket detail
+(`ui.balances.bucketDetail`: `GET bucket/{id}` and `GET accumulatedBalance/{id}`). The action tabs
+list `topupBalance`, `adjustBalance`, `reserveBalance`, `transferBalance` (a transfer's receiver is
+named through `GET bucket/{receiverBucket}`); a row opens the kind's GET in the Balance action
+dialog of the subscriber card (`ui.subscriber.prepaid.historyDetail`), with its actions. Postpaid
+accounts have no bucket and never appear. Design: [next-slices-design.md](next-slices-design.md)
+section 22.
 
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
 
