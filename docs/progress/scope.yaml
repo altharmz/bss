@@ -392,6 +392,10 @@ items:
   - {id: ui.subscriber.prepaid.editNoteForm, area: ui, stage: 5, title: "Note form of the Balance action dialog"}
   - {id: ui.addProduct.prepaidPreview, area: ui, stage: 5, title: "Prepaid first-charge preview in Add product: to pay, available, shortfall, ledger after"}
   - {id: ui.addProduct.topUpShortfall, area: ui, stage: 5, title: "Top up the shortfall from Add product: opens the Top-up form with the amount typed in"}
+  - {id: ui.payments, area: ui, stage: 5, title: "Payments screen: payments and refunds tabs with status, account and date filters"}
+  - {id: ui.payments.accountChip, area: ui, stage: 5, title: "Payments screen account filter chip"}
+  - {id: ui.payments.detail, area: ui, stage: 5, title: "Payment detail dialog with the bills it paid"}
+  - {id: ui.subscriber.payments, area: ui, stage: 5, title: "Payments panel on the subscriber card"}
   - {id: ui.subscriber.refunds, area: ui, stage: 5, title: "Recorded refund history with payout metadata"}
   - {id: ui.subscriber.billNow, area: ui, stage: 5, title: "Request an on-demand bill"}
   - {id: ui.subscriber.billRequests, area: ui, stage: 5, title: "On-demand bill status and resulting bill"}

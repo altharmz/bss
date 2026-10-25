@@ -44,6 +44,7 @@ import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
 import { FailedCommands, OrderWatch } from './PrepaidOrderWatch';
 import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
 import { watch, type Watched } from './watched';
+import { PaymentsPanel } from './Payments';
 import { AccountBills, RefundAction, RefundsPanel } from './AccountActions';
 import { DeleteSubscriberModal, EditSubscriberModal } from './SubscriberForms';
 import './screens.css';
@@ -379,6 +380,7 @@ function Card({
         onOpen={setOpenBill}
         onCompleted={reload}
       />
+      <PaymentsPanel accountId={account.id} version={version} />
       <RefundsPanel accountId={account.id} version={version} />
 
       {account.ratingType === 'prepaid' && (

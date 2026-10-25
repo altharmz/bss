@@ -168,6 +168,8 @@ function backend(routes: Record<string, Handler> = {}, account: object = ACCOUNT
     [`GET ${HISTORY}?partyAccount.id=${A}&offset=0&limit=100`]: () => json([], { total: 0 }),
     [`GET ${HISTORY}?receiverBucket.id=${BUCKET}&offset=0&limit=100`]: () => json([], { total: 0 }),
     [billsUrl(A)]: () => json([], { total: 0 }),
+    [`GET /tmf-api/payment/v4/payment?account.id=${A}&offset=0&limit=100`]: () =>
+      json([], { total: 0 }),
     [`GET /tmf-api/payment/v4/refund?account.id=${A}&offset=0&limit=100`]: () =>
       json([], { total: 0 }),
     [`GET /tmf-api/customerBillManagement/v5/customerBillOnDemand?billingAccount.id=${A}&offset=0&limit=100`]:

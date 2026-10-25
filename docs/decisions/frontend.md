@@ -573,3 +573,17 @@ server 409) and `tests/test_ui_requests.py::test_party_and_customer_writes_as_th
 Deviation: "accounts it owns" is read from the financial, party and settlement account lists
 (three extra reads); the party status is shown but not edited (a record only).
 
+
+## UI: payments and refunds history (slice 19, 2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 19), frontend only.
+`screens/Payments.tsx` and `api/payments.ts`: the card's Payments panel with a detail dialog
+(`GET /payment/{id}`), and the `/payments` screen (Billing > Payments) with Payments | Refunds tabs,
+a status filter, the `?account=` chip (sent as `account.id`) and a client-side date range. Both
+lists load with `getAll`, newest first.
+Tests: `Payments.test.tsx` (list, links, tabs, filters and requests, detail, error and retry, the
+card panel) and `tests/test_ui_requests.py::test_payment_and_refund_history_reads_as_the_ui_makes_them`.
+Deviations: `done` is the only payment and refund status, so the status filter has one choice
+besides All; the reference column is `correlatorId`, else `authorizationCode`, else `name` (the
+payment has no single reference field); refund rows have no account name, so they show `BA-xxxx`.
+TEST-CHANGE: the shell test's expected sidebar links gain `/payments`.

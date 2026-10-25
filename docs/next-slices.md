@@ -53,7 +53,7 @@ Status: `todo` · `next` · `done: <commit subject>` · `split`
 | 16 | Billing account delete; financial account writes and linking | UI | Create, edit, link, unlink and delete are pinned and replayed. | done: Add financial account writes, account linking and billing account delete |
 | 17 | Party and settlement accounts | UI | CRUD for both is pinned. | done: Add party and settlement account tabs to the Accounts screen |
 | 18 | Billing settings: cycle specs, bill formats, presentation media | UI | CRUD and the `billStructure` selection are pinned. | done: Add billing settings screen and billStructure selection to the subscriber form |
-| 19 | Payments and refunds history | UI | The card panel and the global screen are pinned. | todo |
+| 19 | Payments and refunds history | UI | The card panel and the global screen are pinned. | done: Add payments history panel and global Payments screen |
 | 20 | Global bills, bill cycles, rates | UI | The list, filters, cycle and rates views are pinned. | todo |
 | 21 | Product and number inventory | UI | All product states are reachable. Number delete is pinned. | todo |
 | 22 | Balances screen (TMF654 reads) | UI | Every TMF654 list and GET is used. Details reuse slice 2/3. | todo |

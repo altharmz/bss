@@ -47,7 +47,7 @@ API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the coun
 The sidebar is one `<nav aria-label="Main">` with three labelled sections
 (`ui.shell.section.customers|products|billing`): Customers (Subscribers, Parties), Products (Product
 catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Accounts,
-Billing settings, without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
+Payments, Billing settings, without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
 (`X-Total-Count`). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
 
 ### Sign-in, operator menu and users
@@ -408,6 +408,19 @@ of `billStructure` in the billing account PATCH (media as a whole list, the buil
 `.confirmDelete`. API: `GET|POST|PATCH|DELETE .../billingCycleSpecification|billFormat|
 billPresentationMedia`, `PATCH .../billingAccount/{id}`. Design:
 [next-slices-design.md](next-slices-design.md) section 18.
+
+### Payments (`ui.payments`, `ui.subscriber.payments`) - `screens/Payments.tsx`
+
+Reads only. The subscriber card has a **Payments** panel (`ui.subscriber.payments`: date, amount,
+method, status, reference = `correlatorId`, else `authorizationCode`, else `name`), newest first,
+above Recorded refunds; a row opens the payment read with `GET /payment/{id}`
+(`ui.payments.detail`: total, net, tax, method, references, and the bills it paid). Route
+`/payments`, sidebar Billing > Payments (no count): tabs **Payments** | **Refunds**, a status filter
+(`done`, the only status), an account chip (`?account=<id>`, sent as `account.id`,
+`ui.payments.accountChip`) and From/To dates applied client side to the loaded rows (business dates).
+Subscribers link to their cards. API: `GET .../payment/v4/payment|refund?account.id=&status=` (paged
+100 at a time), `GET .../payment/{id}`. Design: [next-slices-design.md](next-slices-design.md)
+section 19.
 
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
 

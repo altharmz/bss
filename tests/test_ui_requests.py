@@ -1805,3 +1805,40 @@ def test_billing_settings_writes_and_bill_structure_as_the_ui_sends_them(api):
     for item in (cycle, spare, fmt, medium, other):
         assert api.delete(item.json()["href"]).status_code == 204
     assert api.get(cycle.json()["href"]).status_code == 404
+
+
+def test_payment_and_refund_history_reads_as_the_ui_makes_them(api):
+    """api/payments.ts, pinned in Payments.test.tsx: the lists by account.id and status
+    (paged by getAll), a payment by id with its paymentItem, and the refunds list."""
+    account = apidata.account(api)
+    other = apidata.account(api)
+    a = account["id"]
+    made = api.post(PAYMENT, apidata.payment_body(account, 100))
+    assert made.status_code == 201, made.text
+    assert api.post(PAYMENT, apidata.payment_body(other, 30)).status_code == 201
+    refund = api.post_raw(
+        "/tmf-api/payment/v4/refund",
+        f'{{"@type":"Refund","account":{{"id":"{a}","@referredType":"BillingAccount"}},'
+        '"totalAmount":{"unit":"USD","value":10.00},"paymentMethod":{"name":"bankTransfer"},'
+        '"description":"Returned deposit"}',
+    )
+    assert refund.status_code == 201, refund.text
+
+    page = "offset=0&limit=100"
+    mine = api.get(f"{PAYMENT}?account.id={a}&status=done&{page}")
+    assert [p["id"] for p in mine.json()] == [made.json()["id"]]
+    assert mine.headers["X-Total-Count"] == "1"
+    row = mine.json()[0]
+    assert row["paymentDate"] and row["status"] == "done"
+    assert row["account"]["id"] == a and row["account"]["name"]
+    assert row["paymentMethod"]["name"] and row["totalAmount"]["unit"] == "USD"
+    assert len(api.get(f"{PAYMENT}?{page}").json()) == 2
+    assert api.get(f"{PAYMENT}?account.id={a}&status=pending&{page}").json() == []
+    one = api.get(f"{PAYMENT}/{made.json()['id']}")
+    assert one.status_code == 200 and one.json()["id"] == made.json()["id"]
+    refunds = api.get(f"/tmf-api/payment/v4/refund?account.id={a}&status=done&{page}")
+    assert [r["id"] for r in refunds.json()] == [refund.json()["id"]]
+    only = refunds.json()[0]
+    assert only["refundDate"] and only["status"] == "done"
+    assert only["account"]["id"] == a and only["description"] == "Returned deposit"
+    assert api.get(f"/tmf-api/payment/v4/refund?{page}").headers["X-Total-Count"] == "1"
