@@ -366,6 +366,14 @@ items:
   - {id: ui.catalog.newSpecification, area: ui, stage: 5, title: "New product specification"}
   - {id: ui.catalog.editSpecification, area: ui, stage: 5, title: "Edit a product specification"}
   - {id: ui.catalog.deleteSpecification, area: ui, stage: 5, title: "Delete an unused product specification"}
+  - {id: ui.catalog.categories, area: ui, stage: 5, title: "Catalog tab: categories tree"}
+  - {id: ui.catalog.newCategory, area: ui, stage: 5, title: "New category"}
+  - {id: ui.catalog.editCategory, area: ui, stage: 5, title: "Edit a category and its offering membership"}
+  - {id: ui.catalog.deleteCategory, area: ui, stage: 5, title: "Delete an empty category"}
+  - {id: ui.catalog.catalogs, area: ui, stage: 5, title: "Catalog tab: product catalogs"}
+  - {id: ui.catalog.newCatalog, area: ui, stage: 5, title: "New product catalog"}
+  - {id: ui.catalog.editCatalog, area: ui, stage: 5, title: "Edit a product catalog and its root categories"}
+  - {id: ui.catalog.deleteCatalog, area: ui, stage: 5, title: "Delete a product catalog"}
   - {id: ui.billingRuns.list, area: ui, stage: 4, title: "Billing runs: latest run, history, failed badge in the nav"}
   - {id: ui.billingRuns.catchUp, area: ui, stage: 4, title: "Catch up to a date"}
   - {id: ui.billingRuns.retry, area: ui, stage: 4, title: "Retry a failed run"}

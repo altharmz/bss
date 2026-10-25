@@ -368,6 +368,107 @@ def test_offering_and_price_edits_as_the_ui_sends_them(api):
     assert api.get(fresh["href"]).status_code == 404
 
 
+def test_category_and_catalog_writes_as_the_ui_sends_them(api):
+    """createCategory(), categoryChanges(), createCatalog(), catalogChanges() and the deletes:
+    bodies pinned in Catalog.test.tsx."""
+    offering = create_offering(api)
+    other = create_offering(api, code="MOB-OTHER")
+    home = api.post(f"{CATALOG}/category", {"@type": "Category", "name": "Home"}).json()
+    created = api.post(
+        f"{CATALOG}/category",
+        {
+            "@type": "Category",
+            "name": "Roaming",
+            "description": "Abroad",
+            "lifecycleStatus": "In Design",
+            "validFor": {
+                "startDateTime": "2026-11-01T00:00:00+03:00",
+                "endDateTime": "2027-01-01T00:00:00+03:00",
+            },
+            "parent": {"id": home["id"], "@type": "CategoryRef"},
+            "productOffering": [{"id": offering["id"], "@type": "ProductOfferingRef"}],
+        },
+    )
+    assert created.status_code == 201, created.text
+    category = created.json()
+    assert category["parent"]["id"] == home["id"] and category["isRoot"] is False
+    # an end without a start is refused (the UI keeps Create disabled)
+    assert (
+        api.post(
+            f"{CATALOG}/category",
+            {
+                "@type": "Category",
+                "name": "X",
+                "validFor": {"endDateTime": "2027-01-01T00:00:00+03:00"},
+            },
+        ).status_code
+        == 422
+    )
+    assert [o["id"] for o in category["productOffering"]] == [offering["id"]]
+    # the membership is replaced as a whole; the parent goes with null; only changed fields
+    patched = api.patch(
+        category["href"],
+        {
+            "name": "Roaming 2",
+            "lifecycleStatus": "Active",
+            "parent": None,
+            "productOffering": [{"id": other["id"], "@type": "ProductOfferingRef"}],
+        },
+    )
+    assert patched.status_code == 200, patched.text
+    body = patched.json()
+    assert body["isRoot"] is True and "parent" not in body
+    assert [o["id"] for o in body["productOffering"]] == [other["id"]]
+    # a cycle (a parent below the category) is refused; the UI leaves it out of the select
+    child = api.post(
+        f"{CATALOG}/category",
+        {
+            "@type": "Category",
+            "name": "Sub",
+            "parent": {"id": category["id"], "@type": "CategoryRef"},
+        },
+    ).json()
+    cycle = api.patch(category["href"], {"parent": {"id": child["id"], "@type": "CategoryRef"}})
+    assert cycle.status_code == 409
+    # a category with subcategories or offerings is not deleted (the UI hides Delete)
+    assert api.delete(category["href"]).status_code == 409
+
+    catalog = api.post(
+        f"{CATALOG}/productCatalog",
+        {
+            "@type": "ProductCatalog",
+            "name": "Wholesale",
+            "lifecycleStatus": "In Design",
+            "validFor": {"startDateTime": "2026-11-01T00:00:00+03:00"},
+            "catalogType": "b2b",
+            "category": [{"id": home["id"], "@type": "CategoryRef"}],
+        },
+    )
+    assert catalog.status_code == 201, catalog.text
+    catalog = catalog.json()
+    assert catalog["catalogType"] == "b2b" and [c["id"] for c in catalog["category"]] == [
+        home["id"]
+    ]
+    changed = api.patch(
+        catalog["href"],
+        {"catalogType": None, "category": [{"id": category["id"], "@type": "CategoryRef"}]},
+    )
+    assert changed.status_code == 200, changed.text
+    assert "catalogType" not in changed.json()
+    assert [c["id"] for c in changed.json()["category"]] == [category["id"]]
+    # a catalog takes root categories only (the UI lists only those)
+    assert (
+        api.patch(
+            catalog["href"], {"category": [{"id": child["id"], "@type": "CategoryRef"}]}
+        ).status_code
+        == 409
+    )
+    assert api.delete(catalog["href"]).status_code == 204
+    assert api.get(catalog["href"]).status_code == 404
+    assert api.delete(child["href"]).status_code == 204
+    assert api.delete(home["href"]).status_code == 204
+
+
 def test_lifecycle_steps_are_merge_patches(api):
     offering = create_offering(api)
     for status in ("Active", "Retired"):  # NEXT_LIFECYCLE

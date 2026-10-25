@@ -257,6 +257,20 @@ and a row's dialog edit name, description, brand, version, product number and th
 still shows). **New offering** has **New specification...**, which preselects the new one.
 API: `POST|PATCH|DELETE .../productSpecification` (merge patch of changed fields only).
 
+### Categories and Catalogs tabs (`ui.catalog.categories`, `ui.catalog.catalogs`) - `screens/Classification.tsx`
+
+**Categories** is a tree by parent (roots first, indented) with status, offering count and
+subcategory count; search by name. **+ New category** (`ui.catalog.newCategory`) and a row's dialog
+(`ui.catalog.editCategory`) edit name, description, parent (the select leaves out the category and
+everything below it), lifecycle (forward step only), validity (an end needs a start) and the
+offering membership (a checkbox list; a changed membership is sent as the whole array). Delete
+(`ui.catalog.deleteCategory`) is offered without subcategories and offerings; the server's 409
+(catalog membership) still shows. **Catalogs** lists name, type, status and root category names;
+**+ New catalog** (`ui.catalog.newCatalog`) / edit (`ui.catalog.editCatalog`) take name, description,
+type, lifecycle, validity and the root categories (roots only); Delete (`ui.catalog.deleteCatalog`)
+is always offered.
+API: `POST|PATCH|DELETE .../category`, `.../productCatalog` (merge patch of changed fields only).
+
 ### Offering detail (`ui.catalog.offeringDetail`), lifecycle step (`ui.catalog.lifecycle`), change price (`ui.catalog.changePrice`)
 
 The detail dialog shows the offering and its recurring prices. The lifecycle button offers

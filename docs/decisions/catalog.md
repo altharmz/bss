@@ -364,3 +364,22 @@ Deviations: "has no products" cannot be known in the UI, so Delete hides on stat
 only and the server's 409 covers the rest; the price dialog is offered Delete always (its
 offering's order history is not loaded); only the price amount is a charge field in Edit price
 (period fields stay API/MCP).
+
+## UI: categories and product catalogs (slice 13, 2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 13), frontend only.
+Catalog tabs **Categories** (`ui.catalog.categories`: tree by `parent`, roots first, status,
+offering and subcategory counts) and **Catalogs** (`ui.catalog.catalogs`: name, type, status, root
+category names). One dialog per kind (`newCategory`/`editCategory`/`deleteCategory` and the
+catalog equivalents) with name, description, parent or catalog type, a forward-only lifecycle,
+validity and a checkbox list: the offerings of a category (sent as the whole `productOffering[]`
+when the set changed) or the root categories of a catalog (`category[]`). A changed field goes out
+alone in a merge patch (null for an emptied text or a category made a root; an unchanged validity
+start is sent as loaded). Delete of a category is hidden while it has loaded subcategories or
+offerings (the 409 for catalog membership still shows); Delete of a catalog is always offered.
+Code: `screens/Classification.tsx`, `api/classification.ts`. Tests: `Catalog.test.tsx`
+("categories and catalogs": tree, exact bodies, cycle-free parent select, membership replacement,
+delete availability, refusals) and
+`tests/test_ui_requests.py::test_category_and_catalog_writes_as_the_ui_sends_them`.
+Deviation: the server requires `validFor.startDateTime` whenever `validFor` is sent, so the dialog
+refuses a "Valid to" without "Valid from" (the refusal is certain).
