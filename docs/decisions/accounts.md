@@ -51,11 +51,11 @@ ignored on POST like a billing account's, 400 on PATCH). `contact`, `taxExemptio
 **Closing** a financial account that still contains accounts is allowed; the links stay
 and are still summed. Only new links to it are refused.
 
-**UI**: read-only. A *Financial accounts* screen lists owner, state, the balance per
-currency and the contained accounts, billing accounts linking to their subscriber card. The subscriber
-card names the account's financial account next to its BillingAccount id. Creating and
-linking stay in the API and the MCP tools: UI writes would need the pinned request
-contract (frontend.md) for a feature the demo does not need on screen.
+**UI**: a *Financial accounts* screen lists owner, state, the balance per currency and the
+contained accounts, billing accounts linking to their subscriber card. The subscriber card names
+the account's financial account next to its BillingAccount id. **Superseded 2026-10-25 (slice
+16):** the screen creates, edits and deletes financial accounts, the subscriber Edit form links
+and unlinks one, and the card deletes an account without history (entry below).
 
 Since 2026-10-20, the sidebar shows the financial account total like the other lists,
 using `financialAccount?limit=1&fields=id` and `X-Total-Count`. This adds one small
@@ -187,3 +187,30 @@ specification with another `paymentDueDateOffset` is stored; answering the store
 `relatedParty[0]` as the owner shows the contact. Rolling back `0023` needs
 `alembic downgrade 0022` by hand (drops `details` on four tables and the billing
 account's `description`/`account_type`).
+
+## UI: financial account writes, linking and billing account delete (slice 16, 2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 16), frontend only;
+it replaces "UI: read-only" above. `api/financial.ts`, `screens/FinancialForms.tsx`.
+
+- **Financial accounts screen:** `ui.financialAccounts.new` opens the form (`.form`): name, owner
+  (select of individuals and organizations, relatedParty role `owner`), account type, description,
+  informational credit limit with its currency (exact decimal token), state. Per row,
+  `ui.financialAccounts.edit` PATCHes only the changed fields (a cleared optional field is `null`;
+  an owner change sends the owner plus the other related parties as loaded) and
+  `ui.financialAccounts.delete` (confirmation `.confirmDelete`) is shown only when
+  `accountRelationship` is empty. The server's 409/422 text shows in the dialog with the values kept;
+  after an uncertain result the dialog offers Refresh.
+- **Linking:** the subscriber Edit form has a **Financial account** select
+  (`ui.subscriber.financialLink`) from `financialAccount?relatedParty.id={party}` plus None; it
+  sends `financialAccount` (a `FinancialAccountRef`) or `null` in the billing account PATCH.
+- **Delete subscriber** (`ui.subscriber.delete`, confirmation `.deleteConfirm`): shown for a
+  postpaid account when the products, charges, transactions and bills the card loaded are all
+  empty. DELETE with no body, then the Subscribers list. A 409 shows "... - close it instead".
+- Tests: `FinancialAccounts.test.tsx` (create, edit, owner refusal, delete availability and
+  body), `SubscriberCard.test.tsx` (link, unlink, 422, delete offered/hidden per resource, prepaid,
+  409) and `tests/test_ui_requests.py::test_financial_account_writes_and_links_as_the_ui_sends_them`.
+- Deviations: Delete is a header button, not a menu item (the header has no menu); the card now
+  loads charges and transactions itself and passes them to the history panels (same requests).
+  The existing `editBackend` test helper stubs the new financial-accounts list (TEST-CHANGE).
+

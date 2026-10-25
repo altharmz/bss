@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 import { expectUi } from '../test/expectUi';
-import { accountBody, billsUrl, NO_SETTLEMENT } from '../test/fixtures';
+import { accountBody, billBody, billsUrl, NO_SETTLEMENT } from '../test/fixtures';
 
 const A = 'aaaa1111-0000-4000-8000-0000000000a1';
 const C = 'cccc2222-0000-4000-8000-0000000000c2';
@@ -700,20 +700,33 @@ const PARTY_URL = `/tmf-api/partyManagement/v5/individual/${PARTY_ID}`;
 const CUSTOMER_URL = `/tmf-api/customer/v5/customer/${C}`;
 const ACCOUNT_URL = `/tmf-api/accountManagement/v5/billingAccount/${A}`;
 
-function editBackend(routes: Record<string, Handler> = {}) {
-  return backend({
-    [`GET ${CUSTOMER_URL}`]: () =>
-      json({
-        id: C,
-        name: 'Olga Kuznetsova',
-        status: 'Active',
-        engagedParty: { id: PARTY_ID, '@type': 'PartyRef', '@referredType': 'Individual' },
-        '@type': 'Customer',
-      }),
-    [`GET ${PARTY_URL}`]: () =>
-      json({ id: PARTY_ID, givenName: 'Olga', familyName: 'Kuznetsova', '@type': 'Individual' }),
-    ...routes,
-  });
+const FINANCIAL_URL = '/tmf-api/accountManagement/v5/financialAccount';
+const FIN1 = 'f0000001-0000-4000-8000-000000000001';
+const FIN2 = 'f0000002-0000-4000-8000-000000000002';
+const OWNER_FINANCIAL = [
+  { id: FIN1, name: 'Group receivables', state: 'Active', '@type': 'FinancialAccount' },
+  { id: FIN2, name: 'Old group', state: 'Closed', '@type': 'FinancialAccount' },
+];
+
+function editBackend(routes: Record<string, Handler> = {}, account: object = ACCOUNT) {
+  return backend(
+    {
+      [`GET ${CUSTOMER_URL}`]: () =>
+        json({
+          id: C,
+          name: 'Olga Kuznetsova',
+          status: 'Active',
+          engagedParty: { id: PARTY_ID, '@type': 'PartyRef', '@referredType': 'Individual' },
+          '@type': 'Customer',
+        }),
+      [`GET ${PARTY_URL}`]: () =>
+        json({ id: PARTY_ID, givenName: 'Olga', familyName: 'Kuznetsova', '@type': 'Individual' }),
+      [`GET ${FINANCIAL_URL}?relatedParty.id=${PARTY_ID}&offset=0&limit=100`]: () =>
+        json(OWNER_FINANCIAL, { total: 2 }),
+      ...routes,
+    },
+    account,
+  );
 }
 
 async function openEdit() {
@@ -815,6 +828,151 @@ describe('edit subscriber', () => {
     });
     expect(within(dialog).getByText('Enter a credit limit with at most 2 decimals.')).toBeTruthy();
     expect(save.disabled).toBe(true);
+  });
+});
+
+describe('link a financial account', () => {
+  const linked = accountBody(
+    A,
+    { id: C, name: 'Olga Kuznetsova' },
+    { financialAccount: { id: FIN1, name: 'Group receivables', '@type': 'FinancialAccountRef' } },
+  );
+  const LINK = {
+    id: FIN2,
+    '@type': 'FinancialAccountRef',
+    '@referredType': 'FinancialAccount',
+  };
+
+  it('lists the owner financial accounts and links the chosen one', async () => {
+    const { fetchMock, calls } = editBackend({ [`PATCH ${ACCOUNT_URL}`]: () => json(ACCOUNT) });
+    const dialog = await openEdit();
+    expectUi('ui.subscriber.financialLink');
+    expect(calls).toContain(`GET ${FINANCIAL_URL}?relatedParty.id=${PARTY_ID}&offset=0&limit=100`);
+    const select = within(dialog).getByLabelText('Financial account') as HTMLSelectElement;
+    expect(select.value).toBe('');
+    expect(await within(select).findByRole('option', { name: 'Old group (closed)' })).toBeTruthy();
+    fireEvent.change(select, { target: { value: FIN2 } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    expect(patches(fetchMock)).toEqual([[ACCOUNT_URL, JSON.stringify({ financialAccount: LINK })]]);
+  });
+
+  it('unlinks with null', async () => {
+    const { fetchMock } = editBackend({ [`PATCH ${ACCOUNT_URL}`]: () => json(ACCOUNT) }, linked);
+    const dialog = await openEdit();
+    const select = within(dialog).getByLabelText('Financial account') as HTMLSelectElement;
+    expect(select.value).toBe(FIN1);
+    fireEvent.change(select, { target: { value: '' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    expect(patches(fetchMock)).toEqual([[ACCOUNT_URL, '{"financialAccount":null}']]);
+  });
+
+  it('shows the 422 of another owner and keeps the choice', async () => {
+    editBackend({
+      [`PATCH ${ACCOUNT_URL}`]: () =>
+        tmfError(422, 'financialAccount: must be owned by the same party as this account'),
+    });
+    const dialog = await openEdit();
+    const select = within(dialog).getByLabelText('Financial account') as HTMLSelectElement;
+    await within(select).findByRole('option', { name: 'Old group (closed)' });
+    fireEvent.change(select, { target: { value: FIN2 } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain('same party');
+    expect(select.value).toBe(FIN2);
+  });
+});
+
+describe('delete a billing account', () => {
+  const EMPTY: Record<string, Handler> = {
+    [`GET ${INTERNAL}/products`]: () => json([], { total: 0 }),
+    [`GET ${INTERNAL}/charges?limit=20`]: () => json([], { total: 0 }),
+    [`GET ${INTERNAL}/transactions?limit=20`]: () => json([], { total: 0 }),
+  };
+  const LIST = '/tmf-api/accountManagement/v5/billingAccount?offset=0&limit=100';
+  const DELETE_KEY = `DELETE ${ACCOUNT_URL}`;
+  const deleteButton = () => screen.queryByRole('button', { name: 'Delete' });
+  const deletes = (calls: string[]) => calls.filter((c) => c.startsWith('DELETE'));
+
+  it('is offered for an empty postpaid account: DELETE with no body, then the list', async () => {
+    const { fetchMock, calls } = backend({
+      ...EMPTY,
+      [DELETE_KEY]: () => new Response(null, { status: 204 }),
+      [`GET ${LIST}`]: () => json([], { total: 0 }),
+      'GET /tmf-api/productInventory/v5/product?status=active&fields=billingAccount&offset=0&limit=100':
+        () => json([], { total: 0 }),
+    });
+    await open();
+    await screen.findByText('No active products');
+    await waitFor(() => expect(deleteButton()).toBeTruthy());
+    expectUi('ui.subscriber.delete');
+    fireEvent.click(deleteButton() as HTMLElement);
+    const dialog = await screen.findByRole('dialog', { name: 'Delete billing account' });
+    expectUi('ui.subscriber.deleteConfirm');
+    expect(dialog.textContent).toContain(
+      'Deletes the billing account. Its customer and party stay (delete them under Parties).',
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(window.location.pathname).toBe('/subscribers'));
+    expect(deletes(calls)).toEqual([DELETE_KEY]);
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'DELETE');
+    expect(call?.[1]?.body).toBeUndefined();
+  });
+
+  it('is not offered with a product, a charge, a transaction or a bill', async () => {
+    backend(); // the default card has products, charges and transactions
+    await open();
+    await screen.findByText('Fiber 100');
+    await screen.findByText('Transaction history');
+    expect(deleteButton()).toBeNull();
+  });
+
+  it.each([
+    ['a charge', { [`GET ${INTERNAL}/charges?limit=20`]: () => json(CHARGES, { total: 2 }) }],
+    [
+      'a transaction',
+      { [`GET ${INTERNAL}/transactions?limit=20`]: () => json(TRANSACTIONS, { total: 3 }) },
+    ],
+    [
+      'a bill',
+      {
+        [billsUrl(A)]: () => json([billBody('b9', '2026-09-01', 10, 10, 'new')], { total: 1 }),
+      },
+    ],
+    ['a product', { [`GET ${INTERNAL}/products`]: () => json(PRODUCTS, { total: 3 }) }],
+  ])('is not offered with %s alone', async (_what, extra) => {
+    backend({ ...EMPTY, ...extra });
+    await open();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    await screen.findByText('Transaction history');
+    expect(deleteButton()).toBeNull();
+  });
+
+  it('is never offered for a prepaid account', async () => {
+    backend(
+      {
+        ...EMPTY,
+        'GET /tmf-api/prepayBalanceManagement/v4/bucket?partyAccount.id=aaaa1111-0000-4000-8000-0000000000a1&offset=0&limit=100':
+          () => json([], { total: 0 }),
+      },
+      accountBody(A, { id: C, name: 'Olga Kuznetsova' }, { ratingType: 'prepaid' }),
+    );
+    await open();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(deleteButton()).toBeNull();
+  });
+
+  it('shows the 409 as close it instead and keeps the dialog', async () => {
+    backend({ ...EMPTY, [DELETE_KEY]: () => tmfError(409, 'billingAccount has charges') });
+    await open();
+    await waitFor(() => expect(deleteButton()).toBeTruthy());
+    fireEvent.click(deleteButton() as HTMLElement);
+    const dialog = await screen.findByRole('dialog', { name: 'Delete billing account' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain('close it instead');
+    expect(window.location.pathname).toBe(`/subscribers/${A}`);
   });
 });
 

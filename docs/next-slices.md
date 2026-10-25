@@ -50,7 +50,7 @@ Status: `todo` · `next` · `done: <commit subject>` · `split`
 | 13 | Categories and product catalogs | UI | The tree, membership and catalogs are pinned. Cycles are excluded. | done: Add categories and product catalogs tabs to the Catalog screen |
 | 14 | Catalog import and export jobs | UI | An export, then its import, round-trips. Download works. | done: Add import and export jobs tab to the Catalog screen |
 | 15 | Parties and customers | UI | Parties without accounts are reachable. Deletes are pinned. | done: Add Parties screen with individuals, organizations and customers |
-| 16 | Billing account delete; financial account writes and linking | UI | Create, edit, link, unlink and delete are pinned and replayed. | todo |
+| 16 | Billing account delete; financial account writes and linking | UI | Create, edit, link, unlink and delete are pinned and replayed. | done: Add financial account writes, account linking and billing account delete |
 | 17 | Party and settlement accounts | UI | CRUD for both is pinned. | todo |
 | 18 | Billing settings: cycle specs, bill formats, presentation media | UI | CRUD and the `billStructure` selection are pinned. | todo |
 | 19 | Payments and refunds history | UI | The card panel and the global screen are pinned. | todo |

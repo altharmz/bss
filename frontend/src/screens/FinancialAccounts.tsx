@@ -1,19 +1,20 @@
-import { Fragment } from 'react';
-import { loadFinancialAccounts, type ContainedKind } from '../api/bss';
+import { Fragment, useState } from 'react';
+import { loadFinancialAccounts, type ContainedKind, type FinancialAccount } from '../api/bss';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { shortId } from '../format/ids';
 import { formatInt } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { PageTitle, Panel, Pill } from '../ui/kit';
+import { Button, PageTitle, Panel, Pill, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
+import { DeleteFinancialModal, FinancialFormModal } from './FinancialForms';
 import './screens.css';
 
-// Read-only (docs/decisions/accounts.md): a financial account groups a party's accounts.
-// Links are made on the accounts themselves, through the API or MCP; the balance is the
-// sum of the linked billing accounts, one line per currency.
+// A financial account groups a party's accounts (docs/decisions/accounts.md). It is created,
+// edited and deleted here; accounts are linked in the subscriber's Edit form. The balance is
+// the sum of the linked billing accounts, one line per currency.
 
 export const COLUMNS: Column[] = [
   { key: 'no', label: 'Account no.', width: '120px', mono: true },
@@ -22,6 +23,7 @@ export const COLUMNS: Column[] = [
   { key: 'status', label: 'Status', width: '110px' },
   { key: 'balance', label: 'Balance', width: '170px', align: 'right', mono: true },
   { key: 'contains', label: 'Contains', width: '1.4fr' },
+  { key: 'actions', label: '', width: '150px', align: 'right' },
 ];
 
 const KIND_LABEL: Record<ContainedKind, string> = {
@@ -33,6 +35,15 @@ const KIND_LABEL: Record<ContainedKind, string> = {
 export function FinancialAccountsScreen() {
   useSetCrumbs([{ label: 'Financial accounts' }], 'financialAccounts');
   const accounts = useResource('financialAccounts', loadFinancialAccounts);
+  const toast = useToast();
+  const [dialog, setDialog] = useState<
+    { kind: 'new' } | { kind: 'edit' | 'delete'; account: FinancialAccount } | null
+  >(null);
+  const done = (message: string) => {
+    setDialog(null);
+    toast(message);
+    accounts.retry();
+  };
 
   return (
     <div className="bss-screen" data-ui="ui.financialAccounts.list">
@@ -41,6 +52,13 @@ export function FinancialAccountsScreen() {
           title="Financial accounts"
           count={accounts.status === 'ok' ? formatInt(accounts.data.length) : undefined}
         />
+        <Button
+          variant="primary"
+          data-ui="ui.financialAccounts.new"
+          onClick={() => setDialog({ kind: 'new' })}
+        >
+          + New financial account
+        </Button>
       </div>
       <Panel>
         <TableHead columns={COLUMNS} />
@@ -50,7 +68,7 @@ export function FinancialAccountsScreen() {
           errorTitle="Failed to load financial accounts"
           empty={{
             title: 'No financial accounts yet',
-            text: 'Create one through the TMF666 API, then link billing accounts to it.',
+            text: 'Create one, then link billing accounts to it in the subscriber Edit form.',
           }}
           total={(data) => data.length}
           rows={(data) => data}
@@ -114,6 +132,29 @@ export function FinancialAccountsScreen() {
                           ))}
                         </div>
                       ),
+                    actions: (
+                      <span>
+                        <Button
+                          small
+                          data-ui="ui.financialAccounts.edit"
+                          aria-label={`Edit ${account.name}`}
+                          onClick={() => setDialog({ kind: 'edit', account })}
+                        >
+                          Edit
+                        </Button>{' '}
+                        {account.contains.length === 0 && (
+                          <Button
+                            small
+                            data-ui="ui.financialAccounts.delete"
+                            variant="danger-outline"
+                            aria-label={`Delete ${account.name}`}
+                            onClick={() => setDialog({ kind: 'delete', account })}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </span>
+                    ),
                   }}
                 />
               ))}
@@ -125,6 +166,23 @@ export function FinancialAccountsScreen() {
           )}
         </ListState>
       </Panel>
+      {dialog?.kind === 'new' && (
+        <FinancialFormModal account={null} onClose={() => setDialog(null)} onDone={done} />
+      )}
+      {dialog?.kind === 'edit' && (
+        <FinancialFormModal
+          account={dialog.account}
+          onClose={() => setDialog(null)}
+          onDone={done}
+        />
+      )}
+      {dialog?.kind === 'delete' && (
+        <DeleteFinancialModal
+          account={dialog.account}
+          onClose={() => setDialog(null)}
+          onDone={done}
+        />
+      )}
     </div>
   );
 }

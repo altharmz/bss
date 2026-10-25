@@ -239,7 +239,7 @@ export async function submitBalanceAction(
   return { status: need(stored.status, 'status'), reason: stored.reason ?? null };
 }
 
-// --- financial accounts (TMF666): read-only in the UI (docs/decisions/accounts.md) ---
+// --- financial accounts (TMF666): list, create, edit, delete, link (docs/decisions/accounts.md) ---
 
 export type ContainedKind = 'BillingAccount' | 'PartyAccount' | 'SettlementAccount';
 
@@ -252,6 +252,12 @@ export interface FinancialAccount {
   ownerKind: string; // Individual | Organization
   balances: { currency: string; cents: number }[]; // positive = in credit
   contains: { id: string; name: string; kind: ContainedKind }[];
+  description: string | null;
+  /** the informational credit limit: canonical decimal string and currency */
+  creditLimit: { value: string; unit: string } | null;
+  ownerId: string;
+  /** relatedParty entries in other roles, sent back unchanged when the owner changes */
+  otherParties: unknown[];
 }
 
 export function toFinancialAccount(body: T666['schemas']['FinancialAccount']): FinancialAccount {
@@ -266,6 +272,16 @@ export function toFinancialAccount(body: T666['schemas']['FinancialAccount']): F
     accountType: body.accountType ?? null,
     ownerName: need(owner.name, 'owner name'),
     ownerKind: need(owner['@referredType'], 'owner @referredType'),
+    ownerId: need(owner.id, 'owner id'),
+    description: body.description ?? null,
+    creditLimit:
+      body.creditLimit?.value === undefined
+        ? null
+        : {
+            value: canonical(toCents(body.creditLimit.value)) ?? '',
+            unit: need(body.creditLimit.unit, 'creditLimit unit'),
+          },
+    otherParties: (body.relatedParty ?? []).filter((party) => party.role !== 'owner'),
     balances: need(body.accountBalance, 'accountBalance').map((balance) => ({
       currency: need(balance.amount?.unit, 'balance unit'),
       cents: toCents(need(balance.amount?.value, 'balance value')),
@@ -436,9 +452,11 @@ export interface SubscriberProfile {
   accountName: string;
   accountState: AccountState;
   creditLimit: string | null; // canonical decimal string, or none
+  /** the financial account the billing account links to (slice 16), or none */
+  financialAccountId: string | null;
 }
 
-function canonical(cents: number | null): string | null {
+export function canonical(cents: number | null): string | null {
   if (cents === null) return null;
   return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
 }
@@ -471,6 +489,7 @@ export async function loadProfile(
     accountName: account.name,
     accountState: account.state,
     creditLimit: canonical(account.creditLimitCents),
+    financialAccountId: account.financialAccount?.id ?? null,
   };
 }
 
@@ -508,6 +527,16 @@ export async function updateSubscriber(
   const account: Record<string, unknown> = {};
   if (after.accountName.trim() !== before.accountName) account.name = after.accountName.trim();
   if (after.accountState !== before.accountState) account.state = after.accountState;
+  if (after.financialAccountId !== before.financialAccountId) {
+    account.financialAccount =
+      after.financialAccountId === null
+        ? null
+        : {
+            id: after.financialAccountId,
+            '@type': 'FinancialAccountRef',
+            '@referredType': 'FinancialAccount',
+          };
+  }
   const limitChanged = after.creditLimit !== before.creditLimit;
   if (limitChanged) {
     account.creditLimit = after.creditLimit === null ? null : { unit: currency, value: AMOUNT };

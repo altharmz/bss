@@ -13,13 +13,15 @@ import {
   type Account,
   type AccountProduct,
   type AccountSettlement,
+  type Charge,
   type PrepaidBalance,
+  type Transaction,
 } from '../api/bss';
 import { explain } from '../api/client';
 import type { PendingOrder } from '../api/commands';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
-import { hrefOf, Link } from '../app/router';
+import { hrefOf, Link, useRouter } from '../app/router';
 import { lastDay, nextCycleDate } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatCents, toCents } from '../format/money';
@@ -43,7 +45,7 @@ import { FailedCommands, OrderWatch } from './PrepaidOrderWatch';
 import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
 import { watch, type Watched } from './watched';
 import { AccountBills, RefundAction, RefundsPanel } from './AccountActions';
-import { EditSubscriberModal } from './SubscriberForms';
+import { DeleteSubscriberModal, EditSubscriberModal } from './SubscriberForms';
 import './screens.css';
 
 // Screen 2. Everything about one billing account. Products change only through TMF622
@@ -181,6 +183,7 @@ function Card({
 }) {
   const context = useSystemContext();
   const toast = useToast();
+  const { navigate } = useRouter();
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState(false);
   const [money, setMoney] = useState<MoneyForm | null>(null);
@@ -188,6 +191,7 @@ function Card({
   const [transferring, setTransferring] = useState(false);
   const [openBill, setOpenBill] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const customerStatus = useResource(`customer:${account.customerId}:${version}`, (signal) =>
     loadCustomerStatus(account.customerId, signal),
   );
@@ -203,6 +207,24 @@ function Card({
       : Promise.resolve(null),
   );
   const bills = useBills(account, version);
+  const charges = useResource(`charges:${account.id}:${version}`, (signal) =>
+    loadCharges(account.id, signal),
+  );
+  const transactions = useResource(`transactions:${account.id}:${version}`, (signal) =>
+    loadTransactions(account.id, signal),
+  );
+  // Delete is offered only when everything the card loaded is empty (a postpaid account:
+  // a prepaid bucket is history). The server still decides (409: close it instead).
+  const deletable =
+    account.ratingType === 'postpaid' &&
+    products.status === 'ok' &&
+    products.data.length === 0 &&
+    charges.status === 'ok' &&
+    charges.data.length === 0 &&
+    transactions.status === 'ok' &&
+    transactions.data.length === 0 &&
+    bills.status === 'ok' &&
+    bills.data.length === 0;
   const canAdd = account.state === 'Active';
   const activeOfferings = new Set(
     products.status === 'ok' ? products.data.map((p) => p.productOffering.id) : [],
@@ -238,6 +260,17 @@ function Card({
           </div>
           <div className="bss-card-action">
             <Button onClick={() => setEditing(true)}>Edit</Button>{' '}
+            {deletable && (
+              <>
+                <Button
+                  variant="danger-outline"
+                  data-ui="ui.subscriber.delete"
+                  onClick={() => setDeleting(true)}
+                >
+                  Delete
+                </Button>{' '}
+              </>
+            )}
             <Button onClick={() => setPaying(true)} disabled={bills.status !== 'ok'}>
               Record payment
             </Button>{' '}
@@ -358,7 +391,7 @@ function Card({
       )}
 
       <div className="bss-two-col">
-        <History account={account} version={version} />
+        <History account={account} charges={charges} transactions={transactions} />
       </div>
 
       {paying && bills.status === 'ok' && (
@@ -396,6 +429,16 @@ function Card({
             setTransferring(false);
             onWatch(accepted);
             reload();
+          }}
+        />
+      )}
+      {deleting && (
+        <DeleteSubscriberModal
+          account={account}
+          onClose={() => setDeleting(false)}
+          onDeleted={(message) => {
+            toast(message);
+            navigate(hrefOf({ name: 'subscribers' }));
           }}
         />
       )}
@@ -900,13 +943,15 @@ function ProductRow({
   );
 }
 
-function History({ account, version }: { account: Account; version: number }) {
-  const charges = useResource(`charges:${account.id}:${version}`, (signal) =>
-    loadCharges(account.id, signal),
-  );
-  const transactions = useResource(`transactions:${account.id}:${version}`, (signal) =>
-    loadTransactions(account.id, signal),
-  );
+function History({
+  account,
+  charges,
+  transactions,
+}: {
+  account: Account;
+  charges: ResourceWithRetry<Charge[]>;
+  transactions: ResourceWithRetry<Transaction[]>;
+}) {
   return (
     <>
       <Panel title="Charge history" subtitle="AppliedCustomerBillingRate">

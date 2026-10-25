@@ -7,6 +7,7 @@ Context: business date 2026-10-01 in Europe/Moscow (+03:00), the api fixture's c
 """
 
 import base64
+import json
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -1529,3 +1530,101 @@ def test_party_and_customer_writes_as_the_ui_sends_them(api):
     assert api.delete(person["href"]).status_code == 204
     assert api.delete(org["href"]).status_code == 204
     assert api.get(org["href"]).status_code == 404
+
+
+def test_financial_account_writes_and_links_as_the_ui_sends_them(api):
+    """createBody(), patchBody() of api/financial.ts, the link in updateSubscriber() and the
+    deletes: bodies pinned in FinancialAccounts.test.tsx and SubscriberCard.test.tsx."""
+    fin = "/tmf-api/accountManagement/v5/financialAccount"
+    org = apidata.organization(api, "Romashka LLC")
+    person = apidata.individual(api, "Olga", "Kuznetsova")
+    owner = {
+        "role": "owner",
+        "partyOrPartyRole": {"id": org["id"], "@type": "PartyRef", "@referredType": "Organization"},
+        "@type": "RelatedPartyRefOrPartyRoleRef",
+    }
+    # the lists of the forms: owners, and one owner's financial accounts
+    for url in (
+        f"{PARTY}/individual?offset=0&limit=100",
+        f"{PARTY}/organization?offset=0&limit=100",
+        f"{fin}?relatedParty.id={org['id']}&offset=0&limit=100",
+    ):
+        assert api.get(url).status_code == 200, url
+    created = api.post_raw(
+        fin,
+        '{"@type":"FinancialAccount","name":"Holding","relatedParty":['
+        + json.dumps(owner, separators=(",", ":"))
+        + '],"state":"Active","accountType":"Business","description":"All lines",'
+        '"creditLimit":{"unit":"USD","value":1000.10}}',
+    )
+    assert created.status_code == 201, created.text
+    group = created.json()
+    assert decimals(created)["creditLimit"]["value"] == Decimal("1000.10")
+    # an edit: only the changed fields; a cleared optional field is null
+    edited = api.patch_raw(
+        group["href"],
+        '{"accountType":null,"description":"Spare","state":"Suspended",'
+        '"creditLimit":{"unit":"USD","value":250.00}}',
+    )
+    assert edited.status_code == 200, edited.text
+    assert "accountType" not in edited.json()
+    assert edited.json()["state"] == "Suspended"
+    assert decimals(edited)["creditLimit"]["value"] == Decimal("250.00")
+    # link and unlink from the subscriber's Edit form
+    buyer = apidata.customer(api, org)
+    held = apidata.account(api, buyer)
+    ref = {"id": group["id"], "@type": "FinancialAccountRef", "@referredType": "FinancialAccount"}
+    linked = api.patch(held["href"], {"financialAccount": ref})
+    assert linked.status_code == 200, linked.text
+    assert linked.json()["financialAccount"]["id"] == group["id"]
+    # linked: delete is 409 (the UI hides it), the owner cannot change
+    assert api.delete(group["href"]).status_code == 409
+    moved = api.patch(
+        group["href"],
+        {
+            "relatedParty": [
+                {
+                    "role": "owner",
+                    "partyOrPartyRole": {
+                        "id": person["id"],
+                        "@type": "PartyRef",
+                        "@referredType": "Individual",
+                    },
+                    "@type": "RelatedPartyRefOrPartyRoleRef",
+                }
+            ]
+        },
+    )
+    assert moved.status_code == 409
+    # another owner's financial account is a 422 on the link
+    other = api.post(
+        fin,
+        {
+            "@type": "FinancialAccount",
+            "name": "Personal",
+            "relatedParty": [
+                {
+                    "role": "owner",
+                    "partyOrPartyRole": {
+                        "id": person["id"],
+                        "@type": "PartyRef",
+                        "@referredType": "Individual",
+                    },
+                    "@type": "RelatedPartyRefOrPartyRoleRef",
+                }
+            ],
+        },
+    ).json()
+    foreign = {**ref, "id": other["id"]}
+    assert api.patch(held["href"], {"financialAccount": foreign}).status_code == 422
+    unlinked = api.patch(held["href"], {"financialAccount": None})
+    assert unlinked.status_code == 200 and "financialAccount" not in unlinked.json()
+    assert api.delete(group["href"]).status_code == 204
+    assert api.delete(other["href"]).status_code == 204
+    # an account without history deletes; one with a payment is a 409 (close it instead)
+    busy = apidata.account(api, apidata.customer(api, apidata.individual(api, "Anna", "Lee")))
+    apidata.payment(api, busy)
+    refused = api.delete(busy["href"])
+    assert refused.status_code == 409 and "close it instead" in refused.json()["message"]
+    assert api.delete(held["href"]).status_code == 204
+    assert api.get(held["href"]).status_code == 404

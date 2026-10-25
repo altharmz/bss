@@ -12,7 +12,8 @@ import {
   type RatingMode,
   type SubscriberProfile,
 } from '../api/bss';
-import { explain } from '../api/client';
+import { ApiError, explain } from '../api/client';
+import { deleteBillingAccount, loadFinancialChoices } from '../api/financial';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { accountLabel } from '../format/ids';
@@ -20,9 +21,10 @@ import { parseAmount } from '../format/money';
 import { Button, Modal, Segmented, TextInput } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { AddProductModal } from './AddProduct';
+import { uncertain } from './submissionKey';
 
 // Create and edit a subscriber (party + customer + billing account) through the TMF APIs.
-// There is no delete: an account carries products, bills and payments; it can be Closed.
+// Delete of an account without history is on the subscriber card (SubscriberCard.tsx).
 // The backend validates everything again; the checks here only keep obviously wrong
 // requests from being sent.
 
@@ -307,6 +309,10 @@ function EditForm({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const set = (change: Partial<SubscriberProfile>) => setForm({ ...form, ...change });
+  // the owner's financial accounts: the party engaged by the customer
+  const financial = useResource(`financial-choices:${before.partyId}`, (signal) =>
+    loadFinancialChoices(before.partyId, signal),
+  );
 
   const credit = limitOf(limitText);
   const after: SubscriberProfile = { ...form, creditLimit: credit.value };
@@ -409,6 +415,40 @@ function EditForm({
           {!credit.ok && (
             <div className="bss-inline-error">Enter a credit limit with at most 2 decimals.</div>
           )}
+          <Field label="Financial account">
+            <select
+              className="bss-input"
+              data-ui="ui.subscriber.financialLink"
+              value={form.financialAccountId ?? ''}
+              disabled={financial.status === 'loading'}
+              onChange={(e) => set({ financialAccountId: e.target.value || null })}
+            >
+              <option value="">None</option>
+              {financial.status === 'ok' &&
+                financial.data.map((choice) => (
+                  <option key={choice.id} value={choice.id}>
+                    {choice.name}
+                    {choice.state === 'Closed' ? ' (closed)' : ''}
+                  </option>
+                ))}
+              {form.financialAccountId !== null &&
+                !(
+                  financial.status === 'ok' &&
+                  financial.data.some((choice) => choice.id === form.financialAccountId)
+                ) && <option value={form.financialAccountId}>Current financial account</option>}
+            </select>
+          </Field>
+          {financial.status === 'error' && (
+            <div className="bss-inline-error">
+              Failed to load the owner's financial accounts: {explain(financial.error)}.{' '}
+              <Button small onClick={financial.retry}>
+                Retry
+              </Button>
+            </div>
+          )}
+          <div className="caption">
+            Only financial accounts of the same owner can be linked; the server refuses others.
+          </div>
         </section>
       </div>
       <footer className="bss-modal-footer">
@@ -423,5 +463,70 @@ function EditForm({
         </Button>
       </footer>
     </>
+  );
+}
+
+/** Delete a billing account without history. The card offers it only when everything it
+ * loaded is empty; a 409 from the server (history it did not show) says to close it instead. */
+export function DeleteSubscriberModal({
+  account,
+  onClose,
+  onDeleted,
+}: {
+  account: Account;
+  onClose: () => void;
+  onDeleted: (message: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [unsure, setUnsure] = useState(false);
+
+  async function remove() {
+    setBusy(true);
+    setProblem(null);
+    setUnsure(false);
+    try {
+      await deleteBillingAccount(account.id);
+      onDeleted(`${account.name} deleted`);
+    } catch (error) {
+      if (uncertain(error)) {
+        setUnsure(true);
+        setProblem(`${explain(error)}. Unsure whether it was saved: Refresh to check.`);
+      } else if (error instanceof ApiError && error.status === 409) {
+        setProblem(`${explain(error)} - close it instead.`);
+      } else {
+        setProblem(explain(error));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Delete billing account"
+      width={480}
+      onClose={onClose}
+      ui="ui.subscriber.deleteConfirm"
+      subtitle={`${account.customerName} · ${accountLabel(account.id)}`}
+      footer={
+        <>
+          {problem !== null && (
+            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+              {problem}
+            </div>
+          )}
+          {unsure && <Button onClick={() => onDeleted('Refreshed')}>Refresh</Button>}
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="danger" disabled={busy} onClick={() => void remove()}>
+            Delete
+          </Button>
+        </>
+      }
+    >
+      <div className="bss-modal-body">
+        <p>Deletes the billing account. Its customer and party stay (delete them under Parties).</p>
+      </div>
+    </Modal>
   );
 }

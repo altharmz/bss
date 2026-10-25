@@ -121,6 +121,12 @@ transaction history (signed amount, balance after).
 API: `GET .../billingAccount/{id}`, `GET /tmf-api/customer/v5/customer/{id}`,
 `GET /internal/v1/billingAccount/{id}/products`, `.../charges?limit=20`,
 `.../transactions?limit=20`.
+**Delete** (`ui.subscriber.delete`, confirmation `ui.subscriber.deleteConfirm`) is in the header for
+a postpaid account whose loaded products, charges, transactions and bills are all empty:
+`DELETE .../billingAccount/{id}`, then the Subscribers list; a 409 says to close it instead. The
+Edit form's **Financial account** select (`ui.subscriber.financialLink`, from
+`GET .../financialAccount?relatedParty.id=`) links or unlinks (`financialAccount` ref or `null` in
+the PATCH). Design: [next-slices-design.md](next-slices-design.md) section 16.
 
 ### Balance actions (`ui.subscriber.prepaid.history`, `ui.subscriber.prepaid.historyDetail`) - `screens/PrepaidHistory.tsx`
 
@@ -364,6 +370,16 @@ the dialog offers Refresh. API: `GET .../individual|organization`, `GET .../cust
 `GET .../billingAccount?fields=name,relatedParty`, `GET .../financialAccount|partyAccount|
 settlementAccount?fields=relatedParty`; `PATCH|DELETE` on the three. Design:
 [next-slices-design.md](next-slices-design.md) section 15.
+
+### Financial accounts writes (`ui.financialAccounts.new|edit|delete`) - `screens/FinancialForms.tsx`
+
+The Financial accounts screen has **+ New financial account** (name, owner from the individuals and
+organizations, account type, description, informational credit limit and currency, state), a row
+**Edit** (merge patch of changed fields, owner editable, the server refuses while accounts link)
+and **Delete** (only when nothing is linked; confirmation). Server refusals show in the dialog;
+after an uncertain result it offers Refresh. API: `POST|PATCH|DELETE .../financialAccount`,
+`GET .../individual|organization`. Design: [next-slices-design.md](next-slices-design.md)
+section 16.
 
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
 

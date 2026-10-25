@@ -101,6 +101,14 @@ items:
   - {id: api.tmf666.settlementAccount.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/accountManagement/v5/settlementAccount/{account_id}", title: "Delete a settlement account"}
   - {id: ui.financialAccounts.list, area: ui, stage: 5, title: "Financial accounts: owner, balance per currency, contained accounts"}
   - {id: ui.subscriber.financialAccount, area: ui, stage: 5, title: "Subscriber card: link to the account's financial account"}
+  - {id: ui.financialAccounts.new, area: ui, stage: 5, title: "New financial account"}
+  - {id: ui.financialAccounts.form, area: ui, stage: 5, title: "Financial account create and edit dialog"}
+  - {id: ui.financialAccounts.edit, area: ui, stage: 5, title: "Edit a financial account (owner, fields, state)"}
+  - {id: ui.financialAccounts.delete, area: ui, stage: 5, title: "Delete a financial account with nothing linked"}
+  - {id: ui.financialAccounts.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a financial account"}
+  - {id: ui.subscriber.financialLink, area: ui, stage: 5, title: "Link or unlink a financial account in the subscriber Edit form"}
+  - {id: ui.subscriber.delete, area: ui, stage: 5, title: "Delete a postpaid billing account without history"}
+  - {id: ui.subscriber.deleteConfirm, area: ui, stage: 5, title: "Confirm deleting a billing account"}
   - {id: db.refund, area: db, stage: 5, table: refund, title: "Completed cash refunds (TMF676)"}
   - {id: db.refund_source, area: db, stage: 5, table: refund_source, title: "Credit consumed by refunds"}
   - {id: db.customer_bill_on_demand, area: db, stage: 5, table: customer_bill_on_demand, title: "On-demand bill requests (TMF678)"}
