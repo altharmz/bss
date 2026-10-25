@@ -12,8 +12,10 @@ You are the **orchestrator** for the phase named in the request, taken from
 [docs/next-slices-design.md](next-slices-design.md), so nothing needs the human's
 approval. Your job:
 - Run each slice in a **new, clean subagent** (Agent tool, `subagent_type:
-  "general-purpose"`, `model: "sonnet"`), one at a time and in order.
+  "general-purpose"`, `model` from the line below), one at a time and in order.
 - Check what it did, then start the next slice.
+
+**Model per slice:** `haiku` for slice 22 (pilot); `sonnet` for every other slice.
 
 You do not write code. Do not run two subagents at once: they share the working tree,
 the local stack and the pre-commit lock.
