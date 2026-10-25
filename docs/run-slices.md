@@ -15,7 +15,7 @@ approval. Your job:
   "general-purpose"`, `model` from the line below), one at a time and in order.
 - Check what it did, then start the next slice.
 
-**Model per slice:** `haiku` for slice 22 (pilot); `sonnet` for every other slice.
+**Model:** `sonnet` for every slice. The slice 22 Haiku pilot used 171 turns and 3.5M weighted tokens against 1.26M for slices 17-20, and 5 commit attempts.
 
 You do not write code. Do not run two subagents at once: they share the working tree,
 the local stack and the pre-commit lock.
