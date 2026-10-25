@@ -13,7 +13,6 @@ import {
   type Account,
   type AccountProduct,
   type AccountSettlement,
-  type ProductChange,
   type PrepaidBalance,
 } from '../api/bss';
 import { explain } from '../api/client';
@@ -32,7 +31,13 @@ import { AddProductModal } from './AddProduct';
 import { ProductNumber } from './ProductNumber';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
 import { BalanceActions } from './PrepaidHistory';
-import { offeredChanges, ProductActionsMenu, ProductChangeDialog } from './ProductActions';
+import {
+  ChangeOfferingDialog,
+  offeredChanges,
+  ProductActionsMenu,
+  ProductChangeDialog,
+  type ProductAction,
+} from './ProductActions';
 import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
 import { FailedCommands, OrderWatch } from './PrepaidOrderWatch';
 import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
@@ -659,7 +664,7 @@ function ProductRow({
   onTopUp: (amount: string) => void;
 }) {
   const context = useSystemContext();
-  const [changing, setChanging] = useState<ProductChange | null>(null);
+  const [changing, setChanging] = useState<ProductAction | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -819,7 +824,7 @@ function ProductRow({
           ) : (
             <>
               <ProductActionsMenu
-                items={offeredChanges(product)}
+                items={offeredChanges(product, account.ratingType)}
                 onPick={(change) => setChanging(change)}
               />{' '}
               {fundingWait !== null && (
@@ -847,7 +852,19 @@ function ProductRow({
           ),
         }}
       />
-      {changing !== null && (
+      {changing === 'offering' && (
+        <ChangeOfferingDialog
+          account={account}
+          product={product}
+          onClose={() => setChanging(null)}
+          onRefresh={onRefresh}
+          onDone={(message, accepted) => {
+            setChanging(null);
+            onDone(message, accepted);
+          }}
+        />
+      )}
+      {changing !== null && changing !== 'offering' && (
         <ProductChangeDialog
           change={changing}
           account={account}

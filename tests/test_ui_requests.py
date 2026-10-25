@@ -987,3 +987,77 @@ def test_prepaid_product_actions_as_the_ui_sends_them(api, db_conn):
     delete = {"action": "delete", "product": {"id": ids[1], "@type": "ProductRef"}}
     end = api.post(ORDER, ui_product_order(account, delete, later))
     assert end.status_code == 201 and end.json()["state"] == "inProgress", end.text
+
+
+def ui_offering_item(product_id, offering_id):
+    """orderOfferingChange(): a modify item with the new offering, its href, and no status."""
+    return {
+        "action": "modify",
+        "product": {"id": product_id, "@type": "ProductRef"},
+        "productOffering": {
+            "id": offering_id,
+            "href": f"{CATALOG}/productOffering/{offering_id}",
+            "@type": "ProductOfferingRef",
+        },
+    }
+
+
+def test_postpaid_offering_change_as_the_ui_sends_it(api):
+    """ChangeOfferingDialog: the preview read for the chosen day, the modify order on the
+    product's next charge date, and the pending change it leaves (with its Undo order)."""
+    offering = apidata.sellable_offering(api)
+    other = apidata.sellable_offering(api, value=900, name="Fiber Plus")
+    account = apidata.account(api)
+    api.clock.set(api.clock.now().replace(day=2))
+    product = apidata.product_of(api, apidata.order(api, account, apidata.add_item(offering)))
+    listing = f"/internal/v1/billingAccount/{account['id']}/products"
+    row = next(p for p in api.get(listing).json() if p["id"] == product["id"])
+    day = row["nextChargeDate"]
+    assert day is not None and row["pendingChanges"] == []
+
+    preview = api.get(
+        f"/internal/v1/billingAccount/{account['id']}/firstCharge"
+        f"?productOffering.id={other['id']}&startDate={day}"
+    )
+    assert preview.status_code == 200, preview.text
+
+    changed = api.post(
+        ORDER, ui_product_order(account, ui_offering_item(product["id"], other["id"]), day)
+    )
+    assert changed.status_code == 201 and changed.json()["state"] == "completed", changed.text
+    pending = next(p for p in api.get(listing).json() if p["id"] == product["id"])["pendingChanges"]
+    assert [(c["kind"], c["date"], c["productOffering"]["id"]) for c in pending] == [
+        ("offering", day, other["id"])
+    ]
+    assert pending[0]["productOrder"]["id"] == changed.json()["id"]
+
+
+def test_prepaid_offering_change_as_the_ui_sends_it(api, db_conn):
+    """The prepaid dialog fixes the day at max(paidThrough, today): the same body completes
+    and leaves a pending change dated paidThrough; any other day is refused and shown."""
+    other = apidata.sellable_offering(api, value=5, name="Fiber Lite")
+    off, account = shop(api, db_conn, numbers=False)
+    purchase(api, off, account, numbers=False)
+    tick(db_conn, api.clock.now())
+    product_id, through = db_conn.execute(
+        "SELECT product_id::text, upper(period) FROM funded_interval ORDER BY product_id LIMIT 1"
+    ).fetchone()
+    day = through.isoformat()
+
+    wrong = api.post(
+        ORDER,
+        ui_product_order(
+            account,
+            ui_offering_item(product_id, other["id"]),
+            (through + timedelta(days=1)).isoformat(),
+        ),
+    )
+    assert "offeringChangeNotAtRenewal" in wrong.text, wrong.text
+
+    changed = api.post(
+        ORDER, ui_product_order(account, ui_offering_item(product_id, other["id"]), day)
+    )
+    assert changed.status_code == 201 and changed.json()["state"] == "completed", changed.text
+    listing = f"/internal/v1/billingAccount/{account['id']}/products"
+    row = next(p for p in api.get(listing).json() if p["id"] == product_id)
+    assert [(c["kind"], c["date"]) for c in row["pendingChanges"]] == [("offering", day)]

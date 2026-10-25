@@ -256,7 +256,7 @@ export function AddProductModal({
   );
 }
 
-function Preview({
+export function Preview({
   preview,
   account,
   start,

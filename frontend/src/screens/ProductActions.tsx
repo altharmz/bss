@@ -1,37 +1,53 @@
 import { useRef, useState } from 'react';
 import {
+  loadFirstCharge,
+  loadSellableOfferings,
+  orderOfferingChange,
   orderProductChange,
   type Account,
   type AccountProduct,
+  type FirstCharge,
   type ProductChange,
 } from '../api/bss';
 import { explain } from '../api/client';
 import type { PendingOrder } from '../api/commands';
+import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
-import { isIsoDate } from '../format/dates';
+import { addDays, isIsoDate } from '../format/dates';
+import { formatCents } from '../format/money';
 import { Button, Modal, TextInput } from '../ui/kit';
+import { ErrorBlock, SkeletonRows } from '../ui/states';
+import { Preview } from './AddProduct';
 import { uncertain } from './submissionKey';
 
 // Product actions of the subscriber card: suspend, resume and end on a date, as TMF622 orders
 // (docs/next-slices-design.md slice 4, decisions/frontend.md). The server decides every rule;
 // the menu hides an item only when the row's own data makes the refusal certain.
 
-export const CHANGE_UI: Record<ProductChange, string> = {
+/** A menu item: a status or end change, or the offering change of slice 5. */
+export type ProductAction = ProductChange | 'offering';
+
+export const CHANGE_UI: Record<ProductAction, string> = {
   suspend: 'ui.subscriber.suspend',
   resume: 'ui.subscriber.resume',
+  offering: 'ui.subscriber.changeOffering',
   end: 'ui.subscriber.endOnDate',
 };
 
-const TITLE: Record<ProductChange, string> = {
+const TITLE: Record<ProductAction, string> = {
   suspend: 'Suspend',
   resume: 'Resume',
+  offering: 'Change offering',
   end: 'End on a date',
 };
 
 /** The change items the row offers, from what it already shows. */
-export function offeredChanges(product: AccountProduct): ProductChange[] {
+export function offeredChanges(
+  product: AccountProduct,
+  ratingType?: Account['ratingType'],
+): ProductAction[] {
   const statusPending = product.pendingChanges.some((c) => c.kind === 'status');
-  const items: ProductChange[] = [];
+  const items: ProductAction[] = [];
   if (product.status === 'active' && !statusPending) items.push('suspend');
   if (
     product.status === 'suspended' &&
@@ -41,6 +57,15 @@ export function offeredChanges(product: AccountProduct): ProductChange[] {
   ) {
     items.push('resume');
   }
+  const ended = product.terminationDate !== null || product.status === 'pendingTerminate';
+  if (
+    (product.status === 'active' || product.status === 'suspended') &&
+    !ended &&
+    !product.pendingChanges.some((c) => c.kind === 'offering') &&
+    (ratingType !== 'prepaid' || product.paidThrough != null)
+  ) {
+    items.push('offering');
+  }
   if (product.terminationDate === null && product.status !== 'pendingTerminate') items.push('end');
   return items;
 }
@@ -49,8 +74,8 @@ export function ProductActionsMenu({
   items,
   onPick,
 }: {
-  items: ProductChange[];
-  onPick: (change: ProductChange) => void;
+  items: ProductAction[];
+  onPick: (change: ProductAction) => void;
 }) {
   const [open, setOpen] = useState(false);
   if (items.length === 0) return null;
@@ -236,3 +261,238 @@ export function ProductChangeDialog({
     </Modal>
   );
 }
+
+export function ChangeOfferingDialog({
+  account,
+  product,
+  onClose,
+  onDone,
+  onRefresh,
+}: {
+  account: Account;
+  product: AccountProduct;
+  onClose: () => void;
+  onDone: (message: string, accepted?: PendingOrder) => void;
+  onRefresh: () => void;
+}) {
+  const context = useSystemContext();
+  const today = context.businessDate;
+  const prepaid = account.ratingType === 'prepaid';
+  // prepaid: the change applies at the next renewal, max(paidThrough, today); postpaid: the
+  // cycle boundary by default, any date from today
+  const boundary =
+    product.paidThrough != null && product.paidThrough > today ? product.paidThrough : today;
+  const [day, setDay] = useState(
+    prepaid
+      ? boundary
+      : product.nextChargeDate != null && product.nextChargeDate >= today
+        ? product.nextChargeDate
+        : today,
+  );
+  const [offeringId, setOfferingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [unsure, setUnsure] = useState(false);
+  const saving = useRef(false);
+  const name = product.productOffering.name;
+  const valid = isIsoDate(day) && (prepaid || day >= today);
+
+  const offerings = useResource('offerings', (signal) =>
+    loadSellableOfferings(context.now, account.currency, signal),
+  );
+  const previewKey = offeringId !== null && valid ? `change:${offeringId}|${day}` : 'none';
+  const preview = useResource<FirstCharge | null>(previewKey, (signal) =>
+    offeringId !== null && valid
+      ? loadFirstCharge(account.id, offeringId, day, signal)
+      : Promise.resolve(null),
+  );
+  const q = filter.trim().toLowerCase();
+  const visible =
+    offerings.status === 'ok'
+      ? offerings.data.filter(
+          (o) =>
+            o.id !== product.productOffering.id &&
+            o.priceCents !== null &&
+            (!q || o.name.toLowerCase().includes(q) || (o.code ?? '').toLowerCase().includes(q)),
+        )
+      : [];
+  const chosen = visible.find((o) => o.id === offeringId);
+
+  async function submit() {
+    if (!valid || offeringId === null || chosen === undefined || saving.current) return;
+    saving.current = true;
+    setBusy(true);
+    setProblem(null);
+    setUnsure(false);
+    try {
+      const result = await orderOfferingChange(
+        account.id,
+        product.id,
+        offeringId,
+        day,
+        context.timeZone,
+      );
+      if (result.state === 'completed') {
+        onDone(`${name}: change to ${chosen.name} recorded for ${day}`);
+      } else if (result.state === 'inProgress') {
+        onDone(`${name}: change to ${chosen.name} accepted, the billing worker completes it`, {
+          id: result.id,
+          label: `Change of ${name} to ${chosen.name}`,
+        });
+      } else {
+        setProblem(`Rejected: ${result.reasons.join(' ') || result.state}`);
+      }
+    } catch (error) {
+      if (uncertain(error)) {
+        setUnsure(true);
+        setProblem(`${explain(error)}. Unsure whether it was saved: Refresh to check.`);
+      } else {
+        setProblem(explain(error));
+      }
+    } finally {
+      saving.current = false;
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Change offering: ${name}`}
+      width={720}
+      onClose={() => {
+        if (!saving.current) onClose();
+      }}
+      ui="ui.subscriber.offeringChange"
+      footer={
+        <>
+          {problem !== null && (
+            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+              {problem}
+            </div>
+          )}
+          {unsure && (
+            <Button
+              onClick={() => {
+                onClose();
+                onRefresh();
+              }}
+            >
+              Refresh
+            </Button>
+          )}
+          <Button disabled={busy} onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!valid || offeringId === null || busy}
+            onClick={() => void submit()}
+          >
+            Change offering
+          </Button>
+        </>
+      }
+    >
+      <div className="bss-modal-body">
+        <section>
+          <div className="bss-step-head">
+            1. New offering
+            <TextInput
+              className="filter"
+              width={230}
+              placeholder="Filter offerings"
+              aria-label="Filter offerings"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+            />
+          </div>
+          <div className="bss-offer-list" role="radiogroup" aria-label="Offering">
+            {offerings.status === 'loading' && <SkeletonRows columns={OFFER_COLUMNS} rows={3} />}
+            {offerings.status === 'error' && (
+              <ErrorBlock
+                title="Failed to load offerings"
+                error={offerings.error}
+                onRetry={offerings.retry}
+              />
+            )}
+            {offerings.status === 'ok' && visible.length === 0 && (
+              <div className="bss-state">
+                <div className="text">No other active offerings.</div>
+              </div>
+            )}
+            {visible.map((offer) => (
+              <div
+                key={offer.id}
+                className="bss-offer"
+                role="radio"
+                aria-checked={offer.id === offeringId}
+                tabIndex={0}
+                onClick={() => setOfferingId(offer.id)}
+                onKeyDown={(event) => {
+                  if (event.key === ' ' || event.key === 'Enter') setOfferingId(offer.id);
+                }}
+              >
+                <span className="bss-radio" />
+                <span>
+                  <span className="bss-name">{offer.name}</span>
+                  {offer.code !== null && <div className="bss-code">{offer.code}</div>}
+                </span>
+                <span>{offer.specification}</span>
+                <span className="num num-right">
+                  {formatCents(offer.priceCents ?? 0)} / {offer.interval ?? 'mo'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section>
+          <div className="bss-step-head">2. Date</div>
+          <TextInput
+            mono
+            width={180}
+            type={prepaid ? 'text' : 'date'}
+            aria-label="Date"
+            min={prepaid ? undefined : today}
+            value={day}
+            readOnly={prepaid}
+            onChange={(event) => {
+              if (!prepaid) setDay(event.target.value);
+            }}
+          />
+          {!valid && <div className="bss-inline-error">Enter a date from {today}.</div>}
+          <p className="bss-secondary">
+            {prepaid
+              ? `The change applies at the next renewal (${day}) and only when the balance covers the new offering's interval; until then the current offering stays.`
+              : `The old offering is billed until ${addDays(day, -1)}, the new one from ${day}; a charge already billed for the period is adjusted by a prorated refund.`}
+          </p>
+        </section>
+        <section>
+          <div className="bss-step-head">
+            3. {prepaid ? `Renewal on ${day}` : `New offering from ${day}`}
+          </div>
+          <div className="bss-preview">
+            {offeringId === null ? (
+              <div className="bss-hint">Select an offering to see the calculation</div>
+            ) : (
+              <Preview
+                preview={preview}
+                account={account}
+                start={day}
+                today={today}
+                onTopUp={undefined}
+              />
+            )}
+          </div>
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
+const OFFER_COLUMNS = [
+  { key: 'radio', label: '', width: '28px' },
+  { key: 'name', label: '', width: '1fr' },
+  { key: 'spec', label: '', width: '170px' },
+  { key: 'price', label: '', width: '150px', align: 'right' as const, mono: true },
+];

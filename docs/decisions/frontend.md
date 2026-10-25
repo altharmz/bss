@@ -45,6 +45,28 @@ Deviations (the code differs from the design's facts):
 - The detail shows the product by name or short id without a link: there is no product screen.
 - A transfer or other action still `created` reads "Pending" (the design names Held only for holds).
 
+## Slice 5: Change offering (2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 5), frontend only.
+**Change offering…** (`ui.subscriber.changeOffering`) joins the Actions menu for an active or
+suspended product with no end and no pending offering change (prepaid also needs `paidThrough`).
+`ChangeOfferingDialog` (`screens/ProductActions.tsx`, `orderOfferingChange` in `api/bss.ts`,
+`ui.subscriber.offeringChange`) lists the Add product offerings (`loadSellableOfferings`, with a
+price in the account currency, the current one excluded), takes the date and shows the first-charge
+preview (`Preview` of `AddProduct.tsx`, now exported) labelled "New offering from {D}" or, prepaid,
+"Renewal on {D}". Postpaid D defaults to `nextChargeDate` and may be any day from today; prepaid D
+is read-only `max(paidThrough, today)`. Body: one `modify` item, `product: {id}` and
+`productOffering: {id, href, @type}`, never a `status`. The pending change then shows through
+slice 4's line and Undo. Tests: `SubscriberCard.test.tsx` ("change offering": menu rules, both
+bodies, offering list, fixed prepaid date, rejection and 422 shown) and the replays
+`tests/test_ui_requests.py::test_postpaid_offering_change_as_the_ui_sends_it` and
+`::test_prepaid_offering_change_as_the_ui_sends_it`.
+Deviations:
+- The menu tests of slice 4 listed the items exactly, so the new item changed their expectations
+  (TEST-CHANGE in the commit); no check was weakened.
+- An offering without a recurring price in the account currency is not offered (the design's
+  "source of Add product" lists those with a dash; a change to one has no price to preview).
+
 ## Slice 4: Product actions and pending changes (2026-10-25)
 
 Built as designed ([next-slices-design.md](../next-slices-design.md) section 4). The product row
@@ -69,7 +91,7 @@ Deviations:
 - The status and end orders carry no Idempotency-Key, like `orderDelete` (a repeat after an
   uncertain submission is refused by the server as a second change on the same day); an uncertain
   outcome says "Unsure whether it was saved: Refresh to check" with Refresh.
-- Change offering is slice 5 and is not in the menu yet.
+- Change offering followed in slice 5 (below).
 
 ## Slice 3: Cancel, release, remove and edit-note writes (2026-10-25)
 

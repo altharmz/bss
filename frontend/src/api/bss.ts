@@ -931,6 +931,36 @@ export async function orderProductChange(
   return outcome(order);
 }
 
+/** Change a product's offering on `day`: one modify item with the new offering and no status
+ * (a status in the same item is a 422 by rule). The offering ref carries its catalog href. */
+export async function orderOfferingChange(
+  accountId: string,
+  productId: string,
+  offeringId: string,
+  day: string,
+  timeZone: string,
+): Promise<OrderOutcome> {
+  const order = await postJson<OrderBody>(PATHS.orders, {
+    '@type': 'ProductOrder',
+    billingAccount: { id: accountId, '@type': 'BillingAccountRef' },
+    requestedStartDate: requestedDate(day, timeZone),
+    productOrderItem: [
+      {
+        '@type': 'ProductOrderItem',
+        id: '1',
+        action: 'modify',
+        product: { id: productId, '@type': 'ProductRef' },
+        productOffering: {
+          id: offeringId,
+          href: `${PATHS.offerings}/${offeringId}`,
+          '@type': 'ProductOfferingRef',
+        },
+      },
+    ],
+  });
+  return outcome(order);
+}
+
 /** Undo a pending change: cancel (TMF622 cancelProductOrder) the order that holds it. */
 export async function undoPendingChange(orderId: string): Promise<void> {
   await postJson(PATHS.cancellations, {

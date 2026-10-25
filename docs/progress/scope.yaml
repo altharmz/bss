@@ -320,6 +320,8 @@ items:
   - {id: ui.subscriber.endOnDate, area: ui, stage: 5, title: "End a product on a date"}
   - {id: ui.subscriber.productChange, area: ui, stage: 5, title: "Product change dialog (suspend, resume, end)"}
   - {id: ui.subscriber.pendingChange, area: ui, stage: 5, title: "Pending change line on a product"}
+  - {id: ui.subscriber.changeOffering, area: ui, stage: 5, title: "Change offering menu item"}
+  - {id: ui.subscriber.offeringChange, area: ui, stage: 5, title: "Change offering dialog (both modes)"}
   - {id: ui.subscriber.undoChange, area: ui, stage: 5, title: "Undo a pending change (cancel its order)"}
   - {id: ui.subscriber.topUpProduct, area: ui, stage: 5, title: "Top up from a funding-suspended product"}
   - {id: ui.subscriber.bills, area: ui, stage: 5, title: "Bills panel on the subscriber card"}
