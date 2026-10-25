@@ -32,8 +32,8 @@ Status: `todo` · `next` · `done: <commit subject>` · `split`
 |---|---|---|---|---|
 | 1 | Prepaid first-charge preview in Add product | UI | The prepaid preview shows to pay / available / shortfall, with a Top-up handoff. Postpaid is unchanged. | done: Show the prepaid first-charge preview in Add product with a Top-up handoff |
 | 2 | Balance action history on the card; transactions include balance actions | backend (bug fix, internal contract) + UI | The newest `balanceAfter` equals the ledger on a prepaid account with adjustments and transfers. The history panel lists sent and received actions with a detail dialog. | done: Show prepaid balance actions on the card and include them in transactions |
-| 3 | Cancel top-ups and adjustments, release holds, remove refused actions, edit notes | UI | The four PATCH bodies and the DELETE are pinned and replayed. A 409 is shown in place. | next |
-| 4 | Product actions: suspend, resume, end on a date; pending changes with Undo | backend (internal `pendingChanges`) + UI | Bodies for both modes are pinned and replayed. Pending changes show and can be undone. | todo |
+| 3 | Cancel top-ups and adjustments, release holds, remove refused actions, edit notes | UI | The four PATCH bodies and the DELETE are pinned and replayed. A 409 is shown in place. | done: Cancel top-ups and adjustments, release holds, remove refused actions, edit notes in the Balance action dialog |
+| 4 | Product actions: suspend, resume, end on a date; pending changes with Undo | backend (internal `pendingChanges`) + UI | Bodies for both modes are pinned and replayed. Pending changes show and can be undone. | next |
 | 5 | Change offering (both modes) | UI | Postpaid any date from today. Prepaid fixed at `max(paidThrough, today)`. Pinned and replayed. | todo |
 | 6 | Prepaid commands screen | UI | List, filters, detail, and Retry only for `failedTechnical`, pinned. Sidebar badge. | todo |
 | 7 | Prepaid browser check and release evidence | e2e | `make web-e2e` passes the prepaid steps. prepaid-release.md is updated. | todo |

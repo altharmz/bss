@@ -1,6 +1,15 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { PrepaidBalance } from '../api/bss';
-import { loadBalanceAction, loadBalanceActions, type BalanceAction } from '../api/history';
+import { explain } from '../api/client';
+import { uncertain } from './submissionKey';
+import {
+  cancelAction,
+  editNote,
+  loadBalanceAction,
+  loadBalanceActions,
+  removeAction,
+  type BalanceAction,
+} from '../api/history';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
@@ -8,12 +17,13 @@ import { businessDate, clockTime } from '../format/dates';
 import { shortId } from '../format/ids';
 import { formatCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Modal, Panel, Pill } from '../ui/kit';
+import { Button, Modal, Panel, Pill, TextInput, useToast } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 
 // The prepaid card's Balance actions panel: TMF654 balanceActionHistory, read-only
-// (docs/decisions/frontend.md, slice 2 of docs/next-slices.md). Transfers the account
+// (docs/decisions/frontend.md, slice 2 of docs/next-slices.md); the detail dialog carries
+// the cancel, release, remove and edit-note writes (slice 3). Transfers the account
 // received are found by the receiver bucket, the rest by the account.
 
 const COLUMNS: Column[] = [
@@ -66,14 +76,22 @@ export function BalanceActions({
   balance,
   accountId,
   version,
+  onChanged,
 }: {
   balance: ResourceWithRetry<PrepaidBalance | null>;
   accountId: string;
   version: number;
+  /** A write succeeded: the card reloads (the version bumps). */
+  onChanged: () => void;
 }) {
   if (balance.status === 'ok' && balance.data !== null) {
     return (
-      <ActionsPanel accountId={accountId} bucketId={balance.data.bucketId} version={version} />
+      <ActionsPanel
+        accountId={accountId}
+        bucketId={balance.data.bucketId}
+        version={version}
+        onChanged={onChanged}
+      />
     );
   }
   return (
@@ -95,10 +113,12 @@ function ActionsPanel({
   accountId,
   bucketId,
   version,
+  onChanged,
 }: {
   accountId: string;
   bucketId: string;
   version: number;
+  onChanged: () => void;
 }) {
   const { timeZone } = useSystemContext();
   const [open, setOpen] = useState<BalanceAction | null>(null);
@@ -145,7 +165,12 @@ function ActionsPanel({
         </ListState>
       </div>
       {open !== null && (
-        <ActionDialog id={open.id} accountId={accountId} onClose={() => setOpen(null)} />
+        <ActionDialog
+          id={open.id}
+          accountId={accountId}
+          onClose={() => setOpen(null)}
+          onChanged={onChanged}
+        />
       )}
     </Panel>
   );
@@ -159,10 +184,12 @@ function ActionDialog({
   id,
   accountId,
   onClose,
+  onChanged,
 }: {
   id: string;
   accountId: string;
   onClose: () => void;
+  onChanged: () => void;
 }) {
   const { timeZone } = useSystemContext();
   const detail = useResource(`balance-action:${id}`, (signal) =>
@@ -211,16 +238,201 @@ function ActionDialog({
           />
         )}
         {detail.status === 'ok' && (
-          <dl className="bss-details">
-            {rows.map(([label, value]) => (
-              <div key={label} style={{ display: 'contents' }}>
-                <dt>{label}</dt>
-                <dd>{value}</dd>
-              </div>
-            ))}
-          </dl>
+          <>
+            <dl className="bss-details">
+              {rows.map(([label, value]) => (
+                <div key={label} style={{ display: 'contents' }}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+            <ActionWrites action={detail.data} onChanged={onChanged} />
+          </>
         )}
       </div>
     </Modal>
+  );
+}
+
+type Pending = 'cancel' | 'remove' | null;
+
+/** The writes of one balance action (docs/next-slices-design.md section 3). The UI offers
+ * what the entry's kind and status allow and shows the server's refusal in place. */
+function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged: () => void }) {
+  const toast = useToast();
+  const [pending, setPending] = useState<Pending>(null);
+  const [editing, setEditing] = useState(false);
+  const [reason, setReason] = useState(action.reason ?? '');
+  const [description, setDescription] = useState(action.description ?? '');
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [unsure, setUnsure] = useState(false);
+  const running = useRef(false);
+
+  const { kind, status } = action;
+  const amount = formatCents(Math.abs(action.cents));
+  const cancel =
+    status === 'completed' && kind === 'topup'
+      ? {
+          button: 'Cancel top-up',
+          ui: 'ui.subscriber.prepaid.cancelTopup',
+          text: `Takes ${amount} back off the balance. Only possible while none of it was spent or held. The payment record stays.`,
+          done: 'Top-up cancelled',
+        }
+      : status === 'completed' && kind === 'adjustment'
+        ? {
+            button: 'Cancel adjustment',
+            ui: 'ui.subscriber.prepaid.cancelAdjustment',
+            text: `Reverses this ${action.cents < 0 ? 'debit' : 'credit'} of ${amount}.`,
+            done: 'Adjustment cancelled',
+          }
+        : status === 'created' && kind === 'reservation'
+          ? {
+              button: 'Release hold',
+              ui: 'ui.subscriber.prepaid.releaseHold',
+              text: `Makes ${amount} available again.`,
+              done: 'Hold released',
+            }
+          : null;
+  const removable = status === 'failed';
+  const editable = !removable && kind !== 'transfer';
+
+  async function run(write: () => Promise<void>, message: string) {
+    if (running.current) return;
+    running.current = true;
+    setBusy(true);
+    setProblem(null);
+    setUnsure(false);
+    try {
+      await write();
+      toast(message);
+      onChanged();
+    } catch (error) {
+      setUnsure(uncertain(error));
+      setProblem(
+        uncertain(error)
+          ? `${explain(error)}. Unsure whether it was saved: Refresh to check.`
+          : explain(error),
+      );
+    } finally {
+      running.current = false;
+      setBusy(false);
+    }
+  }
+
+  const note = () => {
+    const changed: { reason?: string | null; description?: string | null } = {};
+    if (reason.trim() !== (action.reason ?? '')) changed.reason = reason.trim() || null;
+    if (description.trim() !== (action.description ?? ''))
+      changed.description = description.trim() || null;
+    return changed;
+  };
+  const changed = note();
+
+  if (cancel === null && !removable && !editable) return null;
+  return (
+    <section>
+      {problem !== null && (
+        <div className="bss-inline-error" role="alert">
+          {problem}{' '}
+          {unsure && (
+            <Button small onClick={onChanged}>
+              Refresh
+            </Button>
+          )}
+        </div>
+      )}
+      {pending !== null ? (
+        <span className="bss-confirm">
+          <span className="ask">
+            {pending === 'cancel'
+              ? (cancel?.text ?? '')
+              : 'Deletes this refused request. It moved no money.'}
+          </span>
+          <Button
+            variant="danger"
+            small
+            disabled={busy}
+            onClick={() =>
+              void (pending === 'cancel' && cancel !== null
+                ? run(() => cancelAction(kind, action.id, action.reason), cancel.done)
+                : run(() => removeAction(kind, action.id), 'Refused request removed'))
+            }
+          >
+            Yes
+          </Button>
+          <Button small disabled={busy} onClick={() => setPending(null)}>
+            No
+          </Button>
+        </span>
+      ) : (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {cancel !== null && (
+            <Button
+              variant="danger-outline"
+              small
+              data-ui={cancel.ui}
+              onClick={() => setPending('cancel')}
+            >
+              {cancel.button}
+            </Button>
+          )}
+          {removable && (
+            <Button
+              variant="danger-outline"
+              small
+              data-ui="ui.subscriber.prepaid.removeFailed"
+              onClick={() => setPending('remove')}
+            >
+              Remove
+            </Button>
+          )}
+          {editable && !editing && (
+            <Button small data-ui="ui.subscriber.prepaid.editNote" onClick={() => setEditing(true)}>
+              Edit note
+            </Button>
+          )}
+        </div>
+      )}
+      {editable && editing && (
+        <div data-ui="ui.subscriber.prepaid.editNoteForm">
+          <div className="bss-step-head">Reason</div>
+          <TextInput
+            aria-label="Reason"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+          <div className="bss-step-head">Description</div>
+          <TextInput
+            aria-label="Description"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+          <div style={{ marginTop: 8 }}>
+            <Button
+              variant="primary"
+              small
+              disabled={
+                busy ||
+                Object.keys(changed).length === 0 ||
+                (kind === 'reservation' && reason.trim() === '')
+              }
+              onClick={() =>
+                void run(
+                  () => editNote(kind, action.id, status, reason.trim() || null, changed),
+                  'Note saved',
+                )
+              }
+            >
+              Save note
+            </Button>{' '}
+            <Button small disabled={busy} onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

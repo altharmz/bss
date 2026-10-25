@@ -45,6 +45,27 @@ Deviations (the code differs from the design's facts):
 - The detail shows the product by name or short id without a link: there is no product screen.
 - A transfer or other action still `created` reads "Pending" (the design names Held only for holds).
 
+## Slice 3: Cancel, release, remove and edit-note writes (2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 3), frontend only.
+The Balance action dialog (`PrepaidHistory.tsx` `ActionWrites`, `api/history.ts`) offers Cancel
+top-up, Cancel adjustment, Release hold, Remove and Edit note (markers
+`ui.subscriber.prepaid.cancelTopup|cancelAdjustment|releaseHold|removeFailed|editNote`), each
+cancel/remove behind an inline Yes/No with the design's texts, one request, a toast and a card
+reload. A 409 shows the server's message in the dialog, which stays open; a 5xx says "Unsure
+whether it was saved" with Refresh. Tests: `SubscriberCard.test.tsx` ("writes on a balance
+action": every body, buttons per kind and status, the 409, the 5xx) and
+`tests/test_ui_requests.py::test_balance_action_writes_as_the_ui_sends_them` (replay: reversed
+top-up, released hold, 409 for a held top-up, DELETE of a refused action).
+Deviations (the code differs from the design's facts):
+- Every `*_Update` schema requires `status`, so Edit note sends the current status with the
+  changed fields (a repeat is a no-op 200). A hold's also requires `reason`: Release hold sends
+  the stored reason, or "Released by operator" when it has none, and Edit note on a hold sends
+  the reason and cannot clear it.
+- The cancel/remove/edit reload bumps the card `version`, and the card unmounts while it
+  reloads, so the dialog closes after a successful write (the toast confirms) instead of
+  showing the reloaded detail.
+
 ## Sidebar grouped by TMF area; global Orders screen (2026-10-21)
 
 Decided by the human on 2026-10-21. Nothing is implemented yet. It replaces the single "Operations"

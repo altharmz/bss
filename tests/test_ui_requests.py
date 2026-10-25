@@ -635,6 +635,116 @@ def test_prepaid_money_forms_as_the_ui_sends_them(api):
     assert remaining() == Decimal("1230.50")
 
 
+def test_balance_action_writes_as_the_ui_sends_them(api):
+    """cancelAction() / editNote() / removeAction() (api/history.ts), pinned in
+    SubscriberCard.test.tsx: merge patches `{"status":"cancelled"}` and the note fields, and a
+    DELETE without a body. A cancelled top-up reverses, a released hold frees funds, a refused
+    action is deleted, and a top-up with held funds is a 409 with a message."""
+    prepay = "/tmf-api/prepayBalanceManagement/v4"
+    account = apidata.account(api, ratingType="prepaid")
+    bucket = api.get(f"{prepay}/bucket?partyAccount.id={account['id']}&offset=0&limit=100").json()[
+        0
+    ]
+    where = {"bucket": {"id": bucket["id"]}}
+    owner = {"id": account["id"], "@referredType": "BillingAccount"}
+    money = {"units": "USD"}
+
+    def stored(path, body, key):
+        made = api.post(f"{prepay}/{path}", body, headers={"Idempotency-Key": key})
+        assert made.status_code == 201, made.text
+        return made.json()
+
+    def values():
+        found = api.get(f"{prepay}/bucket/{bucket['id']}").json()
+        return found["remainingValue"]["amount"], found["reservedValue"]["amount"]
+
+    def topup(amount, key):
+        return stored(
+            "topupBalance",
+            {
+                "@type": "TopupBalance",
+                "amount": {**money, "amount": amount},
+                "usageType": "monetary",
+                "partyAccount": owner,
+                "paymentMethod": {"id": "cash", "name": "cash"},
+                **where,
+            },
+            key,
+        )
+
+    cancel = {"status": "cancelled"}
+    first = topup(50, "w-topup-1")
+    assert values() == (50, 0)
+    cancelled = api.patch(f"{prepay}/topupBalance/{first['id']}", cancel)
+    assert cancelled.status_code == 200 and cancelled.json()["status"] == "cancelled"
+    assert values() == (0, 0)
+
+    second = topup(50, "w-topup-2")
+    noted = api.patch(
+        f"{prepay}/topupBalance/{second['id']}",
+        {"status": "completed", "reason": "Cash at the desk", "description": None},
+    )
+    assert noted.status_code == 200 and noted.json()["reason"] == "Cash at the desk"
+    hold = stored(
+        "reserveBalance",
+        {
+            "@type": "ReserveBalance",
+            "amount": {**money, "amount": 30},
+            "usageType": "monetary",
+            "partyAccount": owner,
+            **where,
+            "validFor": {"endDateTime": "2026-10-06T00:00:00+03:00"},
+        },
+        "w-hold-1",
+    )
+    assert values() == (20, 30)  # remainingValue is the spendable part
+    blocked = api.patch(f"{prepay}/topupBalance/{second['id']}", cancel)
+    assert blocked.status_code == 409 and blocked.json()["message"]
+    # a hold's update schema requires `reason`: the UI repeats it or states one
+    released = api.patch(
+        f"{prepay}/reserveBalance/{hold['id']}",
+        {"status": "cancelled", "reason": "Released by operator"},
+    )
+    assert released.status_code == 200 and released.json()["status"] == "cancelled"
+    assert values() == (50, 0)
+    renamed = api.patch(
+        f"{prepay}/reserveBalance/{hold['id']}", {"status": "cancelled", "reason": "Deposit"}
+    )
+    assert renamed.status_code == 200 and renamed.json()["reason"] == "Deposit"
+
+    credit = stored(
+        "adjustBalance",
+        {
+            "@type": "AdjustBalance",
+            "amount": {**money, "amount": 12.5},
+            "usageType": "monetary",
+            **where,
+        },
+        "w-adjust-1",
+    )
+    assert values() == (62.5, 0)
+    undone = api.patch(f"{prepay}/adjustBalance/{credit['id']}", cancel)
+    assert undone.status_code == 200 and undone.json()["status"] == "cancelled"
+    assert values() == (50, 0)
+
+    refused = stored(
+        "adjustBalance",
+        {
+            "@type": "AdjustBalance",
+            "amount": {**money, "amount": -5000},
+            "usageType": "monetary",
+            **where,
+        },
+        "w-adjust-2",
+    )
+    assert refused["status"] == "failed"
+    removed = api.request("DELETE", f"{prepay}/adjustBalance/{refused['id']}")
+    assert removed.status_code == 204 and removed.content == b""
+    gone = api.get(f"{prepay}/balanceActionHistory/{refused['id']}")
+    assert gone.status_code == 404
+    assert values() == (50, 0)
+
+
 def test_prepaid_transfer_as_the_ui_sends_it(api, db_conn):
     """transferRequest() and findReceiver() (api/transfer.ts), pinned in SubscriberCard.test.tsx:
     the receiver is found by number (inventory value filter, the product's account, that

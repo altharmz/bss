@@ -336,7 +336,12 @@ function Card({
       <RefundsPanel accountId={account.id} version={version} />
 
       {account.ratingType === 'prepaid' && (
-        <BalanceActions balance={balance} accountId={account.id} version={version} />
+        <BalanceActions
+          balance={balance}
+          accountId={account.id}
+          version={version}
+          onChanged={reload}
+        />
       )}
 
       <div className="bss-two-col">

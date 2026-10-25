@@ -1999,4 +1999,215 @@ describe('prepaid balance actions', () => {
     for (const label of ['Transfer out', 'Transfer in', 'Reversal', 'Adjustment'])
       expect(await within(tx).findByText(label)).toBeTruthy();
   });
+
+  describe('writes on a balance action', () => {
+    const writes = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
+      fetchMock.mock.calls
+        .filter(([, init]) => init?.method === 'PATCH' || init?.method === 'DELETE')
+        .map(([url, init]) => [init?.method, String(url), init?.body ? String(init.body) : null]);
+    const detailOf = async (body: object, rowText: string, over: Record<string, Handler> = {}) => {
+      const stub = backend(
+        routes({
+          [OWN]: list(body),
+          [RECEIVED]: list(),
+          [`GET ${HISTORY}/${(body as { id: string }).id}`]: () => json(body),
+          ...over,
+        }),
+        PREPAID,
+      );
+      await open();
+      await waitFor(() => expect(rowsOf()).toHaveLength(1));
+      fireEvent.click(within(panel('Balance actions')).getByText(rowText));
+      const dialog = await screen.findByRole('dialog', { name: 'Balance action' });
+      await within(dialog).findByText('Kind');
+      return { dialog, ...stub };
+    };
+    const buttons = (dialog: HTMLElement) =>
+      within(dialog)
+        .queryAllByRole('button')
+        .map((b) => b.textContent)
+        .filter((t) => t !== '×');
+
+    it('cancels a completed top-up after a confirmation, then reloads the card', async () => {
+      const { dialog, fetchMock, calls } = await detailOf(topup, 'Top-up', {
+        [`PATCH ${PREPAY}/topupBalance/${T1}`]: () => json({ ...topup, status: 'cancelled' }),
+      });
+      expect(buttons(dialog)).toEqual(['Cancel top-up', 'Edit note']);
+      expectUi('ui.subscriber.prepaid.cancelTopup');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel top-up' }));
+      expect(
+        within(dialog).getByText(/Takes 50\.00 back off the balance\. Only possible while none/),
+      ).toBeTruthy();
+      expect(writes(fetchMock)).toEqual([]);
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+      expect(await screen.findByText('Top-up cancelled')).toBeTruthy();
+      expect(writes(fetchMock)).toEqual([
+        ['PATCH', `${PREPAY}/topupBalance/${T1}`, '{"status":"cancelled"}'],
+      ]);
+      await waitFor(() => expect(calls.filter((c) => c === OWN).length).toBeGreaterThan(1));
+    });
+
+    it('cancels an adjustment and releases a hold with the same body', async () => {
+      const first = await detailOf(debit, 'Debit adjustment', {
+        [`PATCH ${PREPAY}/adjustBalance/${T2}`]: () => json({ ...debit, status: 'cancelled' }),
+      });
+      expectUi('ui.subscriber.prepaid.cancelAdjustment');
+      fireEvent.click(within(first.dialog).getByRole('button', { name: 'Cancel adjustment' }));
+      expect(within(first.dialog).getByText('Reverses this debit of 5.00.')).toBeTruthy();
+      fireEvent.click(within(first.dialog).getByRole('button', { name: 'Yes' }));
+      await waitFor(() =>
+        expect(writes(first.fetchMock)).toEqual([
+          ['PATCH', `${PREPAY}/adjustBalance/${T2}`, '{"status":"cancelled"}'],
+        ]),
+      );
+    });
+
+    it('releases a hold', async () => {
+      const { dialog, fetchMock } = await detailOf(hold, 'Hold', {
+        [`PATCH ${PREPAY}/reserveBalance/${T4}`]: () => json({ ...hold, status: 'cancelled' }),
+      });
+      expectUi('ui.subscriber.prepaid.releaseHold');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Release hold' }));
+      expect(within(dialog).getByText('Makes 10.00 available again.')).toBeTruthy();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+      await waitFor(() =>
+        expect(writes(fetchMock)).toEqual([
+          [
+            'PATCH',
+            `${PREPAY}/reserveBalance/${T4}`,
+            '{"status":"cancelled","reason":"Pre-authorisation"}',
+          ],
+        ]),
+      );
+    });
+
+    it('releases a hold without a reason with a stated one, which ReserveBalance_Update requires', async () => {
+      const bare = { ...hold, reason: undefined };
+      const { dialog, fetchMock } = await detailOf(bare, 'Hold', {
+        [`PATCH ${PREPAY}/reserveBalance/${T4}`]: () => json({ ...bare, status: 'cancelled' }),
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Release hold' }));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+      await waitFor(() =>
+        expect(writes(fetchMock)).toEqual([
+          [
+            'PATCH',
+            `${PREPAY}/reserveBalance/${T4}`,
+            '{"status":"cancelled","reason":"Released by operator"}',
+          ],
+        ]),
+      );
+    });
+
+    it('edits the note of a hold with its status and reason, and does not allow clearing the reason', async () => {
+      const { dialog, fetchMock } = await detailOf(hold, 'Hold', {
+        [`PATCH ${PREPAY}/reserveBalance/${T4}`]: () => json(hold),
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Edit note' }));
+      fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: '' } });
+      const save = within(dialog).getByRole('button', { name: 'Save note' }) as HTMLButtonElement;
+      expect(save.disabled).toBe(true);
+      fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'Deposit' } });
+      fireEvent.click(save);
+      await waitFor(() =>
+        expect(writes(fetchMock)).toEqual([
+          ['PATCH', `${PREPAY}/reserveBalance/${T4}`, '{"status":"created","reason":"Deposit"}'],
+        ]),
+      );
+    });
+
+    it('removes a refused action with a DELETE and no body, on any path', async () => {
+      const { dialog, fetchMock } = await detailOf(refused, 'Debit adjustment', {
+        [`DELETE ${PREPAY}/adjustBalance/${T7}`]: () => new Response(null, { status: 204 }),
+      });
+      expect(buttons(dialog)).toEqual(['Remove']);
+      expectUi('ui.subscriber.prepaid.removeFailed');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+      expect(
+        within(dialog).getByText('Deletes this refused request. It moved no money.'),
+      ).toBeTruthy();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+      await waitFor(() =>
+        expect(writes(fetchMock)).toEqual([['DELETE', `${PREPAY}/adjustBalance/${T7}`, null]]),
+      );
+    });
+
+    it('removes a refused transfer through transferBalance', async () => {
+      const failedTransfer = { ...sent, status: 'failed' };
+      const { dialog, fetchMock } = await detailOf(failedTransfer, 'Transfer to Ivan Sidorov', {
+        [`DELETE ${PREPAY}/transferBalance/${T5}`]: () => new Response(null, { status: 204 }),
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+      await waitFor(() =>
+        expect(writes(fetchMock)).toEqual([['DELETE', `${PREPAY}/transferBalance/${T5}`, null]]),
+      );
+    });
+
+    it('offers the buttons the kind and status allow', async () => {
+      const done = await detailOf({ ...credit, status: 'completed' }, 'Credit adjustment');
+      expect(buttons(done.dialog)).toEqual(['Cancel adjustment', 'Edit note']);
+    });
+
+    it('offers nothing on a completed transfer and only Edit note on a cancelled top-up', async () => {
+      const transfer = await detailOf(sent, 'Transfer to Ivan Sidorov');
+      expect(buttons(transfer.dialog)).toEqual([]);
+    });
+
+    it('offers only Edit note on a cancelled top-up', async () => {
+      const { dialog } = await detailOf({ ...topup, status: 'cancelled' }, 'Top-up');
+      expect(buttons(dialog)).toEqual(['Edit note']);
+    });
+
+    it('sends only the changed note fields, an emptied one as null', async () => {
+      const { dialog, fetchMock } = await detailOf(topup, 'Top-up', {
+        [`PATCH ${PREPAY}/topupBalance/${T1}`]: () => json(topup),
+      });
+      expectUi('ui.subscriber.prepaid.editNote');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Edit note' }));
+      expectUi('ui.subscriber.prepaid.editNoteForm');
+      const save = within(dialog).getByRole('button', { name: 'Save note' }) as HTMLButtonElement;
+      expect(save.disabled).toBe(true);
+      fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: '' } });
+      fireEvent.change(within(dialog).getByLabelText('Description'), {
+        target: { value: ' Checked ' },
+      });
+      fireEvent.click(save);
+      await waitFor(() =>
+        expect(writes(fetchMock)).toEqual([
+          [
+            'PATCH',
+            `${PREPAY}/topupBalance/${T1}`,
+            '{"status":"completed","reason":null,"description":"Checked"}',
+          ],
+        ]),
+      );
+    });
+
+    it('shows a 409 in the dialog and keeps it open', async () => {
+      const { dialog, fetchMock } = await detailOf(topup, 'Top-up', {
+        [`PATCH ${PREPAY}/topupBalance/${T1}`]: () => tmfError(409, 'The top-up was partly spent'),
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel top-up' }));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+      expect((await within(dialog).findByRole('alert')).textContent).toContain(
+        'The top-up was partly spent',
+      );
+      expect(screen.getByRole('dialog', { name: 'Balance action' })).toBeTruthy();
+      expect(writes(fetchMock)).toHaveLength(1);
+      expect(within(dialog).queryByRole('button', { name: 'Refresh' })).toBeNull();
+    });
+
+    it('says it is unsure after a 5xx and offers Refresh', async () => {
+      const { dialog } = await detailOf(topup, 'Top-up', {
+        [`PATCH ${PREPAY}/topupBalance/${T1}`]: () => tmfError(500, 'database is down'),
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel top-up' }));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+      expect((await within(dialog).findByRole('alert')).textContent).toContain(
+        'Unsure whether it was saved',
+      );
+      expect(within(dialog).getByRole('button', { name: 'Refresh' })).toBeTruthy();
+    });
+  });
 });

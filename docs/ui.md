@@ -133,6 +133,13 @@ with the card. Transaction history also lists Adjustment, Reversal, Transfer in/
 API: `GET /tmf-api/prepayBalanceManagement/v4/balanceActionHistory?partyAccount.id=` and
 `?receiverBucket.id=`, `.../balanceActionHistory/{id}`, `.../bucket/{id}` (receiver name).
 
+The dialog also writes (`ui.subscriber.prepaid.cancelTopup`, `cancelAdjustment`, `releaseHold`,
+`removeFailed`, `editNote`): Cancel top-up / Cancel adjustment (completed) and Release hold
+(created) each ask Yes/No and send `PATCH {topupBalance|adjustBalance|reserveBalance}/{id}`
+`{"status":"cancelled"}` (a hold also repeats its `reason`); Remove (failed, any kind) sends
+`DELETE .../{id}`; Edit note (not failed, not transfers) sends the status and the changed
+`reason`/`description`. A 409 is shown in the dialog; success toasts and reloads the card.
+
 ### Deactivate a product (`ui.subscriber.deactivate`)
 
 A destructive button per product with an inline confirm. It places a **TMF622 order with

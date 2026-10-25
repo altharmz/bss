@@ -329,6 +329,12 @@ items:
   - {id: ui.subscriber.prepaid.failedCommands, area: ui, stage: 5, title: "Needs-attention panel of technically failed prepaid commands with Retry"}
   - {id: ui.subscriber.prepaid.history, area: ui, stage: 5, title: "Balance actions panel: TMF654 balanceActionHistory of the account and transfers it received"}
   - {id: ui.subscriber.prepaid.historyDetail, area: ui, stage: 5, title: "Balance action dialog: one action fetched fresh, with transfer parties and cost"}
+  - {id: ui.subscriber.prepaid.cancelTopup, area: ui, stage: 5, title: "Cancel a completed top-up from the Balance action dialog (PATCH status cancelled, confirmed)"}
+  - {id: ui.subscriber.prepaid.cancelAdjustment, area: ui, stage: 5, title: "Cancel a completed adjustment from the Balance action dialog"}
+  - {id: ui.subscriber.prepaid.releaseHold, area: ui, stage: 5, title: "Release an operator hold from the Balance action dialog"}
+  - {id: ui.subscriber.prepaid.removeFailed, area: ui, stage: 5, title: "Delete a refused (failed) balance action of any kind"}
+  - {id: ui.subscriber.prepaid.editNote, area: ui, stage: 5, title: "Edit the reason and description of a top-up, adjustment or hold"}
+  - {id: ui.subscriber.prepaid.editNoteForm, area: ui, stage: 5, title: "Note form of the Balance action dialog"}
   - {id: ui.addProduct.prepaidPreview, area: ui, stage: 5, title: "Prepaid first-charge preview in Add product: to pay, available, shortfall, ledger after"}
   - {id: ui.addProduct.topUpShortfall, area: ui, stage: 5, title: "Top up the shortfall from Add product: opens the Top-up form with the amount typed in"}
   - {id: ui.subscriber.refunds, area: ui, stage: 5, title: "Recorded refund history with payout metadata"}

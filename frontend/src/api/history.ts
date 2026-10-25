@@ -1,5 +1,5 @@
 import { PATHS } from './bss';
-import { getAll, getJson } from './client';
+import { getAll, getJson, patchJson, request } from './client';
 import { toCents } from '../format/money';
 
 // TMF654 balanceActionHistory: every top-up, hold, adjustment and transfer of a prepaid
@@ -176,4 +176,50 @@ export async function loadBalanceAction(
   const body = await getJson<HistoryBody>(`${HISTORY}/${id}`, signal);
   const [action] = await withReceivers([body], accountId, signal);
   return need(action, 'balance action');
+}
+
+const WRITE_PATH: Record<ActionKind, string> = {
+  topup: PATHS.topups,
+  adjustment: PATHS.adjustments,
+  reservation: PATHS.reservations,
+  transfer: '/tmf-api/prepayBalanceManagement/v4/transferBalance',
+};
+
+/** Used when a hold being released has no reason: ReserveBalance_Update requires one. */
+export const RELEASE_REASON = 'Released by operator';
+
+/** Cancel a completed top-up or adjustment, or release a hold (merge patch; the server
+ * refuses a spent top-up or an owned hold with a 409). A hold's update schema requires
+ * `reason`, so the stored one is repeated (a no-op) or RELEASE_REASON is set. */
+export async function cancelAction(
+  kind: ActionKind,
+  id: string,
+  reason: string | null,
+): Promise<void> {
+  await patchJson(`${WRITE_PATH[kind]}/${id}`, {
+    status: 'cancelled',
+    ...(kind === 'reservation' ? { reason: reason ?? RELEASE_REASON } : {}),
+  });
+}
+
+/** Change the note of a top-up, adjustment or hold: only the changed fields, an empty one as
+ * null. The *_Update schemas require `status` (repeating the current one is a no-op 200), and
+ * a hold's also `reason`, which can be replaced but not cleared. */
+export async function editNote(
+  kind: ActionKind,
+  id: string,
+  status: string,
+  reason: string | null,
+  note: { reason?: string | null; description?: string | null },
+): Promise<void> {
+  await patchJson(`${WRITE_PATH[kind]}/${id}`, {
+    status,
+    ...(kind === 'reservation' ? { reason } : {}),
+    ...note,
+  });
+}
+
+/** Remove a refused (`failed`) action of any kind: 204, it moved no money. */
+export async function removeAction(kind: ActionKind, id: string): Promise<void> {
+  await request('DELETE', `${WRITE_PATH[kind]}/${id}`);
 }
