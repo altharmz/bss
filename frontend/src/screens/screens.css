@@ -641,3 +641,21 @@
   padding: 4px 8px 4px 0;
   border-bottom: 1px solid var(--border, rgba(128, 128, 128, 0.25));
 }
+
+.bss-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.bss-facts > div {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 12px;
+}
+.bss-facts dt {
+  color: var(--muted);
+}
+.bss-facts dd {
+  margin: 0;
+  min-width: 0;
+}

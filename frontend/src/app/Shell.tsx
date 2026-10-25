@@ -77,6 +77,7 @@ export function Sidebar({ context }: { context: SystemContext }) {
           count: accounts,
           active: (r) => r.name === 'subscribers' || r.name === 'subscriber',
         },
+        { label: 'Parties', href: '/parties', count: '', active: (r) => r.name === 'parties' },
       ],
     },
     {

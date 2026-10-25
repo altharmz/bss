@@ -65,6 +65,7 @@ describe('routes', () => {
     ['/catalog', { name: 'catalog' }],
     ['/billing-runs', { name: 'billingRuns' }],
     ['/financial-accounts', { name: 'financialAccounts' }],
+    ['/parties', { name: 'parties' }],
     ['/orders', { name: 'orders' }],
     ['/billing', { name: 'notFound', path: '/billing' }], // not /billing: /billing-status
     ['/subscribers/nope', { name: 'notFound', path: '/subscribers/nope' }],
@@ -125,6 +126,7 @@ describe('shell', () => {
     const links = within(nav).getAllByRole('link');
     expect(links.map((a) => a.getAttribute('href'))).toEqual([
       '/subscribers',
+      '/parties',
       '/catalog',
       '/orders',
       '/numbers',
@@ -139,6 +141,7 @@ describe('shell', () => {
     expect(labels).toEqual([
       '# Customers',
       '/subscribers',
+      '/parties',
       '# Products',
       '/catalog',
       '/orders',

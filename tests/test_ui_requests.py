@@ -1488,3 +1488,44 @@ def test_order_writes_replay_as_the_ui_sends_them(api):
     )
     assert with_reason.status_code == 201, with_reason.text
     assert with_reason.json()["cancellationReason"] == "Customer left"
+
+
+def test_party_and_customer_writes_as_the_ui_sends_them(api):
+    """patchParty(), patchCustomer(), deleteParty() and deleteCustomer() and the list
+    requests of loadParties(): bodies pinned in Parties.test.tsx."""
+    person = apidata.individual(api, "Olga", "Kuznetsova")
+    org = apidata.organization(api, "Lone Ltd")
+    buyer = apidata.customer(api, apidata.individual(api, "Ivan", "Petrov"))
+    held = apidata.account(api, buyer)
+    # the list requests of the Parties screen: fields and paging are accepted
+    party = "/tmf-api/partyManagement/v5"
+    accounts = "/tmf-api/accountManagement/v5"
+    for url in (
+        f"{party}/individual?offset=0&limit=100",
+        f"{party}/organization?offset=0&limit=100",
+        "/tmf-api/customer/v5/customer?fields=name,status,engagedParty&offset=0&limit=100",
+        f"{accounts}/billingAccount?fields=name,relatedParty&offset=0&limit=100",
+        f"{accounts}/financialAccount?fields=relatedParty&offset=0&limit=100",
+        f"{accounts}/partyAccount?fields=relatedParty&offset=0&limit=100",
+        f"{accounts}/settlementAccount?fields=relatedParty&offset=0&limit=100",
+    ):
+        assert api.get(url).status_code == 200, url
+    # a merge patch of only the changed names
+    patched = api.patch(person["href"], {"familyName": "Kuznetsova-Lee"})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["givenName"] == "Olga"
+    assert patched.json()["familyName"] == "Kuznetsova-Lee"
+    assert api.patch(org["href"], {"name": "Lone Holdings"}).json()["name"] == "Lone Holdings"
+    cust = apidata.customer(api, person)
+    changed = api.patch(cust["href"], {"name": "Olga K.", "status": "Inactive"})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["status"] == "Inactive"
+    # a party with a customer, and a customer with a billing account, are 409 (the UI hides
+    # Delete from the loaded data and still shows this message)
+    assert api.delete(person["href"]).status_code == 409
+    assert api.delete(buyer["href"]).status_code == 409
+    assert held["id"]
+    assert api.delete(cust["href"]).status_code == 204
+    assert api.delete(person["href"]).status_code == 204
+    assert api.delete(org["href"]).status_code == 204
+    assert api.get(org["href"]).status_code == 404

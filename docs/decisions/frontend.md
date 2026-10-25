@@ -558,3 +558,18 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
 - **Polling tests** fake only `setTimeout`/`clearTimeout` and wait with an `until` helper
   (`BillingRuns.test.tsx`): Testing Library's `findBy`/`waitFor` hang under a fake
   `setTimeout`.
+
+## UI: parties and customers (slice 15, 2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 15), frontend only.
+Route `/parties` (`screens/Parties.tsx`, `api/parties.ts`), sidebar Customers > Parties, tabs
+Individuals / Organizations / Customers with name search and a status filter. One load holds the
+three lists plus the billing accounts (`fields=name,relatedParty`) and the owners of financial,
+party and settlement accounts (`fields=relatedParty`), so the delete rules read from loaded data.
+The detail dialog GETs the record; Edit reuses `Field` and `CUSTOMER_STATUSES` of
+`SubscriberForms.tsx` and patches only the changed names (party) or name and status (customer).
+Tests: `Parties.test.tsx` (lists, search and filter, links, edits, delete bodies, hidden Delete,
+server 409) and `tests/test_ui_requests.py::test_party_and_customer_writes_as_the_ui_sends_them`.
+Deviation: "accounts it owns" is read from the financial, party and settlement account lists
+(three extra reads); the party status is shown but not edited (a record only).
+

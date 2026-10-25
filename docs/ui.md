@@ -45,7 +45,7 @@ API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the coun
 `X-Total-Count`).
 
 The sidebar is one `<nav aria-label="Main">` with three labelled sections
-(`ui.shell.section.customers|products|billing`): Customers (Subscribers), Products (Product
+(`ui.shell.section.customers|products|billing`): Customers (Subscribers, Parties), Products (Product
 catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Financial accounts
 without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
 (`X-Total-Count`). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
@@ -347,6 +347,23 @@ chip; the card's "Commands" link, `ui.subscriber.prepaid.commands`, sets it). A 
 field and the `needs_topup` block (`ui.prepaidCommands.needsTopup`); **Retry** appears only for
 `failedTechnical` (POST `.../retry`, no body; a 409 is shown). Design:
 [next-slices-design.md](next-slices-design.md) section 6.
+
+### Parties (`ui.parties`, `ui.parties.individuals|organizations|customers`) - `screens/Parties.tsx`
+
+Route `/parties`, sidebar **Customers > Parties** (no count request). Three tabs: Individuals,
+Organizations (name, status, number of customers, linked subscribers) and Customers (name,
+status, engaged party, billing accounts), each with a name search and a status filter, so a party
+or customer without a billing account is reachable. Subscriber links go to the card. A row opens
+the record read with GET (`ui.parties.individual|organization|customer`): the attributes the
+subscriber forms edit. **Edit** (`ui.parties.edit`) reuses the subscriber form fields for the
+party names or the customer name and status alone (merge patch of changed fields). **Delete**
+(`ui.parties.delete`, a confirmation) is offered unless the loaded data shows a dependency: a
+party with customers or owning a financial, party or settlement account, a customer with billing
+accounts (the dialog says what blocks it); the server's 409 still shows. After an uncertain result
+the dialog offers Refresh. API: `GET .../individual|organization`, `GET .../customer?fields=...`,
+`GET .../billingAccount?fields=name,relatedParty`, `GET .../financialAccount|partyAccount|
+settlementAccount?fields=relatedParty`; `PATCH|DELETE` on the three. Design:
+[next-slices-design.md](next-slices-design.md) section 15.
 
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
 

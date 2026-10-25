@@ -26,7 +26,7 @@ import { AddProductModal } from './AddProduct';
 // The backend validates everything again; the checks here only keep obviously wrong
 // requests from being sent.
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="bss-field">
       <span className="label">{label}</span>
@@ -244,7 +244,7 @@ function InitialProduct({ accountId, onDone }: { accountId: string; onDone: () =
   );
 }
 
-const CUSTOMER_STATUSES: CustomerStatus[] = ['Created', 'Active', 'Inactive'];
+export const CUSTOMER_STATUSES: CustomerStatus[] = ['Created', 'Active', 'Inactive'];
 const ACCOUNT_STATES: AccountState[] = ['Active', 'Suspended', 'Closed'];
 
 export function EditSubscriberModal({
