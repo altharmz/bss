@@ -46,7 +46,7 @@ Status: `todo` · `next` · `done: <commit subject>` · `split`
 | 9 | Sidebar sections and global Orders screen | UI | As in the 2026-10-21 decision, plus the design's additions. | done: Add sidebar sections and the global read-only Orders screen |
 | 10 | Order writes: cancel, drafts, order details | UI | Cancel, edit details, save/edit/submit/delete drafts, all pinned and replayed. | done: Add order cancel, details and draft writes to the order dialog |
 | 11 | Product specifications | UI | A spec can be created inside New offering and used at once. CRUD is pinned. | done: Add product specifications tab with create, edit and delete |
-| 12 | Offering and price detail, edit, delete | UI | Edits are pinned. Refusals are shown. The code edit keeps other identifiers. | todo |
+| 12 | Offering and price detail, edit, delete | UI | Edits are pinned. Refusals are shown. The code edit keeps other identifiers. | done: Add offering and price edit, end and delete to the offering dialog |
 | 13 | Categories and product catalogs | UI | The tree, membership and catalogs are pinned. Cycles are excluded. | todo |
 | 14 | Catalog import and export jobs | UI | An export, then its import, round-trips. Download works. | todo |
 | 15 | Parties and customers | UI | Parties without accounts are reachable. Deletes are pinned. | todo |

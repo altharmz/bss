@@ -355,6 +355,12 @@ items:
   - {id: ui.catalog.offeringDetail, area: ui, stage: 5, title: "Offering detail dialog"}
   - {id: ui.catalog.lifecycle, area: ui, stage: 5, title: "Offering lifecycle step (Activate / Retire)"}
   - {id: ui.catalog.changePrice, area: ui, stage: 5, title: "Change price of a live offering"}
+  - {id: ui.catalog.editOffering, area: ui, stage: 5, title: "Edit an offering (fields, code, specification, categories)"}
+  - {id: ui.catalog.deleteOffering, area: ui, stage: 5, title: "Delete an offering with no prices"}
+  - {id: ui.catalog.priceDetail, area: ui, stage: 5, title: "Price detail dialog"}
+  - {id: ui.catalog.editPrice, area: ui, stage: 5, title: "Edit a price (name, description, amount)"}
+  - {id: ui.catalog.endPrice, area: ui, stage: 5, title: "End a price on a date"}
+  - {id: ui.catalog.deletePrice, area: ui, stage: 5, title: "Delete a price"}
   - {id: ui.catalog.newOffering, area: ui, stage: 5, title: "New offering"}
   - {id: ui.catalog.specifications, area: ui, stage: 5, title: "Catalog tab: product specifications"}
   - {id: ui.catalog.newSpecification, area: ui, stage: 5, title: "New product specification"}

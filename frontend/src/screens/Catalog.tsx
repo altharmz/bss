@@ -2,6 +2,9 @@ import { useState } from 'react';
 import {
   changePrice,
   createOffering,
+  deleteOffering,
+  lastValidDate,
+  loadOfferingDetail,
   hasOpenPrice,
   loadCatalog,
   NEXT_LIFECYCLE,
@@ -20,6 +23,7 @@ import { formatCents, formatInt, parseAmount } from '../format/money';
 import { Button, Modal, PageTitle, Panel, Pill, Segmented, TextInput, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
+import { OfferingEditModal, PriceModal } from './OfferingEdit';
 import { SpecificationModal, SpecificationsTab } from './Specifications';
 import { checkOffering, type OfferingForm } from './newOffering';
 import './screens.css';
@@ -45,10 +49,7 @@ function columns(currency: string): Column[] {
   ];
 }
 
-/** The last valid day of an exclusive end instant, as a business date. */
-function lastValidDay(endExclusive: string, timeZone: string): string {
-  return businessDate(new Date(Date.parse(endExclusive) - 1).toISOString(), timeZone);
-}
+const lastValidDay = lastValidDate;
 
 export function validity(offering: CatalogOffering, timeZone: string): string {
   const from =
@@ -255,6 +256,7 @@ export function CatalogScreen() {
       {open !== null && (
         <OfferingModal
           offering={open}
+          specifications={catalog.status === 'ok' ? catalog.data.specifications : []}
           onClose={() => setOpen(null)}
           onChanged={(message) => {
             setOpen(null);
@@ -280,10 +282,12 @@ const CONFIRM: Record<Lifecycle, { button: string; ask: string }> = {
 
 export function OfferingModal({
   offering,
+  specifications = [],
   onClose,
   onChanged,
 }: {
   offering: CatalogOffering;
+  specifications?: Specification[];
   onClose: () => void;
   onChanged: (message: string) => void;
 }) {
@@ -291,7 +295,34 @@ export function OfferingModal({
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [price, setPrice] = useState<string | null>(null);
+  const detail = useResource(`offering:${offering.id}`, (signal) =>
+    loadOfferingDetail(offering.id, signal),
+  );
   const next = NEXT_LIFECYCLE[offering.status];
+  // The server refuses a delete of an ordered offering or one with prices; the UI hides
+  // it only where the loaded data already makes that certain.
+  const deletable =
+    detail.status === 'ok' &&
+    detail.data.status !== 'Active' &&
+    detail.data.status !== 'Retired' &&
+    detail.data.priceRefs.length === 0;
+
+  async function remove() {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await deleteOffering(offering.id);
+      onChanged(`Offering ${offering.code ?? offering.name} deleted`);
+    } catch (error) {
+      setProblem(explain(error));
+      setDeleting(false);
+    } finally {
+      setBusy(false);
+    }
+  }
   const label = offering.code ?? offering.name;
 
   async function step() {
@@ -310,79 +341,152 @@ export function OfferingModal({
   }
 
   return (
-    <Modal
-      title={offering.name}
-      subtitle={[offering.code, offering.specification].filter(Boolean).join(' · ')}
-      width={600}
-      onClose={onClose}
-      ui="ui.catalog.offeringDetail"
-      footer={
-        <>
-          {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
-              {problem}
-            </div>
-          )}
-          {next === null ? (
-            <span className="bss-hint" style={{ marginRight: 'auto' }}>
-              Retired is final: the offering cannot be ordered again.
-            </span>
-          ) : confirming ? (
-            <span className="bss-confirm">
-              <span className="ask">{CONFIRM[next].ask}</span>
-              <Button
-                variant={next === 'Retired' ? 'danger' : 'primary'}
-                small
-                disabled={busy}
-                onClick={() => void step()}
-              >
-                Yes
-              </Button>
-              <Button small disabled={busy} onClick={() => setConfirming(false)}>
-                No
-              </Button>
-            </span>
-          ) : (
-            <Button
-              variant={next === 'Retired' ? 'danger-outline' : 'primary'}
-              data-ui="ui.catalog.lifecycle"
-              onClick={() => setConfirming(true)}
-            >
-              {CONFIRM[next].button}
-            </Button>
-          )}
-          <Button onClick={onClose}>Close</Button>
-        </>
-      }
-    >
-      <div className="bss-modal-body">
-        <dl className="bss-details">
-          <dt>Status</dt>
-          <dd>
-            <Pill status={offering.status} />
-          </dd>
-          <dt>Validity</dt>
-          <dd className="num">{validity(offering, context.timeZone)}</dd>
-          <dt>Prices</dt>
-          <dd>
-            {offering.prices.length === 0 ? (
-              <span className="bss-dash">no recurring price</span>
-            ) : (
-              offering.prices.map((price) => (
-                <div key={price.id} className="num">
-                  {formatCents(price.cents)} {price.currency} / {price.interval ?? 'month'} ·{' '}
-                  {businessDate(price.from, context.timeZone)} –{' '}
-                  {price.to === null ? 'open-ended' : lastValidDay(price.to, context.timeZone)}
-                </div>
-              ))
+    <>
+      <Modal
+        title={offering.name}
+        subtitle={[offering.code, offering.specification].filter(Boolean).join(' · ')}
+        width={600}
+        onClose={price !== null || editing ? () => undefined : onClose}
+        ui="ui.catalog.offeringDetail"
+        footer={
+          <>
+            {problem !== null && (
+              <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+                {problem}
+              </div>
             )}
-          </dd>
-        </dl>
-        {hasOpenPrice(offering, context.currency) && (
-          <PriceChangeSection offering={offering} label={label} onChanged={onChanged} />
-        )}
-      </div>
-    </Modal>
+            {detail.status === 'ok' && (
+              <Button data-ui="ui.catalog.editOffering" onClick={() => setEditing(true)}>
+                Edit offering
+              </Button>
+            )}
+            {deletable &&
+              (deleting ? (
+                <span className="bss-confirm">
+                  <span className="ask">Delete this offering?</span>
+                  <Button variant="danger" small disabled={busy} onClick={() => void remove()}>
+                    Yes
+                  </Button>
+                  <Button small disabled={busy} onClick={() => setDeleting(false)}>
+                    No
+                  </Button>
+                </span>
+              ) : (
+                <Button
+                  variant="danger-outline"
+                  data-ui="ui.catalog.deleteOffering"
+                  onClick={() => setDeleting(true)}
+                >
+                  Delete
+                </Button>
+              ))}
+            {next === null ? (
+              <span className="bss-hint" style={{ marginRight: 'auto' }}>
+                Retired is final: the offering cannot be ordered again.
+              </span>
+            ) : confirming ? (
+              <span className="bss-confirm">
+                <span className="ask">{CONFIRM[next].ask}</span>
+                <Button
+                  variant={next === 'Retired' ? 'danger' : 'primary'}
+                  small
+                  disabled={busy}
+                  onClick={() => void step()}
+                >
+                  Yes
+                </Button>
+                <Button small disabled={busy} onClick={() => setConfirming(false)}>
+                  No
+                </Button>
+              </span>
+            ) : (
+              <Button
+                variant={next === 'Retired' ? 'danger-outline' : 'primary'}
+                data-ui="ui.catalog.lifecycle"
+                onClick={() => setConfirming(true)}
+              >
+                {CONFIRM[next].button}
+              </Button>
+            )}
+            <Button onClick={onClose}>Close</Button>
+          </>
+        }
+      >
+        <div className="bss-modal-body">
+          <dl className="bss-details">
+            <dt>Status</dt>
+            <dd>
+              <Pill status={offering.status} />
+            </dd>
+            <dt>Validity</dt>
+            <dd className="num">{validity(offering, context.timeZone)}</dd>
+            {detail.status === 'ok' && (
+              <>
+                <dt>Description</dt>
+                <dd>{detail.data.description ?? <span className="bss-dash">—</span>}</dd>
+                <dt>Sellable</dt>
+                <dd>{detail.data.isSellable ? 'yes' : 'no'}</dd>
+                <dt>Code</dt>
+                <dd className="num">{detail.data.code ?? <span className="bss-dash">—</span>}</dd>
+                <dt>Specification</dt>
+                <dd>{detail.data.specification?.name ?? <span className="bss-dash">—</span>}</dd>
+                <dt>Categories</dt>
+                <dd>
+                  {detail.data.categories.length === 0 ? (
+                    <span className="bss-dash">none</span>
+                  ) : (
+                    detail.data.categories.map((c) => c.name).join(', ')
+                  )}
+                </dd>
+              </>
+            )}
+            {detail.status === 'error' && (
+              <>
+                <dt>Details</dt>
+                <dd className="bss-inline-error" role="alert">
+                  {detail.error.message}
+                </dd>
+              </>
+            )}
+            <dt>Prices</dt>
+            <dd>
+              {offering.prices.length === 0 ? (
+                <span className="bss-dash">no recurring price</span>
+              ) : (
+                offering.prices.map((p) => (
+                  <div key={p.id} className="num">
+                    <button
+                      type="button"
+                      className="bss-link"
+                      aria-label={`Open price ${formatCents(p.cents)}`}
+                      onClick={() => setPrice(p.id)}
+                    >
+                      {formatCents(p.cents)} {p.currency} / {p.interval ?? 'month'} ·{' '}
+                      {businessDate(p.from, context.timeZone)} –{' '}
+                      {p.to === null ? 'open-ended' : lastValidDay(p.to, context.timeZone)}
+                    </button>
+                  </div>
+                ))
+              )}
+            </dd>
+          </dl>
+          {hasOpenPrice(offering, context.currency) && (
+            <PriceChangeSection offering={offering} label={label} onChanged={onChanged} />
+          )}
+        </div>
+      </Modal>
+      {editing && detail.status === 'ok' && (
+        <OfferingEditModal
+          detail={detail.data}
+          specifications={specifications}
+          onClose={() => setEditing(false)}
+          onSaved={onChanged}
+        />
+      )}
+      {price !== null && (
+        <PriceModal priceId={price} onClose={() => setPrice(null)} onChanged={onChanged} />
+      )}
+    </>
   );
 }
 

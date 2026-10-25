@@ -37,6 +37,7 @@ export const PATHS = {
   offerings: '/tmf-api/productCatalogManagement/v5/productOffering',
   specifications: '/tmf-api/productCatalogManagement/v5/productSpecification',
   prices: '/tmf-api/productCatalogManagement/v5/productOfferingPrice',
+  categories: '/tmf-api/productCatalogManagement/v5/category',
   orders: '/tmf-api/productOrderingManagement/v5/productOrder',
   cancellations: '/tmf-api/productOrderingManagement/v5/cancelProductOrder',
   internal: '/internal/v1/billingAccount',
@@ -851,6 +852,231 @@ export const NEXT_LIFECYCLE: Record<Lifecycle, Lifecycle | null> = {
 
 export async function setLifecycle(offeringId: string, status: Lifecycle): Promise<void> {
   await patchJson(`${PATHS.offerings}/${offeringId}`, { lifecycleStatus: status });
+}
+
+// --- offering and price detail, edit and delete (TMF620) ---
+
+interface Identifier {
+  id?: string;
+  externalIdentifierType?: string;
+  [key: string]: unknown;
+}
+
+export interface OfferingDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  status: Lifecycle;
+  isSellable: boolean;
+  validFrom: string | null; // instant
+  validTo: string | null; // instant, exclusive
+  code: string | null;
+  identifiers: Identifier[]; // every externalIdentifier entry, as loaded
+  specification: { id: string; name: string } | null;
+  categories: { id: string; name: string }[];
+  priceRefs: { id: string; name: string }[]; // every attached price, of any type
+}
+
+export async function loadOfferingDetail(id: string, signal: AbortSignal): Promise<OfferingDetail> {
+  const body = await getJson<OfferingBody>(`${PATHS.offerings}/${id}`, signal);
+  const spec = body.productSpecification;
+  return {
+    id: need(body.id, 'offering id'),
+    name: need(body.name, 'offering name'),
+    description: body.description ?? null,
+    status: need(body.lifecycleStatus, 'lifecycleStatus') as Lifecycle,
+    isSellable: body.isSellable ?? true,
+    validFrom: body.validFor?.startDateTime ?? null,
+    validTo: body.validFor?.endDateTime ?? null,
+    code: offeringCode(body),
+    identifiers: (body.externalIdentifier ?? []) as Identifier[],
+    specification: spec?.id === undefined ? null : { id: spec.id, name: spec.name ?? spec.id },
+    categories: (body.category ?? []).flatMap((c) =>
+      c.id === undefined ? [] : [{ id: c.id, name: c.name ?? c.id }],
+    ),
+    priceRefs: (body.productOfferingPrice ?? []).flatMap((p) =>
+      p.id === undefined ? [] : [{ id: p.id, name: p.name ?? p.id }],
+    ),
+  };
+}
+
+export interface CategoryChoice {
+  id: string;
+  name: string;
+}
+
+export async function loadCategories(signal: AbortSignal): Promise<CategoryChoice[]> {
+  const rows = await getAll<{ id?: string; name?: string }>(PATHS.categories, signal);
+  return rows.map((c) => ({ id: need(c.id, 'category id'), name: c.name ?? need(c.id, 'id') }));
+}
+
+export interface OfferingEditFields {
+  name: string;
+  description: string;
+  isSellable: boolean;
+  validFrom: string; // business date, '' = none
+  validTo: string; // business date, inclusive last valid day, '' = open-ended
+  code: string;
+  specificationId: string;
+  categoryIds: string[];
+}
+
+/** The last valid day of an exclusive end instant, as a business date. */
+export function lastValidDate(endExclusive: string, timeZone: string): string {
+  return businessDate(new Date(Date.parse(endExclusive) - 1).toISOString(), timeZone);
+}
+
+export function offeringEditFields(o: OfferingDetail, timeZone: string): OfferingEditFields {
+  return {
+    name: o.name,
+    description: o.description ?? '',
+    isSellable: o.isSellable,
+    validFrom: o.validFrom === null ? '' : businessDate(o.validFrom, timeZone),
+    validTo: o.validTo === null ? '' : lastValidDate(o.validTo, timeZone),
+    code: o.code ?? '',
+    specificationId: o.specification?.id ?? '',
+    categoryIds: o.categories.map((c) => c.id),
+  };
+}
+
+/** Only the fields that differ from the loaded offering; null = nothing changed. The
+ * code replaces the offeringCode entry and keeps every other identifier as loaded. */
+export function offeringChanges(
+  before: OfferingDetail,
+  form: OfferingEditFields,
+  timeZone: string,
+): Record<string, unknown> | null {
+  const was = offeringEditFields(before, timeZone);
+  const changes: Record<string, unknown> = {};
+  if (form.name.trim() !== was.name) changes.name = form.name.trim();
+  if (form.description.trim() !== was.description)
+    changes.description = form.description.trim() === '' ? null : form.description.trim();
+  if (form.isSellable !== was.isSellable) changes.isSellable = form.isSellable;
+  if (form.validFrom !== was.validFrom || form.validTo !== was.validTo) {
+    if (form.validFrom === '' && form.validTo === '') changes.validFor = null;
+    else {
+      changes.validFor = {
+        // an unchanged start is sent as loaded: recomputing it could "move" it
+        ...(form.validFrom === ''
+          ? {}
+          : {
+              startDateTime:
+                form.validFrom === was.validFrom && before.validFrom !== null
+                  ? before.validFrom
+                  : midnightOf(form.validFrom, timeZone),
+            }),
+        ...(form.validTo === ''
+          ? {}
+          : { endDateTime: midnightOf(addDays(form.validTo, 1), timeZone) }),
+      };
+    }
+  }
+  const code = form.code.trim().toUpperCase();
+  if (code !== was.code && code !== '') {
+    const entry = {
+      id: code,
+      externalIdentifierType: 'offeringCode',
+      '@type': 'ExternalIdentifier',
+    };
+    const has = before.identifiers.some((i) => i.externalIdentifierType === 'offeringCode');
+    changes.externalIdentifier = has
+      ? before.identifiers.map((i) =>
+          i.externalIdentifierType === 'offeringCode' ? { ...i, id: code } : i,
+        )
+      : [...before.identifiers, entry];
+  }
+  if (form.specificationId !== was.specificationId && form.specificationId !== '')
+    changes.productSpecification = {
+      id: form.specificationId,
+      '@type': 'ProductSpecificationRef',
+    };
+  if ([...form.categoryIds].sort().join() !== [...was.categoryIds].sort().join())
+    changes.category = form.categoryIds.map((id) => ({ id, '@type': 'CategoryRef' }));
+  return Object.keys(changes).length === 0 ? null : changes;
+}
+
+export async function patchOffering(id: string, changes: Record<string, unknown>): Promise<void> {
+  await patchJson(`${PATHS.offerings}/${id}`, changes);
+}
+
+export async function deleteOffering(id: string): Promise<void> {
+  await request('DELETE', `${PATHS.offerings}/${id}`);
+}
+
+export interface PriceDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  priceType: string | null;
+  cents: number | null;
+  currency: string | null;
+  interval: string;
+  validFrom: string | null; // instant
+  validTo: string | null; // instant, exclusive
+}
+
+export async function loadPriceDetail(id: string, signal: AbortSignal): Promise<PriceDetail> {
+  const p = await getJson<PriceBody>(`${PATHS.prices}/${id}`, signal);
+  return {
+    id: need(p.id, 'price id'),
+    name: need(p.name, 'price name'),
+    description: p.description ?? null,
+    priceType: p.priceType ?? null,
+    cents: p.price?.value === undefined ? null : toCents(p.price.value),
+    currency: p.price?.unit ?? null,
+    interval: chargeInterval(p.recurringChargePeriodType, p.recurringChargePeriodLength),
+    validFrom: p.validFor?.startDateTime ?? null,
+    validTo: p.validFor?.endDateTime ?? null,
+  };
+}
+
+export interface PriceEditFields {
+  name: string;
+  description: string;
+  amount: string; // as typed
+}
+
+export interface PriceChange {
+  body: Record<string, unknown>;
+  amount: string | null; // canonical; goes out as an exact number token
+}
+
+/** A merge patch of the changed name, description and amount; null = nothing changed. */
+export function priceChanges(
+  before: PriceDetail,
+  form: PriceEditFields,
+  amount: string | null,
+): PriceChange | null {
+  const body: Record<string, unknown> = {};
+  if (form.name.trim() !== before.name) body.name = form.name.trim();
+  if (form.description.trim() !== (before.description ?? ''))
+    body.description = form.description.trim() === '' ? null : form.description.trim();
+  const changedAmount =
+    amount !== null && before.currency !== null && Number(amount.replace('.', '')) !== before.cents;
+  if (changedAmount) body.price = { unit: before.currency, value: AMOUNT };
+  return Object.keys(body).length === 0 ? null : { body, amount: changedAmount ? amount : null };
+}
+
+export async function patchPrice(id: string, change: PriceChange): Promise<void> {
+  await patchJson(
+    `${PATHS.prices}/${id}`,
+    change.amount === null ? change.body : jsonWithAmount(change.body, change.amount),
+  );
+}
+
+/** End a price: validFor keeps its start as loaded and gets `endDay`'s midnight as the
+ * exclusive end. */
+export async function endPrice(price: PriceDetail, endDay: string, timeZone: string) {
+  await patchJson(`${PATHS.prices}/${price.id}`, {
+    validFor: {
+      startDateTime: need(price.validFrom, 'price validFor.startDateTime'),
+      endDateTime: midnightOf(endDay, timeZone),
+    },
+  });
+}
+
+export async function deletePrice(id: string): Promise<void> {
+  await request('DELETE', `${PATHS.prices}/${id}`);
 }
 
 // --- product specifications (TMF620): records only, billing never reads them ---

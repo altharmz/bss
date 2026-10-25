@@ -83,6 +83,13 @@ function backend(routes: Record<string, Handler> = {}, offerings: unknown[] = OF
       json(SPECS, { total: SPECS.length }),
     [`GET ${CAT}/productOfferingPrice?priceType=recurring&offset=0&limit=100`]: () =>
       json(PRICES, { total: PRICES.length }),
+    // the detail dialog loads the offering itself
+    ...Object.fromEntries(
+      (offerings as { id: string }[]).map((o) => [
+        `GET ${CAT}/productOffering/${o.id}`,
+        () => json(o),
+      ]),
+    ),
     ...routes,
   });
 }
@@ -756,5 +763,262 @@ describe('specifications', () => {
     });
     // the offering itself is not created yet
     expect(fetchMock.mock.calls.filter(([, i]) => i?.method === 'POST')).toHaveLength(1);
+  });
+});
+
+describe('offering detail, edit and delete', () => {
+  const DETAIL = {
+    ...OFFERINGS[2],
+    description: 'Basic TV',
+    isSellable: true,
+    category: [{ id: 'c1', name: 'TV bundles' }],
+    externalIdentifier: [
+      {
+        id: 'TV-BASE',
+        externalIdentifierType: 'offeringCode',
+        owner: 'bss',
+        '@type': 'ExternalIdentifier',
+      },
+      { id: 'CRM-7', externalIdentifierType: 'crm', '@type': 'ExternalIdentifier' },
+    ],
+    productSpecification: { id: 's3', name: 'TV' },
+    validFor: { startDateTime: '2026-10-04T21:00:00Z', endDateTime: '2026-12-31T21:00:00Z' },
+    productOfferingPrice: [],
+  };
+  // TV Basic has no price at all, so Delete is offered; the list agrees
+  const LIST = OFFERINGS.map((o) => (o.id === ids(3) ? { ...o, productOfferingPrice: [] } : o));
+  const CATEGORIES = [
+    { id: 'c1', name: 'TV bundles' },
+    { id: 'c2', name: 'Promo' },
+  ];
+  const tvBackend = (routes: Record<string, Handler> = {}) =>
+    backend(
+      {
+        [`GET ${CAT}/productOffering/${ids(3)}`]: () => json(DETAIL),
+        [`GET ${CAT}/category?offset=0&limit=100`]: () => json(CATEGORIES, { total: 2 }),
+        ...routes,
+      },
+      LIST,
+    );
+
+  async function details(name: string) {
+    await open();
+    await waitFor(() => row(name));
+    fireEvent.click(row(name));
+    const dialog = screen.getByRole('dialog', { name });
+    await within(dialog).findByText('Basic TV');
+    return dialog;
+  }
+  const bodyOf = (fetchMock: { mock: { calls: unknown[][] } }, method: string) => {
+    const call = fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === method);
+    return String((call?.[1] as RequestInit | undefined)?.body);
+  };
+
+  it('shows the fields, specification, code and categories of the offering', async () => {
+    tvBackend();
+    const dialog = await details('TV Basic');
+    expectUi('ui.catalog.offeringDetail');
+    expect(within(dialog).getByText('TV bundles')).toBeTruthy();
+    expect(within(dialog).getByText('TV-BASE')).toBeTruthy();
+    expect(within(dialog).getByText('TV')).toBeTruthy();
+    expect(within(dialog).getByText('yes')).toBeTruthy();
+  });
+
+  it('patches only the changed fields and keeps the other identifiers', async () => {
+    const { fetchMock } = tvBackend({
+      [`PATCH ${CAT}/productOffering/${ids(3)}`]: () => json({ id: ids(3) }),
+    });
+    const dialog = await details('TV Basic');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit offering' }));
+    const edit = screen.getByRole('dialog', { name: 'Edit TV Basic' });
+    expectUi('ui.catalog.editOffering');
+    expect(within(edit).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
+    await within(edit).findByRole('checkbox', { name: 'Promo' });
+    fireEvent.change(within(edit).getByLabelText(/^Name/), { target: { value: 'TV Basic 2' } });
+    fireEvent.change(within(edit).getByLabelText(/^Code/), { target: { value: 'tv-2' } });
+    fireEvent.change(within(edit).getByLabelText(/^Valid to/), { target: { value: '2027-01-31' } });
+    fireEvent.click(within(edit).getByRole('checkbox', { name: 'Promo' }));
+    fireEvent.click(within(edit).getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Offering TV-2 saved');
+    expect(JSON.parse(bodyOf(fetchMock, 'PATCH'))).toEqual({
+      name: 'TV Basic 2',
+      // the start is sent as loaded; the end is the midnight after the last valid day
+      validFor: {
+        startDateTime: '2026-10-04T21:00:00Z',
+        endDateTime: '2027-02-01T00:00:00+03:00',
+      },
+      // the offeringCode entry changes, the crm entry stays as loaded
+      externalIdentifier: [
+        {
+          id: 'TV-2',
+          externalIdentifierType: 'offeringCode',
+          owner: 'bss',
+          '@type': 'ExternalIdentifier',
+        },
+        { id: 'CRM-7', externalIdentifierType: 'crm', '@type': 'ExternalIdentifier' },
+      ],
+      category: [
+        { id: 'c1', '@type': 'CategoryRef' },
+        { id: 'c2', '@type': 'CategoryRef' },
+      ],
+    });
+  });
+
+  it('sends the specification, sellable and an emptied description', async () => {
+    const { fetchMock } = tvBackend({
+      [`PATCH ${CAT}/productOffering/${ids(3)}`]: () => json({ id: ids(3) }),
+    });
+    const dialog = await details('TV Basic');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit offering' }));
+    const edit = screen.getByRole('dialog', { name: 'Edit TV Basic' });
+    fireEvent.change(within(edit).getByLabelText(/^Specification/), { target: { value: 's1' } });
+    fireEvent.change(within(edit).getByLabelText(/^Description/), { target: { value: '' } });
+    fireEvent.click(within(edit).getByRole('checkbox', { name: 'Sellable' }));
+    fireEvent.click(within(edit).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    expect(JSON.parse(bodyOf(fetchMock, 'PATCH'))).toEqual({
+      description: null,
+      isSellable: false,
+      productSpecification: { id: 's1', '@type': 'ProductSpecificationRef' },
+    });
+  });
+
+  it('shows the refusal of an edit and keeps the entered values', async () => {
+    tvBackend({
+      [`PATCH ${CAT}/productOffering/${ids(3)}`]: () =>
+        tmfError(409, 'productSpecification cannot change: the offering was ordered'),
+    });
+    const dialog = await details('TV Basic');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit offering' }));
+    const edit = screen.getByRole('dialog', { name: 'Edit TV Basic' });
+    fireEvent.change(within(edit).getByLabelText(/^Specification/), { target: { value: 's1' } });
+    fireEvent.click(within(edit).getByRole('button', { name: 'Save' }));
+    expect((await within(edit).findByRole('alert')).textContent).toMatch(/was ordered/);
+    expect((within(edit).getByLabelText(/^Specification/) as HTMLSelectElement).value).toBe('s1');
+  });
+
+  it('deletes an offering with no prices after confirming, and shows a refusal', async () => {
+    const { fetchMock } = tvBackend({
+      [`DELETE ${CAT}/productOffering/${ids(3)}`]: () =>
+        tmfError(409, 'productOffering is referenced: retire it instead'),
+    });
+    const dialog = await details('TV Basic');
+    expectUi('ui.catalog.deleteOffering');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(fetchMock.mock.calls.some(([, i]) => i?.method === 'DELETE')).toBe(false);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+    expect((await within(dialog).findByRole('alert')).textContent).toMatch(/retire it instead/);
+  });
+
+  it('deletes with no body and reports it', async () => {
+    const { fetchMock } = tvBackend({
+      [`DELETE ${CAT}/productOffering/${ids(3)}`]: () => new Response(null, { status: 204 }),
+    });
+    const dialog = await details('TV Basic');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Offering TV-BASE deleted',
+    );
+    const call = fetchMock.mock.calls.find(([, i]) => i?.method === 'DELETE');
+    expect(call?.[1]?.body).toBeUndefined();
+  });
+
+  it('offers no delete for an Active offering or one with prices', async () => {
+    tvBackend();
+    await open();
+    await waitFor(() => row('Mobile L'));
+    fireEvent.click(row('Mobile L')); // Active
+    const dialog = screen.getByRole('dialog', { name: 'Mobile L' });
+    await within(dialog).findByRole('button', { name: 'Edit offering' });
+    expect(within(dialog).queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
+
+  describe('prices', () => {
+    const PRICE = {
+      id: 'pr1',
+      name: 'Mobile L monthly',
+      priceType: 'recurring',
+      recurringChargePeriodType: 'monthly',
+      price: usd(1290),
+      validFor: { startDateTime: '2026-06-01T21:00:00Z' },
+    };
+    const priceBackend = (routes: Record<string, Handler> = {}) =>
+      backend({
+        [`GET ${CAT}/productOfferingPrice/pr1`]: () => json(PRICE),
+        ...routes,
+      });
+    async function openPrice() {
+      await open();
+      await waitFor(() => row('Mobile L'));
+      fireEvent.click(row('Mobile L'));
+      const dialog = screen.getByRole('dialog', { name: 'Mobile L' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Open price 1,290.00' }));
+      return screen.findByRole('dialog', { name: 'Mobile L monthly' });
+    }
+
+    it('opens a price and patches the changed name and the exact amount', async () => {
+      const { fetchMock } = priceBackend({
+        [`PATCH ${CAT}/productOfferingPrice/pr1`]: () => json(PRICE),
+      });
+      const price = await openPrice();
+      expectUi('ui.catalog.priceDetail');
+      expect(within(price).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
+      fireEvent.change(within(price).getByLabelText(/^Name/), { target: { value: 'Mobile L 2' } });
+      fireEvent.change(within(price).getByLabelText(/^Price,/), { target: { value: '1300.5' } });
+      fireEvent.click(within(price).getByRole('button', { name: 'Save' }));
+      await screen.findByRole('status');
+      expect(bodyOf(fetchMock, 'PATCH')).toBe(
+        '{"name":"Mobile L 2","price":{"unit":"USD","value":1300.50}}',
+      );
+    });
+
+    it('shows the 409 for a charge change and points to Change price', async () => {
+      priceBackend({
+        [`PATCH ${CAT}/productOfferingPrice/pr1`]: () =>
+          tmfError(409, 'the charge cannot change: end its validFor and attach a new price'),
+      });
+      const price = await openPrice();
+      fireEvent.change(within(price).getByLabelText(/^Price,/), { target: { value: '1400' } });
+      fireEvent.click(within(price).getByRole('button', { name: 'Save' }));
+      const alert = await within(price).findByRole('alert');
+      expect(alert.textContent).toMatch(/end its validFor and attach a new price/);
+      expect(alert.textContent).toMatch(/Change price/);
+      expect((within(price).getByLabelText(/^Price,/) as HTMLInputElement).value).toBe('1400');
+    });
+
+    it('ends a price on a chosen day, from tomorrow, keeping its start', async () => {
+      const { fetchMock } = priceBackend({
+        [`PATCH ${CAT}/productOfferingPrice/pr1`]: () => json(PRICE),
+      });
+      const price = await openPrice();
+      expectUi('ui.catalog.endPrice');
+      fireEvent.click(within(price).getByRole('button', { name: 'End price' }));
+      const day = within(price).getByLabelText('Price ends on') as HTMLInputElement;
+      expect(day.value).toBe('2026-10-02');
+      fireEvent.change(day, { target: { value: '2026-11-01' } });
+      fireEvent.click(within(price).getByRole('button', { name: 'End on this date' }));
+      await screen.findByRole('status');
+      expect(JSON.parse(bodyOf(fetchMock, 'PATCH'))).toEqual({
+        validFor: {
+          startDateTime: '2026-06-01T21:00:00Z',
+          endDateTime: '2026-11-01T00:00:00+03:00',
+        },
+      });
+    });
+
+    it('deletes a price after confirming and shows the refusal', async () => {
+      const { fetchMock } = priceBackend({
+        [`DELETE ${CAT}/productOfferingPrice/pr1`]: () =>
+          tmfError(409, 'a price of an ordered offering stays; end its validFor instead'),
+      });
+      const price = await openPrice();
+      expectUi('ui.catalog.deletePrice');
+      fireEvent.click(within(price).getByRole('button', { name: 'Delete' }));
+      expect(fetchMock.mock.calls.some(([, i]) => i?.method === 'DELETE')).toBe(false);
+      fireEvent.click(within(price).getByRole('button', { name: 'Yes' }));
+      expect((await within(price).findByRole('alert')).textContent).toMatch(/stays/);
+    });
   });
 });

@@ -344,3 +344,23 @@ preselects the result. Code: `screens/Specifications.tsx`, `api/bss.ts`. Tests:
 Deviation: none. The search box filters the Specifications tab by name or brand; the
 lifecycle filter shows on the Offerings tab only.
 
+## UI: offering and price detail, edit, delete (slice 12, 2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 12), frontend only.
+The offering dialog loads `GET productOffering/{id}` (description, sellable, code, specification,
+categories). **Edit offering** (`ui.catalog.editOffering`) sends a merge patch of the changed
+fields only; an unchanged `validFor` start is sent as loaded, the code edit rewrites the
+`offeringCode` entry and sends every other `externalIdentifier` entry as loaded, categories are a
+checkbox list from `GET category` (empty list says so). **Delete** (`ui.catalog.deleteOffering`)
+is offered when the loaded offering is In Design and has no attached price; the server's 409
+(retire it instead / delete its prices first) is shown. A price line opens the price dialog
+(`ui.catalog.priceDetail`): name, description and amount edits (`ui.catalog.editPrice`; the
+amount goes out as an exact number token and a 409 adds a pointer to Change price), **End price**
+(`ui.catalog.endPrice`, from tomorrow, keeps the loaded start) and **Delete**
+(`ui.catalog.deletePrice`). Code: `screens/OfferingEdit.tsx`, `screens/Catalog.tsx`, `api/bss.ts`.
+Tests: `Catalog.test.tsx` (detail, bodies, identifiers kept, refusals, delete) and
+`tests/test_ui_requests.py::test_offering_and_price_edits_as_the_ui_sends_them`.
+Deviations: "has no products" cannot be known in the UI, so Delete hides on status and prices
+only and the server's 409 covers the rest; the price dialog is offered Delete always (its
+offering's order history is not loaded); only the price amount is a charge field in Edit price
+(period fields stay API/MCP).

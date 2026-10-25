@@ -290,6 +290,84 @@ def test_specification_writes_as_the_ui_sends_them(api):
     assert api.get(spec_url).status_code == 404
 
 
+def test_offering_and_price_edits_as_the_ui_sends_them(api):
+    """offeringChanges(), patchOffering(), patchPrice(), endPrice() and the deletes: bodies
+    pinned in Catalog.test.tsx."""
+    offering = create_offering(api)
+    category = api.post(f"{CATALOG}/category", {"name": "Promo"}).json()
+    other_spec = api.post(
+        f"{CATALOG}/productSpecification",
+        {"@type": "ProductSpecification", "name": "Roaming", "lifecycleStatus": "Active"},
+    ).json()
+    crm = {"id": "CRM-7", "externalIdentifierType": "crm", "@type": "ExternalIdentifier"}
+    # another identifier next to the code, as an API client may have stored
+    assert (
+        api.patch(
+            offering["href"],
+            {
+                "externalIdentifier": [
+                    {**offering["externalIdentifier"][0]},
+                    crm,
+                ]
+            },
+        ).status_code
+        == 200
+    )
+    patched = api.patch(
+        offering["href"],
+        {
+            "name": "Mobile XL 2",
+            "description": "Big",
+            "isSellable": False,
+            # the start as loaded, the end the midnight after the last valid day
+            "validFor": {
+                "startDateTime": offering["validFor"]["startDateTime"],
+                "endDateTime": "2027-02-01T00:00:00+03:00",
+            },
+            "externalIdentifier": [
+                {**offering["externalIdentifier"][0], "id": "MOB-XL2"},
+                crm,
+            ],
+            "productSpecification": {"id": other_spec["id"], "@type": "ProductSpecificationRef"},
+            "category": [{"id": category["id"], "@type": "CategoryRef"}],
+        },
+    )
+    assert patched.status_code == 200, patched.text
+    body = patched.json()
+    assert body["name"] == "Mobile XL 2" and body["isSellable"] is False
+    assert [i["id"] for i in body["externalIdentifier"]] == ["MOB-XL2", "CRM-7"]
+    assert [c["id"] for c in body["category"]] == [category["id"]]
+    assert body["productSpecification"]["id"] == other_spec["id"]
+    # an emptied description is null (merge patch removes it)
+    assert "description" not in api.patch(offering["href"], {"description": None}).json()
+
+    price_url = body["productOfferingPrice"][0]["href"]
+    # the amount is a raw number token, next to the other changed fields
+    renamed = api.patch_raw(
+        price_url, '{"name":"Mobile XL 2 monthly","price":{"unit":"USD","value":2100.50}}'
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["price"] == {"unit": "USD", "value": 2100.5}
+    price = api.get(price_url).json()
+    ended = api.patch(
+        price_url,
+        {
+            "validFor": {
+                "startDateTime": price["validFor"]["startDateTime"],
+                "endDateTime": "2026-12-01T00:00:00+03:00",
+            }
+        },
+    )
+    assert ended.status_code == 200, ended.text
+    # an offering with a price is not deleted (the UI shows the 409)
+    assert api.delete(offering["href"]).status_code == 409
+    fresh = create_offering(api, code="MOB-NEW")
+    fresh_price = fresh["productOfferingPrice"][0]["href"]
+    assert api.delete(fresh_price).status_code == 204
+    assert api.delete(fresh["href"]).status_code == 204
+    assert api.get(fresh["href"]).status_code == 404
+
+
 def test_lifecycle_steps_are_merge_patches(api):
     offering = create_offering(api)
     for status in ("Active", "Retired"):  # NEXT_LIFECYCLE

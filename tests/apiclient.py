@@ -157,6 +157,10 @@ class TmfClient:
             "PATCH", url, content=json.dumps(body), headers={"Content-Type": content_type}
         )
 
+    def patch_raw(self, url: str, text: str) -> Response:
+        """A merge patch whose text is sent verbatim (exact number tokens)."""
+        return self.request("PATCH", url, content=text, headers={"Content-Type": MERGE_PATCH})
+
     def _check(self, method: str, path: str, response: Response, partial: bool = False) -> None:
         self.checked += 1
         if response.status_code == 204:  # DELETE: no body, and the spec must declare it

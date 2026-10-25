@@ -268,6 +268,17 @@ after the date, new orders from the date.
 API: `PATCH .../productOffering/{id}` (`application/merge-patch+json`,
 `{lifecycleStatus}`), `POST /internal/v1/productOffering/{id}/priceChange`.
 
+The dialog also loads `GET .../productOffering/{id}` and shows description, sellable, code,
+specification and categories. **Edit offering** (`ui.catalog.editOffering`) patches only the
+changed fields among name, description, sellable, validity, code (the `offeringCode` entry;
+other identifiers are sent as loaded), specification and categories (checkbox list). **Delete**
+(`ui.catalog.deleteOffering`, inline confirm) is offered for an In Design offering with no
+attached price; the server's 409 shows. A price line opens the price dialog
+(`ui.catalog.priceDetail`): edit name, description and amount (`ui.catalog.editPrice`; a 409
+points to Change price), **End price** (`ui.catalog.endPrice`, from tomorrow) and **Delete**
+(`ui.catalog.deletePrice`). API: `GET|PATCH|DELETE .../productOfferingPrice/{id}`,
+`DELETE .../productOffering/{id}`, `GET .../category`.
+
 ### New offering (`ui.catalog.newOffering`)
 
 Modal: code (upper-cased), name, specification, monthly price, valid from, valid to
