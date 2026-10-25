@@ -68,3 +68,4 @@ subscriber-card visual review (a human check, kept in the CLAUDE.md backlog).
 | Date | Remaining | Note |
 |---|---|---|
 | 2026-10-24 | 24 rows, expect 28-32 commits | Past UI slices split about 1.2× (P6c became 2). Likely splits: 2 (backend/UI), 4 (backend/UI), 8, 10, 23. |
+| 2026-10-25 | Phase B: 16 rows (9-24) | Phase A: 8 rows in 8 commits, no splits (slices 2 and 4 stayed one commit each): 9a3dab8, 46bd515, e7bdbbf, 90dd631, 1f35502, 11e8b26, accf340 and the slice 1 commit 5492db3. Deviations: Update schemas require `status` (and a hold's `reason`) in 3; offerings without a recurring price are not offered in 5; the commands API filter is `billingAccount.id` in 6. TEST-CHANGE in 5, 6 and 8. The worker heartbeat timing test failed once under load in 7 and 8 (passes alone). |

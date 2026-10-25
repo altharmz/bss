@@ -137,8 +137,9 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   [Release evidence](docs/subscriber-number-release.md).
 - **Next:** the prepaid tracker is complete (P7: mixed-mode seed, runbook, [release evidence](docs/prepaid-release.md));
   [tracker](docs/prepaid-slices.md), [scope](docs/prepaid-plan.md), [decision](docs/decisions/prepaid.md).
-  Next is [docs/next-slices.md](docs/next-slices.md): slices 1-8 finish prepaid, 9-24 bring
-  every MCP operation into the UI. All decisions are in
+  Next is [docs/next-slices.md](docs/next-slices.md): Phase A (slices 1-8, finish prepaid)
+  is done on 2026-10-25; Phase B (slices 9-24) brings every MCP operation into the UI and
+  starts at slice 9. All decisions are in
   [docs/next-slices-design.md](docs/next-slices-design.md), and no slice needs approval.
   The orchestrator prompt is in [docs/run-slices.md](docs/run-slices.md).
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21
