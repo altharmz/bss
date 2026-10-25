@@ -120,6 +120,28 @@ items:
   - {id: ui.accounts.settlement.delete, area: ui, stage: 5, title: "Delete a settlement account"}
   - {id: ui.accounts.settlement.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a settlement account"}
   - {id: ui.accounts.settlement.financialLink, area: ui, stage: 5, title: "Link or unlink a financial account on a settlement account"}
+  - {id: ui.billingSettings.cycles, area: ui, stage: 5, title: "Billing settings: cycle specification tab"}
+  - {id: ui.billingSettings.cycles.new, area: ui, stage: 5, title: "New cycle specification"}
+  - {id: ui.billingSettings.cycles.form, area: ui, stage: 5, title: "Cycle specification create and edit dialog"}
+  - {id: ui.billingSettings.cycles.edit, area: ui, stage: 5, title: "Edit a cycle specification"}
+  - {id: ui.billingSettings.cycles.delete, area: ui, stage: 5, title: "Delete a cycle specification no loaded account uses"}
+  - {id: ui.billingSettings.cycles.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a cycle specification"}
+  - {id: ui.billingSettings.formats, area: ui, stage: 5, title: "Billing settings: bill format tab"}
+  - {id: ui.billingSettings.formats.new, area: ui, stage: 5, title: "New bill format"}
+  - {id: ui.billingSettings.formats.form, area: ui, stage: 5, title: "Bill format create and edit dialog"}
+  - {id: ui.billingSettings.formats.edit, area: ui, stage: 5, title: "Edit a bill format"}
+  - {id: ui.billingSettings.formats.delete, area: ui, stage: 5, title: "Delete a bill format no loaded account uses"}
+  - {id: ui.billingSettings.formats.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a bill format"}
+  - {id: ui.billingSettings.media, area: ui, stage: 5, title: "Billing settings: presentation medium tab"}
+  - {id: ui.billingSettings.media.new, area: ui, stage: 5, title: "New presentation medium"}
+  - {id: ui.billingSettings.media.form, area: ui, stage: 5, title: "Presentation medium create and edit dialog"}
+  - {id: ui.billingSettings.media.edit, area: ui, stage: 5, title: "Edit a presentation medium"}
+  - {id: ui.billingSettings.media.delete, area: ui, stage: 5, title: "Delete a presentation medium no loaded account uses"}
+  - {id: ui.billingSettings.media.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a presentation medium"}
+  - {id: ui.subscriber.billingGroup, area: ui, stage: 5, title: "Billing group of the subscriber Edit form (billStructure)"}
+  - {id: ui.subscriber.cycleSpecification, area: ui, stage: 5, title: "Select a billing cycle specification in the subscriber Edit form"}
+  - {id: ui.subscriber.billFormat, area: ui, stage: 5, title: "Select a bill format in the subscriber Edit form"}
+  - {id: ui.subscriber.presentationMedia, area: ui, stage: 5, title: "Select presentation media in the subscriber Edit form"}
   - {id: ui.subscriber.financialLink, area: ui, stage: 5, title: "Link or unlink a financial account in the subscriber Edit form"}
   - {id: ui.subscriber.delete, area: ui, stage: 5, title: "Delete a postpaid billing account without history"}
   - {id: ui.subscriber.deleteConfirm, area: ui, stage: 5, title: "Confirm deleting a billing account"}

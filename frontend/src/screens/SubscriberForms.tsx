@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import {
+  BUILT_IN_CYCLE,
   createSubscriber,
   loadAccount,
   loadProfile,
@@ -7,12 +8,14 @@ import {
   updateSubscriber,
   type Account,
   type AccountState,
+  type BillingPrefs,
   type CustomerStatus,
   type PartyKind,
   type RatingMode,
   type SubscriberProfile,
 } from '../api/bss';
 import { ApiError, explain } from '../api/client';
+import { loadSettings } from '../api/billing';
 import { deleteBillingAccount, loadFinancialChoices } from '../api/financial';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
@@ -314,6 +317,15 @@ function EditForm({
     loadFinancialChoices(before.partyId, signal),
   );
 
+  // the bill structure choices (slice 18): a failed list leaves its select disabled
+  const cycles = useResource('billing-settings:cycles', (signal) => loadSettings('cycles', signal));
+  const formats = useResource('billing-settings:formats', (signal) =>
+    loadSettings('formats', signal),
+  );
+  const media = useResource('billing-settings:media', (signal) => loadSettings('media', signal));
+  const setBilling = (change: Partial<BillingPrefs>) =>
+    set({ billing: { ...form.billing, ...change } });
+
   const credit = limitOf(limitText);
   const after: SubscriberProfile = { ...form, creditLimit: credit.value };
   const named =
@@ -448,6 +460,93 @@ function EditForm({
           )}
           <div className="caption">
             Only financial accounts of the same owner can be linked; the server refuses others.
+          </div>
+        </section>
+        <section className="bss-form" data-ui="ui.subscriber.billingGroup">
+          <div className="bss-step-head">Billing</div>
+          <Field label="Cycle specification">
+            <select
+              className="bss-input"
+              data-ui="ui.subscriber.cycleSpecification"
+              value={form.billing.cycleId ?? BUILT_IN_CYCLE}
+              disabled={cycles.status !== 'ok'}
+              onChange={(e) =>
+                setBilling({ cycleId: e.target.value === BUILT_IN_CYCLE ? null : e.target.value })
+              }
+            >
+              {cycles.status === 'ok' ? (
+                cycles.data.map((choice) => (
+                  <option key={choice.id} value={choice.id}>
+                    {choice.name}
+                  </option>
+                ))
+              ) : (
+                <option value={form.billing.cycleId ?? BUILT_IN_CYCLE}>Current</option>
+              )}
+            </select>
+          </Field>
+          <Field label="Bill format">
+            <select
+              className="bss-input"
+              data-ui="ui.subscriber.billFormat"
+              value={form.billing.formatId ?? ''}
+              disabled={formats.status !== 'ok'}
+              onChange={(e) => setBilling({ formatId: e.target.value || null })}
+            >
+              <option value="">Default</option>
+              {formats.status === 'ok' ? (
+                formats.data.map((choice) => (
+                  <option key={choice.id} value={choice.id}>
+                    {choice.name}
+                  </option>
+                ))
+              ) : form.billing.formatId !== null ? (
+                <option value={form.billing.formatId}>Current</option>
+              ) : null}
+            </select>
+          </Field>
+          <fieldset aria-label="Presentation media" data-ui="ui.subscriber.presentationMedia">
+            <legend className="label">Presentation media</legend>
+            {media.status === 'ok' && media.data.length === 0 && (
+              <span className="caption">None defined yet (Billing settings).</span>
+            )}
+            {media.status === 'ok' &&
+              media.data.map((choice) => (
+                <label key={choice.id} className="bss-check">
+                  <input
+                    type="checkbox"
+                    checked={form.billing.mediaIds.includes(choice.id)}
+                    onChange={(e) =>
+                      setBilling({
+                        mediaIds: e.target.checked
+                          ? [...form.billing.mediaIds, choice.id]
+                          : form.billing.mediaIds.filter((id) => id !== choice.id),
+                      })
+                    }
+                  />{' '}
+                  {choice.name}
+                </label>
+              ))}
+          </fieldset>
+          {(cycles.status === 'error' ||
+            formats.status === 'error' ||
+            media.status === 'error') && (
+            <div className="bss-inline-error">
+              Failed to load the billing settings.{' '}
+              <Button
+                small
+                onClick={() => {
+                  cycles.retry();
+                  formats.retry();
+                  media.retry();
+                }}
+              >
+                Retry
+              </Button>
+            </div>
+          )}
+          <div className="caption">
+            Cycle specifications, formats and media are managed under Billing settings.
           </div>
         </section>
       </div>

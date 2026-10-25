@@ -231,3 +231,22 @@ Create sends `financialAccount` only when chosen; edit sends it (a ref or `null`
   `tests/test_ui_requests.py::test_party_and_settlement_account_writes_as_the_ui_sends_them`.
 - Deviations: none. The sidebar label and heading tests of the financial screen changed to
   "Accounts" (TEST-CHANGE).
+
+## UI: billing settings (slice 18, 2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 18), frontend only.
+Route `/billing-settings` (`screens/BillingSettings.tsx`, `api/billing.ts`), sidebar Billing >
+Billing settings, three tabs. The built-in `monthly` row is read-only; stored cycle specifications,
+bill formats and presentation media have New/Edit (`name`, `description`: the only attributes
+the API stores; a cleared description is sent as `null`) and Delete, hidden while the accounts the
+screen loaded name the setting. The subscriber Edit form gets a Billing group; `Account` now carries
+`billing` (cycle id or null for monthly, format id, media ids) read from `billStructure`, and
+`billStructurePatch` sends only what changed (`format: null` clears, `presentationMedia` is the whole
+list, the built-in cycle is `{id: monthly}`).
+- Tests: `BillingSettings.test.tsx` (lists, read-only built-in, delete hidden when used, bodies for the
+  three resources, the server's 409), `SubscriberCard.test.tsx` (billStructure selection, clear, 422)
+  and `tests/test_ui_requests.py::test_billing_settings_writes_and_bill_structure_as_the_ui_sends_them`.
+- Deviations: a bill format's name is a select of the two values the API accepts
+  (`FormatCreate`), not free text. The existing `editBackend` helper stubs the three new lists
+  (TEST-CHANGE); the sidebar link lists in `App.test.tsx` gained `/billing-settings`.
+

@@ -66,6 +66,7 @@ describe('routes', () => {
     ['/billing-runs', { name: 'billingRuns' }],
     ['/financial-accounts', { name: 'financialAccounts' }],
     ['/parties', { name: 'parties' }],
+    ['/billing-settings', { name: 'billingSettings' }],
     ['/orders', { name: 'orders' }],
     ['/billing', { name: 'notFound', path: '/billing' }], // not /billing: /billing-status
     ['/subscribers/nope', { name: 'notFound', path: '/subscribers/nope' }],
@@ -133,6 +134,7 @@ describe('shell', () => {
       '/billing-runs',
       '/prepaid-commands',
       '/financial-accounts',
+      '/billing-settings',
     ]);
     // three labelled sections in the TMF order, each item under its own label
     const labels = Array.from(nav.children).map((el) =>
@@ -150,6 +152,7 @@ describe('shell', () => {
       '/billing-runs',
       '/prepaid-commands',
       '/financial-accounts',
+      '/billing-settings',
     ]);
     expect(await within(nav).findByText('1,284')).toBeTruthy();
     expect(await within(nav).findByText('12')).toBeTruthy();

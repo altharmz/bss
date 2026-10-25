@@ -52,7 +52,7 @@ Status: `todo` · `next` · `done: <commit subject>` · `split`
 | 15 | Parties and customers | UI | Parties without accounts are reachable. Deletes are pinned. | done: Add Parties screen with individuals, organizations and customers |
 | 16 | Billing account delete; financial account writes and linking | UI | Create, edit, link, unlink and delete are pinned and replayed. | done: Add financial account writes, account linking and billing account delete |
 | 17 | Party and settlement accounts | UI | CRUD for both is pinned. | done: Add party and settlement account tabs to the Accounts screen |
-| 18 | Billing settings: cycle specs, bill formats, presentation media | UI | CRUD and the `billStructure` selection are pinned. | todo |
+| 18 | Billing settings: cycle specs, bill formats, presentation media | UI | CRUD and the `billStructure` selection are pinned. | done: Add billing settings screen and billStructure selection to the subscriber form |
 | 19 | Payments and refunds history | UI | The card panel and the global screen are pinned. | todo |
 | 20 | Global bills, bill cycles, rates | UI | The list, filters, cycle and rates views are pinned. | todo |
 | 21 | Product and number inventory | UI | All product states are reachable. Number delete is pinned. | todo |

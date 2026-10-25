@@ -700,6 +700,7 @@ const PARTY_URL = `/tmf-api/partyManagement/v5/individual/${PARTY_ID}`;
 const CUSTOMER_URL = `/tmf-api/customer/v5/customer/${C}`;
 const ACCOUNT_URL = `/tmf-api/accountManagement/v5/billingAccount/${A}`;
 
+const ACCOUNT_BASE = '/tmf-api/accountManagement/v5';
 const FINANCIAL_URL = '/tmf-api/accountManagement/v5/financialAccount';
 const FIN1 = 'f0000001-0000-4000-8000-000000000001';
 const FIN2 = 'f0000002-0000-4000-8000-000000000002';
@@ -707,6 +708,13 @@ const OWNER_FINANCIAL = [
   { id: FIN1, name: 'Group receivables', state: 'Active', '@type': 'FinancialAccount' },
   { id: FIN2, name: 'Old group', state: 'Closed', '@type': 'FinancialAccount' },
 ];
+
+const BILLING_LISTS: Record<string, Handler> = {
+  [`GET ${ACCOUNT_BASE}/billingCycleSpecification?offset=0&limit=100`]: () =>
+    json([{ id: 'monthly', name: 'Monthly billing' }], { total: 1 }),
+  [`GET ${ACCOUNT_BASE}/billFormat?offset=0&limit=100`]: () => json([], { total: 0 }),
+  [`GET ${ACCOUNT_BASE}/billPresentationMedia?offset=0&limit=100`]: () => json([], { total: 0 }),
+};
 
 function editBackend(routes: Record<string, Handler> = {}, account: object = ACCOUNT) {
   return backend(
@@ -723,6 +731,7 @@ function editBackend(routes: Record<string, Handler> = {}, account: object = ACC
         json({ id: PARTY_ID, givenName: 'Olga', familyName: 'Kuznetsova', '@type': 'Individual' }),
       [`GET ${FINANCIAL_URL}?relatedParty.id=${PARTY_ID}&offset=0&limit=100`]: () =>
         json(OWNER_FINANCIAL, { total: 2 }),
+      ...BILLING_LISTS,
       ...routes,
     },
     account,
@@ -828,6 +837,148 @@ describe('edit subscriber', () => {
     });
     expect(within(dialog).getByText('Enter a credit limit with at most 2 decimals.')).toBeTruthy();
     expect(save.disabled).toBe(true);
+  });
+});
+
+describe('billing structure in the edit form', () => {
+  const CY1 = 'c1000000-0000-4000-8000-000000000001';
+  const BF1 = 'b1000000-0000-4000-8000-000000000001';
+  const BF2 = 'b2000000-0000-4000-8000-000000000002';
+  const BM1 = 'e1000000-0000-4000-8000-000000000001';
+  const BM2 = 'e2000000-0000-4000-8000-000000000002';
+  const LISTS: Record<string, Handler> = {
+    [`GET ${ACCOUNT_BASE}/billingCycleSpecification?offset=0&limit=100`]: () =>
+      json(
+        [
+          { id: 'monthly', name: 'Monthly billing' },
+          { id: CY1, name: 'Corporate monthly' },
+        ],
+        { total: 2 },
+      ),
+    [`GET ${ACCOUNT_BASE}/billFormat?offset=0&limit=100`]: () =>
+      json(
+        [
+          { id: BF1, name: 'JSON detailed' },
+          { id: BF2, name: 'JSON summary' },
+        ],
+        { total: 2 },
+      ),
+    [`GET ${ACCOUNT_BASE}/billPresentationMedia?offset=0&limit=100`]: () =>
+      json(
+        [
+          { id: BM1, name: 'Email' },
+          { id: BM2, name: 'Post' },
+        ],
+        { total: 2 },
+      ),
+  };
+  const structured = accountBody(
+    A,
+    { id: C, name: 'Olga Kuznetsova' },
+    {
+      billStructure: {
+        cycleSpecification: { id: CY1, name: 'Corporate monthly' },
+        format: { id: BF1, name: 'JSON detailed' },
+        presentationMedia: [{ id: BM1, name: 'Email' }],
+        '@type': 'BillStructure',
+      },
+    },
+  );
+
+  it('selects a cycle specification, a format and media: billStructure patch of the changes', async () => {
+    const { fetchMock } = editBackend({ ...LISTS, [`PATCH ${ACCOUNT_URL}`]: () => json(ACCOUNT) });
+    const dialog = await openEdit();
+    expectUi('ui.subscriber.billingGroup');
+    await within(dialog).findByRole('option', { name: 'Corporate monthly' });
+    expectUi('ui.subscriber.cycleSpecification');
+    expectUi('ui.subscriber.billFormat');
+    expectUi('ui.subscriber.presentationMedia');
+    const cycle = within(dialog).getByLabelText('Cycle specification') as HTMLSelectElement;
+    expect(cycle.value).toBe('monthly');
+    fireEvent.change(cycle, { target: { value: CY1 } });
+    fireEvent.change(within(dialog).getByLabelText('Bill format'), { target: { value: BF2 } });
+    fireEvent.click(await within(dialog).findByLabelText('Email'));
+    fireEvent.click(within(dialog).getByLabelText('Post'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    expect(patches(fetchMock)).toEqual([
+      [
+        ACCOUNT_URL,
+        JSON.stringify({
+          billStructure: {
+            cycleSpecification: {
+              id: CY1,
+              '@type': 'BillingCycleSpecificationRef',
+              '@referredType': 'BillingCycleSpecification',
+            },
+            format: { id: BF2, '@type': 'BillFormatRef', '@referredType': 'BillFormat' },
+            presentationMedia: [
+              {
+                id: BM1,
+                '@type': 'BillPresentationMediaRef',
+                '@referredType': 'BillPresentationMedia',
+              },
+              {
+                id: BM2,
+                '@type': 'BillPresentationMediaRef',
+                '@referredType': 'BillPresentationMedia',
+              },
+            ],
+          },
+        }),
+      ],
+    ]);
+  });
+
+  it('clears: back to the built-in cycle, no format, no media', async () => {
+    const { fetchMock } = editBackend(
+      { ...LISTS, [`PATCH ${ACCOUNT_URL}`]: () => json(structured) },
+      structured,
+    );
+    const dialog = await openEdit();
+    await within(dialog).findByRole('option', { name: 'Corporate monthly' });
+    expect((within(dialog).getByLabelText('Cycle specification') as HTMLSelectElement).value).toBe(
+      CY1,
+    );
+    expect((within(dialog).getByLabelText('Bill format') as HTMLSelectElement).value).toBe(BF1);
+    expect((within(dialog).getByLabelText('Email') as HTMLInputElement).checked).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText('Cycle specification'), {
+      target: { value: 'monthly' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Bill format'), { target: { value: '' } });
+    fireEvent.click(within(dialog).getByLabelText('Email'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    expect(patches(fetchMock)).toEqual([
+      [
+        ACCOUNT_URL,
+        JSON.stringify({
+          billStructure: {
+            cycleSpecification: {
+              id: 'monthly',
+              '@type': 'BillingCycleSpecificationRef',
+              '@referredType': 'BillingCycleSpecification',
+            },
+            format: null,
+            presentationMedia: [],
+          },
+        }),
+      ],
+    ]);
+  });
+
+  it('shows the 422 of a setting that vanished and keeps the choice', async () => {
+    editBackend({
+      ...LISTS,
+      [`PATCH ${ACCOUNT_URL}`]: () => tmfError(422, 'billStructure.format does not exist'),
+    });
+    const dialog = await openEdit();
+    await within(dialog).findByRole('option', { name: 'JSON summary' });
+    fireEvent.change(within(dialog).getByLabelText('Bill format'), { target: { value: BF2 } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain('format does not exist');
+    expect((within(dialog).getByLabelText('Bill format') as HTMLSelectElement).value).toBe(BF2);
   });
 });
 

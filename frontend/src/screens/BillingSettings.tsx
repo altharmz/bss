@@ -1,0 +1,349 @@
+import { useState } from 'react';
+import { loadAccounts } from '../api/bss';
+import {
+  createBody,
+  createSetting,
+  deleteSetting,
+  FORMAT_NAMES,
+  formOf,
+  loadSettings,
+  patchBody,
+  patchSetting,
+  usedBy,
+  type Setting,
+  type SettingForm,
+  type SettingKind,
+} from '../api/billing';
+import { useResource } from '../api/useResource';
+import { useSetCrumbs } from '../app/context';
+import { formatInt } from '../format/money';
+import { Button, Modal, PageTitle, Panel, Pill, Segmented, TextInput, useToast } from '../ui/kit';
+import { ListState } from '../ui/states';
+import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
+import { Footer, useWrite } from './FinancialForms';
+import { Field } from './SubscriberForms';
+import './screens.css';
+
+// Billing settings (docs/next-slices-design.md section 18): the cycle specifications, bill
+// formats and presentation media a billing account may name in its billStructure. The
+// subscriber Edit form selects them. The server decides: its 409/422 text is shown in the
+// dialog and the entered values stay.
+
+interface Tab {
+  title: string;
+  word: string; // singular, lower case
+  plural: string;
+  empty: string;
+}
+
+const TABS: Record<SettingKind, Tab> = {
+  cycles: {
+    title: 'Cycle specifications',
+    word: 'cycle specification',
+    plural: 'cycle specifications',
+    empty: 'Create one, then select it in the subscriber Edit form.',
+  },
+  formats: {
+    title: 'Bill formats',
+    word: 'bill format',
+    plural: 'bill formats',
+    empty: 'Create one, then select it in the subscriber Edit form.',
+  },
+  media: {
+    title: 'Presentation media',
+    word: 'presentation medium',
+    plural: 'presentation media',
+    empty: 'Create one, then select it in the subscriber Edit form.',
+  },
+};
+
+const COLUMNS: Column[] = [
+  { key: 'name', label: 'Name', width: '1fr' },
+  { key: 'description', label: 'Description', width: '2fr' },
+  { key: 'used', label: 'Used by', width: '140px', align: 'right' },
+  { key: 'actions', label: '', width: '150px', align: 'right' },
+];
+
+export function BillingSettingsScreen() {
+  useSetCrumbs([{ label: 'Billing settings' }], 'billingSettings');
+  const [tab, setTab] = useState<SettingKind>('cycles');
+  const tabs = (
+    <div className="bss-toolbar">
+      <Segmented
+        label="Billing settings sections"
+        value={tab}
+        onChange={setTab}
+        options={(Object.keys(TABS) as SettingKind[]).map((key) => ({
+          key,
+          label: TABS[key].title,
+        }))}
+      />
+    </div>
+  );
+  return <SettingsTab key={tab} kind={tab} tabs={tabs} />;
+}
+
+function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode }) {
+  const tab = TABS[kind];
+  const marker = `ui.billingSettings.${kind}`;
+  const rows = useResource(`billing-settings:${kind}`, (signal) => loadSettings(kind, signal));
+  // the billing accounts name these: a setting in use cannot be deleted
+  const accounts = useResource('accounts', loadAccounts);
+  const toast = useToast();
+  const [dialog, setDialog] = useState<
+    { kind: 'new' } | { kind: 'edit' | 'delete'; setting: Setting } | null
+  >(null);
+  const done = (message: string) => {
+    setDialog(null);
+    toast(message);
+    rows.retry();
+    accounts.retry();
+  };
+  const used = (setting: Setting) =>
+    accounts.status === 'ok' ? usedBy(kind, setting.id, accounts.data) : null;
+
+  return (
+    <div className="bss-screen" data-ui={marker}>
+      <div className="bss-title-row">
+        <PageTitle
+          title="Billing settings"
+          count={rows.status === 'ok' ? formatInt(rows.data.length) : undefined}
+        />
+        <Button
+          variant="primary"
+          data-ui={`${marker}.new`}
+          onClick={() => setDialog({ kind: 'new' })}
+        >
+          + New {tab.word}
+        </Button>
+      </div>
+      {tabs}
+      <Panel>
+        <TableHead columns={COLUMNS} />
+        <ListState
+          resource={rows}
+          columns={COLUMNS}
+          errorTitle={`Failed to load ${tab.plural}`}
+          empty={{ title: `No ${tab.plural} yet`, text: tab.empty }}
+          total={(data) => data.length}
+          rows={(data) => data}
+          onResetFilters={() => {}}
+        >
+          {(list) => (
+            <>
+              {list.map((setting) => {
+                const count = used(setting);
+                return (
+                  <TableRow
+                    key={setting.id}
+                    columns={COLUMNS}
+                    cells={{
+                      name: (
+                        <div className="ellipsis">
+                          <span className="bss-name">{setting.name}</span>
+                          {setting.builtIn && (
+                            <>
+                              {' '}
+                              <Pill status="Active" label="built in" />
+                            </>
+                          )}
+                        </div>
+                      ),
+                      description: setting.description ?? <span className="bss-zero">—</span>,
+                      used: count === null ? <span className="bss-zero">—</span> : formatInt(count),
+                      actions: setting.builtIn ? (
+                        <span className="bss-secondary">read-only</span>
+                      ) : (
+                        <span>
+                          <Button
+                            small
+                            data-ui={`${marker}.edit`}
+                            aria-label={`Edit ${setting.name}`}
+                            onClick={() => setDialog({ kind: 'edit', setting })}
+                          >
+                            Edit
+                          </Button>{' '}
+                          {count === null || count === 0 ? (
+                            <Button
+                              small
+                              data-ui={`${marker}.delete`}
+                              variant="danger-outline"
+                              aria-label={`Delete ${setting.name}`}
+                              onClick={() => setDialog({ kind: 'delete', setting })}
+                            >
+                              Delete
+                            </Button>
+                          ) : null}
+                        </span>
+                      ),
+                    }}
+                  />
+                );
+              })}
+              <TableFooter
+                left={`${formatInt(list.length)} ${tab.plural}`}
+                right={
+                  kind === 'cycles'
+                    ? 'Stored ones are names only: billing is always monthly'
+                    : 'Used by: billing accounts naming it in their bill structure'
+                }
+              />
+            </>
+          )}
+        </ListState>
+      </Panel>
+      {(dialog?.kind === 'new' || dialog?.kind === 'edit') && (
+        <SettingFormModal
+          kind={kind}
+          setting={dialog.kind === 'edit' ? dialog.setting : null}
+          onClose={() => setDialog(null)}
+          onDone={done}
+        />
+      )}
+      {dialog?.kind === 'delete' && (
+        <DeleteSettingModal
+          kind={kind}
+          setting={dialog.setting}
+          onClose={() => setDialog(null)}
+          onDone={done}
+        />
+      )}
+    </div>
+  );
+}
+
+function SettingFormModal({
+  kind,
+  setting,
+  onClose,
+  onDone,
+}: {
+  kind: SettingKind;
+  setting: Setting | null;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const tab = TABS[kind];
+  const [form, setForm] = useState<SettingForm>(formOf(setting));
+  const write = useWrite(onDone);
+  const set = (change: Partial<SettingForm>) => setForm({ ...form, ...change });
+  const body = setting ? patchBody(kind, setting, form) : createBody(kind, form);
+  const valid = form.name.trim() !== '';
+  return (
+    <Modal
+      title={setting ? `Edit ${setting.name}` : `New ${tab.word}`}
+      width={480}
+      onClose={onClose}
+      ui={`ui.billingSettings.${kind}.form`}
+      footer={
+        <Footer write={write} onRefresh={() => onDone('Refreshed')}>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            disabled={!valid || body === null || write.busy}
+            onClick={() =>
+              body !== null &&
+              void write.run(async () => {
+                if (setting) {
+                  await patchSetting(kind, setting.id, body);
+                  return `${form.name.trim()} saved`;
+                }
+                await createSetting(kind, body);
+                return `${form.name.trim()} created`;
+              })
+            }
+          >
+            {setting ? 'Save' : 'Create'}
+          </Button>
+        </Footer>
+      }
+    >
+      <div className="bss-modal-body">
+        <section className="bss-form">
+          <Field label="Name">
+            {kind === 'formats' ? (
+              <select
+                className="bss-input"
+                value={form.name}
+                onChange={(e) => set({ name: e.target.value })}
+              >
+                {form.name === '' && <option value="">Choose a format</option>}
+                {form.name !== '' && !(FORMAT_NAMES as readonly string[]).includes(form.name) && (
+                  <option value={form.name}>{form.name}</option>
+                )}
+                {FORMAT_NAMES.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <TextInput value={form.name} onChange={(e) => set({ name: e.target.value })} />
+            )}
+          </Field>
+          <Field label="Description">
+            <TextInput
+              value={form.description}
+              onChange={(e) => set({ description: e.target.value })}
+            />
+          </Field>
+          {kind === 'cycles' && (
+            <div className="caption">
+              The policy is fixed: monthly periods, no date shift. A stored specification is a name
+              for it; the server refuses other values.
+            </div>
+          )}
+          {kind === 'formats' && (
+            <div className="caption">The server stores only these two bill formats.</div>
+          )}
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
+function DeleteSettingModal({
+  kind,
+  setting,
+  onClose,
+  onDone,
+}: {
+  kind: SettingKind;
+  setting: Setting;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const write = useWrite(onDone);
+  return (
+    <Modal
+      title={`Delete ${setting.name}`}
+      width={480}
+      onClose={onClose}
+      ui={`ui.billingSettings.${kind}.confirmDelete`}
+      footer={
+        <Footer write={write} onRefresh={() => onDone('Refreshed')}>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="danger"
+            disabled={write.busy}
+            onClick={() =>
+              void write.run(async () => {
+                await deleteSetting(kind, setting.id);
+                return `${setting.name} deleted`;
+              })
+            }
+          >
+            Delete
+          </Button>
+        </Footer>
+      }
+    >
+      <div className="bss-modal-body">
+        <p>
+          Deletes the {TABS[kind].word}. Issued bills keep their own copy. The server refuses while
+          a billing account still names it.
+        </p>
+      </div>
+    </Modal>
+  );
+}

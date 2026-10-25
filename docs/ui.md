@@ -46,8 +46,8 @@ API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the coun
 
 The sidebar is one `<nav aria-label="Main">` with three labelled sections
 (`ui.shell.section.customers|products|billing`): Customers (Subscribers, Parties), Products (Product
-catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Accounts
-without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
+catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Accounts,
+Billing settings, without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
 (`X-Total-Count`). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
 
 ### Sign-in, operator menu and users
@@ -392,6 +392,22 @@ is the financial-account form plus a **Financial account** select of the owner's
 `.edit`, `.delete`, `.confirmDelete`, `.financialLink`. API: `GET|POST|PATCH|DELETE
 .../partyAccount|settlementAccount`, `GET .../financialAccount?relatedParty.id=`. Design:
 [next-slices-design.md](next-slices-design.md) section 17.
+
+### Billing settings (`ui.billingSettings.cycles|formats|media`) - `screens/BillingSettings.tsx`
+
+Route `/billing-settings`, sidebar Billing > Billing settings, three tabs: **Cycle specifications**,
+**Bill formats**, **Presentation media**. Each lists name, description and how many loaded billing
+accounts use it, with **+ New ...**, row **Edit** and **Delete**. Delete is hidden while a loaded
+account names the setting; the server's 409 still shows in the dialog. The built-in `monthly`
+specification is shown read-only. Cycle specifications and media take `name` and `description`; a
+bill format's name is one of `JSON detailed` / `JSON summary` (a select: the API stores only those).
+The subscriber **Edit** form has a **Billing** group (`ui.subscriber.billingGroup`) with selects for
+the cycle specification and bill format and checkboxes for the media, sent as only the changed parts
+of `billStructure` in the billing account PATCH (media as a whole list, the built-in cycle as id
+`monthly`). Markers `ui.billingSettings.<tab>` with `.new`, `.form`, `.edit`, `.delete`,
+`.confirmDelete`. API: `GET|POST|PATCH|DELETE .../billingCycleSpecification|billFormat|
+billPresentationMedia`, `PATCH .../billingAccount/{id}`. Design:
+[next-slices-design.md](next-slices-design.md) section 18.
 
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
 

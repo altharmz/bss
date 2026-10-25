@@ -42,7 +42,7 @@ const MARKER: Record<AccountKind, string> = {
 type Editable = AccountRecord & { financial?: { id: string; name: string } | null };
 
 /** Save/Delete outcome state shared by both dialogs. */
-function useWrite(onDone: (message: string) => void) {
+export function useWrite(onDone: (message: string) => void) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [unsure, setUnsure] = useState(false);
@@ -66,7 +66,7 @@ function useWrite(onDone: (message: string) => void) {
   return { busy, problem, unsure, run };
 }
 
-function Footer({
+export function Footer({
   write,
   onRefresh,
   children,

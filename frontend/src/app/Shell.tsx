@@ -116,6 +116,12 @@ export function Sidebar({ context }: { context: SystemContext }) {
           count: '',
           active: (r) => r.name === 'financialAccounts',
         },
+        {
+          label: 'Billing settings',
+          href: '/billing-settings',
+          count: '',
+          active: (r) => r.name === 'billingSettings',
+        },
       ],
     },
   ];

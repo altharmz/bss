@@ -5,6 +5,7 @@ import { OrdersScreen } from '../screens/Orders';
 import { PrepaidCommandsScreen } from '../screens/PrepaidCommands';
 import { CatalogScreen } from '../screens/Catalog';
 import { PartiesScreen } from '../screens/Parties';
+import { BillingSettingsScreen } from '../screens/BillingSettings';
 import { FinancialAccountsScreen } from '../screens/FinancialAccounts';
 import { NotFoundScreen } from '../screens/placeholders';
 import { SubscriberCardScreen } from '../screens/SubscriberCard';
@@ -52,6 +53,8 @@ function Screen() {
       return <FinancialAccountsScreen />;
     case 'parties':
       return <PartiesScreen />;
+    case 'billingSettings':
+      return <BillingSettingsScreen />;
     case 'notFound':
       return <NotFoundScreen path={route.path} />;
   }

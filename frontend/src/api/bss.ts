@@ -87,6 +87,53 @@ export interface Account {
   balanceCents: number; // positive = in credit
   creditLimitCents: number | null;
   financialAccount: { id: string; name: string } | null;
+  /** the bill structure the account prefers (slice 18); absent = the defaults */
+  billing?: BillingPrefs | undefined;
+}
+
+/** The ids of the cycle specification (null = the built-in monthly), bill format and
+ * presentation media a billing account names. */
+export interface BillingPrefs {
+  cycleId: string | null;
+  formatId: string | null;
+  mediaIds: string[];
+}
+
+export const BUILT_IN_CYCLE = 'monthly';
+
+function toBilling(structure: T666['schemas']['BillingAccount']['billStructure']): BillingPrefs {
+  const cycle = structure?.cycleSpecification?.id;
+  return {
+    cycleId: cycle === undefined || cycle === BUILT_IN_CYCLE ? null : cycle,
+    formatId: structure?.format?.id ?? null,
+    mediaIds: (structure?.presentationMedia ?? []).flatMap((m) => (m.id ? [m.id] : [])),
+  };
+}
+
+const BILLING_REF = {
+  cycle: { '@type': 'BillingCycleSpecificationRef', '@referredType': 'BillingCycleSpecification' },
+  format: { '@type': 'BillFormatRef', '@referredType': 'BillFormat' },
+  media: { '@type': 'BillPresentationMediaRef', '@referredType': 'BillPresentationMedia' },
+} as const;
+
+/** The billStructure of the billing account merge patch: only the parts that changed. The
+ * media list is replaced as a whole (as the API defines it); the built-in cycle is sent as
+ * the id `monthly`. null = nothing changed. */
+export function billStructurePatch(
+  before: BillingPrefs,
+  after: BillingPrefs,
+): Record<string, unknown> | null {
+  const body: Record<string, unknown> = {};
+  if (after.cycleId !== before.cycleId) {
+    body.cycleSpecification = { id: after.cycleId ?? BUILT_IN_CYCLE, ...BILLING_REF.cycle };
+  }
+  if (after.formatId !== before.formatId) {
+    body.format = after.formatId === null ? null : { id: after.formatId, ...BILLING_REF.format };
+  }
+  if (JSON.stringify(after.mediaIds) !== JSON.stringify(before.mediaIds)) {
+    body.presentationMedia = after.mediaIds.map((id) => ({ id, ...BILLING_REF.media }));
+  }
+  return Object.keys(body).length === 0 ? null : body;
 }
 
 export function toAccount(body: BillingAccountBody): Account {
@@ -102,6 +149,7 @@ export function toAccount(body: BillingAccountBody): Account {
     financialAccount: financial
       ? { id: need(financial.id, 'financialAccount id'), name: financial.name ?? '' }
       : null,
+    billing: toBilling(body.billStructure),
     id: need(body.id, 'id'),
     name: need(body.name, 'name'),
     state: need(body.state, 'state') as AccountState,
@@ -506,6 +554,8 @@ export interface SubscriberProfile {
   creditLimit: string | null; // canonical decimal string, or none
   /** the financial account the billing account links to (slice 16), or none */
   financialAccountId: string | null;
+  /** the bill structure the account prefers (slice 18) */
+  billing: BillingPrefs;
 }
 
 export function canonical(cents: number | null): string | null {
@@ -542,6 +592,7 @@ export async function loadProfile(
     accountState: account.state,
     creditLimit: canonical(account.creditLimitCents),
     financialAccountId: account.financialAccount?.id ?? null,
+    billing: account.billing ?? { cycleId: null, formatId: null, mediaIds: [] },
   };
 }
 
@@ -589,6 +640,8 @@ export async function updateSubscriber(
             '@referredType': 'FinancialAccount',
           };
   }
+  const structure = billStructurePatch(before.billing, after.billing);
+  if (structure !== null) account.billStructure = structure;
   const limitChanged = after.creditLimit !== before.creditLimit;
   if (limitChanged) {
     account.creditLimit = after.creditLimit === null ? null : { unit: currency, value: AMOUNT };

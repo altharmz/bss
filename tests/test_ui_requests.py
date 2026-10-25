@@ -1700,3 +1700,108 @@ def test_party_and_settlement_account_writes_as_the_ui_sends_them(api):
     assert api.delete(party["href"]).status_code == 204
     assert api.delete(settlement.json()["href"]).status_code == 204
     assert api.get(party["href"]).status_code == 404
+
+
+def test_billing_settings_writes_and_bill_structure_as_the_ui_sends_them(api):
+    """api/billing.ts createBody/patchBody, the deletes, and billStructurePatch() of
+    api/bss.ts: bodies pinned in BillingSettings.test.tsx and SubscriberCard.test.tsx."""
+    acc = "/tmf-api/accountManagement/v5"
+    for url in (
+        f"{acc}/billingCycleSpecification?offset=0&limit=100",
+        f"{acc}/billFormat?offset=0&limit=100",
+        f"{acc}/billPresentationMedia?offset=0&limit=100",
+    ):
+        assert api.get(url).status_code == 200, url
+    cycle = api.post_raw(
+        f"{acc}/billingCycleSpecification",
+        '{"@type":"BillingCycleSpecification","name":"Quarter end","description":"Names only"}',
+    )
+    assert cycle.status_code == 201, cycle.text
+    spare = api.post_raw(
+        f"{acc}/billingCycleSpecification",
+        '{"@type":"BillingCycleSpecification","name":"Spare"}',
+    )
+    assert spare.status_code == 201, spare.text
+    fmt = api.post_raw(
+        f"{acc}/billFormat",
+        '{"@type":"BillFormat","name":"JSON summary","description":"Totals"}',
+    )
+    assert fmt.status_code == 201, fmt.text
+    medium = api.post_raw(
+        f"{acc}/billPresentationMedia", '{"@type":"BillPresentationMedia","name":"SMS"}'
+    )
+    assert medium.status_code == 201, medium.text
+    other = api.post_raw(
+        f"{acc}/billPresentationMedia", '{"@type":"BillPresentationMedia","name":"Post"}'
+    )
+    assert other.status_code == 201, other.text
+    # edits: a cleared description, a rename with a new description
+    cleared = api.patch_raw(
+        cycle.json()["href"], '{"@type":"BillingCycleSpecification","description":null}'
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert "description" not in cleared.json()
+    renamed = api.patch_raw(
+        spare.json()["href"],
+        '{"@type":"BillingCycleSpecification","name":"Spare 2","description":"x"}',
+    )
+    assert renamed.status_code == 200 and renamed.json()["name"] == "Spare 2"
+    assert (
+        api.patch_raw(
+            fmt.json()["href"], '{"@type":"BillFormat","description":"Totals only"}'
+        ).status_code
+        == 200
+    )
+    assert (
+        api.patch_raw(
+            medium.json()["href"], '{"@type":"BillPresentationMedia","name":"Paper post"}'
+        ).status_code
+        == 200
+    )
+    # the subscriber Edit form: billStructure with only what changed
+    account = apidata.account(api)
+
+    def ref(kind, referred, item_id):
+        return json.dumps(
+            {"id": item_id, "@type": f"{kind}Ref", "@referredType": referred},
+            separators=(",", ":"),
+        )
+
+    cycle_ref = ref("BillingCycleSpecification", "BillingCycleSpecification", cycle.json()["id"])
+    format_ref = ref("BillFormat", "BillFormat", fmt.json()["id"])
+    media_refs = ",".join(
+        ref("BillPresentationMedia", "BillPresentationMedia", m.json()["id"])
+        for m in (medium, other)
+    )
+    chosen = api.patch_raw(
+        account["href"],
+        '{"billStructure":{"cycleSpecification":'
+        + cycle_ref
+        + ',"format":'
+        + format_ref
+        + ',"presentationMedia":['
+        + media_refs
+        + "]}}",
+    )
+    assert chosen.status_code == 200, chosen.text
+    structure = chosen.json()["billStructure"]
+    assert structure["cycleSpecification"]["id"] == cycle.json()["id"]
+    assert structure["format"]["id"] == fmt.json()["id"]
+    assert len(structure["presentationMedia"]) == 2
+    # in use: the server refuses the deletes; the UI hides the buttons when it knows
+    for item in (cycle, fmt, medium):
+        refused = api.delete(item.json()["href"])
+        assert refused.status_code == 409, refused.text
+    cleared = api.patch_raw(
+        account["href"],
+        '{"billStructure":{"cycleSpecification":'
+        + ref("BillingCycleSpecification", "BillingCycleSpecification", "monthly")
+        + ',"format":null,"presentationMedia":[]}}',
+    )
+    assert cleared.status_code == 200, cleared.text
+    structure = cleared.json()["billStructure"]
+    assert structure["cycleSpecification"]["id"] == "monthly"
+    assert "format" not in structure and "presentationMedia" not in structure
+    for item in (cycle, spare, fmt, medium, other):
+        assert api.delete(item.json()["href"]).status_code == 204
+    assert api.get(cycle.json()["href"]).status_code == 404
