@@ -16,7 +16,7 @@ from app.api import balance, bill, payment
 from app.api.common import money, parse_id
 from app.api.deps import ClockDep, Tx
 from app.api.errors import bad_request, not_found, unprocessable
-from app.api.inventory import product_href
+from app.api.inventory import order_href, product_href
 from app.api.listing import parse_page
 from app.api.tmfjson import TmfJSONResponse
 from app.billing import entitlement
@@ -272,6 +272,20 @@ def _next_charge(product: Row, today: date, cycle_day: int) -> date | None:
     return None if end is not None and end <= nxt else nxt
 
 
+def _pending_change(c: Row) -> dict[str, Any]:
+    """One `pendingChanges` entry: a status or offering change not yet in effect."""
+    out: dict[str, Any] = {
+        "kind": c["kind"],
+        "date": c["date"],
+        "productOrder": {"id": str(c["order_id"]), "href": order_href(c["order_id"])},
+    }
+    if c["kind"] == "status":
+        out["status"] = c["status"]
+    else:
+        out["productOffering"] = {"id": str(c["offering_id"]), "name": c["offering_name"]}
+    return out
+
+
 @router.get("/{account_id}/products")
 def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     """The account's products that are not ended (created, pendingActive, active,
@@ -291,6 +305,7 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
             else {}
         )
         changes = billing.offering_changes(conn, [p["id"] for p in rows])
+        pending = products.pending_changes(conn, [p["id"] for p in rows], today)
         cores = {p["id"]: billing.core_product(p, changes.get(p["id"], ())) for p in rows}
         prices = billing.load_recurring_prices(
             conn, [o for p in cores.values() for o in p.offering_ids]
@@ -330,6 +345,7 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                 "nextChargeDate": prepaid_views[p["id"]]["paidThrough"]
                 if p["id"] in prepaid_views
                 else nxt,
+                "pendingChanges": [_pending_change(c) for c in pending.get(p["id"], [])],
                 **prepaid_views.get(p["id"], {}),
             }
         )

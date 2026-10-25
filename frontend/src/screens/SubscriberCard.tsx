@@ -9,9 +9,11 @@ import {
   loadTransactions,
   orderDelete,
   undoDeactivation,
+  undoPendingChange,
   type Account,
   type AccountProduct,
   type AccountSettlement,
+  type ProductChange,
   type PrepaidBalance,
 } from '../api/bss';
 import { explain } from '../api/client';
@@ -30,6 +32,7 @@ import { AddProductModal } from './AddProduct';
 import { ProductNumber } from './ProductNumber';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
 import { BalanceActions } from './PrepaidHistory';
+import { offeredChanges, ProductActionsMenu, ProductChangeDialog } from './ProductActions';
 import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
 import { FailedCommands, OrderWatch } from './PrepaidOrderWatch';
 import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
@@ -47,7 +50,7 @@ const PRODUCT_COLUMNS: Column[] = [
   { key: 'activated', label: 'Activated', width: '140px', mono: true },
   { key: 'next', label: 'Next charge', width: '170px', mono: true },
   { key: 'price', label: 'Price', width: '170px', align: 'right', mono: true },
-  { key: 'actions', label: 'Actions', width: '170px' },
+  { key: 'actions', label: 'Actions', width: '300px' },
 ];
 const CHARGE_COLUMNS: Column[] = [
   { key: 'date', label: 'Date', width: '92px', mono: true },
@@ -311,6 +314,11 @@ function Card({
                 key={product.id}
                 account={account}
                 product={product}
+                onRefresh={reload}
+                onTopUp={(amount) => {
+                  setMoneyAmount(amount);
+                  setMoney('topup');
+                }}
                 onDone={(message, accepted) => {
                   toast(message);
                   if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
@@ -641,12 +649,17 @@ function ProductRow({
   account,
   product,
   onDone,
+  onRefresh,
+  onTopUp,
 }: {
   account: Account;
   product: AccountProduct;
   onDone: (message: string, accepted?: PendingOrder) => void;
+  onRefresh: () => void;
+  onTopUp: (amount: string) => void;
 }) {
   const context = useSystemContext();
+  const [changing, setChanging] = useState<ProductChange | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -696,6 +709,26 @@ function ProductRow({
     }
   }
 
+  async function undoChange(orderId: string) {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await undoPendingChange(orderId);
+      onDone(`${name}: the pending change was cancelled`);
+    } catch (error) {
+      setProblem(explain(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const fundingWait =
+    account.ratingType === 'prepaid' &&
+    product.status === 'suspended' &&
+    product.suspensionCause === 'funding' &&
+    product.needs_topup
+      ? product.needs_topup
+      : null;
   const code = [product.productOffering.code, product.productSpecification?.name]
     .filter(Boolean)
     .join(' · ');
@@ -716,6 +749,36 @@ function ProductRow({
               )}
               <div className="bss-code">{code}</div>
               <ProductNumber accountId={account.id} productId={product.id} onDone={onDone} />
+              {product.pendingChanges.map((c) => (
+                <div
+                  key={c.productOrder.id}
+                  className="bss-secondary"
+                  data-ui="ui.subscriber.pendingChange"
+                >
+                  {c.kind === 'status'
+                    ? c.status === 'suspended'
+                      ? `Suspends on ${c.date}`
+                      : `Resumes on ${c.date}`
+                    : `Changes to ${c.productOffering?.name ?? 'another offering'} on ${c.date}${
+                        account.ratingType === 'prepaid' && c.date < context.businessDate
+                          ? ' (waits for funds)'
+                          : ''
+                      }`}{' '}
+                  <Button
+                    small
+                    disabled={busy}
+                    data-ui="ui.subscriber.undoChange"
+                    onClick={() => void undoChange(c.productOrder.id)}
+                  >
+                    Undo
+                  </Button>
+                </div>
+              ))}
+              {fundingWait !== null && (
+                <div className="bss-secondary">
+                  Waiting for funds: short {formatCents(toCents(fundingWait.shortfall))}
+                </div>
+              )}
               {problem !== null && (
                 <div className="bss-inline-error" role="alert">
                   {problem}
@@ -754,17 +817,49 @@ function ProductRow({
               </Button>
             </span>
           ) : (
-            <Button
-              variant="danger-outline"
-              small
-              data-ui="ui.subscriber.deactivate"
-              onClick={() => setConfirming(true)}
-            >
-              Deactivate
-            </Button>
+            <>
+              <ProductActionsMenu
+                items={offeredChanges(product)}
+                onPick={(change) => setChanging(change)}
+              />{' '}
+              {fundingWait !== null && (
+                <>
+                  <Button
+                    small
+                    data-ui="ui.subscriber.topUpProduct"
+                    onClick={() =>
+                      onTopUp(formatCents(toCents(fundingWait.shortfall)).replace(/,/g, ''))
+                    }
+                  >
+                    Top up
+                  </Button>{' '}
+                </>
+              )}
+              <Button
+                variant="danger-outline"
+                small
+                data-ui="ui.subscriber.deactivate"
+                onClick={() => setConfirming(true)}
+              >
+                Deactivate
+              </Button>
+            </>
           ),
         }}
       />
+      {changing !== null && (
+        <ProductChangeDialog
+          change={changing}
+          account={account}
+          product={product}
+          onClose={() => setChanging(null)}
+          onRefresh={onRefresh}
+          onDone={(message, accepted) => {
+            setChanging(null);
+            onDone(message, accepted);
+          }}
+        />
+      )}
     </div>
   );
 }

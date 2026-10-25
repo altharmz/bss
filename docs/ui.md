@@ -148,6 +148,23 @@ one delete item, effective today** (no `requestedStartDate`): a started product 
 reasons.
 API: `POST /tmf-api/productOrderingManagement/v5/productOrder`.
 
+### Product actions (`ui.subscriber.productActions`) and pending changes
+
+**Actions ▾** on a product row lists what the row allows: **Suspend…** (`ui.subscriber.suspend`,
+active, no pending status change), **Resume…** (`ui.subscriber.resume`, suspended but not by
+funding or the account, no pending status change) and **End on a date…**
+(`ui.subscriber.endOnDate`, no end set). Each opens a dialog (`ui.subscriber.productChange`)
+with a date and an explanation, and places one TMF622 order: a `modify` item with
+`product.status` (suspend, resume) or a `delete` item, `requestedStartDate` noon of the date.
+Postpaid dates start at today; prepaid Suspend/Resume are fixed to today. A rejected order shows
+its reasons in the dialog; an `inProgress` one is followed like any prepaid order. Pending
+changes (`pendingChanges` of the internal products) show under the product ("Suspends on ...",
+"Changes to X on ... (waits for funds)") with **Undo** (`ui.subscriber.undoChange`: a
+`cancelProductOrder` of that order; a 409 shows in the row). A funding-suspended prepaid product
+shows its shortfall and **Top up** (`ui.subscriber.topUpProduct`). Deactivate stays beside the menu.
+API: `POST .../productOrder`, `POST .../cancelProductOrder`,
+`GET /internal/v1/billingAccount/{id}/products`.
+
 ### Bills (`ui.subscriber.bills`), bill dialog (`ui.subscriber.billDetail`), hold/release (`ui.subscriber.billHold`), record payment (`ui.subscriber.recordPayment`) - `screens/Bills.tsx`
 
 The bill lifecycle (docs/archive/bill-lifecycle-design.md section 6). The Billing account panel

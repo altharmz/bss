@@ -314,6 +314,14 @@ items:
   - {id: ui.subscriber.addProduct, area: ui, stage: 5, title: "Add product, with first-charge preview"}
   - {id: ui.subscriber.deactivate, area: ui, stage: 5, title: "Deactivate a product"}
   - {id: ui.subscriber.undoDeactivation, area: ui, stage: 5, title: "Undo a pending deactivation (cancel its order)"}
+  - {id: ui.subscriber.productActions, area: ui, stage: 5, title: "Product Actions menu"}
+  - {id: ui.subscriber.suspend, area: ui, stage: 5, title: "Suspend a product on a date"}
+  - {id: ui.subscriber.resume, area: ui, stage: 5, title: "Resume a suspended product"}
+  - {id: ui.subscriber.endOnDate, area: ui, stage: 5, title: "End a product on a date"}
+  - {id: ui.subscriber.productChange, area: ui, stage: 5, title: "Product change dialog (suspend, resume, end)"}
+  - {id: ui.subscriber.pendingChange, area: ui, stage: 5, title: "Pending change line on a product"}
+  - {id: ui.subscriber.undoChange, area: ui, stage: 5, title: "Undo a pending change (cancel its order)"}
+  - {id: ui.subscriber.topUpProduct, area: ui, stage: 5, title: "Top up from a funding-suspended product"}
   - {id: ui.subscriber.bills, area: ui, stage: 5, title: "Bills panel on the subscriber card"}
   - {id: ui.subscriber.billDetail, area: ui, stage: 5, title: "Bill dialog: charges, payments, history"}
   - {id: ui.subscriber.billHold, area: ui, stage: 5, title: "Put a bill on hold / release it"}

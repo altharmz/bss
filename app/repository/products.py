@@ -313,6 +313,42 @@ def changes_of(conn: psycopg.Connection, product_id: UUID) -> list[Row]:
     )
 
 
+def pending_changes(
+    conn: psycopg.Connection, product_ids: list[UUID], today: date
+) -> dict[UUID, list[Row]]:
+    """The products' changes not yet in effect, by day: status changes after `today` (not
+    applied) and offering changes - postpaid after `today`, prepaid not yet announced (a
+    change waiting for a funded renewal can be dated in the past). Each row has `kind`,
+    `product_id`, `date`, `status`, `offering_id`, `offering_name` and `order_id`."""
+    rows = fetch_all(
+        conn,
+        """
+        SELECT 'status' AS kind, c.product_id, c.change_date AS date, c.status::text AS status,
+               NULL::uuid AS offering_id, NULL::text AS offering_name,
+               i.product_order_id AS order_id
+        FROM product_status_change c
+        JOIN product_order_item i ON i.id = c.changed_by_item_id
+        WHERE c.product_id = ANY(%(ids)s) AND c.applied_at IS NULL AND c.change_date > %(day)s
+        UNION ALL
+        SELECT 'offering', c.product_id, c.change_date, NULL, o.id, o.name, i.product_order_id
+        FROM product_offering_change c
+        JOIN product_order_item i ON i.id = c.changed_by_item_id
+        JOIN product p ON p.id = c.product_id
+        JOIN billing_account a ON a.id = p.billing_account_id
+        JOIN product_offering o ON o.id = c.product_offering_id
+        WHERE c.product_id = ANY(%(ids)s)
+          AND CASE WHEN a.rating_type = 'prepaid' THEN c.effect_announced_at IS NULL
+                   ELSE c.change_date > %(day)s END
+        ORDER BY 3, 1
+        """,
+        {"ids": product_ids, "day": today},
+    )
+    out: dict[UUID, list[Row]] = {}
+    for row in rows:
+        out.setdefault(row["product_id"], []).append(row)
+    return out
+
+
 def change_items(conn: psycopg.Connection, product_id: UUID) -> list[UUID]:
     """The modify items that changed the product's offering, by change day."""
     return [row["changed_by_item_id"] for row in changes_of(conn, product_id)]

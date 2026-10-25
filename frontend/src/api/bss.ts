@@ -47,6 +47,7 @@ export const PATHS = {
 };
 
 export type AccountProduct = Internal['schemas']['AccountProduct'];
+export type PendingChange = AccountProduct['pendingChanges'][number];
 export type Charge = Internal['schemas']['Charge'];
 export type Transaction = Internal['schemas']['Transaction'];
 export type FirstCharge = Internal['schemas']['FirstCharge'];
@@ -897,6 +898,45 @@ export async function orderDelete(accountId: string, productId: string): Promise
     ],
   });
   return outcome(order);
+}
+
+export type ProductChange = 'suspend' | 'resume' | 'end';
+
+/** Suspend, resume or end a product on `day` (a business date): one TMF622 item,
+ * `requestedStartDate` as noon of that day in BILLING_TZ, like the add order. A status
+ * change is a modify item with product.status; ending is a delete item. */
+export async function orderProductChange(
+  accountId: string,
+  productId: string,
+  change: ProductChange,
+  day: string,
+  timeZone: string,
+): Promise<OrderOutcome> {
+  const ref = { id: productId, '@type': 'ProductRef' };
+  const order = await postJson<OrderBody>(PATHS.orders, {
+    '@type': 'ProductOrder',
+    billingAccount: { id: accountId, '@type': 'BillingAccountRef' },
+    requestedStartDate: requestedDate(day, timeZone),
+    productOrderItem: [
+      change === 'end'
+        ? { '@type': 'ProductOrderItem', id: '1', action: 'delete', product: ref }
+        : {
+            '@type': 'ProductOrderItem',
+            id: '1',
+            action: 'modify',
+            product: { ...ref, status: change === 'suspend' ? 'suspended' : 'active' },
+          },
+    ],
+  });
+  return outcome(order);
+}
+
+/** Undo a pending change: cancel (TMF622 cancelProductOrder) the order that holds it. */
+export async function undoPendingChange(orderId: string): Promise<void> {
+  await postJson(PATHS.cancellations, {
+    '@type': 'CancelProductOrder',
+    productOrder: { id: orderId, '@type': 'ProductOrderRef' },
+  });
 }
 
 type ProductBody = T637['schemas']['Product'];

@@ -45,6 +45,32 @@ Deviations (the code differs from the design's facts):
 - The detail shows the product by name or short id without a link: there is no product screen.
 - A transfer or other action still `created` reads "Pending" (the design names Held only for holds).
 
+## Slice 4: Product actions and pending changes (2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 4). The product row
+gets **Actions ▾** (`ui.subscriber.productActions`) with Suspend, Resume and End on a date
+(`ui.subscriber.suspend|resume|endOnDate`), all through `ProductChangeDialog`
+(`screens/ProductActions.tsx`, `orderProductChange` in `api/bss.ts`): one TMF622 order, a `modify`
+item with `product.status` or a `delete` item, with `requestedStartDate`. Pending changes show as
+lines with **Undo** (`ui.subscriber.undoChange`, `cancelProductOrder` with the order ref). A
+funding-suspended prepaid product shows "Waiting for funds" and a **Top up** button that opens
+the Top-up form with the shortfall. Backend: `pendingChanges` on the internal account products
+(see [prepaid.md](prepaid.md)), no migration. Tests: `SubscriberCard.test.tsx` ("product actions":
+menu items per status and cause, every body, the rejected reasons, pending lines, Undo and its
+409), `tests/test_internal_pending_changes.py`, and the replays
+`tests/test_ui_requests.py::test_postpaid_product_actions_as_the_ui_sends_them` and
+`::test_prepaid_product_actions_as_the_ui_sends_them`.
+Deviations:
+- `requestedStartDate` is noon of the date in BILLING_TZ (`requestedDate`, as the add order
+  sends it), not midnight: the code, not the design's wording, is the pattern.
+- **Deactivate stays a button** next to the menu instead of moving into it, because the existing
+  tests click it directly (never weakened); the menu holds the new items. The Actions column is
+  wider (300 px).
+- The status and end orders carry no Idempotency-Key, like `orderDelete` (a repeat after an
+  uncertain submission is refused by the server as a second change on the same day); an uncertain
+  outcome says "Unsure whether it was saved: Refresh to check" with Refresh.
+- Change offering is slice 5 and is not in the menu yet.
+
 ## Slice 3: Cancel, release, remove and edit-note writes (2026-10-25)
 
 Built as designed ([next-slices-design.md](../next-slices-design.md) section 3), frontend only.

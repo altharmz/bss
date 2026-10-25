@@ -6,7 +6,7 @@ means. If the UI changes a body, change it here too.
 Context: business date 2026-10-01 in Europe/Moscow (+03:00), the api fixture's clock.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -897,3 +897,93 @@ def test_edit_subscriber_as_the_ui_patches_it(api):
     removed = api.patch(made["account"]["href"], {"state": "Suspended", "creditLimit": None})
     assert removed.status_code == 200, removed.text
     assert removed.json()["state"] == "Suspended" and "creditLimit" not in removed.json()
+
+
+def ui_product_order(account, item, day):
+    """orderProductChange(): the order the UI sends for a suspend, resume or end on `day`."""
+    return {
+        "@type": "ProductOrder",
+        "billingAccount": {"id": account["id"], "@type": "BillingAccountRef"},
+        "requestedStartDate": f"{day}T12:00:00{OFFSET}",
+        "productOrderItem": [{"@type": "ProductOrderItem", "id": "1", **item}],
+    }
+
+
+def ui_status_item(product_id, status):
+    ref = {"id": product_id, "@type": "ProductRef"}
+    return {"action": "modify", "product": {**ref, "status": status}}
+
+
+def test_postpaid_product_actions_as_the_ui_sends_them(api):
+    """ProductChangeDialog (api/bss.ts orderProductChange): a dated suspend and resume, an
+    end on a date, and the Undo of a pending one (cancelProductOrder with the order ref that
+    pendingChanges names)."""
+    offering = apidata.sellable_offering(api)
+    account = apidata.account(api)
+    api.clock.set(api.clock.now().replace(day=2))
+    placed = apidata.order(api, account, apidata.add_item(offering))
+    product = apidata.product_of(api, placed)
+    other = apidata.product_of(api, apidata.order(api, account, apidata.add_item(offering)))
+    listing = f"/internal/v1/billingAccount/{account['id']}/products"
+
+    suspend = api.post(
+        ORDER,
+        ui_product_order(account, ui_status_item(product["id"], "suspended"), "2026-10-20"),
+    )
+    assert suspend.status_code == 201 and suspend.json()["state"] == "completed", suspend.text
+    pending = next(p for p in api.get(listing).json() if p["id"] == product["id"])["pendingChanges"]
+    assert [(c["kind"], c["date"], c["status"]) for c in pending] == [
+        ("status", "2026-10-20", "suspended")
+    ]
+    assert pending[0]["productOrder"]["id"] == suspend.json()["id"]
+    cancelled = api.post(
+        "/tmf-api/productOrderingManagement/v5/cancelProductOrder",
+        {
+            "@type": "CancelProductOrder",
+            "productOrder": {"id": pending[0]["productOrder"]["id"], "@type": "ProductOrderRef"},
+        },
+    )
+    assert cancelled.status_code == 201, cancelled.text
+    assert (
+        next(p for p in api.get(listing).json() if p["id"] == product["id"])["pendingChanges"] == []
+    )
+
+    # suspended today, resumed on a later date
+    now = api.post(
+        ORDER, ui_product_order(account, ui_status_item(product["id"], "suspended"), "2026-10-02")
+    )
+    assert now.json()["state"] == "completed", now.text
+    assert api.get(product["href"]).json()["status"] == "suspended"
+    resume = api.post(
+        ORDER, ui_product_order(account, ui_status_item(product["id"], "active"), "2026-10-25")
+    )
+    assert resume.status_code == 201 and resume.json()["state"] == "completed", resume.text
+
+    delete = {"action": "delete", "product": {"id": other["id"], "@type": "ProductRef"}}
+    end = api.post(ORDER, ui_product_order(account, delete, "2026-11-03"))
+    assert end.status_code == 201 and end.json()["state"] == "completed", end.text
+    assert api.get(other["href"]).json()["status"] == "pendingTerminate"
+
+
+def test_prepaid_product_actions_as_the_ui_sends_them(api, db_conn):
+    """The prepaid bodies are the same: a suspend dated today completes in the order, the
+    resume comes on a later day, an end on a date is accepted as inProgress for the worker."""
+    off, account = shop(api, db_conn, numbers=False)
+    purchase(api, off, account, numbers=False)
+    tick(db_conn, api.clock.now())
+    ids = [r[0] for r in db_conn.execute("SELECT id::text FROM product ORDER BY id").fetchall()]
+    today = api.clock.now().date()
+
+    suspend = api.post(
+        ORDER, ui_product_order(account, ui_status_item(ids[0], "suspended"), today.isoformat())
+    )
+    assert suspend.status_code == 201 and suspend.json()["state"] == "completed", suspend.text
+    api.clock.set(api.clock.now() + timedelta(days=1))
+    later = api.clock.now().date().isoformat()
+    resume = api.post(ORDER, ui_product_order(account, ui_status_item(ids[0], "active"), later))
+    assert resume.status_code == 201, resume.text
+    assert resume.json()["state"] in ("completed", "inProgress"), resume.text
+
+    delete = {"action": "delete", "product": {"id": ids[1], "@type": "ProductRef"}}
+    end = api.post(ORDER, ui_product_order(account, delete, later))
+    assert end.status_code == 201 and end.json()["state"] == "inProgress", end.text

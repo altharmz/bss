@@ -4,12 +4,22 @@
 
 These decisions were made under the human's delegation of 2026-10-24
 ([next-slices-design.md](../next-slices-design.md)):
-- **Slice 4:** the internal products view gains `pendingChanges`.
 - **Slice 8:** dated prepaid suspend/resume runs through an `order` command due on its
   date. A failed revalidation reaches TMF622 `failed`. Number-only changes run as on
   postpaid.
 
 Each slice replaces this note with its own entry when built.
+
+## Slice 4: `pendingChanges` on the internal products (2026-10-25)
+
+`GET /internal/v1/billingAccount/{id}/products` returns `pendingChanges` on every product
+(`[]` when none; contract in `spec/internal/bss-internal.oas.yaml`, `products.pending_changes`),
+ordered by date: `status` entries are unapplied `product_status_change` rows dated after today;
+`offering` entries are `product_offering_change` rows not in effect: postpaid dated after today,
+prepaid not yet announced (a change waiting for a funded renewal can be dated in the past). Each
+names the order to cancel. No migration; the MCP `open_products` carries it. The prepaid pending
+dated `order` commands join after slice 8. Tests: `tests/test_internal_pending_changes.py`.
+UI: [frontend.md](frontend.md#slice-4-product-actions-and-pending-changes-2026-10-25).
 
 ## Slice 2: transactions include balance actions (2026-10-24)
 

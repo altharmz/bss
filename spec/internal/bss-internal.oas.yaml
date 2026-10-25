@@ -784,7 +784,7 @@ components:
       type: object
       additionalProperties: false
       required: [id, href, status, startDate, terminationDate, productOffering,
-                 productSpecification, price, nextChargeDate]
+                 productSpecification, price, nextChargeDate, pendingChanges]
       properties:
         recurringChargePeriod: {type: string, description: 'Charge interval label; absent means month.'}
         id: {type: string, format: uuid}
@@ -820,6 +820,21 @@ components:
             shortfall: {type: number}
             observedAt: {type: string, format: date-time}
         nextChargeDate: {$ref: '#/components/schemas/NullableBusinessDate'}
+        pendingChanges:
+          description: >-
+            Status and offering changes not yet in effect, by date; [] when there is none.
+            Undo one by cancelling its productOrder.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, date, productOrder]
+            properties:
+              kind: {type: string, enum: [status, offering]}
+              date: {$ref: '#/components/schemas/BusinessDate'}
+              status: {type: string, enum: [suspended, active], nullable: true}
+              productOffering: {$ref: '#/components/schemas/NullableNamed'}
+              productOrder: {$ref: '#/components/schemas/Link'}
     Charge:
       type: object
       additionalProperties: false
