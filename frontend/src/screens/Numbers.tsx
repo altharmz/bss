@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import {
   createNumber,
+  deleteNumber,
+  loadNumber,
   loadNumbers,
   lockNumber,
   loadNumberProducts,
@@ -10,7 +12,8 @@ import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
 import { Link } from '../app/router';
-import { Button, Modal, PageTitle, Panel, TextInput } from '../ui/kit';
+import { Button, Modal, PageTitle, Panel, TextInput, useToast } from '../ui/kit';
+import { Footer, useWrite } from './FinancialForms';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -140,7 +143,7 @@ function NewNumber({ onClose, onCreated }: { onClose: () => void; onCreated: () 
 }
 
 function NumberDetail({
-  number,
+  number: listed,
   onClose,
   onChanged,
 }: {
@@ -148,12 +151,29 @@ function NumberDetail({
   onClose: () => void;
   onChanged: (n: SubscriberNumber) => void;
 }) {
+  // the detail is GET resource/{id}; the list row shows until it arrives
+  const fresh = useResource(`number:${listed.id}:${listed.administrativeState}`, (signal) =>
+    loadNumber(listed.id, signal),
+  );
+  const number = fresh.status === 'ok' ? fresh.data : listed;
+  const toast = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const remove = useWrite((message) => {
+    toast(message);
+    onClose();
+  });
   const products = useResource(`number-products:${number.id}`, (signal) =>
     loadNumberProducts(number.id, signal),
   );
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const [uncertain, setUncertain] = useState(false);
+  // hidden only when the loaded data shows an assignment; the server decides the rest
+  const neverAssigned =
+    products.status === 'ok' &&
+    products.data.length === 0 &&
+    number.allocationStatus === 'available' &&
+    number.usageState === 'idle';
   async function toggle() {
     setBusy(true);
     try {
@@ -171,9 +191,30 @@ function NumberDetail({
       width={640}
       onClose={onClose}
       ui="ui.numbers.detail"
-      footer={<Button onClick={onClose}>Close</Button>}
+      footer={
+        <Footer write={remove} onRefresh={onClose}>
+          {confirming && (
+            <Button
+              data-ui="ui.numbers.deleteConfirm"
+              disabled={remove.busy || remove.unsure}
+              onClick={() =>
+                void remove.run(async () => {
+                  await deleteNumber(number.id);
+                  return `Number ${number.value} deleted`;
+                })
+              }
+            >
+              Confirm delete
+            </Button>
+          )}
+          <Button onClick={onClose}>Close</Button>
+        </Footer>
+      }
     >
       <div className="bss-modal-body">
+        {fresh.status === 'error' && (
+          <ErrorBlock title="Failed to load the number" error={fresh.error} onRetry={fresh.retry} />
+        )}
         <p>
           {number.name} · {number.allocationStatus} · {number.usageState} ·{' '}
           {number.administrativeState}
@@ -183,6 +224,23 @@ function NumberDetail({
           {number.administrativeState === 'locked' ? 'Unlock' : 'Lock'}
         </Button>
         {problem && <div role="alert">{problem}</div>}
+        {neverAssigned && (
+          <>
+            <Button
+              data-ui="ui.numbers.delete"
+              disabled={remove.busy}
+              onClick={() => setConfirming(true)}
+            >
+              Delete number
+            </Button>
+            {confirming && (
+              <p>
+                Delete {number.value} from the inventory? This cannot be undone; the server refuses
+                a number that has ever been assigned.
+              </p>
+            )}
+          </>
+        )}
         {products.status === 'error' && (
           <ErrorBlock
             title="Failed to load assigned products"

@@ -70,6 +70,7 @@ describe('routes', () => {
     ['/bills', { name: 'bills' }],
     ['/payments', { name: 'payments' }],
     ['/orders', { name: 'orders' }],
+    ['/products', { name: 'products' }],
     ['/billing', { name: 'notFound', path: '/billing' }], // not /billing: /billing-status
     ['/subscribers/nope', { name: 'notFound', path: '/subscribers/nope' }],
   ])('%s', (path, route) => {
@@ -131,6 +132,7 @@ describe('shell', () => {
       '/subscribers',
       '/parties',
       '/catalog',
+      '/products',
       '/orders',
       '/numbers',
       '/billing-runs',
@@ -150,6 +152,7 @@ describe('shell', () => {
       '/parties',
       '# Products',
       '/catalog',
+      '/products',
       '/orders',
       '/numbers',
       '# Billing',

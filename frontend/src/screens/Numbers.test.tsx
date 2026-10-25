@@ -7,6 +7,7 @@ import { RouterProvider } from '../app/router';
 import { json, stubFetch, tmfError } from '../test/fetch';
 import { NUMBERS } from '../api/numbers';
 import { orderAdd, PATHS } from '../api/bss';
+import { ToastProvider } from '../ui/kit';
 import { expectUi } from '../test/expectUi';
 
 const N1 = '10000000-0000-4000-8000-000000000001';
@@ -24,7 +25,9 @@ function inventory() {
   return render(
     <RouterProvider>
       <CrumbsProvider>
-        <NumbersScreen />
+        <ToastProvider>
+          <NumbersScreen />
+        </ToastProvider>
       </CrumbsProvider>
     </RouterProvider>,
   );
@@ -37,6 +40,7 @@ describe('number inventory', () => {
       [`POST ${NUMBERS}`]: () => json(stock),
       [`GET ${PATHS.products}?realizingResource.id=${N1}&offset=0&limit=100`]: () =>
         json([], { total: 0 }),
+      [`GET ${NUMBERS}/${N1}`]: () => json(stock),
       [`PATCH ${NUMBERS}/${N1}`]: () => json({ ...stock, administrativeState: 'locked' }),
     });
     inventory();
@@ -78,6 +82,44 @@ describe('number inventory', () => {
       administrativeState: 'unlocked',
       resourceSpecification: { id: 'msisdn', '@type': 'ResourceSpecificationRef' },
     });
+  });
+
+  it('deletes a never-assigned number: DELETE without a body, and hides it for assigned ones', async () => {
+    const used = { ...stock, id: 'n2', value: '12025550124', allocationStatus: 'assigned' };
+    let refuse = true;
+    const { fetchMock } = stubFetch({
+      [list]: () => json([stock, used], { total: 2 }),
+      [`GET ${NUMBERS}/${N1}`]: () => json(stock),
+      [`GET ${NUMBERS}/n2`]: () => json(used),
+      [`GET ${PATHS.products}?realizingResource.id=${N1}&offset=0&limit=100`]: () =>
+        json([], { total: 0 }),
+      [`GET ${PATHS.products}?realizingResource.id=n2&offset=0&limit=100`]: () =>
+        json([{ id: 'p', status: 'active' }], { total: 1 }),
+      [`DELETE ${NUMBERS}/${N1}`]: () =>
+        refuse
+          ? tmfError(409, 'a number with assignment history cannot be deleted')
+          : new Response(null, { status: 204 }),
+    });
+    inventory();
+    fireEvent.click(await screen.findByRole('button', { name: used.value }));
+    await screen.findByText(/Open subscriber|active/);
+    expect(screen.queryByText('Delete number')).toBeNull();
+    fireEvent.click(within(screen.getByRole('dialog')).getByText('Close'));
+    fireEvent.click(await screen.findByRole('button', { name: stock.value }));
+    const detail = screen.getByRole('dialog');
+    fireEvent.click(await within(detail).findByText('Delete number'));
+    expectUi('ui.numbers.delete');
+    fireEvent.click(within(detail).getByText('Confirm delete'));
+    // the server's refusal is shown and the dialog stays open
+    expect(await within(detail).findByText(/assignment history cannot be deleted/)).toBeTruthy();
+    refuse = false;
+    fireEvent.click(within(detail).getByText('Confirm delete'));
+    expect(await screen.findByText('Number 12025550123 deleted')).toBeTruthy();
+    const deletes = fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE');
+    expect(deletes.map(([url, init]) => [url, init?.body])).toEqual([
+      [`${NUMBERS}/${N1}`, undefined],
+      [`${NUMBERS}/${N1}`, undefined],
+    ]);
   });
 
   it('offers retry on a failed inventory read', async () => {

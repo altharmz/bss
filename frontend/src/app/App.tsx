@@ -2,6 +2,7 @@ import { getJson } from '../api/client';
 import { useResource } from '../api/useResource';
 import { BillingRunsScreen } from '../screens/BillingRuns';
 import { OrdersScreen } from '../screens/Orders';
+import { ProductsScreen } from '../screens/Products';
 import { PrepaidCommandsScreen } from '../screens/PrepaidCommands';
 import { CatalogScreen } from '../screens/Catalog';
 import { PaymentsScreen } from '../screens/Payments';
@@ -47,6 +48,8 @@ function Screen() {
       return <CatalogScreen />;
     case 'orders':
       return <OrdersScreen />;
+    case 'products':
+      return <ProductsScreen />;
     case 'billingRuns':
       return <BillingRunsScreen />;
     case 'prepaidCommands':

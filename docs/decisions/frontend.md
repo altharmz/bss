@@ -45,6 +45,25 @@ Deviations (the code differs from the design's facts):
 - The detail shows the product by name or short id without a link: there is no product screen.
 - A transfer or other action still `created` reads "Pending" (the design names Held only for holds).
 
+## Slice 21: Product and number inventory (2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 21), frontend only.
+`screens/Products.tsx` and `api/products.ts`: the `/products` screen (Products > Products) lists
+`GET product` over every status with the server filters `status` and `billingAccount.id` (the
+`?account=` chip) and client filters on offering name and number. A row opens the detail from
+`GET product/{id}` (dates, specification, subscriber link, `productOrderItem[]` with a link to
+`/orders?account=`, the realizing resource). The Numbers detail now loads `GET resource/{id}` and
+offers **Delete number** (`ui.numbers.delete`, then Confirm delete): DELETE without a body through
+`useWrite`; hidden when the loaded data shows an assignment (a product, or allocation not
+`available`, or usage not `idle`), otherwise the server's 409 is shown in the dialog.
+Tests: `Products.test.tsx`, `Numbers.test.tsx` (delete pinned, refusal kept in the dialog),
+`tests/test_ui_requests.py::test_product_inventory_reads_and_number_delete_as_the_ui_sends_them`.
+Deviations: the product list has no number value, only the resource id, so the Number column joins
+the inventory list (`loadNumbers`); order links go to `/orders?account=` because the Orders screen
+filters by account only; the status filter is a select of the eight stored statuses.
+TEST-CHANGE: the shell test's expected sidebar links gain `/products`; the first Numbers test stubs
+the new `GET resource/{id}`.
+
 ## Slice 10: Order writes: cancel, drafts, order details (2026-10-25)
 
 Built as designed ([next-slices-design.md](../next-slices-design.md) section 10), frontend only. It

@@ -349,6 +349,13 @@ items:
   - {id: ui.users.manage, area: ui, stage: 5, title: "Create, edit, disable and reset users"}
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
   - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
+  - {id: ui.products, area: ui, stage: 5, title: "Products screen: every status, filters, rows"}
+  - {id: ui.products.status, area: ui, stage: 5, title: "Products status filter"}
+  - {id: ui.products.accountChip, area: ui, stage: 5, title: "Products account filter chip"}
+  - {id: ui.products.detail, area: ui, stage: 5, title: "Product detail dialog"}
+  - {id: ui.products.orderItems, area: ui, stage: 5, title: "Product order items with Orders link"}
+  - {id: ui.products.resource, area: ui, stage: 5, title: "Product realizing resource"}
+  - {id: ui.numbers.delete, area: ui, stage: 5, title: "Delete a never-assigned number"}
   - {id: ui.numbers.list, area: ui, stage: 5, title: "Subscriber-number inventory and search"}
   - {id: ui.numbers.create, area: ui, stage: 5, title: "Create an inventory number"}
   - {id: ui.numbers.detail, area: ui, stage: 5, title: "Number details, assignments and lock/unlock"}

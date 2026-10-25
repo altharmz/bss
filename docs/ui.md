@@ -323,6 +323,13 @@ API: `POST .../productOfferingPrice`, `POST .../productOffering`.
 (`frontend/src/screens/*.test.tsx`), and `tests/test_ui_requests.py` replays the same
 bodies against the real API.
 
+### Products (`ui.products`, `ui.products.status`, `ui.products.accountChip`, `ui.products.detail`, `ui.products.orderItems`, `ui.products.resource`) - `screens/Products.tsx`
+
+Route `/products` (sidebar Products). TMF637 `product` over every status: server filters status and
+`?account=` chip, client filters offering and number. Columns: product, offering, subscriber, status,
+start, end, number. A row opens the detail (`GET product/{id}`): dates, order items with a link to
+Orders, the realizing resource. Read-only; orders alone change products. Slice 21.
+
 ### Orders (`ui.orders`, `ui.orders.accountChip`, `ui.orders.detail`, `ui.orders.items`, `ui.orders.cancellations`, `ui.orders.command`, `ui.orders.errors`) - `screens/Orders.tsx`
 
 Route `/orders`. The list is read-only, the dialog writes (slice 10, below). TMF622 `productOrder` pages of 50 as served (oldest first), state
@@ -492,7 +499,8 @@ API: `GET /internal/v1/billingRun?limit=14`, `GET .../billingRun/{id}`,
 ## Tests
 
 Subscriber numbers: `/numbers` provides inventory search, creation, state details,
-assignment links and lock/unlock. Add product requires a number when the selected
+assignment links, lock/unlock and Delete number (`ui.numbers.delete`, a number never assigned; the
+server refuses one with history). Add product requires a number when the selected
 offering's specification requires `msisdn`. New subscriber optionally continues to
 this product step after creating the account. A product's Subscriber number dialog
 shows the effective number and submits changes through a modify order. The picker

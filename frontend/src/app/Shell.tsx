@@ -89,6 +89,12 @@ export function Sidebar({ context }: { context: SystemContext }) {
           count: offerings,
           active: (r) => r.name === 'catalog',
         },
+        {
+          label: 'Products',
+          href: '/products',
+          count: '',
+          active: (r) => r.name === 'products',
+        },
         { label: 'Orders', href: '/orders', count: orders, active: (r) => r.name === 'orders' },
         { label: 'Numbers', href: '/numbers', count: '', active: (r) => r.name === 'numbers' },
       ],

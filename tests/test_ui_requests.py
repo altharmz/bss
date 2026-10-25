@@ -1875,3 +1875,79 @@ def test_payment_and_refund_history_reads_as_the_ui_makes_them(api):
     assert only["refundDate"] and only["status"] == "done"
     assert only["account"]["id"] == a and only["description"] == "Returned deposit"
     assert api.get(f"/tmf-api/payment/v4/refund?{page}").headers["X-Total-Count"] == "1"
+
+
+def test_product_inventory_reads_and_number_delete_as_the_ui_sends_them(api):
+    """api/products.ts and api/numbers.ts of slice 21: the Products list queries and detail,
+    the number detail and its delete (pinned in Products.test.tsx and Numbers.test.tsx)."""
+    url = "/tmf-api/resourceInventory/v5/resource"
+
+    def number(value):
+        created = api.post(
+            url,
+            {
+                "@type": "LogicalResource",
+                "name": f"MSISDN {value}",
+                "value": value,
+                "administrativeState": "unlocked",
+                "resourceSpecification": {"id": "msisdn", "@type": "ResourceSpecificationRef"},
+            },
+        )
+        assert created.status_code == 201, created.text
+        return created.json()
+
+    spare, used = number("12025550131"), number("12025550132")
+    offering = apidata.sellable_offering(api)
+    api.patch(
+        offering["productSpecification"]["href"],
+        {"resourceSpecification": [{"id": "msisdn", "@type": "ResourceSpecificationRef"}]},
+    )
+    account = apidata.account(api)
+    placed = api.post(
+        ORDER,
+        {
+            "@type": "ProductOrder",
+            "billingAccount": {"id": account["id"], "@type": "BillingAccountRef"},
+            "requestedStartDate": "2026-10-02T12:00:00+03:00",
+            "productOrderItem": [
+                {
+                    "@type": "ProductOrderItem",
+                    "id": "1",
+                    "action": "add",
+                    "productOffering": {"id": offering["id"], "@type": "ProductOfferingRef"},
+                    "product": {
+                        "@type": "ProductRefOrValue",
+                        "realizingResource": [
+                            {
+                                "id": used["id"],
+                                "@type": "ResourceRef",
+                                "@referredType": "LogicalResource",
+                            }
+                        ],
+                    },
+                }
+            ],
+        },
+    )
+    assert placed.status_code == 201, placed.text
+    product = apidata.product_of(api, placed.json())
+    page = "offset=0&limit=100"
+    everything = api.get(f"{apidata.PRODUCT}?{page}")
+    assert everything.status_code == 200 and product["id"] in [p["id"] for p in everything.json()]
+    for query in (
+        f"status={product['status']}&{page}",
+        f"billingAccount.id={account['id']}&{page}",
+    ):
+        listed = api.get(f"{apidata.PRODUCT}?{query}")
+        assert listed.status_code == 200, query
+        assert product["id"] in [p["id"] for p in listed.json()]
+    assert api.get(f"{apidata.PRODUCT}?status=terminated&{page}").json() == []
+    detail = api.get(f"{apidata.PRODUCT}/{product['id']}").json()
+    assert detail["productOrderItem"][0]["orderId"] == placed.json()["id"]
+    assert detail["realizingResource"][0]["id"] == used["id"]
+    assert api.get(f"{url}/{spare['id']}").json()["value"] == "12025550131"
+    # a number with an assignment is refused, a never-assigned one deletes (no body)
+    refused = api.delete(f"{url}/{used['id']}")
+    assert refused.status_code == 409, refused.text
+    assert api.delete(f"{url}/{spare['id']}").status_code == 204
+    assert api.get(f"{url}/{spare['id']}").status_code == 404

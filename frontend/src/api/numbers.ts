@@ -1,6 +1,6 @@
 import type { components as T639 } from './generated/tmf639';
 import type { components as T637 } from './generated/tmf637';
-import { getAll, getJson, patchJson, postJson } from './client';
+import { getAll, getJson, patchJson, postJson, request } from './client';
 import { PATHS } from './bss';
 
 export const NUMBERS = '/tmf-api/resourceInventory/v5/resource';
@@ -38,6 +38,15 @@ export function lockNumber(id: string, locked: boolean): Promise<SubscriberNumbe
   return patchJson<NumberBody>(`${NUMBERS}/${id}`, {
     administrativeState: locked ? 'locked' : 'unlocked',
   }).then(toNumber);
+}
+
+export function loadNumber(id: string, signal: AbortSignal): Promise<SubscriberNumber> {
+  return getJson<NumberBody>(`${NUMBERS}/${id}`, signal).then(toNumber);
+}
+
+/** Deletes a number that was never assigned; the server refuses one with history (409). */
+export async function deleteNumber(id: string): Promise<void> {
+  await request('DELETE', `${NUMBERS}/${id}`);
 }
 
 export function numberProduct(id: string) {
