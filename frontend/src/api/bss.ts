@@ -35,6 +35,7 @@ export const PATHS = {
   customers: '/tmf-api/customer/v5/customer',
   products: '/tmf-api/productInventory/v5/product',
   offerings: '/tmf-api/productCatalogManagement/v5/productOffering',
+  specifications: '/tmf-api/productCatalogManagement/v5/productSpecification',
   prices: '/tmf-api/productCatalogManagement/v5/productOfferingPrice',
   orders: '/tmf-api/productOrderingManagement/v5/productOrder',
   cancellations: '/tmf-api/productOrderingManagement/v5/cancelProductOrder',
@@ -661,6 +662,7 @@ export interface CatalogOffering {
   code: string | null;
   status: Lifecycle;
   specification: string;
+  specificationId?: string | undefined;
   validFrom: string | null; // instant; null = no validFor (valid at any time)
   validTo: string | null; // instant, exclusive
   prices: CatalogPrice[]; // recurring, attached to this offering
@@ -669,6 +671,25 @@ export interface CatalogOffering {
 export interface Specification {
   id: string;
   name: string;
+  description: string | null;
+  status: Lifecycle | null;
+  brand: string | null;
+  version: string | null;
+  productNumber: string | null;
+  updated: string | null; // lastUpdate, an instant
+}
+
+export function toSpecification(spec: SpecBody): Specification {
+  return {
+    id: need(spec.id, 'spec id'),
+    name: need(spec.name, 'spec name'),
+    description: spec.description ?? null,
+    status: (spec.lifecycleStatus as Lifecycle | undefined) ?? null,
+    brand: spec.brand ?? null,
+    version: spec.version ?? null,
+    productNumber: spec.productNumber ?? null,
+    updated: spec.lastUpdate ?? null,
+  };
 }
 
 export interface Catalog {
@@ -679,21 +700,19 @@ export interface Catalog {
 export async function loadCatalog(signal: AbortSignal): Promise<Catalog> {
   const [offerings, specs, prices] = await Promise.all([
     getAll<OfferingBody>(PATHS.offerings, signal),
-    getAll<SpecBody>('/tmf-api/productCatalogManagement/v5/productSpecification', signal),
+    getAll<SpecBody>(PATHS.specifications, signal),
     getAll<PriceBody>(`${PATHS.prices}?priceType=recurring`, signal),
   ]);
   const priceById = new Map(prices.map((price) => [need(price.id, 'price id'), price]));
   return {
-    specifications: specs.map((spec) => ({
-      id: need(spec.id, 'spec id'),
-      name: need(spec.name, 'spec name'),
-    })),
+    specifications: specs.map(toSpecification),
     offerings: offerings.map((offering) => ({
       id: need(offering.id, 'offering id'),
       name: need(offering.name, 'offering name'),
       code: offeringCode(offering),
       status: need(offering.lifecycleStatus, 'lifecycleStatus') as Lifecycle,
       specification: offering.productSpecification?.name ?? '',
+      specificationId: offering.productSpecification?.id,
       validFrom: offering.validFor?.startDateTime ?? null,
       validTo: offering.validFor?.endDateTime ?? null,
       prices: (offering.productOfferingPrice ?? []).flatMap((ref) => {
@@ -832,6 +851,57 @@ export const NEXT_LIFECYCLE: Record<Lifecycle, Lifecycle | null> = {
 
 export async function setLifecycle(offeringId: string, status: Lifecycle): Promise<void> {
   await patchJson(`${PATHS.offerings}/${offeringId}`, { lifecycleStatus: status });
+}
+
+// --- product specifications (TMF620): records only, billing never reads them ---
+
+/** The simple fields the UI edits; the characteristics and other documents stay API/MCP.
+ * An empty optional text is null on edit (merge patch removes it) and left out on create. */
+export interface SpecificationFields {
+  name: string;
+  description: string;
+  brand: string;
+  version: string;
+  productNumber: string;
+  lifecycleStatus: Lifecycle;
+}
+
+const SPEC_TEXT = ['description', 'brand', 'version', 'productNumber'] as const;
+
+export async function createSpecification(form: SpecificationFields): Promise<Specification> {
+  const body: Record<string, unknown> = {
+    '@type': 'ProductSpecification',
+    name: form.name.trim(),
+    lifecycleStatus: form.lifecycleStatus,
+  };
+  for (const key of SPEC_TEXT) if (form[key].trim()) body[key] = form[key].trim();
+  return toSpecification(await postJson<SpecBody>(PATHS.specifications, body));
+}
+
+/** Only the fields that differ from `before`; null = nothing changed. */
+export function specificationChanges(
+  before: Specification,
+  form: SpecificationFields,
+): Record<string, string | null> | null {
+  const changes: Record<string, string | null> = {};
+  if (form.name.trim() !== before.name) changes.name = form.name.trim();
+  for (const key of SPEC_TEXT) {
+    const now = form[key].trim();
+    if (now !== (before[key] ?? '')) changes[key] = now === '' ? null : now;
+  }
+  if (form.lifecycleStatus !== before.status) changes.lifecycleStatus = form.lifecycleStatus;
+  return Object.keys(changes).length === 0 ? null : changes;
+}
+
+export async function patchSpecification(
+  id: string,
+  changes: Record<string, string | null>,
+): Promise<void> {
+  await patchJson(`${PATHS.specifications}/${id}`, changes);
+}
+
+export async function deleteSpecification(id: string): Promise<void> {
+  await request('DELETE', `${PATHS.specifications}/${id}`);
 }
 
 // --- orders (TMF622): the only way to add or end a product ---

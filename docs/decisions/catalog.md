@@ -325,3 +325,22 @@ the required `scripts/docs/` registry and notes edits. No commit or deployment m
 - **Migration 0002** adds what the API needs and 0001 had no place for. Its NOT NULL
   columns have no default on purpose: if the tables are not empty the migration fails
   and the deploy stops before the app starts.
+
+## UI: product specifications (slice 11, 2026-10-25)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 11), frontend only.
+The Catalog screen has the tabs Offerings | Specifications (`ui.catalog.specifications`):
+name, status, brand, version, the number of loaded offerings using it, last update. A row opens
+one dialog (`ui.catalog.editSpecification`) with name, description, brand, version, product
+number and a lifecycle select that holds only the current and the next forward status; Save sends
+a merge patch of the changed fields (null for an emptied text). Delete
+(`ui.catalog.deleteSpecification`, inline confirm) is hidden while a loaded offering uses the
+specification, and the server's 409 still shows. `+ New specification`
+(`ui.catalog.newSpecification`) posts name, lifecycleStatus (default In Design) and the filled
+text fields; New offering has a **New specification…** button that opens the same dialog and
+preselects the result. Code: `screens/Specifications.tsx`, `api/bss.ts`. Tests:
+`Catalog.test.tsx` (list, create/edit/delete bodies, forward-only lifecycle, delete hidden,
+409 messages, preselection) and `tests/test_ui_requests.py::test_specification_writes_as_the_ui_sends_them`.
+Deviation: none. The search box filters the Specifications tab by name or brand; the
+lifecycle filter shows on the Offerings tab only.
+

@@ -10,6 +10,7 @@ import {
   type Catalog,
   type CatalogOffering,
   type Lifecycle,
+  type Specification,
 } from '../api/bss';
 import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
@@ -19,6 +20,7 @@ import { formatCents, formatInt, parseAmount } from '../format/money';
 import { Button, Modal, PageTitle, Panel, Pill, Segmented, TextInput, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
+import { SpecificationModal, SpecificationsTab } from './Specifications';
 import { checkOffering, type OfferingForm } from './newOffering';
 import './screens.css';
 
@@ -27,6 +29,7 @@ import './screens.css';
 // offering's details, which carry the lifecycle step (In Design -> Active -> Retired):
 // the design's table has no room for an action column at 1280px.
 
+type Tab = 'offerings' | 'specifications';
 type Filter = 'All' | Lifecycle;
 const FILTERS: Filter[] = ['All', 'In Design', 'Active', 'Retired'];
 
@@ -61,7 +64,9 @@ export function CatalogScreen() {
   const [version, setVersion] = useState(0);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('All');
+  const [tab, setTab] = useState<Tab>('offerings');
   const [creating, setCreating] = useState(false);
+  const [creatingSpec, setCreatingSpec] = useState(false);
   const [fresh, setFresh] = useState<string | null>(null); // highlighted after creation
   const [open, setOpen] = useState<CatalogOffering | null>(null);
   const catalog = useResource(`catalog:${version}`, loadCatalog);
@@ -80,107 +85,160 @@ export function CatalogScreen() {
       + New offering
     </Button>
   );
+  const specs = tab === 'specifications';
 
   return (
     <div className="bss-screen" data-ui="ui.catalog.list">
       <div className="bss-title-row">
         <PageTitle
           title="Product catalog"
-          count={catalog.status === 'ok' ? formatInt(offerings.length) : undefined}
+          count={
+            catalog.status === 'ok'
+              ? formatInt(specs ? catalog.data.specifications.length : offerings.length)
+              : undefined
+          }
         />
-        {newButton}
+        {specs ? (
+          <Button
+            variant="primary"
+            data-ui="ui.catalog.newSpecification"
+            onClick={() => setCreatingSpec(true)}
+            disabled={catalog.status !== 'ok'}
+          >
+            + New specification
+          </Button>
+        ) : (
+          newButton
+        )}
+      </div>
+      <div className="bss-toolbar">
+        <Segmented
+          label="Catalog sections"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { key: 'offerings', label: 'Offerings' },
+            { key: 'specifications', label: 'Specifications' },
+          ]}
+        />
       </div>
       <div className="bss-toolbar">
         <TextInput
           width={300}
-          placeholder="Search by code or name"
-          aria-label="Search offerings"
+          placeholder={specs ? 'Search by name or brand' : 'Search by code or name'}
+          aria-label={specs ? 'Search specifications' : 'Search offerings'}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <Segmented
-          label="Lifecycle status"
-          value={filter}
-          onChange={setFilter}
-          options={FILTERS.map((key) => ({
-            key,
-            label: key,
-            ...(catalog.status === 'ok' ? { count: countOf(key) } : {}),
-          }))}
-        />
+        {!specs && (
+          <Segmented
+            label="Lifecycle status"
+            value={filter}
+            onChange={setFilter}
+            options={FILTERS.map((key) => ({
+              key,
+              label: key,
+              ...(catalog.status === 'ok' ? { count: countOf(key) } : {}),
+            }))}
+          />
+        )}
       </div>
-      <Panel>
-        <TableHead columns={cols} />
-        <ListState
-          resource={catalog}
-          columns={cols}
-          errorTitle="Failed to load the catalog"
-          empty={{
-            title: 'Catalog is empty',
-            text: 'Create the first product offering. It starts in In Design.',
-            action: newButton,
-          }}
-          total={(data) => data.offerings.length}
-          rows={(data) =>
-            data.offerings.filter(
-              (o) =>
-                (filter === 'All' || o.status === filter) &&
-                (!q ||
-                  o.name.toLowerCase().includes(q) ||
-                  (o.code ?? '').toLowerCase().includes(q)),
-            )
-          }
-          onResetFilters={reset}
-        >
-          {(rows, data) => (
-            <>
-              {rows.map((offering) => {
-                const price = shownPrice(offering.prices, context.now, context.currency);
-                return (
-                  <TableRow
-                    key={offering.id}
-                    columns={cols}
-                    onClick={() => setOpen(offering)}
-                    {...(offering.id === fresh ? { style: { background: 'var(--sel-3)' } } : {})}
-                    cells={{
-                      code: offering.code ?? <span className="bss-dash">—</span>,
-                      name: (
-                        <span
-                          className={`bss-name ellipsis${offering.status === 'Retired' ? ' bss-retired' : ''}`}
-                        >
-                          {offering.name}
-                        </span>
-                      ),
-                      spec: <span className="ellipsis">{offering.specification}</span>,
-                      price:
-                        price === null ? (
-                          <span className="bss-dash">—</span>
-                        ) : (
-                          <div>
-                            {formatCents(price.cents)}
-                            {price.from !== null && (
-                              <div className="bss-secondary">
-                                from {businessDate(price.from, context.timeZone)}
-                              </div>
-                            )}
-                          </div>
+      {specs && (
+        <div data-ui="ui.catalog.specifications">
+          <SpecificationsTab
+            resource={catalog}
+            query={query}
+            onChanged={(message) => {
+              toast(message);
+              setVersion((v) => v + 1);
+            }}
+          />
+        </div>
+      )}
+      {!specs && (
+        <Panel>
+          <TableHead columns={cols} />
+          <ListState
+            resource={catalog}
+            columns={cols}
+            errorTitle="Failed to load the catalog"
+            empty={{
+              title: 'Catalog is empty',
+              text: 'Create the first product offering. It starts in In Design.',
+              action: newButton,
+            }}
+            total={(data) => data.offerings.length}
+            rows={(data) =>
+              data.offerings.filter(
+                (o) =>
+                  (filter === 'All' || o.status === filter) &&
+                  (!q ||
+                    o.name.toLowerCase().includes(q) ||
+                    (o.code ?? '').toLowerCase().includes(q)),
+              )
+            }
+            onResetFilters={reset}
+          >
+            {(rows, data) => (
+              <>
+                {rows.map((offering) => {
+                  const price = shownPrice(offering.prices, context.now, context.currency);
+                  return (
+                    <TableRow
+                      key={offering.id}
+                      columns={cols}
+                      onClick={() => setOpen(offering)}
+                      {...(offering.id === fresh ? { style: { background: 'var(--sel-3)' } } : {})}
+                      cells={{
+                        code: offering.code ?? <span className="bss-dash">—</span>,
+                        name: (
+                          <span
+                            className={`bss-name ellipsis${offering.status === 'Retired' ? ' bss-retired' : ''}`}
+                          >
+                            {offering.name}
+                          </span>
                         ),
-                      period: price?.interval ?? 'month',
-                      status: <Pill status={offering.status} />,
-                      validity: validity(offering, context.timeZone),
-                    }}
-                  />
-                );
-              })}
-              <TableFooter
-                left={`Showing ${formatInt(rows.length)} of ${formatInt(data.offerings.length)}`}
-                right="Prices exclude taxes · taxes are not applied"
-              />
-            </>
-          )}
-        </ListState>
-      </Panel>
+                        spec: <span className="ellipsis">{offering.specification}</span>,
+                        price:
+                          price === null ? (
+                            <span className="bss-dash">—</span>
+                          ) : (
+                            <div>
+                              {formatCents(price.cents)}
+                              {price.from !== null && (
+                                <div className="bss-secondary">
+                                  from {businessDate(price.from, context.timeZone)}
+                                </div>
+                              )}
+                            </div>
+                          ),
+                        period: price?.interval ?? 'month',
+                        status: <Pill status={offering.status} />,
+                        validity: validity(offering, context.timeZone),
+                      }}
+                    />
+                  );
+                })}
+                <TableFooter
+                  left={`Showing ${formatInt(rows.length)} of ${formatInt(data.offerings.length)}`}
+                  right="Prices exclude taxes · taxes are not applied"
+                />
+              </>
+            )}
+          </ListState>
+        </Panel>
+      )}
 
+      {creatingSpec && (
+        <SpecificationModal
+          onClose={() => setCreatingSpec(false)}
+          onCreated={(created) => {
+            setCreatingSpec(false);
+            toast(`Specification ${created.name} created`);
+            setVersion((v) => v + 1);
+          }}
+        />
+      )}
       {creating && catalog.status === 'ok' && (
         <NewOfferingModal
           catalog={catalog.data}
@@ -453,6 +511,9 @@ export function NewOfferingModal({
   });
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [extra, setExtra] = useState<Specification[]>([]); // created from this dialog
+  const [creatingSpec, setCreatingSpec] = useState(false);
+  const specifications = [...catalog.specifications, ...extra];
   const taken = new Set(catalog.offerings.flatMap((o) => (o.code ? [o.code] : [])));
   const checked = checkOffering(form, taken, context.businessDate);
   const set = (field: keyof OfferingForm) => (value: string) =>
@@ -487,112 +548,133 @@ export function NewOfferingModal({
 
   const message = problem ?? checked.error;
   return (
-    <Modal
-      title="New product offering"
-      width={600}
-      onClose={onClose}
-      ui="ui.catalog.newOffering"
-      footer={
-        <>
-          {message !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
-              {message}
-            </div>
-          )}
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!checked.ready || busy} onClick={() => void create()}>
-            Create in In Design
-          </Button>
-        </>
-      }
-    >
-      <div className="bss-modal-body bss-form">
-        <label>
-          Code
-          <TextInput
-            mono
-            value={form.code}
-            style={{ textTransform: 'uppercase' }}
-            onChange={(e) => set('code')(e.target.value)}
-          />
-        </label>
-        <label>
-          Name
-          <TextInput value={form.name} onChange={(e) => set('name')(e.target.value)} />
-        </label>
-        <label>
-          Specification
-          <select
-            className="bss-input"
-            value={form.specificationId}
-            onChange={(e) => set('specificationId')(e.target.value)}
-          >
-            {catalog.specifications.map((spec) => (
-              <option key={spec.id} value={spec.id}>
-                {spec.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="bss-form-pair">
+    <>
+      <Modal
+        title="New product offering"
+        width={600}
+        onClose={creatingSpec ? () => undefined : onClose}
+        ui="ui.catalog.newOffering"
+        footer={
+          <>
+            {message !== null && (
+              <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+                {message}
+              </div>
+            )}
+            <Button onClick={onClose}>Cancel</Button>
+            <Button
+              variant="primary"
+              disabled={!checked.ready || busy}
+              onClick={() => void create()}
+            >
+              Create in In Design
+            </Button>
+          </>
+        }
+      >
+        <div className="bss-modal-body bss-form">
           <label>
-            Price, {context.currency}
+            Code
             <TextInput
               mono
-              inputMode="decimal"
-              value={form.price}
-              onChange={(e) => set('price')(e.target.value)}
+              value={form.code}
+              style={{ textTransform: 'uppercase' }}
+              onChange={(e) => set('code')(e.target.value)}
             />
           </label>
           <label>
-            Recurrence
+            Name
+            <TextInput value={form.name} onChange={(e) => set('name')(e.target.value)} />
+          </label>
+          <label>
+            Specification
             <select
               className="bss-input"
-              value={form.recurringPeriodType}
-              onChange={(e) => set('recurringPeriodType')(e.target.value)}
+              value={form.specificationId}
+              onChange={(e) => set('specificationId')(e.target.value)}
             >
-              <option value="daily">day</option>
-              <option value="weekly">week</option>
-              <option value="monthly">month</option>
-              <option value="yearly">year</option>
+              {specifications.map((spec) => (
+                <option key={spec.id} value={spec.id}>
+                  {spec.name}
+                </option>
+              ))}
             </select>
           </label>
+          <div>
+            <Button small onClick={() => setCreatingSpec(true)}>
+              New specification…
+            </Button>
+          </div>
+          <div className="bss-form-pair">
+            <label>
+              Price, {context.currency}
+              <TextInput
+                mono
+                inputMode="decimal"
+                value={form.price}
+                onChange={(e) => set('price')(e.target.value)}
+              />
+            </label>
+            <label>
+              Recurrence
+              <select
+                className="bss-input"
+                value={form.recurringPeriodType}
+                onChange={(e) => set('recurringPeriodType')(e.target.value)}
+              >
+                <option value="daily">day</option>
+                <option value="weekly">week</option>
+                <option value="monthly">month</option>
+                <option value="yearly">year</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            Charge every
+            <TextInput
+              type="number"
+              min="1"
+              max="1000"
+              step="1"
+              value={form.recurringPeriodLength ?? '1'}
+              onChange={(e) => set('recurringPeriodLength')(e.target.value)}
+            />
+            <span className="bss-secondary">
+              Selected periods per charge; price covers the entire interval.
+            </span>
+          </label>
+          <label>
+            Valid from
+            <TextInput
+              mono
+              type="date"
+              min={tomorrow}
+              value={form.validFrom}
+              onChange={(e) => set('validFrom')(e.target.value)}
+            />
+          </label>
+          <label>
+            Valid to (empty = open-ended)
+            <TextInput
+              mono
+              type="date"
+              min={form.validFrom || tomorrow}
+              value={form.validTo}
+              onChange={(e) => set('validTo')(e.target.value)}
+            />
+          </label>
         </div>
-        <label>
-          Charge every
-          <TextInput
-            type="number"
-            min="1"
-            max="1000"
-            step="1"
-            value={form.recurringPeriodLength ?? '1'}
-            onChange={(e) => set('recurringPeriodLength')(e.target.value)}
-          />
-          <span className="bss-secondary">
-            Selected periods per charge; price covers the entire interval.
-          </span>
-        </label>
-        <label>
-          Valid from
-          <TextInput
-            mono
-            type="date"
-            min={tomorrow}
-            value={form.validFrom}
-            onChange={(e) => set('validFrom')(e.target.value)}
-          />
-        </label>
-        <label>
-          Valid to (empty = open-ended)
-          <TextInput
-            mono
-            type="date"
-            min={form.validFrom || tomorrow}
-            value={form.validTo}
-            onChange={(e) => set('validTo')(e.target.value)}
-          />
-        </label>
-      </div>
-    </Modal>
+      </Modal>
+      {creatingSpec && (
+        <SpecificationModal
+          onClose={() => setCreatingSpec(false)}
+          onCreated={(created) => {
+            setExtra((list) => [...list, created]);
+            set('specificationId')(created.id);
+            setCreatingSpec(false);
+          }}
+        />
+      )}
+    </>
   );
 }

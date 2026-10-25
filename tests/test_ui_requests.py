@@ -256,6 +256,40 @@ def test_new_offering_is_stored_as_the_ui_means_it(api, unit, length):
     )
 
 
+def test_specification_writes_as_the_ui_sends_them(api):
+    """createSpecification(), patchSpecification() and deleteSpecification(): bodies pinned
+    in Catalog.test.tsx."""
+    url = f"{CATALOG}/productSpecification"
+    created = api.post(
+        url,
+        {
+            "@type": "ProductSpecification",
+            "name": "Roaming",
+            "lifecycleStatus": "In Design",
+            "brand": "Acme",
+            "version": "1.0",
+            "productNumber": "PN-9",
+        },
+    )
+    assert created.status_code == 201, created.text
+    spec_url = created.json()["href"]
+    assert created.json()["brand"] == "Acme" and created.json()["productNumber"] == "PN-9"
+    # only the changed fields; an emptied optional text is null (merge patch removes it)
+    changed = api.patch(spec_url, {"name": "Roaming 2", "brand": None, "lifecycleStatus": "Active"})
+    assert changed.status_code == 200, changed.text
+    body = changed.json()
+    assert body["name"] == "Roaming 2" and body["lifecycleStatus"] == "Active"
+    assert "brand" not in body and body["version"] == "1.0"
+    # the forward step only; the server's 409 is shown by the dialog
+    assert api.patch(spec_url, {"lifecycleStatus": "In Design"}).status_code == 409
+    # a used specification is a 409; an unused one is deleted with no body
+    offering = create_offering(api)
+    used = offering["productSpecification"]["href"]
+    assert api.delete(used).status_code == 409
+    assert api.delete(spec_url).status_code == 204
+    assert api.get(spec_url).status_code == 404
+
+
 def test_lifecycle_steps_are_merge_patches(api):
     offering = create_offering(api)
     for status in ("Active", "Retired"):  # NEXT_LIFECYCLE

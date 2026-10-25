@@ -552,3 +552,209 @@ describe('offering attributes TMF620 makes optional', () => {
     expect(offeringCode({ externalIdentifier: [entry('SKU-1', 'sku')] })).toBeNull();
   });
 });
+
+describe('specifications', () => {
+  const SPECS_URL = `GET ${CAT}/productSpecification?offset=0&limit=100`;
+  const SPEC_ROWS = [
+    {
+      id: 's1',
+      name: 'Mobile Voice & Data',
+      description: 'Voice and data',
+      lifecycleStatus: 'Active',
+      brand: 'Acme',
+      version: '2.1',
+      productNumber: 'PN-1',
+      lastUpdate: '2026-09-30T21:30:00Z',
+    },
+    { id: 's2', name: 'Home Internet', lifecycleStatus: 'In Design' },
+    { id: 's3', name: 'TV', lifecycleStatus: 'Retired' },
+  ];
+  // Mobile L uses s1; Fiber 100 and TV Basic use s2 and s3 is unused
+  const USING = OFFERINGS.map((o, i) => ({
+    ...o,
+    productSpecification: { id: i === 0 ? 's1' : 's2', name: o.productSpecification.name },
+  }));
+  const specBackend = (routes: Record<string, Handler> = {}) =>
+    backend({ [SPECS_URL]: () => json(SPEC_ROWS, { total: 3 }), ...routes }, USING);
+
+  async function openTab() {
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Specifications' }));
+    await screen.findByText('Mobile Voice & Data');
+  }
+  const specRow = (name: string) =>
+    screen
+      .getAllByRole('row')
+      .find(
+        (r) => within(r).queryByText(name) && within(r).queryAllByRole('cell').length === 6,
+      ) as HTMLElement;
+  const field = (dialog: HTMLElement, label: RegExp) => within(dialog).getByLabelText(label);
+
+  it('lists specifications with status, brand, version, offerings and update', async () => {
+    specBackend();
+    await openTab();
+    expectUi('ui.catalog.specifications');
+    expect(
+      within(specRow('Mobile Voice & Data'))
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['Mobile Voice & Data', 'Active', 'Acme', '2.1', '1', '2026-10-01']);
+    expect(within(specRow('Home Internet')).getAllByRole('cell')[4]?.textContent).toBe('3');
+    expect(within(specRow('TV')).getAllByRole('cell')[4]?.textContent).toBe('0');
+  });
+
+  it('creates a specification with the exact body', async () => {
+    const { fetchMock } = specBackend({
+      [`POST ${CAT}/productSpecification`]: () =>
+        json({ id: 's9', name: 'Roaming' }, { status: 201 }),
+    });
+    await openTab();
+    fireEvent.click(screen.getByRole('button', { name: '+ New specification' }));
+    const dialog = screen.getByRole('dialog', { name: 'New product specification' });
+    expectUi('ui.catalog.newSpecification');
+    const create = within(dialog).getByRole('button', { name: 'Create' }) as HTMLButtonElement;
+    expect(create.disabled).toBe(true);
+    expect((field(dialog, /Lifecycle status/) as HTMLSelectElement).value).toBe('In Design');
+    fireEvent.change(field(dialog, /^Name/), { target: { value: ' Roaming ' } });
+    fireEvent.change(field(dialog, /Brand/), { target: { value: 'Acme' } });
+    fireEvent.change(field(dialog, /Version/), { target: { value: '1.0' } });
+    fireEvent.change(field(dialog, /Product number/), { target: { value: 'PN-9' } });
+    fireEvent.click(create);
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Specification Roaming created',
+    );
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+      '@type': 'ProductSpecification',
+      name: 'Roaming',
+      lifecycleStatus: 'In Design',
+      brand: 'Acme',
+      version: '1.0',
+      productNumber: 'PN-9',
+    });
+  });
+
+  it('edits with a merge patch of only the changed fields, forward lifecycle only', async () => {
+    const { fetchMock } = specBackend({
+      [`PATCH ${CAT}/productSpecification/s1`]: () => json({ id: 's1', name: 'Mobile' }),
+    });
+    await openTab();
+    fireEvent.click(specRow('Mobile Voice & Data'));
+    const dialog = screen.getByRole('dialog', { name: 'Mobile Voice & Data' });
+    expectUi('ui.catalog.editSpecification');
+    const save = within(dialog).getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true); // nothing changed
+    expect(
+      within(field(dialog, /Lifecycle status/))
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Active', 'Retired']);
+    fireEvent.change(field(dialog, /^Name/), { target: { value: 'Mobile' } });
+    fireEvent.change(field(dialog, /Brand/), { target: { value: '' } });
+    fireEvent.change(field(dialog, /Lifecycle status/), { target: { value: 'Retired' } });
+    fireEvent.click(save);
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Specification Mobile saved',
+    );
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+      name: 'Mobile',
+      brand: null,
+      lifecycleStatus: 'Retired',
+    });
+    expect((call?.[1]?.headers as Record<string, string>)['Content-Type']).toBe(
+      'application/merge-patch+json',
+    );
+  });
+
+  it('offers no lifecycle step after Retired', async () => {
+    specBackend();
+    await openTab();
+    fireEvent.click(specRow('TV'));
+    const dialog = screen.getByRole('dialog', { name: 'TV' });
+    expect(
+      within(field(dialog, /Lifecycle status/))
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['Retired']);
+  });
+
+  it('shows a refused save and keeps the entered values', async () => {
+    specBackend({
+      [`PATCH ${CAT}/productSpecification/s1`]: () => tmfError(409, 'Retired is final'),
+    });
+    await openTab();
+    fireEvent.click(specRow('Mobile Voice & Data'));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(field(dialog, /Brand/), { target: { value: 'Other' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(await within(dialog).findByRole('alert')).toBeTruthy();
+    expect((field(dialog, /Brand/) as HTMLInputElement).value).toBe('Other');
+  });
+
+  it('deletes an unused specification and hides Delete for a used one', async () => {
+    const { fetchMock } = specBackend({
+      [`DELETE ${CAT}/productSpecification/s3`]: () => new Response(null, { status: 204 }),
+    });
+    await openTab();
+    fireEvent.click(specRow('Mobile Voice & Data'));
+    let dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(within(dialog).getByText(/Used by 1 offering/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    fireEvent.click(specRow('TV'));
+    dialog = screen.getByRole('dialog', { name: 'TV' });
+    expectUi('ui.catalog.deleteSpecification');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Specification TV deleted',
+    );
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'DELETE');
+    expect(call?.[1]?.body).toBeUndefined();
+  });
+
+  it('shows the 409 of a delete the server refuses', async () => {
+    specBackend({
+      [`DELETE ${CAT}/productSpecification/s3`]: () => tmfError(409, 'still referenced'),
+    });
+    await openTab();
+    fireEvent.click(specRow('TV'));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+    expect(await within(dialog).findByRole('alert')).toBeTruthy();
+  });
+
+  it('creates a specification from New offering and preselects it', async () => {
+    const { fetchMock } = specBackend({
+      [`POST ${CAT}/productSpecification`]: () =>
+        json({ id: 's9', name: 'Roaming', lifecycleStatus: 'In Design' }, { status: 201 }),
+    });
+    await open();
+    await waitFor(() => row('Mobile L'));
+    fireEvent.click(screen.getByRole('button', { name: '+ New offering' }));
+    const offering = screen.getByRole('dialog', { name: 'New product offering' });
+    fireEvent.click(within(offering).getByRole('button', { name: 'New specification…' }));
+    const dialog = screen.getByRole('dialog', { name: 'New product specification' });
+    fireEvent.change(field(dialog, /^Name/), { target: { value: 'Roaming' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'New product specification' })).toBeNull(),
+    );
+    const select = within(offering).getByLabelText(/Specification/) as HTMLSelectElement;
+    expect(select.value).toBe('s9');
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+      '@type': 'ProductSpecification',
+      name: 'Roaming',
+      lifecycleStatus: 'In Design',
+    });
+    // the offering itself is not created yet
+    expect(fetchMock.mock.calls.filter(([, i]) => i?.method === 'POST')).toHaveLength(1);
+  });
+});

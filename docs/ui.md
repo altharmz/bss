@@ -248,6 +248,15 @@ lifecycle status. **+ New offering**. A row opens the offering detail.
 API: `GET .../productOffering`, `GET .../productSpecification`,
 `GET .../productOfferingPrice?priceType=recurring` (all pages).
 
+### Specifications tab (`ui.catalog.specifications`), `ui.catalog.newSpecification`, `ui.catalog.editSpecification`, `ui.catalog.deleteSpecification` - `screens/Specifications.tsx`
+
+Second tab of the Catalog screen: specifications with status, brand, version, the number of
+offerings using each and the last update; search by name or brand. **+ New specification**
+and a row's dialog edit name, description, brand, version, product number and the lifecycle
+(forward step only); Delete is offered only when no loaded offering uses it (the server's 409
+still shows). **New offering** has **New specification...**, which preselects the new one.
+API: `POST|PATCH|DELETE .../productSpecification` (merge patch of changed fields only).
+
 ### Offering detail (`ui.catalog.offeringDetail`), lifecycle step (`ui.catalog.lifecycle`), change price (`ui.catalog.changePrice`)
 
 The detail dialog shows the offering and its recurring prices. The lifecycle button offers

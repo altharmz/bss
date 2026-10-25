@@ -356,6 +356,10 @@ items:
   - {id: ui.catalog.lifecycle, area: ui, stage: 5, title: "Offering lifecycle step (Activate / Retire)"}
   - {id: ui.catalog.changePrice, area: ui, stage: 5, title: "Change price of a live offering"}
   - {id: ui.catalog.newOffering, area: ui, stage: 5, title: "New offering"}
+  - {id: ui.catalog.specifications, area: ui, stage: 5, title: "Catalog tab: product specifications"}
+  - {id: ui.catalog.newSpecification, area: ui, stage: 5, title: "New product specification"}
+  - {id: ui.catalog.editSpecification, area: ui, stage: 5, title: "Edit a product specification"}
+  - {id: ui.catalog.deleteSpecification, area: ui, stage: 5, title: "Delete an unused product specification"}
   - {id: ui.billingRuns.list, area: ui, stage: 4, title: "Billing runs: latest run, history, failed badge in the nav"}
   - {id: ui.billingRuns.catchUp, area: ui, stage: 4, title: "Catch up to a date"}
   - {id: ui.billingRuns.retry, area: ui, stage: 4, title: "Retry a failed run"}
