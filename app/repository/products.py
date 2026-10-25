@@ -492,6 +492,24 @@ def change_status(
     return change
 
 
+def apply_prepaid_status_change(
+    conn: psycopg.Connection, changed_by_item_id: UUID, applied_at: datetime
+) -> Row:
+    """A retained dated change of a prepaid product takes effect: marked applied and its
+    manual cause set or lifted (the caller sets the effective status)."""
+    change = returning(
+        conn,
+        "UPDATE product_status_change SET applied_at = %s WHERE changed_by_item_id = %s"
+        " AND applied_at IS NULL RETURNING *",
+        (applied_at, changed_by_item_id),
+    )
+    conn.execute(
+        "UPDATE product SET manually_suspended = %s WHERE id = %s",
+        (change["status"] == "suspended", change["product_id"]),
+    )
+    return change
+
+
 def pending_status_change(conn: psycopg.Connection, product_id: UUID) -> Row | None:
     """The product's status change that has not taken effect, if any."""
     return fetch_one(

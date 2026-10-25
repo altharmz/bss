@@ -1004,6 +1004,33 @@ def test_prepaid_product_actions_as_the_ui_sends_them(api, db_conn):
     assert end.status_code == 201 and end.json()["state"] == "inProgress", end.text
 
 
+def test_prepaid_dated_suspend_as_the_ui_sends_it(api, db_conn):
+    """ProductChangeDialog on a prepaid product: the same body dated later is accepted as
+    inProgress, shows as a pending status change, and the Undo cancels it before its day."""
+    off, account = shop(api, db_conn, numbers=False)
+    purchase(api, off, account, numbers=False)
+    tick(db_conn, api.clock.now())
+    product_id = db_conn.execute("SELECT id::text FROM product ORDER BY id").fetchone()[0]
+    listing = f"/internal/v1/billingAccount/{account['id']}/products"
+
+    suspend = api.post(
+        ORDER,
+        ui_product_order(account, ui_status_item(product_id, "suspended"), "2026-10-12"),
+    )
+    assert suspend.status_code == 201 and suspend.json()["state"] == "inProgress", suspend.text
+    pending = next(p for p in api.get(listing).json() if p["id"] == product_id)["pendingChanges"]
+    assert [(c["kind"], c["date"], c["status"]) for c in pending] == [
+        ("status", "2026-10-12", "suspended")
+    ]
+    assert pending[0]["productOrder"]["id"] == suspend.json()["id"]
+    undo = api.post(
+        "/tmf-api/productOrderingManagement/v5/cancelProductOrder",
+        {"@type": "CancelProductOrder", "productOrder": {"id": suspend.json()["id"]}},
+    )
+    assert undo.status_code == 201, undo.text
+    assert next(p for p in api.get(listing).json() if p["id"] == product_id)["pendingChanges"] == []
+
+
 def ui_offering_item(product_id, offering_id):
     """orderOfferingChange(): a modify item with the new offering, its href, and no status."""
     return {

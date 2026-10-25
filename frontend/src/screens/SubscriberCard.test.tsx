@@ -2453,7 +2453,7 @@ describe('product actions', () => {
     fireEvent.click(within(row).getByRole('menuitem', { name: 'Resume…' }));
     const dialog = screen.getByRole('dialog');
     const date = within(dialog).getByLabelText('Date') as HTMLInputElement;
-    expect([date.value, date.readOnly]).toEqual(['2026-10-01', true]);
+    expect([date.value, date.readOnly]).toEqual(['2026-10-01', false]);
     expect(
       within(dialog).getByText(/The paid interval has ended: resuming starts a new interval/),
     ).toBeTruthy();
@@ -2470,6 +2470,61 @@ describe('product actions', () => {
           id: '1',
           action: 'modify',
           product: { id: P1, '@type': 'ProductRef', status: 'active' },
+        },
+      ],
+    });
+  });
+
+  it('suspends a prepaid product on a later date with the pinned order body', async () => {
+    const { fetchMock } = prepaidBackend({
+      ...products([product(P1, { paidThrough: '2026-10-20', needs_topup: null })]),
+      [`POST ${ORDERS}`]: () =>
+        json({ id: ORDER_ID, state: 'inProgress', '@type': 'ProductOrder' }, { status: 201 }),
+      [`GET ${CMD}/${ORDER_ID}`]: () =>
+        json({
+          id: ORDER_ID,
+          kind: 'order',
+          state: 'completed',
+          outcome: 'funded',
+          billingAccount: { id: A, name: 'Olga' },
+          dueDate: '2026-10-01',
+          createdAt: '2026-10-01T06:00:00Z',
+          attempts: 1,
+          attemptedAt: null,
+          nextRetryAt: null,
+          reason: null,
+          error: null,
+          needs_topup: null,
+          productOrder: null,
+          products: [],
+          billingRun: null,
+          bills: [],
+        }),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    openMenu(row);
+    fireEvent.click(within(row).getByRole('menuitem', { name: 'Suspend…' }));
+    const dialog = screen.getByRole('dialog');
+    const date = within(dialog).getByLabelText('Date') as HTMLInputElement;
+    expect([date.value, date.readOnly]).toEqual(['2026-10-01', false]);
+    expect(within(dialog).getByText(/Paid days are not extended by a suspension\./)).toBeTruthy();
+    fireEvent.change(date, { target: { value: '2026-10-12' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend' }));
+
+    expect(
+      await screen.findByText(/suspend accepted, the billing worker completes it/),
+    ).toBeTruthy();
+    expect(JSON.parse(String(posts(fetchMock)[0]?.[1]?.body))).toEqual({
+      '@type': 'ProductOrder',
+      billingAccount: { id: A, '@type': 'BillingAccountRef' },
+      requestedStartDate: '2026-10-12T12:00:00+03:00',
+      productOrderItem: [
+        {
+          '@type': 'ProductOrderItem',
+          id: '1',
+          action: 'modify',
+          product: { id: P1, '@type': 'ProductRef', status: 'suspended' },
         },
       ],
     });

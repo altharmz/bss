@@ -366,6 +366,12 @@ def _process(
             prepaid_orders.terminate(conn, order, request, rows, command_id, start, today, now)
         elif prepaid and all(i.product_offering_id is not None for i in request.items):
             prepaid_orders.change_offerings(conn, order, request, rows, start, today, now)
+        elif prepaid and prepaid_orders.number_only(request):
+            _execute(conn, order, request, rows, start, today, locked, now)
+        elif prepaid and start > today:
+            prepaid_orders.schedule_statuses(
+                conn, order, request, rows, command_id, start, today, now
+            )
         elif prepaid:
             prepaid_orders.change_statuses(conn, order, request, rows, renewals, today, now)
         else:

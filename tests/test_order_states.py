@@ -19,6 +19,7 @@ ORDER_ALLOWED = [
     ("acknowledged", "rejected"),
     ("inProgress", "completed"),
     ("inProgress", "cancelled"),  # prepaid purchase before its first grant
+    ("inProgress", "failed"),  # prepaid dated status change revalidated on its date
     ("completed", "cancelled"),  # cancelProductOrder
 ]
 ITEM_ALLOWED = [
@@ -27,6 +28,7 @@ ITEM_ALLOWED = [
     ("acknowledged", "cancelled"),
     ("inProgress", "completed"),
     ("inProgress", "cancelled"),  # prepaid purchase before its first grant
+    ("inProgress", "failed"),  # prepaid dated status change revalidated on its date
     ("completed", "cancelled"),  # its order is cancelled
 ]
 

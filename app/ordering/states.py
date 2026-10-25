@@ -7,7 +7,8 @@ retains inProgress until the billing owner completes posting:
     draft -> acknowledged                        (PATCH state; then processed as below)
     acknowledged -> inProgress -> completed      (every item valid)
     acknowledged -> rejected                     (at least one reason to refuse)
-    inProgress -> cancelled                     (prepaid, before its first grant)
+    inProgress -> cancelled                     (prepaid, before its first grant or dated change)
+    inProgress -> failed                        (prepaid dated status change that no longer applies)
     completed -> cancelled                       (cancelProductOrder, before it takes effect)
     draft -> cancelled                           (cancelProductOrder: nothing to undo)
 
@@ -15,7 +16,7 @@ Items follow their order; when an order is rejected, the items that were fine ar
 `cancelled` (never executed), the others `rejected`. A cancelled order's items are all
 `cancelled` (app/ordering/cancel.py). A draft's items have no state until it is submitted.
 
-The other states of TMF622 (pending, held, failed, partial, assessingCancellation,
+The other states of TMF622 (pending, held, partial, assessingCancellation,
 pendingCancellation, inProgress.accepted) belong to asynchronous fulfilment: processing
 is all-or-nothing, so they are never reached.
 """
@@ -23,18 +24,18 @@ is all-or-nothing, so they are never reached.
 ORDER_TRANSITIONS: dict[str, frozenset[str]] = {
     "draft": frozenset({"acknowledged", "cancelled"}),
     "acknowledged": frozenset({"inProgress", "rejected"}),
-    "inProgress": frozenset({"completed", "cancelled"}),
+    "inProgress": frozenset({"completed", "cancelled", "failed"}),
     "completed": frozenset({"cancelled"}),
 }
 
 ITEM_TRANSITIONS: dict[str, frozenset[str]] = {
     "acknowledged": frozenset({"inProgress", "rejected", "cancelled"}),
-    "inProgress": frozenset({"completed", "cancelled"}),
+    "inProgress": frozenset({"completed", "cancelled", "failed"}),
     "completed": frozenset({"cancelled"}),
 }
 
 # completed is not terminal: a cancelProductOrder may still cancel it
-TERMINAL = frozenset({"rejected", "cancelled"})
+TERMINAL = frozenset({"rejected", "cancelled", "failed"})
 
 
 class InvalidTransition(ValueError):

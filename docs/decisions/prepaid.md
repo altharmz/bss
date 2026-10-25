@@ -1,14 +1,36 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
-## Decided 2026-10-24, not built yet
+## Slice 8: dated prepaid status changes and number-only changes (2026-10-25)
 
-These decisions were made under the human's delegation of 2026-10-24
-([next-slices-design.md](../next-slices-design.md)):
-- **Slice 8:** dated prepaid suspend/resume runs through an `order` command due on its
-  date. A failed revalidation reaches TMF622 `failed`. Number-only changes run as on
-  postpaid.
-
-Each slice replaces this note with its own entry when built.
+Design: [next-slices-design.md](../next-slices-design.md#8-prepaid-lifecycle-parity-in-the-backend-dated-status-changes-number-changes).
+Built as designed, no migration, no contract or MCP change (`create_order` never stated a
+today-only rule).
+- **Acceptance** (`app/ordering/prepaid.py`): a prepaid `modify` item with `product.status` dated
+  after today is accepted. The order and items stay `inProgress`, the `product_status_change` row
+  is kept unapplied (so `openModifyItem`, `statusUnchanged` against the latest pending change,
+  `productAlreadyEnded` and slice 4's `pendingChanges` come from the shared postpaid rules) and one
+  `order` command is due on the date, request `{order_id, status_changes: [{product_id, status}]}`.
+- **Posting** (`app/billing/status_change.py`, dispatched in `app/worker/prepaid.py`, which locks the
+  renewal identities of resumed products before the account): revalidates, then runs P3f's same-day
+  execution. Resume after expiry queues the renewal. If the product ended or the account is not
+  Active for a resume, items and order end `failed` (first use of TMF622 `failed`: `states.py`,
+  tmf-api.md), the error messages carry `productAlreadyEnded` / `accountNotActive`, and the retained
+  change is deleted. The command completes with `{outcome: failed|statusChanged}`.
+- **cancelProductOrder:** before the command ran it cancels the command, the change and the
+  order (`cancel._cancel_status`); once applied, the postpaid same-day rule (allowed on the date,
+  409 later); a `failed` order is 409.
+- **Number-only** modify items on prepaid run through the postpaid `_execute`: synchronous, no
+  command, interval from the date. Mixed with purchase, delete or status items stay
+  `prepaidLifecycleUnavailable`.
+- **UI:** the prepaid Suspend/Resume date is editable
+  ([frontend.md](frontend.md#slice-4-product-actions-and-pending-changes-2026-10-25)).
+- **Deviations:** none. Scope item `worker.prepaidDatedStatus`.
+- **Tests:** `tests/test_prepaid_dated_status.py` (dated suspend and resume after expiry, cancel
+  before and on/after the date, ordering rules, both revalidation failures, number-only today and
+  dated, mixed refused), `test_ui_requests.py::test_prepaid_dated_suspend_as_the_ui_sends_it`, the
+  component test in `SubscriberCard.test.tsx`. TEST-CHANGE: `test_order_states.py` allows
+  `inProgress -> failed`; the prepaid status test no longer expects a dated change to be refused;
+  the Resume dialog date is no longer read-only.
 
 ## Slice 4: `pendingChanges` on the internal products (2026-10-25)
 
@@ -17,8 +39,8 @@ Each slice replaces this note with its own entry when built.
 ordered by date: `status` entries are unapplied `product_status_change` rows dated after today;
 `offering` entries are `product_offering_change` rows not in effect: postpaid dated after today,
 prepaid not yet announced (a change waiting for a funded renewal can be dated in the past). Each
-names the order to cancel. No migration; the MCP `open_products` carries it. The prepaid pending
-dated `order` commands join after slice 8. Tests: `tests/test_internal_pending_changes.py`.
+names the order to cancel. No migration; the MCP `open_products` carries it. Pending dated prepaid status changes appear
+through their unapplied rows (slice 8). Tests: `tests/test_internal_pending_changes.py`.
 UI: [frontend.md](frontend.md#slice-4-product-actions-and-pending-changes-2026-10-25).
 
 ## Slice 2: transactions include balance actions (2026-10-24)

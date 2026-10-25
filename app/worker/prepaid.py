@@ -15,6 +15,7 @@ import psycopg
 from app.billing import entitlement, transfer_fee
 from app.billing.funding import InsufficientFunds
 from app.billing.prepaid import post_interval
+from app.billing.status_change import post_status_change, renewal_ids
 from app.billing.termination import post_termination
 from app.clock import Clock
 from app.events import emit
@@ -172,6 +173,8 @@ def process_commands(
             # Command identity precedes account locks, as in producers/posting.
             for cmd in sorted(pending, key=lambda c: c["id"]):
                 commands.lock_identity(conn, cmd["id"])
+            for renewal in sorted({r for c in pending for r in renewal_ids(conn, c["request"])}):
+                commands.lock_identity(conn, renewal)  # a resumption may queue it
             billing.load_account(conn, account_id)
             for cmd in pending:
                 now = clock.now()  # funds committed before the account lock are visible
@@ -187,7 +190,13 @@ def process_commands(
                         attempted.append(cmd["id"])
                     if blocked is not None:
                         continue
-                post = post_termination if "terminations" in current["request"] else post_interval
+                post = (
+                    post_termination
+                    if "terminations" in current["request"]
+                    else post_status_change
+                    if "status_changes" in current["request"]
+                    else post_interval
+                )
                 try:
                     post(conn, cmd["id"], now=now, tz=tz)
                 except InsufficientFunds as shortfall:

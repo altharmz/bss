@@ -5,7 +5,9 @@ Prepaid inProgress orders may be cancelled before their first grant, under the
 command identity lock: release money and number claims and retain a cancelled
 command result. A prepaid termination cannot be cancelled once accepted. A prepaid
 status order is undone like a postpaid one; its product gets back the manual cause
-and effective status the earlier changes left. Postpaid cancellation undoes a
+and effective status the earlier changes left. A dated one that has not been applied
+yet (its command is pending) is cancelled with its command; once applied it follows
+the postpaid rule (allowed on its day, 409 later). Postpaid cancellation undoes a
 completed order whose every effect is still in the future, in one transaction:
 
 - add item: its product has not started (`created`/`pendingActive`, start after today)
@@ -172,7 +174,7 @@ def cancel_order(
         raise LookupError(f"productOrder {request.order_id} does not exist")
     if order["state"] == "draft":
         return _cancel_draft(conn, order, request, now)
-    if command is not None:
+    if command is not None and not _applied_status_order(order, command):
         return _cancel_prepaid(conn, order, command, request, now, today)
     if order["state"] != "completed":
         raise CancelRefused(
@@ -235,7 +237,29 @@ def cancel_order(
     return _cancelled(conn, order, request, now)
 
 
+def _applied_status_order(order, command) -> bool:
+    return "status_changes" in command["request"] and order["state"] == "completed"
+
+
+def _cancel_status(conn, order, command, request, now):
+    """A dated status order whose command has not run: drop the change and the command."""
+    items = orders.items_of(conn, order["id"])
+    for item in items:
+        products.undo_status_change(conn, item["id"])
+        orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "cancelled"))
+    commands.complete(conn, command["id"], {"outcome": "cancelled"}, now=now)
+    return _cancelled(conn, order, request, now)
+
+
 def _cancel_prepaid(conn, order, command, request, now, today):
+    if "status_changes" in command["request"]:
+        if order["state"] != "inProgress" or command["state"] == "completed":
+            raise CancelRefused(
+                f"productOrder {order['id']} is {order['state']}: it cannot be cancelled"
+            )
+        parties.get_billing_account(conn, order["billing_account_id"], "update")
+        products.lock_products(conn, [i["product_id"] for i in orders.items_of(conn, order["id"])])
+        return _cancel_status(conn, order, command, request, now)
     if "terminations" in command["request"]:
         raise CancelRefused("a prepaid termination cannot be cancelled once accepted")
     if order["state"] != "inProgress" or command["state"] == "completed":

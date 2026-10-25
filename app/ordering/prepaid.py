@@ -2,9 +2,13 @@
 apply manual suspension/resumption orders, accept terminations and retain offering
 changes for the next renewal.
 
+A dated status change (slice 8) stays inProgress with an `order` command due on its date;
+the billing owner revalidates and applies it then (app/billing/status_change.py).
+A number-only change runs as on postpaid: synchronous, no money, no command.
+
 A suspend order keeps the paid interval and its charge; at expiry it blocks renewal.
 A resume order reuses a still-live grant, or queues the renewal of the expired one,
-which authorizes from today. Status changes take effect on the order's day only.
+which authorizes from today. A status change dated today takes effect at once.
 A termination ends the product and releases its number at the requested date; its
 command, due that day, has the billing owner credit the unused dates
 (app/billing/termination.py) and complete the order.
@@ -42,14 +46,17 @@ def lock_renewals(conn, product_ids):
 
 
 def problems(conn, request, account, start, today):
-    """Prepaid orders purchase, terminate, change the offering at renewal, or
-    suspend/resume today; a non-Active account only suspends and terminates."""
+    """Prepaid orders purchase, terminate, change the offering at renewal, suspend or
+    resume (today or dated), or change a number; a non-Active account only suspends
+    and terminates."""
     if all(item.action == "add" for item in request.items):
         return []
     if all(item.action == "delete" for item in request.items):
         return _not_started(conn, request)
     if all(item.action == "modify" and item.product_offering_id for item in request.items):
         return _not_at_renewal(conn, request, start, today)
+    if number_only(request):
+        return []
     if any(item.action != "modify" or item.product_status is None for item in request.items):
         return [
             (
@@ -58,8 +65,6 @@ def problems(conn, request, account, start, today):
                 "prepaid orders purchase, terminate, change offering, suspend or resume",
             )
         ]
-    if start != today:
-        return [(None, "prepaidLifecycleUnavailable", "prepaid status changes take effect today")]
     found = []
     if account["state"] != "Active" and any(i.product_status == "active" for i in request.items):
         found.append(
@@ -70,6 +75,17 @@ def problems(conn, request, account, start, today):
             )
         )
     return found + _not_started(conn, request)
+
+
+def number_only(request):
+    """Every item is a modify of the subscriber number alone (no offering, no status)."""
+    return all(
+        item.action == "modify"
+        and item.product_offering_id is None
+        and item.product_status is None
+        and numbers.references(item) is not None
+        for item in request.items
+    )
 
 
 def _not_started(conn, request):
@@ -178,6 +194,37 @@ def restore_status(conn, product_id, account, today):
     status = entitlement.view(conn, product, account, today)["status"]
     products.set_product_status(conn, product_id, status)
     return status != before
+
+
+def schedule_statuses(conn, order, request, rows, command_id, start, today, now):
+    """Retain dated status changes: the items stay inProgress and one `order` command
+    due on `start` applies them (app/billing/status_change.py)."""
+    state = order_transition(order["state"], "inProgress")
+    orders.set_order_state(conn, order["id"], state)
+    for item in request.items:
+        row = rows[item.item_id]
+        orders.set_order_item_state(conn, row["id"], item_transition(row["state"], "inProgress"))
+        products.change_status(
+            conn,
+            item.product_id,
+            change_date=start,
+            status=item.product_status,
+            changed_by_item_id=row["id"],
+        )
+    commands.enqueue(
+        conn,
+        command_id,
+        order["billing_account_id"],
+        kind="order",
+        due_date=start,
+        request={
+            "order_id": str(order["id"]),
+            "status_changes": [
+                {"product_id": str(i.product_id), "status": i.product_status} for i in request.items
+            ],
+        },
+        now=now,
+    )
 
 
 def change_statuses(conn, order, request, rows, renewals, today, now):

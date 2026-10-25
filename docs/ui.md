@@ -156,7 +156,7 @@ funding or the account, no pending status change) and **End on a date…**
 (`ui.subscriber.endOnDate`, no end set). Each opens a dialog (`ui.subscriber.productChange`)
 with a date and an explanation, and places one TMF622 order: a `modify` item with
 `product.status` (suspend, resume) or a `delete` item, `requestedStartDate` noon of the date.
-Postpaid dates start at today; prepaid Suspend/Resume are fixed to today. A rejected order shows
+Dates start at today in both modes. A prepaid Suspend/Resume dated later stays `inProgress` until its day (the worker applies it) and adds "Paid days are not extended by a suspension." A rejected order shows
 its reasons in the dialog; an `inProgress` one is followed like any prepaid order. Pending
 changes (`pendingChanges` of the internal products) show under the product ("Suspends on ...",
 "Changes to X on ... (waits for funds)") with **Undo** (`ui.subscriber.undoChange`: a

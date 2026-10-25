@@ -108,6 +108,7 @@ items:
   - {id: db.bill_presentation_media, area: db, stage: 5, table: bill_presentation_media, title: "Bill presentation media (TMF666)"}
   - {id: db.account_presentation_media, area: db, stage: 5, table: account_presentation_media, title: "Account presentation preferences"}
   - {id: worker.onDemand, area: worker, stage: 5, title: "Issue on-demand bills without moving monthly anchors"}
+  - {id: worker.prepaidDatedStatus, area: worker, stage: 5, title: "Dated prepaid suspend/resume applied or failed by the billing owner on its date"}
   - {id: worker.billDocument, area: worker, stage: 5, title: "Snapshot issued JSON documents with presentation preferences"}
   - {id: api.tmf676.refund.list, area: api, stage: 5, method: GET, path: /tmf-api/payment/v4/refund, title: "List refunds"}
   - {id: api.tmf676.refund.get, area: api, stage: 5, method: GET, path: "/tmf-api/payment/v4/refund/{refund_id}", title: "Get a refund"}

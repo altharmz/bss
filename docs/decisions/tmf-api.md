@@ -276,10 +276,11 @@ is ours, as below. `modify` items come in slice 8b (below, when done).
   cancelProductOrder (`draft -> cancelled`, items `cancelled`, nothing to undo). Once
   processed, the account, items and start date may only be repeated (409 otherwise, was
   a 400 read-only); any other `state` in a PATCH is a 422.
-- **States never reached:** pending, held, failed, partial, assessingCancellation,
+- **States never reached:** pending, held, partial, assessingCancellation,
   pendingCancellation and inProgress.accepted describe asynchronous fulfilment. Orders
   here are processed synchronously and all or nothing, which TMF allows, so they are
-  not reached (`app/ordering/states.py`).
+  not reached (`app/ordering/states.py`). `failed` is reached only by a dated prepaid status
+  change that no longer applies on its date ([prepaid.md](prepaid.md#slice-8-dated-prepaid-status-changes-and-number-only-changes-2026-10-25)).
 - **MCP:** the recursive item model is inlined once in the tool schema; below that, a
   nested item is "an object of the same shape" (`bss_mcp/schema.py`).
 

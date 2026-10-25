@@ -51,6 +51,7 @@ def page(
 def _request_products(request: dict[str, Any]) -> set[str]:
     ids = set(request.get("products", [])) | set(request.get("terminations", []))
     ids |= {q["product_id"] for q in request.get("intervals", [])}
+    ids |= {c["product_id"] for c in request.get("status_changes", [])}
     if "product_id" in request:
         ids.add(request["product_id"])
     return ids

@@ -146,8 +146,6 @@ export function ProductChangeDialog({
   const context = useSystemContext();
   const today = context.businessDate;
   const prepaid = account.ratingType === 'prepaid';
-  // prepaid status changes take effect today until dated ones exist (slice 8)
-  const fixed = prepaid && change !== 'end';
   const [day, setDay] = useState(today);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -165,7 +163,7 @@ export function ProductChangeDialog({
       : prepaid
         ? change === 'resume' && expired
           ? 'The paid interval has ended: resuming starts a new interval paid from the balance.'
-          : 'Prepaid status changes take effect today.'
+          : 'Billing does not change while a product is suspended: it is charged by its dates. Paid days are not extended by a suspension.'
         : 'Billing does not change while a product is suspended: it is charged by its dates.';
 
   async function submit() {
@@ -251,7 +249,6 @@ export function ProductChangeDialog({
             aria-label="Date"
             placeholder="YYYY-MM-DD"
             value={day}
-            readOnly={fixed}
             onChange={(event) => setDay(event.target.value)}
           />
           {!valid && <div className="bss-inline-error">Enter a date as YYYY-MM-DD.</div>}

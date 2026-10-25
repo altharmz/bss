@@ -128,11 +128,8 @@ def test_suspended_account_only_suspends(api, db_conn, granted):
     assert view(api, acc, second)["suspensionCause"] == "manual"
 
 
-def test_unsupported_prepaid_status_orders_are_rejected(api, db_conn, granted):
+def test_mixed_prepaid_status_and_delete_orders_are_rejected(api, db_conn, granted):
     acc, (first, second) = granted
-    tomorrow = (api.clock.now() + timedelta(days=1)).isoformat()
-    future = change(api, acc, first, "suspended", requestedStartDate=tomorrow)
-    assert errors(future) == ["prepaidLifecycleUnavailable"]
     mixed = api.post(
         ORDER,
         apidata.order_body(
