@@ -110,7 +110,8 @@ Build exactly section N, nothing more:
   migration or a billing change; report why.
 - Targeted tests while developing (make web-test, single pytest files); the
   pre-commit hook is the one full run. Never use --no-verify. If the hook fails, fix
-  the cause and commit again.
+  the cause and commit again. If the pre-commit hook fails 3 times, stop, do not
+  commit, and report the failures.
 - Too large for one commit: split into Na/Nb rows in docs/next-slices.md, commit Na
   complete with its tests, report that Nb remains.
 - One commit (the message ends with the Co-Authored-By line from your
