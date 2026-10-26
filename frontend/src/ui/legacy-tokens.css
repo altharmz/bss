@@ -64,19 +64,4 @@
   --fs-17: 15px;
   --fs-18: 20px;
   --fs-20: 20px;
-  --st-active-fg: var(--color-positive);
-  --st-active-bg: var(--color-positive-tint);
-  --st-active-dot: var(--color-positive);
-  --st-inactive-fg: var(--color-ink-2);
-  --st-inactive-bg: var(--color-bg-sunken);
-  --st-inactive-dot: var(--color-ink-4);
-  --st-design-fg: var(--color-info);
-  --st-design-bg: var(--color-info-tint);
-  --st-design-dot: var(--color-info);
-  --st-retired-fg: var(--color-ink-3);
-  --st-retired-bg: var(--color-bg);
-  --st-retired-dot: var(--color-border-strong);
-  --st-failed-fg: var(--color-on-primary);
-  --st-failed-bg: var(--color-negative);
-  --st-failed-dot: var(--color-on-primary);
 }

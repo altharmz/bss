@@ -13,7 +13,7 @@ import { hrefOf, Link } from '../app/router';
 import { shortId } from '../format/ids';
 import { formatInt } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, PageTitle, Panel, Pill, Segmented, useToast } from '../ui/kit';
+import { Button, PageTitle, Panel, StatusPill, Segmented, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { DeleteFinancialModal, FinancialFormModal } from './FinancialForms';
@@ -131,7 +131,7 @@ function FinancialTab({ tabs }: { tabs: React.ReactNode }) {
                         <span className="bss-secondary"> · {account.ownerKind}</span>
                       </div>
                     ),
-                    status: <Pill status={account.state} />,
+                    status: <StatusPill kind="account" status={account.state} />,
                     balance:
                       account.balances.length === 0 ? (
                         <span className="bss-zero">—</span>
@@ -139,7 +139,7 @@ function FinancialTab({ tabs }: { tabs: React.ReactNode }) {
                         <div>
                           {account.balances.map((balance) => (
                             <div key={balance.currency}>
-                              <Amount cents={balance.cents} currency={balance.currency} chip />
+                              <Amount cents={balance.cents} currency={balance.currency} />
                             </div>
                           ))}
                         </div>
@@ -181,7 +181,8 @@ function FinancialTab({ tabs }: { tabs: React.ReactNode }) {
                           <Button
                             small
                             data-ui="ui.financialAccounts.delete"
-                            variant="danger-outline"
+                            variant="quiet"
+                            tone="negative"
                             aria-label={`Delete ${account.name}`}
                             onClick={() => setDialog({ kind: 'delete', account })}
                           >
@@ -298,7 +299,7 @@ function PartyTab({ kind, tabs }: { kind: PartyAccountKind; tabs: React.ReactNod
                       </div>
                     ),
                     type: account.accountType ?? <span className="bss-zero">—</span>,
-                    status: <Pill status={account.state} />,
+                    status: <StatusPill kind="account" status={account.state} />,
                     financial: account.financial ? (
                       <div className="ellipsis">{account.financial.name}</div>
                     ) : (
@@ -317,7 +318,8 @@ function PartyTab({ kind, tabs }: { kind: PartyAccountKind; tabs: React.ReactNod
                         <Button
                           small
                           data-ui={`${marker}.delete`}
-                          variant="danger-outline"
+                          variant="quiet"
+                          tone="negative"
                           aria-label={`Delete ${account.name}`}
                           onClick={() => setDialog({ kind: 'delete', account })}
                         >

@@ -15,8 +15,7 @@ import {
 
 // --- buttons ---
 
-// The legacy variant remains only until slice 2b migrates its screen callers.
-type Variant = 'primary' | 'secondary' | 'danger-outline' | 'danger' | 'quiet';
+type Variant = 'primary' | 'secondary' | 'danger' | 'quiet';
 
 export function Button({
   variant = 'secondary',
@@ -82,56 +81,6 @@ export function Panel({
       {children}
     </section>
   );
-}
-
-// --- status pill ---
-
-export type Tone = 'active' | 'inactive' | 'design' | 'retired' | 'failed';
-
-// Every status the UI shows, onto the design's five pill styles (D8: only colours that
-// exist in the tokens). Statuses the design lacks take the closest meaning.
-const TONES: Record<string, Tone> = {
-  // design
-  Active: 'active',
-  completed: 'active',
-  Inactive: 'inactive',
-  'In Design': 'design',
-  running: 'design',
-  Retired: 'retired',
-  failed: 'failed',
-  // billing account state
-  Suspended: 'inactive',
-  Closed: 'retired',
-  // product status (TMF637)
-  active: 'active',
-  created: 'design',
-  pendingActive: 'design',
-  pendingTerminate: 'inactive',
-  suspended: 'inactive',
-  terminated: 'retired',
-  cancelled: 'retired',
-  aborted: 'retired',
-  // order state (TMF622); completed, failed and cancelled are above
-  rejected: 'failed',
-  inProgress: 'design',
-  // a billing run's per-account outcome
-  ok: 'active',
-  blocked: 'inactive',
-  // customer bill (TMF678): paid green, owed amber, held red, not issued yet blue
-  settled: 'active',
-  partiallyPaid: 'inactive',
-  sent: 'inactive',
-  onHold: 'failed',
-  new: 'design',
-  validated: 'design',
-};
-
-export function toneOf(status: string): Tone {
-  return TONES[status] ?? 'inactive';
-}
-
-export function Pill({ status, label }: { status: string; label?: string }) {
-  return <span className={`bss-pill ${toneOf(status)}`}>{label ?? status}</span>;
 }
 
 // --- inputs ---

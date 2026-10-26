@@ -17,7 +17,7 @@ import {
 import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
 import { formatInt } from '../format/money';
-import { Button, Modal, PageTitle, Panel, Pill, Segmented, TextInput, useToast } from '../ui/kit';
+import { Button, Modal, PageTitle, Panel, Tag, Segmented, TextInput, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { Footer, useWrite } from './FinancialForms';
@@ -144,7 +144,7 @@ function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode 
                           {setting.builtIn && (
                             <>
                               {' '}
-                              <Pill status="Active" label="built in" />
+                              <Tag>built in</Tag>
                             </>
                           )}
                         </div>
@@ -167,7 +167,8 @@ function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode 
                             <Button
                               small
                               data-ui={`${marker}.delete`}
-                              variant="danger-outline"
+                              variant="quiet"
+                              tone="negative"
                               aria-label={`Delete ${setting.name}`}
                               onClick={() => setDialog({ kind: 'delete', setting })}
                             >

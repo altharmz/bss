@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import {
   catalogChanges,
   categoryChanges,
@@ -23,7 +23,7 @@ import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { formatInt } from '../format/money';
-import { Button, Modal, Panel, Pill, TextInput, useToast } from '../ui/kit';
+import { Button, Modal, Panel, StatusPill, TextInput, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -45,7 +45,8 @@ const CATALOG_COLUMNS: Column[] = [
 ];
 
 const dash = <span className="bss-dash">—</span>;
-const statusCell = (s: Category['status']) => (s === null ? dash : <Pill status={s} />);
+const statusCell = (s: Category['status']) =>
+  s === null ? dash : <StatusPill kind="lifecycle" status={s} />;
 
 export function CategoriesTab({ offerings, query }: { offerings: Catalog | null; query: string }) {
   const toast = useToast();
@@ -88,8 +89,8 @@ export function CategoriesTab({ offerings, query }: { offerings: Catalog | null;
                   cells={{
                     name: (
                       <span
-                        className="bss-name ellipsis"
-                        style={{ paddingLeft: `${q ? 0 : depth * 20}px` }}
+                        className="bss-name ellipsis category-indent"
+                        style={{ '--category-indent': `${q ? 0 : depth * 20}px` } as CSSProperties}
                       >
                         {category.name}
                       </span>
@@ -339,14 +340,14 @@ function ClassificationModal({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="footer-push bss-inline-error" role="alert">
               {problem}
             </div>
           )}
           {record !== null &&
             deletable &&
             (confirming ? (
-              <span className="bss-confirm" style={{ marginRight: 'auto' }}>
+              <span className="footer-push bss-confirm">
                 <span className="ask">Delete this {kind}?</span>
                 <Button variant="danger" small disabled={busy} onClick={() => void remove()}>
                   Yes
@@ -357,7 +358,8 @@ function ClassificationModal({
               </span>
             ) : (
               <Button
-                variant="danger-outline"
+                variant="quiet"
+                tone="negative"
                 data-ui={`ui.catalog.delete${noun}`}
                 onClick={() => setConfirming(true)}
               >
@@ -365,7 +367,7 @@ function ClassificationModal({
               </Button>
             ))}
           {record !== null && !deletable && (
-            <span className="bss-hint" style={{ marginRight: 'auto' }}>
+            <span className="footer-push bss-hint">
               It has subcategories or offerings: remove them first to delete it.
             </span>
           )}

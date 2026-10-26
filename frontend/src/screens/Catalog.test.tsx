@@ -1110,9 +1110,11 @@ describe('categories and catalogs', () => {
         .getAllByRole('cell')
         .map((c) => c.textContent);
     expect(cells('Mobile')).toEqual(['Mobile', 'Active', '1', '1']);
-    expect(cells('Plans')).toEqual(['Plans', 'In Design', '0', '1']);
+    expect(cells('Plans')).toEqual(['Plans', 'In design', '0', '1']);
     const indent = (name: string) =>
-      (within(treeRow(name)).getByText(name) as HTMLElement).style.paddingLeft;
+      (within(treeRow(name)).getByText(name) as HTMLElement).style.getPropertyValue(
+        '--category-indent',
+      );
     expect([indent('Mobile'), indent('Plans'), indent('Promo')]).toEqual(['0px', '20px', '40px']);
   });
 
@@ -1272,7 +1274,7 @@ describe('categories and catalogs', () => {
         .getAllByRole('cell')
         .map((c) => c.textContent);
     expect(cells('Retail')).toEqual(['Retail', 'sales', 'Active', 'Mobile']);
-    expect(cells('Draft')).toEqual(['Draft', '—', 'In Design', '—']);
+    expect(cells('Draft')).toEqual(['Draft', '—', 'In design', '—']);
   });
 
   it('creates a catalog with root categories only and the exact body', async () => {

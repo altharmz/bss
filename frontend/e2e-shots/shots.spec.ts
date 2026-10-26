@@ -20,6 +20,8 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       'payments',
       'balances',
       'prepaid-commands',
+      'financial-accounts',
+      'billing-settings',
       'parties',
       'integrations',
       'ui-kit',

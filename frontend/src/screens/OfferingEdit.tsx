@@ -90,7 +90,7 @@ export function OfferingEditModal({
       footer={
         <>
           {message !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="footer-push bss-inline-error" role="alert">
               {message}
             </div>
           )}
@@ -116,9 +116,10 @@ export function OfferingEditModal({
         <label>
           Code
           <TextInput
+            className="uppercase"
             mono
             value={form.code}
-            style={{ textTransform: 'uppercase' }}
+
             onChange={(e) => set('code', e.target.value)}
           />
         </label>
@@ -312,7 +313,7 @@ function PriceBody({
       footer={
         <>
           {message !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="footer-push bss-inline-error" role="alert">
               {message}
               {hint && ' Use Change price in the offering to replace the price of a live offering.'}
             </div>
@@ -329,7 +330,8 @@ function PriceBody({
             </span>
           ) : (
             <Button
-              variant="danger-outline"
+              variant="quiet"
+              tone="negative"
               data-ui="ui.catalog.deletePrice"
               onClick={() => setDeleting(true)}
             >

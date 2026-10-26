@@ -196,7 +196,7 @@ describe('shell', () => {
     start('/subscribers');
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     const runs = within(nav).getByRole('link', { name: /Billing runs/ });
-    expect((await within(runs).findByText('failed')).className).toBe('badge');
+    expect((await within(runs).findByText('failed')).className).toBe('bss-badge badge-failed');
     expect(within(runs).queryByText('9')).toBeNull();
   });
 

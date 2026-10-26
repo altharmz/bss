@@ -1,30 +1,11 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { Button, Modal, Pill, Segmented, toneOf, ToastProvider, useToast } from './kit';
+import { Button, Modal, StatusPill, Segmented, ToastProvider, useToast } from './kit';
 
-describe('Pill', () => {
-  it.each([
-    ['Active', 'active'],
-    ['completed', 'active'],
-    ['Inactive', 'inactive'],
-    ['In Design', 'design'],
-    ['running', 'design'],
-    ['Retired', 'retired'],
-    ['failed', 'failed'],
-    // not in the design: mapped onto existing token colours (D8)
-    ['Suspended', 'inactive'],
-    ['Closed', 'retired'],
-    ['created', 'design'],
-    ['pendingTerminate', 'inactive'],
-    ['cancelled', 'retired'],
-    ['somethingNew', 'inactive'],
-  ])('%s -> %s', (status, tone) => {
-    expect(toneOf(status)).toBe(tone);
-  });
-
-  it('renders its label with the tone class', () => {
-    render(<Pill status="pendingTerminate" label="ends 2026-10-25" />);
-    expect(screen.getByText('ends 2026-10-25').className).toBe('bss-pill inactive');
+describe('StatusPill', () => {
+  it('uses the explicit product family and preserves the note label', () => {
+    render(<StatusPill kind="product" status="pendingTerminate" label="ends 2026-10-25" />);
+    expect(screen.getByText('ends 2026-10-25').className).toBe('status-pill pill-pending');
   });
 });
 
@@ -54,13 +35,13 @@ describe('Segmented', () => {
 describe('Button', () => {
   it('is a non-submitting button with its variant', () => {
     render(
-      <Button variant="danger-outline" small disabled>
+      <Button variant="quiet" tone="negative" small disabled>
         Deactivate
       </Button>,
     );
     const button = screen.getByRole('button', { name: 'Deactivate' }) as HTMLButtonElement;
     expect(button.type).toBe('button');
-    expect(button.className).toBe('bss-btn danger-outline small');
+    expect(button.className).toBe('bss-btn quiet small tone-negative');
     expect(button.disabled).toBe(true);
   });
 });

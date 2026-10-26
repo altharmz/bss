@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type CSSProperties } from 'react';
 import {
   catchUp,
   loadRun,
@@ -18,7 +18,16 @@ import { hrefOf, Link } from '../app/router';
 import { addDays, businessDate, clockTime, utcLabel } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatCents, formatInt, toCents } from '../format/money';
-import { Button, Modal, PageTitle, Panel, Pill, Segmented, TextInput, useToast } from '../ui/kit';
+import {
+  Button,
+  Modal,
+  PageTitle,
+  Panel,
+  StatusPill,
+  Segmented,
+  TextInput,
+  useToast,
+} from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -353,8 +362,8 @@ function LatestSkeleton() {
       <div className="bss-run-kpis">
         {Array.from({ length: 5 }, (_, i) => (
           <div key={i} className="bss-run-kpi">
-            <span className="bss-skel" style={{ width: 70, height: 8 }} />
-            <span className="bss-skel" style={{ width: 110, height: 16 }} />
+            <span className="run-skeleton-label bss-skel" />
+            <span className="run-skeleton-value bss-skel" />
           </div>
         ))}
       </div>
@@ -379,7 +388,7 @@ function LatestRun({
       <header>
         <span className="label">Latest run</span>
         <span className="date">{run.runDate}</span>
-        <Pill status={run.status} />
+        <StatusPill kind="run" status={run.status} />
         <Tags run={run} />
         <span className="id" title={run.id}>
           {shortId(run.id)}
@@ -411,7 +420,10 @@ function LatestRun({
             aria-valuemax={run.accounts.total}
             aria-valuenow={done}
           >
-            <div className="fill" style={{ width: `${pct}%` }} />
+            <div
+              className="fill run-progress"
+              style={{ '--progress': `${pct}%` } as CSSProperties}
+            />
           </div>
           <span>
             {formatInt(done)} of {formatInt(run.accounts.total)} accounts
@@ -446,13 +458,6 @@ function HistoryRow({
   onRetry: () => void;
 }) {
   const failed = run.status === 'failed';
-  const background = run.isLatest
-    ? failed
-      ? 'var(--run-failed-latest)'
-      : 'var(--sel-3)'
-    : failed
-      ? 'var(--run-failed-row)'
-      : undefined;
   const retry = (event: MouseEvent) => {
     event.stopPropagation(); // not the row's click (the detail)
     onRetry();
@@ -461,10 +466,7 @@ function HistoryRow({
     <TableRow
       columns={columns(context.currency)}
       onClick={onOpen}
-      style={{
-        ...(background !== undefined ? { background } : {}),
-        ...(run.isLatest ? { fontWeight: 600 } : {}),
-      }}
+      className={`run-history-row${run.isLatest ? ' is-latest' : ''}${failed ? ' is-failed' : ''}`}
       cells={{
         date: run.runDate,
         start: <span className="bss-text-2">{clockTime(run.startedAt, context.timeZone)}</span>,
@@ -474,7 +476,7 @@ function HistoryRow({
           </span>
         ),
         duration: <span className="bss-text-2">{duration(run) ?? 'running…'}</span>,
-        status: <Pill status={run.status} />,
+        status: <StatusPill kind="run" status={run.status} />,
         note: (
           <span className="bss-run-note-cell">
             <Tags run={run} latest={run.isLatest} />
@@ -564,7 +566,7 @@ function RunModal({
       title={`Run for ${run.runDate}`}
       subtitle={
         <span className="bss-run-subtitle">
-          <Pill status={run.status} />
+          <StatusPill kind="run" status={run.status} />
           <Tags run={run} latest={run.isLatest} />
           <span className="bss-mono" title={run.id}>
             {shortId(run.id)}
@@ -668,7 +670,7 @@ function RunModal({
                           {outcome.billingAccount.name}
                         </span>
                       ),
-                      status: <Pill status={outcome.status} />,
+                      status: <StatusPill kind="runOutcome" status={outcome.status} />,
                       note:
                         outcome.status === 'failed' ? (
                           <span className="bss-run-error-text ellipsis" title={outcome.error ?? ''}>

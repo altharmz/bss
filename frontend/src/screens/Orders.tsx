@@ -24,7 +24,16 @@ import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatAmount, formatInt } from '../format/money';
-import { Button, Modal, PageTitle, Panel, Pill, Segmented, TextInput, useToast } from '../ui/kit';
+import {
+  Button,
+  Modal,
+  PageTitle,
+  Panel,
+  StatusPill,
+  Segmented,
+  TextInput,
+  useToast,
+} from '../ui/kit';
 import { AddProductModal, type DraftToEdit } from './AddProduct';
 import { OrderWatch } from './PrepaidOrderWatch';
 import { watch, type Watched } from './watched';
@@ -186,7 +195,13 @@ export function OrdersScreen() {
                       ) : (
                         '—'
                       ),
-                    state: <Pill status={order.state ?? ''} label={order.state ?? '—'} />,
+                    state: (
+                      <StatusPill
+                        kind="order"
+                        status={order.state ?? ''}
+                        label={order.state ?? '—'}
+                      />
+                    ),
                     items: (
                       <span className="ellipsis" title={itemSummary(order)}>
                         {itemSummary(order)}
@@ -444,14 +459,14 @@ function OrderModal({
   return (
     <Modal
       title={`Order ${shortId(orderId)}`}
-      subtitle={<Pill status={order.state ?? ''} label={order.state ?? '—'} />}
+      subtitle={<StatusPill kind="order" status={order.state ?? ''} label={order.state ?? '—'} />}
       width={680}
       ui="ui.orders.detail"
       onClose={onClose}
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="footer-push bss-inline-error" role="alert">
               {unsure ? `Unsure whether it was saved: ${problem}` : problem}{' '}
               {unsure && (
                 <Button

@@ -12,7 +12,7 @@ import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatCents, formatInt } from '../format/money';
-import { Modal, PageTitle, Panel, Pill, Segmented } from '../ui/kit';
+import { Modal, PageTitle, Panel, StatusPill, Segmented } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { actionLabel, ActionDialog, statusLabel } from './PrepaidHistory';
@@ -78,7 +78,7 @@ function actionCells(action: BalanceAction, timeZone: string) {
     kind: actionLabel(action),
     requested: stamp(action.requestedDate, timeZone),
     amount: formatCents(action.cents),
-    status: <Pill status={action.status} label={statusLabel(action)} />,
+    status: <StatusPill kind="balanceAction" status={action.status} label={statusLabel(action)} />,
   };
 }
 
@@ -198,7 +198,7 @@ export function BalancesScreen() {
                         remaining: formatCents(row.remainingCents),
                         reserved: formatCents(row.reservedCents),
                         total: row.totalCents === null ? '—' : formatCents(row.totalCents),
-                        status: <Pill status={row.status} />,
+                        status: <StatusPill kind="bucket" status={row.status} />,
                       }}
                     />
                   ))}
@@ -281,7 +281,7 @@ function BucketDialog({ row, onClose }: { row: BucketRow; onClose: () => void })
             <dd>{shortId(detail.data.bucketId)}</dd>
             <dt>Status</dt>
             <dd>
-              <Pill status={detail.data.status} />
+              <StatusPill kind="bucket" status={detail.data.status} />
             </dd>
             <dt>Remaining</dt>
             <dd>{formatCents(detail.data.remainingCents)}</dd>

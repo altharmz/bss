@@ -6,7 +6,7 @@ import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
-import { Button, Modal, PageTitle, Panel, Pill, TextInput } from '../ui/kit';
+import { Button, Modal, PageTitle, Panel, StatusPill, TextInput } from '../ui/kit';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -161,7 +161,9 @@ export function ProductsScreen() {
                     ) : (
                       '—'
                     ),
-                  status: <Pill status={p.status ?? ''} label={p.status ?? '—'} />,
+                  status: (
+                    <StatusPill kind="product" status={p.status ?? ''} label={p.status ?? '—'} />
+                  ),
                   start: day(p.startDate, context.timeZone),
                   end: day(p.terminationDate, context.timeZone),
                   number: digits(p) || '—',
@@ -200,7 +202,7 @@ function ProductDetail({ product, onClose }: { product: InventoryProduct; onClos
         )}
         {loaded.status === 'loading' && <p>Loading…</p>}
         <p>
-          <Pill status={p.status ?? ''} label={p.status ?? '—'} /> · starts{' '}
+          <StatusPill kind="product" status={p.status ?? ''} label={p.status ?? '—'} /> · starts{' '}
           {day(p.startDate, context.timeZone)} · ends {day(p.terminationDate, context.timeZone)}
         </p>
         <p>

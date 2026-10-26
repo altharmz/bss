@@ -16,7 +16,7 @@ import { clockTime, businessDate, lastDay } from '../format/dates';
 import { accountLabel } from '../format/ids';
 import { formatCents, parseAmount, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, Modal, Panel, Pill, TextInput } from '../ui/kit';
+import { Button, Modal, Panel, StatusPill, TextInput } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { BillLinks } from './BillLinks';
@@ -103,7 +103,7 @@ export function BillsPanel({
                   ),
                   amount: <Amount cents={bill.amountDueCents} />,
                   remaining: <Amount cents={bill.remainingCents} />,
-                  state: <Pill status={bill.state} />,
+                  state: <StatusPill kind="bill" status={bill.state} />,
                 }}
               />
             ))
@@ -204,7 +204,7 @@ function BillBody({
         <div className="bss-kpi">
           <div className="label">State</div>
           <div className="value">
-            <Pill status={bill.state} />
+            <StatusPill kind="bill" status={bill.state} />
           </div>
           {bill.overdue && <div className="caption negative">Overdue</div>}
         </div>
@@ -298,7 +298,8 @@ function BillBody({
             ) : (
               <Button
                 key={state}
-                variant={state === 'onHold' ? 'danger-outline' : 'secondary'}
+                variant={state === 'onHold' ? 'quiet' : 'secondary'}
+                {...(state === 'onHold' ? { tone: 'negative' as const } : {})}
                 data-ui="ui.subscriber.billHold"
                 onClick={() => setConfirming(state)}
               >
@@ -399,7 +400,7 @@ export function RecordPaymentModal({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="footer-push bss-inline-error" role="alert">
               {problem}
             </div>
           )}

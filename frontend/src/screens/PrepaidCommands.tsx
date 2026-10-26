@@ -15,7 +15,7 @@ import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatCents, formatInt, toCents } from '../format/money';
-import { Button, Modal, PageTitle, Panel, Pill, Segmented } from '../ui/kit';
+import { Button, Modal, PageTitle, Panel, StatusPill, Segmented } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -42,13 +42,6 @@ const STATE_LABEL: Record<StateFilter, string> = {
   pending: 'Pending',
   completed: 'Completed',
   failedTechnical: 'Failed technically',
-};
-
-// the pill tones are keyed by status words; a command's internal state maps onto them
-const PILL: Record<CommandState, string> = {
-  pending: 'created',
-  completed: 'completed',
-  failedTechnical: 'failed',
 };
 
 function when(instant: string | null, timeZone: string): string {
@@ -175,7 +168,9 @@ export function PrepaidCommandsScreen() {
                         {command.billingAccount.name}
                       </span>
                     ),
-                    state: <Pill status={PILL[command.state]} label={command.state} />,
+                    state: (
+                      <StatusPill kind="command" status={command.state} label={command.state} />
+                    ),
                     due: command.dueDate,
                     attempts: formatInt(command.attempts),
                     next: (
@@ -269,7 +264,7 @@ function CommandModal({
       title={`Command ${shortId(command.id)}`}
       subtitle={
         <>
-          <Pill status={PILL[command.state]} label={command.state} /> {command.kind}
+          <StatusPill kind="command" status={command.state} label={command.state} /> {command.kind}
         </>
       }
       width={640}

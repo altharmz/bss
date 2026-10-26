@@ -13,7 +13,7 @@ import { businessDate } from '../format/dates';
 import { accountLabel } from '../format/ids';
 import { formatInt, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { PageTitle, Panel, Pill, Segmented, TextInput } from '../ui/kit';
+import { PageTitle, Panel, StatusPill, Segmented, TextInput } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { BillDialog } from './Bills';
@@ -176,7 +176,7 @@ export function BillsScreen() {
                           </span>
                         ),
                         date: businessDate(bill.billDate, timeZone),
-                        state: <Pill status={bill.state} />,
+                        state: <StatusPill kind="bill" status={bill.state} />,
                         amount: (
                           <Amount
                             cents={toCents(bill.amountDue.value)}

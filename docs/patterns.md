@@ -135,4 +135,13 @@ semantics. `/ui-kit` previews these primitives without screen-specific reads or 
 raw text. Each family has a CSS glyph as well as its colour. `Tag` identifies fixed
 attributes, `Flag` shows short warning facts, and `Badge` takes `count` (default),
 `failed`, or `info`. Each takes children. `/ui-kit` renders all D4 values and variants.
-Screen callers still use the legacy pill until the 2b2 migration removes it.
+Every screen caller now passes its D4 kind; legacy Pill and danger-outline compatibility
+are removed. Destructive text actions use `variant="quiet" tone="negative"`.
+
+`Amount({ cents, currency?, signed? })` uses mono tabular figures, U+2212 negatives and
+neutral positive values. Use `signed` for movements; use an `amount-strong` wrapper for
+body-strong emphasis. `Id({ id, prefix })` displays prefix + uppercase short UUID and
+copies the full UUID, toasting success or failure without activating an enclosing row.
+The Subscribers list keeps Subscriber no. and adds a BA Id column; the card meta also
+uses Id. Other display ids migrate in the later screen slices.
+`TableRow` accepts a `className` for screen state styling.

@@ -136,51 +136,6 @@
   font-weight: 600;
 }
 
-/* --- status pill --- */
-.bss-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  border-radius: var(--r-tag);
-  font-size: var(--fs-115);
-  font-weight: 500;
-  line-height: 16px;
-  white-space: nowrap;
-}
-.bss-pill::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--dot);
-}
-.bss-pill.active {
-  color: var(--st-active-fg);
-  background: var(--st-active-bg);
-  --dot: var(--st-active-dot);
-}
-.bss-pill.inactive {
-  color: var(--st-inactive-fg);
-  background: var(--st-inactive-bg);
-  --dot: var(--st-inactive-dot);
-}
-.bss-pill.design {
-  color: var(--st-design-fg);
-  background: var(--st-design-bg);
-  --dot: var(--st-design-dot);
-}
-.bss-pill.retired {
-  color: var(--st-retired-fg);
-  background: var(--st-retired-bg);
-  --dot: var(--st-retired-dot);
-}
-.bss-pill.failed {
-  color: var(--st-failed-fg);
-  background: var(--st-failed-bg);
-  --dot: var(--st-failed-dot);
-}
-
 /* --- Ledger controls --- */
 .bss-btn {
   display: inline-flex;
@@ -225,8 +180,7 @@
   background: transparent;
   color: var(--color-ink-2);
 }
-.bss-btn.quiet.tone-negative,
-.bss-btn.danger-outline {
+.bss-btn.quiet.tone-negative {
   color: var(--color-negative);
 }
 .bss-btn:disabled {
@@ -638,4 +592,58 @@
 .badge-info {
   background: var(--color-info-tint);
   color: var(--color-info);
+}
+
+/* --- Ledger amounts and display identifiers --- */
+.bss-amount {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  font: var(--type-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bss-amount .currency {
+  font: var(--type-micro);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--color-ink-3);
+}
+.bss-amount.negative .value {
+  color: var(--color-negative);
+}
+.amount-strong {
+  font: var(--type-body-strong);
+}
+.amount-strong .bss-amount {
+  font-weight: inherit;
+}
+.bss-id {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: var(--type-code);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bss-id .id-prefix {
+  color: var(--color-ink-3);
+}
+.bss-id .id-body {
+  color: var(--color-ink-1);
+}
+.bss-id:hover {
+  background: var(--color-bg-hover);
+}
+.bss-id:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.bss-row {
+  --table-columns: none;
+  grid-template-columns: var(--table-columns);
 }

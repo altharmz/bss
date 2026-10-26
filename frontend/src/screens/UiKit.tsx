@@ -1,3 +1,5 @@
+import { Amount } from '../ui/Amount';
+import { Id, ID_PREFIXES } from '../ui/Id';
 import { STATUS_MAP, type StatusKind } from '../ui/status';
 import { useState } from 'react';
 import {
@@ -97,6 +99,20 @@ export function UiKitScreen() {
           <Badge>14</Badge>
           <Badge kind="failed">failed</Badge>
           <Badge kind="info">2</Badge>
+        </div>
+      </section>
+      <section>
+        <h2>Amounts and ids</h2>
+        <div className="ui-kit-row">
+          <Amount cents={-4210} currency="EUR" />
+          <Amount cents={1000} signed currency="EUR" />
+          <Amount cents={0} />
+          <span className="amount-strong">
+            <Amount cents={125040} currency="EUR" />
+          </span>
+          {ID_PREFIXES.map((prefix) => (
+            <Id key={prefix} prefix={prefix} id="81d0e7b4-0000-4000-8000-000000000001" />
+          ))}
         </div>
       </section>
       <section>

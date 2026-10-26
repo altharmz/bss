@@ -51,7 +51,7 @@ describe('loading', () => {
     const rows = within(screen.getByLabelText('Loading')).getAllByRole('row');
     expect(rows).toHaveLength(SKELETON_ROWS);
     for (const row of rows) {
-      expect(row.style.gridTemplateColumns).toBe('150px 1fr 190px');
+      expect(row.style.getPropertyValue('--table-columns')).toBe('150px 1fr 190px');
       const cells = within(row).getAllByRole('cell');
       expect(cells).toHaveLength(3);
       // numeric columns keep their bars right-aligned, mono like the real values

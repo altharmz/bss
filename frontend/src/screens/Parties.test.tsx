@@ -117,7 +117,7 @@ describe('parties list', () => {
     });
     expect(link.getAttribute('href')).toBe(`/subscribers/${A1}`);
     // a person without a customer or an account is reachable too
-    expect(rowOf(/Olga/)?.textContent).toContain('initialized');
+    expect(rowOf(/Olga/)?.textContent).toContain('Initialized');
 
     tab('Organizations');
     expect(await screen.findByText('Lone Ltd')).toBeTruthy();

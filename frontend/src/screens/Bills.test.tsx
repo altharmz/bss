@@ -186,7 +186,7 @@ describe('bills on the subscriber card', () => {
     expect(within(overdue).getByText('2026-08-31')).toBeTruthy();
     expect(within(overdue).getByText('overdue')).toBeTruthy();
     expect(within(billRow('BL-B2000002')).queryByText('overdue')).toBeNull(); // due today
-    expect(within(billRow('BL-B2000002')).getByText('partiallyPaid')).toBeTruthy();
+    expect(within(billRow('BL-B2000002')).getByText('Partly paid')).toBeTruthy();
     expect(within(billRow('BL-B3000003')).getByText('credit note')).toBeTruthy();
     expect(within(billRow('BL-B3000003')).getByText('−50.00')).toBeTruthy();
   });

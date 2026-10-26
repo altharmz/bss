@@ -17,7 +17,7 @@ import { businessDate, clockTime } from '../format/dates';
 import { shortId } from '../format/ids';
 import { formatCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, Modal, Panel, Pill, TextInput, useToast } from '../ui/kit';
+import { Button, Modal, Panel, StatusPill, TextInput, useToast } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -66,8 +66,8 @@ export function statusLabel(a: BalanceAction): string {
   }
 }
 
-function StatusPill({ action }: { action: BalanceAction }) {
-  return <Pill status={action.status} label={statusLabel(action)} />;
+function ActionStatusPill({ action }: { action: BalanceAction }) {
+  return <StatusPill kind="balanceAction" status={action.status} label={statusLabel(action)} />;
 }
 
 /** The panel needs the bucket id the card already loaded; until then (or if that failed)
@@ -154,9 +154,11 @@ function ActionsPanel({
                     a.kind === 'reservation' ? (
                       <span className="bss-secondary">{formatCents(a.cents)}</span>
                     ) : (
-                      <Amount cents={a.cents} signed strong />
+                      <span className="amount-strong">
+                        <Amount cents={a.cents} signed />
+                      </span>
                     ),
-                  status: <StatusPill action={a} />,
+                  status: <ActionStatusPill action={a} />,
                   note: <span className="bss-secondary">{a.reason ?? a.description ?? ''}</span>,
                 }}
               />
@@ -241,7 +243,7 @@ export function ActionDialog({
           <>
             <dl className="bss-details">
               {rows.map(([label, value]) => (
-                <div key={label} style={{ display: 'contents' }}>
+                <div className="detail-contents" key={label}>
                   <dt>{label}</dt>
                   <dd>{value}</dd>
                 </div>
@@ -367,10 +369,11 @@ function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged:
           </Button>
         </span>
       ) : (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div className="history-actions">
           {cancel !== null && (
             <Button
-              variant="danger-outline"
+              variant="quiet"
+              tone="negative"
               small
               data-ui={cancel.ui}
               onClick={() => setPending('cancel')}
@@ -380,7 +383,8 @@ function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged:
           )}
           {removable && (
             <Button
-              variant="danger-outline"
+              variant="quiet"
+              tone="negative"
               small
               data-ui="ui.subscriber.prepaid.removeFailed"
               onClick={() => setPending('remove')}
@@ -409,7 +413,7 @@ function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged:
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />
-          <div style={{ marginTop: 8 }}>
+          <div className="history-detail-gap">
             <Button
               variant="primary"
               small

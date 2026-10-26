@@ -106,7 +106,7 @@ describe('balances screen', () => {
     expectUi('ui.balances.buckets');
     expect(screen.getByText('120.00')).toBeTruthy();
     expect(screen.getByText('125.00')).toBeTruthy();
-    expect(screen.getByText('suspended', { selector: 'span' })).toBeTruthy();
+    expect(screen.getByText('Suspended', { selector: 'span' })).toBeTruthy();
     // the buckets tab reads buckets and balances only: no action list
     expect(calls).toContain(`GET ${BUCKETS}?${PAGE}`);
     expect(calls).toContain(`GET ${ACC}?${PAGE}`);

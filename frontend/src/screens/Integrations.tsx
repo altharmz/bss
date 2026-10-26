@@ -12,7 +12,7 @@ import {
 import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { businessDate, clockTime } from '../format/dates';
-import { Button, Modal, PageTitle, Panel, Pill, TextInput, useToast } from '../ui/kit';
+import { Button, Modal, PageTitle, Panel, StatusPill, TextInput, useToast } from '../ui/kit';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { Footer, useWrite } from './FinancialForms';
@@ -33,13 +33,6 @@ const COLUMNS: Column[] = [
   { key: 'failures', label: 'Failed', width: '70px', align: 'right', mono: true },
   { key: 'actions', label: 'Actions', width: '90px' },
 ];
-
-const DELIVERY_PILL: Record<string, string> = {
-  pending: 'created',
-  delivered: 'completed',
-  failed: 'failed',
-  dropped: 'inactive',
-};
 
 export function IntegrationsScreen() {
   useSetCrumbs([{ label: 'Integrations' }], 'integrations');
@@ -111,8 +104,9 @@ export function IntegrationsScreen() {
                         <span className="bss-text-2">None yet</span>
                       ) : (
                         <span>
-                          <Pill
-                            status={DELIVERY_PILL[hub.lastDelivery.state] ?? 'inactive'}
+                          <StatusPill
+                            kind="delivery"
+                            status={hub.lastDelivery.state}
                             label={hub.lastDelivery.state}
                           />{' '}
                           {businessDate(hub.lastDelivery.at, timeZone)}{' '}
@@ -219,9 +213,9 @@ function NewSubscription({
           </Field>
           <fieldset className="bss-field" data-ui="ui.integrations.events">
             <legend className="label">Event types (none chosen: every event)</legend>
-            <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+            <div className="event-options">
               {events.map((event) => (
-                <label key={event} style={{ display: 'block' }}>
+                <label className="event-option" key={event}>
                   <input
                     type="checkbox"
                     checked={chosen.includes(event)}
@@ -308,8 +302,9 @@ function SystemPanel() {
         )}
         {health.status === 'ok' && (
           <p data-ui="ui.system.health">
-            <Pill
-              status={health.data.ok ? 'completed' : 'failed'}
+            <StatusPill
+              kind="health"
+              status={health.data.ok ? 'ok' : 'error'}
               label={health.data.ok ? 'OK' : 'Error'}
             />{' '}
             {health.data.ok ? '' : `HTTP ${health.data.status} ${JSON.stringify(health.data.body)}`}
@@ -323,17 +318,16 @@ function SystemPanel() {
         {status.status === 'ok' && (
           <dl data-ui="ui.system.billingStatus">
             <p>
-              <Pill
-                status={status.data.ok ? 'completed' : 'failed'}
+              <StatusPill
+                kind="health"
+                status={status.data.ok ? 'ok' : 'error'}
                 label={status.data.ok ? 'OK' : `HTTP ${status.data.status}`}
               />
             </p>
             {Object.entries(status.data.body ?? {}).map(([key, value]) => (
               <div key={key}>
-                <dt style={{ display: 'inline' }}>{key}: </dt>
-                <dd style={{ display: 'inline', margin: 0 }} className="bss-mono">
-                  {value === null ? '—' : String(value)}
-                </dd>
+                <dt className="system-key">{key}: </dt>
+                <dd className="system-value bss-mono">{value === null ? '—' : String(value)}</dd>
               </div>
             ))}
           </dl>

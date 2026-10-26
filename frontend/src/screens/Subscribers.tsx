@@ -6,7 +6,8 @@ import { hrefOf, useRouter } from '../app/router';
 import { matchesShortId, shortId } from '../format/ids';
 import { formatInt } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, PageTitle, Panel, Pill, Segmented, TextInput, useToast } from '../ui/kit';
+import { Id } from '../ui/Id';
+import { Button, PageTitle, Panel, StatusPill, Segmented, TextInput, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { NewSubscriberModal } from './SubscriberForms';
@@ -17,12 +18,13 @@ import './screens.css';
 // products from one product list (status=active), grouped - no request per row (D4).
 
 export const COLUMNS: Column[] = [
-  { key: 'no', label: 'Subscriber no.', width: '150px', mono: true },
+  { key: 'no', label: 'Subscriber no.', width: '110px', mono: true },
   { key: 'name', label: 'Name', width: '1fr' },
+  { key: 'account', label: 'Account', width: '130px' },
   { key: 'status', label: 'Status', width: '120px' },
-  { key: 'balance', label: 'Balance', width: '190px', align: 'right', mono: true },
-  { key: 'products', label: 'Active products', width: '160px', align: 'right', mono: true },
-  { key: 'cycle', label: 'Cycle day', width: '150px', align: 'right', mono: true },
+  { key: 'balance', label: 'Balance', width: '170px', align: 'right', mono: true },
+  { key: 'products', label: 'Active products', width: '110px', align: 'right', mono: true },
+  { key: 'cycle', label: 'Cycle day', width: '110px', align: 'right', mono: true },
 ];
 
 type StateFilter = 'All' | AccountState;
@@ -177,9 +179,10 @@ export function SubscribersScreen() {
                             )}
                           </div>
                         ),
-                        status: <Pill status={account.state} />,
+                        account: <Id prefix="BA-" id={account.id} />,
+                        status: <StatusPill kind="account" status={account.state} />,
                         balance: (
-                          <Amount cents={account.balanceCents} currency={account.currency} chip />
+                          <Amount cents={account.balanceCents} currency={account.currency} />
                         ),
                         products: <span className={active ? '' : 'bss-zero'}>{active}</span>,
                         cycle: `Day ${account.cycleDay}`,

@@ -236,7 +236,7 @@ describe('subscriber card', () => {
     await open();
     const heading = screen.getByRole('heading', { name: /Olga Kuznetsova/ });
     expectUi('ui.subscriber.card');
-    expect(within(heading).getByText('Active').className).toContain('bss-pill');
+    expect(within(heading).getByText('Active').className).toContain('status-pill');
     expect(screen.getByText('CCCC2222')).toBeTruthy(); // subscriber no.
     expect(screen.getAllByText('BA-AAAA1111').length).toBeGreaterThan(0);
     expect(await screen.findByText('Active', { selector: '.bss-meta .value' })).toBeTruthy();
@@ -420,7 +420,7 @@ describe('subscriber card', () => {
     await open();
     const tx = panel('Transaction history');
     expect(await within(tx).findByText('+116.13')).toBeTruthy();
-    expect(within(tx).getByText('+116.13').parentElement?.className).toContain('positive');
+    expect(within(tx).getByText('+116.13').parentElement?.className).not.toContain('positive');
     expect(within(tx).getAllByText('−300.00')).toHaveLength(2); // amount and balance after
     expect(within(tx).getByText('−83.87')).toBeTruthy();
     expect(within(tx).getByText('Refund')).toBeTruthy();

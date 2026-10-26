@@ -69,7 +69,7 @@ async function open() {
 }
 
 const dataRows = () =>
-  screen.getAllByRole('row').filter((row) => within(row).queryAllByRole('cell').length === 6);
+  screen.getAllByRole('row').filter((row) => within(row).queryAllByRole('cell').length === 7);
 const rowOf = (name: RegExp) => dataRows().find((row) => name.test(row.textContent ?? ''));
 
 describe('subscribers list', () => {
@@ -82,17 +82,19 @@ describe('subscribers list', () => {
 
     const ivan = rowOf(/Ivan Petrov/) as HTMLElement;
     const cells = within(ivan).getAllByRole('cell');
+    expect(cells[2]?.textContent).toBe('BA-11111111');
+    expect(within(ivan).getByRole('button', { name: `Copy ${A1}` })).toBeTruthy();
     expect(cells[0]?.textContent).toBe('AAAA1111'); // the customer's short id
-    expect(cells[2]?.textContent).toBe('Active');
-    expect(cells[3]?.textContent).toBe('1,250.40USD');
-    expect(cells[4]?.textContent).toBe('2');
-    expect(cells[5]?.textContent).toBe('Day 5');
+    expect(cells[3]?.textContent).toBe('Active');
+    expect(cells[4]?.textContent).toBe('1,250.40USD');
+    expect(cells[5]?.textContent).toBe('2');
+    expect(cells[6]?.textContent).toBe('Day 5');
 
     const anna = rowOf(/Anna Smirnova/) as HTMLElement;
-    expect(within(anna).getByText('Suspended').className).toContain('inactive');
+    expect(within(anna).getByText('Suspended').className).toContain('pill-paused');
     const negative = within(anna).getByText('−116.13');
-    expect(negative.parentElement?.className).toContain('chip');
-    expect(within(anna).getAllByRole('cell')[4]?.firstElementChild?.className).toBe('bss-zero');
+    expect(negative.parentElement?.className).toContain('negative');
+    expect(within(anna).getAllByRole('cell')[5]?.firstElementChild?.className).toBe('bss-zero');
 
     // a customer with two accounts is two rows, told apart by the account name
     expect(rowOf(/Romashka HQ/)).toBeTruthy();

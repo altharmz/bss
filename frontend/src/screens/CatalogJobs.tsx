@@ -156,12 +156,7 @@ function download(job: CatalogJob, timeZone: string) {
 
 function ErrorLog({ text }: { text: string }) {
   return (
-    <pre
-      className="bss-inline-error"
-      role="alert"
-      data-ui="ui.catalog.errorLog"
-      style={{ whiteSpace: 'pre-wrap' }}
-    >
+    <pre className="job-result bss-inline-error" role="alert" data-ui="ui.catalog.errorLog">
       {text}
     </pre>
   );
@@ -205,7 +200,7 @@ function ExportModal({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="footer-push bss-inline-error" role="alert">
               {problem}
             </div>
           )}
@@ -318,7 +313,7 @@ function ImportModal({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="footer-push bss-inline-error" role="alert">
               {problem}
             </div>
           )}
@@ -345,11 +340,10 @@ function ImportModal({
         <label>
           Or paste the document
           <textarea
-            className="bss-input"
+            className="bss-input job-source"
             rows={10}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            style={{ fontFamily: 'monospace' }}
           />
         </label>
         {check !== null && <span className="bss-inline-error">{check}</span>}
@@ -398,12 +392,12 @@ function JobModal({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="footer-push bss-inline-error" role="alert">
               {problem}
             </div>
           )}
           {confirming ? (
-            <span className="bss-confirm" style={{ marginRight: 'auto' }}>
+            <span className="footer-push bss-confirm">
               <span className="ask">
                 {isImport
                   ? 'Delete this job record? Nothing it imported is undone.'
@@ -418,7 +412,8 @@ function JobModal({
             </span>
           ) : (
             <Button
-              variant="danger-outline"
+              variant="quiet"
+              tone="negative"
               data-ui="ui.catalog.deleteJob"
               onClick={() => setConfirming(true)}
             >

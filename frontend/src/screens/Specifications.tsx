@@ -14,7 +14,7 @@ import { explain } from '../api/client';
 import { useSystemContext } from '../app/context';
 import { businessDate } from '../format/dates';
 import { formatInt } from '../format/money';
-import { Button, Modal, Panel, Pill, TextInput } from '../ui/kit';
+import { Button, Modal, Panel, StatusPill, TextInput } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import type { ResourceWithRetry } from '../api/useResource';
@@ -84,7 +84,7 @@ export function SpecificationsTab({
                       spec.status === null ? (
                         <span className="bss-dash">—</span>
                       ) : (
-                        <Pill status={spec.status} />
+                        <StatusPill kind="lifecycle" status={spec.status} />
                       ),
                     brand: spec.brand ?? <span className="bss-dash">—</span>,
                     version: spec.version ?? <span className="bss-dash">—</span>,
@@ -203,14 +203,14 @@ export function SpecificationModal({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="footer-push bss-inline-error" role="alert">
               {problem}
             </div>
           )}
           {spec !== null &&
             used === 0 &&
             (confirming ? (
-              <span className="bss-confirm" style={{ marginRight: 'auto' }}>
+              <span className="footer-push bss-confirm">
                 <span className="ask">Delete this specification?</span>
                 <Button variant="danger" small disabled={busy} onClick={() => void remove()}>
                   Yes
@@ -221,7 +221,8 @@ export function SpecificationModal({
               </span>
             ) : (
               <Button
-                variant="danger-outline"
+                variant="quiet"
+                tone="negative"
                 data-ui="ui.catalog.deleteSpecification"
                 onClick={() => setConfirming(true)}
               >
@@ -229,7 +230,7 @@ export function SpecificationModal({
               </Button>
             ))}
           {spec !== null && used > 0 && (
-            <span className="bss-hint" style={{ marginRight: 'auto' }}>
+            <span className="footer-push bss-hint">
               Used by {used} offering{used === 1 ? '' : 's'}: it cannot be deleted.
             </span>
           )}

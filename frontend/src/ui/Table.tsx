@@ -24,7 +24,11 @@ function cellClass(column: Column): string {
 
 export function TableHead({ columns }: { columns: Column[] }) {
   return (
-    <div className="bss-row head" role="row" style={{ gridTemplateColumns: gridOf(columns) }}>
+    <div
+      className="bss-row head"
+      role="row"
+      style={{ '--table-columns': gridOf(columns) } as CSSProperties}
+    >
       {columns.map((column) => (
         <div key={column.key} className={cellClass(column)} role="columnheader">
           {column.label}
@@ -39,17 +43,19 @@ export function TableRow({
   cells,
   onClick,
   style,
+  className = '',
 }: {
   columns: Column[];
   cells: Record<string, ReactNode>;
   onClick?: () => void;
   style?: CSSProperties;
+  className?: string;
 }) {
   return (
     <div
-      className={`bss-row${onClick ? ' clickable' : ''}`}
+      className={`bss-row${onClick ? ' clickable' : ''} ${className}`.trim()}
       role="row"
-      style={{ gridTemplateColumns: gridOf(columns), ...style }}
+      style={{ '--table-columns': gridOf(columns), ...style } as CSSProperties}
       onClick={onClick}
     >
       {columns.map((column) => (

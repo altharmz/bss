@@ -26,7 +26,8 @@ import { lastDay, nextCycleDate } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatCents, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, Panel, Pill, useToast } from '../ui/kit';
+import { Id } from '../ui/Id';
+import { Button, Panel, StatusPill, useToast } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
@@ -242,14 +243,14 @@ function Card({
         <div className="bss-card-header">
           <div>
             <h1>
-              {account.customerName} <Pill status={account.state} />
+              {account.customerName} <StatusPill kind="account" status={account.state} />
             </h1>
             <div className="bss-meta">
               <span>
                 Subscriber no. <span className="value">{shortId(account.customerId)}</span>
               </span>
               <span>
-                Billing account <span className="value">{accountLabel(account.id)}</span>
+                Billing account <Id prefix="BA-" id={account.id} />
               </span>
               <span>
                 Customer{' '}
@@ -264,7 +265,8 @@ function Card({
             {deletable && (
               <>
                 <Button
-                  variant="danger-outline"
+                  variant="quiet"
+                  tone="negative"
                   data-ui="ui.subscriber.delete"
                   onClick={() => setDeleting(true)}
                 >
@@ -808,7 +810,7 @@ function ProductRow({
     <div className="bss-product-row">
       <TableRow
         columns={PRODUCT_COLUMNS}
-        style={{ minHeight: 44 }}
+        className="product-row-height"
         cells={{
           offering: (
             <div>
@@ -816,7 +818,7 @@ function ProductRow({
               {note && (
                 <>
                   {' '}
-                  <Pill status={note.status} label={note.label} />
+                  <StatusPill kind="product" status={note.status} label={note.label} />
                 </>
               )}
               <div className="bss-code">{code}</div>
@@ -908,7 +910,8 @@ function ProductRow({
                 </>
               )}
               <Button
-                variant="danger-outline"
+                variant="quiet"
+                tone="negative"
                 small
                 data-ui="ui.subscriber.deactivate"
                 onClick={() => setConfirming(true)}
@@ -1003,7 +1006,11 @@ function History({
                 <div className="bss-secondary">{t.note}</div>
               </div>
             ),
-            amount: <Amount cents={toCents(t.amount.value)} signed strong />,
+            amount: (
+              <span className="amount-strong">
+                <Amount cents={toCents(t.amount.value)} signed />
+              </span>
+            ),
             after: <Amount cents={toCents(t.balanceAfter.value)} />,
           })}
         />

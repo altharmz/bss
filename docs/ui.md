@@ -21,7 +21,7 @@ Tested means a passing component test saw the marker on screen (`expectUi`, see 
 | System context | `frontend/src/app/context.tsx` | loads `GET /internal/v1/context` before any screen: no date can be shown without the business date and zone |
 | API client | `frontend/src/api/client.ts`, `bss.ts` | fetch wrapper; every failure is an `ApiError` whose message is the call ("GET /path -> 503 Service Unavailable"); `getAll` pages by 100; `useResource` = loading / error / ok + retry; `usePolled` = the same, refreshed in the background every few seconds while a predicate on the data holds (a failed refresh keeps the data and stops) |
 | Types | `frontend/scripts/gen-types.mjs` -> `src/api/generated/` (git-ignored) | generated from `spec/` (TMF620, 622, 637, 666 and the internal API) on every build, lint and test - never from FastAPI's `/openapi.json` |
-| UI kit | `/ui-kit`, `frontend/src/ui/` | Ledger v2 buttons (busy and outcome labels), Field/TextInput/SelectField/DateField/MoneyField/Checkbox, filter and radio Segmented, live controls gallery including every D4 status via explicit StatusPill kinds, Tag/Flag/Badge variants; legacy screen callers remain until slice 2b2 |
+| UI kit | `/ui-kit`, `frontend/src/ui/` | Ledger v2 buttons (busy and outcome labels), Field/TextInput/SelectField/DateField/MoneyField/Checkbox, filter and radio Segmented, live controls gallery including every D4 status via explicit StatusPill kinds, Tag/Flag/Badge variants, neutral-positive Amount figures and copyable Id examples; all status callers use explicit D4 kinds |
 | Money | `frontend/src/format/money.ts` | amounts become integer cents at the edge; no float arithmetic; typed amounts are sent as the validated decimal string as an exact JSON number (`jsonWithAmount`); negatives use U+2212 |
 | Dates | `frontend/src/format/dates.ts` | business dates in BILLING_TZ via `Intl`, never the browser's zone; dates sent carry BILLING_TZ's offset *for that date* (`zonedDateTime`) |
 
@@ -35,6 +35,8 @@ matches" with Reset filters when filters hide everything (`frontend/src/ui/state
 operation the screen calls (`frontend/src/api/bss.ts`).
 
 ### Shell (`ui.shell`)
+
+The failed-run indicator uses the shared failed Badge.
 
 Sidebar with the navigation (Subscribers, Catalog, Billing runs - each with its count;
 Billing runs shows the red **failed** badge instead when the latest run failed), the
@@ -79,6 +81,8 @@ ordinary-user denial and sign-out as well as the existing billing screens.
 
 ### Subscribers list (`ui.subscribers.list`) - `screens/Subscribers.tsx`
 
+Ledger v2: account StatusPill, neutral-positive Amount and a copyable BA Id column alongside Subscriber no.
+
 One row per **billing account** (a customer with two accounts is two rows): subscriber
 number (first 8 hex digits of the account id, upper case), name, the account's state
 pill, balance (negative highlighted), active product count, cycle day. Search by name or
@@ -111,6 +115,8 @@ API: `POST/PATCH /tmf-api/partyManagement/v5/{individual|organization}`,
 
 ### Subscriber card (`ui.subscriber.card`) - `screens/SubscriberCard.tsx`
 
+Ledger v2: account/product StatusPill, copyable BA Id in the meta line, and neutral-positive movement Amounts.
+
 Header with name, state, subscriber number, billing account (`BA-xxxxxxxx`), customer
 status, and **+ Add product** (disabled for a non-Active account, with the reason - the
 same rule ordering enforces). Billing account panel: balance, currency, cycle day (and the
@@ -129,6 +135,8 @@ Edit form's **Financial account** select (`ui.subscriber.financialLink`, from
 the PATCH). Design: [next-slices-design.md](next-slices-design.md) section 16.
 
 ### Balance actions (`ui.subscriber.prepaid.history`, `ui.subscriber.prepaid.historyDetail`) - `screens/PrepaidHistory.tsx`
+
+Ledger v2: balanceAction StatusPill keeps custom labels; signed Amounts stay neutral for credits.
 
 Prepaid cards only, above Charge history. Lists the account's top-ups, holds, adjustments and
 transfers (requested time, action, signed amount, status, note), newest first; the account's
@@ -180,6 +188,8 @@ is fixed to `max(paidThrough, today)`, the change applies at a funded renewal an
 pending change until then (Undo). API adds `GET /internal/v1/billingAccount/{id}/firstCharge`.
 
 ### Bills (`ui.subscriber.bills`), bill dialog (`ui.subscriber.billDetail`), hold/release (`ui.subscriber.billHold`), record payment (`ui.subscriber.recordPayment`) - `screens/Bills.tsx`
+
+Ledger v2: bill StatusPill; hold actions use quiet negative buttons.
 
 The bill lifecycle (docs/archive/bill-lifecycle-design.md section 6). The Billing account panel
 adds **Due on bills** (outstanding, with "N overdue · amount" in red and "N on hold") and
@@ -248,6 +258,8 @@ API: `GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=A
 
 ### Product catalog (`ui.catalog.list`) - `screens/Catalog.tsx`
 
+Ledger v2: lifecycle StatusPill and quiet negative destructive actions.
+
 Table of offerings: code, name, specification, the price valid now in the UI currency
 (or the next one with its start), status, validity. Search by code or name; filter by
 lifecycle status. **+ New offering**. A row opens the offering detail.
@@ -255,6 +267,8 @@ API: `GET .../productOffering`, `GET .../productSpecification`,
 `GET .../productOfferingPrice?priceType=recurring` (all pages).
 
 ### Specifications tab (`ui.catalog.specifications`), `ui.catalog.newSpecification`, `ui.catalog.editSpecification`, `ui.catalog.deleteSpecification` - `screens/Specifications.tsx`
+
+Ledger v2: lifecycle StatusPill and quiet negative destructive actions.
 
 Second tab of the Catalog screen: specifications with status, brand, version, the number of
 offerings using each and the last update; search by name or brand. **+ New specification**
@@ -264,6 +278,8 @@ still shows). **New offering** has **New specification...**, which preselects th
 API: `POST|PATCH|DELETE .../productSpecification` (merge patch of changed fields only).
 
 ### Categories and Catalogs tabs (`ui.catalog.categories`, `ui.catalog.catalogs`) - `screens/Classification.tsx`
+
+Ledger v2: lifecycle StatusPill; category indentation uses a runtime CSS variable.
 
 **Categories** is a tree by parent (roots first, indented) with status, offering count and
 subcategory count; search by name. **+ New category** (`ui.catalog.newCategory`) and a row's dialog
@@ -278,6 +294,8 @@ is always offered.
 API: `POST|PATCH|DELETE .../category`, `.../productCatalog` (merge patch of changed fields only).
 
 ### Import / export tab (`ui.catalog.jobs`) - `screens/CatalogJobs.tsx`
+
+Ledger v2: quiet negative destructive actions and CSS-based form styling.
 
 One list of import and export jobs (newest first): kind, status, created, completed and the first
 line of the error log; a row opens the job (`ui.catalog.job`, full error log, Download for a
@@ -325,12 +343,16 @@ bodies against the real API.
 
 ### Products (`ui.products`, `ui.products.status`, `ui.products.accountChip`, `ui.products.detail`, `ui.products.orderItems`, `ui.products.resource`) - `screens/Products.tsx`
 
+Ledger v2: explicit product StatusPill.
+
 Route `/products` (sidebar Products). TMF637 `product` over every status: server filters status and
 `?account=` chip, client filters offering and number. Columns: product, offering, subscriber, status,
 start, end, number. A row opens the detail (`GET product/{id}`): dates, order items with a link to
 Orders, the realizing resource. Read-only; orders alone change products. Slice 21.
 
 ### Orders (`ui.orders`, `ui.orders.accountChip`, `ui.orders.detail`, `ui.orders.items`, `ui.orders.cancellations`, `ui.orders.command`, `ui.orders.errors`) - `screens/Orders.tsx`
+
+Ledger v2: explicit order StatusPill.
 
 Route `/orders`. The list is read-only, the dialog writes (slice 10, below). TMF622 `productOrder` pages of 50 as served (oldest first), state
 filter, `?account=<id>` chip (the card's "Orders" link `ui.subscriber.orders`). Columns: order id,
@@ -353,6 +375,8 @@ result (no response or 5xx) the dialog says it is unsure and offers Refresh.
 
 ### Prepaid commands (`ui.prepaidCommands`, `ui.prepaidCommands.accountChip`, `ui.prepaidCommands.detail`, `ui.prepaidCommands.retry`) - `screens/PrepaidCommands.tsx`
 
+Ledger v2: command StatusPill uses the actual command state.
+
 Route `/prepaid-commands`, sidebar after Billing runs with a red badge while any command is
 `failedTechnical`. Lists the internal prepaid command journal (id, kind, account, state, due date,
 attempts, next retry, result), 50 per page, filtered by state and by `?account=<id>` (a removable
@@ -362,6 +386,8 @@ field and the `needs_topup` block (`ui.prepaidCommands.needsTopup`); **Retry** a
 [next-slices-design.md](next-slices-design.md) section 6.
 
 ### Parties (`ui.parties`, `ui.parties.individuals|organizations|customers`) - `screens/Parties.tsx`
+
+Ledger v2: separate party and customer StatusPill kinds.
 
 Route `/parties`, sidebar **Customers > Parties** (no count request). Three tabs: Individuals,
 Organizations (name, status, number of customers, linked subscribers) and Customers (name,
@@ -390,6 +416,8 @@ section 16.
 
 ### Accounts: party and settlement tabs (`ui.accounts.party|settlement`) - `screens/FinancialAccounts.tsx`
 
+Ledger v2: account StatusPill and neutral-positive Amount figures.
+
 The Financial accounts screen is now **Accounts** (route `/financial-accounts`, kept) with tabs
 **Financial** (above), **Party** and **Settlement**. A party or settlement tab lists name, owner,
 type, state and financial account (no balance: they have no ledger) with **+ New party|settlement
@@ -401,6 +429,8 @@ is the financial-account form plus a **Financial account** select of the owner's
 [next-slices-design.md](next-slices-design.md) section 17.
 
 ### Billing settings (`ui.billingSettings.cycles|formats|media`) - `screens/BillingSettings.tsx`
+
+Ledger v2: built-in settings use an attribute Tag; destructive actions use quiet negative buttons.
 
 Route `/billing-settings`, sidebar Billing > Billing settings, three tabs: **Cycle specifications**,
 **Bill formats**, **Presentation media**. Each lists name, description and how many loaded billing
@@ -418,6 +448,8 @@ billPresentationMedia`, `PATCH .../billingAccount/{id}`. Design:
 
 ### Bills (`ui.bills`) - `screens/GlobalBills.tsx`, `screens/BillLinks.tsx`
 
+Ledger v2: bill StatusPill; hold actions use quiet negative buttons.
+
 Reads plus the existing bill dialog. Route `/bills`, sidebar Billing > Bills (no count): tabs **Bills** |
 **Bill cycles**. Bills: bill no., subscriber (link), billing date, state, amount due, kind (`runType`:
 onCycle/offCycle); filters: state (server), account chip (`?account=<id>`, sent as `billingAccount.id`,
@@ -429,6 +461,8 @@ due) with the same date filter and a detail dialog. API: `GET .../customerBillMa
 appliedCustomerBillingRate`. Design: [next-slices-design.md](next-slices-design.md) section 20.
 
 ### Payments (`ui.payments`, `ui.subscriber.payments`) - `screens/Payments.tsx`
+
+Ledger v2: payment StatusPill for payments and refunds.
 
 Reads only. The subscriber card has a **Payments** panel (`ui.subscriber.payments`: date, amount,
 method, status, reference = `correlatorId`, else `authorizationCode`, else `name`), newest first,
@@ -442,6 +476,8 @@ Subscribers link to their cards. API: `GET .../payment/v4/payment|refund?account
 section 19.
 
 ### Balances (`ui.balances`, `ui.balances.buckets|topups|adjustments|holds|transfers`, `ui.balances.bucketDetail`) - `screens/Balances.tsx`
+
+Ledger v2: bucket and balanceAction StatusPill retain the action-specific note labels.
 
 Reads only, TMF654. Route `/balances`, sidebar Billing > Balances (no count). Tabs **Buckets** |
 **Top-ups** | **Adjustments** | **Holds** | **Transfers**, each with a status filter
@@ -458,6 +494,8 @@ section 22.
 
 ### Integrations (`ui.integrations`, `ui.integrations.list|new|form|events|delete|confirmDelete`) and System (`ui.system`) - `screens/Integrations.tsx`
 
+Ledger v2: delivery and health StatusPill use their actual states.
+
 Route `/integrations`, sidebar System > Integrations, visible to every role. Lists the live hubs
 from `GET /internal/v1/eventSubscription` (API, callback, events, subscribed, last delivery,
 failed count). New subscription: API (all ten), callback URL, event checkboxes of that API
@@ -468,6 +506,8 @@ reads `/healthz` and `/billing-status` (a 503 body is shown) and links the BssBi
 in a new tab. Design: [next-slices-design.md](next-slices-design.md) section 23.
 
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
+
+Ledger v2: run/runOutcome StatusPill; progress width uses a runtime CSS variable.
 
 Stage 4, slice g, from [archive/stage4-design.md](archive/stage4-design.md) section 7. **The worker alone
 bills; this screen reads runs and queues requests** for it.
@@ -520,7 +560,7 @@ API: `GET /internal/v1/billingRun?limit=14`, `GET .../billingRun/{id}`,
 | Billing runs: "Scheduled daily at 02:00", "Cycle date", "last 14 days" | `BILLING_RUN_AT` (00:30) from the context, "Run date", "last 14 runs" | the run time is configuration; the list is the 14 newest runs |
 | Billing runs: "manual" tag | "catch-up" / "retry" trigger tags and "attempt N" | the API reports the trigger and the attempt |
 | Billing runs: per-account detail | a run dialog with failed / blocked / ok accounts | stage 4: isolation is per account |
-| Statuses the design lacks (`created`, `pendingTerminate`, Suspended, Closed, ...) | pills reusing existing token colours | |
+| Statuses the design lacks (`created`, `pendingTerminate`, Suspended, Closed, ...) | explicit D4 families with shape and label | Ledger v2 |
 
 ## Tests
 

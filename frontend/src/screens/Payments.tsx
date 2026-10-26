@@ -15,7 +15,7 @@ import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatAmount, formatInt } from '../format/money';
-import { Modal, PageTitle, Panel, Pill, Segmented, TextInput, Button } from '../ui/kit';
+import { Modal, PageTitle, Panel, StatusPill, Segmented, TextInput, Button } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -74,7 +74,7 @@ function paymentCells(payment: PaymentRecord, timeZone: string) {
     date: stamp(payment.paymentDate, timeZone),
     amount: moneyText(payment.totalAmount),
     method: payment.paymentMethod.name ?? payment.paymentMethod['@type'] ?? '—',
-    status: <Pill status={payment.status} />,
+    status: <StatusPill kind="payment" status={payment.status} />,
     reference: referenceOf(payment),
   };
 }
@@ -163,7 +163,7 @@ export function PaymentDialog({ paymentId, onClose }: { paymentId: string; onClo
               <Field label="Net">{moneyText(payment.amount)}</Field>
               <Field label="Tax">{moneyText(payment.taxAmount)}</Field>
               <Field label="Status">
-                <Pill status={payment.status} />
+                <StatusPill kind="payment" status={payment.status} />
               </Field>
             </div>
             <dl className="bss-caption">
@@ -401,7 +401,7 @@ function RefundRow({ refund, timeZone }: { refund: RefundRecord; timeZone: strin
         date: stamp(refund.refundDate, timeZone),
         amount: moneyText(refund.totalAmount),
         method: refund.paymentMethod.name ?? '—',
-        status: <Pill status={refund.status} />,
+        status: <StatusPill kind="payment" status={refund.status} />,
         reference,
       }}
     />

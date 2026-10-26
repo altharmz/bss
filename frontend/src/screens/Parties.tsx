@@ -26,7 +26,16 @@ import { useSetCrumbs } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { shortId } from '../format/ids';
 import { formatInt } from '../format/money';
-import { Button, Modal, PageTitle, Panel, Pill, Segmented, TextInput, useToast } from '../ui/kit';
+import {
+  Button,
+  Modal,
+  PageTitle,
+  Panel,
+  StatusPill,
+  Segmented,
+  TextInput,
+  useToast,
+} from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { CUSTOMER_STATUSES, Field } from './SubscriberForms';
@@ -243,7 +252,7 @@ function PartiesList({
                   onClick={() => onOpen(party)}
                   cells={{
                     name: <span className="bss-name ellipsis">{party.name}</span>,
-                    status: party.status ? <Pill status={party.status} /> : dash,
+                    status: party.status ? <StatusPill kind="party" status={party.status} /> : dash,
                     customers: <span className={own.length ? '' : 'bss-zero'}>{own.length}</span>,
                     subscribers: <AccountLinks links={accounts} />,
                   }}
@@ -304,7 +313,7 @@ function CustomersList({
                   onClick={() => onOpen(customer)}
                   cells={{
                     name: <span className="bss-name ellipsis">{customer.name}</span>,
-                    status: <Pill status={customer.status} />,
+                    status: <StatusPill kind="customer" status={customer.status} />,
                     party: (
                       <div className="ellipsis">
                         {party?.name ?? shortId(customer.partyId)}
@@ -407,7 +416,7 @@ function Frame(p: FrameProps) {
       footer={
         <>
           {p.write.problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="footer-push bss-inline-error" role="alert">
               {p.write.problem}
             </div>
           )}
@@ -446,13 +455,13 @@ function DeleteControl({
 }) {
   if (block !== null)
     return (
-      <span className="bss-hint" style={{ marginRight: 'auto' }}>
+      <span className="footer-push bss-hint">
         {block}: remove {noun === 'party' ? 'them' : 'those'} first to delete it.
       </span>
     );
   if (confirming)
     return (
-      <span className="bss-confirm" style={{ marginRight: 'auto' }}>
+      <span className="footer-push bss-confirm">
         <span className="ask">Delete this {noun}?</span>
         <Button variant="danger" small disabled={busy} onClick={onDelete}>
           Yes
@@ -464,7 +473,8 @@ function DeleteControl({
     );
   return (
     <Button
-      variant="danger-outline"
+      variant="quiet"
+      tone="negative"
       data-ui="ui.parties.delete"
       onClick={() => setConfirming(true)}
     >
@@ -544,7 +554,7 @@ function PartyModal({
                   ['Family name', before.familyName],
                 ] as [string, ReactNode][])
               : ([['Organization name', before.organizationName]] as [string, ReactNode][])),
-            ['Status', before.status ? <Pill status={before.status} /> : dash],
+            ['Status', before.status ? <StatusPill kind="party" status={before.status} /> : dash],
             ['Customers', own.length ? own.map((c) => c.name).join(', ') : dash],
             ['Subscribers', <AccountLinks key="s" links={accounts} />],
           ]}
@@ -663,7 +673,7 @@ function CustomerModal({
       <Facts
         rows={[
           ['Name', before.name],
-          ['Status', <Pill key="s" status={before.status} />],
+          ['Status', <StatusPill kind="customer" key="s" status={before.status} />],
           ['Engaged party', `${before.partyName || shortId(before.partyId)} · ${before.partyKind}`],
           ['Billing accounts', <AccountLinks key="a" links={accounts} />],
         ]}

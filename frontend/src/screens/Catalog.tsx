@@ -20,7 +20,16 @@ import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { addDays, businessDate } from '../format/dates';
 import { formatCents, formatInt, parseAmount } from '../format/money';
-import { Button, Modal, PageTitle, Panel, Pill, Segmented, TextInput, useToast } from '../ui/kit';
+import {
+  Button,
+  Modal,
+  PageTitle,
+  Panel,
+  StatusPill,
+  Segmented,
+  TextInput,
+  useToast,
+} from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { OfferingEditModal, PriceModal } from './OfferingEdit';
@@ -235,7 +244,7 @@ export function CatalogScreen() {
                             </div>
                           ),
                         period: price?.interval ?? 'month',
-                        status: <Pill status={offering.status} />,
+                        status: <StatusPill kind="lifecycle" status={offering.status} />,
                         validity: validity(offering, context.timeZone),
                       }}
                     />
@@ -372,7 +381,7 @@ export function OfferingModal({
         footer={
           <>
             {problem !== null && (
-              <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+              <div className="footer-push bss-inline-error" role="alert">
                 {problem}
               </div>
             )}
@@ -394,7 +403,8 @@ export function OfferingModal({
                 </span>
               ) : (
                 <Button
-                  variant="danger-outline"
+                  variant="quiet"
+                  tone="negative"
                   data-ui="ui.catalog.deleteOffering"
                   onClick={() => setDeleting(true)}
                 >
@@ -402,7 +412,7 @@ export function OfferingModal({
                 </Button>
               ))}
             {next === null ? (
-              <span className="bss-hint" style={{ marginRight: 'auto' }}>
+              <span className="footer-push bss-hint">
                 Retired is final: the offering cannot be ordered again.
               </span>
             ) : confirming ? (
@@ -422,7 +432,8 @@ export function OfferingModal({
               </span>
             ) : (
               <Button
-                variant={next === 'Retired' ? 'danger-outline' : 'primary'}
+                variant={next === 'Retired' ? 'quiet' : 'primary'}
+                {...(next === 'Retired' ? { tone: 'negative' as const } : {})}
                 data-ui="ui.catalog.lifecycle"
                 onClick={() => setConfirming(true)}
               >
@@ -437,7 +448,7 @@ export function OfferingModal({
           <dl className="bss-details">
             <dt>Status</dt>
             <dd>
-              <Pill status={offering.status} />
+              <StatusPill kind="lifecycle" status={offering.status} />
             </dd>
             <dt>Validity</dt>
             <dd className="num">{validity(offering, context.timeZone)}</dd>
@@ -682,7 +693,7 @@ export function NewOfferingModal({
         footer={
           <>
             {message !== null && (
-              <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+              <div className="footer-push bss-inline-error" role="alert">
                 {message}
               </div>
             )}
@@ -701,9 +712,9 @@ export function NewOfferingModal({
           <label>
             Code
             <TextInput
+              className="uppercase"
               mono
               value={form.code}
-              style={{ textTransform: 'uppercase' }}
               onChange={(e) => set('code')(e.target.value)}
             />
           </label>

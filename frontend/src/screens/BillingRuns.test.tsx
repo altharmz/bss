@@ -133,7 +133,7 @@ describe('billing runs: latest run and history', () => {
 
     const panel = latestPanel();
     expect(within(panel).getByText('2026-10-01')).toBeTruthy();
-    expect(within(panel).getByText('completed')).toBeTruthy();
+    expect(within(panel).getByText('Completed')).toBeTruthy();
     expect(within(panel).getByText('B0000001')).toBeTruthy();
     // times in BILLING_TZ, not the browser's zone (the suite also runs in New York)
     expect(within(panel).getByText('00:30:00')).toBeTruthy();
@@ -151,7 +151,7 @@ describe('billing runs: latest run and history', () => {
     ]);
     expect(within(rowOf('2026-10-01') as HTMLElement).getByText('latest')).toBeTruthy();
     const failed = rowOf('2026-09-29') as HTMLElement;
-    expect(within(failed).getByText('failed')).toBeTruthy();
+    expect(within(failed).getByText('Failed')).toBeTruthy();
     expect(within(failed).getByText('1 of 3 accounts not billed (1 failed)')).toBeTruthy();
     expect(within(failed).getByRole('button', { name: 'Retry' })).toBeTruthy();
     expect(within(rowOf('2026-09-30') as HTMLElement).queryByRole('button')).toBeNull();
@@ -469,7 +469,7 @@ describe('billing runs: polling', () => {
     );
     await openWithFakeTimers();
     await until(latestPanel);
-    expect(within(latestPanel()).getByText('running')).toBeTruthy();
+    expect(within(latestPanel()).getByText('Running')).toBeTruthy();
     expect(within(latestPanel()).getByText('running…')).toBeTruthy();
     expect(within(latestPanel()).getByText('2 of 3 accounts')).toBeTruthy();
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('2');
@@ -488,7 +488,7 @@ describe('billing runs: polling', () => {
     const navBefore = count(calls, NAV_RUNS);
     await advance(POLL_MS);
     expect(count(calls, LIST)).toBe(3);
-    await until(() => within(latestPanel()).getByText('completed'));
+    await until(() => within(latestPanel()).getByText('Completed'));
     expect(screen.queryByRole('progressbar')).toBeNull();
     await until(() => expect(count(calls, NAV_RUNS)).toBe(navBefore + 1)); // the badge follows
     expect((screen.getByRole('button', { name: 'Catch up' }) as HTMLButtonElement).disabled).toBe(
@@ -547,10 +547,10 @@ describe('billing runs: polling', () => {
 
     await advance(POLL_MS);
     expect(count(calls, LIST)).toBe(3);
-    await until(() => within(latestPanel()).getByText('running'));
+    await until(() => within(latestPanel()).getByText('Running'));
     await advance(POLL_MS);
     expect(count(calls, LIST)).toBe(4);
-    await until(() => within(latestPanel()).getByText('completed'));
+    await until(() => within(latestPanel()).getByText('Completed'));
     expect(screen.queryByText(/Queued:/)).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull(); // the banner is gone with the failure
 
@@ -615,12 +615,12 @@ describe('billing runs: polling', () => {
         /Refresh failed: GET \/internal\/v1\/billingRun\?limit=14 → 502 Bad Gateway/,
       ),
     );
-    expect(within(latestPanel()).getByText('running')).toBeTruthy(); // the last data stays
+    expect(within(latestPanel()).getByText('Running')).toBeTruthy(); // the last data stays
     await advance(POLL_MS * 2);
     expect(count(calls, LIST)).toBe(2); // a failed refresh stops the polling
     const note = screen.getByText(/Refresh failed/);
     fireEvent.click(within(note).getByRole('button', { name: 'Retry' }));
-    await until(() => within(latestPanel()).getByText('completed'));
+    await until(() => within(latestPanel()).getByText('Completed'));
     expect(count(calls, LIST)).toBe(3);
     expect(screen.queryByText(/Refresh failed/)).toBeNull();
   });

@@ -1,34 +1,5 @@
 /* Screen-specific layout: values from README "Screen 1", "Screen 2", "Modal 5". */
 
-/* --- amounts --- */
-.bss-amount {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  font-family: var(--font-mono);
-  font-size: var(--fs-125);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.bss-amount .currency {
-  font-size: var(--fs-11);
-  color: var(--faint);
-}
-.bss-amount.negative .value {
-  color: var(--neg);
-}
-.bss-amount.positive .value {
-  color: var(--pos);
-}
-.bss-amount.strong .value {
-  font-weight: 600;
-}
-.bss-amount.chip .value {
-  padding: 1px 5px;
-  border-radius: var(--r-tag);
-  background: var(--neg-bg);
-}
-
 /* --- toolbars --- */
 .bss-toolbar {
   display: flex;
@@ -287,15 +258,6 @@
   box-shadow: inset 0 0 0 3px var(--surface);
   background: var(--primary);
 }
-.bss-tag {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 0 5px;
-  border-radius: var(--r-tag);
-  background: var(--st-inactive-bg);
-  color: var(--st-inactive-fg);
-  font-size: var(--fs-105);
-}
 .bss-hint {
   margin-left: 10px;
   font-size: var(--fs-12);
@@ -382,8 +344,8 @@
 .bss-run-tag.latest {
   padding: 1px 6px;
   border-color: transparent;
-  background: var(--st-design-bg);
-  color: var(--st-design-fg);
+  background: var(--color-info-tint);
+  color: var(--color-info);
   font-weight: 600;
 }
 .bss-run-note {
@@ -708,4 +670,70 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-xl);
   max-width: 960px;
+}
+
+/* Caller styles extracted during the Ledger primitive migration. */
+.run-skeleton-label {
+  width: 70px;
+  height: var(--space-sm);
+}
+.run-skeleton-value {
+  width: 110px;
+  height: var(--space-lg);
+}
+.footer-push {
+  margin-right: auto;
+}
+.uppercase {
+  text-transform: uppercase;
+}
+.job-result {
+  white-space: pre-wrap;
+}
+.event-options {
+  max-height: 220px;
+  overflow-y: auto;
+}
+.event-option {
+  display: block;
+}
+.system-key {
+  display: inline;
+}
+.system-value {
+  display: inline;
+  margin: 0;
+}
+.detail-contents {
+  display: contents;
+}
+.history-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+.history-detail-gap {
+  margin-top: var(--space-sm);
+}
+.run-progress {
+  --progress: 0%;
+  width: var(--progress);
+}
+.category-indent {
+  --category-indent: 0px;
+  padding-left: var(--category-indent);
+}
+.run-history-row.is-latest {
+  background: var(--color-bg-hover);
+  font-weight: 600;
+}
+.run-history-row.is-failed {
+  background: var(--color-negative-tint);
+}
+
+.job-source {
+  font: var(--type-code);
+}
+.product-row-height {
+  min-height: 44px;
 }

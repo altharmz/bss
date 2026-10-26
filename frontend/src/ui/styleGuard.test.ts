@@ -61,6 +61,21 @@ describe('Ledger style guard', () => {
     ).toEqual([]);
   });
 
+  it('removes legacy status and destructive-control compatibility from production source', () => {
+    const legacyUses = files(src)
+      .filter((file) => /\.(css|tsx)$/.test(file) && !file.includes('.test.'))
+      .flatMap((file) =>
+        readFileSync(file, 'utf8')
+          .split('\n')
+          .flatMap((line, index) =>
+            /\b(?:Pill|toneOf|TONES)\b|danger-outline|--st-/.test(line)
+              ? [`${file}:${index + 1}: ${line.trim()}`]
+              : [],
+          ),
+      );
+    expect(legacyUses).toEqual([]);
+  });
+
   it('defines an alias for every legacy variable still used by CSS and components', () => {
     const tokens = readFileSync(join(src, 'ui/tokens.css'), 'utf8');
     const legacy = readFileSync(join(src, 'ui/legacy-tokens.css'), 'utf8');

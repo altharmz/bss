@@ -9,6 +9,7 @@ import { utcLabel } from '../format/dates';
 import { useCrumbs, useNavVersion, type SystemContext } from './context';
 import { Link, useRouter, type Route } from './router';
 import './shell.css';
+import { Badge } from '../ui/kit';
 import { SignOut, useSession } from './session';
 
 // The frame around every screen: sidebar (brand, navigation, operator) and top bar
@@ -193,7 +194,7 @@ export function Sidebar({ context }: { context: SystemContext }) {
               >
                 {item.label}
                 {item.failed ? (
-                  <span className="badge">failed</span>
+                  <Badge kind="failed">failed</Badge>
                 ) : (
                   <span className="count">{item.count}</span>
                 )}
