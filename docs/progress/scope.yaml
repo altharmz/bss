@@ -333,6 +333,7 @@ items:
   - {id: api.internal.billingRunAccounts.list, area: api, stage: 4, method: GET, path: "/internal/v1/billingRun/{run_id}/accounts", title: "A run's per-account outcomes"}
   - {id: api.internal.billingRun.catchUp, area: api, stage: 4, method: POST, path: /internal/v1/billingRun/catchUp, title: "Queue a catch-up to a date"}
   - {id: api.internal.billingRun.retry, area: api, stage: 4, method: POST, path: "/internal/v1/billingRun/{run_id}/retry", title: "Queue a retry of a failed run"}
+  - {id: api.internal.eventSubscription.list, area: api, stage: 5, method: GET, path: /internal/v1/eventSubscription, title: "List live event subscriptions (hubs) with delivery summary"}
   - {id: api.internal.prepaidCommand.list, area: api, stage: 5, method: GET, path: /internal/v1/prepaid/command, title: "List prepaid commands with state, outcome and links"}
   - {id: api.internal.prepaidCommand.get, area: api, stage: 5, method: GET, path: "/internal/v1/prepaid/command/{command_id}", title: "Get a prepaid command"}
   - {id: api.internal.prepaidCommand.retry, area: api, stage: 5, method: POST, path: "/internal/v1/prepaid/command/{command_id}/retry", title: "Return a failedTechnical prepaid command to pending"}
@@ -504,6 +505,18 @@ items:
   - {id: worker.billSettle, area: worker, stage: 5, title: "Every run applies unused credit to open bills, oldest first"}
   - {id: worker.eventDelivery, area: worker, stage: 5, title: "Due events are POSTed to hub callbacks, retried with backoff"}
 
+  - {id: ui.integrations, area: ui, stage: 5, title: "Integrations screen: event subscriptions (hubs)"}
+  - {id: ui.integrations.list, area: ui, stage: 5, title: "Live event subscriptions with last delivery and failures"}
+  - {id: ui.integrations.new, area: ui, stage: 5, title: "New subscription button"}
+  - {id: ui.integrations.form, area: ui, stage: 5, title: "New subscription: API, callback URL, event types"}
+  - {id: ui.integrations.events, area: ui, stage: 5, title: "Event type choice of the selected API"}
+  - {id: ui.integrations.delete, area: ui, stage: 5, title: "Delete subscription row action"}
+  - {id: ui.integrations.confirmDelete, area: ui, stage: 5, title: "Delete subscription confirmation"}
+  - {id: ui.system, area: ui, stage: 5, title: "System panel: health, billing status, schema link"}
+  - {id: ui.system.health, area: ui, stage: 5, title: "GET /healthz result"}
+  - {id: ui.system.billingStatus, area: ui, stage: 5, title: "GET /billing-status as key/value"}
+  - {id: ui.system.schema, area: ui, stage: 5, title: "Link to the BssBillingAccount JSON Schema"}
+  - {id: ui.shell.section.system, area: ui, stage: 5, title: "Sidebar System section"}
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}
   - {id: ui.notFound, area: ui, reason: "not-found page, not a product feature"}

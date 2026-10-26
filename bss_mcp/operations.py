@@ -49,6 +49,7 @@ from app.api.reserve import ReserveCreate, ReservePatch
 from app.api.resource_inventory import ResourceCreate, ResourcePatch
 from app.api.topup import TopupCreate, TopupPatch
 from app.api.transfer import TransferCreate, TransferPatch
+from app.events.types import BASES
 from app.internal.billing_runs import OUTCOMES, CatchUp
 from app.internal.catalog import PriceChange
 from app.internal.prepaid_commands import STATES
@@ -659,6 +660,12 @@ OPERATIONS: dict[str, Op] = {
         "Return a failedTechnical prepaid command to pending with the same identity, request"
         " and hold; the worker attempts it within a minute (409 unless failedTechnical).",
         no_body=True,
+    ),
+    "list_event_subscriptions": Op(
+        "Live event subscriptions (hubs) of every API, newest first: API, callback, event"
+        " types, when subscribed, the last delivery and the deliveries that failed for good.",
+        query=PAGE,
+        extra={"api": {"type": "string", "enum": sorted(BASES)}},
     ),
     "bill_detail": Op(
         "A bill with its charges, payments and state history (who held or released it)."

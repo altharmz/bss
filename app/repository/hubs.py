@@ -51,3 +51,33 @@ def matching(conn: psycopg.Connection, api: str, event_type: str) -> list[Row]:
         """,
         (api, event_type),
     )
+
+
+def page(
+    conn: psycopg.Connection, *, api: str | None, offset: int, limit: int
+) -> tuple[list[Row], int]:
+    """Live subscriptions newest first (ties by id), each with its delivery summary:
+    the last attempted delivery (state, time) and how many deliveries failed for good."""
+    params = {"api": api, "offset": offset, "limit": limit}
+    rows = fetch_all(
+        conn,
+        """
+        SELECT s.*, last.state AS last_state, last.at AS last_at,
+               (SELECT count(*) FROM event_delivery f
+                 WHERE f.subscription_id = s.id AND f.state = 'failed') AS failures
+          FROM event_subscription s
+          LEFT JOIN LATERAL (
+              SELECT d.state, d.last_attempt_at AS at FROM event_delivery d
+               WHERE d.subscription_id = s.id AND d.last_attempt_at IS NOT NULL
+               ORDER BY d.last_attempt_at DESC, d.id DESC LIMIT 1) last ON true
+         WHERE s.deleted_at IS NULL AND (%(api)s::text IS NULL OR s.api = %(api)s)
+         ORDER BY s.subscribed_at DESC, s.id DESC OFFSET %(offset)s LIMIT %(limit)s
+        """,
+        params,
+    )
+    total = conn.execute(
+        "SELECT count(*) FROM event_subscription WHERE deleted_at IS NULL"
+        " AND (%(api)s::text IS NULL OR api = %(api)s)",
+        params,
+    ).fetchone()[0]
+    return rows, total

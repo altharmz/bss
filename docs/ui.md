@@ -44,10 +44,10 @@ its run count and badge whenever the latest run it shows changes.
 API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the count is its
 `X-Total-Count`).
 
-The sidebar is one `<nav aria-label="Main">` with three labelled sections
-(`ui.shell.section.customers|products|billing`): Customers (Subscribers, Parties), Products (Product
+The sidebar is one `<nav aria-label="Main">` with four labelled sections
+(`ui.shell.section.customers|products|billing|system`): Customers (Subscribers, Parties), Products (Product
 catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Accounts,
-Bills, Payments, Balances, Billing settings, without a count or count request). The Orders count is `productOrder?limit=1&fields=id`
+Bills, Payments, Balances, Billing settings, without a count or count request) and System (Integrations, and Users for an admin). The Orders count is `productOrder?limit=1&fields=id`
 (`X-Total-Count`). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
 
 ### Sign-in, operator menu and users
@@ -59,8 +59,8 @@ before any protected screen. Password changes revoke the current session too, so
 operator signs in again. Passwords stay in form state; server failures clear password
 fields and closing a form discards them. No token or password is kept in browser storage.
 
-The sidebar operator menu shows username and role, Change password, Sign out and, for
-admins, Users. `/users` lists username, role, active state and last sign-in in the business
+The sidebar operator menu shows username and role, Change password and Sign out; admins reach
+Users in the System section. `/users` lists username, role, active state and last sign-in in the business
 time zone. New user sets an initial password and role; Edit sends only changed role and
 disabled fields; Reset password forces another first change. Self-disable is unavailable.
 The server enforces the last-active-admin rule and displays its rejection in the form.
@@ -455,6 +455,17 @@ named through `GET bucket/{receiverBucket}`); a row opens the kind's GET in the 
 dialog of the subscriber card (`ui.subscriber.prepaid.historyDetail`), with its actions. Postpaid
 accounts have no bucket and never appear. Design: [next-slices-design.md](next-slices-design.md)
 section 22.
+
+### Integrations (`ui.integrations`, `ui.integrations.list|new|form|events|delete|confirmDelete`) and System (`ui.system`) - `screens/Integrations.tsx`
+
+Route `/integrations`, sidebar System > Integrations, visible to every role. Lists the live hubs
+from `GET /internal/v1/eventSubscription` (API, callback, events, subscribed, last delivery,
+failed count). New subscription: API (all ten), callback URL, event checkboxes of that API
+(`api/hubs.ts`, checked against the server's list); it POSTs `{callback, query?}` to the API's
+`/hub`. Delete confirms, then DELETEs the hub's own path; a refusal (422 for a callback the server
+will not use) shows in the dialog. The System panel (`ui.system`, `ui.system.health|billingStatus|schema`)
+reads `/healthz` and `/billing-status` (a 503 body is shown) and links the BssBillingAccount schema
+in a new tab. Design: [next-slices-design.md](next-slices-design.md) section 23.
 
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
 

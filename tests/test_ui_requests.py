@@ -2011,3 +2011,45 @@ def test_product_inventory_reads_and_number_delete_as_the_ui_sends_them(api):
     assert refused.status_code == 409, refused.text
     assert api.delete(f"{url}/{spare['id']}").status_code == 204
     assert api.get(f"{url}/{spare['id']}").status_code == 404
+
+
+def test_event_subscriptions_as_the_ui_sends_them(api):
+    """Integrations.test.tsx: the hub bodies for a v4 (TMF676) and a v5 (TMF620) API, the
+    list read, and the delete through the `hub` path the server names."""
+    pay = "/tmf-api/payment/v4"
+    catalog = "/tmf-api/productCatalogManagement/v5"
+    made = api.post_raw(
+        f"{pay}/hub",
+        '{"callback":"https://example.org/events",'
+        '"query":"eventType=RefundCreateEvent,PaymentCreateEvent"}',
+    )
+    assert made.status_code == 201, made.text
+    everything = api.post_raw(f"{catalog}/hub", '{"callback":"https://example.org/all"}')
+    assert everything.status_code == 201, everything.text
+
+    listed = api.get("/internal/v1/eventSubscription?offset=0&limit=100")
+    assert listed.status_code == 200, listed.text
+    by_id = {h["id"]: h for h in listed.json()}
+    assert by_id[made.json()["id"]]["eventTypes"] == ["RefundCreateEvent", "PaymentCreateEvent"]
+    assert by_id[everything.json()["id"]]["eventTypes"] == []
+    for hub in by_id.values():
+        assert api.delete(hub["hub"]).status_code == 204
+    assert api.get("/internal/v1/eventSubscription?offset=0&limit=100").json() == []
+
+
+def test_the_ui_event_lists_are_the_servers():
+    """frontend/src/api/hubs.ts hard-codes each API's base path and listener events."""
+    import re
+    from pathlib import Path
+
+    from app.events.types import BASES, EVENT_TYPES
+
+    source = Path("frontend/src/api/hubs.ts").read_text()
+    bases = dict(re.findall(r"id: '(TMF\d{3})',[^}]*?base: '([^']+)'", source))
+    assert bases == BASES
+    block = source.split("export const EVENT_TYPES")[1]
+    found = {
+        api: set(re.findall(r"'([A-Za-z]+Event)'", body))
+        for api, body in re.findall(r"(TMF\d{3}): \[(.*?)\]", block, re.S)
+    }
+    assert found == {api: set(types) for api, types in EVENT_TYPES.items()}

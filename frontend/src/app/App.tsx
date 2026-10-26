@@ -27,6 +27,7 @@ import { RouterProvider, useRouter } from './router';
 import { Shell } from './Shell';
 import { SessionGate } from './session';
 import { UsersScreen } from '../screens/Users';
+import { IntegrationsScreen } from '../screens/Integrations';
 import { NumbersScreen } from '../screens/Numbers';
 
 const CONTEXT = '/internal/v1/context';
@@ -38,6 +39,8 @@ function Screen() {
       return <NumbersScreen />;
     case 'users':
       return <UsersScreen />;
+    case 'integrations':
+      return <IntegrationsScreen />;
     case 'signIn':
     case 'password':
       return null;

@@ -148,6 +148,27 @@ export function Sidebar({ context }: { context: SystemContext }) {
         },
       ],
     },
+    {
+      label: 'System',
+      items: [
+        {
+          label: 'Integrations',
+          href: '/integrations',
+          count: '',
+          active: (r) => r.name === 'integrations',
+        },
+        ...(session?.role === 'admin'
+          ? [
+              {
+                label: 'Users',
+                href: '/users',
+                count: '',
+                active: (r: Route) => r.name === 'users',
+              },
+            ]
+          : []),
+      ],
+    },
   ];
   return (
     <aside className="bss-sidebar">
@@ -186,7 +207,6 @@ export function Sidebar({ context }: { context: SystemContext }) {
           </summary>
           <nav aria-label="User menu">
             <Link href="/change-password">Change password</Link>
-            {session?.role === 'admin' && <Link href="/users">Users</Link>}
             <SignOut />
           </nav>
         </details>

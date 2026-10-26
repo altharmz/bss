@@ -630,3 +630,33 @@ Deviations: `done` is the only payment and refund status, so the status filter h
 besides All; the reference column is `correlatorId`, else `authorizationCode`, else `name` (the
 payment has no single reference field); refund rows have no account name, so they show `BA-xxxx`.
 TEST-CHANGE: the shell test's expected sidebar links gain `/payments`.
+
+## Slice 23: Event subscriptions (hubs) and System panel (2026-10-26)
+
+Built as designed ([next-slices-design.md](../next-slices-design.md) section 23): a backend list,
+its MCP tool and the UI. No migration. `GET /internal/v1/eventSubscription` (internal contract
+first; `app/internal/event_subscriptions.py`, `hubs.page`) lists live hubs newest first with
+`offset`/`limit` and an `api` filter; each item has `id`, `api` {id, name}, `hub` (the API's
+`/hub/{id}` path), `callback`, `query`, `eventTypes`, `subscribedAt`, `lastDelivery` {state, at}
+(the latest attempted `event_delivery`) and `failures` (deliveries `failed` for good): both come
+from a lateral lookup on the delivery index, so no new table. MCP tool `list_event_subscriptions`
+(185 tools). UI `/integrations` (`screens/Integrations.tsx`, `api/hubs.ts`), a fourth sidebar
+section **System** with Integrations and, for an admin, Users (the Users link left the operator
+menu). New subscription: API select, callback, event checkboxes; it POSTs `{callback}` or
+`{callback, query: "eventType=A,B"}` to the API's `/hub`. Delete (with a confirmation) sends DELETE
+to the `hub` path the server names. The server's 422 shows in the dialog with the values kept.
+The System panel (`ui.system`) shows `/healthz`, `/billing-status` as key/value (a 503 body is shown,
+not hidden) and the BssBillingAccount schema link. The dev proxy forwards `/healthz` and
+`/billing-status`.
+Tests: `tests/test_event_subscription_list.py` (list, filter, paging, deleted excluded, delivery
+summary, 401), `Integrations.test.tsx` (list, panel, 503 states, role, create for TMF676 v4 and
+TMF620 v5, 422 kept, delete), `tests/test_ui_requests.py::test_event_subscriptions_as_the_ui_sends_them`
+and `test_the_ui_event_lists_are_the_servers` (`hubs.ts` base paths and events against
+`app/events/types.py`; `compose.override.yaml` mounts that one file into the test container).
+Deviations:
+- The design says eight APIs; the server has ten hubs (TMF620, 622, 629, 632, 637, 639, 654, 666,
+  676, 678). The select offers all ten.
+- The hub POST/DELETE carry no Idempotency-Key: the hub API journals none (TMF654's hub is not a
+  balance action). An uncertain result offers Refresh, as for any other write.
+- TEST-CHANGE: `App.test.tsx` expects the System section in the sidebar.
+

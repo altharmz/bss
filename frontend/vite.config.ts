@@ -19,6 +19,8 @@ export default defineConfig({
     proxy: {
       '/tmf-api': { target: api },
       '/internal': { target: api },
+      '/billing-status': { target: api },
+      '/healthz': { target: api },
     },
   },
   // make web-e2e reaches the preview as http://web-preview:4173 from the Playwright

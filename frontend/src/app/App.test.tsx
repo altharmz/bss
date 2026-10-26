@@ -143,8 +143,10 @@ describe('shell', () => {
       '/payments',
       '/balances',
       '/billing-settings',
+      '/integrations',
+      '/users',
     ]);
-    // three labelled sections in the TMF order, each item under its own label
+    // four labelled sections in the TMF order, each item under its own label
     const labels = Array.from(nav.children).map((el) =>
       el.classList.contains('section') ? `# ${el.textContent}` : (el.getAttribute('href') ?? ''),
     );
@@ -165,6 +167,9 @@ describe('shell', () => {
       '/payments',
       '/balances',
       '/billing-settings',
+      '# System',
+      '/integrations',
+      '/users',
     ]);
     expect(await within(nav).findByText('1,284')).toBeTruthy();
     expect(await within(nav).findByText('12')).toBeTruthy();

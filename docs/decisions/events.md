@@ -111,3 +111,9 @@ by decision (TMF637 product writes, billingCycleSpecification writes, PATCH prod
 - Tests: `tests/test_event_delivery.py` (a local listener on a thread). Negative proofs,
   each reverted: connecting to the host name instead of the checked address, and
   skipping the check before the send, each fail their test.
+
+## Operator list of hubs (slice 23)
+
+TMF has no hub list, so operators get `GET /internal/v1/eventSubscription` (ours, read only, live
+hubs with their last delivery and failed count). Create and delete stay on each API's `/hub`. See
+[frontend.md](frontend.md#slice-23-event-subscriptions-hubs-and-system-panel-2026-10-26).

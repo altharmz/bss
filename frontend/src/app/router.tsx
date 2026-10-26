@@ -33,6 +33,7 @@ export type Route =
   | { name: 'payments' }
   | { name: 'bills' }
   | { name: 'balances' }
+  | { name: 'integrations' }
   | { name: 'notFound'; path: string };
 
 const SUBSCRIBER = /^\/subscribers\/([0-9a-fA-F-]{36})\/?$/;
@@ -41,6 +42,7 @@ export function parseRoute(path: string): Route {
   if (path === '/sign-in') return { name: 'signIn' };
   if (path === '/change-password') return { name: 'password' };
   if (path === '/users') return { name: 'users' };
+  if (path === '/integrations' || path === '/integrations/') return { name: 'integrations' };
   if (path === '/numbers' || path === '/numbers/') return { name: 'numbers' };
   if (path === '/subscribers' || path === '/subscribers/') return { name: 'subscribers' };
   const card = SUBSCRIBER.exec(path);
@@ -73,6 +75,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/change-password';
     case 'users':
       return '/users';
+    case 'integrations':
+      return '/integrations';
     case 'numbers':
       return '/numbers';
     case 'subscribers':

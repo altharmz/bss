@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 23
+- Operations exposed: 24
 
 
 ## Operations
@@ -23,6 +23,7 @@
 | POST | `/internal/v1/billingRun/{run_id}/retry` | path: `run_id`; body: `application/json` | - | 202 `RetryQueued` | [`app/internal/billing_runs.py`](../../app/internal/billing_runs.py) |
 | GET | `/internal/v1/context` | - | - | 200 `Context` | [`app/internal/context.py`](../../app/internal/context.py) |
 | GET | `/internal/v1/customerBill/{bill_id}` | path: `bill_id` | - | 200 `BillDetail` | [`app/main.py`](../../app/main.py) |
+| GET | `/internal/v1/eventSubscription` | query: `offset`, `limit`, `api` | - | 200 `array of EventSubscription` | [`app/main.py`](../../app/main.py) |
 | GET | `/internal/v1/prepaid/command` | query: `offset`, `limit`, `billingAccount.id`, `state` | - | 200 `array of PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |
 | GET | `/internal/v1/prepaid/command/{command_id}` | path: `command_id` | - | 200 `PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |
 | POST | `/internal/v1/prepaid/command/{command_id}/retry` | path: `command_id`; body: `application/json` | - | 202 `PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |

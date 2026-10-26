@@ -13,6 +13,8 @@ services:
       # read by tests/test_mcp_tools.py: the MCP tools = the API
       # operations minus scope.yaml's api exclusions (drift check)
       - ./docs/progress/scope.yaml:/app/docs/progress/scope.yaml:ro
+      # read by tests/test_ui_requests.py: the UI's hub event lists = app/events/types.py
+      - ./frontend/src/api/hubs.ts:/app/frontend/src/api/hubs.ts:ro
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini:ro

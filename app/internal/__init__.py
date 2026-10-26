@@ -16,11 +16,21 @@ from app.internal import (
     bills,
     catalog,
     context,
+    event_subscriptions,
     prepaid_commands,
     users,
 )
 
 
 def install(app: FastAPI) -> None:
-    for module in (context, accounts, catalog, billing_runs, prepaid_commands, bills, users):
+    for module in (
+        context,
+        accounts,
+        catalog,
+        billing_runs,
+        prepaid_commands,
+        bills,
+        users,
+        event_subscriptions,
+    ):
         app.include_router(module.router)

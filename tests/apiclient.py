@@ -101,6 +101,7 @@ INTERNAL: dict[str, str] = {
     "/billingRun/{id}/accounts": "RunAccount",
     "/billingRun/catchUp": "CatchUp",
     "/billingRun/{id}/retry": "RetryQueued",
+    "/eventSubscription": "EventSubscription",
     "/prepaid/command": "PrepaidCommand",
     "/prepaid/command/{id}": "PrepaidCommand",
     "/prepaid/command/{id}/retry": "PrepaidCommand",

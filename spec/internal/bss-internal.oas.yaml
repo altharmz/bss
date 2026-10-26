@@ -349,6 +349,29 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+  /eventSubscription:
+    get:
+      summary: Live event subscriptions (hubs) of every API, newest first (stage 5).
+      description: >-
+        An operator view, not a TMF operation: TMF defines POST/DELETE /hub per API and no
+        list. Deleted hubs are not listed. Filter by api (TMF number). The delivery summary
+        comes from the outbox - the last attempted delivery and the count of deliveries
+        that failed for good.
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - name: api
+          in: query
+          schema: {type: string, pattern: '^TMF[0-9]{3}$'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/EventSubscription'}
+        '400': {$ref: '#/components/responses/Error'}
   /prepaid/command:
     get:
       summary: Prepaid commands, newest acceptance first (P3i).
@@ -994,6 +1017,41 @@ components:
       required: [request]
       properties:
         request: {$ref: '#/components/schemas/WorkerRequest'}
+    EventSubscription:
+      type: object
+      additionalProperties: false
+      required: [id, api, hub, callback, query, eventTypes, subscribedAt, lastDelivery, failures]
+      properties:
+        id: {type: string, format: uuid}
+        api:
+          type: object
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id: {type: string, pattern: '^TMF[0-9]{3}$'}
+            name: {type: string}
+        hub:
+          type: string
+          description: The API's /hub/{id} path, the one DELETE uses.
+        callback: {type: string}
+        query:
+          type: string
+          nullable: true
+          description: As sent (eventType=A,B); null means every event of the API.
+        eventTypes:
+          type: array
+          description: Empty means every event of the API.
+          items: {type: string}
+        subscribedAt: {type: string, format: date-time}
+        lastDelivery:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [state, at]
+          properties:
+            state: {type: string, enum: [pending, delivered, failed, dropped]}
+            at: {type: string, format: date-time}
+        failures: {type: integer, minimum: 0}
     PrepaidCommand:
       type: object
       additionalProperties: false

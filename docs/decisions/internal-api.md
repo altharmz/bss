@@ -63,3 +63,6 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
   retries only the accounts that failed in D+1, accounts blocked on D stay blocked until
   D is fixed). `tests/apiclient.py` maps `/billingRun/<uuid>` to `/billingRun/{id}`
   unless the path is a declared literal (`/billingRun/catchUp`).
+
+- `GET /internal/v1/eventSubscription` (slice 23): an operator view of the live hubs, like the prepaid
+  commands; not a TMF extension. Entry: [frontend.md](frontend.md#slice-23-event-subscriptions-hubs-and-system-panel-2026-10-26).

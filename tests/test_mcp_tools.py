@@ -497,6 +497,7 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "bill_detail": {"bill_id": world["bill"]["id"]},
         "get_prepaid_command": {"command_id": str(world["command"]["id"])},
         "list_prepaid_commands": {"state": "pending", "limit": 1},
+        "list_event_subscriptions": {"api": "TMF676", "limit": 1},
         "list_payments": {"filters": {"account.id": acc}, "limit": 1},
         "list_bills": {"filters": {"billingAccount.id": acc}},
     }
