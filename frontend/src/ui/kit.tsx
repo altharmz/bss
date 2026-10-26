@@ -1,6 +1,8 @@
 import { statusPresentation, type StatusKind } from './status';
 export { Menu, Tabs, TabPanel } from './navigation';
 export { Note } from './Note';
+export { KeyValue, MoneyStrip, PageHeader } from './summaries';
+import { PageHeader } from './summaries';
 export type { MenuItem, TabOption } from './navigation';
 import {
   createContext,
@@ -53,12 +55,7 @@ export function Button({
 // --- page title and panel ---
 
 export function PageTitle({ title, count }: { title: string; count?: ReactNode }) {
-  return (
-    <div className="bss-page-title">
-      <h1>{title}</h1>
-      {count !== undefined && <span className="count">{count}</span>}
-    </div>
-  );
+  return <PageHeader title={title} count={count} />;
 }
 
 export function Panel({
@@ -76,7 +73,7 @@ export function Panel({
     <section className="bss-panel">
       {title !== undefined && (
         <header className="bss-panel-header">
-          <span className="title">{title}</span>
+          <h2 className="title">{title}</h2>
           {subtitle !== undefined && <span className="subtitle">{subtitle}</span>}
           {right !== undefined && <span className="right">{right}</span>}
         </header>

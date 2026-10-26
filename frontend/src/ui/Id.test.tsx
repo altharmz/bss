@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { UiKitScreen } from '../screens/UiKit';
 import { Id, ID_PREFIXES } from './Id';
@@ -9,11 +9,13 @@ const id = 'abcdef01-0000-4000-8000-000000000001';
 describe('Ledger Id', () => {
   it('previews amounts and every identifier prefix in the gallery', () => {
     render(<UiKitScreen />);
-    expect(screen.getByRole('heading', { name: 'Amounts and ids' })).toBeTruthy();
+    const section = screen.getByRole('heading', { name: 'Amounts and ids' }).closest('section');
+    if (!section) throw new Error('Identifier gallery section is missing');
+    const gallery = within(section);
     expect(screen.getByText('−42.10')).toBeTruthy();
     expect(screen.getByText('+10.00')).toBeTruthy();
     expect(
-      screen.getAllByRole('button', { name: 'Copy 81d0e7b4-0000-4000-8000-000000000001' }),
+      gallery.getAllByRole('button', { name: 'Copy 81d0e7b4-0000-4000-8000-000000000001' }),
     ).toHaveLength(ID_PREFIXES.length);
   });
   it.each(ID_PREFIXES)('displays %s with the short uppercase body', (prefix) => {

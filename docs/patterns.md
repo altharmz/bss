@@ -180,3 +180,14 @@ The gallery previews all three tones. Existing screen callers migrate in 3b2b.
 `ErrorBlock` captures each error's failure instant once, displaying HH:MM:SS in the
 system context's business zone. Bootstrap errors preserve their call and Retry when
 context is unavailable, omitting the timestamp until context exists.
+
+### Ledger summary foundations (slice 3b2b1)
+
+`PageHeader({ title, count?, meta?, actions?, filters? })` supplies the title/count row,
+right actions, metadata and wrapping filter row. `PageTitle` delegates to it until slice 14.
+`KeyValue({ items })` renders pairs of React nodes as a semantic two-column definition list.
+`MoneyStrip({ figures, operators?, divider?, actions? })` takes labelled value/caption
+figures. `emphasis="figure"` enlarges inputs; `emphasis="answer"` enlarges and emphasizes
+the answer label. Optional negative/muted tones affect the value. Operators follow the
+figure at their index; divider indices insert rules before figures. The actions slot
+sits beside the figures. `Panel` uses a 44 px header only when a title is provided.

@@ -18,6 +18,10 @@ import {
   DateField,
   Field,
   MoneyField,
+  KeyValue,
+  MoneyStrip,
+  PageHeader,
+  Panel,
   Segmented,
   SelectField,
   TextInput,
@@ -32,6 +36,76 @@ export function UiKitScreen() {
   return (
     <div className="ui-kit" data-ui="ui.kit">
       <h1>UI kit</h1>
+      <section>
+        <h2>Page header and summaries</h2>
+        <PageHeader
+          title="Subscribers"
+          count="1,284"
+          meta="Billing accounts"
+          actions={<Button variant="primary">New subscriber</Button>}
+          filters={
+            <TextInput aria-label="Search subscribers" placeholder="Name, BA id or number" />
+          }
+        />
+        <MoneyStrip
+          figures={[
+            { label: 'Ledger', value: <Amount cents={1850} currency="EUR" />, emphasis: 'figure' },
+            { label: 'Reserved', value: <Amount cents={500} />, emphasis: 'figure' },
+            {
+              label: 'Available',
+              value: <Amount cents={1350} currency="EUR" />,
+              emphasis: 'answer',
+            },
+            { label: 'Paid through', value: '2026-11-14', sub: 'in 19 days' },
+            { label: 'Shortfall', value: '—', sub: 'none', tone: 'muted' },
+          ]}
+          operators={['−', '=']}
+          divider={[3]}
+          actions={
+            <>
+              <Button variant="primary">Top up</Button>
+              <Button>Adjust</Button>
+              <Button>Hold</Button>
+              <Button>Transfer</Button>
+            </>
+          }
+        />
+        <MoneyStrip
+          figures={[
+            {
+              label: 'Balance',
+              value: <Amount cents={-125040} currency="EUR" />,
+              emphasis: 'answer',
+              tone: 'negative',
+            },
+            {
+              label: 'Credit limit',
+              value: <Amount cents={50000} />,
+              sub: <Flag>Over by 750.40</Flag>,
+            },
+            { label: 'Cycle day', value: '1', sub: 'next bill 2026-11-01' },
+          ]}
+          divider={[1]}
+          actions={<Button variant="primary">Record payment</Button>}
+        />
+        <KeyValue
+          items={[
+            ['Account', <Id prefix="BA-" id="81d0e7b4-0000-4000-8000-000000000001" />],
+            ['Party', 'Nordwind Logistics OÜ'],
+            ['Customer since', '2023-05-02'],
+          ]}
+        />
+        <Panel
+          title="Order in progress"
+          subtitle="ORD-26-10-00418"
+          right={<Button small>Open order</Button>}
+        >
+          <Note tone="info">Panels group work the operator acts on as one.</Note>
+        </Panel>
+        <Panel>
+          <Note tone="info">A panel without a title is only a box.</Note>
+        </Panel>
+      </section>
       <section>
         <h2>Inline notes</h2>
         <Note tone="info" lead="Change scheduled.">

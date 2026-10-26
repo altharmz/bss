@@ -1,43 +1,156 @@
 /* Shared components. Values from design-ref/.../README.md ("Shared Patterns", "Global
    Layout"), always through the tokens in tokens.css. */
 
-/* --- page --- */
-.bss-page-title {
+/* --- Ledger summaries --- */
+.bss-page-heading {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
 }
-.bss-page-title h1 {
+.bss-page-heading h1 {
   margin: 0;
-  font-size: var(--fs-18);
-  font-weight: 600;
+  font: var(--type-page);
+  letter-spacing: var(--tracking-page);
 }
-.bss-page-title .count {
+.bss-page-heading .count {
+  padding-top: 4px;
+  font: var(--type-code);
+  color: var(--color-ink-3);
+}
+.bss-page-heading .actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.bss-page-meta {
+  font: var(--type-label);
+  color: var(--color-ink-3);
+}
+.bss-page-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 0 12px;
+}
+.bss-key-value {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  border-top: 1px solid var(--color-border);
+}
+.bss-key-value dt,
+.bss-key-value dd {
+  margin: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.bss-key-value dt {
+  font: var(--type-label);
+  color: var(--color-ink-3);
+}
+.bss-key-value dd {
+  color: var(--color-ink-1);
+  min-width: 0;
+}
+.bss-money-strip {
+  display: flex;
+  align-items: stretch;
+  min-height: 88px;
+  background: var(--color-bg-subtle);
+  border-block: 1px solid var(--color-border);
+}
+.money-figure {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 12px 24px;
+}
+.money-label {
+  font: var(--type-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-micro);
+  color: var(--color-ink-3);
+}
+.money-value {
+  font: var(--type-section);
   font-family: var(--font-mono);
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink-1);
+  white-space: nowrap;
+}
+.money-value .bss-amount {
+  font: inherit;
+  color: inherit;
+}
+.bss-money-strip {
+  flex-wrap: wrap;
+}
+.money-figure.emphasis-figure .money-value,
+.money-figure.emphasis-answer .money-value {
+  font: var(--type-figure);
+  letter-spacing: var(--tracking-figure);
+  color: var(--color-ink-2);
+}
+.money-figure.emphasis-answer .money-label,
+.money-figure.emphasis-answer .money-value {
+  color: var(--color-ink-1);
+}
+.money-figure.tone-negative .money-value {
+  color: var(--color-negative);
+}
+.money-figure.tone-muted .money-value {
+  color: var(--color-ink-3);
+}
+.money-sub {
+  font: var(--type-label);
+  color: var(--color-ink-3);
+}
+.money-operator {
+  display: flex;
+  align-items: center;
+  padding-top: 14px;
+  font: var(--type-page);
+  font-family: var(--font-mono);
+  color: var(--color-ink-4);
+}
+.money-divider {
+  width: 1px;
+  background: var(--color-border);
+  margin: 16px 8px;
+}
+.money-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 24px;
 }
 
 /* --- panel --- */
 .bss-panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-panel);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: clip;
 }
 .bss-panel-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
+  height: 44px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--color-border);
 }
 .bss-panel-header .title {
+  margin: 0;
+  font: var(--type-body);
   font-weight: 600;
 }
 .bss-panel-header .subtitle {
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font: var(--type-code);
+  color: var(--color-ink-3);
 }
 .bss-panel-header .right {
   margin-left: auto;
