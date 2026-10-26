@@ -1,589 +1,985 @@
-# UI redesign "Ledger" (v2): decisions and slice specs (2026-10-26)
+# UI redesign "Ledger" v2: decisions and slice specs (final, 2026-10-26)
 
-The handoff is in `design-ref/design_handoff_bss_admin_v2/` (read-only). Read its
-`HANDOFF.md` first. Then read `tokens.css` and the artboard each slice names. This file
-records every decision the handoff left open, adapts the handoff to the backend, and specifies
-each slice. **Where this file and the handoff disagree, this file wins.** The tracker is
-[ui-redesign-slices.md](ui-redesign-slices.md). The brief that produced the handoff is
-[ui-redesign-brief.md](ui-redesign-brief.md).
+The handoff is in `design-ref/design_handoff_bss_admin_v2/` (read-only). This file records
+**every** decision and specifies each slice. **Where this file and the handoff disagree, this
+file wins.** Nothing is left open: a worker never decides product questions. If reality
+contradicts this file, follow "When the spec is wrong".
 
-The human delegated every design decision on 2026-10-26. No slice needs approval.
+- Tracker and orchestration: [ui-redesign-slices.md](ui-redesign-slices.md).
+- Brief that produced the handoff: [ui-redesign-brief.md](ui-redesign-brief.md).
 
 ## Rules for every slice
 
-1. **Visual and layout only.** Do not change API calls, query strings, request bodies,
-   headers (including `Idempotency-Key`), routes, polling intervals, permissions or business
-   rules. `tests/test_ui_requests.py` must not need any change. If a slice seems to need
-   one, it is wrong; see "When the spec is wrong".
-2. **Read before writing:** CLAUDE.md, this file's "Decisions" and your slice's section,
-   [patterns.md](patterns.md), and the artboard(s) named in the slice. Open other screens
-   only as needed.
-3. **Artboards are the spec for looks.** The inline `style` values are exact. Map every
-   value to a token in `frontend/src/ui/tokens.css`. No hex colour, font size or raw
-   shadow in components or screens. Only the 9 `--type-*` tokens set text. Spacing uses
-   `--space-*` unless a value is a fixed component dimension (e.g. a row height), and those
-   are tokens too. The `renderVals()` arrays are sample data. Copy the artboard's wording
-   only where the data exists (see D10).
-4. **CSS lives in CSS files.** Do not add new inline `style={{}}`. Slices that touch a screen
-   remove that screen's existing inline styles, except a dynamic value such as a grid
-   template or a progress width.
-5. **Keep the test contracts:**
-   - Every `data-ui` marker stays on the element that has the same meaning.
-   - A new visible part gets a new marker, added to `docs/progress/scope.yaml`.
-   - Accessible names (roles, labels, button text) stay unless this file renames them.
-   - A test that changes because a label or structure changed by design gets a
-     `TEST-CHANGE: <reason>` line in the commit message.
-   - Never delete or weaken an assertion about a request, a state or a refusal.
-6. **New tests in every slice.** Components: render, states, keyboard behaviour. Screens:
-   the new structure (tabs, groups, flags), queried by role or by `data-ui`.
-7. **Look at it.** After the change, run `make web-shots` (added in R1). Compare each touched
-   screen at 1280 and 1600 px with its artboard, and fix differences you can see. Nothing
-   may overflow horizontally at 1280 px.
-8. **Docs per slice:**
-   - `docs/ui.md` for changed screens;
-   - `docs/patterns.md` when a primitive's API or a screen shape changes (rule from that
-     file);
-   - `docs/progress/scope.yaml` for new markers;
-   - a short line under "Ledger v2" in `docs/decisions/frontend.md` (what was built,
-     deviations);
-   - this slice's row in the tracker.
-9. **Toolchain** (no Claude hooks protect you, so follow it by hand):
-   - Node, npm and npx run only in containers, through `make web-*` targets or `docker
-     compose run --rm web-offline ...`. Never on the host.
+1. **Visual and layout only.**
+   - Do not add, remove or change any HTTP request: not its path, query string, body or
+     headers (including `Idempotency-Key`), nor when it is sent.
+   - Polling intervals, routes, permissions and business rules stay too.
+   - `tests/test_ui_requests.py` and everything under `app/` stay untouched.
+2. **Read first:** CLAUDE.md, then from this file "Rules", "When the spec is wrong",
+   "Decisions" and your slice section. Then [patterns.md](patterns.md), the handoff's
+   `HANDOFF.md`, and the artboards your slice names.
+3. **Artboards are the spec for looks.** Their inline `style` values are exact.
+   - Map every value to a token in `frontend/src/ui/tokens.css`.
+   - No colour literal (hex, `rgb()`, `hsl()`) outside `tokens.css`. No `px` font size
+     anywhere. Text is set only through the `--type-*` tokens (the `font` shorthand), plus
+     `--tracking-*` for letter-spacing.
+   - The artboards' `renderVals()` data is sample data. Wording comes from this file or the
+     artboard. Where the artboard shows data that D11 drops, leave it out.
+4. **CSS lives in CSS files.** Keep the existing split: `ui/ui.css` (primitives),
+   `app/shell.css` (shell), `screens/screens.css` (screens). Every file a slice touches loses
+   its `style={{…}}` props. The only exception is a value computed at runtime (a grid
+   template, a progress width), passed as a CSS custom property:
+   `style={{ '--progress': '40%' }}`.
+5. **Test contracts:**
+   - Every `data-ui` marker stays on an element with the same meaning. New visible parts get
+     the new markers named in the slice, and each is added to
+     `docs/progress/scope.yaml` (`area: ui, stage: 5`).
+   - Accessible names stay unless this file renames them.
+   - An existing test changed because a label, class or structure changed **by this design**
+     gets a `TEST-CHANGE: <reason>` line in the commit message.
+   - Never delete or weaken an assertion about a request, a state, a refusal or a value.
+6. **Every slice adds tests that fail without it.** The tests each slice needs are listed in
+   its section.
+7. **Look at it.** From slice 1 on:
+   - Run `make web-shots` and open `frontend/.shots/<page>-1280.png` and `-1600.png` for
+     every page the slice touches.
+   - Compare them with the artboard and fix visible differences.
+   - Nothing may scroll horizontally at 1280 px.
+8. **Docs, in the same commit:**
+   - `docs/ui.md` (the entry of each touched screen);
+   - `docs/patterns.md` (when a primitive's API or a screen shape changes);
+   - `docs/progress/scope.yaml` (new markers);
+   - one line under "Ledger v2" in `docs/decisions/frontend.md` (built, plus any recorded
+     deviation);
+   - the slice's tracker row.
+9. **Toolchain.** No Claude hook protects a Codex session, so follow these by hand:
+   - Node, npm and npx run only in containers (`make web-*`, or `docker compose run --rm
+     --no-deps web-offline sh -c 'sh scripts/check-deps.sh && …'`).
    - Nothing under `design-ref/` is ever edited.
-   - Run `make web-fmt` before committing. The pre-commit hook runs `web-lint`, which
-     fails on unformatted files.
-   - Do not install or upgrade dependencies. No new package. Every component is hand-written.
+   - No new dependency, no upgrade, no `make web-install` unless the lockfile check says so.
+   - `make web-fmt` runs before every commit.
 
 ## When the spec is wrong
 
-- **The design shows data the API does not return:** leave it out, or use the D10
-  replacement. Record it in the slice's decision line. Never add a backend change in this
-  tracker.
-- **An existing test asserts old visuals** (a class name or a tone): update it with
-  `TEST-CHANGE:`. **An existing test asserts behaviour** (a request, a refusal, a state):
-  the slice is wrong; keep the behaviour.
-- **A slice is too large:** split it into `Na`/`Nb` rows in the tracker, each committed on
-  its own. Do not widen scope.
-- **Stop and report to the human only for these:** a needed backend or API change, a
-  migration, a billing behaviour change, or two failed attempts at the same slice.
+| Situation | Action |
+|---|---|
+| The code lacks a field this file assumes | Leave the element out, add the deviation line to the decision entry, continue. |
+| An existing test asserts old visuals (class, tone, label, position) | Update it, with `TEST-CHANGE:`. |
+| An existing test asserts behaviour (request, refusal, state, value) and the slice would break it | The slice is wrong: keep the behaviour, adapt the layout. |
+| The slice is too large for one session | Split it in the tracker into `Na`/`Nb`, each committed separately. Do not widen scope. |
+| A backend/API change, a migration or a billing change looks necessary | Stop and report. Never do it. |
 
 ## Decisions
 
 ### D1 Tokens
 
-- `frontend/src/ui/tokens.css` becomes the handoff's `tokens.css`, copied exactly, plus:
-  - `--row-height-dense: 28px` (Foundations "Table density" uses 28 for outcomes and the
-    command queue; HANDOFF says 32 compact; use 32 for `compact` and 28 for `dense`);
-  - letter-spacing companions: `--tracking-page: -0.01em`, `--tracking-micro: 0.06em`,
-    `--tracking-figure: -0.01em`;
-  - a spinner track for buttons on a solid fill: `--color-on-primary-dim: rgba(255, 255,
-    255, 0.35)` (light and dark).
-- **The old token names** (`--muted`, `--neg`, `--fs-125`, ...) move into a temporary
-  `frontend/src/ui/legacy-tokens.css`. Each one is an alias of a v2 token, with a comment.
-  Font sizes snap to the scale: 10.5 and 11 to 11 px, 11.5 and 12 to 12 px, 12.5 and 13 to
-  13 px, 14 and 15 to 15 px, 16 to 18 to 15 px (titles inside dialogs), and 20 to 20 px.
-  Screens keep working until they are restyled. The file is deleted in R14, and nothing
-  may reference it after that.
+- **`ui/tokens.css`** = the handoff's `tokens.css` byte for byte, followed by this block:
+
+  ```css
+  :root {
+    --tracking-page: -0.01em;
+    --tracking-micro: 0.06em;
+    --tracking-figure: -0.01em;
+    --row-height-dense: 28px;            /* outcomes, history, command queue */
+    --color-on-primary-dim: rgba(255, 255, 255, 0.35); /* spinner track on solid buttons */
+  }
+  ```
+
+  In dark mode, `--color-on-primary-dim` is `rgba(18, 19, 21, 0.35)`, added to both dark
+  blocks. The artboards' grey canvas `#8A8C90` is not a token and is never used.
+- **Type overrides:** a `--type-*` shorthand may be followed only by these overrides:
+  - the currency code: `--type-micro` + `font-weight: 400; text-transform: none;
+    letter-spacing: normal`;
+  - `Flag` and `Badge`: `--type-micro` + `font-weight: 500; text-transform: none;
+    letter-spacing: normal`;
+  - `--type-micro` used as a label always adds `text-transform: uppercase;
+    letter-spacing: var(--tracking-micro)`;
+  - `--type-page` and `--type-figure` add their `--tracking-*`.
+- **Row heights:**
+  - `--row-height` 36: default tables.
+  - `--row-height-compact` 32: the card's products table, and the outcome and history
+    tables in Billing runs.
+  - `--row-height-dense` 28: the Prepaid commands table.
+- **Legacy aliases.** The old names live in `ui/legacy-tokens.css` until slice 14 deletes
+  it. Use exactly this mapping:
+
+| Old | New | Old | New |
+|---|---|---|---|
+| `--ink` | `var(--color-ink-1)` | `--sel-1` | `var(--color-primary-tint)` |
+| `--text-2` | `var(--color-ink-2)` | `--sel-2` | `var(--color-bg-selected)` |
+| `--muted` | `var(--color-ink-3)` | `--sel-3` | `var(--color-bg-hover)` |
+| `--faint` | `var(--color-ink-3)` | `--neg` | `var(--color-negative)` |
+| `--num-disabled` | `var(--color-ink-4)` | `--neg-bg` | `var(--color-negative-tint)` |
+| `--crumb-sep` | `var(--color-ink-4)` | `--neg-hover-bg` | `var(--color-negative-tint)` |
+| `--page` | `var(--color-bg)` | `--neg-hover-border` | `var(--color-negative)` |
+| `--surface` | `var(--color-bg)` | `--alert` | `var(--color-negative)` |
+| `--th-bg` | `var(--color-bg-subtle)` | `--pos` | `var(--color-positive)` |
+| `--foot-bg` | `var(--color-bg-subtle)` | `--prorate` | `var(--color-warning)` |
+| `--preview-bg` | `var(--color-bg-subtle)` | `--run-border` | `var(--color-border-strong)` |
+| `--nav-hover` | `var(--color-bg-hover)` | `--run-failed-bg` | `var(--color-negative-tint)` |
+| `--btn-secondary-hover` | `var(--color-bg-hover)` | `--run-failed-border` | `var(--color-negative)` |
+| `--border` | `var(--color-border)` | `--run-failed-latest` | `var(--color-negative-tint)` |
+| `--divider` | `var(--color-border)` | `--run-failed-row` | `var(--color-negative-tint)` |
+| `--input-border` | `var(--color-border-strong)` | `--run-track` | `var(--color-bg-sunken)` |
+| `--radio-border` | `var(--color-border-strong)` | `--skeleton-1` | `var(--color-bg-sunken)` |
+| `--primary` | `var(--color-primary)` | `--skeleton-2` | `var(--color-bg-subtle)` |
+| `--primary-hover` | `var(--color-primary-hover)` | `--r-tag`, `--r-ctl` | `var(--radius-sm)` |
+| `--primary-border` | `var(--color-primary)` | `--r-panel` | `var(--radius-md)` |
+| `--primary-ink` | `var(--color-primary)` | `--r-modal` | `var(--radius-lg)` |
+| `--focus-ring` | `var(--color-primary-tint)` | `--shadow-modal` | `var(--elev-dialog)` |
+| `--sidebar-w` | `var(--sidebar-width)` | `--shadow-toast` | `var(--elev-popover)` |
+| `--bar-h` | `var(--topbar-height)` | `--overlay` | `var(--scrim)` |
+| `--pad-page` | `var(--space-xl) var(--space-xl) var(--space-3xl)` | `--pad-cell` | `var(--space-sm) var(--space-md)` |
+| `--gap-panel` | `var(--space-lg)` | | |
+| `--fs-105`, `--fs-11` | `11px` | `--fs-115`, `--fs-12` | `12px` |
+| `--fs-125`, `--fs-13`, `--fs-14` | `13px` | `--fs-15`, `--fs-16`, `--fs-17` | `15px` |
+| `--fs-18`, `--fs-20` | `20px` | | |
+
+  `--st-*` pill tokens are not aliased. Slice 2 replaces the pill and deletes them. Until
+  then, slice 1 keeps them in `legacy-tokens.css` with these values:
+  - `active`: `--color-positive` / `--color-positive-tint` / `--color-positive`
+  - `inactive`: `--color-ink-2` / `--color-bg-sunken` / `--color-ink-4`
+  - `design`: `--color-info` / `--color-info-tint` / `--color-info`
+  - `retired`: `--color-ink-3` / `--color-bg` / `--color-border-strong`
+  - `failed`: `--color-on-primary` / `--color-negative` / `--color-on-primary`
+
+  The `--fs-*` aliases are the only place where a `px` font size may appear, and only in
+  `legacy-tokens.css`.
 
 ### D2 Fonts
 
-Self-hosted `@fontsource` only (no Google Fonts link from the artboards). Golos Text 400,
-500, 600; JetBrains Mono 400, 500. Remove the Golos 700 and Mono 600 imports and their
-uses.
+- Imports in `ui/base.css`: `@fontsource/golos-text` 400, 500, 600 and
+  `@fontsource/jetbrains-mono` 400, 500. Remove the Golos 700 and Mono 600 imports.
+- Every `font-weight: 700` becomes 600. Every mono 600 becomes 500.
 
 ### D3 Theme
 
-- Light is the default.
-- **R1–R13:** only the opt-in `:root[data-theme="dark"]` block is active. The
-  `prefers-color-scheme` block is commented out with a pointer to R14, because unmigrated
-  screens still assume a white surface.
-- **R14** enables the `prefers-color-scheme` block. It also adds a Theme choice (System /
-  Light / Dark) to the operator menu, stored in `localStorage` (wrapped in try/catch) and
-  applied as `data-theme` on `<html>` before first paint (a small inline script in
-  `index.html`).
+- **Slices 1–13:** `tokens.css` keeps the handoff's `@media (prefers-color-scheme: dark)`
+  block, but wrapped in a comment (`/* enabled in slice 14 … */`). The
+  `:root[data-theme="dark"]` block is active, and nothing sets it yet.
+- **Slice 14:**
+  - uncomment the media block;
+  - add the operator-menu item "Theme" with the options System / Light / Dark;
+  - store the choice under the localStorage key `bss.theme`, with every access in
+    try/catch;
+  - apply it as `data-theme="light"|"dark"` on `<html>`, or remove the attribute for
+    System;
+  - apply it before first paint, from a 6-line inline script in `frontend/index.html` that
+    reads the same key.
 
-### D4 Status families (TMF-based mapping)
+### D4 Status pill: one component, explicit kinds
 
-- One component, `StatusPill({ status, kind })`, with one mapping table in
-  `frontend/src/ui/status.ts`.
-- `kind` disambiguates values that mean different things in different APIs:
-  `account | customer | party | offering | product | order | orderItem | run |
-  runOutcome | command | bill | onDemandBill | bucket | balanceAction | delivery |
-  catalogJob`.
-- An unknown value renders as Draft with the raw value as its label, and logs once with
-  `console.warn` in development. Never crash.
-- Families, glyphs and colours are as in HANDOFF "Status families". Ended pills are
-  outlined. The label is sentence case of the API value unless a label is given below.
+`StatusPill({ kind, status, label? })` and the mapping table in `ui/status.ts`. Every call
+site passes a `kind`, so the mapping is never guessed.
 
-| kind | Live | Moving | Queued | Pending | Paused | Failed | Draft | Ended |
-|---|---|---|---|---|---|---|---|---|
-| account (TMF666 state) | Active | | | | Suspended | | | Closed |
-| customer (TMF629) | Active | | | | | | Created | Inactive |
-| party (TMF632) | validated | | | | | | initialized | deceased, closed |
-| offering (TMF620 lifecycleStatus) | Active, Launched | | | | | Rejected | In study, In design/In Design, In test | Retired, Obsolete |
-| product (TMF637) | active | | pendingActive | pendingTerminate | suspended | | created | terminated, cancelled |
-| order, orderItem (TMF622) | completed | inProgress, assessingCancellation, pendingCancellation | acknowledged, pending | | held | failed, partial, rejected | draft | cancelled |
-| run (internal) | completed | running | | | | failed | | |
-| runOutcome (internal) | ok → "Billed" | | | blocked → "Waiting on an earlier date" | | failed | | |
-| command (internal prepaid) | completed | | pending → "Queued" | | | failedTechnical → "Failed (technical)" | | |
-| bill (TMF678) | | | validated → "Ready to send" | sent → "Unpaid", partiallyPaid → "Partly paid" | onHold → "On hold" | | new | settled → "Settled" |
-| onDemandBill (TMF678) | done | inProgress | | | | rejected, terminatedWithError | | |
-| bucket (TMF654) | active | | | | suspended | | | expired |
-| balanceAction (TMF654) | completed | | created → "Accepted" | | | failed | | cancelled |
-| delivery (hub, internal) | delivered | | pending | | | failed | | dropped |
-| catalogJob (TMF620) | Succeeded | Running | Not Started | | | Failed | | |
+- An unknown `status` renders the Draft family with the raw value as its label.
+- `label` overrides the display label.
+- The default label is the "Label" column below, else sentence case of the value (split
+  camelCase: `pendingTerminate` → "Pending terminate").
 
-Reasons:
-- TMF defines `rejected` (order) as a validation failure, and `partial` as some items
-  failed. Both need an operator, so they are Failed.
-- `held` waits on a person, so it is Paused.
-- `pending` in TMF622 is waiting for information, so it is Queued.
-- A settled bill is final, so it is Ended: unpaid bills stand out in a mixed list.
-- `blocked` run outcomes clear on their own once the earlier date bills, so they are Pending.
+The families and their glyphs are as in HANDOFF "Status families":
+- Live: filled dot
+- Moving: half ring
+- Queued: ring
+- Pending: ring
+- Paused: pause bars
+- Failed: diamond
+- Draft: dashed ring
+- Ended: dash, outlined
 
-Customer and party labels stay as the API spells them. Offering labels use sentence case
-("In design").
+| kind | value → family (Label if not sentence case) |
+|---|---|
+| `account` (TMF666, billing/party/settlement account `state`) | Active → Live · Suspended → Paused · Closed → Ended |
+| `customer` (TMF629) | Created → Draft · Active → Live · Inactive → Ended |
+| `party` (TMF632) | initialized → Draft · validated → Live · deceased → Ended · closed → Ended |
+| `lifecycle` (TMF620 offering, specification, category `lifecycleStatus`) | In study, In design, In Design, In test → Draft ("In design" etc.) · Active, Launched → Live · Rejected → Failed · Retired, Obsolete → Ended |
+| `product` (TMF637) | created → Draft · pendingActive → Queued · active → Live · pendingTerminate → Pending · suspended → Paused · terminated, cancelled → Ended |
+| `order` (TMF622 order and item `state`) | draft → Draft · acknowledged, pending → Queued · inProgress, assessingCancellation, pendingCancellation → Moving · held → Paused · completed → Live · failed, partial, rejected → Failed · cancelled → Ended |
+| `run` (internal) | running → Moving · completed → Live · failed → Failed |
+| `runOutcome` (internal) | ok → Live ("Billed") · blocked → Pending ("Waiting") · failed → Failed |
+| `command` (internal prepaid) | pending → Queued ("Queued") · completed → Live · failedTechnical → Failed ("Failed (technical)") |
+| `bill` (TMF678) | new → Draft · validated → Queued ("Ready to send") · sent → Pending ("Unpaid") · partiallyPaid → Pending ("Partly paid") · onHold → Paused ("On hold") · settled → Ended |
+| `onDemandBill` (TMF678) | inProgress → Moving · done → Live · rejected, terminatedWithError → Failed |
+| `payment` (TMF676 payment and refund) | pendingAuthorization → Queued · authorized, captured, done → Live · failed, denied → Failed · canceled → Ended ("Cancelled") |
+| `bucket` (TMF654) | active → Live · suspended → Paused · expired → Ended |
+| `balanceAction` (TMF654) | created → Queued ("Accepted") · completed → Live · failed → Failed · cancelled → Ended |
+| `delivery` (hub) | pending → Queued · delivered → Live · failed → Failed · dropped → Ended |
+| `catalogJob` (TMF620) | Not Started → Queued · Running → Moving · Succeeded → Live · Failed → Failed |
+| `health` (System panel) | ok → Live ("OK") · error → Failed ("Error") |
+
+Existing callers that pass a custom `label` keep it, for example Balances'
+`statusLabel(action)` and the card's product status note. "Built in" on Billing settings is
+not a status: it becomes a `Tag`. Integrations' `DELIVERY_PILL` table is deleted (kind
+`delivery`). System health passes `status={ok ? 'ok' : 'error'}`.
 
 ### D5 Numbers, ids, dates
 
-- `Amount` follows HANDOFF rule 2. It drops the green credit colour: positive is never
-  money. An explicit `+` is shown only where the component is given `signed`
-  (transactions, payments, balance movements).
-- The old `chip` variant goes away. The "Over limit" flag replaces it.
-- `Id` component for display ids:
-  - The prefix is in `--color-ink-3` and the body in ink-1, in mono. Click copies the
-    **full** id (UUID) to the clipboard and shows the toast "Copied".
-  - Prefixes: `BA-` (billing account), `ORD-` (order), `BL-` (bill), `CMD-` (prepaid
-    command), `PAY-` (payment), `PRD-` (product). Customer numbers stay as they are now
-    (`Subscriber no.`, no prefix).
-  - The body is the existing display id: the first 8 hex digits, upper case.
-- Dates and times stay as `format/dates.ts` makes them (business zone). A relative hint ("in
-  19 days") is computed from `context.businessDate`, never from the browser clock.
+**`Amount`:**
+- Mono and tabular.
+- Negative: U+2212 and `--color-negative`.
+- Currency per the D1 type override, in `--color-ink-3`, with a 4 px gap.
+- An explicit `+` only with `signed` (transactions, payments, balance movements, the
+  activity rail).
+- Positive amounts are never green.
+- The `chip` and `strong` props are removed. Callers that used `strong` use the
+  `--type-body-strong` weight through a wrapping class.
 
-### D6 Business-date chip (top bar)
+**`Id`** renders a display id:
+- the prefix in `--color-ink-3`, the body in `--color-ink-1`, mono `--type-code`;
+- it is a `<button>` with aria-label "Copy <full id>": a click copies the full UUID with
+  `navigator.clipboard.writeText` and toasts "Copied";
+- if the clipboard throws, the toast says "Copy failed".
 
-- The chip shows `context.businessDate` and the zone label from the context.
-- It turns warning-toned with "N day(s) behind/ahead of the wall clock" when the business
-  date differs from **today in BILLING_TZ**. Compute that with `Intl.DateTimeFormat`
-  (`timeZone` from the context) on `Date.now()`. That is the only use of the browser clock
-  in the UI, and a test with a fixed system time covers both states. Re-check every 60 s.
-- The operator avatar (initials) in the top bar opens the existing operator menu. The
-  sidebar footer shows name and role, as the artboard does. The existing menu items keep
-  their names and markers.
+Prefixes:
+
+| Object | Prefix |
+|---|---|
+| Billing account | `BA-` |
+| Order | `ORD-` |
+| Bill | `BL-` |
+| Prepaid command | `CMD-` |
+| Payment | `PAY-` |
+| Refund | `RF-` |
+| Product | `PRD-` |
+| Balance action | `BAL-` |
+
+The body is the existing `shortId()` (the first 8 hex digits, upper case). The customer's
+"Subscriber no." keeps its current text format, with no prefix. Anywhere a screen now prints
+`accountLabel(id)` or `shortId(id)` for one of these objects, it renders `<Id>`.
+
+**Dates:** dates and times keep `format/dates.ts`. A relative hint ("in 19 days") is
+computed from `context.businessDate` only.
+
+### D6 Shell
+
+**Sidebar** (216 px, `--color-bg-subtle`, right hairline):
+- **Brand row**, 28 px: an 18 px ink-1 square with a mono "B", then "BSS Admin". The
+  environment tag moves next to it as a `Tag` with the `context.environment` value,
+  upper-cased.
+- **Sections:** `--type-micro` labels.
+- **Items:** 28 px high, ink-2 text, radius sm, hover `--color-bg-hover`. The active item
+  is `--color-bg` with a 1 px `--color-border` ring, ink-1 text and weight 500.
+- Counts in mono `--type-code` ink-3. The "failed" badge has the negative fill and white
+  text, with the same logic as now.
+
+**Footer** (top hairline):
+- a 24 px round avatar showing initials (see below), the operator's name, and the role
+  underneath (`--type-label` ink-3);
+- the whole footer is the trigger for the existing operator menu (`details/summary` stays,
+  with the same items and markers);
+- initials are the first letters of the first two words of the display name, else the
+  first two characters of the login, upper case.
+
+**Top bar** (48 px, `--color-bg`, bottom hairline):
+- Breadcrumbs on the left: parents are ink-3 links with no underline, separators are ink-4
+  "/", and the current crumb is ink-1 weight 500.
+- The business-date chip on the right; nothing else.
+
+**Business-date chip:**
+- Shows `context.businessDate` and `UTC` + `context.utcOffset` without a leading zero
+  ("UTC+3"; "UTC+5:30" when the minutes are not zero).
+- **Drift** compares the business date with the calendar date of `context.now` in
+  `context.timeZone`, using `Intl.DateTimeFormat`. No browser clock.
+- When they differ, the chip takes the warning style and adds a third segment:
+  - "1 day behind the wall clock" / "N days behind the wall clock" when the business date
+    is earlier;
+  - "… ahead of the wall clock" when it is later.
 
 ### D7 Dialogs and write states
 
-- `Modal` becomes `Dialog` with `size: 'S' | 'M' | 'L'` (400 / 560 / 760). `Modal`
-  stays as a thin wrapper (width ≤ 440 → S, ≤ 600 → M, else L) until R14 removes it.
-- Header: title (`--type-section`), an optional context line, an optional "Step n of N",
-  and the close button.
-- Footer: `--color-bg-subtle`, state or reason text on the left, actions on the right,
-  primary last.
-- Write states, through `useWrite` and `Footer` in `screens/FinancialForms.tsx`. Their API
-  stays and gains optional props:
-  - **busy:** `Button busy` shows the spinner and keeps its width. A dialog passes
-    `busyLabel` ("Recording…"). Other controls are disabled.
-  - **refused:** a negative `Note` above the footer: the server's message, then the code
-    in mono. Inputs stay editable.
-  - **unsure:** a warning `Note`: "Unsure whether it was saved." plus the call (method,
-    path) and the time. No request id: the API has none. The primary becomes Refresh, and
-    the dialog's normal primary is hidden.
-- Final writes (transfer) keep the existing confirmation step and gain an acknowledgement
-  checkbox. The primary stays disabled until it is ticked, and Enter does not submit on
-  that step.
-- Primary labels state the outcome with the amount where one exists ("Record 42.10
-  EUR"). Rename labels only where the slice says so, and update tests with
-  `TEST-CHANGE:`.
+**`Dialog`** (`ui/kit.tsx`):
+- props: `size: 'S' | 'M' | 'L'` (400 / 560 / 760 px), `title`, `context` (one line under
+  the title, ink-3), `step` (`{ n, of }`, rendered "Step n of N" after the title), `footer`,
+  `ui`, `onClose`;
+- header padding 16/20, title `--type-section`, a 28 px quiet close button with an `×` icon;
+- the body is padded 20;
+- the footer has a top hairline on `--color-bg-subtle`, padding 12/20, a left slot for state
+  text, and actions on the right;
+- `Modal` stays as a wrapper until slice 14: width ≤ 440 → S, ≤ 620 → M, else L.
+
+**Write states** stay in `screens/FinancialForms.tsx` (`useWrite`, `Footer`), which gains:
+- **busy:** the primary `Button` gets `busy`. It keeps its label, shows a 12 px spinner
+  before it, keeps its width and is disabled. Cancel and the inputs are disabled. A dialog
+  may pass `busyLabel`; slices 10 and 11 list where.
+- **refused** (`write.problem`): a negative `Note` directly above the footer. The lead is
+  "Refused.", then the server message. If the API error has a code, the code follows in
+  mono ink-3.
+- **unsure** (`write.unsure`): a warning `Note` above the footer reading "Unsure whether it
+  was saved. The request was sent but no answer came back. Refresh to read it back before
+  trying again." It is followed by the failed call (`ApiError` message) in mono ink-3. The
+  footer then shows only Cancel and a primary **Refresh**; the dialog's own primary is
+  hidden.
+
+**Final writes:** the transfer's confirm step gains a checkbox, "I confirmed the amount and
+the recipient's number with the subscriber". The primary is disabled until it is ticked,
+and Enter does not submit on that step.
 
 ### D8 Toast
 
-- Bottom-left, `--elev-popover`, ink-1 background, white text. Shown for 6 s, with an
-  optional action (`{ label, onClick }`).
-- Success only. Errors stay inline (already the case).
-- One at a time, as now. `useToast()` keeps its signature and gains an optional second
-  argument for the action.
+- Bottom-left, 24 px from the edges. Ink-1 background, `--color-bg` text, radius md,
+  `--elev-popover`, padding 10/12/10/14.
+- Shown for 6 s. One at a time.
+- `useToast()` returns `(message, action?: { label: string; onClick: () => void })`; an
+  action renders as a `--color-primary-tint`-coloured text button at the right.
+- Success only, as now.
 
 ### D9 Polling
 
-Keep `POLL_MS` (5 s) and `POLL_CAP_MS` (3 min) from `screens/watched.ts`. The artboard's
-2 s / 60 s are not adopted: changing them changes request behaviour (rule 1). The copy
-adapts: "Checking every 5 s · last check HH:MM:SS"; when the cap is reached, "Still
-running. It continues in Prepaid commands." with a link to that screen.
+- Keep `POLL_MS` = 5 s and `POLL_CAP_MS` = 3 min (`screens/watched.ts`) and the billing
+  runs' 5 s / 3 min.
+- The copy shows "Checking every 5 s · last check HH:MM:SS".
+- At the cap: "Still running. It continues in Prepaid commands." with a link to
+  `/prepaid-commands?account=<id>`. For orders the link text is "Orders" and it goes to
+  `/orders?account=<id>`.
 
-### D10 Artboard content the API does not have
+### D10 Layout
 
-| Artboard | Decision |
+- Minimum width 1280 px. The page background is `--color-bg`. The content padding is
+  24 px at the sides and 20 px at the top.
+- **Tables sit on the page:** no panel border, no radius, no card. The header row has a top
+  hairline.
+- **Panels** (hairline border, radius md, 44 px header) are used only for:
+  - the card's "In progress" box;
+  - the billing-run band;
+  - the inspector;
+  - forms grouped inside a dialog.
+- The inspector (slice 15) shows at a viewport width ≥ 1536 px, through
+  `useMediaQuery('(min-width: 1536px)')` in `ui/useMediaQuery.ts`.
+
+### D11 Artboard content that is dropped or replaced
+
+| Artboard | Built as |
 |---|---|
 | Subscribers "Export CSV" | Not built. |
-| Card "Customer since …" | Not shown: TMF629/666 carry no creation date (an existing decision). |
-| Card "Charged daily at 00:30" | Shown for prepaid accounts, from the context's run time. |
-| Billing runs per-row Retry, "Tries" | No per-account retry exists. Retry is per run and already retries only the failed accounts. Page primary is "Retry N failed" (the existing run retry). The outcome table has no Retry column; Tries is replaced by the outcome's reason. |
-| Billing runs "4 × rating timeout (OCS)" summary | A failure summary counts the outcomes' reasons when the outcome rows carry one; otherwise it shows "N failed". |
-| Add product "Reserved for you until …" | Not shown: number claims have no expiry. |
-| Unsure "req 7f3a91c2" | Replaced by method, path and time. |
-| Catalog "Created … by a.lepp" | Date only. There is no author. |
-| Catalog "In use" | "Active products": counted client-side from one `GET /product?status=active` list (the `getAll` pattern Subscribers already uses). If the slice finds this list already loaded nearby, it reuses it. No per-row requests. |
-| Order step timestamps | Only what TMF622 returns: `orderDate` (acknowledged), `requestedStartDate` (waiting for start), `completionDate`. Steps without a date show no time. |
-| Display ids `ORD-26-10-00418` | `ORD-` + the 8-hex display id (D5). |
-| Transfer step 4 Queued → Running → Succeeded | The command has no running state. Show Queued → Completed, or Failed (technical) with the existing Retry. |
-| Subscribers search placeholder "Name, BA id or number" | Keep what the search does now (name or subscriber number). If BA id matching can be done client-side on the loaded list, add it and say so in the placeholder. |
-| Sidebar user "Elena Kask" | The signed-in operator from the session, as now. |
+| Subscribers row `⋯` menu | Not built: the whole row opens the account, as now. |
+| Card top-bar avatar and Account menu | Not built. The operator menu stays in the sidebar footer (D6). |
+| Card "Customer since …" | Not shown (TMF629/666 have no creation date). |
+| Card Products tab, "Show 1 terminated" | Not built: the card loads only its current products. They are on Overview. |
+| Card Orders tab | Not built: the card has no order list. The meta line keeps the existing "Orders" link to `/orders?account=<id>`. |
+| Catalog "In use" column | Not built (it would need a new request). |
+| Catalog "Created … by a.lepp" | Not shown. "Updated" shows TMF620 `lastUpdate` (date) when present, else "—". |
+| Billing runs per-row Retry | Not built. Retry is per run; it already retries only the failed accounts. |
+| Billing runs reason summary "4 × rating timeout" | "N failed · M waiting", plus `run.error` when `failureKind === 'run'`. |
+| Add product "Reserved for you until …" | Not shown (claims have no expiry). |
+| Unsure "req 7f3a91c2" | The failed call text instead (D7). |
+| Transfer step 4 inside the dialog | Not built: an accepted transfer closes the dialog and the card's "In progress" box follows it (D9), as now. The dialog has 3 steps: Recipient, Amount, Confirm. |
+| Order steps with timestamps | The "In progress" box shows command phases (slice 7), not TMF622 timestamps. |
+| Display ids like `ORD-26-10-00418` | `ORD-` + the 8-hex short id (D5). |
 
-### D11 Layout
+### D12 Subscriber card
 
-- Minimum width 1280 px.
-- The page background becomes `--color-bg`. Tables sit on the page: no panel border, no
-  card.
-- The page gutter is `--space-xl`, and the first/last table cells align to it.
-- The inspector (R15) appears at viewport width ≥ 1536 px, through one `useMediaQuery`
-  hook.
-- Below 1536 px a row click does what it does now (navigate or open the dialog).
+1. **Header** (no panel):
+   - `--type-page` name, then `StatusPill kind=account`, then the mode `Tag` (PREPAID /
+     POSTPAID).
+   - Actions on the right: Add product (secondary, label "Add product", no "+"), Edit
+     (secondary), and a `⋯` Menu "More actions" (`data-ui="ui.subscriber.moreActions"`).
+   - **Menu items:** Record payment (postpaid only; for prepaid it stays a strip action),
+     Delete… (only when `deletable`, negative text, keeps marker `ui.subscriber.delete`).
+     Refund and on-demand bill keep their current places (Account tab, Bills tab).
+   - The meta line (`--type-label` ink-3, items separated by "·"):
+     - `<Id>` of the billing account;
+     - "Subscriber no." + value;
+     - "Customer" + `StatusPill kind=customer`;
+     - the financial account link (keeps `ui.subscriber.financialAccount`) when present;
+     - the "Orders" link (keeps `ui.subscriber.orders`);
+     - for prepaid, "Charged daily at <billingRunAt>".
+   - The "Unavailable for … accounts" caption stays under the actions when Add product is
+     disabled.
+2. **Money strip** (`MoneyStrip`, `data-ui="ui.subscriber.moneyStrip"`), full width,
+   `--color-bg-subtle`, hairlines top and bottom:
+   - **Prepaid:**
+     - Ledger − Reserved = Available (`--type-figure`; Available ink-1 with an ink-1 label,
+       the others ink-2), keeping markers `ui.subscriber.prepaid.reserved` and
+       `.available`;
+     - a vertical hairline;
+     - Paid through (date + "in N days", marker `.paidThrough`);
+     - Shortfall ("—" + "none", or the amount in negative + "renewal needs X, available Y";
+       marker `.shortfall`; the suspension causes line and the "Commands" link
+       `ui.subscriber.prepaid.commands` follow under it);
+     - actions: Top up (primary), Adjust, Hold, Transfer (secondary).
+   - **Postpaid:**
+     - Balance (`--type-figure`, ink-1 label);
+     - a vertical hairline;
+     - Credit limit (value or "—", and "Over by X" in warning when over the limit);
+     - Cycle day ("Day N" + "next bill <date>");
+     - Due on bills (the outstanding amount + "N overdue · X" in negative, or "N on hold");
+     - action: Record payment (primary).
+   - The prepaid balance error shows as a negative `Note` under the strip.
+3. **Tabs** (`data-ui="ui.subscriber.tabs"`), with the selected tab in the URL hash; an
+   unknown or empty hash means Overview:
+   - `#overview` **Overview**: the products table (slice 7), the "In progress" box, and the
+     Recent activity rail.
+   - `#bills` **Bills**: the bills panel, the record payment entry and the on-demand bill.
+   - `#payments` **Payments**: the payments panel, then the refunds panel.
+   - `#charges` **Charges**: the charge history.
+   - `#transactions` **Transactions**: the transaction history.
+   - `#balance` **Balance actions**: prepaid only.
+   - `#commands` **Commands**: prepaid only; the failed-commands panel and a link to the
+     Prepaid commands screen.
+   - `#account` **Account**: a `KeyValue` block with currency, cycle day and next cycle,
+     credit limit and "Available incl. credit" (postpaid), due on bills, and unused credit
+     with the existing Refund action. The financial account link stays.
 
-### D12 Subscriber card information architecture
-
-Order on the page:
-1. **Header:** name (`--type-page`), StatusPill, mode Tag. Meta line: `Id` BA, customer
-   no., party, customer status. Actions: Add product (secondary), Edit, and a `⋯` menu with
-   Record payment, Refund, On-demand bill and Delete (only when deletable, as now).
-2. **Money strip:** the prepaid or postpaid variant from Components.
-   - Prepaid primary is Top up. Adjust, Hold and Transfer are secondary.
-   - Postpaid primary is Record payment. Record payment then leaves the `⋯` menu for
-     postpaid.
-   - Shortfall comes from the existing prepaid figures.
-3. **Tabs**, remembered in the URL hash (`#products`), so the route is unchanged. Each tab
-   lists what it holds:
-   - **Overview:** the products table (pending change as an inline sub-row with Undo), the
-     "In progress" order panel (the existing order watch), and the Recent activity rail
-     (the last 8 transactions, with balanceAfter).
-   - **Products:** all products, with "Show terminated".
-   - **Orders:** this account's orders.
-   - **Charges:** the charge history.
-   - **Transactions:** the transaction history.
-   - **Bills:** the bills panel and its dialogs.
-   - **Payments:** this account's payments and refunds.
-   - **Balance actions:** prepaid only; the existing history and its dialog.
-   - **Commands:** prepaid only; the existing prepaid commands panel.
-   - **Account:** the existing BillingAccountPanel content (settlement, financial account,
-     credit limit, cycle and settings) as a KeyValue block, with its edit actions.
-   - Tab counts come from data already loaded. A tab with open work (orders in progress,
-     pending commands) shows an info Badge.
-4. The rail sits beside the main column from 1280 px (320 px). At ≥ 1536 px it is 400 px.
+   Tab counts come from data already loaded: Bills (bills), Payments (payments + refunds
+   when loaded), Charges and Transactions (rows loaded, max 20, shown as "20+" when 20). The
+   Commands tab shows an info `Badge` with the failed-command count when it is > 0.
+4. **Layout:**
+   - Overview is a two-column grid: main `minmax(0, 1fr)` and the rail (320 px; 400 px at
+     ≥ 1536 px), with a 32 px gap.
+   - Other tabs are full width.
 
 ## Slice specs
 
-### R1 Tokens, fonts, screenshot tool
+### Slice 1: tokens, fonts, legacy aliases, style guard test, `make web-shots`
 
-- **Tokens:** `ui/tokens.css` ← handoff tokens plus the D1 additions. `ui/legacy-tokens.css`
-  holds the aliases. `base.css` imports both and loads the fonts per D2. Body: `--color-bg`,
-  `--type-body`, `--color-ink-1`. The `.num` class uses `--type-num`, and `.neg` uses
-  `--color-negative`.
-- **Stray values:** replace the hard-coded `#fff`/`#000` in `ui.css`, `shell.css` and
-  `screens.css` with tokens (`--color-on-primary`, `--color-ink-1`, ...). Replace the two
-  `var(--x, #fff)` fallbacks in `ProductActions.tsx` with plain tokens.
-- **Screenshots:** add `make web-shots`. A Playwright spec (`frontend/e2e/shots.spec.ts`,
-  run only by that target, not by `make web-e2e`) signs in like the smoke does. It opens
-  these pages at 1280×900 and 1600×1000 and writes PNGs to `.shots/<name>-<width>.png`
-  (git-ignored):
-  - `/subscribers`;
-  - a prepaid subscriber card and a postpaid subscriber card from the seed;
-  - `/catalog`, `/billing-runs`, `/orders`, `/bills`, `/balances`.
+1. **Tokens and fonts:**
+   - `frontend/src/ui/tokens.css` = handoff tokens plus the D1 block, with the media block
+     commented (D3);
+   - `frontend/src/ui/legacy-tokens.css` = the D1 alias table;
+   - `ui/base.css` imports tokens, then legacy, then the fonts (D2);
+   - body: `font: var(--type-body)`, `color: var(--color-ink-1)`, `background:
+     var(--color-bg)`;
+   - `.num` uses `font: var(--type-num)` with `font-variant-numeric: tabular-nums`;
+   - `.neg` uses `color: var(--color-negative)`.
+2. **Remove colour and size literals:**
+   - `shell.css` 35/36/51/93: `#000` → `--color-ink-1`, `#fff` → `--color-on-primary`,
+     `10px` → `font: var(--type-micro)`;
+   - `ui.css` 212/227/354: `#fff` → `--color-on-primary`;
+   - `screens.css` 412/422/437/439: `#fff` → `--color-on-primary` (fill) or `--color-bg`
+     (surface); 627/636: `12px`/`13px` → `var(--type-label)`/`var(--type-body)`; 642: the
+     fallback is dropped (`var(--color-border)`);
+   - `ProductActions.tsx` 105/106: `var(--surface, #fff)` and `var(--border, #ccc)` →
+     `var(--color-bg)` and `var(--color-border)`.
+3. **Style guard test** `frontend/src/ui/styleGuard.test.ts`. Using `node:fs`, it reads
+   every `*.css` under `src/` and fails on:
+   - (a) a hex, `rgb(` or `hsl(` colour outside `tokens.css`;
+   - (b) a `font-size: <n>px` or a `font:` shorthand with a px size outside
+     `legacy-tokens.css`;
+   - (c) `font-weight: 700`.
 
-  It uses the same compose/e2e setup as `make web-e2e` against the local stack with
-  `make seed` data. Document it in CLAUDE.md's command list.
-- **Tests:** a test that fails if any CSS file other than `tokens.css` and
-  `legacy-tokens.css` contains a hex colour or a `px` font-size (a small vitest reading the
-  files). Allow existing violations through an explicit, shrinking allow-list file.
-  Each later slice removes its entries, and R14 empties it.
-- **Done when:** the app renders with v2 colours and type on every screen, tests pass,
-  and the shots exist.
+   Each failure names the file and line.
+4. **`make web-shots`:**
+   - **Files:**
+     - `frontend/playwright.shots.config.ts`: the same as `playwright.config.ts`, but
+       `testDir: 'e2e-shots'` and a single project without a fixed viewport;
+     - `frontend/e2e-shots/shots.spec.ts`: signs in with `signIn(page)` from `../e2e/auth`,
+       then for each width in `[1280, 1600]` (height 900 and 1000) sets the viewport, opens
+       each page, waits for `networkidle` and saves
+       `/web/.shots/<page>-<width>.png` (full page).
+   - **Pages:**
+     - `subscribers`: `/subscribers`;
+     - `card-prepaid`: `/subscribers`, then the "Prepaid" mode filter, then a click on the
+       first row;
+     - `card-postpaid`: the same with "Postpaid";
+     - `catalog`: `/catalog`;
+     - `billing-runs`: `/billing-runs`;
+     - `orders`, `products`, `bills`, `payments`, `balances`, `prepaid-commands`,
+       `parties`, `integrations`: their routes;
+     - `ui-kit`: `/ui-kit` (exists from slice 2; skip it when the heading "UI kit" is
+       absent).
+   - **The target** is a copy of `web-e2e` with the last line running
+     `docker compose run --rm e2e npx playwright test -c playwright.shots.config.ts`. It
+     also runs `rm -rf frontend/.shots && mkdir -p frontend/.shots` first. Add it to the
+     Makefile help, and to CLAUDE.md's command block next to `make web-e2e`.
+   - **Ignores:** add `frontend/.shots/` to `.gitignore`, `.shots/` to
+     `frontend/.prettierignore`, and `'.shots'` to the `ignores` array in
+     `frontend/eslint.config.js`. `e2e-shots/` is linted like `e2e/`.
+5. **Tests:**
+   - the style guard: it passes now, and a fixture string with `#fff` fails it (test the
+     checker function on strings, and the real files);
+   - a test that `legacy-tokens.css` defines every old name the code still uses (a grep of
+     `var(--<old>)` in `src/**/*.{css,tsx}` against the file).
+6. **Done when:** all screens render with the v2 colours and type, the tests pass, and
+   `make web-shots` writes the PNGs.
 
-### R2 Primitives: actions, fields, status
+### Slice 2: Button, fields, Segmented, StatusPill and tags, Amount, Id, `/ui-kit`
 
-- **Button:** variants `primary | secondary | danger | quiet`.
-  - `danger-outline` becomes `quiet` with negative text: add `tone="negative"` to quiet,
-    and migrate the 13 uses.
-  - `small` = 28 px.
-  - `busy` and `busyLabel` per D7.
-  - Focus ring per HANDOFF rule 8.
-  - Disabled: `--color-bg-sunken` and `--color-ink-4` (no opacity).
-- **Field primitives:** `Field` (label, help, error with the diamond glyph, `htmlFor`
-  wiring), `TextInput`, `SelectField` (native select with a custom chevron), `DateField`
-  (text input `YYYY-MM-DD` in mono with the calendar icon; keep the existing date input
-  behaviour and values), `MoneyField` (right-aligned mono, currency suffix, keeps the
-  validated decimal string rules of `format/money.ts`), `Checkbox`.
-- **Segmented:** the track style; `count` in mono; radio-group semantics when used as a
-  field (`role="radiogroup"`). The pressed-button semantics stay for filters.
-- **Status and tags:**
-  - `StatusPill` and `ui/status.ts` per D4, with the 7 glyphs in CSS (no SVG).
-  - `Tag` (outlined caps: Prepaid/Postpaid).
-  - `Flag` (Over limit).
-  - `Badge` (count, failed, info "1 open").
-  - `Pill` remains as a deprecated alias that calls `StatusPill` with a guessed kind,
-    until R14.
-- **Amount and Id:** `Amount` per D5, and the new `Id` per D5.
-- **Tests:**
-  - every row of the D4 table, each `kind`, renders the right family and label;
-  - an unknown status falls back to Draft;
-  - Amount formats U+2212, 2 decimals and `+` only when signed, and has no green;
-  - Id copies the full id;
-  - Button busy keeps its name accessible and is disabled;
-  - MoneyField keeps the typed decimal string.
-- `kit.test.tsx` tone assertions change (`TEST-CHANGE:`).
-- **Done when:** Components.dc.html's buttons, fields, pills, tags and badges match in
-  the shots (render them on a hidden dev-only route `/__kit`, excluded from the sidebar and
-  from the build's router in production: `import.meta.env.DEV`).
+1. **`Button`:**
+   - variants `primary | secondary | danger | quiet`, and `tone?: 'negative'` (quiet only:
+     negative text). Migrate the 13 `danger-outline` uses to `variant="quiet"
+     tone="negative"`;
+   - heights 32, and 28 with `small`;
+   - styles per Components "Buttons": secondary = inset 1 px `--color-border-strong`;
+     disabled = `--color-bg-sunken` fill and ink-4 text, no opacity; focus = `--focus-ring`
+     on `:focus-visible`;
+   - props `busy` and `busyLabel` (D7). The spinner is a CSS `::before` on `.is-busy`.
+2. **Fields:**
+   - `Field({ label, help, error, children })` renders `<label>` with a `--type-label` ink-2
+     label, a 4 px gap, help in ink-3 and an error in negative with a 6 px diamond;
+   - `TextInput` (existing API; 32 px, padding 0 10, border-strong, radius sm; focus = primary
+     border + `--focus-halo`; `mono` → `--type-num`);
+   - `SelectField` (a native select with `appearance: none` and a CSS chevron);
+   - `DateField` (`TextInput mono` with a calendar icon; same value and handlers as the
+     current date inputs);
+   - `MoneyField` (right-aligned mono, with a `--color-bg-subtle` currency suffix
+     segment);
+   - `Checkbox` (14 px, `accent-color: var(--color-primary)`).
 
-### R3 Primitives: table, states, structure, dialog, toast
+   Slice 2 only builds and tests them. Screens adopt them in their slices.
+3. **`Segmented`:**
+   - a `--color-bg-sunken` track with 2 px padding; options 28 px with radius 3 (use
+     `calc(var(--radius-sm) - 1px)`);
+   - the selected option on `--color-bg` with a 1 px `--color-border` ring and ink-1 text;
+   - counts in mono ink-3;
+   - prop `as?: 'filter' | 'radio'`: `filter` keeps `role=group` + `aria-pressed` (the
+     default, so existing tests hold), and `radio` uses `role=radiogroup` / `role=radio` /
+     `aria-checked`.
+4. **`StatusPill`** per D4, in `ui/status.ts` + `ui/kit.tsx`. The glyphs are CSS (`::before`
+   on `.pill-<family>`). Replace **every** `<Pill` call site (39, listed by `grep -n "<Pill"
+   frontend/src`) with `<StatusPill kind=…>` per D4. Then delete `Pill`, `toneOf`, `TONES`,
+   the old `.bss-pill` CSS and the `--st-*` legacy tokens.
+5. **`Tag`** (outlined caps, 18 px, `--type-micro`), **`Flag`** (warning tint, 18 px, the D1
+   Flag override) and **`Badge`** (16 px round, the D1 Badge override: `count` neutral on
+   `--color-bg-sunken`, `failed` negative fill with `--color-on-primary` text, `info` info
+   tint). Use them: the sidebar failed badge
+   (`Badge kind=failed`), the "built in" Tag (D4), and the env Tag (in slice 4).
+6. **`Amount`** per D5 and **`Id`** per D5 (`ui/Id.tsx`). Adopt `Id` in the Subscribers
+   list's account column and the card meta line in this slice. Other screens adopt it in
+   their slices.
+7. **`/ui-kit` route:**
+   - `route name 'uiKit'`, `screens/UiKit.tsx`, heading "UI kit";
+   - not in the sidebar, and present in all builds (it makes no requests);
+   - it renders every primitive in every state from Components.dc.html: buttons × states,
+     fields, pills (every kind and value from D4), tags, flags, badges, amounts and ids;
+   - marker `ui.kit`.
+8. **Tests:**
+   - `status.test.ts`: every row of D4 (kind, value → family class and label), unknown →
+     Draft, the label override;
+   - Amount: `-4210` → "−42.10" with the negative class; `signed` 1000 → "+10.00"; no
+     positive colour class;
+   - Id: the click calls `clipboard.writeText` with the full id and toasts "Copied";
+   - Button busy: disabled, spinner class, name unchanged or `busyLabel`;
+   - Segmented `as="radio"` roles;
+   - MoneyField renders the suffix and keeps the typed string;
+   - `kit.test.tsx` tone tests are replaced (`TEST-CHANGE: pill tones replaced by D4
+     families`).
 
-- **Table** (`ui/Table.tsx`):
-  - header 32 px (`--type-micro`, `--color-bg-subtle`, sticky) and rows 36 px, with
-    `compact` (32) and `dense` (28) table props;
-  - first/last cell padding 24 px; hairlines only; no outer border;
-  - hover, `selected` (bg + inset bar), and `:focus-visible` rows (rows that have
-    `onClick` get `tabIndex=0` and Enter/Space activation);
-  - an optional `actions` column rendering a 28 px `⋯` `Menu` trigger, visible on row hover
-    and focus;
-  - `TableFooter` gains the pagination layout ("1–50 of 1,284", Previous/Next). The
-    existing paging behaviour is unchanged.
-- **States:** `ListState` keeps its logic. Restyle it per States.dc.html:
-  - left-aligned, inside the table body, with the header kept;
-  - the skeleton shows after 200 ms (a timer; tests use fake timers or wait for it);
-  - the error shows the call and the time;
-  - "No results" names the query and active filters when the caller passes them. A new
-    optional prop; screens adopt it in their slices.
-- **Structure primitives:**
-  - `Tabs` (roving focus with arrow keys, `role=tablist/tab/tabpanel`, counts, badge);
-  - `Menu` (button + popover, `role=menu`, arrow keys, Escape, outside click, `…` items,
-    destructive items in negative text, separators);
-  - `Note` (`info | warning | negative`, bold lead plus text, optional code);
-  - `KeyValue` (`dl` grid);
-  - `MoneyStrip` (prepaid equation and postpaid variants, an action slot);
-  - `PageHeader` (title, count, actions, filter row; replaces `PageTitle`, which stays as
-    an alias until R14).
-- **Panel:** a hairline border, radius md, 44 px header, no shadow. It is used only for
-  grouped work, per Components.
-- **Dialog and Footer:** per D7. **Toast:** per D8.
-- Replace the inline-styled menu in `ProductActions.tsx` with `Menu`.
-- **Tests:**
-  - Tabs and Menu keyboard behaviour;
-  - the skeleton delay;
-  - the Footer refused and unsure notes (unsure hides the primary and shows Refresh);
-  - the Dialog sizes and the S/M/L mapping of `Modal` widths;
-  - the toast action and 6 s timeout;
-  - the Table row keyboard activation.
-- **Done when:** Components.dc.html and States.dc.html match on `/__kit`. Every existing
-  screen still passes its tests.
+### Slice 3: Table, list states, Tabs, Menu, Note, KeyValue, MoneyStrip, PageHeader, Panel, Dialog, Footer, Toast
 
-### R4 Shell
+1. **`Table`** (`ui/Table.tsx`):
+   - `TableHead`: 32 px, `--type-micro` caps ink-3, `--color-bg-subtle`, top and bottom
+     hairlines, `position: sticky; top: var(--topbar-height)`;
+   - `TableRow`: `--row-height` min height, bottom hairline, cells padded 0 12, the first
+     cell 24 left and the last 24 right;
+   - a `density?: 'default' | 'compact' | 'dense'` prop on head and rows;
+   - rows with `onClick`: `tabIndex=0`, Enter/Space call it, hover `--color-bg-hover`,
+     `:focus-visible` = an inset 2 px primary ring;
+   - `selected?: boolean` → `--color-bg-selected` + `box-shadow: inset 2px 0 0
+     var(--color-primary)`, `aria-selected`;
+   - column `align: 'right'` for amounts, counts and dates in amount columns;
+   - the Column type gains `kind?: 'actions'` (28 px `⋯` button, visible on row hover and
+     focus-within, `aria-label="Row actions"`);
+   - `TableFooter`: 44 px, the range "1–50 of 1,284" in mono (ink-1 range, ink-3 rest),
+     with the existing paging controls restyled as 28 px secondary buttons (Previous / Next).
+2. **List states** (`ui/states.tsx`) per States.dc.html:
+   - left-aligned at the gutter, under the kept header;
+   - **skeleton:** bars of `--color-bg-sunken`, shown only after 200 ms (`useDelayed(200)`;
+     until then an empty box of the same height);
+   - **error:** a title, then the call and the time (`HH:MM:SS` from `context.now`'s zone;
+     the time of the failure is `new Date()`, the one browser-clock read allowed, for
+     display only), then Retry (secondary);
+   - **empty:** title, one sentence, an optional action;
+   - **no results:** "Nothing matches “<query>”", then "with <filter> <value>" for each
+     active filter, then Reset filters. New optional props `query?: string` and `filters?:
+     { label: string; value: string }[]` on `ListState` and `NoResults`.
+3. **`Tabs`:**
+   - `role=tablist`; each tab is a `role=tab` button, 40 px, ink-2 500, selected ink-1 600
+     with `inset 0 -2px 0 var(--color-ink-1)`;
+   - left and right arrows, Home and End move focus and select;
+   - an optional count (mono) or `Badge` per tab;
+   - `TabPanel` with `role=tabpanel` and `aria-labelledby`.
+4. **`Menu`:**
+   - a trigger button (`aria-haspopup=menu`, `aria-expanded`) and a popover (`role=menu`,
+     220 px min width, padding 4, radius md, `--elev-popover`);
+   - items `role=menuitem`, 30 px, with `tone='negative'` and `disabled`, and separators;
+   - keys: Down/Up move, Enter activates, Escape closes and refocuses the trigger, an
+     outside click closes;
+   - replace the inline-styled menu in `ProductActions.tsx` with it, keeping that
+     component's items, labels and markers.
+5. **`Note`**: `tone: 'info' | 'warning' | 'negative'`, `lead?: string` (bold), children,
+   `code?: string` (mono ink-3); the tint fill, no border, radius sm, padding 10/12, and a
+   14 px icon per tone (inline SVG as in Components). `role="note"`, and `role="alert"` for
+   negative. Replace the classes `bss-warning`, `bss-hint` and `bss-inline-error` in the 9
+   files that use them with `Note` (`bss-inline-error` → negative, `bss-warning` →
+   warning, `bss-hint` → info). Keep their text exactly.
+6. **`KeyValue`**: `items: [ReactNode, ReactNode][]` → a `dl` grid 128 px / 1fr, rows padded
+   8 0 with bottom hairlines, labels `--type-label` ink-3.
+7. **`MoneyStrip`**: `figures: { label, value, sub?, tone?, emphasis? }[]`, optional
+   operators between figures (`'−' | '='`), `divider` positions, and an `actions` slot.
+   Per Components "Money strip".
+8. **`PageHeader`**: `title`, `count?`, `meta?`, `actions?`, `filters?` (a row under the
+   title, 16 px above and 12 px below, wrapping). The title is `--type-page` with
+   `--tracking-page`, the count mono ink-3. `PageTitle` becomes a wrapper of `PageHeader`
+   until slice 14.
+9. **`Panel`** per D10: a hairline border, radius md, a 44 px header with `--type-body`
+   600 title. `Panel` without a title is only a box.
+10. **`Dialog`**, **`Footer`** and the write states per D7; **toast** per D8.
+11. **Tests:**
+    - Tabs keyboard (arrows, Home/End) and aria;
+    - Menu keyboard, Escape refocus, outside click;
+    - the Table row Enter activation and `selected`;
+    - the skeleton hidden before 200 ms and shown after (fake timers);
+    - NoResults lists the query and filters;
+    - the Footer refused note shows the message and code;
+    - unsure shows Refresh and hides the dialog's primary;
+    - the Dialog size mapping from `Modal` widths;
+    - the toast action button and its 6 s hide;
+    - the Note roles.
 
-Artboard: Components "Sidebar" and "Top bar", and any screen artboard's shell.
-- **Sidebar:**
-  - 216 px, `--color-bg-subtle`, the brand row ("BSS Admin"), section labels in micro
-    caps, text-only items 28 px high;
-  - the active item is white with a hairline;
-  - counts in mono, and the failed badge on Billing runs (logic unchanged);
-  - the footer has the avatar initials, name and role.
-- **Top bar:** 48 px; breadcrumbs with ink-3 parents and an ink-1 current crumb; the
-  business-date chip per D6; the avatar menu.
-- `App.test.tsx` and `session.test.tsx` keep their link and menu assertions.
-- **Tests:** chip drift states (same day, behind, ahead) with a fixed system time; the
-  avatar opens the operator menu.
+    `/ui-kit` gains a section for each new primitive (the tables, the four list states, a
+    dialog in each write state, a menu open, tabs, notes, the money strips). Existing tests
+    that wait for the toast's 3.2 s or read a menu by its old structure get `TEST-CHANGE`.
 
-### R5 Subscribers list
+### Slice 4: Shell
 
-Artboard: `Subscribers.dc.html` (the 1280 view; the inspector waits for R15).
-- **PageHeader:** "Subscribers" with the count; the primary is New subscriber.
+Implement D6 in `app/Shell.tsx` and `app/shell.css`. New markers:
+`ui.shell.businessDate` (the chip) and `ui.shell.operator` (the footer trigger).
+
+Tests:
+- the chip for the same day (no warning class), 1 day behind, 3 days behind and 1 day
+  ahead (stub the context's `now`, `businessDate` and `timeZone`, including a zone where
+  the UTC date differs);
+- the "UTC+5:30" format;
+- the initials rule;
+- the active item style class;
+- the existing sidebar link and badge tests stay green.
+
+### Slice 5: Subscribers list
+
+Artboard: `Subscribers.dc.html` without the inspector.
+- **PageHeader:** "Subscribers", the count (the filtered count when a filter or search is
+  on), primary "New subscriber" (existing action and marker).
 - **Filter row:**
-  - search 300 px with the icon; `/` focuses it unless an input has focus;
-  - status and mode as Segmented with counts (the existing counts);
-  - Reset filters only when a filter is set.
+  - a 300 px search with the icon, placeholder "Name, BA id or subscriber no." (the search
+    already matches these);
+  - the shortcut `/` focuses it when the focus is not in an input, textarea or select;
+  - Segmented "Account state" and "Account mode" with counts (existing filters and counts);
+  - a quiet "Reset filters" only when a filter or the search is set;
+  - at the right end, ink-3 "Negative balance N" (the existing count, `neg-count` kept).
 - **Columns:**
-  1. Name (body-strong, link);
-  2. Account (`Id` BA);
-  3. Status;
-  4. Mode;
-  5. Products (right);
-  6. Cycle day (right; "—" for prepaid);
-  7. Balance EUR (right, last), with the "Over limit" Flag when the account has a credit
-     limit and `balanceCents < -creditLimitCents`. That is the same rule as the internal
-     `exceedsCreditLimit`, and it is informational only;
-  8. Actions `⋯`: Open account, Record payment (opens the existing dialog). Only actions
-     that exist today.
-- The negative-balance chip and the "negative" count presentation become the D5 rules. If
-  a negative filter exists, keep it as a Segmented option.
-- The no-results state names the query and filters.
-- **Tests:** the flag shows only over the limit; `/` focuses the search; the row menu opens
-  the existing payment dialog; the no-results copy.
 
-### R6 Subscriber card: header, money strip, tabs
+  | Column | Content | Width |
+  |---|---|---|
+  | Name | body-strong, ellipsis | `minmax(0, 1.6fr)` |
+  | Account | `Id` BA | 140px |
+  | Status | `StatusPill account` | 120px |
+  | Mode | ink-2 "Postpaid"/"Prepaid" | 96px |
+  | Products | right, mono | 80px |
+  | Cycle day | right, mono; "—" for prepaid | 88px |
+  | Balance EUR | right, last; `Amount` without currency; "Over limit" `Flag` before it | 180px |
 
-Artboard: `SubscriberCard.dc.html` (top half). Spec: D12 items 1–3.
-- Move the existing panels into tabs unchanged, except for restyling. Overview holds the
-  products panel as it is today until R7.
-- Tab state in the URL hash. An unknown hash falls back to Overview.
-- **Every existing marker stays.** New: `ui.subscriber.tabs`, `ui.subscriber.moneyStrip`,
-  `ui.subscriber.moreActions`.
-- Tests that find panels on the card now first click their tab. Adjust with
-  `TEST-CHANGE:` (structure changed by design); the assertions themselves stay.
-- **Tests:**
-  - each tab renders its panel;
-  - the prepaid strip equation figures come from the loaded balance;
-  - the postpaid strip shows the over-limit line only over the limit;
-  - the `⋯` menu actions open the existing dialogs;
-  - a hash deep-link opens the tab.
+  Over limit means `creditLimitCents !== null && balanceCents < -creditLimitCents`. The
+  whole row opens the card, as now.
+- No results passes the query and the active filters (labels "Status", "Mode").
 
-### R7 Subscriber card: Overview
+Tests: the flag on/off at the boundary (balance = −limit is not over); `/` focuses the
+search and is ignored inside an input; the placeholder; the no-results copy; the filtered
+count.
 
-Artboard: `SubscriberCard.dc.html` (Overview) and `SubscriberCard-1600`. Spec: D12 Overview, D10 order steps.
-- **Products table:**
-  - columns Product (name + code), Number, Status, Since (startDate), Price EUR (rate),
-    and actions `⋯` with the existing product actions;
-  - a pending change is an inline sub-row with an info Note style and Undo/Cancel change
-    (the existing calls);
-  - "Show N terminated" toggle.
-- **In progress panel:** the existing order watch, restyled as steps from D10, with "Open
-  order" linking to the Orders dialog/route as now.
-- **Recent activity rail:** the last 8 transactions from the already-loaded transaction
-  list; columns what/ref, amount (signed), date, balance after; "All transactions"
-  switches to the tab. The prepaid footnote reads "Holds change Reserved, not Ledger."
-- **Tests:**
-  - the sub-row for a pending change, and Undo still sends the same request (existing
-    assertion);
-  - the rail shows at most 8 rows with balanceAfter;
-  - the terminated toggle.
+### Slice 6: Subscriber card: header, money strip, tabs
 
-### R8 Billing runs
+Implement D12 items 1–3 and 4's tab layout. Overview holds the current products panel
+unchanged until slice 7.
+- Move every existing panel into its tab without changing its content. They are restyled
+  only through the primitives.
+- Dialogs (payment, money, transfer, edit, delete, bill, add product) stay mounted from
+  `Card` as now.
+- `PrepaidFigures` and `BillingAccountPanel` are replaced by the strip and the Account tab.
+  Every marker named in D12 stays.
+
+Tests:
+- each tab shows its panel's marker;
+- the hash deep link (`#bills`) and the fallback;
+- the prepaid strip's three figures equal the loaded balance and ledger;
+- the postpaid "Over by" appears only over the limit;
+- the More actions menu opens the payment dialog (postpaid) and shows Delete only when
+  deletable;
+- the prepaid tabs are absent for postpaid.
+
+Existing card tests that look for a panel first select its tab (`TEST-CHANGE: card panels
+moved into tabs`).
+
+### Slice 7: Subscriber card: Overview
+
+Artboard: `SubscriberCard.dc.html` and `SubscriberCard-1600.dc.html`.
+1. **Products table** (`density="compact"`):
+   - columns Product (name, then the offering code in mono ink-3 under the same line as a
+     second span), Number (mono), Status (`StatusPill product`, with the existing note
+     label), Since (the product start date), Price EUR (rate "9.90 / month", unit ink-3),
+     and the actions column (`Menu` with the existing ProductActions items);
+   - a pending change renders as a sub-row: an indented line on `--color-info-tint` with
+     "Pending change", the change text, and the existing Undo button (markers
+     `ui.subscriber.pendingChange`, `ui.subscriber.undoChange`,
+     `ui.subscriber.undoDeactivation` stay);
+   - the top-up product action (`ui.subscriber.topUpProduct`) and deactivate
+     (`ui.subscriber.deactivate`) stay in the row menu.
+2. **"In progress" box** (Panel, `data-ui="ui.subscriber.inProgress"`): it renders the
+   existing watch (`PrepaidOrderWatch`, the transfer watch) as steps:
+   - Accepted (done);
+   - Waiting for the worker (current while polling);
+   - Needs top-up (warning, when the command waits for funds, with the existing Top up
+     action);
+   - then Completed (done), or Failed (technical) with the existing Retry.
+
+   It also shows the D9 copy. The box is absent when nothing is watched.
+3. **Recent activity rail** (`data-ui="ui.subscriber.activity"`):
+   - the heading "Recent activity" and the link button "All transactions" (selects
+     `#transactions`);
+   - the first 8 rows of the loaded transactions: note and type (ink-3), the amount
+     `signed`, the date (mono ink-3), balanceAfter (mono, right);
+   - for prepaid, the footnote "Ledger balance after each movement. Holds change Reserved,
+     not Ledger.";
+   - empty: "No movements yet."
+
+Tests:
+- the pending sub-row renders and Undo sends the same request (the existing assertion);
+- the rail shows 8 of 20 loaded rows with balanceAfter;
+- the "All transactions" link switches the tab;
+- the In progress steps for each command phase.
+
+### Slice 8: Billing runs
 
 Artboard: `BillingRuns.dc.html`.
-- **Header:** "Billing runs", the meta "Nightly at 00:30 UTC+3" from the context. Actions:
-  Catch up to date… (secondary), and "Retry N failed" (primary, only when the latest run
-  failed; the existing retry).
-- **Latest run band:** date, StatusPill (run), stats (accounts, completed, failed, charged,
-  duration), a progress bar while running, the failure summary (D10), and the next run.
-- **Outcomes** for the selected run (default: the latest):
-  - a Segmented filter Failed / Completed / All, defaulting to Failed when there are
-    failures;
-  - a dense table: Account (Id), Reason, Status (runOutcome);
-  - an info note with the retry explanation.
-- **History:** the last 10 runs, compact table; selecting a row selects the run for
-  Outcomes. This replaces the run dialog, but its marker moves to the outcomes section.
-- Polling and the give-up note stay as they are.
-- **Tests:** "Retry N failed" appears only for a failed latest run; selecting a history row
-  loads that run's outcomes (the existing request); the Failed default.
+1. **PageHeader:**
+   - title "Billing runs";
+   - meta "Nightly at <billingRunAt> UTC±n";
+   - actions "Catch up to date…" (secondary, existing marker `ui.billingRuns.catchUp`), and
+     "Retry N failed" (primary, marker `ui.billingRuns.retry`) only when the latest run
+     failed. N = `accounts.failed`, or "Retry run" when `failureKind === 'run'`.
+2. **Latest run band** (Panel, `data-ui="ui.billingRuns.latest"`):
+   - run date (mono), `StatusPill run`, and the stats Accounts total, Billed (`ok`), Failed,
+     Waiting (`blocked`), Charged (sum, `Amount`), and Took (`finishedAt − startedAt`, as
+     "4 min 12 s");
+   - a progress bar while running (`(ok+failed+blocked)/total`);
+   - the D11 failure summary line;
+   - "Next run <date> <billingRunAt> · in Xh Ym", computed from `context.now` and the
+     zone. The next run's date is the latest run date + 1;
+   - the failed style (negative tint and border) when failed.
+3. **Outcomes** (`data-ui="ui.billingRuns.outcomes"`, replaces the run dialog):
+   - for the selected run (default the latest);
+   - the existing Segmented "Account outcome" (same keys and counts) relabelled Failed /
+     Waiting / Billed / All. Its default is the existing `firstFilter` (failed, else
+     blocked, else all), and the requests are the dialog's (`loadRunAccounts(id, filter)`);
+   - a compact table: Account (name + `Id`), Outcome (`StatusPill runOutcome`), Reason
+     (`error`, or "Waits for the run of <date>" for blocked; "—" for ok), Tries (`attempts`,
+     right), Finished (time);
+   - an info Note under it: "Retry re-bills only the failed accounts for <date>. Billed
+     accounts are not charged twice.";
+   - for a selected non-latest failed run, a secondary "Retry" in the section header (same
+     call and marker).
+4. **History:**
+   - the last runs already loaded, in a compact table: Date, Status, Trigger, Took, Failed,
+     Charged;
+   - a row click selects the run for Outcomes (`selected` row);
+   - a failed row keeps a quiet "Retry" in its actions cell (marker
+     `ui.billingRuns.retry`, as now).
 
-### R9 Product catalog
+Polling, catch-up and retry behaviour and requests are unchanged.
+
+Tests:
+- the primary is present only for a failed latest run, with the right label for each
+  failureKind;
+- selecting a history row loads that run's outcomes (the existing request string);
+- the `firstFilter` default for the latest run;
+- the blocked reason text;
+- the next-run text with a fixed context.
+
+The run-dialog tests move to the section (`TEST-CHANGE: run outcomes inline`).
+
+### Slice 9: Product catalog and offering detail
 
 Artboard: `Catalog.dc.html`.
-- **Offerings tab:**
-  - rows grouped by lifecycle (In design → Active → Retired), each with a group header row
-    (label, count, hint);
-  - columns Offering (name + code), Lifecycle, Recurrence, Price EUR (rate), Active
-    products (D10), Updated (TMF620 `lastUpdate`, date only);
-  - a search field, and a Segmented filter on lifecycle with counts;
-  - the note about the one-way lifecycle.
-- **The offering detail dialog** keeps its function and becomes the artboard's detail
-  layout:
-  - a lifecycle stepper, price, actions Activate… / Retire… / Change price…;
-  - a KeyValue block, and price history from the TMF620 prices already loaded.
-- The other tabs (Specifications, Categories, Catalogs, Import/export) get the Tabs
-  primitive, tables and states. No layout change beyond that.
-- **Tests:** grouping order and group counts; the active-products count from one list
-  request (pin the query string); the stepper reflects the lifecycle.
+1. **Offerings tab:**
+   - PageHeader "Product catalog", count "N offerings", primary "New offering" (existing);
+   - filters: search (name or code, client-side on loaded rows), and a Segmented lifecycle
+     filter (All / In design / Active / Retired, with counts);
+   - the table is grouped in the order In design → Active → Retired. Each group starts with
+     a header row on `--color-bg-subtle`: label, count, and a hint ("Not sellable yet",
+     "Sellable", "Billing only"). Empty groups are hidden;
+   - columns: Offering (name + code), Lifecycle (`StatusPill lifecycle`), Recurrence
+     ("Monthly", "Every 2 weeks" from the existing formatter), Price EUR (rate), and Updated
+     (`lastUpdate` date or "—");
+   - an info Note under the table: "Lifecycle runs one way: In design → Active → Retired.
+     Retired offerings stay billable for products already on them and are hidden from Add
+     product."
+2. **Offering detail dialog** (size L, existing marker):
+   - a lifecycle stepper with three steps (done / current / later, the current one in
+     ink-1 600) and a caption under each ("In design since <date>" when known);
+   - the price `--type-figure` with "/ unit";
+   - actions: the existing lifecycle action ("Activate…", "Retire…") and "Change price…",
+     with markers kept;
+   - a `KeyValue` with recurrence, code, specification, and "valid from";
+   - "Prices": a compact table of the prices the dialog already loads (from, to, amount);
+   - the existing edit and delete actions move into a `⋯` Menu in the dialog header.
+3. **The other tabs** (Specifications, Categories, Catalogs, Import/export) switch to
+   `Tabs`, the tables and the list states, and remove their inline styles. Statuses use
+   `lifecycle` / `catalogJob`.
 
-### R10 Add product dialog
+Tests: group order, group counts and hidden empty groups; the search on code; the stepper
+state for each lifecycle; the Note text; the menu holds edit and delete.
 
-Artboard: `AddProduct.dc.html`.
-- Size L.
-- **Left column:** the offering list as selectable rows (name, code, price/unit, note);
-  the number picker; the start date.
-- **Right column:** the first-charge preview from the server, as it is today (price,
-  period, proration, "then … from …"), with Required now / Available / Shortfall and
-  "Preview from the server · HH:MM:SS".
-- **Shortfall (immediate prepaid):**
-  - a warning Note with the artboard copy, using the server's numbers;
-  - "Add <offering>" is disabled;
-  - the primary is "Top up <shortfall> EUR…", which opens the existing top-up handoff.
-- A future start keeps today's hint and enabled Add.
-- Save draft keeps its place and markers.
-- **Tests:** in the shortfall state the primary is Top up and Add is disabled; the label
-  states the offering; the existing body pins are untouched.
+### Slice 10: Add product dialog
 
-### R11 Money dialogs: transfer, top-up, adjust, hold, record payment
+Artboard: `AddProduct.dc.html`. Size L, `context` = "<name> · BA-xxxx · prepaid|postpaid".
+- **Two columns** (1fr / 300 px):
+  - Left: the offering choice as selectable rows (radio semantics; name + code, a note,
+    and the rate on the right; the selected row gets `--color-bg-selected` + an inset
+    bar), then Number (the existing picker) and Start date (`DateField`, "Today (business
+    date)" help).
+  - Right: the existing server preview in a `--color-bg-subtle` box with "First charge"
+    (`--type-figure`), price, period, proration and the "then …" line; for prepaid, a
+    `KeyValue` with Required now, Available and Shortfall, and the caption "Preview from the
+    server · HH:MM:SS" (the time the preview answered, in the business zone).
+- **Immediate prepaid shortfall:** a warning `Note` lead "Shortfall <X> EUR." with text
+  "The first charge needs <required> and <available> is available. Top up first; the
+  product can be added once the balance covers it."
+  - The "Add <offering name>" button is secondary and disabled.
+  - The primary is "Top up <X> EUR…", the existing handoff, keeping marker
+    `ui.addProduct.topUpShortfall`.
+- **Otherwise:** the primary is "Add <offering name>" (busyLabel "Adding…").
+- Save draft (and save draft changes) are secondary at the left of the footer actions,
+  markers kept. A future-start shortfall keeps today's info hint and the enabled Add.
 
-Artboards: `TransferBalance.dc.html`, `States.dc.html` (Record payment).
-- **Transfer:**
-  - steps 1–4 with "Step n of 4";
-  - step 1: recipient by number, the found-account card with eligibility exactly as the
-    backend rules (show the refusal reason the server or the existing code gives);
-  - step 2: amount with an "Up to <available>" help text and a before/after preview from
-    loaded figures;
-  - step 3: the confirmation summary, a warning Note, the acknowledgement checkbox (D7);
-  - step 4: the watch per D9 and D10.
-- **Top-up, Adjust, Hold and Record payment:**
-  - size M, MoneyField;
-  - "Balance after" where the dialog already knows the balance;
-  - outcome labels ("Top up 20.00 EUR", "Record 42.10 EUR");
-  - busy labels.
-- Idempotency-Key handling and bodies are unchanged; their tests must pass untouched.
-- **Tests:** the checkbox gates the transfer primary and Enter does not submit on step 3;
-  the outcome labels; the unsure state shows Refresh and no retry.
+Tests:
+- the shortfall state: Top up is primary and Add is disabled;
+- the Add label includes the offering;
+- the radio semantics of the offering rows;
+- existing body pins untouched.
 
-### R12 Sweep: Products, Orders, Numbers, Parties, subscriber forms
+The label change is `TEST-CHANGE: outcome labels`.
 
-- PageHeader, filter row and Table with StatusPill kinds, `Id`, Amount and row `⋯` menus.
-- Detail dialogs use Dialog, KeyValue and Tabs where they had sub-sections.
-- Order dialog state chips use the `order` and `orderItem` kinds.
-- New/Edit subscriber forms use Field primitives.
-- No new components (if one seems needed, add it to `ui/` with tests and record why).
-- **Tests:** status kinds per screen; any renamed labels.
+### Slice 11: Money dialogs: transfer, top-up, adjust, hold, record payment
 
-### R13 Sweep: Prepaid commands, Accounts, Bills, Payments, Balances, Billing settings
+Artboards: `TransferBalance.dc.html` (steps 1–3), `States.dc.html` (Record payment).
+1. **Transfer** (size M, `step` 1–3):
+   - **Recipient:** the existing number lookup and its found-account result, shown as a
+     bordered row with name, `StatusPill account`, `Id`, number and the mode `Tag`. When
+     the existing code says the recipient cannot receive, a warning Note shows its existing
+     sentence. Info text: "Only active prepaid accounts can receive a transfer." Next is
+     disabled until the recipient is valid.
+   - **Amount:** `MoneyField` with the help "Up to <available>, the available balance.
+     Reserved money can't be moved." and a before/after `KeyValue` ("<sender> · available A
+     → A−x", "<recipient> · ledger L → L+x" when the recipient's ledger is in the loaded
+     lookup result; otherwise only the sender line).
+   - **Confirm:** a summary block ("You are transferring", the amount in `--type-figure`,
+     From and To lines with `Id`), the warning Note "This is final. A transfer can't be
+     undone here. Correcting it needs a new transfer from the recipient, with their
+     consent.", the D7 checkbox, and the primary "Transfer <x> EUR" (busyLabel
+     "Transferring…").
+   - The existing two-stage logic maps to these three steps. Recipient and Amount were one
+     form, so splitting them changes no request. The bodies and Idempotency-Key are
+     unchanged.
+2. **Top up / Adjust / Hold** (size M):
+   - `MoneyField`, and the existing fields as `Field`s;
+   - a "Balance after" line from the loaded figures (ledger for top-up and adjust, available
+     for hold);
+   - primary labels: "Top up <x> EUR", "Apply adjustment", "Hold <x> EUR" (with no valid
+     amount: "Top up", "Hold");
+   - busyLabels: "Topping up…", "Applying…", "Holding…".
+3. **Record payment** (size M) per States.dc.html:
+   - the context line is the name and `Id`;
+   - "Balance <b>" and "Balance after <b+x>";
+   - `MoneyField` "Amount received";
+   - the existing allocation fields as `Field`s;
+   - primary "Record <x> EUR" (busyLabel "Recording…"), "Record payment" without a valid
+     amount.
 
-Same as R12. Use bill kinds per D4, bucket and balanceAction kinds on Balances, and the
-command kind with "Failed (technical)" on Prepaid commands.
+Tests:
+- the checkbox gates the primary;
+- Enter on the confirm step does not submit;
+- each primary label with and without an amount;
+- the Balance after values;
+- the unsure state in Record payment shows Refresh and no Record button.
 
-### R14 Sweep: Integrations, Users, sign-in, change password, not found; cleanup; dark
+Existing tests clicking the old labels get `TEST-CHANGE: outcome labels`.
 
-- Restyle the remaining screens. Sign-in is a centred 400 px form on `--color-bg-subtle`.
-- **Cleanup:**
-  - delete `legacy-tokens.css`, the `Pill`/`Modal`/`PageTitle` aliases and every remaining
-    inline style except dynamic values;
-  - empty the allow-list from R1;
-  - grep proves no old token names remain.
-- **Dark theme:** enable dark per D3 and add the Theme menu item.
-- **Tests:**
-  - the theme choice is applied, persisted, and survives a storage exception;
-  - the hex/px test passes with an empty allow-list.
-- **Shots:** take each key screen in dark too (`.shots/<name>-<width>-dark.png`).
+### Slice 12: Sweep 1: Products, Orders, Numbers, Parties, subscriber forms
 
-### R15 Inspector ≥ 1536 px
+Every listed screen, with these rules:
+- `PageHeader` with filters;
+- tables per slice 3, with `Id` for every display id (D5), `StatusPill` kinds (`product`,
+  `order`, `party`, `customer`) and `Amount`;
+- detail dialogs use `Dialog` (size by content: L for order details, M for the others) and
+  `KeyValue` for label/value lists;
+- order items and cancellations as compact tables inside the dialog;
+- no inline styles left in these files;
+- the New and Edit subscriber forms (`SubscriberForms.tsx`) use `Field`, `TextInput`,
+  `SelectField` and `Segmented as="radio"` for the mode switch.
 
-Artboards: `Subscribers-1600`, `Catalog-1600`.
-- **Subscribers:** at ≥ 1536 px a row click selects the row and opens a 400 px inspector
-  instead of navigating. It shows:
-  - the name, Id, status and mode;
-  - balance with the over-limit line;
-  - party; cycle and next bill;
-  - the last bill and the last payment (one request each, only for the selected account,
-    using existing loaders);
-  - products summary and open orders;
-  - actions Open account (primary) and Record payment.
-- **Catalog:** the offering detail renders in the inspector instead of a dialog, with the
-  same content and actions.
-- Escape closes the inspector. Enter on a selected row opens the account.
-- **Tests** (mock `matchMedia`):
-  - below 1536 a click navigates (unchanged);
-  - above, a click selects and the inspector shows;
-  - the inspector's loads happen only for the selected row.
+Tests: one per screen asserting the kind mapping of a rendered status, and the `Id`
+prefixes used. The guard test from slice 1 passes with no new exceptions.
 
-### R16 Visual QA and release evidence
+### Slice 13: Sweep 2: Prepaid commands, Accounts, Bills, Payments, Balances, Billing settings
 
-- Run `make web-shots` (light and dark). Compare every key screen with its artboard and
-  fix the differences.
-- Run `make web-e2e`. Update `frontend/e2e/smoke.spec.ts` only where a selector changed by
-  design (`TEST-CHANGE:`).
-- Write `docs/ui-redesign-release.md`: the test counts (backend unchanged, frontend in
-  both zones), the e2e result, the list of shots reviewed, and every D10 deviation as
-  built.
-- Update CLAUDE.md "Current state" (one short paragraph).
+Same rules as slice 12, with these kinds:
+- `command`: the Prepaid commands table uses `density="dense"`;
+- `account`: financial, party and settlement accounts;
+- `bill` and `onDemandBill`: the subscriber Bills panel, Global bills and the bill dialog;
+- `payment`: payments and refunds;
+- `bucket` and `balanceAction`: Balances and PrepaidHistory.
+
+The "built in" `Tag` on Billing settings. Tests as in slice 12.
+
+### Slice 14: Sweep 3, cleanup, dark theme
+
+1. **Restyle:**
+   - Integrations and the System panel (`delivery`, `health` kinds);
+   - Users;
+   - Sign-in (a 400 px column centred on `--color-bg-subtle`, the form in a Panel, the
+     title `--type-page`);
+   - Change password (the same);
+   - Not found (PageHeader "Page not found", a sentence and a link to Subscribers).
+2. **Cleanup:**
+   - delete `legacy-tokens.css`, `PageTitle` and `Modal` (all callers use `PageHeader` and
+     `Dialog`);
+   - delete every remaining inline style except D-rule 4 runtime variables;
+   - extend the style guard: (d) no `var(--` name that is not defined in `tokens.css`, and
+     (e) no `style={{` in `src/**/*.tsx` except `style={{ '--`.
+3. **Dark theme:** per D3.
+4. **`make web-shots`** also writes `<page>-1280-dark.png`, `<page>-1600-dark.png` by
+   setting `localStorage['bss.theme'] = 'dark'` before the page loads.
+5. **Tests:**
+   - the theme choice applies and removes `data-theme` and persists;
+   - a throwing `localStorage` falls back to System without crashing;
+   - the guard's (d) and (e) pass.
+
+### Slice 15: Inspector at ≥ 1536 px
+
+1. **`useMediaQuery`** (`ui/useMediaQuery.ts`) with a `matchMedia` listener.
+2. **Subscribers:** at ≥ 1536 px a row click selects the row (`selected`) and opens a 400 px
+   inspector Panel at the right of the table (`data-ui="ui.subscribers.inspector"`). Enter
+   or a double click opens the card, and Escape closes the inspector. Its content comes only
+   from the loaded list data, with no new request:
+   - name (`--type-section`), `Id`, `StatusPill account`, the mode `Tag`;
+   - Balance (`--type-figure`) and the over-limit line;
+   - `KeyValue`: customer, Cycle day, Credit limit, Products ("N active ·" + offering
+     names with counts);
+   - actions "Open account" (primary).
+
+   Below 1536 px, a click navigates as now.
+3. **Catalog:** at ≥ 1536 px a row click shows the offering detail in a 400 px inspector
+   (`data-ui="ui.catalog.inspector"`) instead of the dialog. It has the same component
+   body and the same requests, and the dialog-only parts (the `⋯` menu, the actions) render
+   in the inspector header. Below 1536 px, the dialog shows as now.
+
+Tests (mock `matchMedia`):
+- below 1536 a click navigates or opens the dialog;
+- above, it selects and shows the inspector;
+- Enter opens the card;
+- Escape closes;
+- the inspector triggers no request on Subscribers (the stubs fail on unknown requests);
+- the Catalog inspector makes the same detail request as the dialog.
+
+### Slice 16: Visual QA, e2e, release evidence
+
+1. `make web-shots` (light and dark). Compare every page with its artboard and fix what
+   differs: spacing, type, colours, alignment, overflow.
+2. `make web-e2e`. In `frontend/e2e/smoke.spec.ts`, change only selectors that changed by
+   design (`TEST-CHANGE:`).
+3. Write `docs/ui-redesign-release.md`:
+   - the frontend test counts (UTC and New York), the backend count from the hook, and the
+     e2e result;
+   - the list of shots reviewed;
+   - the D11 deviations as built;
+   - every deviation recorded in the slice lines.
+4. Update CLAUDE.md "Current state": the redesign is done, with the release evidence link.

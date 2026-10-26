@@ -1,86 +1,142 @@
-# UI redesign "Ledger" v2: slice tracker (planned 2026-10-26)
+# UI redesign "Ledger" v2: orchestration and slice tracker (final, 2026-10-26)
 
-This file says **which slice is next and when it is done**. Every decision and each slice's
-full spec are in [ui-redesign-design.md](ui-redesign-design.md) (section RN = slice RN).
-The handoff is `design-ref/design_handoff_bss_admin_v2/` (read-only). The human delegated
-every design decision on 2026-10-26. **No slice needs approval: build what the design
-says.**
+All decisions are made in [ui-redesign-design.md](ui-redesign-design.md): section "Slice N"
+specifies slice N. The handoff is `design-ref/design_handoff_bss_admin_v2/` (read-only).
+**Nothing needs the human's approval.** The human only starts the run and deploys
+afterwards.
 
-## How to run (Codex)
+## Start (the human pastes this into Codex)
 
-One Codex session per slice, one slice at a time, in order. The slices share the working
-tree, the local stack and the pre-commit hook, so never run two at once.
+> Read CLAUDE.md, then docs/ui-redesign-slices.md, and act as the orchestrator described in
+> its "Orchestrator" section until every slice is done or a stop condition is reached.
 
-To start a session, give it this prompt:
+---
 
-> Read CLAUDE.md, then docs/ui-redesign-slices.md, and run the first slice whose status is
-> not `done`, following "How to run a slice". Stop after that slice's commit and push.
+## Orchestrator
 
-### Before the slice
+You are the **main agent**. You track the slices and delegate each one; you never write
+code, tests or docs yourself, apart from the one tracker fix described in step 3.
 
-1. `git status` must be clean on `master`, and `git log --oneline -3` must show the
-   previous slice's commit. If either is not so, stop and report.
-2. `make ps`. If the stack is down, `make up`. If the frontend container's
-   `node_modules` volume is missing, `make web-install` (the only step that downloads).
-3. For slices that touch screens, the local data must come from `make seed`. If the
-   database is empty, run `make migrate && make seed`.
+### Before the first slice
 
-### How to run a slice
+1. Read CLAUDE.md and this file. From the design, read only "Rules for every slice" and
+   "When the spec is wrong".
+2. Run `git status` and `git log --oneline -5`. The tree must be clean on `master`; if it
+   is not, stop and report.
+3. Run `make ps`. If the local stack is down, run `make up`. Then run `make migrate` and
+   `make seed` (seed is idempotent: it does nothing when its data exists).
+4. Find the first row of the table below whose status is not `done`. That is where you
+   start, and it is also how an interrupted run resumes.
 
-1. **Read** CLAUDE.md, then from the design: "Rules for every slice", "When the spec is
-   wrong", "Decisions", and your section RN. Then read the artboards and the code the
-   section names.
-2. **Build** it, with new tests (each must fail without the change). Iterate with targeted
-   runs:
-   - `docker compose run --rm --no-deps web-offline sh -c 'sh scripts/check-deps.sh && npm run types && npx vitest run src/<path>'`;
-   - `make web-test`, `make web-lint` and `make web-fmt` as needed. Node only in
-     containers.
-3. **Look** at it: `make web-shots` (from R1 on). Check `.shots/*-1280.png` and
-   `*-1600.png` of the touched screens against the artboard, and fix what differs.
-4. **Docs:** follow design rule 8 and set this file's row to `done: <commit subject>`.
-5. **Commit:**
-   - one commit: code, tests, docs, the tracker row;
-   - run `make web-fmt` first, then `git commit`. The pre-commit hook runs lint and tests:
-     that is the one full test run;
-   - never use `--no-verify`;
-   - add a `TEST-CHANGE: <reason>` line for each existing test changed by design;
-   - end the message with `Co-Authored-By:` only if your tool requires it.
-6. **Push** with `git push`. **Never deploy** (`make deploy`, `make verify`): the human
-   decides.
-7. **Report:**
-   - the slice id and the commit subject;
-   - the hook's test counts;
-   - each deviation from the design and why;
-   - anything you left for a later slice.
+### For each slice, strictly one at a time
 
-### When it does not go well
+1. **Start a new subagent with a clean context** for slice N. Give it the "Subagent
+   prompt" below with N filled in, and nothing else from your context. **Wait until it
+   finishes.** Never start the next subagent while one is running: the slices share the
+   working tree, the local stack and the pre-commit hook.
+2. **Verify** what it reports. Do not trust the report alone:
+   - `git log --oneline -3` shows a new commit for slice N, and `git status` is clean.
+   - `git status -sb` shows no "ahead": the push happened.
+   - `git show --stat HEAD` contains changed or new test files under `frontend/src`, and
+     this file with row N changed to `done: <commit subject>`.
+   - `git show --stat HEAD` contains no file under `app/`, `alembic/`, `design-ref/` or
+     `tests/test_ui_requests.py`.
 
-- **The hook fails:** fix the code and commit again; never weaken a test. After three
-  failed hook runs on the same slice, stop and report the output.
-- **The slice is too large:** split it into `RNa`/`RNb` rows here, finish and commit `RNa`,
-  and stop.
-- **Stop and ask the human only for:** a backend or API change, a migration, a billing
-  change, or a contradiction between the design and a test that asserts behaviour.
+   A commit can exist only if the pre-commit hook (lint and the full test suite) passed.
+   That hook run is the slice's verification. Do not run the tests again.
+3. **If the checks pass,** tell the human in one line: slice N, the commit subject, the
+   test counts from the subagent's report, and any deviation it recorded. Then continue
+   with the next row that is not `done`. If row N is marked `done` but the commit lacks
+   the tracker change, edit the row, amend nothing, and commit it with the next slice.
+   Tell the next subagent so.
+4. **If the slice failed** (no commit, the hook failed, the subagent stopped, or a check
+   above failed):
+   - start **one** fresh subagent with the same prompt, plus the first subagent's report,
+     the failure output and `git status`;
+   - tell it to continue from the current tree and not to discard work;
+   - if this second attempt also fails, stop and report to the human.
+5. **If the subagent split the slice** (rows `Na`/`Nb` appear, with `Na` done), continue
+   with `Nb` as its own subagent.
 
-Status: `todo` · `done: <commit subject>` · `split`
+### Stop and ask the human only when
+
+- a subagent reports that the slice needs a backend/API change, a migration or a billing
+  change;
+- two attempts at the same slice failed;
+- the tree is not clean before a slice starts, and the cause is not the previous slice's
+  work.
+
+### Never
+
+- run two subagents at once;
+- write code yourself;
+- deploy (`make deploy`, `make verify`, `/ship`);
+- force-push;
+- use `--no-verify`;
+- edit `design-ref/`.
+
+---
+
+## Subagent prompt (one slice)
+
+> You implement **slice N** of the UI redesign in this repository, and only that slice.
+>
+> 1. Read CLAUDE.md. Then in docs/ui-redesign-design.md read "Rules for every slice", "When
+>    the spec is wrong", all of "Decisions", and "Slice N". Then read
+>    design-ref/design_handoff_bss_admin_v2/HANDOFF.md, the artboards slice N names, and
+>    docs/patterns.md. Open other code only as you need it.
+> 2. Implement slice N exactly as specified. Do not make design decisions. If something is
+>    not covered, follow "When the spec is wrong".
+> 3. Add the tests the slice lists. Each must fail without your change. While working, run
+>    targeted tests:
+>    `docker compose run --rm --no-deps web-offline sh -c 'sh scripts/check-deps.sh && npm run types && npx vitest run src/<path>'`.
+>    Node, npm and npx run only in containers. Never run them on the host.
+> 4. From slice 1 on, run `make web-shots`. Look at the PNGs in `frontend/.shots/` for every
+>    page you touched, at 1280 and 1600, compare them with the artboard, and fix what
+>    differs. (In slice 1 itself, run it once the target exists.)
+> 5. Update the docs per design rule 8. In docs/ui-redesign-slices.md, set row N's status to
+>    `done: <commit subject>`.
+> 6. Run `make web-fmt`, then `git add` your files and `git commit`.
+>    - The subject is one imperative line naming the slice's result.
+>    - The body has one `TEST-CHANGE: <reason>` line per existing test you changed by
+>      design.
+>    - The pre-commit hook runs lint and the full test suites; that is the verification.
+>      Never use `--no-verify`.
+>    - If the hook fails, fix the cause (never weaken a test) and commit again. After three
+>      failed hook runs, stop and report the last output.
+> 7. `git push`. Never deploy.
+> 8. If the slice is too large to finish, split it. Change row N into `Na` (what you
+>    finished) and `Nb` (the rest, with its "done when"). Commit and push `Na`, and report.
+> 9. Report, in this order:
+>    - the commit subject and hash;
+>    - the hook's test counts (backend if it ran, frontend in UTC and New York);
+>    - the TEST-CHANGE lines;
+>    - any deviation from the design and why;
+>    - anything left for a later slice.
+>
+>    If you stopped, say why and what remains.
+
+---
 
 ## Slices
 
+Status: `todo` · `done: <commit subject>` · `split`
+
 | # | Slice | Done when | Status |
 |---|---|---|---|
-| R1 | Tokens, fonts, `make web-shots`, hex/px guard test | v2 tokens and fonts live; legacy aliases keep every screen working; shots written; the guard test has an allow-list | todo |
-| R2 | Primitives: Button, fields, Segmented, StatusPill (D4), Tag/Flag/Badge, Amount, Id | Every D4 mapping tested; `/__kit` (dev only) matches Components buttons/fields/pills | todo |
-| R3 | Primitives: Table, list states, Tabs, Menu, Note, KeyValue, MoneyStrip, PageHeader, Panel, Dialog + write states, Toast | Keyboard tests for Tabs/Menu/rows; Footer refused/unsure notes; States.dc.html matches on `/__kit`; all existing tests green | todo |
-| R4 | Shell: sidebar, top bar, business-date chip, avatar menu | Chip drift states tested with a fixed time; sidebar matches the artboard | todo |
-| R5 | Subscribers list | Filters, over-limit flag, `/` focus, row menu; matches Subscribers.dc.html at 1280 | todo |
-| R6 | Subscriber card: header, money strip, tabs | Every existing panel reachable in its tab; hash deep links; both strip variants | todo |
-| R7 | Subscriber card: Overview (products, pending sub-row, in-progress steps, activity rail) | Matches SubscriberCard.dc.html at 1280 and 1600 | todo |
-| R8 | Billing runs | Latest-run band, outcomes with Failed default, history selection; "Retry N failed" only when failed | todo |
-| R9 | Product catalog and offering detail | Lifecycle groups, active-products count from one request, stepper detail | todo |
-| R10 | Add product dialog | L layout; shortfall makes Top up primary and Add disabled; server preview unchanged | todo |
-| R11 | Money dialogs: transfer, top-up, adjust, hold, record payment | Transfer 4 steps with acknowledgement; outcome labels; write states | todo |
-| R12 | Sweep: Products, Orders, Numbers, Parties, subscriber forms | No legacy token, no inline style, no `Pill` left in these files | todo |
-| R13 | Sweep: Prepaid commands, Accounts, Bills, Payments, Balances, Billing settings | Same as R12 for these files | todo |
-| R14 | Sweep: Integrations, Users, sign-in, password, not found; delete legacy layer; dark theme | `legacy-tokens.css` gone; allow-list empty; Theme menu works; dark shots | todo |
-| R15 | Inspector ≥ 1536 px (Subscribers, Catalog) | matchMedia tests; matches the -1600 artboards | todo |
-| R16 | Visual QA, e2e, release evidence | `make web-e2e` green; `docs/ui-redesign-release.md` written; CLAUDE.md state updated | todo |
+| 1 | Tokens, fonts, legacy aliases, style guard test, `make web-shots` | v2 tokens and fonts live; every screen works through the aliases; the guard test passes; shots are written | todo |
+| 2 | Button, fields, Segmented, StatusPill with explicit kinds, Tag/Flag/Badge, Amount, Id, `/ui-kit` | Every D4 row tested; `Pill` deleted; `/ui-kit` matches Components buttons, fields and pills | todo |
+| 3 | Table, list states, Tabs, Menu, Note, KeyValue, MoneyStrip, PageHeader, Panel, Dialog, write states, Toast | Keyboard tests for Tabs, Menu and rows; Footer refused and unsure notes; `/ui-kit` matches Components and States | todo |
+| 4 | Shell: sidebar, top bar, business-date chip | Chip drift states tested from the context; sidebar matches the artboard | todo |
+| 5 | Subscribers list | Search and `/`, filters with counts, over-limit flag; matches Subscribers.dc.html at 1280 | todo |
+| 6 | Subscriber card: header, money strip, tabs | Every existing panel in its tab with markers kept; hash deep links; both strip variants | todo |
+| 7 | Subscriber card: Overview (products table, pending sub-row, In progress steps, activity rail) | Matches SubscriberCard.dc.html at 1280 and 1600 | todo |
+| 8 | Billing runs: header actions, latest-run band, inline outcomes, history selection | "Retry N failed" only for a failed latest run; outcomes inline; requests unchanged | todo |
+| 9 | Product catalog: lifecycle groups, offering detail with stepper, other tabs restyled | Groups, search and stepper tested; matches Catalog.dc.html | todo |
+| 10 | Add product dialog | L two-column layout; shortfall makes Top up primary and Add disabled | todo |
+| 11 | Money dialogs: transfer (3 steps), top-up, adjust, hold, record payment | Acknowledgement gates the transfer; outcome labels; write states | todo |
+| 12 | Sweep 1: Products, Orders, Numbers, Parties, subscriber forms | No inline style or old pattern left in these files; kinds tested | todo |
+| 13 | Sweep 2: Prepaid commands, Accounts, Bills, Payments, Balances, Billing settings | The same for these files | todo |
+| 14 | Sweep 3: Integrations, Users, sign-in, password, not found; delete the legacy layer; dark theme | `legacy-tokens.css`, `Modal` and `PageTitle` gone; guard (d)(e) pass; Theme menu works; dark shots | todo |
+| 15 | Inspector at ≥ 1536 px (Subscribers, Catalog) | matchMedia tests; no new requests; matches the -1600 artboards | todo |
+| 16 | Visual QA, e2e, release evidence | `make web-e2e` green; `docs/ui-redesign-release.md` written; CLAUDE.md updated | todo |

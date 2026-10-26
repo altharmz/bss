@@ -16,17 +16,19 @@ The other screens grew without a designer. The UI is restyled from the second ha
 It is **visual only**: API calls, bodies, routes and polling are unchanged, so
 `tests/test_ui_requests.py` is untouched.
 
-The human delegated the open decisions. They are recorded in
+The human delegated every decision, and all of them are made in
 [ui-redesign-design.md](../ui-redesign-design.md):
-- D4 maps every TMF state (TMF620/622/629/632/637/654/666/678) and every internal state
-  to a family;
-- D10 adapts artboard content the API lacks (no CSV export, no per-account run retry, no
-  claim expiry, no request id, no "customer since");
-- D9 keeps the 5 s / 3 min polling.
+- **D4:** every TMF state (TMF620/622/629/632/637/654/666/676/678) and every internal
+  state maps to a status family, with an explicit kind per call site.
+- **D11:** artboard content that needs data or requests the API does not offer is
+  dropped or replaced: CSV export, per-account run retry, claim expiry, request id,
+  "customer since", catalog "In use", the card's Orders and Products tabs, and transfer
+  step 4 inside the dialog.
+- **D9:** the 5 s / 3 min polling is kept.
+- **Rule 1:** no HTTP request is added or changed.
 
-Progress: [ui-redesign-slices.md](../ui-redesign-slices.md), R1–R16. Each slice adds a
-line below when built, and this entry supersedes the v1 handoff's visual values wherever
-they differ.
+Progress: [ui-redesign-slices.md](../ui-redesign-slices.md), slices 1–16. Each slice adds a
+line below when built. Wherever its values differ from the v1 handoff, this entry wins.
 
 ## Next slices 1-24: designed (2026-10-24)
 

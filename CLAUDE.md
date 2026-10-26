@@ -143,10 +143,12 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   [docs/next-slices-design.md](docs/next-slices-design.md); the orchestrator prompt is in
   [docs/run-slices.md](docs/run-slices.md) and the screen shapes in
   [docs/patterns.md](docs/patterns.md).
-- **Now: UI redesign "Ledger" v2** (visual only, no API change), slices R1-R16, run one
-  per session: tracker and run instructions [docs/ui-redesign-slices.md](docs/ui-redesign-slices.md),
-  decisions and slice specs [docs/ui-redesign-design.md](docs/ui-redesign-design.md),
-  handoff `design-ref/design_handoff_bss_admin_v2/` (read-only, never edited).
+- **Now: UI redesign "Ledger" v2** (visual only, no API change), slices 1-16, all
+  decisions made. To run it, act as the orchestrator in
+  [docs/ui-redesign-slices.md](docs/ui-redesign-slices.md): one fresh subagent per slice,
+  sequentially, each committing through the hook. The slice specs are in
+  [docs/ui-redesign-design.md](docs/ui-redesign-design.md), and the handoff is in
+  `design-ref/design_handoff_bss_admin_v2/` (read-only, never edited).
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21
   ([frontend.md](docs/decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21));
   UI vs MCP gap slices 2 and 4 ([plan](docs/ui-mcp-gap-plan.md));
