@@ -1,5 +1,9 @@
 # UI vs MCP: operation gap and plan (2026-10-20)
 
+**CLOSED (2026-10-26).** Slices 9-24 of [next-slices.md](next-slices.md) brought the UI to
+parity; [slice 24](next-slices-design.md#24-parity-check) added the check
+(`tests/test_ui_mcp_parity.py`, allowlist `tests/ui-mcp-allowlist.txt`). Kept as history.
+
 **Status (2026-10-24): slice 1 is done (refunds and on-demand bills are in the UI).
 The remaining slices moved to [next-slices.md](next-slices.md), which now
 tracks them.** The measurements below are from 2026-10-20 and are kept as history.

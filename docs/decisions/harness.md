@@ -86,6 +86,37 @@ The user-level `~/.codex/rules/default.rules` allows every `make` target without
 (owner decision 2026-10-21). Codex matches a rule only against a plain command, so a
 `make test > log 2>&1` call misses it and prompts; AGENTS.md asks for bare `make` calls.
 
+## UI/MCP parity check (2026-10-26)
+
+Design: [next-slices-design.md](../next-slices-design.md#24-parity-check). Built:
+`scripts/ui_mcp_parity.py` scans `frontend/src` (no tests, no `generated/`) for every
+`getJson`/`getAll`/`getPage`/`postJson`/`patchJson`/`request('METHOD', ...)` call and
+resolves the path through string constants, `X[kind]` maps, single-return helper
+functions, ternaries, `+` and nearest local `const`s, turning `${...}` into `{}`
+(a text scan, not a parser; `client.ts`, the helpers themselves, is skipped).
+`tests/test_ui_mcp_parity.py` fails (a) for an MCP operation (API operations minus
+scope exclusions and auth operations) with no matching (method, path) call and no line in
+`tests/ui-mcp-allowlist.txt`, (b) for a UI call whose path the scan cannot resolve, so
+an unusual indirection cannot hide a call, (c) for an allowlist entry that is stale
+(the UI calls it now), unknown or has no reason. Five unit tests cover the extractor on
+inline samples. Negative proof: with the `get_refund` line removed the test failed
+naming `get_refund`.
+- **Markers.** A path taken from a variable at run time is declared next to the call as
+  `// parity: METHOD <path expression>` (balance action posts, transfer post, hub
+  delete, the sidebar counts). The marker adds the call and acknowledges the
+  unresolvable call within six lines below it.
+- **Allowlist (23).** `create/patch/delete_product` (orders alone); detail reads the
+  list rows already carry (`get_order`, `get_cancellation`, `get_refund`, `get_bill`,
+  `get_bill_demand`, `get_catalog`, `get_category`, `get_cycle_specification`,
+  `get_bill_format`, `get_bill_media`, `get_import_job`, `get_export_job`, the three
+  account details, `get_hub_customer`, `get_hub_resource`); `healthz`, `billing_status`
+  and `extension_schema` (probes and a linked document, no screen).
+- **Deviation.** The design lists `get_bill` as "the internal bill detail"; the UI does
+  not call the internal bill read, so its reason says the Bills screens use the list rows.
+  The scan matches method and path template, not query parameters or bodies.
+- **Test container.** `compose.override.yaml` mounts `frontend/src` (replacing the single
+  `hubs.ts` mount) and `scripts/ui_mcp_parity.py` read-only.
+
 ## Progress tracker
 
 `make progress` writes `docs/PROGRESS.md` (committed, plain Markdown) and

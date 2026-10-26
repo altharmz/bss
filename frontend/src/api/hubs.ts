@@ -219,6 +219,7 @@ export function createHub(api: HubApi, callback: string, eventTypes: string[]) {
 
 /** DELETE /hub/{id} of the API that owns it (204, no body). */
 export async function deleteHub(subscription: EventSubscription): Promise<void> {
+  // parity: DELETE /tmf-api/{}/{}/hub/{}
   await request('DELETE', subscription.hub);
 }
 

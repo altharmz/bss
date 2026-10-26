@@ -107,6 +107,7 @@ function toState(body: { id?: string; status?: string; description?: string }): 
   return { id: body.id, status: body.status, description: body.description ?? null };
 }
 
+// parity: POST ${TRANSFERS}
 export async function submitTransfer(
   request: { path: string; body: string },
   key: string,

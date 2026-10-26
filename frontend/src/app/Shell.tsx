@@ -18,6 +18,8 @@ import { SignOut, useSession } from './session';
 const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount';
 const OFFERINGS = '/tmf-api/productCatalogManagement/v5/productOffering';
 
+// parity: GET ${ACCOUNTS}
+// parity: GET ${OFFERINGS}
 function useCount(path: string): string {
   const total = useResource(path, (signal) =>
     getPage(`${path}?limit=1&fields=id`, signal).then((page) => page.total),

@@ -279,6 +279,9 @@ export interface BalanceActionResult {
   reason: string | null;
 }
 
+// parity: POST ${PATHS.topups}
+// parity: POST ${PATHS.adjustments}
+// parity: POST ${PATHS.reservations}
 export async function submitBalanceAction(
   request: { path: string; body: string },
   key: string,

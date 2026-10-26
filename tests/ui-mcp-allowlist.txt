@@ -1,0 +1,33 @@
+# MCP operations the admin UI deliberately does not call (tests/test_ui_mcp_parity.py).
+# One line per operation: `operationId: reason`. A line whose operation the UI calls
+# (or that MCP no longer has) fails the test, so the list cannot go stale.
+# Design: docs/next-slices-design.md section 24; decision: docs/decisions/harness.md.
+
+# Orders alone create or end products (CLAUDE.md); the UI only reads the inventory.
+create_product: orders alone create products
+patch_product: orders alone change products
+delete_product: orders alone end products
+
+# Reads whose data the UI already has from the list or from a screen's own call.
+get_bill: the Bills screens read the list rows and a bill's rates; no separate bill detail read
+get_hub_customer: the internal eventSubscription list covers every hub
+get_hub_resource: the internal eventSubscription list covers every hub
+get_order: the Orders screens read the order list rows, which carry the whole order
+get_cancellation: cancellations are read as a list per order (productOrder.id filter)
+get_refund: refunds are shown from the refund list rows
+get_financial_account: the account list rows carry every attribute shown
+get_party_account: the account list rows carry every attribute shown
+get_settlement_account: the account list rows carry every attribute shown
+get_catalog: the catalog is shown from the list rows
+get_category: categories are shown from the list rows
+get_cycle_specification: billing settings are shown from the list rows
+get_bill_format: billing settings are shown from the list rows
+get_bill_media: billing settings are shown from the list rows
+get_import_job: jobs are shown and polled from the job list
+get_export_job: jobs are shown and polled from the job list
+get_bill_demand: an on-demand bill is shown from the POST response and the bill list
+
+# Service and schema documents, not business screens.
+healthz: the liveness probe for the proxy and the deploy checks, no screen
+billing_status: the worker's own status probe (scripts/billing-status-check.sh), the UI reads billing runs
+extension_schema: a static JSON schema; the Integrations screen links to it, which is not a request
