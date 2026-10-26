@@ -1,4 +1,6 @@
 import { statusPresentation, type StatusKind } from './status';
+export { Menu, Tabs, TabPanel } from './navigation';
+export type { MenuItem, TabOption } from './navigation';
 import {
   createContext,
   useCallback,

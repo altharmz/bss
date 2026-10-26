@@ -15,7 +15,7 @@ import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { addDays, isIsoDate } from '../format/dates';
 import { formatCents } from '../format/money';
-import { Button, Modal, TextInput } from '../ui/kit';
+import { Button, Menu, Modal, TextInput } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Preview } from './AddProduct';
 import { uncertain } from './submissionKey';
@@ -77,38 +77,18 @@ export function ProductActionsMenu({
   items: ProductAction[];
   onPick: (change: ProductAction) => void;
 }) {
-  const [open, setOpen] = useState(false);
   if (items.length === 0) return null;
   return (
-    <span className="bss-product-menu">
-      <Button
-        small
-        aria-haspopup="menu"
-        aria-expanded={open}
-        data-ui="ui.subscriber.productActions"
-        onClick={() => setOpen((v) => !v)}
-      >
-        Actions ▾
-      </Button>
-      {open && (
-        <div role="menu" className="bss-product-menu-items">
-          {items.map((item) => (
-            <Button
-              key={item}
-              small
-              role="menuitem"
-              data-ui={CHANGE_UI[item]}
-              onClick={() => {
-                setOpen(false);
-                onPick(item);
-              }}
-            >
-              {TITLE[item]}…
-            </Button>
-          ))}
-        </div>
-      )}
-    </span>
+    <Menu
+      label="Actions ▾"
+      trigger="Actions ▾"
+      ui="ui.subscriber.productActions"
+      items={items.map((item) => ({
+        label: `${TITLE[item]}…`,
+        ui: CHANGE_UI[item],
+        onClick: () => onPick(item),
+      }))}
+    />
   );
 }
 

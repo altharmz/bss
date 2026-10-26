@@ -157,3 +157,16 @@ and the structured footer range remain in slice 3b.
 `useDelayed`. `NoResults` and `ListState` accept optional `query` and
 `filters: { label, value }[]`; query-aware copy names both. Omit query to retain the
 existing accessible “No matches” label until a screen's design migration.
+
+### Ledger navigation and table actions (slice 3b1)
+
+`Tabs({ id, label, options, value, onChange })` uses roving focus and automatic selection
+with Left/Right/Home/End. Each option has a key, label, optional count or badge.
+`TabPanel({ id, value })` links its label to the corresponding tab; share the same id.
+`Menu({ items, label?, trigger?, ui? })` supplies disabled and negative items and
+`{ separator: true }`, keyboard navigation, Escape refocus and outside-click dismissal.
+The default trigger is a 28 px ellipsis named Row actions. ProductActions keeps its
+existing Actions accessible name. `defaultOpen` supports the gallery's open sample.
+`TableRow` accepts `actions: MenuItem[]` for a `kind="actions"` cell; menu clicks do
+not activate the row. `TableFooter` accepts `range: { from, to, total }`, with numeric
+range emphasis; existing `left`/`right` slots remain for screen migration and paging.

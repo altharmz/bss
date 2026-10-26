@@ -103,11 +103,11 @@
   box-shadow: inset 0 0 0 2px var(--color-primary);
 }
 .bss-row .actions {
-  visibility: hidden;
+  opacity: 0;
 }
 .bss-row:hover .actions,
 .bss-row:focus-within .actions {
-  visibility: visible;
+  opacity: 1;
 }
 .bss-table-footer {
   min-height: 44px;
@@ -671,4 +671,76 @@
 .bss-row {
   --table-columns: none;
   grid-template-columns: var(--table-columns);
+}
+
+/* Ledger tabs and floating action menus (Components artboard). */
+.bss-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+.bss-tabs [role='tab'] {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-ink-2);
+  font: var(--type-body);
+  font-weight: 500;
+  cursor: pointer;
+}
+.bss-tabs [aria-selected='true'] {
+  color: var(--color-ink-1);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--color-ink-1);
+}
+.bss-tabs .count {
+  font: var(--type-code);
+  color: var(--color-ink-3);
+}
+.bss-tabs [role='tab']:focus-visible,
+[role='tabpanel']:focus-visible {
+  outline: var(--focus-ring);
+}
+.bss-menu {
+  position: relative;
+  display: inline-flex;
+}
+.bss-menu-items {
+  position: absolute;
+  z-index: 30;
+  top: 100%;
+  right: 0;
+  min-width: 220px;
+  padding: 4px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elev-popover);
+  display: flex;
+  flex-direction: column;
+}
+.bss-menu-items .bss-btn {
+  justify-content: flex-start;
+  height: 30px;
+  padding: 0 10px;
+  font: var(--type-body);
+}
+.bss-menu-items [role='separator'] {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--color-border);
+}
+.bss-table-footer .range {
+  color: var(--color-ink-1);
+}
+.bss-menu > button {
+  min-width: 28px;
+}
+.bss-menu-items .bss-btn:disabled {
+  background: transparent;
 }

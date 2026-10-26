@@ -2,6 +2,9 @@
 
 ## Ledger v2: visual redesign (designed 2026-10-26)
 
+- Slice 3b1 built keyboard Tabs/TabPanel and Menu with outside dismissal, focus return and disabled items; Table gains structured range and action menus; ProductActions uses the shared Menu with its existing accessible label. Gallery and card reviewed at both widths. Remaining slice 3 scope is explicit in 3b2; no API deviations.
+
+
 - Built slice 3a: shared table density, sticky headers, keyboard activation/selection, 200 ms delayed skeletons, descriptive query/filter no-results and gallery previews. Split slice 3 for size; remaining primitives, structured footer range, Menu row actions and error timestamp are explicitly tracked in 3b. Existing callers without query keep their accessible “No matches” text until screen migration; query-aware callers use the new design copy. No requests changed.
 
 - Built slice 2b2: migrate every legacy Pill and danger-outline caller, remove compatibility and status tokens, adopt neutral-positive Amount and copyable Id in Subscribers/card, and add gallery examples. Static styles in touched screens moved to CSS; runtime progress and category indentation use CSS variables. Subscriber no. stays alongside the new BA Id column until slice 5 restyles the columns. Capture coverage now includes Accounts and Billing settings. No request or behavior changes.

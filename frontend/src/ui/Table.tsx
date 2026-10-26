@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import { Menu, type MenuItem } from './navigation';
 
 // A table built on CSS grid with fixed column widths per table (README "Table"). The
 // same column list drives the header, the rows and the loading skeleton, so a skeleton is
@@ -60,6 +61,7 @@ export function TableRow({
   className = '',
   density = 'default',
   selected = false,
+  actions,
 }: {
   columns: Column[];
   cells: Record<string, ReactNode>;
@@ -68,6 +70,7 @@ export function TableRow({
   className?: string;
   density?: Density;
   selected?: boolean;
+  actions?: MenuItem[];
 }) {
   return (
     <div
@@ -90,17 +93,36 @@ export function TableRow({
     >
       {columns.map((column) => (
         <div key={column.key} className={cellClass(column)} role="cell">
-          {cells[column.key]}
+          {column.kind === 'actions' && actions ? <Menu items={actions} /> : cells[column.key]}
         </div>
       ))}
     </div>
   );
 }
 
-export function TableFooter({ left, right }: { left: ReactNode; right?: ReactNode }) {
+export function TableFooter({
+  left,
+  right,
+  range,
+}: {
+  left?: ReactNode;
+  right?: ReactNode;
+  range?: { from: number; to: number; total: number };
+}) {
   return (
     <div className="bss-table-footer">
-      <span>{left}</span>
+      <span>
+        {range ? (
+          <>
+            <span className="range">
+              {range.from.toLocaleString('en-US')}–{range.to.toLocaleString('en-US')}
+            </span>{' '}
+            of {range.total.toLocaleString('en-US')}
+          </>
+        ) : (
+          left
+        )}
+      </span>
       {right !== undefined && <span>{right}</span>}
     </div>
   );

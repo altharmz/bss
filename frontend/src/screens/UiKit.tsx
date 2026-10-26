@@ -1,10 +1,13 @@
-import { TableHead, TableRow } from '../ui/Table';
+import { TableFooter, TableHead, TableRow } from '../ui/Table';
 import { EmptyBlock, ErrorBlock, NoResults, SkeletonRows } from '../ui/states';
 import { Amount } from '../ui/Amount';
 import { Id, ID_PREFIXES } from '../ui/Id';
 import { STATUS_MAP, type StatusKind } from '../ui/status';
 import { useState } from 'react';
 import {
+  Menu,
+  Tabs,
+  TabPanel,
   Badge,
   Flag,
   StatusPill,
@@ -22,11 +25,51 @@ import './screens.css';
 
 /** Ledger Components artboard: live controls without screen-specific requests. */
 export function UiKitScreen() {
+  const [tab, setTab] = useState('overview');
   const [mode, setMode] = useState('prepaid');
   const [money, setMoney] = useState('42.10');
   return (
     <div className="ui-kit" data-ui="ui.kit">
       <h1>UI kit</h1>
+      <section className="ui-kit-navigation">
+        <h2>Tabs and menu</h2>
+        <Tabs
+          id="kit"
+          label="Account sections"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { key: 'overview', label: 'Overview' },
+            { key: 'products', label: 'Products', count: 2 },
+            { key: 'orders', label: 'Orders', badge: <Badge kind="info">1 open</Badge> },
+          ]}
+        />
+        <TabPanel id="kit" value={tab}>
+          {tab}
+        </TabPanel>
+        <Menu
+          defaultOpen
+          label="Product actions"
+          items={[
+            { label: 'Suspend', onClick: () => {} },
+            { label: 'Resume', disabled: true, onClick: () => {} },
+            { label: 'Change offering…', onClick: () => {} },
+            { separator: true },
+            { label: 'Terminate…', tone: 'negative', onClick: () => {} },
+          ]}
+        />
+        <TableFooter
+          range={{ from: 1, to: 50, total: 1284 }}
+          right={
+            <>
+              <Button small disabled>
+                Previous
+              </Button>{' '}
+              <Button small>Next</Button>
+            </>
+          }
+        />
+      </section>
       <section>
         <h2>Tables and list states</h2>
         {(['default', 'compact', 'dense'] as const).map((density) => (
