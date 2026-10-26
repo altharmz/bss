@@ -1,5 +1,10 @@
+import { STATUS_MAP, type StatusKind } from '../ui/status';
 import { useState } from 'react';
 import {
+  Badge,
+  Flag,
+  StatusPill,
+  Tag,
   Button,
   Checkbox,
   DateField,
@@ -68,6 +73,30 @@ export function UiKitScreen() {
           <Field label="Confirmed">
             <Checkbox />
           </Field>
+        </div>
+      </section>
+      <section>
+        <h2>Status pills</h2>
+        {(Object.keys(STATUS_MAP) as StatusKind[]).map((kind) => (
+          <div key={kind}>
+            <h3>{kind}</h3>
+            <div className="ui-kit-row">
+              {Object.keys(STATUS_MAP[kind]).map((status) => (
+                <StatusPill key={status} kind={kind} status={status} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
+      <section>
+        <h2>Tags, flags and badges</h2>
+        <div className="ui-kit-row">
+          <Tag>Prepaid</Tag>
+          <Tag>Postpaid</Tag>
+          <Flag>Over limit</Flag>
+          <Badge>14</Badge>
+          <Badge kind="failed">failed</Badge>
+          <Badge kind="info">2</Badge>
         </div>
       </section>
       <section>

@@ -127,3 +127,12 @@ The legacy danger-outline variant remains for the screen migrations in 2b.
 handlers. `TextInput` retains its `mono` and runtime `width` API.
 `Segmented` defaults to filter buttons (`aria-pressed`); `as="radio"` uses radiogroup/radio
 semantics. `/ui-kit` previews these primitives without screen-specific reads or writes.
+
+### Ledger status and attribute primitives (slice 2b1)
+
+`StatusPill` requires `kind` (a D4 object kind) and `status`, and accepts a custom
+`label`. `ui/status.ts` owns the mapping. Unknown values use the Draft family and their
+raw text. Each family has a CSS glyph as well as its colour. `Tag` identifies fixed
+attributes, `Flag` shows short warning facts, and `Badge` takes `count` (default),
+`failed`, or `info`. Each takes children. `/ui-kit` renders all D4 values and variants.
+Screen callers still use the legacy pill until the 2b2 migration removes it.

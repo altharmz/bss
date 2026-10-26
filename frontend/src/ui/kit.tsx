@@ -1,3 +1,4 @@
+import { statusPresentation, type StatusKind } from './status';
 import {
   createContext,
   useCallback,
@@ -331,4 +332,36 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 export function useToast(): (message: ReactNode) => void {
   return useContext(ToastContext);
+}
+
+/** D4 requires an explicit object kind; unknown states retain their raw label. */
+export function StatusPill({
+  kind,
+  status,
+  label,
+}: {
+  kind: StatusKind;
+  status: string;
+  label?: string;
+}) {
+  const [family, defaultLabel] = statusPresentation(kind, status);
+  return <span className={`status-pill pill-${family}`}>{label ?? defaultLabel}</span>;
+}
+
+export function Tag({ children }: { children: ReactNode }) {
+  return <span className="bss-tag">{children}</span>;
+}
+
+export function Flag({ children }: { children: ReactNode }) {
+  return <span className="bss-flag">{children}</span>;
+}
+
+export function Badge({
+  kind = 'count',
+  children,
+}: {
+  kind?: 'count' | 'failed' | 'info';
+  children: ReactNode;
+}) {
+  return <span className={`bss-badge badge-${kind}`}>{children}</span>;
 }

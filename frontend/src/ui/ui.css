@@ -508,3 +508,134 @@
 .bss-money-field:has([aria-invalid='true']) {
   border-color: var(--color-negative);
 }
+
+/* Ledger status families: shape communicates state alongside colour. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 7px 0 6px;
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+  font: var(--type-label);
+  white-space: nowrap;
+}
+.status-pill::before {
+  content: '';
+  flex: none;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+}
+.pill-live {
+  color: var(--color-positive);
+  background: var(--color-positive-tint);
+}
+.pill-live::before {
+  width: 6px;
+  height: 6px;
+  border: 0;
+  background: currentColor;
+}
+.pill-moving,
+.pill-queued {
+  color: var(--color-info);
+  background: var(--color-info-tint);
+}
+.pill-moving::before {
+  background: linear-gradient(90deg, currentColor 50%, transparent 50%);
+}
+.pill-pending,
+.pill-paused {
+  color: var(--color-warning);
+  background: var(--color-warning-tint);
+}
+.pill-paused::before {
+  width: 6px;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(90deg, currentColor 0 2px, transparent 2px 4px, currentColor 4px 6px);
+}
+.pill-failed {
+  color: var(--color-negative);
+  background: var(--color-negative-tint);
+}
+.pill-failed::before {
+  width: 6px;
+  height: 6px;
+  border: 0;
+  border-radius: 1px;
+  background: currentColor;
+  transform: rotate(45deg);
+}
+.pill-draft {
+  color: var(--color-ink-2);
+  background: var(--color-bg-sunken);
+}
+.pill-draft::before {
+  border-style: dashed;
+}
+.pill-ended {
+  color: var(--color-ink-3);
+  background: var(--color-bg);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+}
+.pill-ended::before {
+  height: 2px;
+  border: 0;
+  border-radius: 1px;
+  background: currentColor;
+}
+.bss-tag,
+.bss-flag,
+.bss-badge {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.bss-tag {
+  height: 18px;
+  padding: 0 6px;
+  border-radius: calc(var(--radius-sm) - 1px);
+  box-shadow: inset 0 0 0 1px var(--color-border-strong);
+  color: var(--color-ink-2);
+  font: var(--type-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-micro);
+}
+.bss-flag {
+  height: 18px;
+  padding: 0 5px;
+  border-radius: calc(var(--radius-sm) - 1px);
+  background: var(--color-warning-tint);
+  color: var(--color-warning);
+  font: var(--type-micro);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.bss-badge {
+  height: 16px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font: var(--type-micro);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.badge-count {
+  background: var(--color-bg-sunken);
+  color: var(--color-ink-2);
+}
+.badge-failed {
+  background: var(--color-negative);
+  color: var(--color-on-primary);
+}
+.badge-info {
+  background: var(--color-info-tint);
+  color: var(--color-info);
+}
