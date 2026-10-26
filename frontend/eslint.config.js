@@ -4,7 +4,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'src/api/generated'] },
+  { ignores: ['.shots', 'dist', 'node_modules', 'src/api/generated'] },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {
@@ -19,6 +19,8 @@ export default tseslint.config(
       'vite.config.ts',
       'eslint.config.js',
       'playwright.config.ts',
+      'playwright.shots.config.ts',
+      'e2e-shots/**/*.ts',
       'e2e/**/*.ts',
     ],
     languageOptions: { globals: globals.node },

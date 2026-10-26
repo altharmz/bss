@@ -133,7 +133,7 @@
   border-radius: 50%;
   background: var(--neg-bg);
   color: var(--neg);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* --- status pill --- */
@@ -209,7 +209,7 @@
 .bss-btn.primary {
   background: var(--primary);
   border-color: var(--primary-border);
-  color: #fff;
+  color: var(--color-on-primary);
 }
 .bss-btn.primary:hover:not(:disabled) {
   background: var(--primary-hover);
@@ -224,7 +224,7 @@
 .bss-btn.danger {
   background: var(--neg);
   border-color: var(--neg);
-  color: #fff;
+  color: var(--color-on-primary);
 }
 .bss-btn:disabled {
   opacity: 0.45;
@@ -351,7 +351,7 @@
   padding: 10px 14px;
   border-radius: var(--r-panel);
   background: var(--ink);
-  color: #fff;
+  color: var(--color-on-primary);
   font-size: var(--fs-13);
   box-shadow: var(--shadow-toast);
 }

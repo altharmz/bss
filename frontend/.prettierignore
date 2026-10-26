@@ -3,3 +3,8 @@ node_modules/
 src/api/generated/
 package-lock.json
 .e2e/
+
+.shots/
+
+# Preserve the design handoff token file byte for byte.
+src/ui/tokens.css

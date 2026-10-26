@@ -124,7 +124,7 @@ Status: `todo` · `done: <commit subject>` · `split`
 
 | # | Slice | Done when | Status |
 |---|---|---|---|
-| 1 | Tokens, fonts, legacy aliases, style guard test, `make web-shots` | v2 tokens and fonts live; every screen works through the aliases; the guard test passes; shots are written | todo |
+| 1 | Tokens, fonts, legacy aliases, style guard test, `make web-shots` | v2 tokens and fonts live; every screen works through the aliases; the guard test passes; shots are written | done: Establish Ledger tokens and visual reference captures |
 | 2 | Button, fields, Segmented, StatusPill with explicit kinds, Tag/Flag/Badge, Amount, Id, `/ui-kit` | Every D4 row tested; `Pill` deleted; `/ui-kit` matches Components buttons, fields and pills | todo |
 | 3 | Table, list states, Tabs, Menu, Note, KeyValue, MoneyStrip, PageHeader, Panel, Dialog, write states, Toast | Keyboard tests for Tabs, Menu and rows; Footer refused and unsure notes; `/ui-kit` matches Components and States | todo |
 | 4 | Shell: sidebar, top bar, business-date chip | Chip drift states tested from the context; sidebar matches the artboard | todo |

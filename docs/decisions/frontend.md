@@ -2,6 +2,8 @@
 
 ## Ledger v2: visual redesign (designed 2026-10-26)
 
+- Built slice 1: Ledger tokens, font faces, legacy aliases, style guard and `make web-shots`; automatic dark preference remains disabled until slice 14. No design deviation.
+
 The first handoff (`design-ref/design_handoff_bss_admin/`) covered 4 screens and 2 modals.
 The other screens grew without a designer. The UI is restyled from the second handoff,
 `design-ref/design_handoff_bss_admin_v2/` ("Ledger"; brief:

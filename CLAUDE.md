@@ -31,7 +31,7 @@ make ssh / tunnel                     # VPS shell / app on localhost:18081
 make hooks     # install pre-commit (lint + test) and pre-push (secrets) hooks
 make mcp-token-create NAME= SCOPE= / mcp-tokens / mcp-token-revoke ID=   # local MCP tokens
 make web-install   # npm ci (the only step that downloads)
-make web-dev / web-build / web-lint / web-test / web-types / web-fmt / web-e2e
+make web-dev / web-build / web-lint / web-test / web-types / web-fmt / web-e2e / web-shots
 ```
 
 ## Hard constraints

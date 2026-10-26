@@ -12,7 +12,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e docs docs-check mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke
+.PHONY: help up down restart logs ps shell test lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e web-shots docs docs-check mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -136,6 +136,16 @@ web-e2e: ## e2e smoke (Playwright) on the built UI and the seeded local stack; b
 	$(E2E_USERS) cleanup
 	$(E2E_USERS) prepare
 	docker compose run --rm e2e; rc=$$?; $(E2E_USERS) cleanup || rc=1; docker compose rm -sf web-preview >/dev/null 2>&1; exit $$rc
+
+web-shots: ## Capture Ledger UI reference PNGs at 1280 and 1600 px
+	rm -rf frontend/.shots
+	mkdir -p frontend/.shots
+	@$(MAKE) --no-print-directory seed
+	@$(MAKE) --no-print-directory web-build
+	mkdir -p frontend/.e2e
+	$(E2E_USERS) cleanup
+	$(E2E_USERS) prepare
+	docker compose run --rm e2e npx playwright test -c playwright.shots.config.ts; rc=$$?; $(E2E_USERS) cleanup || rc=1; docker compose rm -sf web-preview >/dev/null 2>&1; exit $$rc
 
 spec-verify-upstream: ## Re-fetch the spec blob SHAs from GitHub and compare with spec/README.md (network; not in make test)
 	python3 scripts/spec-verify-upstream.py

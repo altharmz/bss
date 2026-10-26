@@ -17,3 +17,5 @@ backups/
 .docs/
 # Ephemeral local browser-test credentials; removed after the test run.
 frontend/.e2e/
+
+frontend/.shots/

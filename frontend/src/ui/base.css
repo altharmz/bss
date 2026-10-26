@@ -1,12 +1,11 @@
+@import './tokens.css';
+@import './legacy-tokens.css';
 /* Self-hosted fonts: only the weights the design uses (README "Type"). */
 @import '@fontsource/golos-text/400.css';
 @import '@fontsource/golos-text/500.css';
 @import '@fontsource/golos-text/600.css';
-@import '@fontsource/golos-text/700.css';
 @import '@fontsource/jetbrains-mono/400.css';
 @import '@fontsource/jetbrains-mono/500.css';
-@import '@fontsource/jetbrains-mono/600.css';
-@import './tokens.css';
 
 *,
 *::before,
@@ -22,17 +21,14 @@ body {
 body {
   min-width: 1280px;
   min-height: 100vh;
-  background: var(--page);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: var(--fs-13);
-  line-height: 1.4;
+  background: var(--color-bg);
+  color: var(--color-ink-1);
+  font: var(--type-body);
 }
 
 /* Identifiers, amounts, dates and counts: mono with tabular figures. */
 .num {
-  font-family: var(--font-mono);
-  font-size: var(--fs-125);
+  font: var(--type-num);
   font-variant-numeric: tabular-nums;
 }
 
@@ -41,5 +37,5 @@ body {
 }
 
 .neg {
-  color: var(--neg);
+  color: var(--color-negative);
 }

@@ -1,104 +1,154 @@
-/* Design tokens: every value from design-ref/design_handoff_bss_admin/README.md
-   ("Design Tokens" and the per-component specs). Light theme only. Components use these
-   variables, never raw values. */
+/* Ledger design tokens — BSS Admin v2.
+   Source of truth: artboards/Foundations.dc.html. Every value used in the
+   artboards maps to one of these. Light is the default; dark is opt-in via
+   [data-theme="dark"] or the OS preference. */
+
 :root {
-  /* text */
-  --ink: #1c2127;
-  --text-2: #475467;
-  --muted: #667085;
-  --faint: #8a93a0;
-  --num-disabled: #a0a7b1;
-  --crumb-sep: #c0c6ce;
+  /* Fonts (self-hosted via @fontsource/golos-text, @fontsource/jetbrains-mono) */
+  --font-ui: 'Golos Text', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
-  /* surfaces */
-  --page: #f5f6f8;
-  --surface: #ffffff;
-  --th-bg: #f8f9fa;
-  --foot-bg: #fbfbfc;
-  --preview-bg: #fafbfc;
-  --nav-hover: #eef1f5;
-  --btn-secondary-hover: #f3f4f6;
+  /* Type scale: size / line-height / weight */
+  --type-page: 600 20px/28px var(--font-ui);        /* letter-spacing: -0.01em */
+  --type-section: 600 15px/20px var(--font-ui);
+  --type-body: 400 13px/20px var(--font-ui);
+  --type-body-strong: 500 13px/20px var(--font-ui);
+  --type-label: 500 12px/16px var(--font-ui);
+  --type-micro: 600 11px/14px var(--font-ui);       /* uppercase, letter-spacing: 0.06em */
+  --type-figure: 500 24px/32px var(--font-mono);    /* letter-spacing: -0.01em */
+  --type-num: 400 13px/20px var(--font-mono);       /* font-variant-numeric: tabular-nums */
+  --type-code: 400 12px/16px var(--font-mono);
 
-  /* lines */
-  --border: #e2e5e9;
-  --divider: #eef0f2;
-  --input-border: #d0d5dc;
-  --radio-border: #b8bfc9;
+  /* Spacing */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;   /* page gutter */
+  --space-2xl: 32px;  /* between sections */
+  --space-3xl: 48px;
 
-  /* primary */
-  --primary: #2356c7;
-  --primary-hover: #1d49ad;
-  --primary-border: #1f4fb8;
-  --primary-ink: #1a3f94;
-  --focus-ring: rgba(35, 86, 199, 0.15);
-  --sel-1: #eaf0fb; /* active nav, selected segment */
-  --sel-2: #eef3fc; /* selected radio row */
-  --sel-3: #f4f7fd; /* row hover, new row, latest run */
+  /* Radii */
+  --radius-xs: 2px;   /* checkbox, bars */
+  --radius-sm: 4px;   /* buttons, inputs, pills */
+  --radius-md: 6px;   /* panels, menus, toasts */
+  --radius-lg: 8px;   /* dialogs only */
 
-  /* meaning */
-  --neg: #b42318;
-  --neg-bg: #fdecea;
-  --neg-hover-bg: #fdf3f2;
-  --neg-hover-border: #e8b4ae;
-  --alert: #d92d20;
-  --pos: #1f7a4d;
-  --prorate: #a15c00;
-  /* billing runs (README "Screen 4") */
-  --run-border: #c9d6f2; /* latest run panel */
-  --run-failed-bg: #fef6f5; /* latest run panel, failed */
-  --run-failed-border: #f2c4bf;
-  --run-failed-latest: #fef3f2; /* latest history row, failed */
-  --run-failed-row: #fffafa; /* other failed history rows */
-  --run-track: #e3e9f6; /* progress bar track */
-  --skeleton-1: #eceef1;
-  --skeleton-2: #f1f2f4;
+  /* Layout */
+  --sidebar-width: 216px;
+  --topbar-height: 48px;
+  --inspector-width: 400px;   /* shown at viewport >= 1536px */
+  --row-height: 36px;
+  --row-height-compact: 32px;
+  --header-row-height: 32px;
+  --control-height: 32px;
+  --control-height-sm: 28px;
 
-  /* status pills: text / background / dot */
-  --st-active-fg: #1f6f46;
-  --st-active-bg: #e7f4ec;
-  --st-active-dot: #2f9e63;
-  --st-inactive-fg: #5b6472;
-  --st-inactive-bg: #eef0f3;
-  --st-inactive-dot: #9aa3af;
-  --st-design-fg: #2350b0;
-  --st-design-bg: #e8effc;
-  --st-design-dot: #4a7be0;
-  --st-retired-fg: #6b6f76;
-  --st-retired-bg: #f0f0f1;
-  --st-retired-dot: #b3b7bd;
-  --st-failed-fg: #ffffff;
-  --st-failed-bg: #d92d20;
-  --st-failed-dot: #ffffff;
+  /* Colour roles — light */
+  --color-bg: #FFFFFF;
+  --color-bg-subtle: #F7F7F5;
+  --color-bg-sunken: #EFEFEC;
+  --color-bg-hover: #F4F4F1;
+  --color-bg-selected: #EEF2FC;
+  --color-border: #E4E4DF;
+  --color-border-strong: #CDCDC6;
+  --color-rule: #16171A;
+  --color-ink-1: #16171A;
+  --color-ink-2: #464A51;
+  --color-ink-3: #696E76;
+  --color-ink-4: #A2A6AD;
+  --color-primary: #2349B5;
+  --color-primary-hover: #1B3B98;
+  --color-primary-tint: #EBF0FC;
+  --color-on-primary: #FFFFFF;
+  --color-negative: #B3261E;
+  --color-negative-hover: #951E18;
+  --color-negative-tint: #FCECEA;
+  --color-positive: #1E7445;
+  --color-positive-tint: #E7F3EC;
+  --color-warning: #8A5300;
+  --color-warning-border: #E8B45C;
+  --color-warning-tint: #FDF2DB;
+  --color-info: #1D5C96;
+  --color-info-tint: #E8F0F8;
 
-  /* type */
-  --font-ui: 'Golos Text', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  --fs-105: 10.5px;
-  --fs-11: 11px;
-  --fs-115: 11.5px;
-  --fs-12: 12px;
-  --fs-125: 12.5px;
-  --fs-13: 13px;
-  --fs-14: 14px;
-  --fs-15: 15px;
-  --fs-16: 16px;
-  --fs-17: 17px;
-  --fs-18: 18px;
-  --fs-20: 20px;
+  /* Elevation */
+  --elev-popover: 0 1px 2px rgba(22, 23, 26, 0.06), 0 6px 16px rgba(22, 23, 26, 0.10);
+  --elev-dialog: 0 16px 40px rgba(22, 23, 26, 0.18), 0 0 0 1px rgba(22, 23, 26, 0.08);
+  --scrim: rgba(22, 23, 26, 0.36);
 
-  /* shape */
-  --r-tag: 3px;
-  --r-ctl: 4px;
-  --r-panel: 6px;
-  --r-modal: 8px;
-  --shadow-modal: 0 20px 50px rgba(16, 24, 40, 0.25);
-  --shadow-toast: 0 8px 24px rgba(16, 24, 40, 0.25);
-  --overlay: rgba(20, 24, 31, 0.42);
+  /* Focus */
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-primary);
+  --focus-halo: 0 0 0 3px var(--color-primary-tint);   /* inputs, with primary border */
+}
 
-  /* layout */
-  --sidebar-w: 212px;
-  --bar-h: 52px;
-  --pad-page: 20px 24px 48px;
-  --pad-cell: 8px 12px;
-  --gap-panel: 16px;
+
+:root {
+  --tracking-page: -0.01em;
+  --tracking-micro: 0.06em;
+  --tracking-figure: -0.01em;
+  --row-height-dense: 28px;
+  --color-on-primary-dim: rgba(255, 255, 255, 0.35);
+}
+
+/* enabled in slice 14
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #121315;
+    --color-bg-subtle: #18191C;
+    --color-bg-sunken: #202226;
+    --color-bg-hover: #1D1F23;
+    --color-bg-selected: #1B2643;
+    --color-border: #2A2D33;
+    --color-border-strong: #3B3F47;
+    --color-rule: #ECEDEF;
+    --color-ink-1: #ECEDEF;
+    --color-ink-2: #B6BAC1;
+    --color-ink-3: #8E939B;
+    --color-ink-4: #5E636B;
+    --color-primary: #7E9CF2;
+    --color-primary-hover: #9BB3F5;
+    --color-primary-tint: #1B2643;
+    --color-on-primary: #121315;
+  --color-on-primary-dim: rgba(18, 19, 21, 0.35);
+    --color-negative: #F08A80;
+    --color-negative-tint: #3A1B19;
+    --color-positive: #6FCB96;
+    --color-positive-tint: #15301F;
+    --color-warning: #E8B45C;
+    --color-warning-tint: #33280F;
+    --color-info: #82B5E8;
+    --color-info-tint: #15283B;
+  }
+}
+
+*/
+
+:root[data-theme="dark"] {
+  --color-bg: #121315;
+  --color-bg-subtle: #18191C;
+  --color-bg-sunken: #202226;
+  --color-bg-hover: #1D1F23;
+  --color-bg-selected: #1B2643;
+  --color-border: #2A2D33;
+  --color-border-strong: #3B3F47;
+  --color-rule: #ECEDEF;
+  --color-ink-1: #ECEDEF;
+  --color-ink-2: #B6BAC1;
+  --color-ink-3: #8E939B;
+  --color-ink-4: #5E636B;
+  --color-primary: #7E9CF2;
+  --color-primary-hover: #9BB3F5;
+  --color-primary-tint: #1B2643;
+  --color-on-primary: #121315;
+  --color-on-primary-dim: rgba(18, 19, 21, 0.35);
+  --color-negative: #F08A80;
+  --color-negative-tint: #3A1B19;
+  --color-positive: #6FCB96;
+  --color-positive-tint: #15301F;
+  --color-warning: #E8B45C;
+  --color-warning-tint: #33280F;
+  --color-info: #82B5E8;
+  --color-info-tint: #15283B;
 }

@@ -42,7 +42,7 @@
 }
 .bss-toolbar .neg-count {
   font-family: var(--font-mono);
-  font-weight: 600;
+  font-weight: 500;
   color: var(--neg);
 }
 
@@ -329,7 +329,7 @@
 .bss-preview .first {
   font-family: var(--font-mono);
   font-size: var(--fs-17);
-  font-weight: 600;
+  font-weight: 500;
 }
 .bss-preview .footnote {
   margin-top: 12px;
@@ -409,7 +409,7 @@
   padding: 10px 14px;
   border-radius: var(--r-panel);
   background: var(--alert);
-  color: #fff;
+  color: var(--color-on-primary);
 }
 .bss-run-banner .icon {
   display: flex;
@@ -419,10 +419,10 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--color-bg);
   color: var(--alert);
   font-size: var(--fs-12);
-  font-weight: 700;
+  font-weight: 600;
 }
 .bss-run-banner .strong {
   font-weight: 600;
@@ -434,9 +434,9 @@
   height: 28px;
   margin-left: auto;
   padding: 0 12px;
-  border: 1px solid #fff;
+  border: 1px solid var(--color-on-primary);
   border-radius: var(--r-ctl);
-  background: #fff;
+  background: var(--color-bg);
   color: var(--neg);
   font: inherit;
   font-size: var(--fs-125);
@@ -478,7 +478,7 @@
 }
 .bss-run-latest header .date {
   font-family: var(--font-mono);
-  font-weight: 600;
+  font-weight: 500;
 }
 .bss-run-latest header .id {
   margin-left: auto;
@@ -624,8 +624,7 @@
 /* The order dialog's item and cancellation tables */
 .bss-subhead {
   margin: 16px 0 6px;
-  font-size: 12px;
-  font-weight: 600;
+  font: var(--type-label);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-2, inherit);
@@ -633,13 +632,13 @@
 .bss-mini {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font: var(--type-body);
 }
 .bss-mini th,
 .bss-mini td {
   text-align: left;
   padding: 4px 8px 4px 0;
-  border-bottom: 1px solid var(--border, rgba(128, 128, 128, 0.25));
+  border-bottom: 1px solid var(--color-border);
 }
 
 .bss-facts {
@@ -658,4 +657,26 @@
 .bss-facts dd {
   margin: 0;
   min-width: 0;
+}
+
+.bss-product-menu {
+  position: relative;
+  display: inline-block;
+}
+.bss-product-menu-items {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.bss-product-error {
+  margin-right: auto;
 }

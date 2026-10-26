@@ -80,7 +80,7 @@ export function ProductActionsMenu({
   const [open, setOpen] = useState(false);
   if (items.length === 0) return null;
   return (
-    <span className="bss-menu" style={{ position: 'relative', display: 'inline-block' }}>
+    <span className="bss-product-menu">
       <Button
         small
         aria-haspopup="menu"
@@ -91,23 +91,7 @@ export function ProductActionsMenu({
         Actions ▾
       </Button>
       {open && (
-        <div
-          role="menu"
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            zIndex: 5,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 4,
-            padding: 6,
-            background: 'var(--surface, #fff)',
-            border: '1px solid var(--border, #ccc)',
-            borderRadius: 6,
-            whiteSpace: 'nowrap',
-          }}
-        >
+        <div role="menu" className="bss-product-menu-items">
           {items.map((item) => (
             <Button
               key={item}
@@ -217,7 +201,7 @@ export function ProductChangeDialog({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="bss-inline-error bss-product-error" role="alert">
               {problem}
             </div>
           )}
@@ -364,7 +348,7 @@ export function ChangeOfferingDialog({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <div className="bss-inline-error bss-product-error" role="alert">
               {problem}
             </div>
           )}

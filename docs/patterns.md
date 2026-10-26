@@ -108,3 +108,11 @@ A read-only slice replays the query strings its component test asserts.
   stage: 5, title: "..."}`.
 - The decision entry the slice section names (what was built, tests, deviations).
 - Row N of `docs/next-slices.md`: `done: <commit subject>`.
+
+## Ledger v2 styles and visual references
+
+`ui/base.css` imports `tokens.css`, temporary `legacy-tokens.css`, then the five font
+faces. New CSS uses the Ledger role and type tokens; legacy aliases bridge screens until
+the cleanup slice. `ui/styleGuard.test.ts` checks CSS literals, font weights and alias
+coverage. `make web-shots` captures seeded pages at both design widths without billing
+writes; screenshot output is ignored.
