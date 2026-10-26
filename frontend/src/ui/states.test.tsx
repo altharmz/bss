@@ -1,9 +1,9 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/client';
 import type { ResourceWithRetry } from '../api/useResource';
 import { Button } from './kit';
-import { ErrorBlock, ListState, SKELETON_ROWS, SkeletonRows } from './states';
+import { ErrorBlock, ListState, NoResults, SKELETON_ROWS, SkeletonRows } from './states';
 import type { Column } from './Table';
 
 const COLUMNS: Column[] = [
@@ -45,6 +45,8 @@ function renderList(res: ResourceWithRetry<Data>, filter = '', onReset = vi.fn()
   return { onReset };
 }
 
+afterEach(() => vi.useRealTimers());
+
 describe('loading', () => {
   it('shows 8 skeleton rows sized like the real cells', () => {
     renderList(resource({ status: 'loading' }));
@@ -61,9 +63,23 @@ describe('loading', () => {
     expect(screen.getAllByTestId('skeleton')).toHaveLength(SKELETON_ROWS * 3);
   });
 
+  it('reserves row height immediately but reveals bars only after 200 ms', () => {
+    vi.useFakeTimers();
+    render(<SkeletonRows columns={COLUMNS} rows={2} />);
+    const loading = screen.getByLabelText('Loading');
+    expect(within(loading).getAllByRole('row')).toHaveLength(2);
+    expect(loading.className).toBe('skeleton-pending');
+    act(() => vi.advanceTimersByTime(199));
+    expect(loading.className).toBe('skeleton-pending');
+    act(() => vi.advanceTimersByTime(1));
+    expect(loading.className).toBe('skeleton-ready');
+  });
+
   it('varies the bar widths per row', () => {
     render(<SkeletonRows columns={COLUMNS} rows={2} />);
-    const bars = screen.getAllByTestId('skeleton').map((bar) => bar.style.width);
+    const bars = screen
+      .getAllByTestId('skeleton')
+      .map((bar) => bar.style.getPropertyValue('--skeleton-width'));
     expect(bars.slice(0, 3)).not.toEqual(bars.slice(3, 6));
   });
 });
@@ -122,6 +138,25 @@ describe('empty and no results', () => {
     expect(screen.queryByText('No subscribers yet')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
     expect(onReset).toHaveBeenCalledOnce();
+  });
+
+  it('names the query and every active filter', () => {
+    const reset = vi.fn();
+    render(
+      <NoResults
+        query="north"
+        filters={[
+          { label: 'Status', value: 'Suspended' },
+          { label: 'Mode', value: 'Prepaid' },
+        ]}
+        onReset={reset}
+      />,
+    );
+    expect(screen.getByText('Nothing matches “north”')).toBeTruthy();
+    expect(screen.getByText('Suspended').parentElement?.textContent).toBe('with Status Suspended');
+    expect(screen.getByText('Prepaid').parentElement?.textContent).toBe('with Mode Prepaid');
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    expect(reset).toHaveBeenCalledOnce();
   });
 
   it('renders the rows otherwise', () => {

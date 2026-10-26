@@ -145,3 +145,15 @@ copies the full UUID, toasting success or failure without activating an enclosin
 The Subscribers list keeps Subscriber no. and adds a BA Id column; the card meta also
 uses Id. Other display ids migrate in the later screen slices.
 `TableRow` accepts a `className` for screen state styling.
+
+### Ledger table and list foundations (slice 3a)
+
+`TableHead` and `TableRow` accept `density="default"|"compact"|"dense"`.
+Clickable rows enter the tab order and activate on Enter/Space; nested control key events
+stay with the control. `selected` adds the selection class and `aria-selected`.
+Column `kind="actions"` reserves a hover/focus-visible action cell; Menu integration
+and the structured footer range remain in slice 3b.
+`SkeletonRows` retains real row geometry immediately and reveals bars after 200 ms via
+`useDelayed`. `NoResults` and `ListState` accept optional `query` and
+`filters: { label, value }[]`; query-aware copy names both. Omit query to retain the
+existing accessible “No matches” label until a screen's design migration.

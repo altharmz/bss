@@ -23,7 +23,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-panel);
-  overflow: hidden;
+  overflow: clip;
 }
 .bss-panel-header {
   display: flex;
@@ -43,97 +43,122 @@
   margin-left: auto;
 }
 
-/* --- table (CSS grid, fixed column widths per table) --- */
+/* --- Ledger tables and list states --- */
 .bss-row {
   display: grid;
   align-items: center;
-  min-height: 37px;
-  border-bottom: 1px solid var(--divider);
+  min-height: var(--row-height);
+  border-bottom: 1px solid var(--color-border);
+}
+.bss-row.density-compact {
+  min-height: var(--row-height-compact);
+}
+.bss-row.density-dense {
+  min-height: var(--row-height-dense);
 }
 .bss-row > .cell {
-  padding: var(--pad-cell);
+  padding: 0 12px;
   min-width: 0;
+}
+.bss-row > .cell:first-child {
+  padding-left: 24px;
+}
+.bss-row > .cell:last-child {
+  padding-right: 24px;
 }
 .bss-row > .cell.right {
   text-align: right;
 }
 .bss-row > .cell.mono {
-  font-family: var(--font-mono);
-  font-size: var(--fs-125);
+  font: var(--type-num);
   font-variant-numeric: tabular-nums;
 }
 .bss-row.head {
-  min-height: 0;
-  background: var(--th-bg);
-  font-size: var(--fs-11);
-  font-weight: 500;
+  min-height: 32px;
+  background: var(--color-bg-subtle);
+  border-top: 1px solid var(--color-border);
+  font: var(--type-micro);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
+  letter-spacing: var(--tracking-micro);
+  color: var(--color-ink-3);
+  position: sticky;
+  top: var(--topbar-height);
+  z-index: 1;
+}
+.bss-row.head > .cell {
+  font: inherit;
 }
 .bss-row.clickable {
   cursor: pointer;
 }
 .bss-row.clickable:hover {
-  background: var(--sel-3);
+  background: var(--color-bg-hover);
+}
+.bss-row.selected {
+  background: var(--color-bg-selected);
+  box-shadow: inset 2px 0 0 var(--color-primary);
+}
+.bss-row.clickable:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--color-primary);
+}
+.bss-row .actions {
+  visibility: hidden;
+}
+.bss-row:hover .actions,
+.bss-row:focus-within .actions {
+  visibility: visible;
 }
 .bss-table-footer {
+  min-height: 44px;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--foot-bg);
-  font-size: var(--fs-12);
-  color: var(--muted);
+  padding: 0 24px;
+  font: var(--type-code);
+  color: var(--color-ink-3);
+}
+.bss-table-footer .bss-btn {
+  height: 28px;
 }
 .ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* --- skeleton --- */
 .bss-skel {
+  --skeleton-width: 62%;
   display: inline-block;
   height: 10px;
-  border-radius: 3px;
-  background: var(--skeleton-1);
+  width: var(--skeleton-width);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-sunken);
   vertical-align: middle;
 }
-.bss-row:nth-child(even) .bss-skel {
-  background: var(--skeleton-2);
+.skeleton-pending .bss-skel {
+  --skeleton-width: 62%;
+  visibility: hidden;
 }
-
-/* --- states: error, empty, no results --- */
 .bss-state {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  padding: 40px;
-  text-align: center;
+  padding: 48px 24px;
+  text-align: left;
 }
 .bss-state .title {
-  font-size: var(--fs-14);
-  font-weight: 600;
+  font: var(--type-body-strong);
 }
 .bss-state .text {
-  color: var(--muted);
+  color: var(--color-ink-2);
 }
 .bss-state .call {
-  font-family: var(--font-mono);
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font: var(--type-code);
+  color: var(--color-ink-3);
 }
 .bss-state .icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--neg-bg);
-  color: var(--neg);
-  font-weight: 600;
+  color: var(--color-negative);
 }
 
 /* --- Ledger controls --- */

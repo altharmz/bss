@@ -1,3 +1,5 @@
+import { TableHead, TableRow } from '../ui/Table';
+import { EmptyBlock, ErrorBlock, NoResults, SkeletonRows } from '../ui/states';
 import { Amount } from '../ui/Amount';
 import { Id, ID_PREFIXES } from '../ui/Id';
 import { STATUS_MAP, type StatusKind } from '../ui/status';
@@ -25,6 +27,55 @@ export function UiKitScreen() {
   return (
     <div className="ui-kit" data-ui="ui.kit">
       <h1>UI kit</h1>
+      <section>
+        <h2>Tables and list states</h2>
+        {(['default', 'compact', 'dense'] as const).map((density) => (
+          <div key={density} role="table" aria-label={`${density} table`}>
+            <TableHead
+              columns={[
+                { key: 'name', label: 'Name', width: '1fr' },
+                { key: 'amount', label: 'Balance EUR', width: '140px', align: 'right' },
+              ]}
+              density={density}
+            />
+            <TableRow
+              columns={[
+                { key: 'name', label: 'Name', width: '1fr' },
+                { key: 'amount', label: 'Balance EUR', width: '140px', align: 'right' },
+              ]}
+              density={density}
+              selected
+              cells={{ name: 'Selected subscriber', amount: <Amount cents={4210} /> }}
+              onClick={() => {}}
+            />
+          </div>
+        ))}
+        <SkeletonRows
+          columns={[
+            { key: 'name', label: 'Name', width: '1fr' },
+            { key: 'amount', label: 'Balance EUR', width: '140px', align: 'right' },
+          ]}
+          rows={2}
+        />
+        <ErrorBlock
+          title="Couldn't load subscribers"
+          error={new Error('GET /billingAccount → 503 Service Unavailable')}
+          onRetry={() => {}}
+        />
+        <EmptyBlock
+          title="No subscribers yet"
+          text="A subscriber appears here when a billing account is created for a party."
+          action={<Button>New subscriber</Button>}
+        />
+        <NoResults
+          query="nordwnd"
+          filters={[
+            { label: 'Status', value: 'Suspended' },
+            { label: 'Mode', value: 'Prepaid' },
+          ]}
+          onReset={() => {}}
+        />
+      </section>
       <section>
         <h2>Buttons</h2>
         {(['primary', 'secondary', 'danger', 'quiet'] as const).map((variant) => (

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ResourceWithRetry } from '../api/useResource';
 import { Button } from './kit';
 import { TableRow, type Column } from './Table';
@@ -11,6 +11,15 @@ import { TableRow, type Column } from './Table';
 const WIDTHS = ['62%', '48%', '70%', '40%', '55%', '66%', '44%', '58%'];
 export const SKELETON_ROWS = 8;
 
+export function useDelayed(ms: number) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setReady(true), ms);
+    return () => clearTimeout(timer);
+  }, [ms]);
+  return ready;
+}
+
 export function SkeletonRows({
   columns,
   rows = SKELETON_ROWS,
@@ -18,8 +27,13 @@ export function SkeletonRows({
   columns: Column[];
   rows?: number;
 }) {
+  const ready = useDelayed(200);
   return (
-    <div aria-busy="true" aria-label="Loading">
+    <div
+      aria-busy="true"
+      aria-label="Loading"
+      className={ready ? 'skeleton-ready' : 'skeleton-pending'}
+    >
       {Array.from({ length: rows }, (_, row) => (
         <TableRow
           key={row}
@@ -31,7 +45,7 @@ export function SkeletonRows({
                 key={column.key}
                 className="bss-skel"
                 data-testid="skeleton"
-                style={{ width: WIDTHS[(row + i) % WIDTHS.length] }}
+                style={{ '--skeleton-width': WIDTHS[(row + i) % WIDTHS.length] } as CSSProperties}
               />,
             ]),
           )}
@@ -79,10 +93,22 @@ export function EmptyBlock({ title, text, action }: EmptyCopy) {
   );
 }
 
-export function NoResults({ onReset }: { onReset: () => void }) {
+interface FilterCopy {
+  query?: string | undefined;
+  filters?: { label: string; value: string }[] | undefined;
+}
+
+export function NoResults({ onReset, query, filters = [] }: FilterCopy & { onReset: () => void }) {
   return (
     <div className="bss-state">
-      <div className="title">No matches</div>
+      <div className="title">
+        {query === undefined ? 'No matches' : `Nothing matches “${query}”`}
+      </div>
+      {filters.map(({ label, value }) => (
+        <div className="text" key={label}>
+          with {label} <strong>{value}</strong>
+        </div>
+      ))}
       <Button onClick={onReset}>Reset filters</Button>
     </div>
   );
@@ -100,8 +126,12 @@ export function ListState<T, R>({
   total,
   rows,
   onResetFilters,
+  query,
+  filters,
   children,
 }: {
+  query?: string | undefined;
+  filters?: FilterCopy['filters'];
   resource: ResourceWithRetry<T>;
   columns: Column[];
   errorTitle: string;
@@ -117,6 +147,7 @@ export function ListState<T, R>({
   }
   if (total(resource.data) === 0) return <EmptyBlock {...empty} />;
   const visible = rows(resource.data);
-  if (visible.length === 0) return <NoResults onReset={onResetFilters} />;
+  if (visible.length === 0)
+    return <NoResults onReset={onResetFilters} query={query} filters={filters} />;
   return <>{children(visible, resource.data)}</>;
 }

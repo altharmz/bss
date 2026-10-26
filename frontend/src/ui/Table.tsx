@@ -9,6 +9,7 @@ export interface Column {
   label: string;
   width: string; // a grid track: "150px", "1fr"
   align?: 'left' | 'right';
+  kind?: 'actions';
   mono?: boolean; // identifiers, amounts, dates, counts
 }
 
@@ -17,15 +18,28 @@ export function gridOf(columns: Column[]): string {
 }
 
 function cellClass(column: Column): string {
-  return ['cell', column.align === 'right' ? 'right' : '', column.mono ? 'mono' : '']
+  return [
+    'cell',
+    column.align === 'right' ? 'right' : '',
+    column.mono ? 'mono' : '',
+    column.kind === 'actions' ? 'actions' : '',
+  ]
     .filter(Boolean)
     .join(' ');
 }
 
-export function TableHead({ columns }: { columns: Column[] }) {
+type Density = 'default' | 'compact' | 'dense';
+
+export function TableHead({
+  columns,
+  density = 'default',
+}: {
+  columns: Column[];
+  density?: Density;
+}) {
   return (
     <div
-      className="bss-row head"
+      className={`bss-row head density-${density}`}
       role="row"
       style={{ '--table-columns': gridOf(columns) } as CSSProperties}
     >
@@ -44,18 +58,34 @@ export function TableRow({
   onClick,
   style,
   className = '',
+  density = 'default',
+  selected = false,
 }: {
   columns: Column[];
   cells: Record<string, ReactNode>;
   onClick?: () => void;
   style?: CSSProperties;
   className?: string;
+  density?: Density;
+  selected?: boolean;
 }) {
   return (
     <div
-      className={`bss-row${onClick ? ' clickable' : ''} ${className}`.trim()}
+      className={`bss-row density-${density}${onClick ? ' clickable' : ''}${selected ? ' selected' : ''} ${className}`.trim()}
       role="row"
       style={{ '--table-columns': gridOf(columns), ...style } as CSSProperties}
+      aria-selected={selected || undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (
+          event.target === event.currentTarget &&
+          onClick &&
+          (event.key === 'Enter' || event.key === ' ')
+        ) {
+          event.preventDefault();
+          onClick();
+        }
+      }}
       onClick={onClick}
     >
       {columns.map((column) => (
