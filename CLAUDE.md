@@ -138,10 +138,11 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
 - **Next:** the prepaid tracker is complete (P7: mixed-mode seed, runbook, [release evidence](docs/prepaid-release.md));
   [tracker](docs/prepaid-slices.md), [scope](docs/prepaid-plan.md), [decision](docs/decisions/prepaid.md).
   Next is [docs/next-slices.md](docs/next-slices.md): Phase A (slices 1-8, finish prepaid)
-  is done on 2026-10-25; Phase B (slices 9-24) brings every MCP operation into the UI and
-  starts at slice 9. All decisions are in
-  [docs/next-slices-design.md](docs/next-slices-design.md), and no slice needs approval.
-  The orchestrator prompt is in [docs/run-slices.md](docs/run-slices.md).
+  is done on 2026-10-25 and Phase B (slices 9-24, every MCP operation in the UI, plus the
+  UI/MCP parity check in `tests/test_ui_mcp_parity.py`) on 2026-10-26. Decisions are in
+  [docs/next-slices-design.md](docs/next-slices-design.md); the orchestrator prompt is in
+  [docs/run-slices.md](docs/run-slices.md) and the screen shapes in
+  [docs/patterns.md](docs/patterns.md). No slice is planned after 24.
 - **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21
   ([frontend.md](docs/decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21));
   UI vs MCP gap slices 2 and 4 ([plan](docs/ui-mcp-gap-plan.md));
