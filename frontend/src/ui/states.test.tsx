@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/client';
+import { SystemContextProvider } from '../app/context';
+import { CONTEXT } from '../test/fetch';
 import type { ResourceWithRetry } from '../api/useResource';
 import { Button } from './kit';
 import { ErrorBlock, ListState, NoResults, SKELETON_ROWS, SkeletonRows } from './states';
@@ -85,6 +87,24 @@ describe('loading', () => {
 });
 
 describe('error', () => {
+  it('captures each failure time in the business zone and keeps it across rerenders', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-26T12:34:56Z'));
+    const error = new Error('GET /example → 503');
+    const show = (failure: Error) => (
+      <SystemContextProvider value={CONTEXT}>
+        <ErrorBlock title="Failed" error={failure} onRetry={() => {}} />
+      </SystemContextProvider>
+    );
+    const view = render(show(error));
+    expect(screen.getByText('15:34:56').getAttribute('datetime')).toBe('2026-10-26T12:34:56.000Z');
+    vi.advanceTimersByTime(60000);
+    view.rerender(show(error));
+    expect(screen.getByText('15:34:56')).toBeTruthy();
+    view.rerender(show(new Error('GET /example → 502')));
+    expect(screen.getByText('15:35:56')).toBeTruthy();
+  });
+
   it('names what failed, shows the call and retries', () => {
     const retry = vi.fn();
     const error = new ApiError(

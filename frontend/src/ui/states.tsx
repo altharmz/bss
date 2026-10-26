@@ -1,5 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ResourceWithRetry } from '../api/useResource';
+import { useOptionalSystemContext } from '../app/context';
+import { clockTime } from '../format/dates';
 import { Button } from './kit';
 import { TableRow, type Column } from './Table';
 
@@ -64,6 +66,9 @@ export function ErrorBlock({
   error: Error;
   onRetry: () => void;
 }) {
+  const context = useOptionalSystemContext();
+  const [failure, setFailure] = useState(() => ({ error, at: new Date().toISOString() }));
+  if (failure.error !== error) setFailure({ error, at: new Date().toISOString() });
   return (
     <div className="bss-state" role="alert">
       <span className="icon" aria-hidden="true">
@@ -72,6 +77,11 @@ export function ErrorBlock({
       <div className="title">{title}</div>
       {/* An ApiError's message is the call: "GET /path → 503 Service Unavailable". */}
       <div className="call">{error.message}</div>
+      {context && (
+        <time className="call" dateTime={failure.at}>
+          {clockTime(failure.at, context.timeZone)}
+        </time>
+      )}
       <Button onClick={onRetry}>Retry</Button>
     </div>
   );

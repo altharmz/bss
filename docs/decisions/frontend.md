@@ -2,6 +2,8 @@
 
 ## Ledger v2: visual redesign (designed 2026-10-26)
 
+- Slice 3b2a built Note (info/warning/negative icons, roles, lead and code) and stable business-zone failure timestamps; gallery reviewed at both widths. Split remaining primitives and screen migrations into 3b2b. Deviation: bootstrap ErrorBlock has no system context, so omits its timestamp rather than assuming a zone; call and Retry remain available. No requests changed.
+
 - Slice 3b1 built keyboard Tabs/TabPanel and Menu with outside dismissal, focus return and disabled items; Table gains structured range and action menus; ProductActions uses the shared Menu with its existing accessible label. Gallery and card reviewed at both widths. Remaining slice 3 scope is explicit in 3b2; no API deviations.
 
 

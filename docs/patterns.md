@@ -170,3 +170,13 @@ existing Actions accessible name. `defaultOpen` supports the gallery's open samp
 `TableRow` accepts `actions: MenuItem[]` for a `kind="actions"` cell; menu clicks do
 not activate the row. `TableFooter` accepts `range: { from, to, total }`, with numeric
 range emphasis; existing `left`/`right` slots remain for screen migration and paging.
+
+### Ledger notes and failure timestamps (slice 3b2a)
+
+`Note({ tone, lead?, code?, children })` supports info, warning and negative tones.
+Negative notes have role alert; the other tones have role note. Leads are bold,
+server codes are mono ink-3, and each tone has its own decorative SVG glyph.
+The gallery previews all three tones. Existing screen callers migrate in 3b2b.
+`ErrorBlock` captures each error's failure instant once, displaying HH:MM:SS in the
+system context's business zone. Bootstrap errors preserve their call and Retry when
+context is unavailable, omitting the timestamp until context exists.

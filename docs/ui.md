@@ -600,3 +600,7 @@ tokens and temporary aliases to every screen. `make web-shots` captures read-onl
 pages at 1280 and 1600 px in `frontend/.shots/`; layout changes follow in later slices.
 
 Ledger v2 slice 3a applies shared 36/32/28 px table rows, sticky headers, keyboard row activation and selection, and left-aligned list states. Skeleton bars appear after 200 ms while retaining row height. Query-aware no-results states list the search and active filters.
+
+Ledger v2 slice 3b2a adds stable failure times in the business time zone to shared list
+errors (bootstrap errors omit the time while context is unavailable). UI kit previews
+info, warning and negative Notes, including bold verdicts and mono server codes.

@@ -16,6 +16,11 @@ export type SystemContext = components['schemas']['Context'];
 
 const SystemContextValue = createContext<SystemContext | null>(null);
 
+/** Bootstrap errors render before the business context is available. */
+export function useOptionalSystemContext(): SystemContext | null {
+  return useContext(SystemContextValue);
+}
+
 export function SystemContextProvider({
   value,
   children,

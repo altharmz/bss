@@ -6,6 +6,7 @@ import { STATUS_MAP, type StatusKind } from '../ui/status';
 import { useState } from 'react';
 import {
   Menu,
+  Note,
   Tabs,
   TabPanel,
   Badge,
@@ -31,6 +32,18 @@ export function UiKitScreen() {
   return (
     <div className="ui-kit" data-ui="ui.kit">
       <h1>UI kit</h1>
+      <section>
+        <h2>Inline notes</h2>
+        <Note tone="info" lead="Change scheduled.">
+          Mobile S becomes Mobile L on 2026-11-15; the price changes from that date.
+        </Note>
+        <Note tone="warning" lead="Shortfall 2.56 EUR.">
+          The first charge needs 16.06; 13.50 is available. Top up first.
+        </Note>
+        <Note tone="negative" lead="Refused by the server." code="INSUFFICIENT_FUNDS">
+          Amount exceeds the available balance (13.50 EUR).
+        </Note>
+      </section>
       <section className="ui-kit-navigation">
         <h2>Tabs and menu</h2>
         <Tabs

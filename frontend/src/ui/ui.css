@@ -744,3 +744,43 @@
 .bss-menu-items .bss-btn:disabled {
   background: transparent;
 }
+
+/* Ledger inline notes: Components artboard. */
+.bss-note {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-1);
+}
+.bss-note strong {
+  font: var(--type-body-strong);
+}
+.bss-note svg {
+  flex: none;
+  margin-top: 3px;
+  fill: none;
+  stroke-width: 1.5;
+}
+.bss-note-info {
+  background: var(--color-info-tint);
+}
+.bss-note-info svg {
+  stroke: var(--color-info);
+}
+.bss-note-warning {
+  background: var(--color-warning-tint);
+}
+.bss-note-warning svg {
+  stroke: var(--color-warning);
+}
+.bss-note-negative {
+  background: var(--color-negative-tint);
+}
+.bss-note-negative svg {
+  fill: var(--color-negative);
+}
+.bss-note-code {
+  font: var(--type-code);
+  color: var(--color-ink-3);
+}
