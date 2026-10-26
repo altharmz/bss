@@ -7,9 +7,12 @@ have no stop checkpoint. Scaled down in time: each account takes SLOW seconds (b
 wrapped with a sleep), the threshold is THRESHOLD, and every run here takes longer than
 the threshold in total. The gaps between the start, every heartbeat and the end must all
 stay under it, and there is exactly one heartbeat per account processed.
+
+Time here is virtual: a slow account advances a test clock instead of sleeping, and the
+heartbeat reads that clock, so host load cannot stretch a gap past the threshold and the
+tests take no real time.
 """
 
-import time
 from datetime import timedelta
 
 import pytest
@@ -41,6 +44,17 @@ def worker(migrated_db_url):
         conn.close()
 
 
+class VirtualTime:
+    """The test's clock: only a slow account moves it."""
+
+    now = 0.0
+
+
+@pytest.fixture(autouse=True)
+def virtual_time():
+    VirtualTime.now = 0.0
+
+
 class Liveness:
     """Records when the heartbeat fired, between a start and an end."""
 
@@ -48,14 +62,14 @@ class Liveness:
         self.beats: list[float] = []
 
     def __call__(self) -> None:
-        self.beats.append(time.monotonic())
+        self.beats.append(VirtualTime.now)
 
     def __enter__(self) -> "Liveness":
-        self.start = time.monotonic()
+        self.start = VirtualTime.now
         return self
 
     def __exit__(self, *exc) -> None:
-        self.end = time.monotonic()
+        self.end = VirtualTime.now
 
     def gaps(self) -> list[float]:
         points = [self.start, *self.beats, self.end]
@@ -71,7 +85,7 @@ def slow_accounts(monkeypatch) -> None:
     real = process.bill_account
 
     def slow(conn, account_id, run, **kw):
-        time.sleep(SLOW)
+        VirtualTime.now += SLOW
         return real(conn, account_id, run, **kw)
 
     monkeypatch.setattr(process, "bill_account", slow)
