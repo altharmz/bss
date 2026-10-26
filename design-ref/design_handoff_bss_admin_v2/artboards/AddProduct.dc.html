@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Add product dialog</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="position: relative; width: 1280px; height: 880px; overflow: hidden; background: #FFFFFF; font-family: 'Golos Text', system-ui, sans-serif; font-size: 13px; line-height: 20px; color: #16171A">
+  <div aria-hidden="true" style="position: absolute; inset: 0">
+    <dc-import name="SubscriberCard" hint-size="1280px,880px"></dc-import>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(22,23,26,0.36); display: flex; align-items: center; justify-content: center">
+
+    <div role="dialog" aria-modal="true" aria-labelledby="ap-title" style="width: 760px; background: #FFFFFF; border-radius: 8px; box-shadow: 0 16px 40px rgba(22,23,26,0.18), 0 0 0 1px rgba(22,23,26,0.08); display: flex; flex-direction: column">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #E4E4DF">
+        <h2 id="ap-title" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Add product</h2>
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">Maria Sokolova · <span style="font-family: 'JetBrains Mono', monospace">BA-C2290A5E</span> · prepaid</span>
+        <button type="button" aria-label="Close" style="margin-left: auto; width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" style="stroke: #464A51; stroke-width: 1.5"><path d="M2 2l8 8M10 2l-8 8"></path></svg></button>
+      </div>
+
+      <div style="display: flex; align-items: stretch">
+        <div style="flex: 1; min-width: 0; padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 18px">
+          <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px">
+            <legend style="padding: 0 0 6px; font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Offering</legend>
+            <div role="radiogroup" aria-label="Offering" style="display: flex; flex-direction: column; border: 1px solid #E4E4DF; border-radius: 4px; overflow: hidden">
+              <sc-for list="{{ offerings }}" as="o" hint-placeholder-count="4">
+                <label style="display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; height: 40px; padding: 0 12px; border-bottom: 1px solid #E4E4DF; background: {{ o.bg }}; box-shadow: {{ o.sh }}; color: {{ o.c }}">
+                  <input type="radio" name="offering" checked="{{ o.on }}" disabled="{{ o.off }}" style="margin: 0; width: 14px; height: 14px; accent-color: #2349B5">
+                  <span style="display: flex; align-items: baseline; gap: 8px; min-width: 0"><span style="font-weight: 500">{{ o.name }}</span><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">{{ o.code }}</span><span style="font-size: 12px; line-height: 16px; color: #696E76">{{ o.note }}</span></span>
+                  <span style="font-family: 'JetBrains Mono', monospace; text-align: right">{{ o.price }}<span style="font-size: 12px; color: #696E76"> / {{ o.unit }}</span></span>
+                </label>
+              </sc-for>
+            </div>
+          </fieldset>
+
+          <div style="display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 16px">
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <label for="ap-number" style="font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Number</label>
+              <div style="display: flex; gap: 8px">
+                <input id="ap-number" type="text" value="+372 5310 8842" readonly="" style="flex: 1; min-width: 0; height: 32px; box-sizing: border-box; padding: 0 10px; border: 1px solid #CDCDC6; border-radius: 4px; background: #FFFFFF; font: 400 13px/20px 'JetBrains Mono', monospace; color: #16171A">
+                <button type="button" style="height: 32px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #2349B5; font: 500 13px/20px 'Golos Text', sans-serif; white-space: nowrap">Pick another</button>
+              </div>
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: #696E76"><span aria-hidden="true" style="width: 8px; height: 8px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid #1D5C96"></span>Reserved for you until <span style="font-family: 'JetBrains Mono', monospace; color: #16171A">14:17:32</span>, then released</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <label for="ap-start" style="font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Start date</label>
+              <span style="position: relative; display: flex">
+                <input id="ap-start" type="text" value="2026-10-26" style="width: 100%; height: 32px; box-sizing: border-box; padding: 0 32px 0 10px; border: 1px solid #CDCDC6; border-radius: 4px; font: 400 13px/20px 'JetBrains Mono', monospace; color: #16171A">
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="position: absolute; right: 10px; top: 9px; fill: none; stroke: #464A51; stroke-width: 1.3"><rect x="1.5" y="2.5" width="11" height="10" rx="1"></rect><path d="M1.5 5.5h11M4.5 1v3M9.5 1v3"></path></svg>
+              </span>
+              <span style="font-size: 12px; line-height: 16px; color: #696E76">Today (business date)</span>
+            </div>
+          </div>
+
+          <div role="note" style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 4px; background: #FDF2DB">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="flex: none; margin-top: 3px; fill: none; stroke: #8A5300; stroke-width: 1.5"><path d="M7 1.5l6 11H1z"></path><path d="M7 6v3M7 10.8v.01"></path></svg>
+            <span><strong style="font-weight: 600">Shortfall <span style="font-family: 'JetBrains Mono', monospace">2.56</span> EUR.</strong> The first charge needs <span style="font-family: 'JetBrains Mono', monospace">16.06</span> and <span style="font-family: 'JetBrains Mono', monospace">13.50</span> is available. Top up first; the product can be added once the balance covers it.</span>
+          </div>
+        </div>
+
+        <aside aria-label="First charge preview" style="flex: none; width: 272px; box-sizing: border-box; padding: 16px 20px 20px; background: #F7F7F5; border-left: 1px solid #E4E4DF; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #16171A">First charge</span>
+            <span style="font: 500 24px/32px 'JetBrains Mono', monospace; letter-spacing: -0.01em">16.06<span style="font-size: 11px; font-weight: 400; color: #696E76; margin-left: 4px">EUR</span></span>
+          </div>
+          <dl style="margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); row-gap: 4px; column-gap: 12px; font-size: 12px; line-height: 16px">
+            <dt style="color: #696E76">Price</dt><dd style="margin: 0; text-align: right; font-family: 'JetBrains Mono', monospace">24.90 / month</dd>
+            <dt style="color: #696E76">Period</dt><dd style="margin: 0; text-align: right; font-family: 'JetBrains Mono', monospace">10-26 → 11-14</dd>
+            <dt style="color: #696E76">Prorated</dt><dd style="margin: 0; text-align: right; font-family: 'JetBrains Mono', monospace">× 20 / 31 days</dd>
+          </dl>
+          <span style="font-size: 12px; line-height: 16px; color: #696E76">Aligned to the paid-through date. Then <span style="font-family: 'JetBrains Mono', monospace; color: #16171A">24.90</span> monthly from <span style="font-family: 'JetBrains Mono', monospace; color: #16171A">2026-11-15</span>.</span>
+          <div style="border-top: 1px solid #16171A; padding-top: 8px; display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; font-size: 12px; line-height: 20px">
+            <span style="color: #464A51">Required now</span><span style="text-align: right; font: 400 13px/20px 'JetBrains Mono', monospace">16.06</span>
+            <span style="color: #464A51">Available</span><span style="text-align: right; font: 400 13px/20px 'JetBrains Mono', monospace">13.50</span>
+            <span style="display: flex; align-items: center; gap: 6px; color: #8A5300; font-weight: 600; border-top: 1px solid #E4E4DF; padding-top: 6px"><span aria-hidden="true" style="width: 8px; height: 8px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid #8A5300"></span>Shortfall</span><span style="text-align: right; font: 500 13px/20px 'JetBrains Mono', monospace; color: #8A5300; border-top: 1px solid #E4E4DF; padding-top: 6px">2.56</span>
+          </div>
+        </aside>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: #F7F7F5; border-top: 1px solid #E4E4DF; border-radius: 0 0 8px 8px">
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">Preview from the server · <span style="font-family: 'JetBrains Mono', monospace">14:07:32</span></span>
+        <button type="button" style="margin-left: auto; height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; color: #464A51; font: 500 13px/20px 'Golos Text', sans-serif">Cancel</button>
+        <button type="button" disabled="" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #A2A6AD; box-shadow: inset 0 0 0 1px #E4E4DF; font: 500 13px/20px 'Golos Text', sans-serif">Add Mobile L</button>
+        <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #2349B5; color: #FFFFFF; font: 500 13px/20px 'Golos Text', sans-serif">Top up 2.56 EUR…</button>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":880}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const O = (name, code, price, unit, state, note) => ({
+      name, code, price, unit, note: note || '',
+      on: state === 'on', off: state === 'off',
+      bg: state === 'on' ? '#EEF2FC' : '#FFFFFF',
+      sh: state === 'on' ? 'inset 2px 0 0 #2349B5' : 'none',
+      c: state === 'off' ? '#A2A6AD' : '#16171A'
+    });
+    return {
+      offerings: [
+        O('Mobile S', 'MOB-S', '9.90', 'month'),
+        O('Mobile L', 'MOB-L', '24.90', 'month', 'on'),
+        O('Prepaid Daily', 'PRE-D', '0.49', 'day'),
+        O('Data 10 GB', 'DATA-10', '7.50', 'month', 'off', 'In design, not sellable yet')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

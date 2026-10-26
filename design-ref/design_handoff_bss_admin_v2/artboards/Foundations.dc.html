@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ledger foundations</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2349B5}a:hover{color:#1B3B98}
+</style>
+</helmet>
+<div style="width: 1600px; min-height: 2140px; box-sizing: border-box; padding: 56px 64px 64px; background: #FFFFFF; color: #16171A; font-family: 'Golos Text', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 48px">
+
+  <header style="display: flex; align-items: flex-end; justify-content: space-between; gap: 48px; padding-bottom: 24px; border-bottom: 1px solid #16171A">
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">BSS Admin · Ledger design system · Foundations</div>
+      <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.015em">Precise, quiet, dense.</h1>
+      <p style="margin: 0; max-width: 760px; color: #464A51; font-size: 13px; line-height: 20px">The page is the surface: hairlines separate, boxes are rare. Colour appears only where it carries meaning: the sign of money, a status, a failure, and the one primary action on a screen. Every token below is a CSS custom property; dark theme is the same roles mapped to other values.</p>
+    </div>
+    <div style="display: grid; grid-template-columns: auto auto; column-gap: 16px; row-gap: 4px; font-size: 12px; line-height: 16px; color: #696E76">
+      <span>UI</span><span style="color: #16171A; font-weight: 500">Golos Text 400 · 500 · 600</span>
+      <span>Figures</span><span style="color: #16171A; font-family: 'JetBrains Mono', monospace">JetBrains Mono 400 · 500</span>
+      <span>Minimum</span><span style="color: #16171A; font-family: 'JetBrains Mono', monospace">1280 px</span>
+    </div>
+  </header>
+
+  <section aria-labelledby="h-type" style="display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: baseline; gap: 12px">
+      <h2 id="h-type" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">01 Type scale</h2>
+      <span style="font-size: 12px; line-height: 16px; color: #696E76">Six sizes, named by role. No half steps. Mono is for anything a person compares or copies.</span>
+    </div>
+    <div style="border-top: 1px solid #16171A">
+      <div style="display: grid; grid-template-columns: 200px 300px minmax(0, 1fr) 420px; height: 32px; align-items: center; background: #F7F7F5; border-bottom: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">
+        <span style="padding: 0 12px">Token</span><span style="padding: 0 12px">Spec</span><span style="padding: 0 12px">Sample</span><span style="padding: 0 12px">Used for</span>
+      </div>
+      <sc-for list="{{ types }}" as="t" hint-placeholder-count="9">
+        <div style="display: grid; grid-template-columns: 200px 300px minmax(0, 1fr) 420px; min-height: 48px; align-items: center; border-bottom: 1px solid #E4E4DF">
+          <span style="padding: 0 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 16px">{{ t.token }}</span>
+          <span style="padding: 0 12px; font-size: 12px; line-height: 16px; color: #464A51">{{ t.spec }}</span>
+          <span style="padding: 8px 12px; font-family: {{ t.ff }}; font-size: {{ t.fs }}; font-weight: {{ t.fw }}; line-height: {{ t.lh }}; letter-spacing: {{ t.ls }}; text-transform: {{ t.tt }}; color: {{ t.c }}; font-variant-numeric: tabular-nums">{{ t.sample }}</span>
+          <span style="padding: 0 12px; font-size: 12px; line-height: 16px; color: #464A51">{{ t.use }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 56px; align-items: start">
+
+    <section aria-labelledby="h-colour" style="display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: baseline; gap: 12px">
+        <h2 id="h-colour" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">02 Colour roles</h2>
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">Light · dark. Neutrals are warm-grey; one blue.</span>
+      </div>
+      <div style="border-top: 1px solid #16171A">
+        <div style="display: grid; grid-template-columns: 150px 120px 120px minmax(0, 1fr); height: 32px; align-items: center; background: #F7F7F5; border-bottom: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">
+          <span style="padding: 0 12px">--color-</span><span style="padding: 0 12px">Light</span><span style="padding: 0 12px">Dark</span><span style="padding: 0 12px">Role</span>
+        </div>
+        <sc-for list="{{ colours }}" as="c" hint-placeholder-count="22">
+          <div style="display: grid; grid-template-columns: 150px 120px 120px minmax(0, 1fr); height: 36px; align-items: center; border-bottom: 1px solid #E4E4DF">
+            <span style="padding: 0 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 16px">{{ c.token }}</span>
+            <span style="padding: 0 12px; display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 16px; color: #464A51"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(22,23,26,0.12); background: {{ c.light }}"></span>{{ c.light }}</span>
+            <span style="padding: 0 12px; display: flex; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 16px; color: #464A51"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(22,23,26,0.12); background: {{ c.dark }}"></span>{{ c.dark }}</span>
+            <span style="padding: 0 12px; font-size: 12px; line-height: 16px; color: #464A51">{{ c.role }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <div style="display: flex; flex-direction: column; gap: 48px">
+      <section aria-labelledby="h-status" style="display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; align-items: baseline; gap: 12px">
+          <h2 id="h-status" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">03 Status palette</h2>
+          <span style="font-size: 12px; line-height: 16px; color: #696E76">Eight families. Shape and label carry the meaning; colour confirms it.</span>
+        </div>
+        <div style="border-top: 1px solid #16171A">
+          <sc-for list="{{ families }}" as="f" hint-placeholder-count="8">
+            <div style="display: grid; grid-template-columns: 132px 180px minmax(0, 1fr); gap: 0; min-height: 44px; align-items: center; border-bottom: 1px solid #E4E4DF; padding: 6px 0">
+              <span style="padding: 0 12px"><span style="display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 0 6px; border-radius: 4px; box-sizing: border-box; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap; color: {{ f.p.fg }}; background: {{ f.p.bg }}; box-shadow: inset 0 0 0 1px {{ f.p.bd }}"><span aria-hidden="true" style="flex: none; box-sizing: border-box; width: {{ f.p.g.w }}; height: {{ f.p.g.h }}; border-radius: {{ f.p.g.r }}; background: {{ f.p.g.bg }}; border: {{ f.p.g.b }}; transform: {{ f.p.g.t }}"></span>{{ f.name }}</span></span>
+              <span style="padding: 0 12px; font-size: 12px; line-height: 16px; color: #464A51">{{ f.meaning }}</span>
+              <span style="padding: 0 12px; font-size: 12px; line-height: 18px; color: #16171A">{{ f.members }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">Pill: 20 px high, radius 4, 12/16 medium, glyph 6–8 px. Ended statuses are outlined, not filled, so live rows stand out in a mixed list. API values (<span style="font-family: 'JetBrains Mono', monospace">pendingTerminate</span>) are shown as sentence case (Pending terminate).</p>
+      </section>
+
+      <section aria-labelledby="h-num" style="display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; align-items: baseline; gap: 12px">
+          <h2 id="h-num" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">04 Numbers, dates, ids</h2>
+          <span style="font-size: 12px; line-height: 16px; color: #696E76">The rules the old design got right, written down.</span>
+        </div>
+        <div style="border-top: 1px solid #16171A">
+          <sc-for list="{{ numRules }}" as="n" hint-placeholder-count="8">
+            <div style="display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 40px; align-items: center; border-bottom: 1px solid #E4E4DF">
+              <span style="padding: 0 12px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 20px; font-variant-numeric: tabular-nums; color: {{ n.c }}">{{ n.ex }}<span style="font-size: 11px; color: #696E76">{{ n.cur }}</span></span>
+              <span style="padding: 6px 12px; font-size: 12px; line-height: 16px; color: #464A51">{{ n.rule }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 40px; align-items: start">
+    <section aria-labelledby="h-space" style="display: flex; flex-direction: column; gap: 12px">
+      <h2 id="h-space" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">05 Spacing</h2>
+      <div style="border-top: 1px solid #16171A; display: flex; flex-direction: column">
+        <sc-for list="{{ spaces }}" as="s" hint-placeholder-count="8">
+          <div style="display: grid; grid-template-columns: 110px 36px minmax(0, 1fr); height: 32px; align-items: center; border-bottom: 1px solid #E4E4DF; font-size: 12px; line-height: 16px">
+            <span style="padding-left: 4px; font-family: 'JetBrains Mono', monospace">{{ s.token }}</span>
+            <span style="font-family: 'JetBrains Mono', monospace; color: #696E76; text-align: right; padding-right: 8px">{{ s.v }}</span>
+            <span style="display: flex; align-items: center; gap: 8px; min-width: 0"><span aria-hidden="true" style="flex: none; height: 8px; background: #2349B5; width: {{ s.px }}"></span><span style="color: #696E76; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ s.use }}</span></span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-radius" style="display: flex; flex-direction: column; gap: 12px">
+      <h2 id="h-radius" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">06 Radii</h2>
+      <div style="border-top: 1px solid #16171A; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding-top: 16px">
+        <div style="display: flex; flex-direction: column; gap: 8px"><div style="height: 56px; border: 1px solid #CDCDC6; border-radius: 2px; background: #F7F7F5"></div><span style="font-size: 12px; line-height: 16px"><span style="font-family: 'JetBrains Mono', monospace">--radius-xs 2</span><br><span style="color: #696E76">Checkbox, progress bars</span></span></div>
+        <div style="display: flex; flex-direction: column; gap: 8px"><div style="height: 56px; border: 1px solid #CDCDC6; border-radius: 4px; background: #F7F7F5"></div><span style="font-size: 12px; line-height: 16px"><span style="font-family: 'JetBrains Mono', monospace">--radius-sm 4</span><br><span style="color: #696E76">Buttons, inputs, pills, rows</span></span></div>
+        <div style="display: flex; flex-direction: column; gap: 8px"><div style="height: 56px; border: 1px solid #CDCDC6; border-radius: 6px; background: #F7F7F5"></div><span style="font-size: 12px; line-height: 16px"><span style="font-family: 'JetBrains Mono', monospace">--radius-md 6</span><br><span style="color: #696E76">Panels, menus, toasts</span></span></div>
+        <div style="display: flex; flex-direction: column; gap: 8px"><div style="height: 56px; border: 1px solid #CDCDC6; border-radius: 8px; background: #F7F7F5"></div><span style="font-size: 12px; line-height: 16px"><span style="font-family: 'JetBrains Mono', monospace">--radius-lg 8</span><br><span style="color: #696E76">Dialogs only</span></span></div>
+      </div>
+      <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">Fully round is reserved for the avatar and count badges.</p>
+    </section>
+
+    <section aria-labelledby="h-elev" style="display: flex; flex-direction: column; gap: 12px">
+      <h2 id="h-elev" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">07 Elevation</h2>
+      <div style="border-top: 1px solid #16171A; display: flex; flex-direction: column; gap: 16px; padding-top: 16px; background: #F7F7F5; padding: 16px; border-radius: 0 0 6px 6px">
+        <div style="display: flex; align-items: center; gap: 12px"><div style="flex: none; width: 72px; height: 40px; background: #FFFFFF"></div><span style="font-size: 12px; line-height: 16px"><span style="font-family: 'JetBrains Mono', monospace">e0 flat</span><br><span style="color: #696E76">Page, tables, money strip</span></span></div>
+        <div style="display: flex; align-items: center; gap: 12px"><div style="flex: none; width: 72px; height: 40px; background: #FFFFFF; border: 1px solid #E4E4DF; border-radius: 6px"></div><span style="font-size: 12px; line-height: 16px"><span style="font-family: 'JetBrains Mono', monospace">e1 hairline</span><br><span style="color: #696E76">Panels, inspector. Border, no shadow.</span></span></div>
+        <div style="display: flex; align-items: center; gap: 12px"><div style="flex: none; width: 72px; height: 40px; background: #FFFFFF; border: 1px solid #E4E4DF; border-radius: 6px; box-shadow: 0 1px 2px rgba(22,23,26,0.06), 0 6px 16px rgba(22,23,26,0.10)"></div><span style="font-size: 12px; line-height: 16px"><span style="font-family: 'JetBrains Mono', monospace">e2 popover</span><br><span style="color: #696E76">Menus, date picker, toasts</span></span></div>
+        <div style="display: flex; align-items: center; gap: 12px"><div style="flex: none; width: 72px; height: 40px; background: #FFFFFF; border-radius: 8px; box-shadow: 0 16px 40px rgba(22,23,26,0.18), 0 0 0 1px rgba(22,23,26,0.08)"></div><span style="font-size: 12px; line-height: 16px"><span style="font-family: 'JetBrains Mono', monospace">e3 dialog</span><br><span style="color: #696E76">Over scrim rgba(22,23,26,.36)</span></span></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-focus" style="display: flex; flex-direction: column; gap: 12px">
+      <h2 id="h-focus" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">08 Focus</h2>
+      <div style="border-top: 1px solid #16171A; display: flex; flex-direction: column; gap: 16px; padding-top: 16px">
+        <div style="display: flex; gap: 12px; align-items: center">
+          <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #2349B5; color: #FFFFFF; font: 500 13px/20px 'Golos Text', system-ui, sans-serif; box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #2349B5">Record payment</button>
+          <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Amount
+            <input type="text" value="120.00" style="width: 120px; height: 32px; box-sizing: border-box; padding: 0 10px; border: 1px solid #2349B5; border-radius: 4px; text-align: right; font: 400 13px/20px 'JetBrains Mono', monospace; color: #16171A; box-shadow: 0 0 0 3px #EBF0FC; outline: none">
+          </label>
+        </div>
+        <p style="margin: 0; font-size: 12px; line-height: 16px; color: #464A51">Buttons, links, rows, tabs: <span style="font-family: 'JetBrains Mono', monospace">0 0 0 2px bg, 0 0 0 4px primary</span> on <span style="font-family: 'JetBrains Mono', monospace">:focus-visible</span>. Inputs: primary border plus a 3 px primary/tint halo. Never removed, never colour-only on rows: a focused row also gets the 2 px ring inset.</p>
+      </div>
+    </section>
+  </div>
+
+  <section aria-labelledby="h-density" style="display: grid; grid-template-columns: 1fr 1fr; gap: 56px">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 id="h-density" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">09 Table density</h2>
+      <div style="border-top: 1px solid #16171A">
+        <sc-for list="{{ density }}" as="d" hint-placeholder-count="8">
+          <div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 36px; align-items: center; border-bottom: 1px solid #E4E4DF; font-size: 12px; line-height: 16px">
+            <span style="padding: 0 12px; font-weight: 500">{{ d.k }}</span>
+            <span style="padding: 6px 12px; color: #464A51">{{ d.v }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: baseline; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">10 Dark, from the same tokens</h2>
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">Optional. No component changes, only token values.</span>
+      </div>
+      <div style="border-top: 1px solid #16171A; padding-top: 16px">
+        <div style="background: #121315; border-radius: 6px; overflow: hidden; color: #ECEDEF; box-shadow: 0 0 0 1px #2A2D33">
+          <div style="height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #2A2D33; font-size: 12px; line-height: 16px; color: #8E939B">
+            <span>Customers <span style="color: #5E636B">/</span> <span style="color: #ECEDEF; font-weight: 500">Subscribers</span></span>
+            <span style="font-family: 'JetBrains Mono', monospace"><span style="color: #8E939B">Business date</span> <span style="color: #ECEDEF">2026-10-26</span> UTC+3</span>
+          </div>
+          <div style="display: grid; grid-template-columns: minmax(0, 1fr) 128px 110px 120px; height: 28px; align-items: center; background: #18191C; border-bottom: 1px solid #2A2D33; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #8E939B">
+            <span style="padding-left: 16px">Name</span><span>Account</span><span>Status</span><span style="text-align: right; padding-right: 16px">Balance</span>
+          </div>
+          <sc-for list="{{ darkRows }}" as="r" hint-placeholder-count="4">
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) 128px 110px 120px; height: 36px; align-items: center; border-bottom: 1px solid #2A2D33; background: {{ r.rowBg }}">
+              <span style="padding-left: 16px; font-weight: 500">{{ r.name }}</span>
+              <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 16px"><span style="color: #8E939B">BA-</span>{{ r.id }}</span>
+              <span><span style="display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 0 6px; border-radius: 4px; box-sizing: border-box; font-size: 12px; line-height: 16px; font-weight: 500; color: {{ r.fg }}; background: {{ r.bg }}; box-shadow: inset 0 0 0 1px {{ r.bd }}"><span aria-hidden="true" style="width: 6px; height: {{ r.gh }}; border-radius: {{ r.gr }}; background: {{ r.fg }}"></span>{{ r.status }}</span></span>
+              <span style="text-align: right; padding-right: 16px; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; color: {{ r.amtC }}">{{ r.amt }} <span style="font-size: 11px; color: #8E939B">EUR</span></span>
+            </div>
+          </sc-for>
+          <div style="display: flex; gap: 8px; padding: 12px 16px">
+            <span style="height: 28px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 4px; background: #7E9CF2; color: #121315; font-weight: 500">Record payment</span>
+            <span style="height: 28px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: 4px; box-shadow: inset 0 0 0 1px #3B3F47; color: #ECEDEF; font-weight: 500">Add product</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":2140}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const FAM = {
+      live:    { fg: '#1E7445', bg: '#E7F3EC', bd: 'transparent', g: 'dot' },
+      moving:  { fg: '#1D5C96', bg: '#E8F0F8', bd: 'transparent', g: 'half' },
+      queued:  { fg: '#1D5C96', bg: '#E8F0F8', bd: 'transparent', g: 'ring' },
+      pending: { fg: '#8A5300', bg: '#FDF2DB', bd: 'transparent', g: 'ring' },
+      paused:  { fg: '#8A5300', bg: '#FDF2DB', bd: 'transparent', g: 'pause' },
+      failed:  { fg: '#B3261E', bg: '#FCECEA', bd: 'transparent', g: 'diamond' },
+      draft:   { fg: '#464A51', bg: '#EFEFEC', bd: 'transparent', g: 'dashed' },
+      ended:   { fg: '#696E76', bg: '#FFFFFF', bd: '#CDCDC6', g: 'dash' }
+    };
+    const GLYPH = {
+      dot: (c) => ({ w: '6px', h: '6px', r: '50%', bg: c, b: 'none', t: 'none' }),
+      ring: (c) => ({ w: '8px', h: '8px', r: '50%', bg: 'transparent', b: '1.5px solid ' + c, t: 'none' }),
+      dashed: (c) => ({ w: '8px', h: '8px', r: '50%', bg: 'transparent', b: '1.5px dashed ' + c, t: 'none' }),
+      half: (c) => ({ w: '8px', h: '8px', r: '50%', bg: 'linear-gradient(90deg, ' + c + ' 50%, transparent 50%)', b: '1.5px solid ' + c, t: 'none' }),
+      pause: (c) => ({ w: '6px', h: '8px', r: '0', bg: 'linear-gradient(90deg, ' + c + ' 0 2px, transparent 2px 4px, ' + c + ' 4px 6px)', b: 'none', t: 'none' }),
+      diamond: (c) => ({ w: '6px', h: '6px', r: '1px', bg: c, b: 'none', t: 'rotate(45deg)' }),
+      dash: (c) => ({ w: '8px', h: '2px', r: '1px', bg: c, b: 'none', t: 'none' })
+    };
+    const fam = (k) => { const f = FAM[k]; return { fg: f.fg, bg: f.bg, bd: f.bd, g: GLYPH[f.g](f.fg) }; };
+    const UI = "'Golos Text', system-ui, sans-serif";
+    const MONO = "'JetBrains Mono', ui-monospace, monospace";
+    const T = (token, spec, sample, use, ff, fs, fw, lh, ls, tt, c) => ({ token, spec, sample, use, ff, fs, fw, lh, ls: ls || 'normal', tt: tt || 'none', c: c || '#16171A' });
+    return {
+      types: [
+        T('--type-page', 'Golos 600 · 20/28 · −0.01em', 'Maria Sokolova', 'Page title, account name. Exactly one per screen.', UI, '20px', 600, '28px', '-0.01em'),
+        T('--type-section', 'Golos 600 · 15/20', 'Products', 'Section and dialog titles, inspector title.', UI, '15px', 600, '20px'),
+        T('--type-body', 'Golos 400 · 13/20', 'Changes take effect from the next billing cycle.', 'Default text: table cells, inputs, sentences.', UI, '13px', 400, '20px'),
+        T('--type-body-strong', 'Golos 500 · 13/20', 'Nordwind Logistics OÜ', 'The identifying cell of a row, buttons, active nav.', UI, '13px', 500, '20px'),
+        T('--type-label', 'Golos 500 · 12/16', 'Start date', 'Field labels, pills, meta lines, help and error text.', UI, '12px', 500, '16px', 'normal', 'none', '#464A51'),
+        T('--type-micro', 'Golos 600 · 11/14 · +0.06em · caps', 'Available', 'Table headers, stat labels, nav groups. Never a sentence.', UI, '11px', 600, '14px', '0.06em', 'uppercase', '#696E76'),
+        T('--type-figure', 'Mono 500 · 24/32', '13.50', 'Money-strip figures. The only large numbers in the product.', MONO, '24px', 500, '32px', '-0.01em'),
+        T('--type-num', 'Mono 400 · 13/20 · tabular', '−1,250.40', 'Amounts in tables, forms and summaries.', MONO, '13px', 400, '20px', 'normal', 'none', '#B3261E'),
+        T('--type-code', 'Mono 400 · 12/16', 'BA-3F9A12C0  2026-10-26 00:30:14', 'Ids, dates, times, phone numbers, counts in columns.', MONO, '12px', 400, '16px')
+      ],
+      colours: [
+        { token: 'bg', light: '#FFFFFF', dark: '#121315', role: 'Page surface. Tables sit directly on it.' },
+        { token: 'bg-subtle', light: '#F7F7F5', dark: '#18191C', role: 'Sidebar, table header, money strip, dialog footer' },
+        { token: 'bg-sunken', light: '#EFEFEC', dark: '#202226', role: 'Segmented track, skeletons, tags' },
+        { token: 'bg-hover', light: '#F4F4F1', dark: '#1D1F23', role: 'Row and quiet-button hover' },
+        { token: 'bg-selected', light: '#EEF2FC', dark: '#1B2643', role: 'Selected row, active tab underline zone' },
+        { token: 'border', light: '#E4E4DF', dark: '#2A2D33', role: 'Hairlines between rows and regions' },
+        { token: 'border-strong', light: '#CDCDC6', dark: '#3B3F47', role: 'Inputs, secondary buttons, ended pills' },
+        { token: 'rule', light: '#16171A', dark: '#ECEDEF', role: 'Section rule: 1 px over a section title' },
+        { token: 'ink-1', light: '#16171A', dark: '#ECEDEF', role: 'Text and numbers' },
+        { token: 'ink-2', light: '#464A51', dark: '#B6BAC1', role: 'Secondary text, values in key–value' },
+        { token: 'ink-3', light: '#696E76', dark: '#8E939B', role: 'Labels, meta, headers. 4.8:1 on bg-subtle' },
+        { token: 'ink-4', light: '#A2A6AD', dark: '#5E636B', role: 'Disabled, separators. Never content.' },
+        { token: 'primary', light: '#2349B5', dark: '#7E9CF2', role: 'The one primary action, links, focus' },
+        { token: 'primary-hover', light: '#1B3B98', dark: '#9BB3F5', role: 'Primary hover and pressed' },
+        { token: 'primary-tint', light: '#EBF0FC', dark: '#1B2643', role: 'Input focus halo, selected segment' },
+        { token: 'negative', light: '#B3261E', dark: '#F08A80', role: 'Negative amounts, failure, destructive' },
+        { token: 'negative-tint', light: '#FCECEA', dark: '#3A1B19', role: 'Failed pill, error note' },
+        { token: 'positive', light: '#1E7445', dark: '#6FCB96', role: 'Healthy statuses only. Never money.' },
+        { token: 'positive-tint', light: '#E7F3EC', dark: '#15301F', role: 'Live pill' },
+        { token: 'warning', light: '#8A5300', dark: '#E8B45C', role: 'Suspended, pending, shortfall, over limit' },
+        { token: 'warning-tint', light: '#FDF2DB', dark: '#33280F', role: 'Paused pill, warning note' },
+        { token: 'info', light: '#1D5C96', dark: '#82B5E8', role: 'Work in progress, neutral notices' },
+        { token: 'info-tint', light: '#E8F0F8', dark: '#15283B', role: 'Moving pill, info note' }
+      ],
+      families: [
+        { name: 'Live', p: fam('live'), meaning: 'Working as intended', members: 'Account Active · Offering Active · Product Active · Order Completed · Run Completed · Command Succeeded' },
+        { name: 'Moving', p: fam('moving'), meaning: 'The system is on it now', members: 'Order In progress · Run Running · Command Running' },
+        { name: 'Queued', p: fam('queued'), meaning: 'Accepted, waiting its turn', members: 'Order Acknowledged · Command Queued' },
+        { name: 'Pending', p: fam('pending'), meaning: 'Will change at a known date', members: 'Product Pending terminate' },
+        { name: 'Paused', p: fam('paused'), meaning: 'Stopped by a person; reversible', members: 'Account Suspended · Product Suspended' },
+        { name: 'Failed', p: fam('failed'), meaning: 'Needs an operator', members: 'Order Failed · Run Failed · Command Failed (retryable)' },
+        { name: 'Draft', p: fam('draft'), meaning: 'Not yet live', members: 'Offering In design · Product Created · Order Draft' },
+        { name: 'Ended', p: fam('ended'), meaning: 'Final; kept for history', members: 'Account Closed · Offering Retired · Product Terminated · Product Cancelled · Order Cancelled' }
+      ],
+      numRules: [
+        { ex: '1,250.40', cur: ' EUR', c: '#16171A', rule: 'Mono, tabular, 2 decimals, comma thousands. Currency code 11 px ink-3 after the figure; omit it in a column whose header names the currency.' },
+        { ex: '−42.10', cur: ' EUR', c: '#B3261E', rule: 'Negative: U+2212 minus and negative colour. Never parentheses, never a hyphen.' },
+        { ex: '+10.00', cur: '', c: '#16171A', rule: 'Explicit plus only in movement lists (transactions, payments). Balances never carry a plus.' },
+        { ex: '0.00', cur: '', c: '#16171A', rule: 'Zero is a number, not a dash. A dash (—) means "does not apply".' },
+        { ex: '24.90 / month', cur: '', c: '#16171A', rule: 'Rates: figure, thin slash, unit in ink-3.' },
+        { ex: '2026-10-26 00:30:14', cur: '', c: '#16171A', rule: 'ISO date, 24 h time, business time zone. Relative time ("in 19 days") only as a second, ink-3 hint.' },
+        { ex: 'BA-3F9A12C0', cur: '', c: '#16171A', rule: 'Ids: prefix in ink-3, body in ink-1, click to copy. Same treatment for ORD-, BL-, CMD-.' },
+        { ex: '+372 5123 4567', cur: '', c: '#16171A', rule: 'Phone numbers in mono with the country code, grouped as stored.' }
+      ],
+      spaces: [
+        { token: '--space-2xs', v: '2', px: '2px', use: 'Glyph to text' },
+        { token: '--space-xs', v: '4', px: '4px', use: 'Label to field' },
+        { token: '--space-sm', v: '8', px: '8px', use: 'Between buttons' },
+        { token: '--space-md', v: '12', px: '12px', use: 'Cell padding' },
+        { token: '--space-lg', v: '16', px: '16px', use: 'Panel padding' },
+        { token: '--space-xl', v: '24', px: '24px', use: 'Page gutter' },
+        { token: '--space-2xl', v: '32', px: '32px', use: 'Between sections' },
+        { token: '--space-3xl', v: '48', px: '48px', use: 'Empty states' }
+      ],
+      density: [
+        { k: 'Row height', v: '36 default · 28 compact (outcomes, command queue) · no two-line rows; a second fact goes into its own column' },
+        { k: 'Header row', v: '32, micro type on bg-subtle, sticky. Sort arrow only on the sorted column.' },
+        { k: 'Cell padding', v: '12 horizontal; first and last cells 24 so text aligns with the page gutter' },
+        { k: 'Alignment', v: 'Text and status left; amounts, counts and dates in amount columns right; row actions right' },
+        { k: 'Rules', v: 'Hairline between rows. No zebra, no vertical rules, no card around the table.' },
+        { k: 'Hover / selected', v: 'bg-hover / bg-selected plus a 2 px primary bar inset on the first cell' },
+        { k: 'Row actions', v: 'One visible text action at most; the rest in a 28 px ⋯ menu that appears on hover and focus' },
+        { k: 'Columns', v: 'Up to 8 at 1280. At ≥ 1536 extra facts move to the inspector, not to more columns.' },
+        { k: 'Footer', v: '44: range "1–50 of 1,284" in mono, page size, previous/next' }
+      ],
+      darkRows: [
+        { name: 'Ivan Petrov', id: '3F9A12C0', status: 'Active', fg: '#6FCB96', bg: '#15301F', bd: 'transparent', gh: '6px', gr: '50%', amt: '−42.10', amtC: '#F08A80', rowBg: 'transparent' },
+        { name: 'Nordwind Logistics OÜ', id: '81D0E7B4', status: 'Active', fg: '#6FCB96', bg: '#15301F', bd: 'transparent', gh: '6px', gr: '50%', amt: '−1,250.40', amtC: '#F08A80', rowBg: '#1B2643' },
+        { name: 'Maria Sokolova', id: 'C2290A5E', status: 'Active', fg: '#6FCB96', bg: '#15301F', bd: 'transparent', gh: '6px', gr: '50%', amt: '18.50', amtC: '#ECEDEF', rowBg: 'transparent' },
+        { name: 'Old Account', id: '0B11D3F2', status: 'Closed', fg: '#8E939B', bg: 'transparent', bd: '#3B3F47', gh: '2px', gr: '1px', amt: '0.00', amtC: '#ECEDEF', rowBg: 'transparent' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

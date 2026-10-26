@@ -1,5 +1,33 @@
 # Frontend (admin UI, stage 5): decisions and conventions
 
+## Ledger v2: visual redesign (designed 2026-10-26)
+
+The first handoff (`design-ref/design_handoff_bss_admin/`) covered 4 screens and 2 modals.
+The other screens grew without a designer. The UI is restyled from the second handoff,
+`design-ref/design_handoff_bss_admin_v2/` ("Ledger"; brief:
+[ui-redesign-brief.md](../ui-redesign-brief.md)). The redesign covers:
+- a 9-step type scale and warm-grey roles;
+- tables on the page;
+- 8 status families with glyphs;
+- one primary action per view;
+- a new information architecture for the Subscriber card (money strip and tabs);
+- dark mode from the same tokens.
+
+It is **visual only**: API calls, bodies, routes and polling are unchanged, so
+`tests/test_ui_requests.py` is untouched.
+
+The human delegated the open decisions. They are recorded in
+[ui-redesign-design.md](../ui-redesign-design.md):
+- D4 maps every TMF state (TMF620/622/629/632/637/654/666/678) and every internal state
+  to a family;
+- D10 adapts artboard content the API lacks (no CSV export, no per-account run retry, no
+  claim expiry, no request id, no "customer since");
+- D9 keeps the 5 s / 3 min polling.
+
+Progress: [ui-redesign-slices.md](../ui-redesign-slices.md), R1–R16. Each slice adds a
+line below when built, and this entry supersedes the v1 handoff's visual values wherever
+they differ.
+
 ## Next slices 1-24: designed (2026-10-24)
 
 The human delegated every design decision on 2026-10-24. The UI for the remaining

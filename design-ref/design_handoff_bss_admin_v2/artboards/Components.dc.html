@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ledger components</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2349B5}a:hover{color:#1B3B98}
+</style>
+</helmet>
+<div style="width: 1600px; min-height: 2700px; box-sizing: border-box; padding: 56px 64px 64px; background: #FFFFFF; color: #16171A; font-family: 'Golos Text', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 56px">
+
+  <header style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 24px; border-bottom: 1px solid #16171A">
+    <div style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">BSS Admin · Ledger design system · Components</div>
+    <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.015em">Components</h1>
+    <p style="margin: 0; max-width: 760px; color: #464A51">Each one maps to a React component with plain CSS reading the tokens. States are drawn side by side; nothing here is decoration.</p>
+  </header>
+
+  <!-- Shell -->
+  <section style="display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 48px; align-items: start">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Sidebar</h2>
+      <nav aria-label="Main" style="width: 216px; height: 620px; box-sizing: border-box; background: #F7F7F5; border: 1px solid #E4E4DF; display: flex; flex-direction: column; padding: 12px 8px; gap: 14px">
+        <div style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px">
+          <span aria-hidden="true" style="width: 18px; height: 18px; border-radius: 4px; background: #16171A; color: #FFFFFF; font: 600 11px/18px 'JetBrains Mono', monospace; text-align: center">B</span>
+          <span style="font-weight: 600">BSS Admin</span>
+        </div>
+        <sc-for list="{{ nav }}" as="sec" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; gap: 1px">
+            <div style="padding: 0 8px; height: 22px; display: flex; align-items: center; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">{{ sec.label }}</div>
+            <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="4">
+              <a href="#" aria-current="{{ it.current }}" style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 4px; text-decoration: none; color: {{ it.color }}; background: {{ it.bg }}; font-weight: {{ it.weight }}; box-shadow: {{ it.shadow }}">
+                <span style="flex: 1">{{ it.label }}</span>
+                <sc-if value="{{ it.count }}" hint-placeholder-val="{{ false }}"><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">{{ it.count }}</span></sc-if>
+                <sc-if value="{{ it.failed }}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; gap: 4px; height: 16px; padding: 0 6px; border-radius: 8px; background: #B3261E; color: #FFFFFF; font-size: 11px; line-height: 14px; font-weight: 600">failed</span></sc-if>
+              </a>
+            </sc-for>
+          </div>
+        </sc-for>
+        <div style="margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 8px; border-top: 1px solid #E4E4DF">
+          <span aria-hidden="true" style="width: 24px; height: 24px; border-radius: 50%; background: #E4E4DF; font: 600 11px/24px 'Golos Text', sans-serif; text-align: center; color: #464A51">EK</span>
+          <span style="display: flex; flex-direction: column; font-size: 12px; line-height: 16px"><span style="font-weight: 500">Elena Kask</span><span style="color: #696E76">Billing operator</span></span>
+        </div>
+      </nav>
+      <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">216 px. Text only, no icons. Active item: white with a hairline. Counts in mono; the Billing runs badge appears only while the latest run is failed.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 32px; min-width: 0">
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Top bar</h2>
+        <div style="border: 1px solid #E4E4DF">
+          <header style="height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 24px; background: #FFFFFF">
+            <nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 6px; color: #696E76">
+              <a href="#" style="color: #696E76; text-decoration: none">Customers</a><span aria-hidden="true" style="color: #A2A6AD">/</span><a href="#" style="color: #696E76; text-decoration: none">Subscribers</a><span aria-hidden="true" style="color: #A2A6AD">/</span><span aria-current="page" style="color: #16171A; font-weight: 500">Maria Sokolova</span>
+            </nav>
+            <div style="margin-left: auto; display: flex; align-items: center; gap: 12px">
+              <div style="display: flex; align-items: stretch; height: 28px; border: 1px solid #E4E4DF; border-radius: 4px; overflow: hidden">
+                <span style="display: flex; align-items: center; padding: 0 8px; background: #F7F7F5; border-right: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Business date</span>
+                <span style="display: flex; align-items: center; gap: 8px; padding: 0 10px; font: 500 12px/16px 'JetBrains Mono', monospace">2026-10-26<span style="color: #696E76; font-weight: 400">UTC+3</span></span>
+              </div>
+              <button type="button" aria-label="Account menu" style="width: 28px; height: 28px; border-radius: 50%; border: 0; background: #E4E4DF; color: #464A51; font: 600 11px/28px 'Golos Text', sans-serif">EK</button>
+            </div>
+          </header>
+        </div>
+        <div style="border: 1px solid #E4E4DF">
+          <header style="height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 24px; background: #FFFFFF">
+            <nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 6px; color: #696E76">
+              <a href="#" style="color: #696E76; text-decoration: none">Billing</a><span aria-hidden="true" style="color: #A2A6AD">/</span><span aria-current="page" style="color: #16171A; font-weight: 500">Billing runs</span>
+            </nav>
+            <div style="margin-left: auto; display: flex; align-items: center; gap: 12px">
+              <div style="display: flex; align-items: stretch; height: 28px; border: 1px solid #E8B45C; border-radius: 4px; overflow: hidden">
+                <span style="display: flex; align-items: center; padding: 0 8px; background: #FDF2DB; border-right: 1px solid #E8B45C; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #8A5300">Business date</span>
+                <span style="display: flex; align-items: center; gap: 8px; padding: 0 10px; font: 500 12px/16px 'JetBrains Mono', monospace">2026-10-25<span style="color: #696E76; font-weight: 400">UTC+3</span></span>
+                <span style="display: flex; align-items: center; padding: 0 10px; border-left: 1px solid #E8B45C; font-size: 12px; line-height: 16px; color: #8A5300">1 day behind the wall clock</span>
+              </div>
+              <button type="button" aria-label="Account menu" style="width: 28px; height: 28px; border-radius: 50%; border: 0; background: #E4E4DF; color: #464A51; font: 600 11px/28px 'Golos Text', sans-serif">EK</button>
+            </div>
+          </header>
+        </div>
+        <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">The business clock is the only persistent chip. It turns amber and says how far it is from the wall clock when they differ (catch-up pending), so nobody reads "today" wrong.</p>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Page header and filter bar</h2>
+        <div style="border: 1px solid #E4E4DF; padding: 20px 24px 0">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <h3 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em">Subscribers</h3>
+            <span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76; padding-top: 4px">1,284</span>
+            <div style="margin-left: auto; display: flex; gap: 8px">
+              <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Export CSV</button>
+              <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #2349B5; color: #FFFFFF; font: 500 13px/20px 'Golos Text', sans-serif">New subscriber</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 0 12px">
+            <label style="position: relative; display: flex; align-items: center">
+              <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search subscribers</span>
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="position: absolute; left: 10px; fill: none; stroke: #696E76; stroke-width: 1.5"><circle cx="6" cy="6" r="4.5"></circle><path d="M9.5 9.5L13 13"></path></svg>
+              <input type="search" placeholder="Name, BA id or number" style="width: 300px; height: 32px; box-sizing: border-box; padding: 0 10px 0 30px; border: 1px solid #CDCDC6; border-radius: 4px; font: 400 13px/20px 'Golos Text', sans-serif; color: #16171A">
+            </label>
+            <div role="group" aria-label="Status" style="display: flex; gap: 2px; padding: 2px; background: #EFEFEC; border-radius: 4px">
+              <button type="button" aria-pressed="true" style="height: 28px; padding: 0 10px; border: 0; border-radius: 3px; background: #FFFFFF; box-shadow: 0 0 0 1px #E4E4DF; font: 500 12px/16px 'Golos Text', sans-serif; color: #16171A">All</button>
+              <button type="button" aria-pressed="false" style="height: 28px; padding: 0 10px; border: 0; border-radius: 3px; background: transparent; font: 500 12px/16px 'Golos Text', sans-serif; color: #464A51">Active</button>
+              <button type="button" aria-pressed="false" style="height: 28px; padding: 0 10px; border: 0; border-radius: 3px; background: transparent; font: 500 12px/16px 'Golos Text', sans-serif; color: #464A51">Suspended</button>
+              <button type="button" aria-pressed="false" style="height: 28px; padding: 0 10px; border: 0; border-radius: 3px; background: transparent; font: 500 12px/16px 'Golos Text', sans-serif; color: #464A51">Closed</button>
+            </div>
+            <div role="group" aria-label="Mode" style="display: flex; gap: 2px; padding: 2px; background: #EFEFEC; border-radius: 4px">
+              <button type="button" aria-pressed="false" style="height: 28px; padding: 0 10px; border: 0; border-radius: 3px; background: transparent; font: 500 12px/16px 'Golos Text', sans-serif; color: #464A51">Any mode</button>
+              <button type="button" aria-pressed="true" style="height: 28px; padding: 0 10px; border: 0; border-radius: 3px; background: #FFFFFF; box-shadow: 0 0 0 1px #E4E4DF; font: 500 12px/16px 'Golos Text', sans-serif; color: #16171A">Postpaid</button>
+              <button type="button" aria-pressed="false" style="height: 28px; padding: 0 10px; border: 0; border-radius: 3px; background: transparent; font: 500 12px/16px 'Golos Text', sans-serif; color: #464A51">Prepaid</button>
+            </div>
+            <button type="button" style="height: 28px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #2349B5; font: 500 12px/16px 'Golos Text', sans-serif">Reset filters</button>
+          </div>
+        </div>
+        <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">Title 20/28, count in mono next to it (filtered count when a filter is on). At most one primary action per page header. Filters sit directly under the title with no panel around them; "Reset filters" appears only when a filter is set.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Table -->
+  <section style="display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: baseline; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Table</h2>
+      <span style="font-size: 12px; line-height: 16px; color: #696E76">Header · default · hover with row actions · selected · keyboard focus · over-limit flag · footer</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 16px">
+      <div style="display: flex; flex-direction: column; font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76; text-align: right">
+        <span style="height: 32px; display: flex; align-items: center; justify-content: flex-end">header</span>
+        <span style="height: 37px; display: flex; align-items: center; justify-content: flex-end">default</span>
+        <span style="height: 37px; display: flex; align-items: center; justify-content: flex-end">hover</span>
+        <span style="height: 37px; display: flex; align-items: center; justify-content: flex-end">selected</span>
+        <span style="height: 37px; display: flex; align-items: center; justify-content: flex-end">focus</span>
+        <span style="height: 37px; display: flex; align-items: center; justify-content: flex-end">flagged</span>
+        <span style="height: 44px; display: flex; align-items: center; justify-content: flex-end">footer</span>
+      </div>
+      <div style="border-top: 1px solid #E4E4DF">
+        <div style="display: grid; grid-template-columns: minmax(0, 1.6fr) 140px 120px 96px 80px 72px 160px 56px; height: 32px; align-items: center; background: #F7F7F5; border-bottom: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">
+          <span style="padding-left: 24px">Name</span><span style="padding: 0 12px">Account</span><span style="padding: 0 12px">Status</span><span style="padding: 0 12px">Mode</span><span style="padding: 0 12px; text-align: right">Products</span><span style="padding: 0 12px; text-align: right">Cycle</span><span style="padding: 0 12px; text-align: right; display: flex; justify-content: flex-end; gap: 4px; color: #16171A">Balance EUR<svg aria-hidden="true" width="8" height="14" viewBox="0 0 8 14" style="fill: #16171A"><path d="M4 10L0.5 5.5h7z"></path></svg></span><span></span>
+        </div>
+        <sc-for list="{{ tableRows }}" as="r" hint-placeholder-count="5">
+          <div style="display: grid; grid-template-columns: minmax(0, 1.6fr) 140px 120px 96px 80px 72px 160px 56px; height: 36px; align-items: center; border-bottom: 1px solid #E4E4DF; background: {{ r.bg }}; box-shadow: {{ r.shadow }}">
+            <span style="padding-left: 24px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><a href="#" style="color: #16171A; text-decoration: none">{{ r.name }}</a></span>
+            <span style="padding: 0 12px; display: flex; align-items: center; gap: 6px; font: 400 12px/16px 'JetBrains Mono', monospace"><span><span style="color: #696E76">BA-</span>{{ r.id }}</span><sc-if value="{{ r.hover }}" hint-placeholder-val="{{ false }}"><svg aria-label="Copy id" role="img" width="12" height="12" viewBox="0 0 12 12" style="fill: none; stroke: #696E76; stroke-width: 1.2"><rect x="3.5" y="3.5" width="7" height="7" rx="1"></rect><path d="M1.5 8V2.5a1 1 0 0 1 1-1H8"></path></svg></sc-if></span>
+            <span style="padding: 0 12px"><span style="display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 0 6px; border-radius: 4px; box-sizing: border-box; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap; color: {{ r.st.fg }}; background: {{ r.st.bg }}; box-shadow: inset 0 0 0 1px {{ r.st.bd }}"><span aria-hidden="true" style="flex: none; box-sizing: border-box; width: {{ r.st.g.w }}; height: {{ r.st.g.h }}; border-radius: {{ r.st.g.r }}; background: {{ r.st.g.bg }}; border: {{ r.st.g.b }}; transform: {{ r.st.g.t }}"></span>{{ r.st.label }}</span></span>
+            <span style="padding: 0 12px; color: #464A51">{{ r.mode }}</span>
+            <span style="padding: 0 12px; text-align: right; font: 400 12px/16px 'JetBrains Mono', monospace">{{ r.products }}</span>
+            <span style="padding: 0 12px; text-align: right; font: 400 12px/16px 'JetBrains Mono', monospace">{{ r.cycle }}</span>
+            <span style="padding: 0 12px; display: flex; justify-content: flex-end; align-items: center; gap: 8px; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; color: {{ r.amtC }}"><sc-if value="{{ r.flag }}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border-radius: 3px; background: #FDF2DB; color: #8A5300; font: 500 11px/14px 'Golos Text', sans-serif">Over limit</span></sc-if>{{ r.amt }}</span>
+            <span style="padding-right: 16px; display: flex; justify-content: flex-end"><sc-if value="{{ r.hover }}" hint-placeholder-val="{{ false }}"><button type="button" aria-label="Row actions" style="width: 28px; height: 28px; border: 0; border-radius: 4px; background: #E4E4DF; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="14" height="4" viewBox="0 0 14 4" style="fill: #16171A"><circle cx="2" cy="2" r="1.4"></circle><circle cx="7" cy="2" r="1.4"></circle><circle cx="12" cy="2" r="1.4"></circle></svg></button></sc-if></span>
+          </div>
+        </sc-for>
+        <div style="height: 44px; display: flex; align-items: center; gap: 16px; padding: 0 16px 0 24px; font-size: 12px; line-height: 16px; color: #696E76">
+          <span style="font-family: 'JetBrains Mono', monospace"><span style="color: #16171A">1–50</span> of 1,284</span>
+          <span style="margin-left: auto">Rows</span>
+          <button type="button" style="height: 28px; padding: 0 8px; border: 0; border-radius: 4px; box-shadow: inset 0 0 0 1px #CDCDC6; background: #FFFFFF; font: 400 12px/16px 'JetBrains Mono', monospace; color: #16171A">50 ▾</button>
+          <div style="display: flex; gap: 4px">
+            <button type="button" disabled="" style="height: 28px; padding: 0 10px; border: 0; border-radius: 4px; box-shadow: inset 0 0 0 1px #E4E4DF; background: #FFFFFF; color: #A2A6AD; font: 500 12px/16px 'Golos Text', sans-serif">Previous</button>
+            <button type="button" style="height: 28px; padding: 0 10px; border: 0; border-radius: 4px; box-shadow: inset 0 0 0 1px #CDCDC6; background: #FFFFFF; color: #16171A; font: 500 12px/16px 'Golos Text', sans-serif">Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Buttons + inputs -->
+  <section style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: start">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Buttons</h2>
+      <div style="border-top: 1px solid #16171A; display: grid; grid-template-columns: 96px repeat(5, minmax(0, 1fr)); row-gap: 14px; column-gap: 12px; padding-top: 12px; align-items: center">
+        <span></span>
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Default</span>
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Hover</span>
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Focus</span>
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Disabled</span>
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Busy</span>
+        <sc-for list="{{ buttons }}" as="b" hint-placeholder-count="4">
+          <span style="font-size: 12px; line-height: 16px; color: #464A51">{{ b.kind }}</span>
+          <sc-for list="{{ b.states }}" as="s" hint-placeholder-count="5">
+            <span><button type="button" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 0; border-radius: 4px; font: 500 13px/20px 'Golos Text', sans-serif; white-space: nowrap; background: {{ s.bg }}; color: {{ s.fg }}; box-shadow: {{ s.sh }}"><sc-if value="{{ s.busy }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 2px solid {{ s.spinA }}; border-top-color: {{ s.spinB }}"></span></sc-if>{{ s.label }}</button></span>
+          </sc-for>
+        </sc-for>
+      </div>
+      <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">32 px default, 28 px in tables and toolbars. Danger is solid only on a confirmation step; in menus a destructive item is negative text. Busy keeps the width and the label in its -ing form ("Recording…"); the dialog's other controls are disabled meanwhile. Icon-only buttons are 28 × 28 with an aria-label.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Fields</h2>
+      <div style="border-top: 1px solid #16171A; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 16px; padding-top: 16px">
+        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Reference
+          <input type="text" value="Bank transfer 10/26" style="height: 32px; box-sizing: border-box; padding: 0 10px; border: 1px solid #CDCDC6; border-radius: 4px; font: 400 13px/20px 'Golos Text', sans-serif; color: #16171A">
+          <span style="font-weight: 400; color: #696E76">Shown on the payment record.</span>
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Offering
+          <span style="position: relative; display: flex">
+            <select style="appearance: none; width: 100%; height: 32px; box-sizing: border-box; padding: 0 28px 0 10px; border: 1px solid #CDCDC6; border-radius: 4px; background: #FFFFFF; font: 400 13px/20px 'Golos Text', sans-serif; color: #16171A"><option>Mobile L · MOB-L</option></select>
+            <svg aria-hidden="true" width="10" height="6" viewBox="0 0 10 6" style="position: absolute; right: 10px; top: 13px; fill: none; stroke: #464A51; stroke-width: 1.5"><path d="M1 1l4 4 4-4"></path></svg>
+          </span>
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Start date
+          <span style="position: relative; display: flex">
+            <input type="text" value="2026-10-26" style="width: 100%; height: 32px; box-sizing: border-box; padding: 0 32px 0 10px; border: 1px solid #CDCDC6; border-radius: 4px; font: 400 13px/20px 'JetBrains Mono', monospace; color: #16171A">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="position: absolute; right: 10px; top: 9px; fill: none; stroke: #464A51; stroke-width: 1.3"><rect x="1.5" y="2.5" width="11" height="10" rx="1"></rect><path d="M1.5 5.5h11M4.5 1v3M9.5 1v3"></path></svg>
+          </span>
+          <span style="font-weight: 400; color: #696E76">Business date by default. Typed as YYYY-MM-DD.</span>
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Amount
+          <span style="display: flex; align-items: stretch; height: 32px; border: 1px solid #CDCDC6; border-radius: 4px; overflow: hidden">
+            <input type="text" value="120.00" style="flex: 1; min-width: 0; border: 0; padding: 0 8px 0 10px; text-align: right; font: 400 13px/20px 'JetBrains Mono', monospace; color: #16171A">
+            <span style="display: flex; align-items: center; padding: 0 10px; background: #F7F7F5; border-left: 1px solid #E4E4DF; font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">EUR</span>
+          </span>
+          <span style="font-weight: 400; color: #696E76">Right-aligned; formats to 2 decimals on blur.</span>
+        </label>
+        <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Amount
+          <span style="display: flex; align-items: stretch; height: 32px; border: 1px solid #B3261E; border-radius: 4px; overflow: hidden">
+            <input type="text" value="20.00" aria-invalid="true" style="flex: 1; min-width: 0; border: 0; padding: 0 8px 0 10px; text-align: right; font: 400 13px/20px 'JetBrains Mono', monospace; color: #16171A">
+            <span style="display: flex; align-items: center; padding: 0 10px; background: #F7F7F5; border-left: 1px solid #E4E4DF; font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">EUR</span>
+          </span>
+          <span style="display: flex; gap: 6px; align-items: center; font-weight: 400; color: #B3261E"><span aria-hidden="true" style="width: 6px; height: 6px; background: #B3261E; transform: rotate(45deg)"></span>More than available (13.50).</span>
+        </label>
+        <div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">
+          <span>Mode</span>
+          <div role="radiogroup" aria-label="Mode" style="display: flex; gap: 2px; padding: 2px; background: #EFEFEC; border-radius: 4px; align-self: flex-start">
+            <button type="button" role="radio" aria-checked="true" style="height: 28px; padding: 0 12px; border: 0; border-radius: 3px; background: #FFFFFF; box-shadow: 0 0 0 1px #E4E4DF; font: 500 12px/16px 'Golos Text', sans-serif; color: #16171A">Postpaid</button>
+            <button type="button" role="radio" aria-checked="false" style="height: 28px; padding: 0 12px; border: 0; border-radius: 3px; background: transparent; font: 500 12px/16px 'Golos Text', sans-serif; color: #464A51">Prepaid</button>
+          </div>
+          <label style="display: flex; align-items: center; gap: 8px; margin-top: 12px; font-weight: 400; font-size: 13px; line-height: 20px; color: #16171A"><input type="checkbox" checked="" style="width: 14px; height: 14px; margin: 0; accent-color: #2349B5">I confirmed the amount with the subscriber</label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Money strip, key-value, tabs -->
+  <section style="display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; align-items: baseline; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Money strip</h2>
+      <span style="font-size: 12px; line-height: 16px; color: #696E76">The summary block. Prepaid reads as an equation so the operator can explain the balance out loud; actions sit next to the numbers they change.</span>
+    </div>
+    <div style="display: flex; align-items: stretch; background: #F7F7F5; border-top: 1px solid #E4E4DF; border-bottom: 1px solid #E4E4DF; min-height: 88px">
+      <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 24px">
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Ledger</span>
+        <span style="font: 500 24px/32px 'JetBrains Mono', monospace; letter-spacing: -0.01em; color: #464A51">18.50<span style="font-size: 11px; font-weight: 400; color: #696E76; margin-left: 4px">EUR</span></span>
+      </div>
+      <span aria-hidden="true" style="display: flex; align-items: center; padding-top: 14px; font: 400 20px/1 'JetBrains Mono', monospace; color: #A2A6AD">−</span>
+      <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 24px">
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Reserved</span>
+        <span style="font: 500 24px/32px 'JetBrains Mono', monospace; letter-spacing: -0.01em; color: #464A51">5.00</span>
+      </div>
+      <span aria-hidden="true" style="display: flex; align-items: center; padding-top: 14px; font: 400 20px/1 'JetBrains Mono', monospace; color: #A2A6AD">=</span>
+      <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 24px">
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #16171A">Available</span>
+        <span style="font: 500 24px/32px 'JetBrains Mono', monospace; letter-spacing: -0.01em; color: #16171A">13.50<span style="font-size: 11px; font-weight: 400; color: #696E76; margin-left: 4px">EUR</span></span>
+      </div>
+      <div style="width: 1px; background: #E4E4DF; margin: 16px 8px"></div>
+      <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 24px">
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Paid through</span>
+        <span style="font: 500 15px/20px 'JetBrains Mono', monospace">2026-11-14</span>
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">in 19 days</span>
+      </div>
+      <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 24px">
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Shortfall</span>
+        <span style="font: 500 15px/20px 'JetBrains Mono', monospace; color: #696E76">—</span>
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">none</span>
+      </div>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 0 24px">
+        <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #2349B5; color: #FFFFFF; font: 500 13px/20px 'Golos Text', sans-serif">Top up</button>
+        <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Adjust</button>
+        <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Hold</button>
+        <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Transfer</button>
+      </div>
+    </div>
+    <div style="display: flex; align-items: stretch; background: #F7F7F5; border-top: 1px solid #E4E4DF; border-bottom: 1px solid #E4E4DF; min-height: 88px">
+      <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 24px">
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #16171A">Balance</span>
+        <span style="font: 500 24px/32px 'JetBrains Mono', monospace; letter-spacing: -0.01em; color: #B3261E">−1,250.40<span style="font-size: 11px; font-weight: 400; color: #696E76; margin-left: 4px">EUR</span></span>
+      </div>
+      <div style="width: 1px; background: #E4E4DF; margin: 16px 0"></div>
+      <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 24px">
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Credit limit</span>
+        <span style="font: 500 15px/20px 'JetBrains Mono', monospace">500.00</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: #8A5300"><span aria-hidden="true" style="width: 7px; height: 7px; box-sizing: border-box; border: 1.5px solid #8A5300; border-radius: 50%"></span>Over by 750.40</span>
+      </div>
+      <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 24px">
+        <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Cycle day</span>
+        <span style="font: 500 15px/20px 'JetBrains Mono', monospace">1</span>
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">next bill 2026-11-01</span>
+      </div>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 0 24px">
+        <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #2349B5; color: #FFFFFF; font: 500 13px/20px 'Golos Text', sans-serif">Record payment</button>
+      </div>
+    </div>
+    <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">Postpaid variant: balance, credit limit with an over-limit flag, cycle. The figure that answers the operator's question is ink-1 and the heaviest label; inputs to it are ink-2. One size of large number (24/32) in the whole product.</p>
+  </section>
+
+  <section style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: start">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Tabs</h2>
+      <div role="tablist" aria-label="Account sections" style="display: flex; gap: 20px; border-bottom: 1px solid #E4E4DF; flex-wrap: wrap">
+        <button type="button" role="tab" aria-selected="true" style="height: 40px; padding: 0; border: 0; background: transparent; box-shadow: inset 0 -2px 0 #16171A; font: 600 13px/20px 'Golos Text', sans-serif; color: #16171A">Overview</button>
+        <button type="button" role="tab" aria-selected="false" style="height: 40px; padding: 0; border: 0; background: transparent; font: 500 13px/20px 'Golos Text', sans-serif; color: #464A51; display: flex; align-items: center; gap: 6px">Products<span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">2</span></button>
+        <button type="button" role="tab" aria-selected="false" style="height: 40px; padding: 0; border: 0; background: transparent; font: 500 13px/20px 'Golos Text', sans-serif; color: #464A51; display: flex; align-items: center; gap: 6px">Orders<span style="display: inline-flex; align-items: center; height: 16px; padding: 0 5px; border-radius: 8px; background: #E8F0F8; color: #1D5C96; font: 500 11px/14px 'JetBrains Mono', monospace">1 open</span></button>
+        <button type="button" role="tab" aria-selected="false" style="height: 40px; padding: 0; border: 0; background: transparent; font: 500 13px/20px 'Golos Text', sans-serif; color: #464A51">Transactions</button>
+      </div>
+      <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">Underline in ink, not blue: tabs are navigation, not an action. Counts in mono; a tab with open work shows it in an info badge.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Key–value block</h2>
+      <dl style="margin: 0; display: grid; grid-template-columns: 128px minmax(0, 1fr); border-top: 1px solid #E4E4DF">
+        <dt style="padding: 8px 0; border-bottom: 1px solid #E4E4DF; font-size: 12px; line-height: 20px; color: #696E76">Account</dt><dd style="margin: 0; padding: 8px 0; border-bottom: 1px solid #E4E4DF; font: 400 12px/20px 'JetBrains Mono', monospace"><span style="color: #696E76">BA-</span>81D0E7B4</dd>
+        <dt style="padding: 8px 0; border-bottom: 1px solid #E4E4DF; font-size: 12px; line-height: 20px; color: #696E76">Party</dt><dd style="margin: 0; padding: 8px 0; border-bottom: 1px solid #E4E4DF"><a href="#" style="color: #2349B5; text-decoration: none">Nordwind Logistics OÜ</a> <span style="color: #696E76">· organisation</span></dd>
+        <dt style="padding: 8px 0; border-bottom: 1px solid #E4E4DF; font-size: 12px; line-height: 20px; color: #696E76">Last bill</dt><dd style="margin: 0; padding: 8px 0; border-bottom: 1px solid #E4E4DF; font-family: 'JetBrains Mono', monospace">1,180.00 <span style="color: #696E76; font-size: 12px">due 2026-10-21</span></dd>
+        <dt style="padding: 8px 0; border-bottom: 1px solid #E4E4DF; font-size: 12px; line-height: 20px; color: #696E76">Customer since</dt><dd style="margin: 0; padding: 8px 0; border-bottom: 1px solid #E4E4DF; font-family: 'JetBrains Mono', monospace; font-size: 12px">2023-05-02</dd>
+      </dl>
+      <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">Labels ink-3 12 px, values ink-1. Rules, not boxes. Use in the inspector and detail dialogs.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Panel</h2>
+      <div style="border: 1px solid #E4E4DF; border-radius: 6px">
+        <div style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-bottom: 1px solid #E4E4DF">
+          <h3 style="margin: 0; font-size: 13px; line-height: 20px; font-weight: 600">Order in progress</h3>
+          <span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">ORD-26-10-00418</span>
+          <a href="#" style="margin-left: auto; font-size: 12px; line-height: 16px; color: #2349B5; text-decoration: none">Open order</a>
+        </div>
+        <div style="padding: 12px 16px; color: #464A51">Panels are for a group the operator acts on as one: an order being watched, a dialog section. Not for every list.</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.9fr); gap: 48px; align-items: start">
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Inline notes</h2>
+      <div role="note" style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 4px; background: #E8F0F8; color: #16171A">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="flex: none; margin-top: 3px; fill: none; stroke: #1D5C96; stroke-width: 1.5"><circle cx="7" cy="7" r="6"></circle><path d="M7 6v4M7 4v.01"></path></svg>
+        <span><strong style="font-weight: 600">Change scheduled.</strong> Mobile S becomes Mobile L on 2026-11-15; the price changes from that date.</span>
+      </div>
+      <div role="note" style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 4px; background: #FDF2DB; color: #16171A">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="flex: none; margin-top: 3px; fill: none; stroke: #8A5300; stroke-width: 1.5"><path d="M7 1.5l6 11H1z"></path><path d="M7 6v3M7 10.8v.01"></path></svg>
+        <span><strong style="font-weight: 600">Shortfall 2.56 EUR.</strong> The first charge needs 16.06; 13.50 is available. Top up first.</span>
+      </div>
+      <div role="alert" style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 4px; background: #FCECEA; color: #16171A">
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="flex: none; margin-top: 3px; fill: #B3261E"><rect x="3" y="3" width="8" height="8" rx="1" transform="rotate(45 7 7)"></rect></svg>
+        <span><strong style="font-weight: 600">Refused by the server.</strong> Amount exceeds the available balance (13.50 EUR). <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #696E76">INSUFFICIENT_FUNDS</span></span>
+      </div>
+      <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">Tint fill, no border, no side stripe. Lead with a bold verdict, then the fact with the number. Server codes in mono ink-3 for support tickets.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Status pills, tags, badges</h2>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px">
+        <sc-for list="{{ allPills }}" as="p" hint-placeholder-count="16">
+          <span style="display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 0 6px; border-radius: 4px; box-sizing: border-box; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap; color: {{ p.fg }}; background: {{ p.bg }}; box-shadow: inset 0 0 0 1px {{ p.bd }}"><span aria-hidden="true" style="flex: none; box-sizing: border-box; width: {{ p.g.w }}; height: {{ p.g.h }}; border-radius: {{ p.g.r }}; background: {{ p.g.bg }}; border: {{ p.g.b }}; transform: {{ p.g.t }}"></span>{{ p.label }}</span>
+        </sc-for>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-top: 8px; border-top: 1px solid #E4E4DF">
+        <span style="display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px; box-shadow: inset 0 0 0 1px #CDCDC6; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #464A51">Prepaid</span>
+        <span style="display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px; box-shadow: inset 0 0 0 1px #CDCDC6; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #464A51">Postpaid</span>
+        <span style="display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border-radius: 3px; background: #FDF2DB; color: #8A5300; font-size: 11px; line-height: 14px; font-weight: 500">Over limit</span>
+        <span style="display: inline-flex; align-items: center; height: 16px; padding: 0 6px; border-radius: 8px; background: #EFEFEC; font: 400 11px/14px 'JetBrains Mono', monospace; color: #464A51">14</span>
+        <span style="display: inline-flex; align-items: center; height: 16px; padding: 0 6px; border-radius: 8px; background: #B3261E; color: #FFFFFF; font-size: 11px; line-height: 14px; font-weight: 600">failed</span>
+      </div>
+      <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">Tag (outlined caps) is a fixed attribute such as mode, never a state. Flags are inline, short, warning-toned facts about a value.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Menu and toast</h2>
+      <div role="menu" aria-label="Product actions" style="width: 220px; padding: 4px; background: #FFFFFF; border: 1px solid #E4E4DF; border-radius: 6px; box-shadow: 0 1px 2px rgba(22,23,26,0.06), 0 6px 16px rgba(22,23,26,0.10); display: flex; flex-direction: column">
+        <button type="button" role="menuitem" style="height: 30px; padding: 0 10px; border: 0; border-radius: 4px; background: #F4F4F1; text-align: left; font: 400 13px/20px 'Golos Text', sans-serif; color: #16171A">Suspend</button>
+        <button type="button" role="menuitem" disabled="" style="height: 30px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; text-align: left; font: 400 13px/20px 'Golos Text', sans-serif; color: #A2A6AD">Resume</button>
+        <button type="button" role="menuitem" style="height: 30px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; text-align: left; font: 400 13px/20px 'Golos Text', sans-serif; color: #16171A">Change offering…</button>
+        <div role="separator" style="height: 1px; background: #E4E4DF; margin: 4px 0"></div>
+        <button type="button" role="menuitem" style="height: 30px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; text-align: left; font: 400 13px/20px 'Golos Text', sans-serif; color: #B3261E">Terminate…</button>
+      </div>
+      <div role="status" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 14px; background: #16171A; color: #FFFFFF; border-radius: 6px; box-shadow: 0 6px 16px rgba(22,23,26,0.20)">
+        <span>Payment recorded · <span style="font-family: 'JetBrains Mono', monospace">120.00 EUR</span></span>
+        <a href="#" style="margin-left: auto; color: #9BB3F5; text-decoration: none; font-weight: 500">View</a>
+      </div>
+      <p style="margin: 0; font-size: 12px; line-height: 16px; color: #696E76">Toasts confirm success only, bottom-left, 6 s. Errors never toast: they stay inline where the input is. "…" marks an item that opens a dialog.</p>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":2700}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const FAM = {
+      live:    { fg: '#1E7445', bg: '#E7F3EC', bd: 'transparent', g: 'dot' },
+      moving:  { fg: '#1D5C96', bg: '#E8F0F8', bd: 'transparent', g: 'half' },
+      queued:  { fg: '#1D5C96', bg: '#E8F0F8', bd: 'transparent', g: 'ring' },
+      pending: { fg: '#8A5300', bg: '#FDF2DB', bd: 'transparent', g: 'ring' },
+      paused:  { fg: '#8A5300', bg: '#FDF2DB', bd: 'transparent', g: 'pause' },
+      failed:  { fg: '#B3261E', bg: '#FCECEA', bd: 'transparent', g: 'diamond' },
+      draft:   { fg: '#464A51', bg: '#EFEFEC', bd: 'transparent', g: 'dashed' },
+      ended:   { fg: '#696E76', bg: '#FFFFFF', bd: '#CDCDC6', g: 'dash' }
+    };
+    const GLYPH = {
+      dot: (c) => ({ w: '6px', h: '6px', r: '50%', bg: c, b: 'none', t: 'none' }),
+      ring: (c) => ({ w: '8px', h: '8px', r: '50%', bg: 'transparent', b: '1.5px solid ' + c, t: 'none' }),
+      dashed: (c) => ({ w: '8px', h: '8px', r: '50%', bg: 'transparent', b: '1.5px dashed ' + c, t: 'none' }),
+      half: (c) => ({ w: '8px', h: '8px', r: '50%', bg: 'linear-gradient(90deg, ' + c + ' 50%, transparent 50%)', b: '1.5px solid ' + c, t: 'none' }),
+      pause: (c) => ({ w: '6px', h: '8px', r: '0', bg: 'linear-gradient(90deg, ' + c + ' 0 2px, transparent 2px 4px, ' + c + ' 4px 6px)', b: 'none', t: 'none' }),
+      diamond: (c) => ({ w: '6px', h: '6px', r: '1px', bg: c, b: 'none', t: 'rotate(45deg)' }),
+      dash: (c) => ({ w: '8px', h: '2px', r: '1px', bg: c, b: 'none', t: 'none' })
+    };
+    const MAP = { 'Active': 'live', 'Completed': 'live', 'Succeeded': 'live', 'In progress': 'moving', 'Running': 'moving', 'Acknowledged': 'queued', 'Queued': 'queued', 'Pending terminate': 'pending', 'Suspended': 'paused', 'Failed': 'failed', 'In design': 'draft', 'Created': 'draft', 'Draft': 'draft', 'Closed': 'ended', 'Retired': 'ended', 'Terminated': 'ended', 'Cancelled': 'ended' };
+    const pill = (label) => { const f = FAM[MAP[label]]; return { label, fg: f.fg, bg: f.bg, bd: f.bd, g: GLYPH[f.g](f.fg) }; };
+    const NEG = '#B3261E', INK = '#16171A';
+    const navItem = (label, opts) => Object.assign({ label, current: undefined, color: '#464A51', bg: 'transparent', weight: 400, shadow: 'none', count: '', failed: false }, opts || {});
+    const active = { current: 'page', color: INK, bg: '#FFFFFF', weight: 500, shadow: '0 0 0 1px #E4E4DF' };
+    const sec = '#FFFFFF';
+    const B = (bg, fg, sh, label, busy, spinA, spinB) => ({ bg, fg, sh, label, busy: !!busy, spinA: spinA || 'transparent', spinB: spinB || 'transparent' });
+    const focus = (extra) => (extra ? extra + ', ' : '') + '0 0 0 2px #FFFFFF, 0 0 0 4px #2349B5';
+    return {
+      nav: [
+        { label: 'Customers', items: [navItem('Subscribers', active), navItem('Parties')] },
+        { label: 'Products', items: [navItem('Product catalog'), navItem('Products'), navItem('Orders', { count: '3' }), navItem('Numbers')] },
+        { label: 'Billing', items: [navItem('Billing runs', { failed: true }), navItem('Prepaid commands', { count: '2' }), navItem('Accounts'), navItem('Bills'), navItem('Payments'), navItem('Balances'), navItem('Billing settings')] },
+        { label: 'System', items: [navItem('Integrations'), navItem('Users')] }
+      ],
+      tableRows: [
+        { name: 'Ivan Petrov', id: '3F9A12C0', st: pill('Active'), mode: 'Postpaid', products: '2', cycle: '1', amt: '−42.10', amtC: NEG, bg: '#FFFFFF', shadow: 'none', hover: false, flag: false },
+        { name: 'Maria Sokolova', id: 'C2290A5E', st: pill('Active'), mode: 'Prepaid', products: '2', cycle: '—', amt: '18.50', amtC: INK, bg: '#F4F4F1', shadow: 'none', hover: true, flag: false },
+        { name: 'Tallinna Kohvik OÜ', id: '7A04B9E1', st: pill('Suspended'), mode: 'Postpaid', products: '3', cycle: '15', amt: '−318.75', amtC: NEG, bg: '#EEF2FC', shadow: 'inset 2px 0 0 #2349B5', hover: false, flag: false },
+        { name: 'Old Account', id: '0B11D3F2', st: pill('Closed'), mode: 'Postpaid', products: '0', cycle: '1', amt: '0.00', amtC: INK, bg: '#FFFFFF', shadow: 'inset 0 0 0 2px #2349B5', hover: false, flag: false },
+        { name: 'Nordwind Logistics OÜ', id: '81D0E7B4', st: pill('Active'), mode: 'Postpaid', products: '14', cycle: '1', amt: '−1,250.40', amtC: NEG, bg: '#FFFFFF', shadow: 'none', hover: false, flag: true }
+      ],
+      buttons: [
+        { kind: 'Primary', states: [B('#2349B5', '#FFFFFF', 'none', 'Top up'), B('#1B3B98', '#FFFFFF', 'none', 'Top up'), B('#2349B5', '#FFFFFF', focus(), 'Top up'), B('#EFEFEC', '#A2A6AD', 'none', 'Top up'), B('#2349B5', '#FFFFFF', 'none', 'Topping up…', true, 'rgba(255,255,255,0.35)', '#FFFFFF')] },
+        { kind: 'Secondary', states: [B(sec, INK, 'inset 0 0 0 1px #CDCDC6', 'Add product'), B('#F4F4F1', INK, 'inset 0 0 0 1px #CDCDC6', 'Add product'), B(sec, INK, focus('inset 0 0 0 1px #CDCDC6'), 'Add product'), B(sec, '#A2A6AD', 'inset 0 0 0 1px #E4E4DF', 'Add product'), B(sec, INK, 'inset 0 0 0 1px #CDCDC6', 'Adding…', true, '#E4E4DF', '#464A51')] },
+        { kind: 'Danger', states: [B('#B3261E', '#FFFFFF', 'none', 'Terminate'), B('#951E18', '#FFFFFF', 'none', 'Terminate'), B('#B3261E', '#FFFFFF', '0 0 0 2px #FFFFFF, 0 0 0 4px #B3261E', 'Terminate'), B('#EFEFEC', '#A2A6AD', 'none', 'Terminate'), B('#B3261E', '#FFFFFF', 'none', 'Terminating…', true, 'rgba(255,255,255,0.35)', '#FFFFFF')] },
+        { kind: 'Quiet', states: [B('transparent', '#464A51', 'none', 'Cancel'), B('#F4F4F1', INK, 'none', 'Cancel'), B('transparent', '#464A51', focus(), 'Cancel'), B('transparent', '#A2A6AD', 'none', 'Cancel'), B('transparent', '#A2A6AD', 'none', 'Cancel')] }
+      ],
+      allPills: ['Active', 'Suspended', 'Closed', 'In design', 'Retired', 'Created', 'Pending terminate', 'Terminated', 'Cancelled', 'Acknowledged', 'In progress', 'Completed', 'Failed', 'Draft', 'Running', 'Queued', 'Succeeded'].map(pill)
+    };
+  }
+}
+</script>
+</body>
+</html>

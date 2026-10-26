@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Subscriber card · Maria Sokolova</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; background: #FFFFFF; color: #16171A; font-family: 'Golos Text', system-ui, sans-serif; font-size: 13px; line-height: 20px">
+
+  <nav aria-label="Main" style="flex: none; width: 216px; box-sizing: border-box; background: #F7F7F5; border-right: 1px solid #E4E4DF; display: flex; flex-direction: column; padding: 10px 8px 12px; gap: 14px">
+    <div style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px">
+      <span aria-hidden="true" style="width: 18px; height: 18px; border-radius: 4px; background: #16171A; color: #FFFFFF; font: 600 11px/18px 'JetBrains Mono', monospace; text-align: center">B</span>
+      <span style="font-weight: 600">BSS Admin</span>
+    </div>
+    <sc-for list="{{ nav }}" as="sec" hint-placeholder-count="4">
+      <div style="display: flex; flex-direction: column; gap: 1px">
+        <div style="padding: 0 8px; height: 22px; display: flex; align-items: center; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">{{ sec.label }}</div>
+        <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="4">
+          <a href="#" aria-current="{{ it.current }}" style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 4px; text-decoration: none; color: {{ it.color }}; background: {{ it.bg }}; font-weight: {{ it.weight }}; box-shadow: {{ it.shadow }}">
+            <span style="flex: 1">{{ it.label }}</span>
+            <sc-if value="{{ it.count }}" hint-placeholder-val="{{ false }}"><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">{{ it.count }}</span></sc-if>
+            <sc-if value="{{ it.failed }}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; height: 16px; padding: 0 6px; border-radius: 8px; background: #B3261E; color: #FFFFFF; font-size: 11px; line-height: 14px; font-weight: 600">failed</span></sc-if>
+          </a>
+        </sc-for>
+      </div>
+    </sc-for>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 8px; border-top: 1px solid #E4E4DF">
+      <span aria-hidden="true" style="width: 24px; height: 24px; border-radius: 50%; background: #E4E4DF; font: 600 11px/24px 'Golos Text', sans-serif; text-align: center; color: #464A51">EK</span>
+      <span style="display: flex; flex-direction: column; font-size: 12px; line-height: 16px"><span style="font-weight: 500">Elena Kask</span><span style="color: #696E76">Billing operator</span></span>
+    </div>
+  </nav>
+
+  <div style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 48px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 24px; border-bottom: 1px solid #E4E4DF">
+      <nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 6px; color: #696E76">
+        <a href="#" style="color: #696E76; text-decoration: none">Customers</a><span aria-hidden="true" style="color: #A2A6AD">/</span><a href="Subscribers.dc.html" style="color: #696E76; text-decoration: none">Subscribers</a><span aria-hidden="true" style="color: #A2A6AD">/</span><span aria-current="page" style="color: #16171A; font-weight: 500">Maria Sokolova</span>
+      </nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 12px">
+        <div style="display: flex; align-items: stretch; height: 28px; border: 1px solid #E4E4DF; border-radius: 4px; overflow: hidden">
+          <span style="display: flex; align-items: center; padding: 0 8px; background: #F7F7F5; border-right: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Business date</span>
+          <span style="display: flex; align-items: center; gap: 8px; padding: 0 10px; font: 500 12px/16px 'JetBrains Mono', monospace">2026-10-26<span style="color: #696E76; font-weight: 400">UTC+3</span></span>
+        </div>
+        <button type="button" aria-label="Account menu" style="width: 28px; height: 28px; border-radius: 50%; border: 0; background: #E4E4DF; color: #464A51; font: 600 11px/28px 'Golos Text', sans-serif">EK</button>
+      </div>
+    </header>
+
+    <main style="flex: 1; display: flex; flex-direction: column">
+      <!-- Tier 1: who -->
+      <div style="padding: 18px 24px 16px; display: flex; flex-direction: column; gap: 6px">
+        <div style="display: flex; align-items: center; gap: 10px">
+          <h1 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em">Maria Sokolova</h1>
+          <span style="display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 0 6px; border-radius: 4px; background: #E7F3EC; color: #1E7445; font-size: 12px; line-height: 16px; font-weight: 500"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: #1E7445"></span>Active</span>
+          <span style="display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px; box-shadow: inset 0 0 0 1px #CDCDC6; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #464A51">Prepaid</span>
+          <div style="margin-left: auto; display: flex; gap: 8px">
+            <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Add product</button>
+            <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; color: #464A51; font: 500 13px/20px 'Golos Text', sans-serif">Edit</button>
+            <button type="button" aria-label="More account actions" style="width: 32px; height: 32px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="14" height="4" viewBox="0 0 14 4" style="fill: #464A51"><circle cx="2" cy="2" r="1.4"></circle><circle cx="7" cy="2" r="1.4"></circle><circle cx="12" cy="2" r="1.4"></circle></svg></button>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; line-height: 16px; color: #696E76">
+          <span style="display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; color: #16171A"><span><span style="color: #696E76">BA-</span>C2290A5E</span><svg aria-label="Copy id" role="img" width="12" height="12" viewBox="0 0 12 12" style="fill: none; stroke: #696E76; stroke-width: 1.2"><rect x="3.5" y="3.5" width="7" height="7" rx="1"></rect><path d="M1.5 8V2.5a1 1 0 0 1 1-1H8"></path></svg></span>
+          <span aria-hidden="true" style="color: #A2A6AD">·</span>
+          <span>Party <a href="#" style="color: #2349B5; text-decoration: none">Maria Sokolova</a> (person)</span>
+          <span aria-hidden="true" style="color: #A2A6AD">·</span>
+          <span>Customer since <span style="font-family: 'JetBrains Mono', monospace; color: #464A51">2024-03-11</span></span>
+          <span aria-hidden="true" style="color: #A2A6AD">·</span>
+          <span>Charged daily at 00:30</span>
+        </div>
+      </div>
+
+      <!-- Tier 2: money -->
+      <section aria-label="Balance" style="display: flex; align-items: stretch; flex-wrap: wrap; background: #F7F7F5; border-top: 1px solid #E4E4DF; border-bottom: 1px solid #E4E4DF; min-height: 88px">
+        <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 20px 12px 24px">
+          <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Ledger</span>
+          <span style="font: 500 24px/32px 'JetBrains Mono', monospace; letter-spacing: -0.01em; color: #464A51">18.50</span>
+        </div>
+        <span aria-hidden="true" style="display: flex; align-items: center; padding-top: 14px; font: 400 20px/1 'JetBrains Mono', monospace; color: #A2A6AD">−</span>
+        <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 20px">
+          <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Reserved</span>
+          <span style="font: 500 24px/32px 'JetBrains Mono', monospace; letter-spacing: -0.01em; color: #464A51">5.00</span>
+        </div>
+        <span aria-hidden="true" style="display: flex; align-items: center; padding-top: 14px; font: 400 20px/1 'JetBrains Mono', monospace; color: #A2A6AD">=</span>
+        <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 20px">
+          <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #16171A">Available</span>
+          <span style="font: 500 24px/32px 'JetBrains Mono', monospace; letter-spacing: -0.01em; color: #16171A">13.50<span style="font-size: 11px; font-weight: 400; color: #696E76; margin-left: 4px">EUR</span></span>
+        </div>
+        <div aria-hidden="true" style="width: 1px; background: #E4E4DF; margin: 16px 4px"></div>
+        <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 20px">
+          <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Paid through</span>
+          <span style="font: 500 15px/20px 'JetBrains Mono', monospace">2026-11-14</span>
+          <span style="font-size: 12px; line-height: 16px; color: #696E76">in 19 days</span>
+        </div>
+        <div style="display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 12px 20px">
+          <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Shortfall</span>
+          <span style="font: 500 15px/20px 'JetBrains Mono', monospace; color: #696E76">—</span>
+          <span style="font-size: 12px; line-height: 16px; color: #696E76">none today</span>
+        </div>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 8px; padding: 12px 24px">
+          <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #2349B5; color: #FFFFFF; font: 500 13px/20px 'Golos Text', sans-serif">Top up</button>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Adjust</button>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Hold</button>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Transfer</button>
+        </div>
+      </section>
+
+      <!-- Tier 3: what they have -->
+      <div role="tablist" aria-label="Account sections" style="display: flex; gap: 20px; padding: 0 24px; border-bottom: 1px solid #E4E4DF; overflow-x: auto">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="9">
+          <button type="button" role="tab" aria-selected="{{ t.sel }}" style="flex: none; height: 40px; padding: 0; border: 0; background: transparent; display: flex; align-items: center; gap: 6px; font: 500 13px/20px 'Golos Text', sans-serif; white-space: nowrap; color: {{ t.c }}; font-weight: {{ t.w }}; box-shadow: {{ t.sh }}">{{ t.label }}<sc-if value="{{ t.n }}" hint-placeholder-val="{{ false }}"><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">{{ t.n }}</span></sc-if><sc-if value="{{ t.open }}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; height: 16px; padding: 0 5px; border-radius: 8px; background: #E8F0F8; color: #1D5C96; font: 500 11px/14px 'JetBrains Mono', monospace">{{ t.open }}</span></sc-if></button>
+        </sc-for>
+      </div>
+
+      <div style="padding: 20px 24px 32px; display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start">
+        <div style="flex: 999 1 600px; min-width: 0; display: flex; flex-direction: column; gap: 28px">
+
+          <section aria-labelledby="h-products" style="display: flex; flex-direction: column">
+            <div style="display: flex; align-items: baseline; gap: 10px; padding-bottom: 10px">
+              <h2 id="h-products" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Products</h2>
+              <span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">2 active</span>
+              <button type="button" style="margin-left: auto; height: 24px; padding: 0 6px; border: 0; border-radius: 4px; background: transparent; color: #2349B5; font: 500 12px/16px 'Golos Text', sans-serif">Show 1 terminated</button>
+            </div>
+            <div role="table" aria-label="Products" style="border-top: 1px solid #16171A">
+              <div role="row" style="display: grid; grid-template-columns: minmax(150px, 1fr) 128px 92px 92px 120px 40px; height: 32px; align-items: center; background: #F7F7F5; border-bottom: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">
+                <span role="columnheader" style="padding-left: 12px">Product</span><span role="columnheader" style="padding: 0 12px">Number</span><span role="columnheader" style="padding: 0 12px">Status</span><span role="columnheader" style="padding: 0 12px">Since</span><span role="columnheader" style="padding: 0 12px; text-align: right">Price EUR</span><span role="columnheader"></span>
+              </div>
+              <div role="row" style="display: grid; grid-template-columns: minmax(150px, 1fr) 128px 92px 92px 120px 40px; height: 36px; align-items: center; border-bottom: 1px solid #E4E4DF">
+                <span role="cell" style="padding-left: 12px; display: flex; align-items: baseline; gap: 8px; min-width: 0"><span style="font-weight: 500; white-space: nowrap">Prepaid Daily</span><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">PRE-D</span></span>
+                <span role="cell" style="padding: 0 12px; font: 400 12px/16px 'JetBrains Mono', monospace">+372 5123 4567</span>
+                <span role="cell" style="padding: 0 12px"><span style="display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 0 6px; border-radius: 4px; background: #E7F3EC; color: #1E7445; font-size: 12px; line-height: 16px; font-weight: 500"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: #1E7445"></span>Active</span></span>
+                <span role="cell" style="padding: 0 12px; font: 400 12px/16px 'JetBrains Mono', monospace; color: #464A51">2024-03-11</span>
+                <span role="cell" style="padding: 0 12px; text-align: right; font-family: 'JetBrains Mono', monospace">0.49<span style="color: #696E76; font-size: 12px"> / day</span></span>
+                <span role="cell" style="display: flex; justify-content: center"></span>
+              </div>
+              <div role="row" style="position: relative; display: grid; grid-template-columns: minmax(150px, 1fr) 128px 92px 92px 120px 40px; height: 36px; align-items: center; border-bottom: 1px solid #E4E4DF; background: #F4F4F1">
+                <span role="cell" style="padding-left: 12px; display: flex; align-items: baseline; gap: 8px; min-width: 0"><span style="font-weight: 500; white-space: nowrap">Mobile S</span><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">MOB-S</span></span>
+                <span role="cell" style="padding: 0 12px; font: 400 12px/16px 'JetBrains Mono', monospace">+372 5208 1190</span>
+                <span role="cell" style="padding: 0 12px"><span style="display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 0 6px; border-radius: 4px; background: #E7F3EC; color: #1E7445; font-size: 12px; line-height: 16px; font-weight: 500"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: #1E7445"></span>Active</span></span>
+                <span role="cell" style="padding: 0 12px; font: 400 12px/16px 'JetBrains Mono', monospace; color: #464A51">2025-06-02</span>
+                <span role="cell" style="padding: 0 12px; text-align: right; font-family: 'JetBrains Mono', monospace">9.90<span style="color: #696E76; font-size: 12px"> / month</span></span>
+                <span role="cell" style="display: flex; justify-content: center"><button type="button" aria-label="Actions for Mobile S" aria-expanded="true" style="width: 28px; height: 28px; border: 0; border-radius: 4px; background: #E4E4DF; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="14" height="4" viewBox="0 0 14 4" style="fill: #16171A"><circle cx="2" cy="2" r="1.4"></circle><circle cx="7" cy="2" r="1.4"></circle><circle cx="12" cy="2" r="1.4"></circle></svg></button></span>
+                <div role="menu" aria-label="Product actions" style="position: absolute; right: 6px; top: 34px; z-index: 2; width: 200px; padding: 4px; background: #FFFFFF; border: 1px solid #E4E4DF; border-radius: 6px; box-shadow: 0 1px 2px rgba(22,23,26,0.06), 0 6px 16px rgba(22,23,26,0.10); display: flex; flex-direction: column">
+                  <button type="button" role="menuitem" style="height: 30px; padding: 0 10px; border: 0; border-radius: 4px; background: #F4F4F1; text-align: left; font: 400 13px/20px 'Golos Text', sans-serif; color: #16171A">Suspend</button>
+                  <button type="button" role="menuitem" disabled="" style="height: 30px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; text-align: left; font: 400 13px/20px 'Golos Text', sans-serif; color: #A2A6AD">Resume</button>
+                  <button type="button" role="menuitem" disabled="" style="height: 30px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; text-align: left; font: 400 13px/20px 'Golos Text', sans-serif; color: #A2A6AD">Change offering… <span style="font-size: 11px">(one pending)</span></button>
+                  <div role="separator" style="height: 1px; background: #E4E4DF; margin: 4px 0"></div>
+                  <button type="button" role="menuitem" style="height: 30px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; text-align: left; font: 400 13px/20px 'Golos Text', sans-serif; color: #B3261E">Terminate…</button>
+                </div>
+              </div>
+              <div role="row" style="display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 12px 0 28px; border-bottom: 1px solid #E4E4DF; font-size: 12px; line-height: 16px; color: #464A51">
+                <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" style="flex: none; fill: none; stroke: #A2A6AD; stroke-width: 1.2"><path d="M2 1v5a2 2 0 0 0 2 2h6M8 6l2 2-2 2"></path></svg>
+                <span style="display: inline-flex; align-items: center; gap: 6px; height: 18px; padding: 0 6px 0 5px; border-radius: 4px; background: #E8F0F8; color: #1D5C96; font-size: 11px; line-height: 14px; font-weight: 500"><span aria-hidden="true" style="width: 7px; height: 7px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid #1D5C96"></span>Pending change</span>
+                <span>To <strong style="font-weight: 500; color: #16171A">Mobile L</strong> at <span style="font-family: 'JetBrains Mono', monospace">24.90</span> / month from <span style="font-family: 'JetBrains Mono', monospace; color: #16171A">2026-11-15</span></span>
+                <span style="margin-left: auto; display: flex; gap: 12px"><a href="#" style="color: #2349B5; text-decoration: none; font-family: 'JetBrains Mono', monospace">ORD-26-10-00418</a><button type="button" style="height: 20px; padding: 0; border: 0; background: transparent; color: #B3261E; font: 500 12px/16px 'Golos Text', sans-serif">Cancel change</button></span>
+              </div>
+            </div>
+          </section>
+
+          <section aria-labelledby="h-progress" style="display: flex; flex-direction: column">
+            <div style="display: flex; align-items: baseline; gap: 10px; padding-bottom: 10px">
+              <h2 id="h-progress" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">In progress</h2>
+              <span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">1 order</span>
+            </div>
+            <div style="border: 1px solid #E4E4DF; border-radius: 6px">
+              <div style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 16px; border-bottom: 1px solid #E4E4DF; flex-wrap: wrap">
+                <span style="font-weight: 600">Change offering</span>
+                <span style="color: #464A51">Mobile S → Mobile L on <span style="font-family: 'JetBrains Mono', monospace">+372 5208 1190</span></span>
+                <span style="margin-left: auto; font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">ORD-26-10-00418</span>
+                <span style="display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 0 6px; border-radius: 4px; background: #E8F0F8; color: #1D5C96; font-size: 12px; line-height: 16px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid #1D5C96; background: linear-gradient(90deg, #1D5C96 50%, transparent 50%)"></span>In progress</span>
+              </div>
+              <ol aria-label="Order steps" style="margin: 0; padding: 16px; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0">
+                <li style="display: flex; flex-direction: column; gap: 4px; padding-right: 12px">
+                  <span style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 16px; height: 16px; border-radius: 50%; background: #1E7445; display: flex; align-items: center; justify-content: center"><svg width="8" height="8" viewBox="0 0 8 8" style="fill: none; stroke: #FFFFFF; stroke-width: 1.6"><path d="M1 4.2l2 2L7 2"></path></svg></span><span style="flex: 1; height: 2px; background: #1E7445"></span></span>
+                  <span style="font-weight: 500">Acknowledged</span>
+                  <span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">2026-10-24 10:12:05</span>
+                </li>
+                <li style="display: flex; flex-direction: column; gap: 4px; padding-right: 12px">
+                  <span style="display: flex; align-items: center; gap: 8px"><span aria-hidden="true" style="width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%; border: 2px solid #1D5C96; background: linear-gradient(90deg, #1D5C96 50%, #FFFFFF 50%)"></span><span style="flex: 1; height: 2px; background: #E4E4DF"></span></span>
+                  <span style="font-weight: 500">Waiting for start date</span>
+                  <span style="font-size: 12px; line-height: 16px; color: #696E76"><span style="font-family: 'JetBrains Mono', monospace">5.00</span> held for the first charge</span>
+                </li>
+                <li style="display: flex; flex-direction: column; gap: 4px">
+                  <span style="display: flex; align-items: center"><span aria-hidden="true" style="width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid #CDCDC6"></span></span>
+                  <span style="font-weight: 500; color: #464A51">Completed</span>
+                  <span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">due 2026-11-15 00:30</span>
+                </li>
+              </ol>
+              <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid #E4E4DF; font-size: 12px; line-height: 16px; color: #696E76">
+                <span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: #1D5C96"></span>Watching · checked <span style="font-family: 'JetBrains Mono', monospace">14:07:32</span></span>
+                <a href="#" style="margin-left: auto; color: #2349B5; text-decoration: none; font-weight: 500">Open order</a>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <aside aria-labelledby="h-activity" style="flex: 1 1 {{ railBasis }}; min-width: 0; display: flex; flex-direction: column">
+          <div style="display: flex; align-items: baseline; gap: 10px; padding-bottom: 10px">
+            <h2 id="h-activity" style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Recent activity</h2>
+            <a href="#" style="margin-left: auto; font-size: 12px; line-height: 16px; color: #2349B5; text-decoration: none; font-weight: 500">All transactions</a>
+          </div>
+          <ol style="margin: 0; padding: 0; list-style: none; border-top: 1px solid #16171A">
+            <sc-for list="{{ activity }}" as="a" hint-placeholder-count="6">
+              <li style="display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; padding: 8px 0; border-bottom: 1px solid #E4E4DF">
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ a.what }} <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #696E76">{{ a.ref }}</span></span>
+                <span style="text-align: right; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; color: {{ a.c }}">{{ a.amt }}</span>
+                <span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">{{ a.at }}</span>
+                <span style="text-align: right; font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">{{ a.after }}</span>
+              </li>
+            </sc-for>
+          </ol>
+          <span style="padding-top: 8px; font-size: 12px; line-height: 16px; color: #696E76">Right column: ledger balance after the movement. Holds change Reserved, not Ledger.</span>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"wide":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const wide = !!this.props.wide;
+    const navItem = (label, opts) => Object.assign({ label, current: undefined, color: '#464A51', bg: 'transparent', weight: 400, shadow: 'none', count: '', failed: false }, opts || {});
+    const active = { current: 'page', color: '#16171A', bg: '#FFFFFF', weight: 500, shadow: '0 0 0 1px #E4E4DF' };
+    const tab = (label, n, open, sel) => ({ label, n: n || '', open: open || '', sel: sel ? 'true' : 'false', c: sel ? '#16171A' : '#464A51', w: sel ? 600 : 500, sh: sel ? 'inset 0 -2px 0 #16171A' : 'none' });
+    const A = (what, ref, amt, at, after) => ({ what, ref, amt, at, after, c: amt.charAt(0) === '−' ? '#B3261E' : (amt.indexOf('held') > -1 ? '#696E76' : '#16171A') });
+    const activity = [
+      A('Daily charge', 'PRE-D', '−0.49', '2026-10-26 00:30:14', '18.50'),
+      A('Daily charge', 'PRE-D', '−0.49', '2026-10-25 00:30:11', '18.99'),
+      A('Top-up · card', '••4417', '+10.00', '2026-10-24 16:02:47', '19.48'),
+      A('Hold', 'ORD-26-10-00418', '5.00 held', '2026-10-24 10:12:05', 'reserved 5.00'),
+      A('Daily charge', 'PRE-D', '−0.49', '2026-10-24 00:30:09', '9.48'),
+      A('Daily charge', 'PRE-D', '−0.49', '2026-10-23 00:30:12', '9.97'),
+      A('Daily charge', 'PRE-D', '−0.49', '2026-10-22 00:30:10', '10.46'),
+      A('Daily charge', 'PRE-D', '−0.49', '2026-10-21 00:30:13', '10.95')
+    ];
+    return {
+      wide,
+      railBasis: wide ? '420px' : '320px',
+      nav: [
+        { label: 'Customers', items: [navItem('Subscribers', active), navItem('Parties')] },
+        { label: 'Products', items: [navItem('Product catalog'), navItem('Products'), navItem('Orders', { count: '3' }), navItem('Numbers')] },
+        { label: 'Billing', items: [navItem('Billing runs', { failed: true }), navItem('Prepaid commands', { count: '2' }), navItem('Accounts'), navItem('Bills'), navItem('Payments'), navItem('Balances'), navItem('Billing settings')] },
+        { label: 'System', items: [navItem('Integrations'), navItem('Users')] }
+      ],
+      tabs: [tab('Overview', '', '', true), tab('Products', '2'), tab('Orders', '', '1 open'), tab('Charges'), tab('Transactions'), tab('Bills'), tab('Payments'), tab('Balance actions'), tab('Commands')],
+      activity: wide ? activity : activity.slice(0, 6)
+    };
+  }
+}
+</script>
+</body>
+</html>

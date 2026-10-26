@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Product catalog</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; background: #FFFFFF; color: #16171A; font-family: 'Golos Text', system-ui, sans-serif; font-size: 13px; line-height: 20px">
+
+  <nav aria-label="Main" style="flex: none; width: 216px; box-sizing: border-box; background: #F7F7F5; border-right: 1px solid #E4E4DF; display: flex; flex-direction: column; padding: 10px 8px 12px; gap: 14px">
+    <div style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px">
+      <span aria-hidden="true" style="width: 18px; height: 18px; border-radius: 4px; background: #16171A; color: #FFFFFF; font: 600 11px/18px 'JetBrains Mono', monospace; text-align: center">B</span>
+      <span style="font-weight: 600">BSS Admin</span>
+    </div>
+    <sc-for list="{{ nav }}" as="sec" hint-placeholder-count="4">
+      <div style="display: flex; flex-direction: column; gap: 1px">
+        <div style="padding: 0 8px; height: 22px; display: flex; align-items: center; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">{{ sec.label }}</div>
+        <sc-for list="{{ sec.items }}" as="it" hint-placeholder-count="4">
+          <a href="#" aria-current="{{ it.current }}" style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 4px; text-decoration: none; color: {{ it.color }}; background: {{ it.bg }}; font-weight: {{ it.weight }}; box-shadow: {{ it.shadow }}">
+            <span style="flex: 1">{{ it.label }}</span>
+            <sc-if value="{{ it.count }}" hint-placeholder-val="{{ false }}"><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">{{ it.count }}</span></sc-if>
+            <sc-if value="{{ it.failed }}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; height: 16px; padding: 0 6px; border-radius: 8px; background: #B3261E; color: #FFFFFF; font-size: 11px; line-height: 14px; font-weight: 600">failed</span></sc-if>
+          </a>
+        </sc-for>
+      </div>
+    </sc-for>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 8px; border-top: 1px solid #E4E4DF">
+      <span aria-hidden="true" style="width: 24px; height: 24px; border-radius: 50%; background: #E4E4DF; font: 600 11px/24px 'Golos Text', sans-serif; text-align: center; color: #464A51">EK</span>
+      <span style="display: flex; flex-direction: column; font-size: 12px; line-height: 16px"><span style="font-weight: 500">Elena Kask</span><span style="color: #696E76">Billing operator</span></span>
+    </div>
+  </nav>
+
+  <div style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column">
+    <header style="height: 48px; flex: none; display: flex; align-items: center; gap: 16px; padding: 0 24px; border-bottom: 1px solid #E4E4DF">
+      <nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 6px; color: #696E76">
+        <a href="#" style="color: #696E76; text-decoration: none">Products</a><span aria-hidden="true" style="color: #A2A6AD">/</span><span aria-current="page" style="color: #16171A; font-weight: 500">Product catalog</span>
+      </nav>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 12px">
+        <div style="display: flex; align-items: stretch; height: 28px; border: 1px solid #E4E4DF; border-radius: 4px; overflow: hidden">
+          <span style="display: flex; align-items: center; padding: 0 8px; background: #F7F7F5; border-right: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Business date</span>
+          <span style="display: flex; align-items: center; gap: 8px; padding: 0 10px; font: 500 12px/16px 'JetBrains Mono', monospace">2026-10-26<span style="color: #696E76; font-weight: 400">UTC+3</span></span>
+        </div>
+        <button type="button" aria-label="Account menu" style="width: 28px; height: 28px; border-radius: 50%; border: 0; background: #E4E4DF; color: #464A51; font: 600 11px/28px 'Golos Text', sans-serif">EK</button>
+      </div>
+    </header>
+
+    <div style="flex: 1; display: flex; min-height: 0">
+      <main style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column">
+        <div style="padding: 20px 24px 0; display: flex; align-items: center; gap: 12px">
+          <h1 style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em">Product catalog</h1>
+          <span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76; padding-top: 4px">5 offerings</span>
+          <div style="margin-left: auto; display: flex; gap: 8px">
+            <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #2349B5; color: #FFFFFF; font: 500 13px/20px 'Golos Text', sans-serif">New offering</button>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px 24px 12px">
+          <label style="position: relative; display: flex; align-items: center">
+            <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Search offerings</span>
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="position: absolute; left: 10px; fill: none; stroke: #696E76; stroke-width: 1.5"><circle cx="6" cy="6" r="4.5"></circle><path d="M9.5 9.5L13 13"></path></svg>
+            <input type="search" placeholder="Name or code" style="width: 240px; height: 32px; box-sizing: border-box; padding: 0 10px 0 30px; border: 1px solid #CDCDC6; border-radius: 4px; font: 400 13px/20px 'Golos Text', sans-serif; color: #16171A">
+          </label>
+          <div role="group" aria-label="Lifecycle" style="display: flex; gap: 2px; padding: 2px; background: #EFEFEC; border-radius: 4px">
+            <sc-for list="{{ lifeSeg }}" as="s" hint-placeholder-count="4">
+              <button type="button" aria-pressed="{{ s.on }}" style="height: 28px; padding: 0 10px; border: 0; border-radius: 3px; font: 500 12px/16px 'Golos Text', sans-serif; display: flex; align-items: center; gap: 6px; background: {{ s.bg }}; color: {{ s.c }}; box-shadow: {{ s.sh }}">{{ s.label }}<span style="font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">{{ s.n }}</span></button>
+            </sc-for>
+          </div>
+          <div role="group" aria-label="Recurrence" style="display: flex; gap: 2px; padding: 2px; background: #EFEFEC; border-radius: 4px">
+            <sc-for list="{{ recSeg }}" as="s" hint-placeholder-count="3">
+              <button type="button" aria-pressed="{{ s.on }}" style="height: 28px; padding: 0 10px; border: 0; border-radius: 3px; font: 500 12px/16px 'Golos Text', sans-serif; background: {{ s.bg }}; color: {{ s.c }}; box-shadow: {{ s.sh }}">{{ s.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="overflow-x: auto; border-top: 1px solid #E4E4DF">
+          <div role="table" aria-label="Offerings" style="min-width: 820px">
+            <div role="row" style="display: grid; grid-template-columns: minmax(200px, 1fr) 116px 104px 160px 96px 108px 52px; height: 32px; align-items: center; background: #F7F7F5; border-bottom: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">
+              <span role="columnheader" style="padding-left: 24px">Offering</span>
+              <span role="columnheader" style="padding: 0 12px">Lifecycle</span>
+              <span role="columnheader" style="padding: 0 12px">Recurrence</span>
+              <span role="columnheader" style="padding: 0 12px; text-align: right">Price EUR</span>
+              <span role="columnheader" style="padding: 0 12px; text-align: right">In use</span>
+              <span role="columnheader" style="padding: 0 12px; text-align: right">Updated</span>
+              <span role="columnheader"></span>
+            </div>
+            <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+              <div role="row" style="display: flex; align-items: flex-end; gap: 8px; height: 36px; padding: 0 24px 6px; box-sizing: border-box; border-bottom: 1px solid #16171A">
+                <span role="rowheader" style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #16171A">{{ g.label }}</span>
+                <span style="font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">{{ g.n }}</span>
+                <span style="font-size: 12px; line-height: 14px; color: #696E76">{{ g.hint }}</span>
+              </div>
+              <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="2">
+                <div role="row" aria-selected="{{ r.sel }}" style="display: grid; grid-template-columns: minmax(200px, 1fr) 116px 104px 160px 96px 108px 52px; height: 36px; align-items: center; border-bottom: 1px solid #E4E4DF; background: {{ r.bg }}; box-shadow: {{ r.shadow }}">
+                  <span role="cell" style="padding-left: 24px; display: flex; align-items: baseline; gap: 8px; min-width: 0"><a href="#" style="font-weight: 500; color: {{ r.nameC }}; text-decoration: none; white-space: nowrap">{{ r.name }}</a><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">{{ r.code }}</span></span>
+                  <span role="cell" style="padding: 0 12px"><span style="display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 0 6px; border-radius: 4px; box-sizing: border-box; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap; color: {{ r.st.fg }}; background: {{ r.st.bg }}; box-shadow: inset 0 0 0 1px {{ r.st.bd }}"><span aria-hidden="true" style="flex: none; box-sizing: border-box; width: {{ r.st.g.w }}; height: {{ r.st.g.h }}; border-radius: {{ r.st.g.r }}; background: {{ r.st.g.bg }}; border: {{ r.st.g.b }}; transform: {{ r.st.g.t }}"></span>{{ r.st.label }}</span></span>
+                  <span role="cell" style="padding: 0 12px; color: #464A51">{{ r.rec }}</span>
+                  <span role="cell" style="padding: 0 12px; text-align: right; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums">{{ r.price }}<span style="font-size: 12px; color: #696E76"> / {{ r.unit }}</span></span>
+                  <span role="cell" style="padding: 0 12px; text-align: right; font: 400 12px/16px 'JetBrains Mono', monospace; color: {{ r.useC }}">{{ r.inUse }}</span>
+                  <span role="cell" style="padding: 0 12px; text-align: right; font: 400 12px/16px 'JetBrains Mono', monospace; color: #464A51">{{ r.updated }}</span>
+                  <span role="cell" style="padding-right: 16px; display: flex; justify-content: flex-end"><button type="button" aria-label="Offering actions" style="width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center; opacity: {{ r.dots }}"><svg aria-hidden="true" width="14" height="4" viewBox="0 0 14 4" style="fill: #464A51"><circle cx="2" cy="2" r="1.4"></circle><circle cx="7" cy="2" r="1.4"></circle><circle cx="12" cy="2" r="1.4"></circle></svg></button></span>
+                </div>
+              </sc-for>
+            </sc-for>
+          </div>
+        </div>
+        <p style="margin: 0; padding: 12px 24px; font-size: 12px; line-height: 16px; color: #696E76">Lifecycle runs one way: In design → Active → Retired. Retired offerings stay billable for products already on them and are hidden from Add product.</p>
+      </main>
+
+      <sc-if value="{{ wide }}" hint-placeholder-val="{{ false }}">
+        <aside aria-label="Selected offering" style="flex: none; width: 400px; box-sizing: border-box; border-left: 1px solid #E4E4DF; display: flex; flex-direction: column">
+          <div style="padding: 20px 24px 16px; display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; align-items: flex-start; gap: 8px">
+              <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600; flex: 1">Data 10 GB</h2>
+              <button type="button" aria-label="Close inspector" style="width: 28px; height: 28px; margin: -4px -6px 0 0; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" style="stroke: #464A51; stroke-width: 1.5"><path d="M2 2l8 8M10 2l-8 8"></path></svg></button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span style="font: 400 12px/16px 'JetBrains Mono', monospace">DATA-10</span>
+              <span style="display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 0 6px; border-radius: 4px; background: #EFEFEC; color: #464A51; font-size: 12px; line-height: 16px; font-weight: 500"><span aria-hidden="true" style="width: 8px; height: 8px; box-sizing: border-box; border-radius: 50%; border: 1.5px dashed #464A51"></span>In design</span>
+            </div>
+          </div>
+          <ol aria-label="Lifecycle" style="margin: 0; padding: 12px 24px 16px; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid #E4E4DF">
+            <li style="display: flex; flex-direction: column; gap: 6px"><span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; background: #16171A"></span><span style="flex: 1; height: 1px; background: #CDCDC6"></span></span><span style="font-size: 12px; line-height: 16px; font-weight: 600">In design</span><span style="font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">since 2026-10-22</span></li>
+            <li style="display: flex; flex-direction: column; gap: 6px"><span style="display: flex; align-items: center; gap: 6px"><span aria-hidden="true" style="width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid #CDCDC6"></span><span style="flex: 1; height: 1px; background: #CDCDC6"></span></span><span style="font-size: 12px; line-height: 16px; color: #464A51">Active</span><span style="font-size: 11px; line-height: 14px; color: #696E76">sellable</span></li>
+            <li style="display: flex; flex-direction: column; gap: 6px"><span style="display: flex; align-items: center"><span aria-hidden="true" style="width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid #CDCDC6"></span></span><span style="font-size: 12px; line-height: 16px; color: #464A51">Retired</span><span style="font-size: 11px; line-height: 14px; color: #696E76">billing only</span></li>
+          </ol>
+          <div style="padding: 16px 24px; display: flex; flex-direction: column; gap: 4px; background: #F7F7F5; border-top: 1px solid #E4E4DF; border-bottom: 1px solid #E4E4DF">
+            <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Price</span>
+            <span style="font: 500 24px/32px 'JetBrains Mono', monospace; letter-spacing: -0.01em">7.50<span style="font-size: 11px; font-weight: 400; color: #696E76; margin-left: 4px">EUR / month</span></span>
+            <div style="display: flex; gap: 8px; margin-top: 10px">
+              <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Activate…</button>
+              <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Change price…</button>
+            </div>
+          </div>
+          <dl style="margin: 0; padding: 4px 24px 0; display: grid; grid-template-columns: 112px minmax(0, 1fr)">
+            <dt style="padding: 8px 0; border-bottom: 1px solid #E4E4DF; font-size: 12px; line-height: 20px; color: #696E76">Recurrence</dt><dd style="margin: 0; padding: 8px 0; border-bottom: 1px solid #E4E4DF">Monthly, on the account's cycle day</dd>
+            <dt style="padding: 8px 0; border-bottom: 1px solid #E4E4DF; font-size: 12px; line-height: 20px; color: #696E76">In use</dt><dd style="margin: 0; padding: 8px 0; border-bottom: 1px solid #E4E4DF; font-family: 'JetBrains Mono', monospace">0</dd>
+            <dt style="padding: 8px 0; border-bottom: 1px solid #E4E4DF; font-size: 12px; line-height: 20px; color: #696E76">Created</dt><dd style="margin: 0; padding: 8px 0; border-bottom: 1px solid #E4E4DF"><span style="font-family: 'JetBrains Mono', monospace">2026-10-22</span> <span style="color: #696E76">by a.lepp</span></dd>
+          </dl>
+          <div style="padding: 20px 24px 0; display: flex; flex-direction: column; gap: 8px">
+            <h3 style="margin: 0; font-size: 13px; line-height: 20px; font-weight: 600">Price history</h3>
+            <div style="border-top: 1px solid #E4E4DF">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) 96px; height: 32px; align-items: center; border-bottom: 1px solid #E4E4DF; font-family: 'JetBrains Mono', monospace"><span style="font-size: 12px">from 2026-10-22</span><span style="text-align: right">7.50</span></div>
+            </div>
+          </div>
+          <div style="padding: 16px 24px 0">
+            <div role="note" style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 4px; background: #E8F0F8; font-size: 12px; line-height: 16px">
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="flex: none; margin-top: 1px; fill: none; stroke: #1D5C96; stroke-width: 1.5"><circle cx="7" cy="7" r="6"></circle><path d="M7 6v4M7 4v.01"></path></svg>
+              <span>Activating makes it selectable in Add product. It can't go back to In design.</span>
+            </div>
+          </div>
+        </aside>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"wide":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const wide = !!this.props.wide;
+    const FAM = {
+      live: { fg: '#1E7445', bg: '#E7F3EC', bd: 'transparent', g: 'dot' },
+      draft: { fg: '#464A51', bg: '#EFEFEC', bd: 'transparent', g: 'dashed' },
+      ended: { fg: '#696E76', bg: '#FFFFFF', bd: '#CDCDC6', g: 'dash' }
+    };
+    const GLYPH = {
+      dot: (c) => ({ w: '6px', h: '6px', r: '50%', bg: c, b: 'none', t: 'none' }),
+      dashed: (c) => ({ w: '8px', h: '8px', r: '50%', bg: 'transparent', b: '1.5px dashed ' + c, t: 'none' }),
+      dash: (c) => ({ w: '8px', h: '2px', r: '1px', bg: c, b: 'none', t: 'none' })
+    };
+    const MAP = { 'Active': 'live', 'In design': 'draft', 'Retired': 'ended' };
+    const pill = (label) => { const f = FAM[MAP[label]]; return { label, fg: f.fg, bg: f.bg, bd: f.bd, g: GLYPH[f.g](f.fg) }; };
+    const O = (name, code, st, rec, price, unit, inUse, updated) => {
+      const sel = wide && code === 'DATA-10';
+      return { name, code, st: pill(st), rec, price, unit, inUse, updated, useC: inUse === '0' ? '#696E76' : '#16171A', nameC: st === 'Retired' ? '#464A51' : '#16171A', sel: sel ? 'true' : 'false', bg: sel ? '#EEF2FC' : '#FFFFFF', shadow: sel ? 'inset 2px 0 0 #2349B5' : 'none', dots: sel ? 1 : 0.55 };
+    };
+    const navItem = (label, opts) => Object.assign({ label, current: undefined, color: '#464A51', bg: 'transparent', weight: 400, shadow: 'none', count: '', failed: false }, opts || {});
+    const active = { current: 'page', color: '#16171A', bg: '#FFFFFF', weight: 500, shadow: '0 0 0 1px #E4E4DF' };
+    const seg = (label, on, n) => ({ label, on: on ? 'true' : 'false', n: n || '', bg: on ? '#FFFFFF' : 'transparent', c: on ? '#16171A' : '#464A51', sh: on ? '0 0 0 1px #E4E4DF' : 'none' });
+    return {
+      wide,
+      nav: [
+        { label: 'Customers', items: [navItem('Subscribers'), navItem('Parties')] },
+        { label: 'Products', items: [navItem('Product catalog', active), navItem('Products'), navItem('Orders', { count: '3' }), navItem('Numbers')] },
+        { label: 'Billing', items: [navItem('Billing runs', { failed: true }), navItem('Prepaid commands', { count: '2' }), navItem('Accounts'), navItem('Bills'), navItem('Payments'), navItem('Balances'), navItem('Billing settings')] },
+        { label: 'System', items: [navItem('Integrations'), navItem('Users')] }
+      ],
+      lifeSeg: [seg('All', true, '5'), seg('In design', false, '1'), seg('Active', false, '3'), seg('Retired', false, '1')],
+      recSeg: [seg('Any', true), seg('Monthly', false), seg('Daily', false)],
+      groups: [
+        { label: 'In design', n: '1', hint: '· not sellable yet', rows: [O('Data 10 GB', 'DATA-10', 'In design', 'Monthly', '7.50', 'month', '0', '2026-10-22')] },
+        { label: 'Active', n: '3', hint: '', rows: [
+          O('Mobile S', 'MOB-S', 'Active', 'Monthly', '9.90', 'month', '1,912', '2026-02-01'),
+          O('Mobile L', 'MOB-L', 'Active', 'Monthly', '24.90', 'month', '604', '2026-02-01'),
+          O('Prepaid Daily', 'PRE-D', 'Active', 'Daily', '0.49', 'day', '2,318', '2025-11-10')
+        ] },
+        { label: 'Retired', n: '1', hint: '· still billed for existing products', rows: [O('Mobile M 2024', 'MOB-M24', 'Retired', 'Monthly', '14.90', 'month', '37', '2026-01-31')] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

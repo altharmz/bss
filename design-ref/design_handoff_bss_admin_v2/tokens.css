@@ -1,0 +1,140 @@
+/* Ledger design tokens — BSS Admin v2.
+   Source of truth: artboards/Foundations.dc.html. Every value used in the
+   artboards maps to one of these. Light is the default; dark is opt-in via
+   [data-theme="dark"] or the OS preference. */
+
+:root {
+  /* Fonts (self-hosted via @fontsource/golos-text, @fontsource/jetbrains-mono) */
+  --font-ui: 'Golos Text', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Type scale: size / line-height / weight */
+  --type-page: 600 20px/28px var(--font-ui);        /* letter-spacing: -0.01em */
+  --type-section: 600 15px/20px var(--font-ui);
+  --type-body: 400 13px/20px var(--font-ui);
+  --type-body-strong: 500 13px/20px var(--font-ui);
+  --type-label: 500 12px/16px var(--font-ui);
+  --type-micro: 600 11px/14px var(--font-ui);       /* uppercase, letter-spacing: 0.06em */
+  --type-figure: 500 24px/32px var(--font-mono);    /* letter-spacing: -0.01em */
+  --type-num: 400 13px/20px var(--font-mono);       /* font-variant-numeric: tabular-nums */
+  --type-code: 400 12px/16px var(--font-mono);
+
+  /* Spacing */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;   /* page gutter */
+  --space-2xl: 32px;  /* between sections */
+  --space-3xl: 48px;
+
+  /* Radii */
+  --radius-xs: 2px;   /* checkbox, bars */
+  --radius-sm: 4px;   /* buttons, inputs, pills */
+  --radius-md: 6px;   /* panels, menus, toasts */
+  --radius-lg: 8px;   /* dialogs only */
+
+  /* Layout */
+  --sidebar-width: 216px;
+  --topbar-height: 48px;
+  --inspector-width: 400px;   /* shown at viewport >= 1536px */
+  --row-height: 36px;
+  --row-height-compact: 32px;
+  --header-row-height: 32px;
+  --control-height: 32px;
+  --control-height-sm: 28px;
+
+  /* Colour roles — light */
+  --color-bg: #FFFFFF;
+  --color-bg-subtle: #F7F7F5;
+  --color-bg-sunken: #EFEFEC;
+  --color-bg-hover: #F4F4F1;
+  --color-bg-selected: #EEF2FC;
+  --color-border: #E4E4DF;
+  --color-border-strong: #CDCDC6;
+  --color-rule: #16171A;
+  --color-ink-1: #16171A;
+  --color-ink-2: #464A51;
+  --color-ink-3: #696E76;
+  --color-ink-4: #A2A6AD;
+  --color-primary: #2349B5;
+  --color-primary-hover: #1B3B98;
+  --color-primary-tint: #EBF0FC;
+  --color-on-primary: #FFFFFF;
+  --color-negative: #B3261E;
+  --color-negative-hover: #951E18;
+  --color-negative-tint: #FCECEA;
+  --color-positive: #1E7445;
+  --color-positive-tint: #E7F3EC;
+  --color-warning: #8A5300;
+  --color-warning-border: #E8B45C;
+  --color-warning-tint: #FDF2DB;
+  --color-info: #1D5C96;
+  --color-info-tint: #E8F0F8;
+
+  /* Elevation */
+  --elev-popover: 0 1px 2px rgba(22, 23, 26, 0.06), 0 6px 16px rgba(22, 23, 26, 0.10);
+  --elev-dialog: 0 16px 40px rgba(22, 23, 26, 0.18), 0 0 0 1px rgba(22, 23, 26, 0.08);
+  --scrim: rgba(22, 23, 26, 0.36);
+
+  /* Focus */
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-primary);
+  --focus-halo: 0 0 0 3px var(--color-primary-tint);   /* inputs, with primary border */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #121315;
+    --color-bg-subtle: #18191C;
+    --color-bg-sunken: #202226;
+    --color-bg-hover: #1D1F23;
+    --color-bg-selected: #1B2643;
+    --color-border: #2A2D33;
+    --color-border-strong: #3B3F47;
+    --color-rule: #ECEDEF;
+    --color-ink-1: #ECEDEF;
+    --color-ink-2: #B6BAC1;
+    --color-ink-3: #8E939B;
+    --color-ink-4: #5E636B;
+    --color-primary: #7E9CF2;
+    --color-primary-hover: #9BB3F5;
+    --color-primary-tint: #1B2643;
+    --color-on-primary: #121315;
+    --color-negative: #F08A80;
+    --color-negative-tint: #3A1B19;
+    --color-positive: #6FCB96;
+    --color-positive-tint: #15301F;
+    --color-warning: #E8B45C;
+    --color-warning-tint: #33280F;
+    --color-info: #82B5E8;
+    --color-info-tint: #15283B;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #121315;
+  --color-bg-subtle: #18191C;
+  --color-bg-sunken: #202226;
+  --color-bg-hover: #1D1F23;
+  --color-bg-selected: #1B2643;
+  --color-border: #2A2D33;
+  --color-border-strong: #3B3F47;
+  --color-rule: #ECEDEF;
+  --color-ink-1: #ECEDEF;
+  --color-ink-2: #B6BAC1;
+  --color-ink-3: #8E939B;
+  --color-ink-4: #5E636B;
+  --color-primary: #7E9CF2;
+  --color-primary-hover: #9BB3F5;
+  --color-primary-tint: #1B2643;
+  --color-on-primary: #121315;
+  --color-negative: #F08A80;
+  --color-negative-tint: #3A1B19;
+  --color-positive: #6FCB96;
+  --color-positive-tint: #15301F;
+  --color-warning: #E8B45C;
+  --color-warning-tint: #33280F;
+  --color-info: #82B5E8;
+  --color-info-tint: #15283B;
+}

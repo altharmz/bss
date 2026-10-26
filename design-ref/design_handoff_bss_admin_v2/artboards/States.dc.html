@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>List and write states</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#2349B5}a:hover{color:#1B3B98}
+</style>
+</helmet>
+<div style="width: 1600px; min-height: 1640px; box-sizing: border-box; padding: 56px 64px 64px; background: #FFFFFF; color: #16171A; font-family: 'Golos Text', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: flex; flex-direction: column; gap: 56px">
+
+  <header style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 24px; border-bottom: 1px solid #16171A">
+    <div style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">BSS Admin · Ledger design system · States</div>
+    <h1 style="margin: 0; font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.015em">Every list has four states. Every write has four.</h1>
+    <p style="margin: 0; max-width: 820px; color: #464A51">States replace the table body in place: the page header, filters and column headers stay, so the operator never loses their place. No illustrations; the copy says what happened and what to do next.</p>
+  </header>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">List states</h2>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px">
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span style="font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">loading</span>
+        <div aria-busy="true" style="border: 1px solid #E4E4DF; border-radius: 6px; overflow: hidden; height: 336px">
+          <div style="display: grid; grid-template-columns: minmax(0, 1fr) 96px 80px; height: 32px; align-items: center; background: #F7F7F5; border-bottom: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76"><span style="padding-left: 16px">Name</span><span>Status</span><span style="text-align: right; padding-right: 16px">Balance</span></div>
+          <sc-for list="{{ skeleton }}" as="s" hint-placeholder-count="8">
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) 96px 80px; height: 36px; align-items: center; border-bottom: 1px solid #E4E4DF">
+              <span style="padding-left: 16px"><span style="display: block; height: 10px; border-radius: 2px; background: #EFEFEC; width: {{ s.a }}"></span></span>
+              <span><span style="display: block; height: 10px; width: 52px; border-radius: 2px; background: #EFEFEC"></span></span>
+              <span style="display: flex; justify-content: flex-end; padding-right: 16px"><span style="display: block; height: 10px; border-radius: 2px; background: #EFEFEC; width: {{ s.b }}"></span></span>
+            </div>
+          </sc-for>
+        </div>
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">Skeleton rows at real row height with real column widths; numbers right-aligned. Shown after 200 ms, so fast loads never flash.</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span style="font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">error</span>
+        <div style="border: 1px solid #E4E4DF; border-radius: 6px; overflow: hidden; height: 336px; display: flex; flex-direction: column">
+          <div style="display: grid; grid-template-columns: minmax(0, 1fr) 96px 80px; height: 32px; align-items: center; background: #F7F7F5; border-bottom: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76"><span style="padding-left: 16px">Name</span><span>Status</span><span style="text-align: right; padding-right: 16px">Balance</span></div>
+          <div role="alert" style="padding: 32px 24px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 600"><span aria-hidden="true" style="width: 7px; height: 7px; background: #B3261E; transform: rotate(45deg)"></span>Couldn't load subscribers</div>
+            <div style="width: 100%; box-sizing: border-box; padding: 8px 10px; background: #F7F7F5; border-radius: 4px; font: 400 12px/16px 'JetBrains Mono', monospace; color: #464A51; word-break: break-all">GET /accountManagement/v4/billingAccount?status=active<br><span style="color: #B3261E">503 Service Unavailable</span> · 00:12:41</div>
+            <span style="color: #464A51">The account service didn't answer. Nothing was changed.</span>
+            <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Retry</button>
+          </div>
+        </div>
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">The failed call, status and time in mono, so it can be pasted into a ticket. Retry is secondary: it is a read.</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span style="font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">empty</span>
+        <div style="border: 1px solid #E4E4DF; border-radius: 6px; overflow: hidden; height: 336px; display: flex; flex-direction: column">
+          <div style="display: grid; grid-template-columns: minmax(0, 1fr) 96px 80px; height: 32px; align-items: center; background: #F7F7F5; border-bottom: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76"><span style="padding-left: 16px">Name</span><span>Status</span><span style="text-align: right; padding-right: 16px">Balance</span></div>
+          <div style="padding: 48px 24px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start">
+            <span style="font-weight: 600">No subscribers yet</span>
+            <span style="color: #464A51">A subscriber appears here when a billing account is created for a party.</span>
+            <button type="button" style="margin-top: 8px; height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">New subscriber</button>
+          </div>
+        </div>
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">Left-aligned with the table, not centred. One sentence of why, one optional action.</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <span style="font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">no results</span>
+        <div style="border: 1px solid #E4E4DF; border-radius: 6px; overflow: hidden; height: 336px; display: flex; flex-direction: column">
+          <div style="display: grid; grid-template-columns: minmax(0, 1fr) 96px 80px; height: 32px; align-items: center; background: #F7F7F5; border-bottom: 1px solid #E4E4DF; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76"><span style="padding-left: 16px">Name</span><span>Status</span><span style="text-align: right; padding-right: 16px">Balance</span></div>
+          <div style="padding: 48px 24px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start">
+            <span style="font-weight: 600">Nothing matches “nordwnd”</span>
+            <span style="color: #464A51">with Status <strong style="font-weight: 500">Suspended</strong> and Mode <strong style="font-weight: 500">Prepaid</strong>. Search looks at name, BA id and number.</span>
+            <button type="button" style="margin-top: 8px; height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #FFFFFF; color: #16171A; box-shadow: inset 0 0 0 1px #CDCDC6; font: 500 13px/20px 'Golos Text', sans-serif">Reset filters</button>
+          </div>
+        </div>
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">Names the query and every active filter, so the operator sees which one is excluding the row.</span>
+      </div>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; align-items: baseline; gap: 12px">
+      <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Write states · Record payment (M, 560)</h2>
+      <span style="font-size: 12px; line-height: 16px; color: #696E76">The same dialog through idle, busy, refused and unsure.</span>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+      <sc-for list="{{ writes }}" as="w" hint-placeholder-count="4">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <span style="font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">{{ w.state }}</span>
+          <div style="background: #8A8C90; padding: 32px; border-radius: 6px; display: flex; justify-content: center">
+            <div role="dialog" aria-modal="true" aria-label="Record payment" style="width: 560px; background: #FFFFFF; border-radius: 8px; box-shadow: 0 16px 40px rgba(22,23,26,0.18), 0 0 0 1px rgba(22,23,26,0.08); display: flex; flex-direction: column">
+              <div style="display: flex; align-items: center; gap: 12px; padding: 16px 20px 12px">
+                <h3 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Record payment</h3>
+                <span style="font-size: 12px; line-height: 16px; color: #696E76">Ivan Petrov · <span style="font-family: 'JetBrains Mono', monospace"><span>BA-</span>3F9A12C0</span></span>
+                <button type="button" aria-label="Close" style="margin-left: auto; width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" style="stroke: #464A51; stroke-width: 1.5"><path d="M2 2l8 8M10 2l-8 8"></path></svg></button>
+              </div>
+              <div style="padding: 4px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+                <div style="display: flex; gap: 24px; font-size: 12px; line-height: 16px; color: #696E76">
+                  <span>Balance <span style="font: 400 13px/20px 'JetBrains Mono', monospace; color: #B3261E; margin-left: 4px">−42.10</span></span>
+                  <span>Balance after <span style="font: 400 13px/20px 'JetBrains Mono', monospace; margin-left: 4px; color: {{ w.afterC }}">{{ w.after }}</span></span>
+                </div>
+                <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Amount received
+                  <span style="display: flex; align-items: stretch; width: 220px; height: 32px; border: 1px solid {{ w.fieldBd }}; border-radius: 4px; overflow: hidden; background: {{ w.fieldBg }}">
+                    <input type="text" value="{{ w.amount }}" readonly="{{ w.ro }}" style="flex: 1; min-width: 0; border: 0; padding: 0 8px 0 10px; background: transparent; text-align: right; font: 400 13px/20px 'JetBrains Mono', monospace; color: {{ w.fieldC }}">
+                    <span style="display: flex; align-items: center; padding: 0 10px; background: #F7F7F5; border-left: 1px solid #E4E4DF; font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">EUR</span>
+                  </span>
+                </label>
+                <sc-if value="{{ w.refused }}" hint-placeholder-val="{{ false }}">
+                  <div role="alert" style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 4px; background: #FCECEA">
+                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="flex: none; margin-top: 3px; fill: #B3261E"><rect x="3" y="3" width="8" height="8" rx="1" transform="rotate(45 7 7)"></rect></svg>
+                    <span><strong style="font-weight: 600">Refused.</strong> A single payment can't exceed 10,000.00 EUR. Check the amount and try again. <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #696E76">PAYMENT_LIMIT</span></span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ w.unsure }}" hint-placeholder-val="{{ false }}">
+                  <div role="alert" style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 4px; background: #FDF2DB">
+                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="flex: none; margin-top: 3px; fill: none; stroke: #8A5300; stroke-width: 1.5"><path d="M7 1.5l6 11H1z"></path><path d="M7 6v3M7 10.8v.01"></path></svg>
+                    <span style="display: flex; flex-direction: column; gap: 4px"><span><strong style="font-weight: 600">Unsure whether it was saved.</strong> The request was sent, then the connection timed out. The payment may already be recorded.</span><span style="color: #464A51">Refresh to read the account back before trying again. Don't record it twice.</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #696E76">POST /payment · timeout 30 s · req 7f3a91c2</span></span>
+                  </div>
+                </sc-if>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: #F7F7F5; border-top: 1px solid #E4E4DF; border-radius: 0 0 8px 8px">
+                <span style="font-size: 12px; line-height: 16px; color: #696E76">{{ w.footNote }}</span>
+                <button type="button" style="margin-left: auto; height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; font: 500 13px/20px 'Golos Text', sans-serif; color: {{ w.cancelC }}">{{ w.cancel }}</button>
+                <button type="button" style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: #2349B5; color: #FFFFFF; font: 500 13px/20px 'Golos Text', sans-serif"><sc-if value="{{ w.busy }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 2px solid rgba(255,255,255,0.35); border-top-color: #FFFFFF"></span></sc-if>{{ w.primary }}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":1640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const W = (o) => Object.assign({ ro: false, refused: false, unsure: false, busy: false, fieldBd: '#CDCDC6', fieldBg: '#FFFFFF', fieldC: '#16171A', cancel: 'Cancel', cancelC: '#464A51', afterC: '#16171A' }, o);
+    return {
+      skeleton: [{ a: '62%', b: '44px' }, { a: '78%', b: '56px' }, { a: '48%', b: '40px' }, { a: '70%', b: '60px' }, { a: '55%', b: '36px' }, { a: '66%', b: '52px' }, { a: '44%', b: '48px' }, { a: '72%', b: '40px' }],
+      writes: [
+        W({ state: 'idle', amount: '42.10', after: '0.00', footNote: 'Enter records it with today’s business date.', primary: 'Record 42.10 EUR' }),
+        W({ state: 'busy', amount: '42.10', after: '0.00', ro: true, busy: true, fieldBg: '#F7F7F5', fieldC: '#464A51', cancelC: '#A2A6AD', footNote: 'Saving. Don’t close this window.', primary: 'Recording…' }),
+        W({ state: 'refused · input kept', amount: '42,100.00', after: '42,057.90', refused: true, fieldBd: '#B3261E', footNote: 'Nothing was recorded.', primary: 'Record 42,100.00 EUR' }),
+        W({ state: 'unsure · network or 5xx', amount: '42.10', after: '0.00', ro: true, unsure: true, fieldBg: '#F7F7F5', fieldC: '#464A51', cancel: 'Close', footNote: 'No retry here, by design.', primary: 'Refresh account' })
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

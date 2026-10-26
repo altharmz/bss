@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Transfer balance dialog</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 2560px; min-height: 820px; box-sizing: border-box; padding: 40px 48px 48px; background: #FFFFFF; color: #16171A; font-family: 'Golos Text', system-ui, sans-serif; font-size: 13px; line-height: 20px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px; align-items: start">
+
+  <sc-for list="{{ frames }}" as="f" hint-placeholder-count="4">
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: baseline; gap: 10px">
+        <span style="font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">{{ f.n }}</span>
+        <span style="font-weight: 600">{{ f.caption }}</span>
+        <span style="font-size: 12px; line-height: 16px; color: #696E76">{{ f.sub }}</span>
+      </div>
+      <div style="background: #8A8C90; border-radius: 6px; padding: 32px 16px; min-height: 640px; box-sizing: border-box; display: flex; justify-content: center; align-items: flex-start">
+        <div role="dialog" aria-modal="true" aria-label="Transfer balance" style="width: 560px; max-width: 100%; background: #FFFFFF; border-radius: 8px; box-shadow: 0 16px 40px rgba(22,23,26,0.18), 0 0 0 1px rgba(22,23,26,0.08); display: flex; flex-direction: column">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 16px 20px 12px">
+            <h2 style="margin: 0; font-size: 15px; line-height: 20px; font-weight: 600">Transfer balance</h2>
+            <span style="font-size: 12px; line-height: 16px; color: #696E76">from Maria Sokolova</span>
+            <button type="button" aria-label="Close" style="margin-left: auto; width: 28px; height: 28px; border: 0; border-radius: 4px; background: transparent; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" style="stroke: #464A51; stroke-width: 1.5"><path d="M2 2l8 8M10 2l-8 8"></path></svg></button>
+          </div>
+          <ol aria-label="Steps" style="margin: 0; padding: 0 20px 12px; list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; border-bottom: 1px solid #E4E4DF">
+            <sc-for list="{{ f.steps }}" as="s" hint-placeholder-count="4">
+              <li aria-current="{{ s.cur }}" style="display: flex; flex-direction: column; gap: 6px">
+                <span aria-hidden="true" style="height: 3px; border-radius: 2px; background: {{ s.bar }}"></span>
+                <span style="font-size: 12px; line-height: 16px; font-weight: {{ s.w }}; color: {{ s.c }}">{{ s.label }}</span>
+              </li>
+            </sc-for>
+          </ol>
+
+          <sc-if value="{{ f.s1 }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+              <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Recipient's number
+                <span style="position: relative; display: flex; align-items: center">
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="position: absolute; left: 10px; fill: none; stroke: #696E76; stroke-width: 1.5"><circle cx="6" cy="6" r="4.5"></circle><path d="M9.5 9.5L13 13"></path></svg>
+                  <input type="text" value="+372 5644 0193" style="width: 100%; height: 32px; box-sizing: border-box; padding: 0 10px 0 30px; border: 1px solid #2349B5; box-shadow: 0 0 0 3px #EBF0FC; border-radius: 4px; font: 400 13px/20px 'JetBrains Mono', monospace; color: #16171A; outline: none">
+                </span>
+              </label>
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">Found</span>
+                <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; padding: 10px 12px; border-radius: 4px; background: #EEF2FC; box-shadow: inset 0 0 0 1px #2349B5">
+                  <span style="font-weight: 600">Anna Kask</span>
+                  <span style="display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px 0 6px; border-radius: 4px; background: #E7F3EC; color: #1E7445; font-size: 12px; line-height: 16px; font-weight: 500; justify-self: end"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 50%; background: #1E7445"></span>Active</span>
+                  <span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #464A51"><span style="color: #696E76">BA-</span>5E7C21D9 · +372 5644 0193</span>
+                  <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #464A51; justify-self: end">Prepaid</span>
+                </div>
+              </div>
+              <span style="font-size: 12px; line-height: 16px; color: #696E76">Only active prepaid accounts can receive a transfer. Postpaid or closed accounts are shown, but can't be picked.</span>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ f.s2 }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 16px">
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); align-items: center; gap: 8px">
+                <div style="display: flex; flex-direction: column; padding: 8px 12px; border: 1px solid #E4E4DF; border-radius: 4px"><span style="font-size: 12px; line-height: 16px; color: #696E76">From</span><span style="font-weight: 500">Maria Sokolova</span><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">BA-C2290A5E</span></div>
+                <svg aria-hidden="true" width="16" height="10" viewBox="0 0 16 10" style="fill: none; stroke: #696E76; stroke-width: 1.5; justify-self: center"><path d="M1 5h13M10 1l4 4-4 4"></path></svg>
+                <div style="display: flex; flex-direction: column; padding: 8px 12px; border: 1px solid #E4E4DF; border-radius: 4px"><span style="font-size: 12px; line-height: 16px; color: #696E76">To</span><span style="font-weight: 500">Anna Kask</span><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">BA-5E7C21D9</span></div>
+              </div>
+              <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; line-height: 16px; font-weight: 500; color: #464A51">Amount
+                <span style="display: flex; align-items: stretch; width: 200px; height: 32px; border: 1px solid #CDCDC6; border-radius: 4px; overflow: hidden">
+                  <input type="text" value="5.00" style="flex: 1; min-width: 0; border: 0; padding: 0 8px 0 10px; text-align: right; font: 400 13px/20px 'JetBrains Mono', monospace; color: #16171A">
+                  <span style="display: flex; align-items: center; padding: 0 10px; background: #F7F7F5; border-left: 1px solid #E4E4DF; font: 400 11px/14px 'JetBrains Mono', monospace; color: #696E76">EUR</span>
+                </span>
+                <span style="font-weight: 400; color: #696E76">Up to <span style="font-family: 'JetBrains Mono', monospace; color: #16171A">13.50</span>, the available balance. Reserved money can't be moved.</span>
+              </label>
+              <div style="border-top: 1px solid #16171A">
+                <div style="display: grid; grid-template-columns: minmax(0, 1fr) 88px 24px 88px; height: 28px; align-items: center; font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76; border-bottom: 1px solid #E4E4DF"><span>After the transfer</span><span style="text-align: right">Now</span><span></span><span style="text-align: right">After</span></div>
+                <div style="display: grid; grid-template-columns: minmax(0, 1fr) 88px 24px 88px; height: 32px; align-items: center; border-bottom: 1px solid #E4E4DF"><span>Maria · available</span><span style="text-align: right; font-family: 'JetBrains Mono', monospace; color: #464A51">13.50</span><span aria-hidden="true" style="text-align: center; color: #A2A6AD">→</span><span style="text-align: right; font-family: 'JetBrains Mono', monospace; font-weight: 500">8.50</span></div>
+                <div style="display: grid; grid-template-columns: minmax(0, 1fr) 88px 24px 88px; height: 32px; align-items: center; border-bottom: 1px solid #E4E4DF"><span>Anna · ledger</span><span style="text-align: right; font-family: 'JetBrains Mono', monospace; color: #464A51">3.20</span><span aria-hidden="true" style="text-align: center; color: #A2A6AD">→</span><span style="text-align: right; font-family: 'JetBrains Mono', monospace; font-weight: 500">8.20</span></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ f.s3 }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+              <div style="display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; background: #F7F7F5; border-radius: 4px">
+                <span style="font-size: 11px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #696E76">You are transferring</span>
+                <span style="font: 500 24px/32px 'JetBrains Mono', monospace; letter-spacing: -0.01em">5.00<span style="font-size: 11px; font-weight: 400; color: #696E76; margin-left: 4px">EUR</span></span>
+                <dl style="margin: 4px 0 0; display: grid; grid-template-columns: 48px minmax(0, 1fr); row-gap: 4px; font-size: 13px; line-height: 20px">
+                  <dt style="color: #696E76">From</dt><dd style="margin: 0">Maria Sokolova <span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">BA-C2290A5E</span></dd>
+                  <dt style="color: #696E76">To</dt><dd style="margin: 0">Anna Kask <span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">BA-5E7C21D9 · +372 5644 0193</span></dd>
+                </dl>
+              </div>
+              <div role="note" style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 4px; background: #FDF2DB">
+                <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="flex: none; margin-top: 3px; fill: none; stroke: #8A5300; stroke-width: 1.5"><path d="M7 1.5l6 11H1z"></path><path d="M7 6v3M7 10.8v.01"></path></svg>
+                <span><strong style="font-weight: 600">This is final.</strong> A transfer can't be undone here. Correcting it needs a new transfer from Anna Kask, with her consent.</span>
+              </div>
+              <label style="display: flex; align-items: flex-start; gap: 8px"><input type="checkbox" checked="" style="width: 14px; height: 14px; margin: 3px 0 0; accent-color: #2349B5">I confirmed the amount and the recipient's number with the subscriber</label>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ f.s4 }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+              <div style="display: flex; align-items: center; gap: 10px">
+                <span style="font: 500 15px/20px 'JetBrains Mono', monospace">5.00 EUR</span>
+                <span style="color: #696E76">to Anna Kask</span>
+                <span style="margin-left: auto; font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">CMD-26-10-88231</span>
+              </div>
+              <ol aria-label="Command progress" style="margin: 0; padding: 0; list-style: none; border-top: 1px solid #16171A">
+                <li style="display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; height: 36px; border-bottom: 1px solid #E4E4DF">
+                  <span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 50%; background: #1E7445; display: flex; align-items: center; justify-content: center"><svg width="8" height="8" viewBox="0 0 8 8" style="fill: none; stroke: #FFFFFF; stroke-width: 1.6"><path d="M1 4.2l2 2L7 2"></path></svg></span>
+                  <span>Queued</span><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">14:09:02</span>
+                </li>
+                <li style="display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; height: 36px; border-bottom: 1px solid #E4E4DF; background: #E8F0F8; margin: 0 -8px; padding: 0 8px">
+                  <span aria-hidden="true" style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; border: 2px solid #1D5C96; background: linear-gradient(90deg, #1D5C96 50%, #FFFFFF 50%)"></span>
+                  <span style="font-weight: 600; color: #1D5C96">Running · moving the money</span><span style="font: 400 12px/16px 'JetBrains Mono', monospace; color: #696E76">14:09:03</span>
+                </li>
+                <li style="display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; height: 36px; border-bottom: 1px solid #E4E4DF; color: #696E76">
+                  <span aria-hidden="true" style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid #CDCDC6"></span>
+                  <span>Succeeded</span><span></span>
+                </li>
+              </ol>
+              <span style="display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: #696E76"><span aria-hidden="true" style="width: 12px; height: 12px; box-sizing: border-box; border-radius: 50%; border: 2px solid #E4E4DF; border-top-color: #1D5C96"></span>Checking every 2 s · last check <span style="font-family: 'JetBrains Mono', monospace">14:09:07</span></span>
+              <div style="display: grid; grid-template-columns: 88px minmax(0, 1fr); row-gap: 6px; font-size: 12px; line-height: 16px; color: #464A51; padding-top: 8px; border-top: 1px solid #E4E4DF">
+                <span style="font-weight: 600; color: #1E7445">Succeeded</span><span>Toast, dialog closes, both balances refresh.</span>
+                <span style="font-weight: 600; color: #B3261E">Failed</span><span>The command's reason and Retry: failures here are technical and safe to retry.</span>
+                <span style="font-weight: 600; color: #8A5300">No answer</span><span>After 60 s: "Still running". It continues in Prepaid commands.</span>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: #F7F7F5; border-top: 1px solid #E4E4DF; border-radius: 0 0 8px 8px">
+            <span style="font-size: 12px; line-height: 16px; color: #696E76">{{ f.foot }}</span>
+            <button type="button" style="margin-left: auto; height: 32px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; color: #464A51; font: 500 13px/20px 'Golos Text', sans-serif">{{ f.back }}</button>
+            <button type="button" style="height: 32px; padding: 0 12px; border: 0; border-radius: 4px; font: 500 13px/20px 'Golos Text', sans-serif; background: {{ f.pBg }}; color: {{ f.pC }}; box-shadow: {{ f.pSh }}">{{ f.primary }}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":2560,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const labels = ['Recipient', 'Amount', 'Confirm', 'Result'];
+    const steps = (n) => labels.map((label, i) => ({
+      label: (i + 1) + ' ' + label,
+      cur: i === n ? 'step' : undefined,
+      bar: i < n ? '#16171A' : (i === n ? '#2349B5' : '#E4E4DF'),
+      c: i <= n ? '#16171A' : '#696E76',
+      w: i === n ? 600 : 400
+    }));
+    const F = (n, o) => Object.assign({ n: 'step ' + (n + 1) + ' / 4', steps: steps(n), s1: n === 0, s2: n === 1, s3: n === 2, s4: n === 3, pBg: '#2349B5', pC: '#FFFFFF', pSh: 'none' }, o);
+    return {
+      frames: [
+        F(0, { caption: 'Find the recipient by number', sub: 'typed or pasted; resolved live', foot: 'Nothing is reserved yet.', back: 'Cancel', primary: 'Next: amount' }),
+        F(1, { caption: 'Amount', sub: 'validated against available, not ledger', foot: 'Both balances shown before and after.', back: 'Back', primary: 'Next: review' }),
+        F(2, { caption: 'Final confirmation', sub: 'the only place the transfer can be stopped', foot: 'Enter does nothing on this step.', back: 'Back', primary: 'Transfer 5.00 EUR' }),
+        F(3, { caption: 'Progress', sub: 'polls the prepaid command', foot: 'Closing keeps the command running.', back: 'Close', primary: 'Done', pBg: '#EFEFEC', pC: '#A2A6AD' })
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
