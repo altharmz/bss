@@ -517,6 +517,7 @@ items:
   - {id: ui.system.billingStatus, area: ui, stage: 5, title: "GET /billing-status as key/value"}
   - {id: ui.system.schema, area: ui, stage: 5, title: "Link to the BssBillingAccount JSON Schema"}
   - {id: ui.shell.section.system, area: ui, stage: 5, title: "Sidebar System section"}
+  - {id: ui.kit, area: ui, stage: 5, title: "Ledger primitive gallery"}
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}
   - {id: ui.notFound, area: ui, reason: "not-found page, not a product feature"}

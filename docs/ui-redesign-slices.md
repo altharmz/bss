@@ -125,7 +125,8 @@ Status: `todo` · `done: <commit subject>` · `split`
 | # | Slice | Done when | Status |
 |---|---|---|---|
 | 1 | Tokens, fonts, legacy aliases, style guard test, `make web-shots` | v2 tokens and fonts live; every screen works through the aliases; the guard test passes; shots are written | done: Establish Ledger tokens and visual reference captures |
-| 2 | Button, fields, Segmented, StatusPill with explicit kinds, Tag/Flag/Badge, Amount, Id, `/ui-kit` | Every D4 row tested; `Pill` deleted; `/ui-kit` matches Components buttons, fields and pills | todo |
+| 2a | Button, fields, Segmented, initial `/ui-kit` | Busy Button, radio Segmented and native field behavior tested; controls gallery at both widths | done: Build Ledger buttons, fields and segmented controls |
+| 2b | StatusPill with explicit kinds, Tag/Flag/Badge, Amount, Id, screen migrations, complete `/ui-kit` | Every D4 row tested; every Pill caller migrated and Pill/old status tokens deleted; danger-outline callers migrated and compatibility removed; Amount and Id adopted per slice 2; gallery covers every D4 status, amounts, ids and tags; all touched screen inline styles removed | todo |
 | 3 | Table, list states, Tabs, Menu, Note, KeyValue, MoneyStrip, PageHeader, Panel, Dialog, write states, Toast | Keyboard tests for Tabs, Menu and rows; Footer refused and unsure notes; `/ui-kit` matches Components and States | todo |
 | 4 | Shell: sidebar, top bar, business-date chip | Chip drift states tested from the context; sidebar matches the artboard | todo |
 | 5 | Subscribers list | Search and `/`, filters with counts, over-limit flag; matches Subscribers.dc.html at 1280 | todo |

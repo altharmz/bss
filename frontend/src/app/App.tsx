@@ -1,3 +1,4 @@
+import { UiKitScreen } from '../screens/UiKit';
 import { getJson } from '../api/client';
 import { useResource } from '../api/useResource';
 import { BillingRunsScreen } from '../screens/BillingRuns';
@@ -35,6 +36,8 @@ const CONTEXT = '/internal/v1/context';
 function Screen() {
   const { route } = useRouter();
   switch (route.name) {
+    case 'uiKit':
+      return <UiKitScreen />;
     case 'numbers':
       return <NumbersScreen />;
     case 'users':

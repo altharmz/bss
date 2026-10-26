@@ -79,7 +79,7 @@ describe('Modal', () => {
     fireEvent.click(screen.getByRole('dialog').parentElement as HTMLElement);
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(3);
-    expect(screen.getByRole('dialog').style.width).toBe('720px');
+    expect(screen.getByRole('dialog').style.getPropertyValue('--modal-width')).toBe('720px');
   });
 });
 

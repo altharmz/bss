@@ -16,6 +16,7 @@ import {
 // mistaken for the app's /billing-status, which Caddy routes to the backend.
 
 export type Route =
+  | { name: 'uiKit' }
   | { name: 'signIn' }
   | { name: 'password' }
   | { name: 'users' }
@@ -39,6 +40,7 @@ export type Route =
 const SUBSCRIBER = /^\/subscribers\/([0-9a-fA-F-]{36})\/?$/;
 
 export function parseRoute(path: string): Route {
+  if (path === '/ui-kit' || path === '/ui-kit/') return { name: 'uiKit' };
   if (path === '/sign-in') return { name: 'signIn' };
   if (path === '/change-password') return { name: 'password' };
   if (path === '/users') return { name: 'users' };
@@ -69,6 +71,8 @@ export function parseRoute(path: string): Route {
 
 export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
   switch (route.name) {
+    case 'uiKit':
+      return '/ui-kit';
     case 'signIn':
       return '/sign-in';
     case 'password':

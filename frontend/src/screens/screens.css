@@ -680,3 +680,32 @@
 .bss-product-error {
   margin-right: auto;
 }
+
+/* Ledger primitive gallery. */
+.ui-kit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xl);
+}
+.ui-kit h1 {
+  margin: 0;
+  font: var(--type-page);
+  letter-spacing: var(--tracking-page);
+}
+.ui-kit h2 {
+  margin: 0 0 var(--space-lg);
+  font: var(--type-section);
+}
+.ui-kit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+.ui-kit-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-xl);
+  max-width: 960px;
+}

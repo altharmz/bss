@@ -116,3 +116,14 @@ faces. New CSS uses the Ledger role and type tokens; legacy aliases bridge scree
 the cleanup slice. `ui/styleGuard.test.ts` checks CSS literals, font weights and alias
 coverage. `make web-shots` captures seeded pages at both design widths without billing
 writes; screenshot output is ignored.
+
+### Ledger controls (slice 2a)
+
+`Button` supports primary, secondary, danger and quiet variants, `small`, quiet
+`tone="negative"`, and `busy`/`busyLabel`. Busy disables the button and adds its spinner.
+The legacy danger-outline variant remains for the screen migrations in 2b.
+`Field` wraps its control in a label, with optional `help` and `error`. `SelectField`,
+`DateField`, `MoneyField` (string value and currency suffix) and `Checkbox` preserve native
+handlers. `TextInput` retains its `mono` and runtime `width` API.
+`Segmented` defaults to filter buttons (`aria-pressed`); `as="radio"` uses radiogroup/radio
+semantics. `/ui-kit` previews these primitives without screen-specific reads or writes.
