@@ -124,7 +124,7 @@ API: `POST/PATCH /tmf-api/partyManagement/v5/{individual|organization}`,
 
 ### Subscriber card (`ui.subscriber.card`) - `screens/SubscriberCard.tsx`
 
-Ledger v2 slice 6a: the identity header has account/customer statuses, a PREPAID or POSTPAID Tag, BA Id, subscriber number, financial-account and Orders links, and the prepaid daily schedule. Add product is secondary. More actions opens Record payment for postpaid and offers Delete… only for an empty deletable account. Money strips and tabs remain in slice 6b.
+Ledger v2 slice 6a: the identity header has account/customer statuses, a PREPAID or POSTPAID Tag, BA Id, subscriber number, financial-account and Orders links, and the prepaid daily schedule. Add product is secondary. More actions opens Record payment for postpaid and offers Delete… only for an empty deletable account. Slice 6b1 adds both full-width MoneyStrips and a semantic Account KeyValue summary with the existing Refund action and financial-account link. Prepaid shows the loaded ledger/reserved/available equation, earliest paid-through with a business-date relative hint, shortfall, suspension causes and Commands link; its primary is Top up and Hold replaces the strip label Hold funds. Postpaid shows Balance, strict over-limit warning, cycle/next bill and bill dues, with primary Record payment. Prepaid balance failures render a Note below the strip. Tabs and the Overview grid remain in slice 6b2; existing panels and eager loaders stay mounted.
 
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.

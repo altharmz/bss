@@ -2,6 +2,8 @@
 
 ## Ledger v2: visual redesign (designed 2026-10-26)
 
+- Built slice 6b1: prepaid ledger/reserved/available MoneyStrip, paid-through and shortfall, postpaid credit-limit boundary/cycle/dues strip, existing money actions and balance-error Note, and semantic Account KeyValue with Refund and financial-account link. Tests cover equation, marker/value separation, primary actions, exact/above/below/no-limit boundaries and definition pairs. Split 6b for size: panel tabs, hashes, loaded counts, Overview grid and remaining tests are explicit in 6b2. Record payment stays a secondary prepaid strip action as D12 requires; eager loaders and HTTP requests unchanged. No design deviations.
+
 - Built slice 6a: subscriber identity header without a panel, account/customer pills, uppercase mode Tag, metadata links and daily prepaid schedule; secondary Add product and More actions with postpaid payment and conditional negative Delete. Split slice 6 for size: both money strips, Account summary and all tabs/panel migration stay in 6b. Existing money entry buttons and panels remain until 6b; requests unchanged.
 
 - Built slice 5: Subscribers PageHeader/filtered count, icon search and slash shortcut, wrapping counted state/mode filters, descriptive no-results, seven-column page table and strict over-limit Flag. Existing prepaid marker moves to Mode. Boundary, shortcut, placeholder, no-results and filtered-count tests added; requests unchanged. No design deviations.

@@ -40,6 +40,7 @@ export function KeyValue({ items }: { items: [ReactNode, ReactNode][] }) {
 }
 
 export interface MoneyFigure {
+  ui?: string;
   label: ReactNode;
   value: ReactNode;
   sub?: ReactNode;
@@ -65,6 +66,7 @@ export function MoneyStrip({
         <Fragment key={index}>
           {divider.includes(index) && <span className="money-divider" aria-hidden="true" />}
           <div
+            data-ui={figure.ui}
             className={`money-figure${figure.emphasis ? ` emphasis-${figure.emphasis}` : ''}${figure.tone ? ` tone-${figure.tone}` : ''}`}
           >
             <span className="money-label">{figure.label}</span>

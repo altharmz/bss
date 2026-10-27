@@ -198,6 +198,64 @@ function productRow(name: string): HTMLElement {
 }
 
 describe('subscriber card', () => {
+  it.each([
+    [-500.01, 500, 'Over by 0.01'],
+    [-500, 500, null],
+    [-499.99, 500, null],
+    [-1, null, null],
+  ])('shows the postpaid over-limit boundary for %s and %s', async (amount, limit, caption) => {
+    backend(
+      {},
+      {
+        ...ACCOUNT,
+        accountBalance: [
+          { balanceType: 'currentBalance', amount: usd(amount), '@type': 'AccountBalance' },
+        ],
+        creditLimit: limit === null ? null : usd(limit),
+      },
+    );
+    await open();
+    const strip = expectUi('ui.subscriber.moneyStrip');
+    if (caption) expect(within(strip).getByText(caption)).toBeTruthy();
+    else expect(within(strip).queryByText(/^Over by/)).toBeNull();
+    expect(within(strip).getByText('next bill 2026-10-28')).toBeTruthy();
+    expect(within(strip).getByRole('button', { name: 'Record payment' }).className).toContain(
+      'primary',
+    );
+    expect(within(strip).queryByText('Reserved')).toBeNull();
+  });
+
+  it('renders the account summary as definition pairs and retains the financial-account link', async () => {
+    backend(
+      {},
+      {
+        ...ACCOUNT,
+        financialAccount: {
+          id: 'fa',
+          name: 'Receivables',
+          '@type': 'FinancialAccountRef',
+          '@referredType': 'FinancialAccount',
+        },
+      },
+    );
+    await open();
+    const summary = expectUi('ui.subscriber.account');
+    expect(summary.querySelector('dl')?.className).toBe('bss-key-value');
+    expect(Array.from(summary.querySelectorAll('dt')).map((el) => el.textContent)).toEqual([
+      'Currency',
+      'Billing cycle day',
+      'Next cycle',
+      'Credit limit',
+      'Available incl. credit',
+      'Due on bills',
+      'Unused credit',
+      'Financial account',
+    ]);
+    expect(within(summary).getByRole('link', { name: 'Receivables' }).getAttribute('href')).toBe(
+      '/financial-accounts',
+    );
+  });
+
   it('links the account to its orders', async () => {
     backend({}, ACCOUNT);
     await open();
@@ -245,16 +303,19 @@ describe('subscriber card', () => {
       await screen.findByText('Active', { selector: '.subscriber-meta .status-pill' }),
     ).toBeTruthy();
 
-    const kpis = panel('Billing account');
-    const balance = within(kpis).getByText('−5,784.19');
-    expect(balance.className).toContain('negative');
-    expect(within(kpis).getByText('In arrears')).toBeTruthy();
+    const strip = expectUi('ui.subscriber.moneyStrip');
+    const balance = within(strip).getByText('−5,784.19');
+    expect(balance.closest('.bss-amount')?.className).toContain('negative');
+    expect(within(strip).getByText('In arrears')).toBeTruthy();
+    const kpis = expectUi('ui.subscriber.account');
     expect(within(kpis).getByText('USD')).toBeTruthy();
     expect(within(kpis).getByText('Day 28')).toBeTruthy();
-    expect(within(kpis).getByText('next cycle 2026-10-28')).toBeTruthy();
+    expect(within(kpis).getByText('2026-10-28')).toBeTruthy();
     expect(within(kpis).getByText('500.00')).toBeTruthy();
     // available incl. credit = -5,784.19 + 500.00
-    expect(within(kpis).getByText('−5,284.19').className).toContain('negative');
+    expect(within(kpis).getByText('−5,284.19').closest('.bss-amount')?.className).toContain(
+      'negative',
+    );
     // breadcrumbs end in the customer's name
     const crumbs = screen.getByRole('navigation', { name: 'Breadcrumbs' });
     expect(await within(crumbs).findByText('Olga Kuznetsova')).toBeTruthy();
@@ -1168,6 +1229,25 @@ describe('prepaid card', () => {
   const prepaidProduct = (id: string, over: Record<string, unknown>) =>
     product(id, { paidThrough: '2026-10-20', suspensionCause: null, needs_topup: null, ...over });
 
+  it('bases the paid-through hint on the business date and keeps error notes below the strip', async () => {
+    backend(
+      {
+        [BUCKETS]: () => tmfError(503, 'Unavailable'),
+        [`GET ${INTERNAL}/products`]: () => json([prepaidProduct(P1, {})], { total: 1 }),
+      },
+      PREPAID,
+    );
+    await open();
+    const strip = expectUi('ui.subscriber.moneyStrip');
+    expect(await within(strip).findByText('in 19 days')).toBeTruthy();
+    const note = await within(strip).findByRole('alert');
+    expect(note.parentElement).toBe(strip);
+    expect(strip.firstElementChild?.className).toBe('bss-money-strip');
+    expect(note.previousElementSibling).toBe(strip.firstElementChild);
+    expect(within(expectUi('ui.subscriber.prepaid.available')).getByText('—')).toBeTruthy();
+    expect(within(expectUi('ui.subscriber.prepaid.reserved')).getByText('—')).toBeTruthy();
+  });
+
   it('keeps ledger, available, reserved, paid-through and shortfall distinct', async () => {
     backend(
       {
@@ -1194,22 +1274,33 @@ describe('prepaid card', () => {
       PREPAID,
     );
     await open();
-    const kpis = panel('Billing account');
+    const kpis = expectUi('ui.subscriber.moneyStrip');
     const figure = (label: string) =>
-      (within(kpis).getByText(label).parentElement as HTMLElement).textContent;
+      (within(kpis).getByText(label).closest('.money-figure') as HTMLElement).textContent;
     expect(await within(kpis).findByText('100.50')).toBeTruthy();
     expect(figure('Ledger')).toContain('120.00');
     expect(figure('Available')).toContain('100.50');
     expect(figure('Reserved')).toContain('19.50');
+    expect(
+      Array.from(kpis.querySelectorAll('.money-operator')).map((el) => el.textContent),
+    ).toEqual(['−', '=']);
+    expect(within(kpis).getByRole('button', { name: 'Top up' }).className).toContain('primary');
+    expect(within(kpis).getByRole('button', { name: 'Hold' })).toBeTruthy();
+    expect(expectUi('ui.subscriber.prepaid.available').textContent).toContain('100.50');
+    expect(expectUi('ui.subscriber.prepaid.reserved').textContent).toContain('19.50');
     expect(await within(kpis).findByText('2026-10-12')).toBeTruthy(); // the earliest
     expect(figure('Paid through')).toContain('2026-10-12');
     expect(figure('Shortfall')).toContain('17.75');
-    expect(figure('Shortfall')).toContain('needs top-up: renewal needs 30.00, available 12.25');
+    expect(figure('Shortfall')).toContain('renewal needs 30.00, available 12.25');
     expect(figure('Shortfall')).toContain('Suspension: funding ran out');
     // none of the postpaid-only figures
     expect(within(kpis).queryByText('Credit limit')).toBeNull();
     expect(within(kpis).queryByText('Available incl. credit')).toBeNull();
     expect(within(kpis).queryByText('In arrears')).toBeNull();
+    expect(within(expectUi('ui.subscriber.account')).queryByText('Credit limit')).toBeNull();
+    expect(
+      within(expectUi('ui.subscriber.account')).queryByText('Available incl. credit'),
+    ).toBeNull();
   });
 
   it('shows no shortfall for a funded account, and a debt as negative available', async () => {
@@ -1221,23 +1312,25 @@ describe('prepaid card', () => {
       PREPAID,
     );
     await open();
-    const kpis = panel('Billing account');
-    expect((await within(kpis).findByText('−5.00')).className).toContain('negative');
-    expect(await within(kpis).findByText('None')).toBeTruthy();
+    const kpis = expectUi('ui.subscriber.moneyStrip');
+    expect((await within(kpis).findByText('−5.00')).closest('.bss-amount')?.className).toContain(
+      'negative',
+    );
+    expect(await within(kpis).findByText('none')).toBeTruthy();
     expect(within(kpis).getByText('2026-10-20')).toBeTruthy();
   });
 
   it('reports a failing bucket without taking the card down', async () => {
     backend({ [BUCKETS]: () => tmfError(503, 'Unavailable') }, PREPAID);
     await open();
-    expect(await within(panel('Billing account')).findByRole('alert')).toBeTruthy();
-    expect(within(panel('Billing account')).getByText('Ledger')).toBeTruthy();
+    expect(await within(expectUi('ui.subscriber.moneyStrip')).findByRole('alert')).toBeTruthy();
+    expect(within(expectUi('ui.subscriber.moneyStrip')).getByText('Ledger')).toBeTruthy();
   });
 
   it('asks nothing of TMF654 for a postpaid account', async () => {
     const { fetchMock } = backend();
     await open();
-    await within(panel('Billing account')).findByText('Credit limit');
+    await within(expectUi('ui.subscriber.moneyStrip')).findByText('Credit limit');
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('prepayBalance'))).toBe(false);
   });
 });
@@ -1356,7 +1449,7 @@ describe('prepaid money forms', () => {
 
   it("holds funds, optionally through a business date (the end is that date's close)", async () => {
     const { fetchMock } = await prepaid({ [`POST ${PREPAY}/reserveBalance`]: stored('created') });
-    press(document.body, 'Hold funds');
+    press(document.body, 'Hold');
     const form = await dialog('Hold funds');
     expectUi('ui.subscriber.prepaid.hold');
     type(form, 'Amount', '20');
@@ -1377,7 +1470,7 @@ describe('prepaid money forms', () => {
 
   it('refuses a debit or hold above the available funds before sending anything', async () => {
     const { fetchMock } = await prepaid();
-    press(document.body, 'Hold funds');
+    press(document.body, 'Hold');
     const form = await dialog('Hold funds');
     type(form, 'Amount', '100.51');
     expect(within(form).getByText('Enter at most the available 100.50.')).toBeTruthy();
@@ -1469,9 +1562,9 @@ describe('prepaid money forms', () => {
   it('offers no money forms on a postpaid account', async () => {
     backend();
     await open();
-    await within(panel('Billing account')).findByText('Credit limit');
+    await within(expectUi('ui.subscriber.moneyStrip')).findByText('Credit limit');
     expect(screen.queryByRole('button', { name: 'Top up' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Hold funds' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Hold' })).toBeNull();
   });
 });
 

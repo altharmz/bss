@@ -138,7 +138,8 @@ Status: `todo` · `done: <commit subject>` · `split`
 | 4 | Shell: sidebar, top bar, business-date chip | Chip drift states tested from the context; sidebar matches the artboard | done: Restyle the shell and show business-date drift |
 | 5 | Subscribers list | Search and `/`, filters with counts, over-limit flag; matches Subscribers.dc.html at 1280 | done: Restyle the Subscribers list with Ledger filters and balances |
 | 6a | Subscriber card: header | Ledger identity/meta, secondary Add product, More actions payment/delete with tests | done: Restyle subscriber identity and account actions |
-| 6b | Subscriber card: money strip, Account and tabs | Both D12 money strips and Account KeyValue; every existing panel in its tab with markers kept and request timing unchanged; hash deep links/fallback and counts; Overview grid; all remaining slice 6 tests and visual review | todo |
+| 6b1 | Subscriber card: money strips and Account summary | Both D12 money strips, boundary/figure tests and semantic Account KeyValue, existing actions/markers and eager loaders kept; visual review | done: Build subscriber money strips and Account summary |
+| 6b2 | Subscriber card: tabs and Overview grid | Every existing panel in its tab with markers kept and request timing unchanged; hash deep links/fallback and loaded counts; prepaid-only tabs absent for postpaid; Overview two-column grid; Account summary in Account tab; all remaining slice 6 tests and visual review | todo |
 | 7 | Subscriber card: Overview (products table, pending sub-row, In progress steps, activity rail) | Matches SubscriberCard.dc.html at 1280 and 1600 | todo |
 | 8 | Billing runs: header actions, latest-run band, inline outcomes, history selection | "Retry N failed" only for a failed latest run; outcomes inline; requests unchanged | todo |
 | 9 | Product catalog: lifecycle groups, offering detail with stepper, other tabs restyled | Groups, search and stepper tested; matches Catalog.dc.html | todo |

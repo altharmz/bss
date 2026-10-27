@@ -28,7 +28,7 @@ import { accountLabel, shortId } from '../format/ids';
 import { formatCents, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
-import { Button, Menu, Panel, StatusPill, Tag, useToast } from '../ui/kit';
+import { Button, KeyValue, Menu, MoneyStrip, Panel, StatusPill, Tag, useToast } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
@@ -311,54 +311,69 @@ function Card({
           {account.ratingType === 'prepaid' && <span>Charged daily at {context.billingRunAt}</span>}
         </div>
       </header>
-      {account.ratingType === 'prepaid' && (
-        <div className="subscriber-money-actions">
-          <Button onClick={() => setPaying(true)} disabled={bills.status !== 'ok'}>
-            Record payment
-          </Button>
-          {account.ratingType === 'prepaid' &&
-            (
-              [
-                ['topup', 'Top up'],
-                ['adjust', 'Adjust'],
-                ['hold', 'Hold funds'],
-              ] as const
-            ).map(([form, label]) => (
-              <span key={form}>
-                <Button
-                  onClick={() => {
-                    setMoneyAmount(undefined);
-                    setMoney(form);
-                  }}
-                  disabled={balance.status !== 'ok' || balance.data === null}
-                >
-                  {label}
-                </Button>{' '}
-              </span>
-            ))}
-          {account.ratingType === 'prepaid' && (
+      <SubscriberMoneyStrip
+        account={account}
+        today={context.businessDate}
+        settlement={settlement.status === 'ok' ? settlement.data : null}
+        balance={balance}
+        products={products}
+        actions={
+          account.ratingType === 'prepaid' ? (
             <>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setMoneyAmount(undefined);
+                  setMoney('topup');
+                }}
+                disabled={balance.status !== 'ok' || balance.data === null}
+              >
+                Top up
+              </Button>
+              <Button
+                onClick={() => {
+                  setMoneyAmount(undefined);
+                  setMoney('adjust');
+                }}
+                disabled={balance.status !== 'ok' || balance.data === null}
+              >
+                Adjust
+              </Button>
+              <Button
+                onClick={() => {
+                  setMoneyAmount(undefined);
+                  setMoney('hold');
+                }}
+                disabled={balance.status !== 'ok' || balance.data === null}
+              >
+                Hold
+              </Button>
               <Button
                 onClick={() => setTransferring(true)}
                 disabled={balance.status !== 'ok' || balance.data === null || transferWatched}
               >
                 Transfer
-              </Button>{' '}
+              </Button>
+              <Button onClick={() => setPaying(true)} disabled={bills.status !== 'ok'}>
+                Record payment
+              </Button>
             </>
-          )}
-        </div>
-      )}
-
-      <BillingAccountPanel
+          ) : (
+            <Button
+              variant="primary"
+              onClick={() => setPaying(true)}
+              disabled={bills.status !== 'ok'}
+            >
+              Record payment
+            </Button>
+          )
+        }
+      />
+      <AccountSummary
         account={account}
         today={context.businessDate}
         settlement={settlement.status === 'ok' ? settlement.data : null}
         onChanged={reload}
-        prepaid={
-          account.ratingType === 'prepaid' ? (
-            <PrepaidFigures accountId={account.id} balance={balance} products={products} />
-          ) : null
-        }
       />
 
       <Panel
@@ -528,86 +543,80 @@ function Card({
   );
 }
 
-function BillingAccountPanel({
+function DueOnBills({ settlement }: { settlement: AccountSettlement | null }) {
+  return (
+    <>{settlement === null ? '…' : <Amount cents={toCents(settlement.outstanding.value)} />}</>
+  );
+}
+
+function DueCaption({ settlement }: { settlement: AccountSettlement | null }) {
+  return settlement !== null && settlement.overdue.count > 0 ? (
+    <span className="subscriber-overdue">
+      {settlement.overdue.count} overdue · {formatCents(toCents(settlement.overdue.amount.value))}
+    </span>
+  ) : settlement !== null && settlement.onHold.count > 0 ? (
+    <>{settlement.onHold.count} on hold</>
+  ) : null;
+}
+
+function AccountSummary({
   account,
   today,
   settlement,
   onChanged,
-  prepaid,
 }: {
   account: Account;
   today: string;
   settlement: AccountSettlement | null;
   onChanged: () => void;
-  prepaid: ReactNode;
 }) {
-  const negative = account.balanceCents < 0;
   const available =
     account.creditLimitCents === null ? null : account.balanceCents + account.creditLimitCents;
+  const items: [ReactNode, ReactNode][] = [
+    ['Currency', account.currency],
+    ['Billing cycle day', `Day ${account.cycleDay}`],
+    ['Next cycle', nextCycleDate(today, account.cycleDay)],
+    ...(account.ratingType === 'postpaid'
+      ? ([
+          [
+            'Credit limit',
+            account.creditLimitCents === null ? '—' : <Amount cents={account.creditLimitCents} />,
+          ],
+          ['Available incl. credit', available === null ? '—' : <Amount cents={available} />],
+        ] as [ReactNode, ReactNode][])
+      : []),
+    [
+      'Due on bills',
+      <>
+        <DueOnBills settlement={settlement} />
+        <div>
+          <DueCaption settlement={settlement} />
+        </div>
+      </>,
+    ],
+    [
+      'Unused credit',
+      <>
+        {settlement === null ? '…' : <Amount cents={toCents(settlement.unallocatedCredit.value)} />}{' '}
+        <RefundAction account={account} settlement={settlement} onChanged={onChanged} />
+      </>,
+    ],
+    ...(account.financialAccount === null
+      ? []
+      : ([
+          [
+            'Financial account',
+            <Link className="bss-link" href={hrefOf({ name: 'financialAccounts' })}>
+              {account.financialAccount.name}
+            </Link>,
+          ],
+        ] as [ReactNode, ReactNode][])),
+  ];
   return (
-    <Panel title="Billing account">
-      <div className="bss-kpis">
-        <div className="bss-kpi">
-          <div className="label">{prepaid ? 'Ledger' : 'Balance'}</div>
-          <div className={`value strong${negative ? ' negative' : ''}`}>
-            {formatCents(account.balanceCents)}
-          </div>
-          {negative && (
-            <div className="caption negative">{prepaid ? 'Below zero' : 'In arrears'}</div>
-          )}
-          {prepaid && <div className="caption">Prepaid</div>}
-        </div>
-        <div className="bss-kpi">
-          <div className="label">Currency</div>
-          <div className="value">{account.currency}</div>
-        </div>
-        <div className="bss-kpi">
-          <div className="label">Billing cycle day</div>
-          <div className="value">Day {account.cycleDay}</div>
-          <div className="caption">next cycle {nextCycleDate(today, account.cycleDay)}</div>
-        </div>
-        {prepaid ? (
-          prepaid
-        ) : (
-          <>
-            <div className="bss-kpi">
-              <div className="label">Credit limit</div>
-              <div className="value">
-                {account.creditLimitCents === null ? '—' : formatCents(account.creditLimitCents)}
-              </div>
-            </div>
-            <div className="bss-kpi">
-              <div className="label">Available incl. credit</div>
-              <div className={`value${available !== null && available < 0 ? ' negative' : ''}`}>
-                {available === null ? '—' : formatCents(available)}
-              </div>
-            </div>
-          </>
-        )}
-        <div className="bss-kpi">
-          <div className="label">Due on bills</div>
-          <div className="value">
-            {settlement === null ? '…' : formatCents(toCents(settlement.outstanding.value))}
-          </div>
-          {settlement !== null && settlement.overdue.count > 0 && (
-            <div className="caption negative">
-              {settlement.overdue.count} overdue ·{' '}
-              {formatCents(toCents(settlement.overdue.amount.value))}
-            </div>
-          )}
-          {settlement !== null && settlement.onHold.count > 0 && (
-            <div className="caption">{settlement.onHold.count} on hold</div>
-          )}
-        </div>
-        <div className="bss-kpi">
-          <div className="label">Unused credit</div>
-          <div className="value">
-            {settlement === null ? '…' : formatCents(toCents(settlement.unallocatedCredit.value))}
-          </div>
-          <RefundAction account={account} settlement={settlement} onChanged={onChanged} />
-        </div>
-      </div>
-    </Panel>
+    <section className="subscriber-account" data-ui="ui.subscriber.account">
+      <h2>Account</h2>
+      <KeyValue items={items} />
+    </section>
   );
 }
 
@@ -617,21 +626,26 @@ const CAUSE_LABEL: Record<string, string> = {
   account: 'the account is not active',
 };
 
-/** The prepaid KPIs. Ledger (the account's), available (ledger less holds, from the TMF654
- * bucket), reserved (holds) and paid-through / shortfall (per product, from the account's
- * product view) are four different things and never merged. */
-function PrepaidFigures({
-  accountId,
+function SubscriberMoneyStrip({
+  account,
+  today,
+  settlement,
   balance,
   products,
+  actions,
 }: {
-  accountId: string;
+  account: Account;
+  today: string;
+  settlement: AccountSettlement | null;
   balance: ResourceWithRetry<PrepaidBalance | null>;
   products: ResourceWithRetry<AccountProduct[]>;
+  actions: ReactNode;
 }) {
   const figures = balance.status === 'ok' ? balance.data : null;
   const rows = products.status === 'ok' ? products.data : null;
   const dates = (rows ?? []).flatMap((p) => (p.paidThrough ? [p.paidThrough] : [])).sort();
+  const paid = dates[0];
+  const days = paid ? Math.round((Date.parse(paid) - Date.parse(today)) / 86400000) : null;
   const short = (rows ?? []).filter((p) => p.needs_topup);
   const worst = short.reduce<AccountProduct | null>(
     (best, p) =>
@@ -644,72 +658,131 @@ function PrepaidFigures({
   const causes = [
     ...new Set((rows ?? []).flatMap((p) => (p.suspensionCause ? [p.suspensionCause] : []))),
   ];
+  const value = (cents: number | undefined) =>
+    balance.status === 'error' ? '—' : cents === undefined ? '…' : <Amount cents={cents} />;
+  const over =
+    account.creditLimitCents !== null && account.balanceCents < -account.creditLimitCents
+      ? -account.balanceCents - account.creditLimitCents
+      : 0;
   return (
-    <>
-      <div className="bss-kpi" data-ui="ui.subscriber.prepaid.available">
-        <div className="label">Available</div>
-        <div
-          className={`value${figures !== null && figures.availableCents < 0 ? ' negative' : ''}`}
-        >
-          {balance.status === 'error'
-            ? '—'
-            : figures === null
-              ? '…'
-              : formatCents(figures.availableCents)}
-        </div>
-        <div className="caption">ledger less holds</div>
-      </div>
-      <div className="bss-kpi" data-ui="ui.subscriber.prepaid.reserved">
-        <div className="label">Reserved</div>
-        <div className="value">
-          {balance.status === 'error'
-            ? '—'
-            : figures === null
-              ? '…'
-              : formatCents(figures.reservedCents)}
-        </div>
-        <div className="caption">holds not spent yet</div>
-        {balance.status === 'error' && (
-          <Note tone="negative">Failed to load the prepaid balance ({balance.error.message})</Note>
-        )}
-      </div>
-      <div className="bss-kpi" data-ui="ui.subscriber.prepaid.paidThrough">
-        <div className="label">Paid through</div>
-        <div className="value">{rows === null ? '…' : (dates[0] ?? '—')}</div>
-        <div className="caption">earliest of its products, service ends here</div>
-      </div>
-      <div className="bss-kpi" data-ui="ui.subscriber.prepaid.shortfall">
-        <div className="label">Shortfall</div>
-        <div className={`value${worst ? ' negative' : ''}`}>
-          {rows === null
-            ? '…'
-            : worst?.needs_topup
-              ? formatCents(toCents(worst.needs_topup.shortfall))
-              : 'None'}
-        </div>
-        {worst?.needs_topup && (
-          <div className="caption negative">
-            needs top-up: renewal needs {formatCents(toCents(worst.needs_topup.required))},
-            available {formatCents(toCents(worst.needs_topup.available))}
-            {short.length > 1 ? ` · ${short.length} products` : ''}
-          </div>
-        )}
-        {causes.length > 0 && (
-          <div className="caption">
-            Suspension: {causes.map((c) => CAUSE_LABEL[c] ?? c).join(', ')}
-          </div>
-        )}
-        <div className="caption">
-          <Link
-            className="bss-link"
-            data-ui="ui.subscriber.prepaid.commands"
-            href={`/prepaid-commands?account=${accountId}`}
-          >
-            Commands
-          </Link>
-        </div>
-      </div>
-    </>
+    <div className="subscriber-money" data-ui="ui.subscriber.moneyStrip">
+      <MoneyStrip
+        actions={actions}
+        operators={account.ratingType === 'prepaid' ? ['−', '='] : []}
+        divider={account.ratingType === 'prepaid' ? [3] : [1]}
+        figures={
+          account.ratingType === 'prepaid'
+            ? [
+                {
+                  label: 'Ledger',
+                  value: <Amount cents={account.balanceCents} />,
+                  emphasis: 'figure',
+                  sub: account.balanceCents < 0 ? 'Below zero' : undefined,
+                },
+                {
+                  label: 'Reserved',
+                  ui: 'ui.subscriber.prepaid.reserved',
+                  value: value(figures?.reservedCents),
+                  emphasis: 'figure',
+                  sub: 'holds not spent yet',
+                },
+                {
+                  label: 'Available',
+                  ui: 'ui.subscriber.prepaid.available',
+                  value: value(figures?.availableCents),
+                  emphasis: 'answer',
+                  sub: 'ledger less holds',
+                },
+                {
+                  label: 'Paid through',
+                  ui: 'ui.subscriber.prepaid.paidThrough',
+                  value: rows === null ? '…' : (paid ?? '—'),
+                  sub: (
+                    <>
+                      {days === null ? null : days >= 0 ? `in ${days} days` : `${-days} days ago`}
+                      <div>earliest of its products, service ends here</div>
+                    </>
+                  ),
+                },
+                {
+                  label: 'Shortfall',
+                  ui: 'ui.subscriber.prepaid.shortfall',
+                  value: (
+                    <>
+                      {rows === null ? (
+                        '…'
+                      ) : worst?.needs_topup ? (
+                        <Amount cents={toCents(worst.needs_topup.shortfall)} />
+                      ) : (
+                        '—'
+                      )}
+                    </>
+                  ),
+                  tone: worst ? 'negative' : 'muted',
+                  sub: (
+                    <>
+                      {worst?.needs_topup ? (
+                        <>
+                          renewal needs {formatCents(toCents(worst.needs_topup.required))},
+                          available {formatCents(toCents(worst.needs_topup.available))}
+                          {short.length > 1 ? ` · ${short.length} products` : ''}
+                        </>
+                      ) : rows === null ? null : (
+                        'none'
+                      )}
+                      {causes.length > 0 && (
+                        <div>Suspension: {causes.map((c) => CAUSE_LABEL[c] ?? c).join(', ')}</div>
+                      )}
+                      <div>
+                        <Link
+                          className="bss-link"
+                          data-ui="ui.subscriber.prepaid.commands"
+                          href={`/prepaid-commands?account=${account.id}`}
+                        >
+                          Commands
+                        </Link>
+                      </div>
+                    </>
+                  ),
+                },
+              ]
+            : [
+                {
+                  label: 'Balance',
+                  value: <Amount cents={account.balanceCents} />,
+                  emphasis: 'answer',
+                  sub: account.balanceCents < 0 ? 'In arrears' : undefined,
+                },
+                {
+                  label: 'Credit limit',
+                  value:
+                    account.creditLimitCents === null ? (
+                      '—'
+                    ) : (
+                      <Amount cents={account.creditLimitCents} />
+                    ),
+                  sub:
+                    over > 0 ? (
+                      <span className="subscriber-over-limit">Over by {formatCents(over)}</span>
+                    ) : undefined,
+                },
+                {
+                  label: 'Cycle day',
+                  value: `Day ${account.cycleDay}`,
+                  sub: `next bill ${nextCycleDate(today, account.cycleDay)}`,
+                },
+                {
+                  label: 'Due on bills',
+                  value: <DueOnBills settlement={settlement} />,
+                  sub: <DueCaption settlement={settlement} />,
+                },
+              ]
+        }
+      />
+      {account.ratingType === 'prepaid' && balance.status === 'error' && (
+        <Note tone="negative">Failed to load the prepaid balance ({balance.error.message})</Note>
+      )}
+    </div>
   );
 }
 

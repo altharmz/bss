@@ -194,7 +194,7 @@ describe('bills on the subscriber card', () => {
   it('shows what is due on bills and the unused credit', async () => {
     backend();
     await open();
-    const kpis = panel('Billing account');
+    const kpis = expectUi('ui.subscriber.account');
     expect(await within(kpis).findByText('400.00')).toBeTruthy();
     expect(within(kpis).getByText('1 overdue · 300.00')).toBeTruthy();
     expect(within(kpis).getByText('25.50')).toBeTruthy();

@@ -844,9 +844,32 @@
   margin-right: var(--space-xs);
   color: var(--color-ink-4);
 }
-.subscriber-money-actions {
-  display: flex;
+.subscriber-money {
+  margin-inline: -24px;
+}
+.subscriber-money .money-figure {
+  padding-inline: 20px;
+}
+.subscriber-money .money-figure:first-child {
+  padding-left: 24px;
+}
+.subscriber-money .money-actions {
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
+  padding-block: 12px;
+}
+.subscriber-money > .bss-note {
+  margin: 12px 24px;
+}
+.subscriber-over-limit {
+  color: var(--color-warning);
+}
+.subscriber-overdue {
+  color: var(--color-negative);
+}
+.subscriber-account h2 {
+  margin: 0 0 16px;
+  font: var(--type-section);
+}
+.subscriber-account {
+  padding-block: 20px;
 }

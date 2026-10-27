@@ -3,6 +3,18 @@ import { describe, expect, it } from 'vitest';
 import { KeyValue, MoneyStrip, PageHeader, PageTitle, Panel } from './kit';
 
 describe('Ledger summaries', () => {
+  it('keeps a money figure marker around its label, value and caption', () => {
+    const { container } = render(
+      <MoneyStrip
+        figures={[
+          { ui: 'test.figure', label: 'Available', value: '13.50', sub: 'ledger less holds' },
+        ]}
+      />,
+    );
+    const figure = container.querySelector('[data-ui="test.figure"]');
+    expect(figure?.className).toBe('money-figure');
+    expect(figure?.textContent).toBe('Available13.50ledger less holds');
+  });
   it('pairs each key and value in a semantic definition grid', () => {
     const { container } = render(
       <KeyValue
