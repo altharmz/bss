@@ -239,3 +239,7 @@ The subscriber identity uses a borderless semantic header with a page title, acc
 Tabs separate the label from an optional count or badge with literal whitespace, preserving readable accessible names such as "Payments 0" and "Commands 1".
 
 The card uses Tabs/TabPanel with selected keys in the URL hash. Empty, unknown or mode-inapplicable hashes fall back to Overview. Keep all panel components mounted behind native hidden wrappers so tab selection neither triggers reads nor cancels polling. PaymentsPanel, RefundsPanel and FailedCommands accept an optional onCount callback for their already loaded list size; undefined means loading or failed. Card counts never add requests. Overview has minmax(0, 1fr) plus a 320/400 px rail with a 32 px gap; other panes fill the width. Dialog ownership stays with the original components.
+
+### Ledger recent activity (slice 7a)
+
+Overview uses the first eight already loaded transactions in server order. The rail pairs note/type and signed amount with the business date and balanceAfter; dates are date-only API values, so no local time conversion is applied. All transactions selects the mounted Transactions pane without fetching. Empty and failed reads remain distinct; prepaid accounts explain ledger versus reserved funds.

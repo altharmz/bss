@@ -189,6 +189,62 @@ function selectTab(name: string) {
   if (tab.getAttribute('aria-selected') !== 'true') fireEvent.click(tab);
 }
 
+describe('Ledger recent activity', () => {
+  it('reuses the first eight loaded movements with signed amounts and balance after', async () => {
+    const movements = Array.from({ length: 20 }, (_, i) => ({
+      ...TRANSACTIONS[0],
+      id: `movement-${i}`,
+      note: `Movement ${i}`,
+      amount: usd(i === 0 ? -1 : 2),
+      balanceAfter: usd(100 - i),
+    }));
+    const api = backend({
+      [`GET ${INTERNAL}/transactions?limit=20`]: () => json(movements, { total: 20 }),
+    });
+    await open();
+    const rail = screen.getByRole('complementary', { name: 'Recent activity' });
+    expect(expectUi('ui.subscriber.activity')).toBe(rail);
+    await within(rail).findByText('Movement 0');
+    expect(within(rail).getAllByRole('listitem')).toHaveLength(8);
+    expect(within(rail).getByText('Movement 7')).toBeTruthy();
+    expect(within(rail).queryByText('Movement 8')).toBeNull();
+    const first = within(rail).getAllByRole('listitem')[0];
+    if (!first) throw new Error('Expected a first activity movement');
+    expect(within(first).getByText('−1.00')).toBeTruthy();
+    expect(within(first).getByText('100.00')).toBeTruthy();
+    expect(within(first).getByText('2026-12-20')).toBeTruthy();
+    expect(within(rail).getAllByText('+2.00')).toHaveLength(7);
+    const calls = [...api.calls];
+    fireEvent.click(within(rail).getByRole('link', { name: 'All transactions' }));
+    expect(window.location.hash).toBe('#transactions');
+    expect(
+      screen.getByRole('tab', { name: 'Transactions 20+' }).getAttribute('aria-selected'),
+    ).toBe('true');
+    expect(await screen.findByRole('heading', { name: 'Transaction history' })).toBeTruthy();
+    expect(api.calls).toEqual(calls);
+    expect(rail.textContent).not.toContain('Holds change Reserved');
+  });
+
+  it('shows an empty rail and explains prepaid ledger movements', async () => {
+    backend(
+      {
+        [`GET ${INTERNAL}/transactions?limit=20`]: () => json([], { total: 0 }),
+        [`GET /tmf-api/prepayBalanceManagement/v4/bucket?partyAccount.id=${A}&offset=0&limit=100`]:
+          () => json([], { total: 0 }),
+      },
+      { ...ACCOUNT, ratingType: 'prepaid' },
+    );
+    await open();
+    const rail = screen.getByRole('complementary', { name: 'Recent activity' });
+    expect(await within(rail).findByText('No movements yet.')).toBeTruthy();
+    expect(
+      within(rail).getByText(
+        'Ledger balance after each movement. Holds change Reserved, not Ledger.',
+      ),
+    ).toBeTruthy();
+  });
+});
+
 const panel = (title: string) => {
   const tabs: Record<string, string> = {
     'Charge history': 'Charges',

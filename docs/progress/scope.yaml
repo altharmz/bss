@@ -369,6 +369,7 @@ items:
   - {id: ui.subscriber.moreActions, area: ui, stage: 5, title: "Subscriber account actions menu"}
   - {id: ui.subscriber.card, area: ui, stage: 5, title: "Subscriber card: account, products, charges, transactions"}
   - {id: ui.subscriber.moneyStrip, area: ui, stage: 5, title: "Subscriber prepaid/postpaid money strip"}
+  - {id: ui.subscriber.activity, area: ui, stage: 5, title: "Subscriber Recent activity from loaded transactions"}
   - {id: ui.subscriber.account, area: ui, stage: 5, title: "Subscriber Account definition summary and refund action"}
   - {id: ui.subscriber.addProduct, area: ui, stage: 5, title: "Add product, with first-charge preview"}
   - {id: ui.subscriber.deactivate, area: ui, stage: 5, title: "Deactivate a product"}

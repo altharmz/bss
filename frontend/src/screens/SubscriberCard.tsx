@@ -511,7 +511,64 @@ function Card({
               </ListState>
             </Panel>
           </div>
-          <aside className="subscriber-overview-rail" />
+          <aside
+            className="subscriber-overview-rail"
+            data-ui="ui.subscriber.activity"
+            aria-labelledby="subscriber-activity-title"
+          >
+            <div className="subscriber-activity-heading">
+              <h2 id="subscriber-activity-title">Recent activity</h2>
+              <a
+                className="bss-link"
+                href="#transactions"
+                onClick={(event) => {
+                  event.preventDefault();
+                  selectTab('transactions');
+                }}
+              >
+                All transactions
+              </a>
+            </div>
+            {transactions.status === 'loading' && (
+              <p className="bss-secondary">Loading movements…</p>
+            )}
+            {transactions.status === 'error' && (
+              <ErrorBlock
+                title="Failed to load movements"
+                error={transactions.error}
+                onRetry={transactions.retry}
+              />
+            )}
+            {transactions.status === 'ok' &&
+              (transactions.data.length === 0 ? (
+                <p className="subscriber-activity-empty">No movements yet.</p>
+              ) : (
+                <ol className="subscriber-activity-list">
+                  {transactions.data.slice(0, 8).map((movement) => (
+                    <li key={`${movement.type}:${movement.id}`}>
+                      <span className="subscriber-activity-description">
+                        {movement.note}{' '}
+                        <span className="subscriber-activity-type">
+                          {TYPE_LABEL[movement.type] ?? movement.type}
+                        </span>
+                      </span>
+                      <span className="subscriber-activity-amount">
+                        <Amount signed cents={toCents(movement.amount.value)} />
+                      </span>
+                      <span className="subscriber-activity-date">{movement.date}</span>
+                      <span className="subscriber-activity-after">
+                        <Amount cents={toCents(movement.balanceAfter.value)} />
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              ))}
+            {account.ratingType === 'prepaid' && (
+              <p className="subscriber-activity-footnote">
+                Ledger balance after each movement. Holds change Reserved, not Ledger.
+              </p>
+            )}
+          </aside>
         </div>,
       )}
       {account.ratingType === 'prepaid' &&
