@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
@@ -84,6 +85,7 @@ export function OfferingEditModal({
     );
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={`Edit ${detail.name}`}
       width={560}
       onClose={onClose}
@@ -213,6 +215,7 @@ export function PriceModal({
   if (price.status !== 'ok') {
     return (
       <Modal
+        onSubmit={submitDialogPrimary}
         title="Price"
         width={520}
         onClose={onClose}
@@ -302,6 +305,7 @@ function PriceBody({
   const message = problem ?? error ?? (ending ? endError : null);
   return (
     <Modal
+      onSubmit={ending || deleting ? undefined : submitDialogPrimary}
       title={price.name}
       subtitle={price.priceType ?? undefined}
       width={520}

@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useRef, useState, type ReactNode } from 'react';
 import type { PrepaidBalance } from '../api/bss';
@@ -226,6 +227,7 @@ export function ActionDialog({
   }
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="Balance action"
       width={560}
       onClose={onClose}

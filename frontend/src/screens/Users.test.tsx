@@ -43,6 +43,20 @@ function fill(label: string, value: string) {
 }
 
 describe('Users', () => {
+  it('keeps native form actions in the fixed dialog footer and submits once with Enter', async () => {
+    const { fetchMock } = start();
+    fireEvent.click(await screen.findByRole('button', { name: 'New user' }));
+    const dialog = screen.getByRole('dialog');
+    const save = within(dialog).getByRole('button', { name: 'Save' });
+    expect(save.closest('footer')?.parentElement).toBe(dialog);
+    expect(dialog.querySelector('.bss-dialog-body')?.contains(save)).toBe(false);
+    fill('Username', 'bob');
+    fill('Initial password', 'initial-password');
+    fireEvent.keyDown(screen.getByLabelText('Initial password'), { key: 'Enter' });
+    await screen.findByRole('button', { name: 'New user' });
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+  });
+
   it('denies a non-admin without requesting users or showing the menu link', async () => {
     const { calls } = start('user');
     await screen.findByRole('heading', { name: 'Not allowed' });

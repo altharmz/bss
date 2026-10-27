@@ -524,10 +524,14 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding-top: 56px;
+  padding: var(--space-8) 0;
+  overflow: hidden;
   background: var(--scrim);
 }
 .bss-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 2 * var(--space-8));
   width: var(--modal-width);
   max-width: calc(100vw - 40px);
   background: var(--color-bg);
@@ -544,6 +548,8 @@
   --modal-width: 760px;
 }
 .bss-dialog-body {
+  overflow: auto;
+  min-height: 0;
   padding: 20px;
 }
 /* Existing modal callers own body spacing until their screen migration. */
@@ -567,6 +573,7 @@
   color: var(--color-ink-3);
 }
 .bss-modal-header {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -600,6 +607,7 @@
   box-shadow: var(--focus-ring);
 }
 .bss-modal-footer {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -1008,4 +1016,8 @@
 .bss-note-code {
   font: var(--type-code);
   color: var(--color-ink-3);
+}
+
+.bss-modal-footer:empty {
+  display: none;
 }

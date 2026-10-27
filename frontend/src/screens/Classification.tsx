@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState, type CSSProperties } from 'react';
 import {
@@ -330,6 +331,7 @@ function ClassificationModal({
 
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={
         record === null
           ? `New ${kind === 'category' ? 'category' : 'product catalog'}`

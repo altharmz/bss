@@ -25,6 +25,7 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       'billing-settings',
       'parties',
       'integrations',
+      'users',
       'ui-kit',
     ]) {
       await page.goto(name.startsWith('card-') ? '/subscribers' : `/${name}`);
@@ -57,6 +58,50 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       await page.screenshot({ path: `/web/.shots/${name}-${width}.png`, fullPage: true });
+      if (name === 'users' || name === 'financial-accounts') {
+        const user = name === 'users';
+        await page
+          .getByRole('button', { name: user ? 'New user' : '+ New financial account', exact: true })
+          .click();
+        const dialog = page.getByRole('dialog');
+        const primary = dialog.locator('.bss-modal-footer .primary');
+        await expect(primary).toBeInViewport({ ratio: 1 });
+        await page.screenshot({ path: `/web/.shots/dialog-${name}-${width}.png` });
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+      }
+      if (name === 'card-postpaid') {
+        await page.getByRole('button', { name: 'Edit', exact: true }).click();
+        const edit = page.getByRole('dialog', { name: 'Edit subscriber' });
+        await expect(edit.getByLabel('Account name')).not.toHaveValue('');
+        await expect(edit.getByRole('button', { name: 'Save', exact: true })).toBeInViewport({
+          ratio: 1,
+        });
+        await page.screenshot({ path: `/web/.shots/dialog-edit-${width}.png` });
+        await edit.getByRole('button', { name: 'Cancel' }).click();
+        await page.getByRole('button', { name: 'Add product', exact: true }).first().click();
+        const add = page.getByRole('dialog', { name: 'Add product' });
+        await expect(add.getByRole('radio').first()).toBeVisible();
+        await expect(add.getByRole('button', { name: 'Activate', exact: true })).toBeInViewport({
+          ratio: 1,
+        });
+        await page.screenshot({ path: `/web/.shots/dialog-add-${width}.png` });
+        await add.getByRole('button', { name: 'Cancel' }).click();
+      }
+      if (name === 'catalog') {
+        await page.getByRole('button', { name: '+ New offering' }).click();
+        const offering = page.getByRole('dialog', { name: 'New product offering' });
+        await expect(offering.locator('.bss-modal-footer .primary')).toBeInViewport({ ratio: 1 });
+        await page.screenshot({ path: `/web/.shots/dialog-offering-${width}.png` });
+        await offering.getByRole('button', { name: 'Cancel' }).click();
+        await page.getByRole('button', { name: 'Categories', exact: true }).click();
+        await page.getByRole('button', { name: '+ New category' }).click();
+        const category = page.getByRole('dialog', { name: 'New category' });
+        await expect(category.getByRole('button', { name: 'Create', exact: true })).toBeInViewport({
+          ratio: 1,
+        });
+        await page.screenshot({ path: `/web/.shots/dialog-category-${width}.png` });
+        await category.getByRole('button', { name: 'Cancel' }).click();
+      }
       if (name.startsWith('card-')) {
         const actions = page.locator('[data-ui="ui.subscriber.productActions"]').first();
         await actions.click();

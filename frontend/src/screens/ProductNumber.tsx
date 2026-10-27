@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { useState } from 'react';
 import type { components as T637 } from '../api/generated/tmf637';
 import { getJson, explain } from '../api/client';
@@ -95,6 +96,7 @@ function NumberModal({
   }
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="Subscriber number"
       width={600}
       onClose={onClose}
@@ -103,7 +105,11 @@ function NumberModal({
         <>
           <Button onClick={onClose}>Close</Button>
           {editable && (
-            <Button disabled={busy || uncertain || !numberId} onClick={() => void submit()}>
+            <Button
+              data-dialog-primary
+              disabled={busy || uncertain || !numberId}
+              onClick={() => void submit()}
+            >
               Change number
             </Button>
           )}

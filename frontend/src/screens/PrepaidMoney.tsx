@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useRef, useState } from 'react';
 import {
@@ -124,6 +125,7 @@ export function PrepaidMoneyModal({
 
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={TITLE[form]}
       width={560}
       onClose={() => {

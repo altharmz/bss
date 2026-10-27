@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { statusPresentation, type StatusKind } from './status';
 export { Menu, Tabs, TabPanel } from './navigation';
 export { Note } from './Note';
@@ -200,6 +201,19 @@ export function Segmented<K extends string>({
 
 // --- modal ---
 
+const DialogFooterContext = createContext<HTMLElement | null>(null);
+
+/** Keeps a loaded child form's actions outside the scrolling body. */
+export function DialogFooter({ children }: { children: ReactNode }) {
+  const host = useContext(DialogFooterContext);
+  return host ? createPortal(children, host) : null;
+}
+
+/** Share the exact click path, validation and write state of the visible primary. */
+export function submitDialogPrimary(primary: HTMLButtonElement) {
+  primary.click();
+}
+
 export function Dialog({
   title,
   context,
@@ -210,8 +224,10 @@ export function Dialog({
   ui,
   children,
   preview = false,
+  onSubmit,
 }: {
   title: string;
+  onSubmit?: ((primary: HTMLButtonElement) => void) | undefined;
   context?: ReactNode;
   step?: { n: number; of: number };
   size: 'S' | 'M' | 'L';
@@ -223,6 +239,7 @@ export function Dialog({
   ui?: string;
   children: ReactNode;
 }) {
+  const [footerHost, setFooterHost] = useState<HTMLElement | null>(null);
   useEffect(() => {
     if (preview) return;
     const onKey = (event: KeyboardEvent) => {
@@ -243,6 +260,39 @@ export function Dialog({
         role="dialog"
         aria-modal={preview ? undefined : true}
         aria-label={title}
+        onKeyDown={(event) => {
+          if (
+            event.key !== 'Enter' ||
+            event.nativeEvent.isComposing ||
+            event.defaultPrevented ||
+            !onSubmit
+          )
+            return;
+          if (
+            !(event.target instanceof HTMLInputElement) ||
+            ![
+              'text',
+              'search',
+              'email',
+              'tel',
+              'url',
+              'password',
+              'number',
+              'date',
+              'time',
+              'datetime-local',
+              'month',
+              'week',
+            ].includes(event.target.type)
+          )
+            return;
+          const primary = event.currentTarget.querySelector<HTMLButtonElement>(
+            ':scope > .bss-modal-footer .bss-btn.primary, :scope > .bss-modal-footer [data-dialog-primary]',
+          );
+          if (!primary || primary.disabled) return;
+          event.preventDefault();
+          onSubmit(primary);
+        }}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="bss-modal-header">
@@ -261,8 +311,12 @@ export function Dialog({
             ×
           </button>
         </header>
-        <div className="bss-dialog-body">{children}</div>
-        {footer !== undefined && <footer className="bss-modal-footer">{footer}</footer>}
+        <DialogFooterContext.Provider value={footerHost}>
+          <div className="bss-dialog-body">{children}</div>
+        </DialogFooterContext.Provider>
+        <footer ref={setFooterHost} className="bss-modal-footer">
+          {footer}
+        </footer>
       </div>
     </div>
   );

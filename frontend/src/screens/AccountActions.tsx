@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { useEffect, useRef, useState } from 'react';
 import {
   loadAccount,
@@ -130,6 +131,7 @@ export function RefundModal({
 
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="Record refund"
       width={620}
       onClose={() => {
@@ -434,6 +436,7 @@ export function AccountBills({
       </div>
       {open && (
         <Modal
+          onSubmit={submitDialogPrimary}
           title="Bill now"
           width={620}
           onClose={() => {

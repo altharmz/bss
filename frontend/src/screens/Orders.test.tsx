@@ -229,6 +229,38 @@ const press = (dialog: HTMLElement, name: string) =>
   fireEvent.click(within(dialog).getByRole('button', { name }));
 
 describe('order writes', () => {
+  it('submits only the metadata form from Enter and keeps its primary in the fixed footer', async () => {
+    const { fetchMock } = writes(DRAFT, { [`PATCH ${ORDERS}/${O1}`]: () => json({ id: O1 }) });
+    open();
+    const dialog = await openOrder('C0000001');
+    press(dialog, 'Edit details');
+    const save = within(dialog).getByRole('button', { name: 'Save details' });
+    expect(save.closest('footer')?.parentElement).toBe(dialog);
+    expect(
+      within(dialog).getByRole('button', { name: 'Submit' }).classList.contains('secondary'),
+    ).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText('Order description'), {
+      target: { value: 'New text' },
+    });
+    fireEvent.keyDown(within(dialog).getByLabelText('Order description'), { key: 'Enter' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(sent(fetchMock).map(({ call, body }) => ({ call, body }))).toEqual([
+      { call: `PATCH ${ORDERS}/${O1}`, body: JSON.stringify({ description: 'New text' }) },
+    ]);
+  });
+
+  it('does not submit a draft or cancel it on Enter from a cancellation reason', async () => {
+    const { fetchMock } = writes(DRAFT);
+    open();
+    const dialog = await openOrder('C0000001');
+    press(dialog, 'Cancel order');
+    const reason = within(dialog).getByLabelText('Cancellation reason');
+    fireEvent.change(reason, { target: { value: 'Customer left' } });
+    fireEvent.keyDown(reason, { key: 'Enter' });
+    expect(sent(fetchMock)).toEqual([]);
+    expect(screen.getByRole('dialog')).toBe(dialog);
+  });
+
   it('offers each action by state', async () => {
     const offered = async (order: object, shortId: string) => {
       const { unmount } = (() => {

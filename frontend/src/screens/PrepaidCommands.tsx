@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
@@ -262,6 +263,7 @@ function CommandModal({
 
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={`Command ${shortId(command.id)}`}
       subtitle={
         <>

@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
@@ -194,6 +195,7 @@ function ExportModal({
   const document = job?.status === 'Succeeded' && job.url !== null ? fromDataUrl(job.url) : null;
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="Export the catalog"
       width={480}
       onClose={onClose}
@@ -307,6 +309,7 @@ function ImportModal({
   }
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="Import a catalog document"
       width={560}
       onClose={onClose}
@@ -385,6 +388,7 @@ function JobModal({
   }
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={isImport ? 'Import job' : 'Export job'}
       subtitle={job.status}
       width={520}

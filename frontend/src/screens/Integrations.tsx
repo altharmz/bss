@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { useState } from 'react';
 import {
   createHub,
@@ -164,6 +165,7 @@ function NewSubscription({
     setChosen(chosen.includes(event) ? chosen.filter((e) => e !== event) : [...chosen, event]);
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="New subscription"
       width={560}
       onClose={onClose}
@@ -244,6 +246,7 @@ function DeleteSubscription({
   const write = useWrite(onDone);
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="Delete subscription"
       width={480}
       onClose={onClose}

@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
@@ -197,6 +198,7 @@ export function SpecificationModal({
 
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={spec === null ? 'New product specification' : spec.name}
       width={520}
       onClose={onClose}

@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { useState } from 'react';
 import { loadBillCycle, loadRate, loadRates, type RateRow } from '../api/bills';
 import { useResource } from '../api/useResource';
@@ -51,6 +52,7 @@ function DetailDialog({
 }) {
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={title}
       width={640}
       onClose={onClose}

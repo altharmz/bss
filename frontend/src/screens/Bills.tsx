@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState, type ReactNode } from 'react';
 import {
@@ -142,6 +143,7 @@ export function BillDialog({
   const detail = useResource(`bill:${billId}`, (signal) => loadBillDetail(billId, signal));
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={detail.status === 'ok' ? `Bill ${detail.data.billNo}` : 'Bill'}
       width={760}
       onClose={onClose}
@@ -389,6 +391,7 @@ export function RecordPaymentModal({
 
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="Record payment"
       width={620}
       onClose={onClose}

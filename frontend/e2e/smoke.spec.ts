@@ -34,11 +34,16 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await expect(
     page
       .getByRole('navigation', { name: 'Main' })
-      .getByRole('link', { name: /Financial accounts/ })
+      .getByRole('link', { name: /Subscribers/ })
       .locator('.count'),
   ).toHaveText(/^\d[\d,]*$/);
+  await expect(
+    page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('link', { name: 'Accounts', exact: true }),
+  ).toBeVisible();
   // New subscriber opens and cancels (read-only: nothing is created)
-  await page.getByRole('button', { name: '+ New subscriber' }).click();
+  await page.getByRole('button', { name: 'New subscriber', exact: true }).click();
   const create = page.getByRole('dialog', { name: 'New subscriber' });
   await expect(create.getByText('Given name')).toBeVisible();
   await create.getByRole('button', { name: 'Cancel' }).click();
@@ -63,8 +68,12 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await olga.click();
   await expect(page.getByRole('heading', { name: /Olga Kuznetsova/ })).toBeVisible();
   await expect(page.getByText('In arrears')).toBeVisible();
-  await expect(page.getByText('Due on bills')).toBeVisible();
+  await expect(
+    page.locator('[data-ui="ui.subscriber.moneyStrip"]').getByText('Due on bills'),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: /^Payments/ }).click();
   await expect(page.locator('[data-ui="ui.subscriber.refunds"]')).toBeVisible();
+  await page.getByRole('tab', { name: /^Bills/ }).click();
   await expect(page.locator('[data-ui="ui.subscriber.billRequests"]')).toBeVisible();
   await page.getByRole('button', { name: 'Bill now', exact: true }).click();
   const demandDialog = page.getByRole('dialog', { name: 'Bill now' });
@@ -73,7 +82,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
 
   // the seed puts Olga's oldest open bill on hold: its dialog offers the release only.
   // Read-only: nothing is clicked in it.
-  const held = page.getByRole('row').filter({ hasText: 'onHold' }).first();
+  const held = page.getByRole('row').filter({ hasText: 'On hold' }).first();
   await held.click();
   const bill = page.getByRole('dialog', { name: /^Bill BL-[0-9A-F]{8}$/ });
   await expect(bill.getByText('History')).toBeVisible();
@@ -81,6 +90,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await bill.getByRole('button', { name: 'Close' }).click();
   await expect(bill).toBeHidden();
 
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   // Edit loads the subscriber's party, customer and account; cancelled, nothing is saved
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const edit = page.getByRole('dialog', { name: 'Edit subscriber' });
@@ -91,7 +101,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   // the first charge comes from the backend's dry run. Any offering priced today will do:
   // the local catalog is also edited by hand during manual reviews, so no name is assumed
   // (an offering whose price starts later shows "—" instead of "/ mo").
-  await page.getByRole('button', { name: '+ Add product' }).first().click();
+  await page.getByRole('button', { name: 'Add product', exact: true }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Add product' });
   await dialog.getByRole('radio').filter({ hasText: '/ mo' }).first().click();
   await expect(dialog.getByTestId('first-charge')).toContainText('USD');
@@ -151,10 +161,11 @@ test('prepaid: Pavel Orlov tops up and orders, Vera Lebedeva waits for funds, co
   await page.getByRole('row').filter({ hasText: 'Pavel Orlov' }).click();
   await expect(page.getByRole('heading', { name: /Pavel Orlov/ })).toBeVisible();
   const kpi = (label: string) =>
-    page.locator('.bss-kpi').filter({ has: page.getByText(label, { exact: true }) });
+    page.locator('.money-figure').filter({ has: page.getByText(label, { exact: true }) });
   await expect(kpi('Ledger')).toBeVisible();
   await expect(kpi('Available')).toBeVisible();
   await expect(kpi('Paid through')).toContainText(/\d{4}-\d{2}-\d{2}/);
+  await page.getByRole('tab', { name: 'Balance actions', exact: true }).click();
   const history = page.locator('[data-ui="ui.subscriber.prepaid.history"]');
   const actions = history.getByRole('row').filter({ hasText: /\d{4}-\d{2}-\d{2}/ });
   await expect(actions.nth(2)).toBeVisible(); // at least three balance actions
@@ -177,14 +188,9 @@ test('prepaid: Pavel Orlov tops up and orders, Vera Lebedeva waits for funds, co
   await expect(kpi('Ledger')).not.toHaveText(ledgerBefore);
 
   // 3. add a product starting today: the prepaid preview, then the order is accepted
-  await page.getByRole('button', { name: '+ Add product' }).first().click();
+  await page.getByRole('button', { name: 'Add product', exact: true }).first().click();
   const add = page.getByRole('dialog', { name: 'Add product' });
-  await add
-    .getByRole('radio')
-    .filter({ hasText: '/ mo' })
-    .filter({ hasNotText: 'already active' })
-    .first()
-    .click();
+  await add.getByRole('radio').filter({ hasText: '/ mo' }).first().click();
   await expect(add.locator('[data-ui="ui.addProduct.prepaidPreview"]')).toBeVisible();
   await expect(add.getByTestId('prepaid-required')).toContainText(/\d/);
   const shortfall = add.locator('[data-ui="ui.addProduct.topUpShortfall"]');
@@ -195,12 +201,11 @@ test('prepaid: Pavel Orlov tops up and orders, Vera Lebedeva waits for funds, co
     await more.getByRole('button', { name: 'cash', exact: true }).click();
     await more.getByRole('button', { name: 'Top up', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Top up' })).toBeHidden();
-    await page.getByRole('button', { name: '+ Add product' }).first().click();
+    await page.getByRole('button', { name: 'Add product', exact: true }).first().click();
     await page
       .getByRole('dialog', { name: 'Add product' })
       .getByRole('radio')
       .filter({ hasText: '/ mo' })
-      .filter({ hasNotText: 'already active' })
       .first()
       .click();
   }
@@ -218,7 +223,9 @@ test('prepaid: Pavel Orlov tops up and orders, Vera Lebedeva waits for funds, co
   await page.getByRole('row').filter({ hasText: 'Vera Lebedeva' }).click();
   await expect(page.getByRole('heading', { name: /Vera Lebedeva/ })).toBeVisible();
   await expect(page.getByText(/Waiting for funds: short/)).toBeVisible();
-  await expect(page.getByText(/needs top-up/).first()).toBeVisible();
+  await expect(page.locator('[data-ui="ui.subscriber.prepaid.shortfall"]')).toContainText(
+    /renewal needs/,
+  );
   await expect(page.locator('[data-ui="ui.subscriber.topUpProduct"]').first()).toBeVisible();
 
   // 5. the Prepaid commands list
@@ -258,6 +265,7 @@ test('refund dialog opens on an account with unused credit without recording a p
   }
   expect(eligible, 'the seed includes an account with refundable credit').toBeTruthy();
   await page.goto(`/subscribers/${eligible}`);
+  await page.getByRole('tab', { name: 'Account', exact: true }).click();
   await page.getByRole('button', { name: 'Refund unused credit' }).click();
   const dialog = page.getByRole('dialog', { name: 'Record refund' });
   await expect(dialog.getByText(/does not send money/)).toBeVisible();
@@ -316,7 +324,7 @@ test('user changes the initial password, signs in again and cannot manage users'
 test('admin opens Users and its forms without changing users', async ({ page }) => {
   await page.goto('/users');
   await signIn(page);
-  await expect(page.getByRole('heading', { name: 'Users', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Users', level: 1, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'New user' }).click();
   await expect(page.getByRole('dialog').getByLabel('Initial password')).toBeVisible();
   await page.getByRole('button', { name: 'Cancel' }).click();

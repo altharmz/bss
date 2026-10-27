@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
@@ -374,6 +375,7 @@ export function OfferingModal({
   return (
     <>
       <Modal
+        onSubmit={submitDialogPrimary}
         title={offering.name}
         subtitle={[offering.code, offering.specification].filter(Boolean).join(' · ')}
         width={600}
@@ -683,6 +685,7 @@ export function NewOfferingModal({
   return (
     <>
       <Modal
+        onSubmit={submitDialogPrimary}
         title="New product offering"
         width={600}
         onClose={creatingSpec ? () => undefined : onClose}

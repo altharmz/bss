@@ -27,6 +27,7 @@
   --space-lg: 16px;
   --space-xl: 24px;   /* page gutter */
   --space-2xl: 32px;  /* between sections */
+  --space-8: var(--space-2xl); /* dialog viewport gutter */
   --space-3xl: 48px;
 
   /* Radii */

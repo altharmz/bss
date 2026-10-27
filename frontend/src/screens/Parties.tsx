@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState, type ReactNode } from 'react';
 import type { CustomerStatus } from '../api/bss';
@@ -409,6 +410,7 @@ interface FrameProps {
 function Frame(p: FrameProps) {
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={p.title}
       width={560}
       onClose={p.onClose}

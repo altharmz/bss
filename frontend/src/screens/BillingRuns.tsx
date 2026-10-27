@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useEffect, useRef, useState, type MouseEvent, type CSSProperties } from 'react';
 import {
@@ -564,6 +565,7 @@ function RunModal({
 
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={`Run for ${run.runDate}`}
       subtitle={
         <span className="bss-run-subtitle">

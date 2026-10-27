@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { Account, PrepaidBalance } from '../api/bss';
@@ -137,6 +138,7 @@ export function PrepaidTransferModal({
 
   return (
     <Modal
+      onSubmit={confirming ? undefined : submitDialogPrimary}
       title="Transfer funds"
       width={560}
       onClose={() => {

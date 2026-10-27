@@ -205,7 +205,19 @@ bottom-left. `ToastMessage` shares the visual rendering with the gallery's stati
 ### Ledger dialogs (slice 3b2b2b1)
 
 `Dialog({ size: 'S'|'M'|'L', title, context?, step?: { n, of }, footer?, ui?, onClose })`
-uses fixed 400/560/760 px sizes, a padded body and subtle footer. Its context line sits
+uses fixed 400/560/760 px sizes, a padded body and subtle footer. The dialog is a
+viewport-bounded column (`100dvh` less two `--space-8` gutters); only
+`.bss-dialog-body` scrolls, while header/footer stay fixed. `Modal` inherits this.
+Loaded child forms use `DialogFooter` to portal actions into the fixed footer without
+moving form state. Native form submit buttons keep an explicit `form` id association
+when portaled, preserving browser validation. Form callers pass optional
+`onSubmit={submitDialogPrimary}` to activate the enabled footer primary on Enter from
+a single-line input. Legacy secondary-styled main actions may explicitly designate
+their target with `data-dialog-primary`, preserving their current appearance. Textareas,
+non-text controls, composition and destructive buttons are excluded; transfer confirms
+pass `undefined` to opt out explicitly, as do destructive End and cancellation panels.
+Order metadata's Save details lives in the footer and owns Enter while that panel is
+open; draft Submit stays available as a secondary action. Its context line sits
 under the title; the step follows the title. `preview` renders static gallery examples
 without an overlay or Escape handler. `Modal` temporarily delegates to Dialog, mapping
 widths ≤440 to S, ≤620 to M, and larger widths to L; existing `subtitle` becomes context.

@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
@@ -322,6 +323,7 @@ function EditDraft({
     );
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="Edit draft"
       width={560}
       onClose={onClose}
@@ -459,6 +461,7 @@ function OrderModal({
 
   return (
     <Modal
+      onSubmit={panel === null || panel === 'details' ? submitDialogPrimary : undefined}
       title={`Order ${shortId(orderId)}`}
       subtitle={<StatusPill kind="order" status={order.state ?? ''} label={order.state ?? '—'} />}
       width={680}
@@ -500,9 +503,23 @@ function OrderModal({
               Edit draft
             </Button>
           )}
-          {state === 'draft' && (
+          {panel === 'details' && (
             <Button
               variant="primary"
+              disabled={busy || Object.keys(changes).length === 0}
+              onClick={() =>
+                void run(async () => {
+                  await patchOrderDetails(orderId, changes);
+                  done('Order details saved');
+                })
+              }
+            >
+              Save details
+            </Button>
+          )}
+          {state === 'draft' && (
+            <Button
+              variant={panel === 'details' ? 'secondary' : 'primary'}
               data-ui="ui.orders.submitDraft"
               disabled={busy}
               onClick={() => void submit()}
@@ -611,20 +628,6 @@ function OrderModal({
                 ))}
               </select>
             </label>
-            <div>
-              <Button
-                variant="primary"
-                disabled={busy || Object.keys(changes).length === 0}
-                onClick={() =>
-                  void run(async () => {
-                    await patchOrderDetails(orderId, changes);
-                    done('Order details saved');
-                  })
-                }
-              >
-                Save details
-              </Button>
-            </div>
           </div>
         )}
         {panel === 'delete' && (

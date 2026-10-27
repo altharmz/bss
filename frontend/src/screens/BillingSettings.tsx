@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { useState } from 'react';
 import { loadAccounts } from '../api/bss';
 import {
@@ -232,6 +233,7 @@ function SettingFormModal({
   const valid = form.name.trim() !== '';
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={setting ? `Edit ${setting.name}` : `New ${tab.word}`}
       width={480}
       onClose={onClose}
@@ -317,6 +319,7 @@ function DeleteSettingModal({
   const write = useWrite(onDone);
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={`Delete ${setting.name}`}
       width={480}
       onClose={onClose}

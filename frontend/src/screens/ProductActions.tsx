@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useRef, useState } from 'react';
 import {
@@ -173,6 +174,7 @@ export function ProductChangeDialog({
 
   return (
     <Modal
+      onSubmit={change === 'end' ? undefined : submitDialogPrimary}
       title={`${TITLE[change]}: ${name}`}
       width={520}
       onClose={() => {
@@ -320,6 +322,7 @@ export function ChangeOfferingDialog({
 
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={`Change offering: ${name}`}
       width={720}
       onClose={() => {

@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
@@ -115,6 +116,7 @@ function NewNumber({ onClose, onCreated }: { onClose: () => void; onCreated: () 
   }
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="New number"
       width={560}
       onClose={onClose}
@@ -123,6 +125,7 @@ function NewNumber({ onClose, onCreated }: { onClose: () => void; onCreated: () 
         <>
           <Button onClick={onClose}>Cancel</Button>
           <Button
+            data-dialog-primary
             disabled={busy || uncertain || !/^[1-9][0-9]{7,14}$/.test(value)}
             onClick={() => void submit()}
           >
@@ -188,6 +191,7 @@ function NumberDetail({
   }
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={number.value ?? 'Number'}
       width={640}
       onClose={onClose}

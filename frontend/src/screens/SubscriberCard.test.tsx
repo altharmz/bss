@@ -2937,6 +2937,18 @@ describe('product actions', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('does not end a product on Enter from its date field', async () => {
+    const { fetchMock } = backend({ [`POST ${ORDERS}`]: completed });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    openMenu(row);
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'End on a date…' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.keyDown(within(dialog).getByLabelText('Date'), { key: 'Enter' });
+    expect(posts(fetchMock)).toEqual([]);
+    expect(screen.getByRole('dialog')).toBe(dialog);
+  });
+
   it('ends a postpaid product on a date with a delete item and says how it is billed', async () => {
     const { fetchMock } = backend({ [`POST ${ORDERS}`]: completed });
     await open();
@@ -3520,6 +3532,12 @@ describe('Ledger subscriber header', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     expectUi('ui.subscriber.moreActions');
     expect(screen.queryByRole('menuitem', { name: 'Delete…' })).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: 'Record payment' })).toHaveProperty(
+        'disabled',
+        false,
+      ),
+    );
     fireEvent.click(screen.getByRole('menuitem', { name: 'Record payment' }));
     expect(await screen.findByRole('dialog', { name: 'Record payment' })).toBeTruthy();
   });

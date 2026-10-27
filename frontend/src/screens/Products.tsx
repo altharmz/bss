@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { useState } from 'react';
 import { loadNumbers } from '../api/numbers';
 import { loadProduct, loadProducts, PRODUCT_STATES, type InventoryProduct } from '../api/products';
@@ -185,6 +186,7 @@ function ProductDetail({ product, onClose }: { product: InventoryProduct; onClos
   const p = loaded.status === 'ok' ? loaded.data : product;
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={`Product ${shortId(id)}`}
       subtitle={p.productOffering?.name ?? p.name}
       width={640}

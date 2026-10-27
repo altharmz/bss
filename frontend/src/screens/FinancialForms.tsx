@@ -1,3 +1,5 @@
+import { DialogFooter } from '../ui/kit';
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { Children, cloneElement, isValidElement, useState } from 'react';
 import type { AccountRecord, AccountState } from '../api/bss';
@@ -164,7 +166,13 @@ export function FinancialFormModal({
   const owners = useResource('financial-owners', loadOwnerChoices);
   const title = account ? `Edit ${account.name}` : `New ${NAME[kind]}`;
   return (
-    <Modal title={title} width={560} onClose={onClose} ui={`${MARKER[kind]}.form`}>
+    <Modal
+      onSubmit={submitDialogPrimary}
+      title={title}
+      width={560}
+      onClose={onClose}
+      ui={`${MARKER[kind]}.form`}
+    >
       {owners.status === 'loading' && (
         <div className="bss-modal-body">
           <SkeletonRows columns={[{ key: 'a', label: '', width: '1fr' }]} rows={5} />
@@ -345,7 +353,7 @@ function Body({
           />
         </fieldset>
       </div>
-      <footer className="bss-modal-footer">
+      <DialogFooter>
         <Footer write={write} onRefresh={() => onDone('Refreshed')}>
           <Button onClick={onClose}>Cancel</Button>
           <Button
@@ -366,7 +374,7 @@ function Body({
             {account ? 'Save' : 'Create'}
           </Button>
         </Footer>
-      </footer>
+      </DialogFooter>
     </>
   );
 }
@@ -390,6 +398,7 @@ export function DeleteFinancialModal({
   const write = useWrite(onDone);
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={`Delete ${account.name}`}
       width={480}
       onClose={onClose}

@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
 import { requiresNumber } from '../api/numbers';
@@ -202,6 +203,7 @@ export function AddProductModal({
 
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={draft === undefined ? 'Add product' : 'Edit draft'}
       width={720}
       onClose={onClose}

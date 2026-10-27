@@ -2,6 +2,15 @@
 
 ## GUI review fixes
 
+G1b browser verification also updates stale pre-redesign smoke selectors for navigation,
+buttons, mounted tabs, MoneyStrip/shortfall and heading scope, preserving the scenario
+assertions. The “already active” offering badge is informational and repeat purchases are
+supported; removing the smoke-only exclusion makes repeat runs work without new fixtures
+or changed business rules. `make web-e2e` passed all eight browser tests. Dialog screenshots
+at 1280/1600 confirm visible actions and no horizontal overflow.
+
+- G1b (B2): Dialog/Modal use a bounded flex column with a scrolling body and fixed header/footer. DialogFooter portals the two loaded legacy form footers while keeping their state, and the Users native form retains validation through an explicit form association; every Modal caller opts into its enabled footer primary's existing click path. Single-line Enter excludes textarea/non-text controls, composition, disabled/destructive actions and transfer confirmation. Component coverage pins structure and exclusions; dialogs.spec.ts checks New category, Edit subscriber with media, New offering and Add product at 1366×768/1920×900. Requests and markers unchanged. Targeted npm command remains unavailable under guard.sh (G1a); permitted make targets and the commit hook provide verification.
+
 - G1a (B4, B5): all Menu lists now portal to document.body with fixed trigger placement, flip-up and scroll/resize dismissal; keyboard, outside click and focus return stay. Subscribers derives its header currency from all loaded accounts and Amount displays each row's currency. MoneyField requires an explicit currency; a TypeScript AST guard rejects currency literals outside tests/gallery. New component coverage and menu screenshot assertions pin these behaviours; make web-shots passed and Subscribers, prepaid/postpaid menus (including the single-product card) and UI kit were reviewed at 1280/1600 with no horizontal overflow. Requests and markers unchanged. G1 splits by ID: all B2 dialog/Enter/e2e work remains in G1b. The prescribed targeted container test command was rejected by guard.sh; verification uses make targets and the commit hook.
 
 ## Ledger v2: visual redesign (designed 2026-10-26)

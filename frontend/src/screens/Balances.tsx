@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { useState } from 'react';
 import { loadBucketDetail, loadBucketRows, BUCKET_STATUSES, type BucketRow } from '../api/balances';
 import {
@@ -261,7 +262,13 @@ function BucketDialog({ row, onClose }: { row: BucketRow; onClose: () => void })
   const { timeZone } = useSystemContext();
   const detail = useResource(`bucket:${row.bucketId}`, (signal) => loadBucketDetail(row, signal));
   return (
-    <Modal title="Bucket" width={520} onClose={onClose} ui="ui.balances.bucketDetail">
+    <Modal
+      onSubmit={submitDialogPrimary}
+      title="Bucket"
+      width={520}
+      onClose={onClose}
+      ui="ui.balances.bucketDetail"
+    >
       <div className="bss-modal-body">
         {detail.status === 'loading' && <SkeletonRows columns={BUCKET_COLUMNS} rows={3} />}
         {detail.status === 'error' && (

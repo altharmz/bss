@@ -676,3 +676,14 @@ to 400/560/760 px. UI kit previews all sizes and the step header; D7 write-state
 are completed in slice 3b2b2b2.
 
 Ledger v2 slice 3b2b2b2 migrates all legacy note callers, including nested catalog forms, product actions, subscriber forms and prepaid write/watch panels. Shared Footer shows negative Refused notes and warning unsure notes with the failed call; unsure replaces the write action with primary Refresh. Busy disables Cancel and shows the primary spinner, and shared-footer editable forms disable their fields. UI kit previews all four write states. The current ApiError exposes no server code, so live refusals omit it; Footer supports an optional presentation code, shown in the gallery and component test.
+
+### GUI review G1b: dialog reachability (B2)
+
+All Dialog/Modal screens keep their header and footer within the viewport, with only
+the body scrolling. This includes Edit subscriber's loaded form and billing media,
+financial account forms, Users native forms, category/catalog edits, New offering and Add product. Order
+metadata's Save details also stays in the footer; Enter saves those details while draft
+Submit remains available. Number forms retain their existing button appearance. Enter
+from a single-line input activates the enabled footer primary; textarea, destructive,
+disabled, destructive End/cancel panels and transfer-confirm actions are excluded.
+No request bodies or markers change.

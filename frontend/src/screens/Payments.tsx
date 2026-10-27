@@ -1,3 +1,4 @@
+import { submitDialogPrimary } from '../ui/kit';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   loadPayment,
@@ -152,6 +153,7 @@ export function PaymentDialog({ paymentId, onClose }: { paymentId: string; onClo
   const payment = detail.status === 'ok' ? detail.data : null;
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title={`Payment ${shortId(paymentId)}`}
       width={640}
       onClose={onClose}

@@ -1,3 +1,5 @@
+import { DialogFooter } from '../ui/kit';
+import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState, type ReactNode } from 'react';
 import {
@@ -127,6 +129,7 @@ export function NewSubscriberModal({
 
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="New subscriber"
       width={560}
       onClose={onClose}
@@ -229,6 +232,7 @@ function InitialProduct({ accountId, onDone }: { accountId: string; onDone: () =
     );
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="Subscriber created"
       width={560}
       onClose={onDone}
@@ -263,6 +267,7 @@ export function EditSubscriberModal({
   const profile = useResource(`profile:${account.id}`, (signal) => loadProfile(account, signal));
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="Edit subscriber"
       width={560}
       onClose={onClose}
@@ -547,7 +552,7 @@ function EditForm({
           </div>
         </section>
       </div>
-      <footer className="bss-modal-footer">
+      <DialogFooter>
         {problem !== null && (
           <Note tone="negative" className="footer-push">
             {problem}
@@ -557,7 +562,7 @@ function EditForm({
         <Button variant="primary" disabled={!valid || !changed || busy} onClick={() => void save()}>
           Save
         </Button>
-      </footer>
+      </DialogFooter>
     </>
   );
 }
@@ -600,6 +605,7 @@ export function DeleteSubscriberModal({
 
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       title="Delete billing account"
       width={480}
       onClose={onClose}

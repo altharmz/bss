@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { DialogFooter, submitDialogPrimary } from '../ui/kit';
+import { useId, useState } from 'react';
 import type { components } from '../api/generated/internal';
 import { explain, getJson, postJson, request } from '../api/client';
 import { useResource } from '../api/useResource';
@@ -129,6 +130,7 @@ function UserForm({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const formId = useId();
   const [username, setUsername] = useState(user?.username ?? '');
   const [role, setRole] = useState<'admin' | 'user'>(user?.role ?? 'user');
   const [disabled, setDisabled] = useState(user?.disabled ?? false);
@@ -139,6 +141,7 @@ function UserForm({
     kind === 'new' ? 'New user' : `${kind === 'edit' ? 'Edit' : 'Reset password for'} ${username}`;
   return (
     <Modal
+      onSubmit={submitDialogPrimary}
       ui="ui.users.manage"
       title={title}
       width={480}
@@ -147,6 +150,7 @@ function UserForm({
       }}
     >
       <form
+        id={formId}
         className="bss-auth-form"
         onSubmit={async (event) => {
           event.preventDefault();
@@ -235,12 +239,14 @@ function UserForm({
         )}
         {self && <p>Saving changes revokes your session. Sign in again afterward.</p>}
         {error && <p role="alert">{error}</p>}
-        <Button type="submit" variant="primary" disabled={busy}>
-          {kind === 'reset' ? 'Reset password' : 'Save'}
-        </Button>
-        <Button disabled={busy} onClick={onClose}>
-          Cancel
-        </Button>
+        <DialogFooter>
+          <Button type="submit" form={formId} variant="primary" disabled={busy}>
+            {kind === 'reset' ? 'Reset password' : 'Save'}
+          </Button>
+          <Button disabled={busy} onClick={onClose}>
+            Cancel
+          </Button>
+        </DialogFooter>
       </form>
     </Modal>
   );
