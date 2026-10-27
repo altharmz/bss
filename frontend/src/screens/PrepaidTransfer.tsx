@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { Account, PrepaidBalance } from '../api/bss';
 import { explain } from '../api/client';
@@ -146,9 +147,9 @@ export function PrepaidTransferModal({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <Note tone="negative" className="footer-push">
               {problem}
-            </div>
+            </Note>
           )}
           <Button disabled={busy} onClick={onClose}>
             Cancel
@@ -204,14 +205,12 @@ export function PrepaidTransferModal({
               <div className="bss-step-head">From number</div>
               {own.status === 'loading' && <span className="bss-secondary">Loading numbers…</span>}
               {own.status === 'error' && (
-                <div className="bss-inline-error">
-                  Failed to load numbers ({explain(own.error)})
-                </div>
+                <Note tone="negative">Failed to load numbers ({explain(own.error)})</Note>
               )}
               {own.status === 'ok' && numbers.length === 0 && (
-                <div className="bss-inline-error">
+                <Note tone="negative">
                   This account has no active product with a number, so it cannot send a transfer.
-                </div>
+                </Note>
               )}
               {numbers.length > 0 && (
                 <Segmented
@@ -248,19 +247,15 @@ export function PrepaidTransferModal({
                 <span className="bss-secondary"> Looking up…</span>
               )}
               {'state' in lookup && lookup.state === 'error' && (
-                <div className="bss-inline-error">Lookup failed ({lookup.message})</div>
+                <Note tone="negative">Lookup failed ({lookup.message})</Note>
               )}
-              {'found' in lookup && !lookup.found && (
-                <div className="bss-inline-error">{lookup.why}</div>
-              )}
+              {'found' in lookup && !lookup.found && <Note tone="negative">{lookup.why}</Note>}
               {receiver !== null && (
                 <div className="bss-secondary">
                   {receiver.account.customerName} · {accountLabel(receiver.account.id)}
                 </div>
               )}
-              {receiverProblem !== null && (
-                <div className="bss-inline-error">{receiverProblem}</div>
-              )}
+              {receiverProblem !== null && <Note tone="negative">{receiverProblem}</Note>}
             </section>
             <section>
               <div className="bss-step-head">Amount</div>
@@ -274,12 +269,10 @@ export function PrepaidTransferModal({
               />{' '}
               <span className="bss-secondary">{account.currency}</span>
               {amountText.trim() !== '' && amount === null && (
-                <div className="bss-inline-error">Enter an amount with at most 2 decimals.</div>
+                <Note tone="negative">Enter an amount with at most 2 decimals.</Note>
               )}
               {amount !== null && cents > spendable && (
-                <div className="bss-inline-error">
-                  Enter at most the available {formatCents(spendable)}.
-                </div>
+                <Note tone="negative">Enter at most the available {formatCents(spendable)}.</Note>
               )}
             </section>
             <section>

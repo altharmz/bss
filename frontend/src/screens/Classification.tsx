@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState, type CSSProperties } from 'react';
 import {
   catalogChanges,
@@ -222,7 +223,7 @@ function CheckList({
   return (
     <fieldset aria-label={label}>
       <legend>{label}</legend>
-      {items.length === 0 && <span className="bss-hint">{none}</span>}
+      {items.length === 0 && <Note tone="info">{none}</Note>}
       {items.map((item) => (
         <div key={item.id}>
           <label>
@@ -340,9 +341,9 @@ function ClassificationModal({
       footer={
         <>
           {problem !== null && (
-            <div className="footer-push bss-inline-error" role="alert">
+            <Note tone="negative" className="footer-push">
               {problem}
-            </div>
+            </Note>
           )}
           {record !== null &&
             deletable &&
@@ -367,9 +368,9 @@ function ClassificationModal({
               </Button>
             ))}
           {record !== null && !deletable && (
-            <span className="footer-push bss-hint">
+            <Note tone="info" className="footer-push">
               It has subcategories or offerings: remove them first to delete it.
-            </span>
+            </Note>
           )}
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!ready || busy} onClick={() => void save()}>
@@ -469,9 +470,7 @@ function ClassificationModal({
             none="No root categories yet."
           />
         )}
-        {error !== null && form.name.trim() !== '' && (
-          <span className="bss-inline-error">{error}</span>
-        )}
+        {error !== null && form.name.trim() !== '' && <Note tone="negative">{error}</Note>}
       </div>
     </Modal>
   );

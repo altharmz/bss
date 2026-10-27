@@ -590,9 +590,11 @@ describe('add product', () => {
       within(dialog).getByText('in the run of 2026-10-02 · on the bill of 2026-10-28'),
     ).toBeTruthy();
     expect(within(dialog).getByText('Then from 2026-10-28')).toBeTruthy();
-    expect(within(dialog).getByRole('note').textContent).toContain(
-      'Balance will exceed the credit limit of 500.00 USD',
-    );
+    expect(
+      within(dialog)
+        .getByText(/Balance will exceed the credit limit/)
+        .closest('[role="note"]')?.textContent,
+    ).toContain('Balance will exceed the credit limit of 500.00 USD');
     expect(
       within(dialog).getByText(/today · the charge is written by the billing run of 2026-10-02/),
     ).toBeTruthy();

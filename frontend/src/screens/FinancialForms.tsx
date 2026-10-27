@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { Note } from '../ui/Note';
+import { Children, cloneElement, isValidElement, useState } from 'react';
 import type { AccountRecord, AccountState } from '../api/bss';
 import { explain } from '../api/client';
 import {
@@ -46,15 +47,18 @@ export function useWrite(onDone: (message: string) => void) {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [unsure, setUnsure] = useState(false);
+  const [failedCall, setFailedCall] = useState<string | undefined>();
   async function run(action: () => Promise<string>) {
     setBusy(true);
     setProblem(null);
     setUnsure(false);
+    setFailedCall(undefined);
     try {
       onDone(await action());
     } catch (error) {
       if (uncertain(error)) {
         setUnsure(true);
+        setFailedCall(error instanceof Error ? error.message : String(error));
         setProblem(`${explain(error)}. Unsure whether it was saved: Refresh to check.`);
       } else {
         setProblem(explain(error));
@@ -63,7 +67,7 @@ export function useWrite(onDone: (message: string) => void) {
       setBusy(false);
     }
   }
-  return { busy, problem, unsure, run };
+  return { busy, problem, unsure, failedCall, run };
 }
 
 export function Footer({
@@ -71,19 +75,76 @@ export function Footer({
   onRefresh,
   children,
 }: {
-  write: ReturnType<typeof useWrite>;
+  write: Pick<ReturnType<typeof useWrite>, 'busy' | 'problem' | 'unsure'> & {
+    code?: string | undefined;
+    failedCall?: string | undefined;
+  };
   onRefresh: () => void;
   children: React.ReactNode;
 }) {
   return (
     <>
-      {write.problem !== null && (
-        <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
-          {write.problem}
-        </div>
+      {write.unsure ? (
+        <Note
+          tone="warning"
+          lead="Unsure whether it was saved."
+          code={write.failedCall}
+          className="bss-write-note"
+        >
+          The request was sent but no answer came back. Refresh to read it back before trying again.
+        </Note>
+      ) : (
+        write.problem !== null && (
+          <Note tone="negative" lead="Refused." code={write.code} className="bss-write-note">
+            {write.problem}
+          </Note>
+        )
       )}
-      {write.unsure && <Button onClick={onRefresh}>Refresh</Button>}
-      {children}
+      <div className="bss-write-actions">
+        {Children.map(children, (child) => {
+          if (!isValidElement<React.ComponentProps<typeof Button>>(child) || child.type !== Button)
+            return child;
+          const action =
+            child.props.variant === 'primary' ||
+            child.props.variant === 'danger' ||
+            Boolean(
+              child.props.onClick &&
+              child.props.children !== 'Cancel' &&
+              child.props.children !== 'Close',
+            );
+          if (write.unsure && action) return null;
+          return cloneElement(child, {
+            disabled: write.busy || child.props.disabled,
+            ...(action
+              ? {
+                  busy: write.busy,
+                  busyLabel: '',
+                  className: `${child.props.className ?? ''} bss-write-button`.trim(),
+                  children: (
+                    <>
+                      <span
+                        className="bss-write-idle-label"
+                        aria-hidden={write.busy && Boolean(child.props.busyLabel)}
+                      >
+                        {child.props.children}
+                      </span>
+                      {child.props.busyLabel && (
+                        <span className="bss-write-busy-label" aria-hidden={!write.busy}>
+                          {child.props.busyLabel}
+                        </span>
+                      )}
+                    </>
+                  ),
+                }
+              : {}),
+          });
+        })}
+        {write.unsure && (
+          <Button variant="primary" onClick={onRefresh}>
+            Refresh
+          </Button>
+        )}
+      </div>
     </>
   );
 }
@@ -177,7 +238,7 @@ function Body({
   return (
     <>
       <div className="bss-modal-body">
-        <section className="bss-form">
+        <fieldset className="bss-form bss-write-fields" disabled={write.busy}>
           <Field label="Name">
             <TextInput value={form.name} onChange={(e) => set({ name: e.target.value })} />
           </Field>
@@ -234,12 +295,12 @@ function Body({
                 </select>
               </Field>
               {financial.status === 'error' && (
-                <div className="bss-inline-error">
+                <Note tone="negative">
                   Failed to load the owner's financial accounts: {explain(financial.error)}.{' '}
                   <Button small onClick={financial.retry}>
                     Retry
                   </Button>
-                </div>
+                </Note>
               )}
               <div className="caption">
                 Only financial accounts of the same owner can be linked; the server refuses others.
@@ -274,17 +335,15 @@ function Body({
               onChange={(e) => set({ currency: e.target.value.toUpperCase() })}
             />
           </Field>
-          {!limit.ok && (
-            <div className="bss-inline-error">Enter a credit limit with at most 2 decimals.</div>
-          )}
-          {!currencyOk && <div className="bss-inline-error">The currency is 3 letters.</div>}
+          {!limit.ok && <Note tone="negative">Enter a credit limit with at most 2 decimals.</Note>}
+          {!currencyOk && <Note tone="negative">The currency is 3 letters.</Note>}
           <Segmented
             label="State"
             value={form.state}
             onChange={(state) => set({ state })}
             options={STATES.map((key) => ({ key, label: key }))}
           />
-        </section>
+        </fieldset>
       </div>
       <footer className="bss-modal-footer">
         <Footer write={write} onRefresh={() => onDone('Refreshed')}>

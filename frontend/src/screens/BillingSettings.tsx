@@ -260,7 +260,7 @@ function SettingFormModal({
       }
     >
       <div className="bss-modal-body">
-        <section className="bss-form">
+        <fieldset className="bss-form bss-write-fields" disabled={write.busy}>
           <Field label="Name">
             {kind === 'formats' ? (
               <select
@@ -297,7 +297,7 @@ function SettingFormModal({
           {kind === 'formats' && (
             <div className="caption">The server stores only these two bill formats.</div>
           )}
-        </section>
+        </fieldset>
       </div>
     </Modal>
   );

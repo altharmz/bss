@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useRef, useState } from 'react';
 import {
   loadFirstCharge,
@@ -181,9 +182,9 @@ export function ProductChangeDialog({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error bss-product-error" role="alert">
+            <Note tone="negative" className="bss-product-error">
               {problem}
-            </div>
+            </Note>
           )}
           {unsure && (
             <Button
@@ -215,7 +216,7 @@ export function ProductChangeDialog({
             value={day}
             onChange={(event) => setDay(event.target.value)}
           />
-          {!valid && <div className="bss-inline-error">Enter a date as YYYY-MM-DD.</div>}
+          {!valid && <Note tone="negative">Enter a date as YYYY-MM-DD.</Note>}
         </section>
         <p className="bss-secondary">{explanation}</p>
       </div>
@@ -328,9 +329,9 @@ export function ChangeOfferingDialog({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error bss-product-error" role="alert">
+            <Note tone="negative" className="bss-product-error">
               {problem}
-            </div>
+            </Note>
           )}
           {unsure && (
             <Button
@@ -421,7 +422,7 @@ export function ChangeOfferingDialog({
               if (!prepaid) setDay(event.target.value);
             }}
           />
-          {!valid && <div className="bss-inline-error">Enter a date from {today}.</div>}
+          {!valid && <Note tone="negative">Enter a date from {today}.</Note>}
           <p className="bss-secondary">
             {prepaid
               ? `The change applies at the next renewal (${day}) and only when the balance covers the new offering's interval; until then the current offering stays.`
@@ -434,7 +435,7 @@ export function ChangeOfferingDialog({
           </div>
           <div className="bss-preview">
             {offeringId === null ? (
-              <div className="bss-hint">Select an offering to see the calculation</div>
+              <Note tone="info">Select an offering to see the calculation</Note>
             ) : (
               <Preview
                 preview={preview}

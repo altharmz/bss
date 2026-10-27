@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState, type ReactNode } from 'react';
 import {
   loadBillDetail,
@@ -279,11 +280,7 @@ function BillBody({
 
       {bill.allowedStates.length > 0 && (
         <div className="bss-bill-actions">
-          {problem !== null && (
-            <div className="bss-inline-error" role="alert">
-              {problem}
-            </div>
-          )}
+          {problem !== null && <Note tone="negative">{problem}</Note>}
           {bill.allowedStates.map((state) =>
             confirming === state ? (
               <span key={state} className="bss-confirm">
@@ -400,9 +397,9 @@ export function RecordPaymentModal({
       footer={
         <>
           {problem !== null && (
-            <div className="footer-push bss-inline-error" role="alert">
+            <Note tone="negative" className="footer-push">
               {problem}
-            </div>
+            </Note>
           )}
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>
@@ -427,7 +424,7 @@ export function RecordPaymentModal({
           />{' '}
           <span className="bss-secondary">{account.currency}</span>
           {amountText.trim() !== '' && amount === null && (
-            <div className="bss-inline-error">Enter an amount with at most 2 decimals.</div>
+            <Note tone="negative">Enter an amount with at most 2 decimals.</Note>
           )}
         </section>
         <section>
@@ -492,13 +489,11 @@ export function RecordPaymentModal({
               </div>
             ))}
           {itemError && (
-            <div className="bss-inline-error">
+            <Note tone="negative">
               {itemError.bill.billNo}: enter at most its remaining amount.
-            </div>
+            </Note>
           )}
-          {tooMuch && (
-            <div className="bss-inline-error">The bills add up to more than the payment.</div>
-          )}
+          {tooMuch && <Note tone="negative">The bills add up to more than the payment.</Note>}
         </section>
       </div>
     </Modal>

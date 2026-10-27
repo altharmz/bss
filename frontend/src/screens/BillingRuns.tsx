@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useEffect, useRef, useState, type MouseEvent, type CSSProperties } from 'react';
 import {
   catchUp,
@@ -297,12 +298,12 @@ export function BillingRunsScreen() {
         {...(runs.refreshError !== null
           ? {
               right: (
-                <span className="bss-inline-error">
+                <Note tone="negative">
                   Refresh failed: {runs.refreshError.message}{' '}
                   <Button small onClick={runs.refresh}>
                     Retry
                   </Button>
-                </span>
+                </Note>
               ),
             }
           : {})}

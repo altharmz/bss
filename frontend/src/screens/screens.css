@@ -130,10 +130,6 @@
   color: var(--neg);
   font-weight: 500;
 }
-.bss-inline-error {
-  font-size: var(--fs-12);
-  color: var(--neg);
-}
 .bss-prorated {
   color: var(--prorate);
 }
@@ -258,11 +254,6 @@
   box-shadow: inset 0 0 0 3px var(--surface);
   background: var(--primary);
 }
-.bss-hint {
-  margin-left: 10px;
-  font-size: var(--fs-12);
-  color: var(--muted);
-}
 .bss-preview {
   padding: 14px 16px;
   border: 1px solid var(--border);
@@ -297,15 +288,6 @@
   margin-top: 12px;
   font-size: var(--fs-12);
   color: var(--muted);
-}
-.bss-warning {
-  margin-top: 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--neg-hover-border);
-  border-radius: var(--r-ctl);
-  background: var(--neg-bg);
-  color: var(--neg);
-  font-size: var(--fs-12);
 }
 
 /* --- billing runs (README "Screen 4") --- */
@@ -631,6 +613,28 @@
   flex-direction: column;
   gap: var(--space-3xl);
 }
+.ui-kit-write-states {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+@media (min-width: 1536px) {
+  .ui-kit-write-states {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.ui-kit-write-label {
+  font: var(--type-code);
+  color: var(--color-ink-3);
+  margin: 0 0 8px;
+}
+.ui-kit-write-balance {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 14px;
+  font: var(--type-label);
+  color: var(--color-ink-3);
+}
 .ui-kit h1 {
   margin: 0;
   font: var(--type-page);
@@ -671,6 +675,12 @@
 }
 .job-result {
   white-space: pre-wrap;
+}
+.job-result pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+  font: var(--type-code);
 }
 .event-options {
   max-height: 220px;

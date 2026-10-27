@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState, type ReactNode } from 'react';
 import type { CustomerStatus } from '../api/bss';
 import { explain } from '../api/client';
@@ -416,9 +417,9 @@ function Frame(p: FrameProps) {
       footer={
         <>
           {p.write.problem !== null && (
-            <div className="footer-push bss-inline-error" role="alert">
+            <Note tone="negative" className="footer-push">
               {p.write.problem}
-            </div>
+            </Note>
           )}
           {p.write.unsure && <Button onClick={p.onRefresh}>Refresh</Button>}
           {p.actions}
@@ -455,9 +456,9 @@ function DeleteControl({
 }) {
   if (block !== null)
     return (
-      <span className="footer-push bss-hint">
+      <Note tone="info" className="footer-push">
         {block}: remove {noun === 'party' ? 'them' : 'those'} first to delete it.
-      </span>
+      </Note>
     );
   if (confirming)
     return (

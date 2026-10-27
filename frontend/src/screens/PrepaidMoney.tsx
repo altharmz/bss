@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useRef, useState } from 'react';
 import {
   balanceActionRequest,
@@ -133,9 +134,9 @@ export function PrepaidMoneyModal({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <Note tone="negative" className="footer-push">
               {problem}
-            </div>
+            </Note>
           )}
           <Button disabled={busy} onClick={onClose}>
             Cancel
@@ -177,12 +178,10 @@ export function PrepaidMoneyModal({
           />{' '}
           <span className="bss-secondary">{account.currency}</span>
           {amountText.trim() !== '' && amount === null && (
-            <div className="bss-inline-error">Enter an amount with at most 2 decimals.</div>
+            <Note tone="negative">Enter an amount with at most 2 decimals.</Note>
           )}
           {limited && amount !== null && cents > spendable && (
-            <div className="bss-inline-error">
-              Enter at most the available {formatCents(spendable)}.
-            </div>
+            <Note tone="negative">Enter at most the available {formatCents(spendable)}.</Note>
           )}
         </section>
         {form === 'topup' && (
@@ -217,10 +216,8 @@ export function PrepaidMoneyModal({
               value={expiresOn}
               onChange={(event) => setExpiresOn(event.target.value)}
             />
-            {!expiryShape && <div className="bss-inline-error">Enter a date as YYYY-MM-DD.</div>}
-            {expiryPast && (
-              <div className="bss-inline-error">Enter today or a later business date.</div>
-            )}
+            {!expiryShape && <Note tone="negative">Enter a date as YYYY-MM-DD.</Note>}
+            {expiryPast && <Note tone="negative">Enter today or a later business date.</Note>}
           </section>
         )}
         <section>

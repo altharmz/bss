@@ -81,6 +81,8 @@ ordinary-user denial and sign-out as well as the existing billing screens.
 
 ### Subscribers list (`ui.subscribers.list`) - `screens/Subscribers.tsx`
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 Ledger v2: account StatusPill, neutral-positive Amount and a copyable BA Id column alongside Subscriber no.
 
 One row per **billing account** (a customer with two accounts is two rows): subscriber
@@ -93,6 +95,8 @@ API: `GET /tmf-api/accountManagement/v5/billingAccount` (all pages),
 `GET /tmf-api/productInventory/v5/product?status=active&fields=billingAccount` (all pages).
 
 ### New subscriber (`ui.subscribers.new`) and Edit subscriber (`ui.subscriber.edit`) - `screens/SubscriberForms.tsx`
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 A subscriber is three TMF resources; **there is no delete** (an account carries products,
 bills and payments - it can be Closed). **+ New subscriber** (list header): a person
@@ -115,6 +119,8 @@ API: `POST/PATCH /tmf-api/partyManagement/v5/{individual|organization}`,
 
 ### Subscriber card (`ui.subscriber.card`) - `screens/SubscriberCard.tsx`
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 Ledger v2: account/product StatusPill, copyable BA Id in the meta line, and neutral-positive movement Amounts. Product actions use the shared keyboard Menu, retaining labels and markers.
 
 Header with name, state, subscriber number, billing account (`BA-xxxxxxxx`), customer
@@ -136,6 +142,8 @@ the PATCH). Design: [next-slices-design.md](next-slices-design.md) section 16.
 
 ### Balance actions (`ui.subscriber.prepaid.history`, `ui.subscriber.prepaid.historyDetail`) - `screens/PrepaidHistory.tsx`
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 Ledger v2: balanceAction StatusPill keeps custom labels; signed Amounts stay neutral for credits.
 
 Prepaid cards only, above Charge history. Lists the account's top-ups, holds, adjustments and
@@ -156,6 +164,8 @@ The dialog also writes (`ui.subscriber.prepaid.cancelTopup`, `cancelAdjustment`,
 
 ### Deactivate a product (`ui.subscriber.deactivate`)
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 A destructive button per product with an inline confirm. It places a **TMF622 order with
 one delete item, effective today** (no `requestedStartDate`): a started product ends today
 (not billed from today); one not started yet is cancelled. A rejected order shows its
@@ -163,6 +173,8 @@ reasons.
 API: `POST /tmf-api/productOrderingManagement/v5/productOrder`.
 
 ### Product actions (`ui.subscriber.productActions`) and pending changes
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 **Actions ▾** on a product row lists what the row allows: **Suspend…** (`ui.subscriber.suspend`,
 active, no pending status change), **Resume…** (`ui.subscriber.resume`, suspended but not by
@@ -188,6 +200,8 @@ is fixed to `max(paidThrough, today)`, the change applies at a funded renewal an
 pending change until then (Undo). API adds `GET /internal/v1/billingAccount/{id}/firstCharge`.
 
 ### Bills (`ui.subscriber.bills`), bill dialog (`ui.subscriber.billDetail`), hold/release (`ui.subscriber.billHold`), record payment (`ui.subscriber.recordPayment`) - `screens/Bills.tsx`
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: bill StatusPill; hold actions use quiet negative buttons.
 
@@ -238,6 +252,8 @@ list filter). Both lists read all pages. Markers: `ui.subscriber.recordRefund`,
 
 ### Add product (`ui.subscriber.addProduct`, `ui.addProduct.saveDraft`, `ui.addProduct.saveDraftChanges`) - `screens/AddProduct.tsx`
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 Modal: 1. pick an Active, sellable offering (filterable list with code, specification and
 today's price); 2. start date (min = business date); 3. **first-charge preview computed by
 the backend** - period, billable days of period days, price, amount, when it is charged
@@ -258,6 +274,8 @@ API: `GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=A
 
 ### Product catalog (`ui.catalog.list`) - `screens/Catalog.tsx`
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 Ledger v2: lifecycle StatusPill and quiet negative destructive actions.
 
 Table of offerings: code, name, specification, the price valid now in the UI currency
@@ -267,6 +285,8 @@ API: `GET .../productOffering`, `GET .../productSpecification`,
 `GET .../productOfferingPrice?priceType=recurring` (all pages).
 
 ### Specifications tab (`ui.catalog.specifications`), `ui.catalog.newSpecification`, `ui.catalog.editSpecification`, `ui.catalog.deleteSpecification` - `screens/Specifications.tsx`
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: lifecycle StatusPill and quiet negative destructive actions.
 
@@ -278,6 +298,8 @@ still shows). **New offering** has **New specification...**, which preselects th
 API: `POST|PATCH|DELETE .../productSpecification` (merge patch of changed fields only).
 
 ### Categories and Catalogs tabs (`ui.catalog.categories`, `ui.catalog.catalogs`) - `screens/Classification.tsx`
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: lifecycle StatusPill; category indentation uses a runtime CSS variable.
 
@@ -295,6 +317,8 @@ API: `POST|PATCH|DELETE .../category`, `.../productCatalog` (merge patch of chan
 
 ### Import / export tab (`ui.catalog.jobs`) - `screens/CatalogJobs.tsx`
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 Ledger v2: quiet negative destructive actions and CSS-based form styling.
 
 One list of import and export jobs (newest first): kind, status, created, completed and the first
@@ -308,6 +332,8 @@ imported is undone." No polling: a job finishes within its request.
 API: `GET|POST|DELETE .../importJob`, `.../exportJob`.
 
 ### Offering detail (`ui.catalog.offeringDetail`), lifecycle step (`ui.catalog.lifecycle`), change price (`ui.catalog.changePrice`)
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 The detail dialog shows the offering and its recurring prices. The lifecycle button offers
 **only the next forward step** (In Design -> Active -> Retired) with an inline confirm
@@ -331,6 +357,8 @@ points to Change price), **End price** (`ui.catalog.endPrice`, from tomorrow) an
 
 ### New offering (`ui.catalog.newOffering`)
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 Modal: code (upper-cased), name, specification, monthly price, valid from, valid to
 (inclusive in the UI, sent as the next midnight). Creating is **two TMF620 calls**, as the
 spec models it: the price first, then the In Design offering referencing it; if the second
@@ -343,6 +371,8 @@ bodies against the real API.
 
 ### Products (`ui.products`, `ui.products.status`, `ui.products.accountChip`, `ui.products.detail`, `ui.products.orderItems`, `ui.products.resource`) - `screens/Products.tsx`
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 Ledger v2: explicit product StatusPill.
 
 Route `/products` (sidebar Products). TMF637 `product` over every status: server filters status and
@@ -351,6 +381,8 @@ start, end, number. A row opens the detail (`GET product/{id}`): dates, order it
 Orders, the realizing resource. Read-only; orders alone change products. Slice 21.
 
 ### Orders (`ui.orders`, `ui.orders.accountChip`, `ui.orders.detail`, `ui.orders.items`, `ui.orders.cancellations`, `ui.orders.command`, `ui.orders.errors`) - `screens/Orders.tsx`
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: explicit order StatusPill.
 
@@ -375,6 +407,8 @@ result (no response or 5xx) the dialog says it is unsure and offers Refresh.
 
 ### Prepaid commands (`ui.prepaidCommands`, `ui.prepaidCommands.accountChip`, `ui.prepaidCommands.detail`, `ui.prepaidCommands.retry`) - `screens/PrepaidCommands.tsx`
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 Ledger v2: command StatusPill uses the actual command state.
 
 Route `/prepaid-commands`, sidebar after Billing runs with a red badge while any command is
@@ -386,6 +420,8 @@ field and the `needs_topup` block (`ui.prepaidCommands.needsTopup`); **Retry** a
 [next-slices-design.md](next-slices-design.md) section 6.
 
 ### Parties (`ui.parties`, `ui.parties.individuals|organizations|customers`) - `screens/Parties.tsx`
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: separate party and customer StatusPill kinds.
 
@@ -406,6 +442,8 @@ settlementAccount?fields=relatedParty`; `PATCH|DELETE` on the three. Design:
 
 ### Financial accounts writes (`ui.financialAccounts.new|edit|delete`) - `screens/FinancialForms.tsx`
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 The Financial accounts screen has **+ New financial account** (name, owner from the individuals and
 organizations, account type, description, informational credit limit and currency, state), a row
 **Edit** (merge patch of changed fields, owner editable, the server refuses while accounts link)
@@ -415,6 +453,8 @@ after an uncertain result it offers Refresh. API: `POST|PATCH|DELETE .../financi
 section 16.
 
 ### Accounts: party and settlement tabs (`ui.accounts.party|settlement`) - `screens/FinancialAccounts.tsx`
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: account StatusPill and neutral-positive Amount figures.
 
@@ -429,6 +469,8 @@ is the financial-account form plus a **Financial account** select of the owner's
 [next-slices-design.md](next-slices-design.md) section 17.
 
 ### Billing settings (`ui.billingSettings.cycles|formats|media`) - `screens/BillingSettings.tsx`
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: built-in settings use an attribute Tag; destructive actions use quiet negative buttons.
 
@@ -448,6 +490,8 @@ billPresentationMedia`, `PATCH .../billingAccount/{id}`. Design:
 
 ### Bills (`ui.bills`) - `screens/GlobalBills.tsx`, `screens/BillLinks.tsx`
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 Ledger v2: bill StatusPill; hold actions use quiet negative buttons.
 
 Reads plus the existing bill dialog. Route `/bills`, sidebar Billing > Bills (no count): tabs **Bills** |
@@ -461,6 +505,8 @@ due) with the same date filter and a detail dialog. API: `GET .../customerBillMa
 appliedCustomerBillingRate`. Design: [next-slices-design.md](next-slices-design.md) section 20.
 
 ### Payments (`ui.payments`, `ui.subscriber.payments`) - `screens/Payments.tsx`
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: payment StatusPill for payments and refunds.
 
@@ -476,6 +522,8 @@ Subscribers link to their cards. API: `GET .../payment/v4/payment|refund?account
 section 19.
 
 ### Balances (`ui.balances`, `ui.balances.buckets|topups|adjustments|holds|transfers`, `ui.balances.bucketDetail`) - `screens/Balances.tsx`
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: bucket and balanceAction StatusPill retain the action-specific note labels.
 
@@ -494,6 +542,8 @@ section 22.
 
 ### Integrations (`ui.integrations`, `ui.integrations.list|new|form|events|delete|confirmDelete`) and System (`ui.system`) - `screens/Integrations.tsx`
 
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+
 Ledger v2: delivery and health StatusPill use their actual states.
 
 Route `/integrations`, sidebar System > Integrations, visible to every role. Lists the live hubs
@@ -506,6 +556,8 @@ reads `/healthz` and `/billing-status` (a 503 body is shown) and links the BssBi
 in a new tab. Design: [next-slices-design.md](next-slices-design.md) section 23.
 
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
+
+Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: run/runOutcome StatusPill; progress width uses a runtime CSS variable.
 
@@ -613,4 +665,6 @@ Shared Ledger foundations: every existing PageTitle now uses PageHeader title/co
 Ledger v2 slice 3b2b2b1 applies shared S/M/L Dialog geometry to every Modal caller,
 including context, close control, body spacing and footer. Legacy widths map at 440/620
 to 400/560/760 px. UI kit previews all sizes and the step header; D7 write-state changes
-remain in slice 3b2b2b2.
+are completed in slice 3b2b2b2.
+
+Ledger v2 slice 3b2b2b2 migrates all legacy note callers, including nested catalog forms, product actions, subscriber forms and prepaid write/watch panels. Shared Footer shows negative Refused notes and warning unsure notes with the failed call; unsure replaces the write action with primary Refresh. Busy disables Cancel and shows the primary spinner, and shared-footer editable forms disable their fields. UI kit previews all four write states. The current ApiError exposes no server code, so live refusals omit it; Footer supports an optional presentation code, shown in the gallery and component test.

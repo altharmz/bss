@@ -32,6 +32,15 @@ function checkStyles(file: string, source: string): string[] {
 const src = join(process.cwd(), 'src');
 
 describe('Ledger style guard', () => {
+  it('migrates every legacy note caller to the Ledger Note component', () => {
+    expect(
+      files(src)
+        .filter((file) => /\.(css|tsx)$/.test(file) && !file.includes('.test.'))
+        .flatMap((file) =>
+          /bss-(warning|hint|inline-error)\b/.test(readFileSync(file, 'utf8')) ? [file] : [],
+        ),
+    ).toEqual([]);
+  });
   it('reports literal colours, px fonts and weight 700 with file and line', () => {
     expect(
       checkStyles(

@@ -176,7 +176,7 @@ range emphasis; existing `left`/`right` slots remain for screen migration and pa
 `Note({ tone, lead?, code?, children })` supports info, warning and negative tones.
 Negative notes have role alert; the other tones have role note. Leads are bold,
 server codes are mono ink-3, and each tone has its own decorative SVG glyph.
-The gallery previews all three tones. Existing screen callers migrate in 3b2b.
+The gallery previews all three tones. All legacy screen note callers migrated in 3b2b2b2; `className` and `data-ui` preserve caller layout and markers.
 `ErrorBlock` captures each error's failure instant once, displaying HH:MM:SS in the
 system context's business zone. Bootstrap errors preserve their call and Retry when
 context is unavailable, omitting the timestamp until context exists.
@@ -208,3 +208,7 @@ without an overlay or Escape handler. `Modal` temporarily delegates to Dialog, m
 widths ≤440 to S, ≤620 to M, and larger widths to L; existing `subtitle` becomes context.
 Existing callers' `bss-modal-body` containers own the same 20 px body spacing without
 double padding. Escape, overlay clicks and the close button preserve closing behavior.
+
+### Ledger write footer (slice 3b2b2b2)
+
+`Footer` keeps Cancel/Close and write buttons as direct children. It disables buttons while busy, reserves space for the write action’s spinner and both labels to keep its width stable while busy, and replaces write actions with primary Refresh when unsure. Refusals use a negative Note with “Refused.”; uncertain outcomes use the D7 warning and `useWrite.failedCall`. Optional `write.code` is presentation data; current ApiError has no code, so live refusals omit it. Editable forms using Footer wrap fields in a disabled fieldset while busy. UI kit shows idle, busy, refused and unsure dialogs; Numbers is included in reference captures.

@@ -187,7 +187,7 @@ function NewSubscription({
       }
     >
       <div className="bss-modal-body">
-        <section className="bss-form">
+        <fieldset className="bss-form bss-write-fields" disabled={write.busy}>
           <Field label="API">
             <select
               className="bss-input"
@@ -226,7 +226,7 @@ function NewSubscription({
               ))}
             </div>
           </fieldset>
-        </section>
+        </fieldset>
       </div>
     </Modal>
   );

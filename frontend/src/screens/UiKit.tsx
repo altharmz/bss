@@ -30,6 +30,7 @@ import {
   useToast,
 } from '../ui/kit';
 import './screens.css';
+import { Footer } from './FinancialForms';
 
 /** Ledger Components artboard: live controls without screen-specific requests. */
 export function UiKitScreen() {
@@ -40,6 +41,59 @@ export function UiKitScreen() {
   return (
     <div className="ui-kit" data-ui="ui.kit">
       <h1>UI kit</h1>
+      <section>
+        <h2>Dialog write states</h2>
+        <div className="ui-kit-write-states">
+          {(['idle', 'busy', 'refused', 'unsure'] as const).map((state) => (
+            <div key={state}>
+              <p className="ui-kit-write-label">{state}</p>
+              <Dialog
+                preview
+                size="M"
+                title="Record payment"
+                context="Ivan Petrov · BA-3F9A12C0"
+                onClose={() => {}}
+                footer={
+                  <Footer
+                    write={{
+                      busy: state === 'busy',
+                      unsure: state === 'unsure',
+                      problem:
+                        state === 'refused'
+                          ? "A single payment can't exceed 10,000.00 EUR. Check the amount and try again."
+                          : null,
+                      code: state === 'refused' ? 'PAYMENT_LIMIT' : undefined,
+                      failedCall: state === 'unsure' ? 'POST /payment → Network error' : undefined,
+                    }}
+                    onRefresh={() => {}}
+                  >
+                    <Button variant="quiet">Cancel</Button>
+                    <Button variant="primary" busyLabel="Recording…">
+                      Record {state === 'refused' ? '42,100.00' : '42.10'} EUR
+                    </Button>
+                  </Footer>
+                }
+              >
+                <div className="ui-kit-write-balance">
+                  <span>
+                    Balance <Amount cents={-4210} />
+                  </span>
+                  <span>
+                    Balance after <Amount cents={state === 'refused' ? 4205790 : 0} />
+                  </span>
+                </div>
+                <Field label="Amount received">
+                  <MoneyField
+                    defaultValue={state === 'refused' ? '42100.00' : '42.10'}
+                    disabled={state === 'busy'}
+                    readOnly={state === 'unsure'}
+                  />
+                </Field>
+              </Dialog>
+            </div>
+          ))}
+        </div>
+      </section>
       <section>
         <h2>Dialogs</h2>
         {(['S', 'M', 'L'] as const).map((size) => (

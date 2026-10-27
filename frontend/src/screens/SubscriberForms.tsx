@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState, type ReactNode } from 'react';
 import {
   BUILT_IN_CYCLE,
@@ -134,9 +135,9 @@ export function NewSubscriberModal({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <Note tone="negative" className="footer-push">
               {problem}
-            </div>
+            </Note>
           )}
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>
@@ -193,10 +194,8 @@ export function NewSubscriberModal({
               />
             </Field>
           )}
-          {day === null && <div className="bss-inline-error">The cycle day is 1 to 28.</div>}
-          {!credit.ok && (
-            <div className="bss-inline-error">Enter a credit limit with at most 2 decimals.</div>
-          )}
+          {day === null && <Note tone="negative">The cycle day is 1 to 28.</Note>}
+          {!credit.ok && <Note tone="negative">Enter a credit limit with at most 2 decimals.</Note>}
           <div className="caption">
             Currency {context.currency}. The cycle day and the currency cannot be changed later.
             {prepaid && ' A prepaid account spends only funds it holds; it takes no credit limit.'}
@@ -424,9 +423,7 @@ function EditForm({
               onChange={(e) => setLimitText(e.target.value)}
             />
           </Field>
-          {!credit.ok && (
-            <div className="bss-inline-error">Enter a credit limit with at most 2 decimals.</div>
-          )}
+          {!credit.ok && <Note tone="negative">Enter a credit limit with at most 2 decimals.</Note>}
           <Field label="Financial account">
             <select
               className="bss-input"
@@ -451,12 +448,12 @@ function EditForm({
             </select>
           </Field>
           {financial.status === 'error' && (
-            <div className="bss-inline-error">
+            <Note tone="negative">
               Failed to load the owner's financial accounts: {explain(financial.error)}.{' '}
               <Button small onClick={financial.retry}>
                 Retry
               </Button>
-            </div>
+            </Note>
           )}
           <div className="caption">
             Only financial accounts of the same owner can be linked; the server refuses others.
@@ -531,7 +528,7 @@ function EditForm({
           {(cycles.status === 'error' ||
             formats.status === 'error' ||
             media.status === 'error') && (
-            <div className="bss-inline-error">
+            <Note tone="negative">
               Failed to load the billing settings.{' '}
               <Button
                 small
@@ -543,7 +540,7 @@ function EditForm({
               >
                 Retry
               </Button>
-            </div>
+            </Note>
           )}
           <div className="caption">
             Cycle specifications, formats and media are managed under Billing settings.
@@ -552,9 +549,9 @@ function EditForm({
       </div>
       <footer className="bss-modal-footer">
         {problem !== null && (
-          <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+          <Note tone="negative" className="footer-push">
             {problem}
-          </div>
+          </Note>
         )}
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="primary" disabled={!valid || !changed || busy} onClick={() => void save()}>
@@ -611,9 +608,9 @@ export function DeleteSubscriberModal({
       footer={
         <>
           {problem !== null && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <Note tone="negative" className="footer-push">
               {problem}
-            </div>
+            </Note>
           )}
           {unsure && <Button onClick={() => onDeleted('Refreshed')}>Refresh</Button>}
           <Button onClick={onClose}>Cancel</Button>

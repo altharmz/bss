@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useCallback, useState, type ReactNode } from 'react';
 import {
   loadAccount,
@@ -660,9 +661,7 @@ function PrepaidFigures({
         </div>
         <div className="caption">holds not spent yet</div>
         {balance.status === 'error' && (
-          <div className="bss-inline-error" role="alert">
-            Failed to load the prepaid balance ({balance.error.message})
-          </div>
+          <Note tone="negative">Failed to load the prepaid balance ({balance.error.message})</Note>
         )}
       </div>
       <div className="bss-kpi" data-ui="ui.subscriber.prepaid.paidThrough">
@@ -853,11 +852,7 @@ function ProductRow({
                   Waiting for funds: short {formatCents(toCents(fundingWait.shortfall))}
                 </div>
               )}
-              {problem !== null && (
-                <div className="bss-inline-error" role="alert">
-                  {problem}
-                </div>
-              )}
+              {problem !== null && <Note tone="negative">{problem}</Note>}
             </div>
           ),
           activated: product.startDate,

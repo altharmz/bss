@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
   COMMAND_PAGE,
@@ -288,15 +289,11 @@ function CommandModal({
     >
       <div className="bss-modal-body">
         {fresh.status === 'error' && (
-          <div className="bss-inline-error" role="alert">
+          <Note tone="negative">
             Failed to refresh the command ({fresh.error.message}); showing the list's copy.
-          </div>
+          </Note>
         )}
-        {problem !== null && (
-          <div className="bss-inline-error" role="alert">
-            {problem}
-          </div>
-        )}
+        {problem !== null && <Note tone="negative">{problem}</Note>}
         <dl className="bss-details">
           <dt>Id</dt>
           <dd className="bss-mono">{command.id}</dd>

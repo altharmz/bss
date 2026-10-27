@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
   createNumber,
@@ -304,10 +305,10 @@ export function NumberPicker({
               </option>
             ))}
       </select>
-      <span className="bss-hint">
+      <Note tone="info">
         The order checks availability for the requested dates, including future claims and
         quarantine.
-      </span>
+      </Note>
     </label>
   );
 }

@@ -12,8 +12,8 @@ describe('Ledger Id', () => {
     const section = screen.getByRole('heading', { name: 'Amounts and ids' }).closest('section');
     if (!section) throw new Error('Identifier gallery section is missing');
     const gallery = within(section);
-    expect(screen.getByText('−42.10')).toBeTruthy();
-    expect(screen.getByText('+10.00')).toBeTruthy();
+    expect(gallery.getByText('−42.10')).toBeTruthy();
+    expect(gallery.getByText('+10.00')).toBeTruthy();
     expect(
       gallery.getAllByRole('button', { name: 'Copy 81d0e7b4-0000-4000-8000-000000000001' }),
     ).toHaveLength(ID_PREFIXES.length);

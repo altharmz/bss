@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
   createSpecification,
@@ -203,9 +204,9 @@ export function SpecificationModal({
       footer={
         <>
           {problem !== null && (
-            <div className="footer-push bss-inline-error" role="alert">
+            <Note tone="negative" className="footer-push">
               {problem}
-            </div>
+            </Note>
           )}
           {spec !== null &&
             used === 0 &&
@@ -230,9 +231,9 @@ export function SpecificationModal({
               </Button>
             ))}
           {spec !== null && used > 0 && (
-            <span className="footer-push bss-hint">
+            <Note tone="info" className="footer-push">
               Used by {used} offering{used === 1 ? '' : 's'}: it cannot be deleted.
-            </span>
+            </Note>
           )}
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!ready || busy} onClick={() => void save()}>

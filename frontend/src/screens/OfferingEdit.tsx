@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
   deletePrice,
@@ -90,9 +91,9 @@ export function OfferingEditModal({
       footer={
         <>
           {message !== null && (
-            <div className="footer-push bss-inline-error" role="alert">
+            <Note tone="negative" className="footer-push">
               {message}
-            </div>
+            </Note>
           )}
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!ready || busy} onClick={() => void save()}>
@@ -173,12 +174,10 @@ export function OfferingEditModal({
         </div>
         <fieldset aria-label="Categories">
           <legend>Categories</legend>
-          {categories.status === 'loading' && <span className="bss-hint">Loading…</span>}
-          {categories.status === 'error' && (
-            <span className="bss-inline-error">{categories.error.message}</span>
-          )}
+          {categories.status === 'loading' && <Note tone="info">Loading…</Note>}
+          {categories.status === 'error' && <Note tone="negative">{categories.error.message}</Note>}
           {categories.status === 'ok' && categories.data.length === 0 && (
-            <span className="bss-hint">No categories yet.</span>
+            <Note tone="info">No categories yet.</Note>
           )}
           {categories.status === 'ok' &&
             categories.data.map((c) => (
@@ -222,11 +221,9 @@ export function PriceModal({
       >
         <div className="bss-modal-body">
           {price.status === 'loading' ? (
-            <span className="bss-hint">Loading…</span>
+            <Note tone="info">Loading…</Note>
           ) : (
-            <div className="bss-inline-error" role="alert">
-              {price.error.message}
-            </div>
+            <Note tone="negative">{price.error.message}</Note>
           )}
         </div>
       </Modal>
@@ -313,10 +310,10 @@ function PriceBody({
       footer={
         <>
           {message !== null && (
-            <div className="footer-push bss-inline-error" role="alert">
+            <Note tone="negative" className="footer-push">
               {message}
               {hint && ' Use Change price in the offering to replace the price of a live offering.'}
-            </div>
+            </Note>
           )}
           {deleting ? (
             <span className="bss-confirm">

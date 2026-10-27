@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
   changePrice,
@@ -381,9 +382,9 @@ export function OfferingModal({
         footer={
           <>
             {problem !== null && (
-              <div className="footer-push bss-inline-error" role="alert">
+              <Note tone="negative" className="footer-push">
                 {problem}
-              </div>
+              </Note>
             )}
             {detail.status === 'ok' && (
               <Button data-ui="ui.catalog.editOffering" onClick={() => setEditing(true)}>
@@ -412,9 +413,9 @@ export function OfferingModal({
                 </Button>
               ))}
             {next === null ? (
-              <span className="footer-push bss-hint">
+              <Note tone="info" className="footer-push">
                 Retired is final: the offering cannot be ordered again.
-              </span>
+              </Note>
             ) : confirming ? (
               <span className="bss-confirm">
                 <span className="ask">{CONFIRM[next].ask}</span>
@@ -475,8 +476,8 @@ export function OfferingModal({
             {detail.status === 'error' && (
               <>
                 <dt>Details</dt>
-                <dd className="bss-inline-error" role="alert">
-                  {detail.error.message}
+                <dd>
+                  <Note tone="negative">{detail.error.message}</Note>
                 </dd>
               </>
             )}
@@ -601,15 +602,11 @@ function PriceChangeSection({
           />
         </label>
       </div>
-      <p className="bss-hint bss-price-change-note">
+      <Note tone="info" className="bss-price-change-note">
         Existing products pick up the new price from their next billing period starting on or after{' '}
         {from || '…'}; new orders from {from || '…'}.
-      </p>
-      {message !== null && (
-        <div className="bss-inline-error" role="alert">
-          {message}
-        </div>
-      )}
+      </Note>
+      {message !== null && <Note tone="negative">{message}</Note>}
       <div className="bss-confirm">
         <Button variant="primary" disabled={!ready || busy} onClick={() => void submit()}>
           Change price
@@ -693,9 +690,9 @@ export function NewOfferingModal({
         footer={
           <>
             {message !== null && (
-              <div className="footer-push bss-inline-error" role="alert">
+              <Note tone="negative" className="footer-push">
                 {message}
-              </div>
+              </Note>
             )}
             <Button onClick={onClose}>Cancel</Button>
             <Button

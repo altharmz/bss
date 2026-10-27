@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState } from 'react';
 import { requiresNumber } from '../api/numbers';
 import { NumberPicker } from './Numbers';
@@ -209,9 +210,9 @@ export function AddProductModal({
       footer={
         <>
           {problem.length > 0 && (
-            <div className="bss-inline-error" role="alert" style={{ marginRight: 'auto' }}>
+            <Note tone="negative" className="footer-push">
               {problem.join(' ')}
-            </div>
+            </Note>
           )}
           <Button onClick={onClose}>Cancel</Button>
           {draft === undefined ? (
@@ -320,20 +321,20 @@ export function AddProductModal({
             value={start}
             onChange={(event) => setStart(event.target.value)}
           />
-          <span className="bss-hint">
+          <Note tone="info">
             {!startValid
               ? `the start date cannot be before ${today}`
               : start === today
                 ? `today · the charge is written by the billing run of ${runOf(start, today)}`
                 : `the charge is written by the billing run of ${start}`}
-          </span>
+          </Note>
         </section>
 
         <section>
           <div className="bss-step-head">3. First charge preview</div>
           <div className="bss-preview">
             {offeringId === null ? (
-              <div className="bss-hint">Select an offering to see the calculation</div>
+              <Note tone="info">Select an offering to see the calculation</Note>
             ) : (
               <Preview
                 preview={preview}
@@ -363,16 +364,12 @@ export function Preview({
   today: string;
   onTopUp: ((amount: string) => void) | undefined;
 }) {
-  if (preview.status === 'loading') return <div className="bss-hint">Calculating…</div>;
+  if (preview.status === 'loading') return <Note tone="info">Calculating…</Note>;
   if (preview.status === 'error') {
-    return (
-      <div className="bss-inline-error" role="alert">
-        {explain(preview.error)}
-      </div>
-    );
+    return <Note tone="negative">{explain(preview.error)}</Note>;
   }
   const p = preview.data;
-  if (p === null) return <div className="bss-hint">Select an offering to see the calculation</div>;
+  if (p === null) return <Note tone="info">Select an offering to see the calculation</Note>;
   if (account.ratingType === 'prepaid' && p.required !== undefined) {
     return <PrepaidPreview p={p} start={start} today={today} onTopUp={onTopUp} />;
   }
@@ -421,10 +418,10 @@ export function Preview({
         </dl>
       </div>
       {p.exceedsCreditLimit && p.creditLimit !== null && (
-        <div className="bss-warning" role="note">
+        <Note tone="warning">
           Balance will exceed the credit limit of {formatAmount(p.creditLimit.value)}{' '}
           {p.creditLimit.unit}. Activation is allowed; services may be suspended.
-        </div>
+        </Note>
       )}
       <div className="footnote">
         Prorated by days until the account’s next billing day (day {account.cycleDay}). Full price
@@ -498,7 +495,7 @@ function PrepaidPreview({
         </dl>
       </div>
       {short && now && (
-        <div className="bss-warning" role="note">
+        <Note tone="warning">
           Insufficient funds: top up at least {formatCents(shortfallCents)} {cur}. The order is
           refused until the account has the funds.{' '}
           {onTopUp !== undefined && (
@@ -509,12 +506,12 @@ function PrepaidPreview({
               Top up {formatCents(shortfallCents)}
             </Button>
           )}
-        </div>
+        </Note>
       )}
       {short && !now && (
-        <div className="bss-hint" role="note">
+        <Note tone="info">
           Funds are checked on {start}; nothing is held now. Top up before then.
-        </div>
+        </Note>
       )}
       <div className="footnote">
         {now

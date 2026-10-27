@@ -6,14 +6,22 @@ export function Note({
   lead,
   code,
   children,
+  className,
+  'data-ui': ui,
 }: {
   tone: 'info' | 'warning' | 'negative';
   lead?: string;
-  code?: string;
+  code?: string | undefined;
   children: ReactNode;
+  className?: string;
+  'data-ui'?: string;
 }) {
   return (
-    <div className={`bss-note bss-note-${tone}`} role={tone === 'negative' ? 'alert' : 'note'}>
+    <div
+      className={`bss-note bss-note-${tone}${className ? ` ${className}` : ''}`}
+      role={tone === 'negative' ? 'alert' : 'note'}
+      data-ui={ui}
+    >
       <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
         {tone === 'info' ? (
           <>

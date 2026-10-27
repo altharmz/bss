@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
   checkDocument,
@@ -156,9 +157,9 @@ function download(job: CatalogJob, timeZone: string) {
 
 function ErrorLog({ text }: { text: string }) {
   return (
-    <pre className="job-result bss-inline-error" role="alert" data-ui="ui.catalog.errorLog">
-      {text}
-    </pre>
+    <Note tone="negative" className="job-result" data-ui="ui.catalog.errorLog">
+      <pre>{text}</pre>
+    </Note>
   );
 }
 
@@ -200,9 +201,9 @@ function ExportModal({
       footer={
         <>
           {problem !== null && (
-            <div className="footer-push bss-inline-error" role="alert">
+            <Note tone="negative" className="footer-push">
               {problem}
-            </div>
+            </Note>
           )}
           <Button onClick={onClose}>{job === null ? 'Cancel' : 'Close'}</Button>
           {job === null && (
@@ -243,10 +244,10 @@ function ExportModal({
           </select>
         </label>
         {job !== null && (
-          <span className="bss-hint">
+          <Note tone="info">
             Export job {job.status}
             {document !== null && ': download the document or copy it into a new import.'}
-          </span>
+          </Note>
         )}
         {job?.errorLog != null && <ErrorLog text={job.errorLog} />}
       </div>
@@ -313,9 +314,9 @@ function ImportModal({
       footer={
         <>
           {problem !== null && (
-            <div className="footer-push bss-inline-error" role="alert">
+            <Note tone="negative" className="footer-push">
               {problem}
-            </div>
+            </Note>
           )}
           <Button onClick={onClose}>Cancel</Button>
           <Button
@@ -346,10 +347,10 @@ function ImportModal({
             onChange={(e) => setText(e.target.value)}
           />
         </label>
-        {check !== null && <span className="bss-inline-error">{check}</span>}
-        <span className="bss-hint">
+        {check !== null && <Note tone="negative">{check}</Note>}
+        <Note tone="info">
           Everything is imported or nothing is. A document already imported is skipped.
-        </span>
+        </Note>
         {failed !== null && <ErrorLog text={failed} />}
       </div>
     </Modal>
@@ -392,9 +393,9 @@ function JobModal({
       footer={
         <>
           {problem !== null && (
-            <div className="footer-push bss-inline-error" role="alert">
+            <Note tone="negative" className="footer-push">
               {problem}
-            </div>
+            </Note>
           )}
           {confirming ? (
             <span className="footer-push bss-confirm">

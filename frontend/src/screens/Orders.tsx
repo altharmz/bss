@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
   cancelOrder,
@@ -466,7 +467,7 @@ function OrderModal({
       footer={
         <>
           {problem !== null && (
-            <div className="footer-push bss-inline-error" role="alert">
+            <Note tone="negative" className="footer-push">
               {unsure ? `Unsure whether it was saved: ${problem}` : problem}{' '}
               {unsure && (
                 <Button
@@ -479,7 +480,7 @@ function OrderModal({
                   Refresh
                 </Button>
               )}
-            </div>
+            </Note>
           )}
           {canDelete && (
             <Button data-ui="ui.orders.deleteDraft" disabled={busy} onClick={() => open('delete')}>
@@ -686,12 +687,12 @@ function OrderModal({
         <h3 className="bss-subhead">Cancellations</h3>
         {cancellations.status === 'loading' && <div className="bss-caption">Loading…</div>}
         {cancellations.status === 'error' && (
-          <div className="bss-inline-error" role="alert">
+          <Note tone="negative">
             Failed to load the cancellations ({cancellations.error.message}){' '}
             <Button small onClick={cancellations.retry}>
               Retry
             </Button>
-          </div>
+          </Note>
         )}
         {cancellations.status === 'ok' &&
           (cancellations.data.length === 0 ? (

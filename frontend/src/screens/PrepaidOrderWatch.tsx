@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useEffect, useEffectEvent, useState } from 'react';
 import {
   loadCommand,
@@ -71,11 +72,7 @@ function TechnicalFailure({
       <Button small disabled={busy} onClick={() => void retry()}>
         Retry now
       </Button>
-      {problem !== null && (
-        <div className="bss-inline-error" role="alert">
-          {problem}
-        </div>
-      )}
+      {problem !== null && <Note tone="negative">{problem}</Note>}
     </>
   );
 }

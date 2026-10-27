@@ -1,3 +1,4 @@
+import { Note } from '../ui/Note';
 import { useRef, useState, type ReactNode } from 'react';
 import type { PrepaidBalance } from '../api/bss';
 import { explain } from '../api/client';
@@ -336,14 +337,14 @@ function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged:
   return (
     <section>
       {problem !== null && (
-        <div className="bss-inline-error" role="alert">
+        <Note tone="negative">
           {problem}{' '}
           {unsure && (
             <Button small onClick={onChanged}>
               Refresh
             </Button>
           )}
-        </div>
+        </Note>
       )}
       {pending !== null ? (
         <span className="bss-confirm">

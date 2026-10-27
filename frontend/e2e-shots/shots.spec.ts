@@ -16,6 +16,7 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       'billing-runs',
       'orders',
       'products',
+      'numbers',
       'bills',
       'payments',
       'balances',
@@ -46,6 +47,13 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         !(await page.getByRole('heading', { name: 'UI kit', exact: true }).count())
       )
         continue;
+      if (name === 'ui-kit') {
+        const primaries = page.locator('.ui-kit-write-states .bss-write-actions .primary');
+        const idle = await primaries.nth(0).boundingBox();
+        const busy = await primaries.nth(1).boundingBox();
+        expect(idle?.width).toBe(busy?.width);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       await page.screenshot({ path: `/web/.shots/${name}-${width}.png`, fullPage: true });
     }
   }
