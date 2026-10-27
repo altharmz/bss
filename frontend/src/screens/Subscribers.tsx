@@ -24,7 +24,7 @@ export const COLUMNS: Column[] = [
   { key: 'mode', label: 'Mode', width: '96px' },
   { key: 'products', label: 'Products', width: '80px', align: 'right', mono: true },
   { key: 'cycle', label: 'Cycle day', width: '88px', align: 'right', mono: true },
-  { key: 'balance', label: 'Balance EUR', width: '180px', align: 'right' },
+  { key: 'balance', label: 'Balance', width: '180px', align: 'right' },
 ];
 
 type StateFilter = 'All' | AccountState;
@@ -73,6 +73,12 @@ export function SubscribersScreen() {
   }, []);
 
   const accounts = subscribers.status === 'ok' ? subscribers.data.accounts : [];
+  const currencies = new Set(accounts.map((account) => account.currency));
+  const columns = COLUMNS.map((column) =>
+    column.key === 'balance' && currencies.size === 1
+      ? { ...column, label: `Balance ${accounts[0]?.currency}` }
+      : column,
+  );
   const countOf = (filter: StateFilter) =>
     filter === 'All' ? accounts.length : accounts.filter((a) => a.state === filter).length;
   const modeCount = (filter: ModeFilter) =>
@@ -158,10 +164,10 @@ export function SubscribersScreen() {
         }
       />
       <div role="table" aria-label="Subscribers" className="bss-subscribers-table">
-        <TableHead columns={COLUMNS} />
+        <TableHead columns={columns} />
         <ListState
           resource={subscribers}
-          columns={COLUMNS}
+          columns={columns}
           errorTitle="Failed to load subscribers"
           empty={{
             title: 'No subscribers yet',
@@ -190,7 +196,7 @@ export function SubscribersScreen() {
                   return (
                     <TableRow
                       key={account.id}
-                      columns={COLUMNS}
+                      columns={columns}
                       onClick={() =>
                         navigate(hrefOf({ name: 'subscriber', accountId: account.id }))
                       }
@@ -223,7 +229,7 @@ export function SubscribersScreen() {
                               account.balanceCents < -account.creditLimitCents && (
                                 <Flag>Over limit</Flag>
                               )}
-                            <Amount cents={account.balanceCents} />
+                            <Amount cents={account.balanceCents} currency={account.currency} />
                           </span>
                         ),
                         products: <span className={active ? '' : 'bss-zero'}>{active}</span>,

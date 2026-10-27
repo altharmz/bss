@@ -1,6 +1,28 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import ts from 'typescript';
+
+function currencyLiterals(file: string, source: string): string[] {
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const problems: string[] = [];
+  function visit(node: ts.Node) {
+    if (
+      (ts.isStringLiteralLike(node) ||
+        ts.isTemplateHead(node) ||
+        ts.isTemplateMiddle(node) ||
+        ts.isTemplateTail(node) ||
+        ts.isJsxText(node)) &&
+      /\b(EUR|RUB|USD)\b/.test(node.text)
+    ) {
+      const { line } = tree.getLineAndCharacterOfPosition(node.getStart(tree));
+      problems.push(`${file}:${line + 1}: currency literal`);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(tree);
+  return problems;
+}
 
 function files(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -32,6 +54,33 @@ function checkStyles(file: string, source: string): string[] {
 const src = join(process.cwd(), 'src');
 
 describe('Ledger style guard', () => {
+  it('detects currency literals in strings, templates and JSX text without matching identifiers or comments', () => {
+    expect(
+      currencyLiterals(
+        'fixture.tsx',
+        "// USD\nconst USD = account.currency;\nconst a = 'Balance EUR';\nconst b = `USD ${amount}`;\nconst c = <span>RUB</span>;",
+      ),
+    ).toEqual([
+      'fixture.tsx:3: currency literal',
+      'fixture.tsx:4: currency literal',
+      'fixture.tsx:5: currency literal',
+    ]);
+    expect(
+      currencyLiterals('fixture.tsx', "const currency = account.currency; const a = 'USDT';"),
+    ).toEqual([]);
+  });
+
+  it('keeps currency literals out of production components except UI kit samples', () => {
+    expect(
+      files(src)
+        .filter(
+          (file) =>
+            file.endsWith('.tsx') && !file.includes('.test.') && basename(file) !== 'UiKit.tsx',
+        )
+        .flatMap((file) => currencyLiterals(file, readFileSync(file, 'utf8'))),
+    ).toEqual([]);
+  });
+
   it('migrates every legacy note caller to the Ledger Note component', () => {
     expect(
       files(src)

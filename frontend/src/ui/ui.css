@@ -934,10 +934,12 @@
   display: inline-flex;
 }
 .bss-menu-items {
-  position: absolute;
+  --menu-top: 0px;
+  --menu-left: 0px;
+  position: fixed;
   z-index: 30;
-  top: 100%;
-  right: 0;
+  top: var(--menu-top);
+  left: var(--menu-left);
   min-width: 220px;
   padding: 4px;
   background: var(--color-bg);

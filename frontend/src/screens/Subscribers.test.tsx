@@ -73,6 +73,33 @@ const dataRows = () =>
 const rowOf = (name: RegExp) => dataRows().find((row) => name.test(row.textContent ?? ''));
 
 describe('subscribers list', () => {
+  it('names a shared loaded currency in the header and every amount', async () => {
+    backend();
+    await open();
+    await screen.findByText('Ivan Petrov');
+    expect(screen.getByRole('columnheader', { name: 'Balance USD' })).toBeTruthy();
+    for (const row of dataRows())
+      expect(within(row).getAllByRole('cell')[6]?.textContent).toContain('USD');
+  });
+
+  it('omits the currency in a mixed header while retaining each row currency through filtering', async () => {
+    const rows = ROWS.map((row, index) => ({ ...row, currency: index === 0 ? 'EUR' : 'USD' }));
+    backend(() => json(rows, { total: rows.length }));
+    await open();
+    await screen.findByText('Ivan Petrov');
+    expect(screen.getByRole('columnheader', { name: 'Balance' })).toBeTruthy();
+    expect(within(rowOf(/Ivan Petrov/) as HTMLElement).getAllByRole('cell')[6]?.textContent).toBe(
+      '1,250.40EUR',
+    );
+    expect(
+      within(rowOf(/Anna Smirnova/) as HTMLElement).getAllByRole('cell')[6]?.textContent,
+    ).toContain('USD');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search subscribers' }), {
+      target: { value: 'Ivan' },
+    });
+    expect(screen.getByRole('columnheader', { name: 'Balance' })).toBeTruthy();
+  });
+
   it('shows one row per billing account with balance, products and cycle day', async () => {
     backend();
     await open();
@@ -85,7 +112,7 @@ describe('subscribers list', () => {
     expect(cells[1]?.textContent).toBe('BA-11111111');
     expect(within(ivan).getByRole('button', { name: `Copy ${A1}` })).toBeTruthy();
     expect(cells[2]?.textContent).toBe('Active');
-    expect(cells[6]?.textContent).toBe('1,250.40');
+    expect(cells[6]?.textContent).toBe('1,250.40USD');
     expect(cells[4]?.textContent).toBe('2');
     expect(cells[5]?.textContent).toBe('5');
 

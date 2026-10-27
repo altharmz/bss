@@ -93,8 +93,8 @@ Ledger v2 slice 5: PageHeader shows the filtered count and New subscriber action
 300 px search (Name, BA id or subscriber no.) has an icon and `/` focus shortcut outside
 editable fields. Account state and mode filters retain counts; Reset filters appears when
 active. Negative balance N stays at the right. The page table shows Name, copyable BA Id,
-account StatusPill, Mode, Products, Cycle day (— for prepaid), and Balance EUR without a
-currency suffix. Over limit appears strictly below the negative credit limit. Query-aware
+account StatusPill, Mode, Products, Cycle day (— for prepaid), and Balance plus the currency when all loaded accounts share one, otherwise Balance.
+Each amount shows its own account currency. Over limit appears strictly below the negative credit limit. Query-aware
 no-results names the active Status and Mode. A row opens the card; reads are unchanged.
 API: `GET /tmf-api/accountManagement/v5/billingAccount` (all pages),
 `GET /tmf-api/productInventory/v5/product?status=active&fields=billingAccount` (all pages).
@@ -129,7 +129,7 @@ Ledger v2 slice 6a: the identity header has account/customer statuses, a PREPAID
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
-Ledger v2: account/product StatusPill, copyable BA Id in the meta line, and neutral-positive movement Amounts. Product actions use the shared keyboard Menu, retaining labels and markers.
+Ledger v2: account/product StatusPill, copyable BA Id in the meta line, and neutral-positive movement Amounts. Product actions use the shared keyboard Menu in a document-body portal, positioned below its trigger or flipped above when needed, and dismissed on scroll/resize; labels and markers stay.
 
 Header with name, state, subscriber number, billing account (`BA-xxxxxxxx`), customer
 status, and **+ Add product** (disabled for a non-Active account, with the reason - the

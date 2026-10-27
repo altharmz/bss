@@ -1,4 +1,13 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+  type CSSProperties,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from './kit';
 
 export interface TabOption<K extends string> {
@@ -110,19 +119,44 @@ export function Menu({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const root = useRef<HTMLSpanElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
   const id = useId();
   const enabled = () =>
     Array.from(
-      root.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? [],
+      list.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? [],
     );
+  useLayoutEffect(() => {
+    if (!open || !button.current || !list.current) return;
+    const trigger = button.current.getBoundingClientRect();
+    const menu = list.current.getBoundingClientRect();
+    setPosition({
+      top:
+        window.innerHeight - trigger.bottom < menu.height
+          ? Math.max(0, trigger.top - menu.height)
+          : trigger.bottom,
+      left: Math.max(0, Math.min(trigger.right - menu.width, window.innerWidth - menu.width)),
+    });
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const outside = (event: MouseEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      if (
+        !root.current?.contains(event.target as Node) &&
+        !list.current?.contains(event.target as Node)
+      )
+        setOpen(false);
     };
+    const close = () => setOpen(false);
     document.addEventListener('click', outside, true);
-    return () => document.removeEventListener('click', outside, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('click', outside, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+    };
   }, [open]);
   const focusEdge = useRef<'first' | 'last' | null>(null);
   useEffect(() => {
@@ -172,54 +206,63 @@ export function Menu({
       >
         {trigger}
       </button>
-      {open && (
-        <div
-          className="bss-menu-items"
-          role="menu"
-          aria-label={label}
-          id={id}
-          onKeyDown={(event) => {
-            const buttons = enabled();
-            const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-            const next =
-              event.key === 'Home'
-                ? 0
-                : event.key === 'End'
-                  ? buttons.length - 1
-                  : event.key === 'ArrowDown'
-                    ? (index + 1) % buttons.length
-                    : event.key === 'ArrowUp'
-                      ? (index - 1 + buttons.length) % buttons.length
-                      : undefined;
-            if (next !== undefined) {
-              event.preventDefault();
-              buttons[next]?.focus();
+      {open &&
+        createPortal(
+          <div
+            className="bss-menu-items"
+            ref={list}
+            style={
+              {
+                '--menu-top': `${position.top}px`,
+                '--menu-left': `${position.left}px`,
+              } as CSSProperties
             }
-          }}
-        >
-          {items.map((item, index) =>
-            'separator' in item ? (
-              <div role="separator" key={index} />
-            ) : (
-              <Button
-                key={index}
-                role="menuitem"
-                variant="quiet"
-                {...(item.tone ? { tone: item.tone } : {})}
-                disabled={item.disabled}
-                data-ui={item.ui}
-                onClick={() => {
-                  setOpen(false);
-                  button.current?.focus();
-                  item.onClick();
-                }}
-              >
-                {item.label}
-              </Button>
-            ),
-          )}
-        </div>
-      )}
+            role="menu"
+            aria-label={label}
+            id={id}
+            onKeyDown={(event) => {
+              const buttons = enabled();
+              const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+              const next =
+                event.key === 'Home'
+                  ? 0
+                  : event.key === 'End'
+                    ? buttons.length - 1
+                    : event.key === 'ArrowDown'
+                      ? (index + 1) % buttons.length
+                      : event.key === 'ArrowUp'
+                        ? (index - 1 + buttons.length) % buttons.length
+                        : undefined;
+              if (next !== undefined) {
+                event.preventDefault();
+                buttons[next]?.focus();
+              }
+            }}
+          >
+            {items.map((item, index) =>
+              'separator' in item ? (
+                <div role="separator" key={index} />
+              ) : (
+                <Button
+                  key={index}
+                  role="menuitem"
+                  variant="quiet"
+                  {...(item.tone ? { tone: item.tone } : {})}
+                  disabled={item.disabled}
+                  data-ui={item.ui}
+                  onClick={() => {
+                    setOpen(false);
+                    button.current?.focus();
+                    item.onClick();
+                  }}
+                >
+                  {item.label}
+                </Button>
+              ),
+            )}
+          </div>,
+          document.body,
+        )}
     </span>
   );
 }

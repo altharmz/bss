@@ -123,7 +123,7 @@ writes; screenshot output is ignored.
 `tone="negative"`, and `busy`/`busyLabel`. Busy disables the button and adds its spinner.
 The legacy danger-outline variant remains for the screen migrations in 2b.
 `Field` wraps its control in a label, with optional `help` and `error`. `SelectField`,
-`DateField`, `MoneyField` (string value and currency suffix) and `Checkbox` preserve native
+`DateField`, `MoneyField` (string value and required currency suffix) and `Checkbox` preserve native
 handlers. `TextInput` retains its `mono` and runtime `width` API.
 `Segmented` defaults to filter buttons (`aria-pressed`); `as="radio"` uses radiogroup/radio
 semantics. `/ui-kit` previews these primitives without screen-specific reads or writes.
@@ -166,7 +166,10 @@ with Left/Right/Home/End. Each option has a key, label, optional count or badge.
 `Menu({ items, label?, trigger?, ui? })` supplies disabled and negative items and
 `{ separator: true }`, keyboard navigation, Escape refocus and outside-click dismissal.
 The default trigger is a 28 px ellipsis named Row actions. ProductActions keeps its
-existing Actions accessible name. `defaultOpen` supports the gallery's open sample.
+existing Actions accessible name. `defaultOpen` supports the gallery's open sample. Items render in a document-body portal
+with fixed viewport coordinates, right-aligned below the trigger or flipped above when
+space below is insufficient. Scroll and resize dismiss the menu. Keyboard navigation,
+outside-click dismissal and focus return remain shared by all callers.
 `TableRow` accepts `actions: MenuItem[]` for a `kind="actions"` cell; menu clicks do
 not activate the row. `TableFooter` accepts `range: { from, to, total }`, with numeric
 range emphasis; existing `left`/`right` slots remain for screen migration and paging.

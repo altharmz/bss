@@ -145,9 +145,9 @@ export function DateField(props: Omit<InputHTMLAttributes<HTMLInputElement>, 'wi
 }
 
 export function MoneyField({
-  currency = 'EUR',
+  currency,
   ...props
-}: Omit<InputHTMLAttributes<HTMLInputElement>, 'width'> & { currency?: string }) {
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'width'> & { currency: string }) {
   return (
     <span className="bss-money-field">
       <TextInput {...props} mono inputMode="decimal" />

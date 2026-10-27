@@ -58,6 +58,19 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       await page.screenshot({ path: `/web/.shots/${name}-${width}.png`, fullPage: true });
       if (name.startsWith('card-')) {
+        const actions = page.locator('[data-ui="ui.subscriber.productActions"]').first();
+        await actions.click();
+        const menu = page.getByRole('menu');
+        await expect(menu).toBeVisible();
+        expect(await menu.evaluate((element) => element.parentElement === document.body)).toBe(
+          true,
+        );
+        const items = menu.getByRole('menuitem');
+        for (const item of await items.all()) await expect(item).toBeInViewport();
+        // Full-page capture can resize the viewport, which intentionally dismisses Menu.
+        await page.screenshot({ path: `/web/.shots/${name}-menu-${width}.png` });
+        await expect(menu).toBeVisible();
+        await actions.press('Escape');
         for (const tab of [
           'Bills',
           'Payments',

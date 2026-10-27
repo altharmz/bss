@@ -131,7 +131,9 @@ Rows run strictly in order.
 
 | # | Slice | Kind | Done when | Status |
 |---|---|---|---|---|
-| G1 | Dialogs fit the viewport, menus escape their card, no hard-coded currency (B2, B4, B5) | UI | e2e at 1366×768 and 1920×900: the primary of New category, Edit subscriber (with media), New offering and Add product is in the viewport. The single-product Menu shows every item. The currency guard passes | todo |
+| G1 | Dialogs fit the viewport, menus escape their card, no hard-coded currency (B2, B4, B5) | UI | Split by ID: G1a then G1b | split |
+| G1a | Menus escape their card; no hard-coded currency (B4, B5) | UI | Portal/flip-up/dismissal regression tests; every single-row menu item present; subscriber single/mixed currencies; currency guard | done: Keep menus visible and show account currencies (B4, B5) |
+| G1b | Dialogs fit the viewport and submit from single-line inputs (B2) | UI | Fixed header/footer with scrolling body inherited by Modal; optional onSubmit wired to every form primary, with disabled/textarea/destructive/transfer-confirm exclusions; structure and Enter tests; new frontend/e2e/dialogs.spec.ts at 1366×768 and 1920×900 checks New category, Edit subscriber with media, New offering and Add product primaries with toBeInViewport(); run make web-e2e once; screenshots and visual review | todo |
 | G2 | Refused orders shown in their dialog; same-day Undo (B1, I4, I5) | internal API + UI | A 201 `rejected` keeps every order dialog open with the mapped sentence and code. Undo suspension cancels a same-day suspension. Future-suspension Undo is tested | todo |
 | G3 | Writes survive refreshes; sidebar counts update (B6, B10) | UI | A refetch between "Release hold" and "Yes" still sends the PATCH. A create bumps the counts | todo |
 | G4 | Subscriber numbers end to end (B3/P1, P11, I2, P13) | TMF622 refusal code + UI | Spec "Requires a subscriber number" and the characteristics are pinned. Change offering is filtered by spec. `numberRequirementDiffers` is tested. The e2e numbered prepaid transfer is written | todo |
@@ -245,6 +247,11 @@ Act as the orchestrator described in [ui-redesign-slices.md](ui-redesign-slices.
   `getBoundingClientRect` mocked); the Subscribers header for one and for mixed
   currencies; the guard. A new e2e spec `frontend/e2e/dialogs.spec.ts` at 1366×768 and
   1920×900 asserts `toBeInViewport()` for the four primaries (run `make web-e2e` once).
+
+G1 is split by ID because B2 includes migrating legacy dialogs whose footers are nested
+inside loaded child components, plus wiring each form's Enter handler. G1a implements B4
+and B5 only. G1b retains **all** B2 implementation and test requirements above, including
+`frontend/e2e/dialogs.spec.ts`, the two viewport sizes, and one `make web-e2e` run.
 
 ### G2: refused orders and same-day Undo (B1, I4, I5)
 

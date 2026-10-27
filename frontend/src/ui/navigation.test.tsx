@@ -27,6 +27,59 @@ function Sections() {
 }
 
 describe('Ledger navigation', () => {
+  it('portals every action outside a single-row card and flips above a bottom trigger', () => {
+    const bounds = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        return (
+          this.getAttribute('role') === 'menu'
+            ? { width: 220, height: 180, top: 0, bottom: 180, left: 0, right: 220 }
+            : {
+                width: 28,
+                height: 28,
+                top: window.innerHeight - 40,
+                bottom: window.innerHeight - 12,
+                left: 300,
+                right: 328,
+              }
+        ) as DOMRect;
+      });
+    try {
+      const { container } = render(
+        <article>
+          <Menu
+            items={['Suspend', 'Resume', 'Change offering', 'Change number', 'End'].map(
+              (label) => ({ label, onClick: () => {} }),
+            )}
+          />
+        </article>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Row actions' }));
+      const menu = screen.getByRole('menu');
+      expect(menu.parentElement).toBe(document.body);
+      expect(container.querySelector('[role="menu"]')).toBeNull();
+      expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+        'Suspend',
+        'Resume',
+        'Change offering',
+        'Change number',
+        'End',
+      ]);
+      expect(menu.style.getPropertyValue('--menu-top')).toBe(`${window.innerHeight - 220}px`);
+      expect(menu.style.getPropertyValue('--menu-left')).toBe('108px');
+    } finally {
+      bounds.mockRestore();
+    }
+  });
+
+  it.each(['scroll', 'resize'])('closes a menu on %s', (event) => {
+    render(<Menu items={[{ label: 'Edit', onClick: () => {} }]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Row actions' }));
+    expect(screen.getByRole('menu')).toBeTruthy();
+    fireEvent(window, new Event(event));
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
   it('separates loaded counts and badges from tab labels in accessible names', () => {
     render(
       <Tabs

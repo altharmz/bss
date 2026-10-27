@@ -84,6 +84,7 @@ export function UiKitScreen() {
                 </div>
                 <Field label="Amount received">
                   <MoneyField
+                    currency="EUR"
                     defaultValue={state === 'refused' ? '42100.00' : '42.10'}
                     disabled={state === 'busy'}
                     readOnly={state === 'unsure'}
@@ -114,7 +115,7 @@ export function UiKitScreen() {
             }
           >
             <Field label="Amount received">
-              <MoneyField defaultValue="42.10" />
+              <MoneyField currency="EUR" defaultValue="42.10" />
             </Field>
           </Dialog>
         ))}

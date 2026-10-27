@@ -1,5 +1,9 @@
 # Frontend (admin UI, stage 5): decisions and conventions
 
+## GUI review fixes
+
+- G1a (B4, B5): all Menu lists now portal to document.body with fixed trigger placement, flip-up and scroll/resize dismissal; keyboard, outside click and focus return stay. Subscribers derives its header currency from all loaded accounts and Amount displays each row's currency. MoneyField requires an explicit currency; a TypeScript AST guard rejects currency literals outside tests/gallery. New component coverage and menu screenshot assertions pin these behaviours; make web-shots passed and Subscribers, prepaid/postpaid menus (including the single-product card) and UI kit were reviewed at 1280/1600 with no horizontal overflow. Requests and markers unchanged. G1 splits by ID: all B2 dialog/Enter/e2e work remains in G1b. The prescribed targeted container test command was rejected by guard.sh; verification uses make targets and the commit hook.
+
 ## Ledger v2: visual redesign (designed 2026-10-26)
 
 - Built slice 7a: Recent activity rail reuses the first eight loaded transactions in server order, with signed amount, date-only business date, balance after, prepaid footnote and All transactions tab link; no requests changed. Tests cover eight-of-twenty, figures, dates, no-refetch navigation and empty/prepaid copy. Split slice 7 for size: compact products/pending subrows/action menu and stable Overview watch steps remain in 7b. Missing-field deviations: transactions expose business dates, not timestamps; retain those dates. AccountProduct has no subscriber-number field; 7b must omit the number value rather than add a request, preserving the lazy Subscriber number action.

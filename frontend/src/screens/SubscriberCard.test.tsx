@@ -189,6 +189,13 @@ function selectTab(name: string) {
   if (tab.getAttribute('aria-selected') !== 'true') fireEvent.click(tab);
 }
 
+function productMenu(row: HTMLElement) {
+  const id = within(row).getByRole('button', { name: 'Actions ▾' }).getAttribute('aria-controls');
+  const menu = id ? document.getElementById(id) : null;
+  if (!menu) throw new Error('Product action menu is not open');
+  return menu;
+}
+
 describe('Ledger recent activity', () => {
   it('reuses the first eight loaded movements with signed amounts and balance after', async () => {
     const movements = Array.from({ length: 20 }, (_, i) => ({
@@ -2789,7 +2796,7 @@ describe('product actions', () => {
   const openMenu = (row: HTMLElement) =>
     fireEvent.click(within(row).getByRole('button', { name: 'Actions ▾' }));
   const items = (row: HTMLElement) =>
-    within(row)
+    within(productMenu(row))
       .queryAllByRole('menuitem')
       .map((b) => b.textContent);
   const prepaidBackend = (routes: Record<string, Handler>) =>
@@ -2825,16 +2832,16 @@ describe('product actions', () => {
     );
     openMenu(active);
     expect(items(active)).toEqual(['Suspend…', 'Change offering…', 'End on a date…']);
-    expect(within(active).getByRole('menuitem', { name: 'Suspend…' })).toBe(
+    expect(within(productMenu(active)).getByRole('menuitem', { name: 'Suspend…' })).toBe(
       expectUi('ui.subscriber.suspend'),
     );
-    expect(within(active).getByRole('menuitem', { name: 'End on a date…' })).toBe(
+    expect(within(productMenu(active)).getByRole('menuitem', { name: 'End on a date…' })).toBe(
       expectUi('ui.subscriber.endOnDate'),
     );
     const suspended = productRow('Fiber 100');
     openMenu(suspended);
     expect(items(suspended)).toEqual(['Resume…', 'Change offering…', 'End on a date…']);
-    expect(within(suspended).getByRole('menuitem', { name: 'Resume…' })).toBe(
+    expect(within(productMenu(suspended)).getByRole('menuitem', { name: 'Resume…' })).toBe(
       expectUi('ui.subscriber.resume'),
     );
     // a pending status change leaves no second one; an ending product only its Undo
@@ -2898,7 +2905,7 @@ describe('product actions', () => {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
     openMenu(row);
-    fireEvent.click(within(row).getByRole('menuitem', { name: 'Suspend…' }));
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'Suspend…' }));
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBe(expectUi('ui.subscriber.productChange'));
     expect(
@@ -2935,7 +2942,7 @@ describe('product actions', () => {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
     openMenu(row);
-    fireEvent.click(within(row).getByRole('menuitem', { name: 'End on a date…' }));
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'End on a date…' }));
     const dialog = screen.getByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-11-03' } });
     expect(
@@ -2994,7 +3001,7 @@ describe('product actions', () => {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
     openMenu(row);
-    fireEvent.click(within(row).getByRole('menuitem', { name: 'Resume…' }));
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'Resume…' }));
     const dialog = screen.getByRole('dialog');
     const date = within(dialog).getByLabelText('Date') as HTMLInputElement;
     expect([date.value, date.readOnly]).toEqual(['2026-10-01', false]);
@@ -3048,7 +3055,7 @@ describe('product actions', () => {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
     openMenu(row);
-    fireEvent.click(within(row).getByRole('menuitem', { name: 'Suspend…' }));
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'Suspend…' }));
     const dialog = screen.getByRole('dialog');
     const date = within(dialog).getByLabelText('Date') as HTMLInputElement;
     expect([date.value, date.readOnly]).toEqual(['2026-10-01', false]);
@@ -3084,7 +3091,7 @@ describe('product actions', () => {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
     openMenu(row);
-    fireEvent.click(within(row).getByRole('menuitem', { name: 'End on a date…' }));
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'End on a date…' }));
     const dialog = screen.getByRole('dialog');
     expect((within(dialog).getByLabelText('Date') as HTMLInputElement).readOnly).toBe(false);
     fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-10-10' } });
@@ -3117,7 +3124,7 @@ describe('product actions', () => {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
     openMenu(row);
-    fireEvent.click(within(row).getByRole('menuitem', { name: 'Suspend…' }));
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'Suspend…' }));
     const dialog = screen.getByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-11-03' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend' }));
@@ -3251,7 +3258,7 @@ describe('change offering', () => {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
     fireEvent.click(within(row).getByRole('button', { name: 'Actions ▾' }));
-    fireEvent.click(within(row).getByRole('menuitem', { name: 'Change offering…' }));
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'Change offering…' }));
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBe(expectUi('ui.subscriber.offeringChange'));
     return { row, dialog };
@@ -3283,7 +3290,9 @@ describe('change offering', () => {
     await open();
     const pending = await waitFor(() => productRow('Mobile L'));
     fireEvent.click(within(pending).getByRole('button', { name: 'Actions ▾' }));
-    expect(within(pending).queryByRole('menuitem', { name: 'Change offering…' })).toBeNull();
+    expect(
+      within(productMenu(pending)).queryByRole('menuitem', { name: 'Change offering…' }),
+    ).toBeNull();
     expect(within(productRow('Ending 1')).queryByRole('button', { name: 'Actions ▾' })).toBeNull();
   });
 
@@ -3300,7 +3309,9 @@ describe('change offering', () => {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
     fireEvent.click(within(row).getByRole('button', { name: 'Actions ▾' }));
-    expect(within(row).queryByRole('menuitem', { name: 'Change offering…' })).toBeNull();
+    expect(
+      within(productMenu(row)).queryByRole('menuitem', { name: 'Change offering…' }),
+    ).toBeNull();
   });
 
   it('changes a postpaid offering on the cycle boundary with the pinned body and previews it', async () => {
