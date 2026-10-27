@@ -198,3 +198,13 @@ sits beside the figures. `Panel` uses a 44 px header only when a title is provid
 previous message and action and starts a fresh six-second timeout. Toasts appear at the
 bottom-left. `ToastMessage` shares the visual rendering with the gallery's static
 `preview`; the gallery also offers a live Show toast action.
+
+### Ledger dialogs (slice 3b2b2b1)
+
+`Dialog({ size: 'S'|'M'|'L', title, context?, step?: { n, of }, footer?, ui?, onClose })`
+uses fixed 400/560/760 px sizes, a padded body and subtle footer. Its context line sits
+under the title; the step follows the title. `preview` renders static gallery examples
+without an overlay or Escape handler. `Modal` temporarily delegates to Dialog, mapping
+widths ≤440 to S, ≤620 to M, and larger widths to L; existing `subtitle` becomes context.
+Existing callers' `bss-modal-body` containers own the same 20 px body spacing without
+double padding. Escape, overlay clicks and the close button preserve closing behavior.

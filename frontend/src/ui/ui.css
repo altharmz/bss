@@ -525,45 +525,89 @@
   justify-content: center;
   align-items: flex-start;
   padding-top: 56px;
-  background: var(--overlay);
+  background: var(--scrim);
 }
 .bss-modal {
-  --modal-width: auto;
   width: var(--modal-width);
-  background: var(--surface);
-  border-radius: var(--r-modal);
-  box-shadow: var(--shadow-modal);
+  max-width: calc(100vw - 40px);
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elev-dialog);
+}
+.bss-dialog-S {
+  --modal-width: 400px;
+}
+.bss-dialog-M {
+  --modal-width: 560px;
+}
+.bss-dialog-L {
+  --modal-width: 760px;
+}
+.bss-dialog-body {
+  padding: 20px;
+}
+/* Existing modal callers own body spacing until their screen migration. */
+.bss-dialog-body:has(.bss-modal-body) {
+  padding: 0;
+}
+.bss-dialog-preview {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+  background: var(--color-bg-sunken);
+  border-radius: var(--radius-md);
+}
+.bss-dialog-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.bss-dialog-step {
+  font: var(--type-label);
+  color: var(--color-ink-3);
 }
 .bss-modal-header {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
 }
 .bss-modal-header h2 {
   margin: 0;
-  font-size: var(--fs-16);
-  font-weight: 600;
+  font: var(--type-section);
 }
 .bss-modal-header .subtitle {
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font: var(--type-label);
+  color: var(--color-ink-3);
 }
 .bss-modal-header .close {
   margin-left: auto;
+  width: 28px;
+  height: 28px;
   border: 0;
+  border-radius: var(--radius-sm);
   background: none;
-  font-size: var(--fs-18);
-  color: var(--muted);
+  font: var(--type-section);
+  color: var(--color-ink-2);
   cursor: pointer;
+}
+.bss-modal-header .close:hover {
+  background: var(--color-bg-hover);
+}
+.bss-modal-header .close:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 .bss-modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 20px;
-  border-top: 1px solid var(--border);
+  align-items: center;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: var(--color-bg-subtle);
 }
 
 /* --- toast --- */

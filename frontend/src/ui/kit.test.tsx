@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { Button, Modal, StatusPill, Segmented, ToastProvider, useToast } from './kit';
+import { Button, Dialog, Modal, StatusPill, Segmented, ToastProvider, useToast } from './kit';
 
 describe('StatusPill', () => {
   it('uses the explicit product family and preserves the note label', () => {
@@ -60,7 +60,64 @@ describe('Modal', () => {
     fireEvent.click(screen.getByRole('dialog').parentElement as HTMLElement);
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(3);
-    expect(screen.getByRole('dialog').style.getPropertyValue('--modal-width')).toBe('720px');
+    expect(screen.getByRole('dialog').classList.contains('bss-dialog-L')).toBe(true);
+  });
+
+  it.each([
+    [400, 'S'],
+    [440, 'S'],
+    [441, 'M'],
+    [620, 'M'],
+    [621, 'L'],
+    [900, 'L'],
+  ])('maps width %s to Ledger size %s', (width, size) => {
+    render(
+      <Modal title="Confirm" width={Number(width)} onClose={() => {}}>
+        Body
+      </Modal>,
+    );
+    expect(screen.getByRole('dialog').classList.contains(`bss-dialog-${size}`)).toBe(true);
+    expect(screen.getByRole('dialog').hasAttribute('style')).toBe(false);
+  });
+});
+
+describe('Dialog', () => {
+  it('renders context, step, padded body, footer and marker with its size', () => {
+    render(
+      <Dialog
+        size="M"
+        title="Transfer"
+        context="Ivan · BA-12345678"
+        step={{ n: 2, of: 3 }}
+        ui="ui.transfer.test"
+        onClose={() => {}}
+        footer={<Button>Next</Button>}
+      >
+        Amount
+      </Dialog>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Transfer' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('data-ui')).toBe('ui.transfer.test');
+    expect(dialog.classList.contains('bss-dialog-M')).toBe(true);
+    expect(screen.getByText('Step 2 of 3')).not.toBeNull();
+    expect(screen.getByText('Ivan · BA-12345678').className).toBe('subtitle');
+    expect(screen.getByText('Amount').className).toBe('bss-dialog-body');
+    expect(screen.getByRole('button', { name: 'Next' }).parentElement?.className).toBe(
+      'bss-modal-footer',
+    );
+  });
+
+  it('keeps static gallery previews non-modal and ignores Escape', () => {
+    const onClose = vi.fn();
+    render(
+      <Dialog preview size="S" title="Preview" onClose={onClose}>
+        Body
+      </Dialog>,
+    );
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog').hasAttribute('aria-modal')).toBe(false);
   });
 });
 

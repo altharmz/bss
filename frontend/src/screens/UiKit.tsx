@@ -16,6 +16,7 @@ import {
   Button,
   Checkbox,
   DateField,
+  Dialog,
   Field,
   MoneyField,
   KeyValue,
@@ -39,6 +40,31 @@ export function UiKitScreen() {
   return (
     <div className="ui-kit" data-ui="ui.kit">
       <h1>UI kit</h1>
+      <section>
+        <h2>Dialogs</h2>
+        {(['S', 'M', 'L'] as const).map((size) => (
+          <Dialog
+            key={size}
+            preview
+            size={size}
+            title={`Dialog ${size}`}
+            context="Ivan Petrov · BA-3F9A12C0"
+            step={{ n: 1, of: 3 }}
+            onClose={() => {}}
+            footer={
+              <>
+                <span className="footer-push">Ready to continue.</span>
+                <Button variant="quiet">Cancel</Button>
+                <Button variant="primary">Continue</Button>
+              </>
+            }
+          >
+            <Field label="Amount received">
+              <MoneyField defaultValue="42.10" />
+            </Field>
+          </Dialog>
+        ))}
+      </section>
       <section>
         <h2>Success toast</h2>
         <ToastMessage

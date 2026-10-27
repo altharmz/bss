@@ -609,3 +609,8 @@ errors (bootstrap errors omit the time while context is unavailable). UI kit pre
 info, warning and negative Notes, including bold verdicts and mono server codes.
 
 Shared Ledger foundations: every existing PageTitle now uses PageHeader title/count typography; Panel headers use the 44 px Components geometry. Screen requests and actions are unchanged.
+
+Ledger v2 slice 3b2b2b1 applies shared S/M/L Dialog geometry to every Modal caller,
+including context, close control, body spacing and footer. Legacy widths map at 440/620
+to 400/560/760 px. UI kit previews all sizes and the step header; D7 write-state changes
+remain in slice 3b2b2b2.

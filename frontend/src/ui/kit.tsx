@@ -200,18 +200,23 @@ export function Segmented<K extends string>({
 
 // --- modal ---
 
-export function Modal({
+export function Dialog({
   title,
-  subtitle,
-  width,
+  context,
+  step,
+  size,
   onClose,
   footer,
   ui,
   children,
+  preview = false,
 }: {
   title: string;
-  subtitle?: ReactNode;
-  width: number;
+  context?: ReactNode;
+  step?: { n: number; of: number };
+  size: 'S' | 'M' | 'L';
+  /** Static gallery rendering without a blocking overlay. */
+  preview?: boolean;
   onClose: () => void;
   footer?: ReactNode;
   /** The dialog's data-ui marker (docs/progress/scope.yaml). */
@@ -219,37 +224,61 @@ export function Modal({
   children: ReactNode;
 }) {
   useEffect(() => {
+    if (preview) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, preview]);
 
   return (
-    <div className="bss-overlay" onClick={onClose}>
+    <div
+      className={preview ? 'bss-dialog-preview' : 'bss-overlay'}
+      onClick={preview ? undefined : onClose}
+    >
       <div
-        className="bss-modal"
+        className={`bss-modal bss-dialog-${size}`}
         data-ui={ui}
         role="dialog"
-        aria-modal="true"
+        aria-modal={preview ? undefined : true}
         aria-label={title}
-        style={{ '--modal-width': `${width}px` } as CSSProperties}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="bss-modal-header">
           <div>
-            <h2>{title}</h2>
-            {subtitle !== undefined && <div className="subtitle">{subtitle}</div>}
+            <div className="bss-dialog-title">
+              <h2>{title}</h2>
+              {step && (
+                <span className="bss-dialog-step">
+                  Step {step.n} of {step.of}
+                </span>
+              )}
+            </div>
+            {context !== undefined && <div className="subtitle">{context}</div>}
           </div>
           <button type="button" className="close" aria-label="Close" onClick={onClose}>
             ×
           </button>
         </header>
-        {children}
+        <div className="bss-dialog-body">{children}</div>
         {footer !== undefined && <footer className="bss-modal-footer">{footer}</footer>}
       </div>
     </div>
+  );
+}
+
+/** Temporary compatibility wrapper; all widths map to the three Ledger sizes. */
+export function Modal({
+  width,
+  subtitle,
+  ...props
+}: Omit<Parameters<typeof Dialog>[0], 'size' | 'context' | 'step' | 'preview'> & {
+  width: number;
+  subtitle?: ReactNode;
+}) {
+  return (
+    <Dialog {...props} context={subtitle} size={width <= 440 ? 'S' : width <= 620 ? 'M' : 'L'} />
   );
 }
 

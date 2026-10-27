@@ -2,6 +2,8 @@
 
 ## Ledger v2: visual redesign (designed 2026-10-26)
 
+- Built slice 3b2b2b1: S/M/L Dialog, context and step header, padded body, quiet close control and subtle footer; Modal maps widths at 440/620 boundaries. Static size gallery and width/semantic tests cover the foundation. Split 3b2b2b for size: legacy Note classes occur across more than the spec's nine files; all caller migrations, D7 Footer and write-state gallery remain explicitly in 3b2b2b2. No requests changed.
+
 - Built slice 3b2b2a: bottom-left success toast with optional action, single-message replacement and six-second lifetime, plus shared static/live gallery previews. Split 3b2b2 for size; Note callers, Dialog/Modal mapping and D7 Footer/write-state gallery remain in 3b2b2b. No request changes or design deviations.
 
 - Built slice 3b2b1: semantic KeyValue, prepaid/postpaid MoneyStrip, PageHeader with PageTitle compatibility, and Ledger Panel geometry; summary gallery and seeded pages reviewed at both widths. Split remaining 3b2b scope into 3b2b2 (Note caller migration, Dialog/Footer/write states and Toast) for size. The summary strip wraps its contents when the viewport cannot fit the artboard’s full-width equation and actions, preserving the no-horizontal-scroll requirement. No request changes.
