@@ -873,3 +873,31 @@
 .subscriber-account {
   padding-block: 20px;
 }
+
+.subscriber-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 32px;
+}
+.subscriber-overview-main {
+  min-width: 0;
+}
+.subscriber-overview-main .bss-panel {
+  min-width: 0;
+}
+.subscriber-overview-main .bss-row {
+  grid-template-columns: minmax(0, 1fr) 112px 112px 110px 100px;
+  overflow-wrap: anywhere;
+}
+.subscriber-overview-main .bss-confirm {
+  flex-wrap: wrap;
+}
+.subscriber-overview-main .bss-row .cell {
+  min-width: 0;
+}
+
+@media (min-width: 1536px) {
+  .subscriber-overview {
+    grid-template-columns: minmax(0, 1fr) 400px;
+  }
+}

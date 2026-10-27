@@ -150,6 +150,7 @@ async function open() {
   window.history.replaceState(null, '', `/subscribers/${A}`);
   render(<App />);
   await screen.findByRole('heading', { name: /Olga Kuznetsova/ });
+  fireEvent.click(screen.getByRole('tab', { name: /^Bills/ }));
 }
 
 const panel = (title: string) =>

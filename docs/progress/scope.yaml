@@ -524,6 +524,11 @@ items:
   - {id: ui.system.schema, area: ui, stage: 5, title: "Link to the BssBillingAccount JSON Schema"}
   - {id: ui.shell.section.system, area: ui, stage: 5, title: "Sidebar System section"}
   - {id: ui.kit, area: ui, stage: 5, title: "Ledger primitive gallery with success toast and dialog write-state previews"}
+
+  - {id: ui.subscriber.tabs, area: ui, stage: 5, title: "Subscriber section tabs"}
+  - {id: ui.subscriber.charges, area: ui, stage: 5, title: "Subscriber Charges tab history"}
+  - {id: ui.subscriber.transactions, area: ui, stage: 5, title: "Subscriber Transactions tab history"}
+
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}
   - {id: ui.notFound, area: ui, reason: "not-found page, not a product feature"}

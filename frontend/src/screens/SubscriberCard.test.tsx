@@ -178,16 +178,33 @@ function backend(routes: Record<string, Handler> = {}, account: object = ACCOUNT
   });
 }
 
-async function open() {
-  window.history.replaceState(null, '', `/subscribers/${A}`);
+async function open(hash = '') {
+  window.history.replaceState(null, '', `/subscribers/${A}${hash}`);
   render(<App />);
   await screen.findByRole('heading', { name: /Olga Kuznetsova/ });
 }
 
-const panel = (title: string) =>
-  screen
+function selectTab(name: string) {
+  const tab = screen.getByRole('tab', { name: new RegExp(`^${name}`) });
+  if (tab.getAttribute('aria-selected') !== 'true') fireEvent.click(tab);
+}
+
+const panel = (title: string) => {
+  const tabs: Record<string, string> = {
+    'Charge history': 'Charges',
+    'Transaction history': 'Transactions',
+    'Balance actions': 'Balance actions',
+    'Needs attention': 'Commands',
+    Bills: 'Bills',
+    'Recorded refunds': 'Payments',
+    Payments: 'Payments',
+    'Active products': 'Overview',
+  };
+  if (tabs[title]) selectTab(tabs[title]);
+  return screen
     .getByText(title, { selector: '.bss-panel-header .title' })
     .closest('section') as HTMLElement;
+};
 
 function productRow(name: string): HTMLElement {
   const row = within(panel('Active products'))
@@ -239,6 +256,7 @@ describe('subscriber card', () => {
       },
     );
     await open();
+    selectTab('Account');
     const summary = expectUi('ui.subscriber.account');
     expect(summary.querySelector('dl')?.className).toBe('bss-key-value');
     expect(Array.from(summary.querySelectorAll('dt')).map((el) => el.textContent)).toEqual([
@@ -1940,6 +1958,11 @@ describe('prepaid orders and commands', () => {
       },
     });
     await open();
+    await screen.findByRole('tab', { name: 'Commands 1' });
+    selectTab('Commands');
+    expect(
+      screen.getByRole('tab', { name: 'Commands 1' }).querySelector('.badge-info'),
+    ).toBeTruthy();
     const strip = await waitFor(() => expectUi('ui.subscriber.prepaid.failedCommands'));
     expect(strip.textContent).toContain('The renewal due 2026-09-28');
     expect(strip.textContent).toContain('deadlock detected');
@@ -2262,11 +2285,15 @@ describe('prepaid balance actions', () => {
       json({ id: RX_BUCKET, partyAccount: { id: B, name: 'Ivan Sidorov' } }),
     ...over,
   });
-  const rowsOf = () =>
-    within(document.querySelector('[data-ui="ui.subscriber.prepaid.history"]') as HTMLElement)
+  const rowsOf = () => {
+    selectTab('Balance actions');
+    return within(
+      document.querySelector('[data-ui="ui.subscriber.prepaid.history"]') as HTMLElement,
+    )
       .getAllByRole('row')
       .slice(1)
       .map((r) => r.textContent ?? '');
+  };
 
   it('merges the account and received-transfer requests, de-duplicated and newest first', async () => {
     const { calls } = backend(routes(), PREPAID);
@@ -3428,5 +3455,124 @@ describe('Ledger subscriber header', () => {
     expect(screen.queryByRole('menuitem', { name: 'Delete…' })).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Record payment' }));
     expect(await screen.findByRole('dialog', { name: 'Record payment' })).toBeTruthy();
+  });
+});
+
+describe('Ledger subscriber tabs', () => {
+  it.each(['#bills', '#unknown', '#balance', '#commands', ''])(
+    'resolves the initial hash %s',
+    async (hash) => {
+      backend();
+      await open(hash);
+      expect(
+        screen
+          .getByRole('tab', { name: hash === '#bills' ? /^Bills/ : 'Overview' })
+          .getAttribute('aria-selected'),
+      ).toBe('true');
+      expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
+      expectUi('ui.subscriber.tabs');
+    },
+  );
+
+  it('moves every postpaid panel into its labelled pane, keeps loaders eager and reuses their data', async () => {
+    const { calls } = backend();
+    await open();
+    await waitFor(() => expect(screen.getByRole('tab', { name: /^Payments 0$/ })).toBeTruthy());
+    const before = [...calls];
+    for (const [tab, marker] of [
+      ['Bills', 'ui.subscriber.bills'],
+      ['Payments', 'ui.subscriber.payments'],
+      ['Charges', 'ui.subscriber.charges'],
+      ['Transactions', 'ui.subscriber.transactions'],
+      ['Account', 'ui.subscriber.account'],
+    ]) {
+      if (!tab || !marker) throw new Error('missing test case');
+      selectTab(tab);
+      const active = screen.getByRole('tabpanel');
+      expect(active.querySelector(`[data-ui="${marker}"]`)).toBeTruthy();
+      expect(window.location.hash).toBe(`#${tab.toLowerCase()}`);
+      expectUi(marker);
+    }
+    expect(calls).toEqual(before);
+    expect(screen.queryByRole('tab', { name: 'Balance actions' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: /^Commands/ })).toBeNull();
+    selectTab('Overview');
+    expect(screen.getByRole('tabpanel').querySelector('.subscriber-overview')).toBeTruthy();
+  });
+
+  it('counts loaded bills, payments plus refunds and caps history labels at 20+', async () => {
+    backend({
+      [`GET /tmf-api/payment/v4/payment?account.id=${A}&offset=0&limit=100`]: () =>
+        json(
+          [
+            {
+              id: 'pay',
+              paymentDate: '2026-09-01T09:00:00Z',
+              totalAmount: usd(1),
+              paymentMethod: { name: 'Cash' },
+              status: 'done',
+            },
+          ],
+          { total: 1 },
+        ),
+      [`GET /tmf-api/payment/v4/refund?account.id=${A}&offset=0&limit=100`]: () =>
+        json(
+          [
+            {
+              id: 'ref',
+              refundDate: '2026-09-01T09:00:00Z',
+              totalAmount: usd(1),
+              paymentMethod: { name: 'Cash' },
+            },
+          ],
+          { total: 1 },
+        ),
+      [`GET ${INTERNAL}/charges?limit=20`]: () =>
+        json(Array.from({ length: 20 }, (_, i) => ({ ...CHARGES[0], id: `charge-${i}` }))),
+      [billsUrl(A)]: () => json([billBody('b1', '2026-09-01', 10, 10, 'new')], { total: 1 }),
+    });
+    await open();
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Payments 2' })).toBeTruthy());
+    expect(screen.getByRole('tab', { name: 'Bills 1' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Charges 20+' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Transactions 3' })).toBeTruthy();
+  });
+
+  it('shows prepaid Balance actions and Commands and follows browser hash changes', async () => {
+    backend(
+      {
+        [`GET /tmf-api/prepayBalanceManagement/v4/bucket?partyAccount.id=${A}&offset=0&limit=100`]:
+          () =>
+            json(
+              [
+                {
+                  id: BUCKET,
+                  remainingValue: { amount: 10, units: 'USD' },
+                  reservedValue: { amount: 0, units: 'USD' },
+                },
+              ],
+              { total: 1 },
+            ),
+      },
+      { ...ACCOUNT, ratingType: 'prepaid' },
+    );
+    await open();
+    selectTab('Balance actions');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('tabpanel').querySelector('[data-ui="ui.subscriber.prepaid.history"]'),
+      ).toBeTruthy(),
+    );
+    selectTab('Commands');
+    expect(
+      within(screen.getByRole('tabpanel'))
+        .getByRole('link', { name: 'Prepaid commands' })
+        .getAttribute('href'),
+    ).toBe(`/prepaid-commands?account=${A}`);
+    window.history.replaceState(null, '', `#account`);
+    fireEvent(window, new HashChangeEvent('hashchange'));
+    expect(
+      screen.getByRole('tabpanel').querySelector('[data-ui="ui.subscriber.account"]'),
+    ).toBeTruthy();
   });
 });

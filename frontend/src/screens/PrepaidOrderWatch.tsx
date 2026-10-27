@@ -167,14 +167,20 @@ export function FailedCommands({
   accountId,
   version,
   onRetried,
+  onCount,
 }: {
   accountId: string;
   version: number;
   onRetried: () => void;
+  onCount?: (count: number | undefined) => void;
 }) {
   const failed = useResource(`failed-commands:${accountId}:${version}`, (signal) =>
     loadFailedCommands(accountId, signal),
   );
+  const count = failed.status === 'ok' ? failed.data.length : undefined;
+  useEffect(() => {
+    onCount?.(count);
+  }, [count, onCount]);
   if (failed.status === 'loading') return null;
   if (failed.status === 'error') {
     return (

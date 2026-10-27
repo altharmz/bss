@@ -203,6 +203,7 @@ describe('payments panel on the subscriber card', () => {
     });
     open(`/subscribers/${A1}`);
     await screen.findByRole('heading', { name: /Ivan Ivanov/ });
+    fireEvent.click(screen.getByRole('tab', { name: /^Payments/ }));
     const card = expectUi('ui.subscriber.payments');
     fireEvent.click(await within(card).findByText('INV-77'));
     expect(within(card).getByText('2026-09-10 12:00')).toBeTruthy();

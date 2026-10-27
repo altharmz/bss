@@ -218,11 +218,23 @@ const REFUND_COLUMNS: Column[] = [
   { key: 'description', label: 'Description', width: '1fr' },
 ];
 
-export function RefundsPanel({ accountId, version }: { accountId: string; version: number }) {
+export function RefundsPanel({
+  accountId,
+  version,
+  onCount,
+}: {
+  accountId: string;
+  version: number;
+  onCount?: (count: number | undefined) => void;
+}) {
   const { timeZone } = useSystemContext();
   const refunds = useResource(`refunds:${accountId}:${version}`, (signal) =>
     loadRefunds(accountId, signal),
   );
+  const count = refunds.status === 'ok' ? refunds.data.length : undefined;
+  useEffect(() => {
+    onCount?.(count);
+  }, [count, onCount]);
   return (
     <div data-ui="ui.subscriber.refunds">
       <Panel title="Recorded refunds">

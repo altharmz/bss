@@ -233,3 +233,9 @@ boundary; NoResults receives query and labelled Status/Mode filters.
 ### Ledger subscriber header (slice 6a)
 
 The subscriber identity uses a borderless semantic header with a page title, account StatusPill and mode Tag. The metadata row uses the customer StatusPill and existing account links. Account actions use Menu with per-item ui markers; postpaid Record payment and conditional Delete… live in More actions. Slice 6b1 replaces the KPI panel with prepaid/postpaid MoneyStrip and a borderless Account KeyValue summary. MoneyFigure accepts optional `ui` for a marker on the complete labelled figure, preserving figure captions and values together. Prepaid relative days use only context.businessDate. All existing eager loaders and dialog ownership stay in place; tabs, loaded counts and the Overview grid follow in 6b2.
+
+### Ledger subscriber tabs (slice 6b2)
+
+Tabs separate the label from an optional count or badge with literal whitespace, preserving readable accessible names such as "Payments 0" and "Commands 1".
+
+The card uses Tabs/TabPanel with selected keys in the URL hash. Empty, unknown or mode-inapplicable hashes fall back to Overview. Keep all panel components mounted behind native hidden wrappers so tab selection neither triggers reads nor cancels polling. PaymentsPanel, RefundsPanel and FailedCommands accept an optional onCount callback for their already loaded list size; undefined means loading or failed. Card counts never add requests. Overview has minmax(0, 1fr) plus a 320/400 px rail with a 32 px gap; other panes fill the width. Dialog ownership stays with the original components.

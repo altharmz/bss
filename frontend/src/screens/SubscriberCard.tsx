@@ -1,5 +1,5 @@
 import { Note } from '../ui/Note';
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   loadAccount,
   loadCharges,
@@ -28,7 +28,19 @@ import { accountLabel, shortId } from '../format/ids';
 import { formatCents, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
-import { Button, KeyValue, Menu, MoneyStrip, Panel, StatusPill, Tag, useToast } from '../ui/kit';
+import {
+  Badge,
+  Button,
+  KeyValue,
+  Menu,
+  MoneyStrip,
+  Panel,
+  StatusPill,
+  TabPanel,
+  Tabs,
+  Tag,
+  useToast,
+} from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
@@ -228,6 +240,67 @@ function Card({
     transactions.data.length === 0 &&
     bills.status === 'ok' &&
     bills.data.length === 0;
+  const [hash, setHash] = useState(() => window.location.hash.slice(1));
+  const [paymentCount, setPaymentCount] = useState<number>();
+  const [refundCount, setRefundCount] = useState<number>();
+  const [failedCount, setFailedCount] = useState<number>();
+  useEffect(() => {
+    const changed = () => setHash(window.location.hash.slice(1));
+    window.addEventListener('hashchange', changed);
+    window.addEventListener('popstate', changed);
+    return () => {
+      window.removeEventListener('hashchange', changed);
+      window.removeEventListener('popstate', changed);
+    };
+  }, []);
+  const loadedCount = (resource: ResourceWithRetry<unknown[]>) =>
+    resource.status === 'ok' ? (
+      <span className="count">{resource.data.length === 20 ? '20+' : resource.data.length}</span>
+    ) : undefined;
+  const options = [
+    { key: 'overview', label: 'Overview' },
+    {
+      key: 'bills',
+      label: 'Bills',
+      ...(bills.status === 'ok' ? { count: bills.data.length } : {}),
+    },
+    {
+      key: 'payments',
+      label: 'Payments',
+      ...(paymentCount !== undefined && refundCount !== undefined
+        ? { count: paymentCount + refundCount }
+        : {}),
+    },
+    { key: 'charges', label: 'Charges', badge: loadedCount(charges) },
+    { key: 'transactions', label: 'Transactions', badge: loadedCount(transactions) },
+    ...(account.ratingType === 'prepaid'
+      ? [
+          { key: 'balance', label: 'Balance actions' },
+          {
+            key: 'commands',
+            label: 'Commands',
+            badge: failedCount ? <Badge kind="info">{failedCount}</Badge> : undefined,
+          },
+        ]
+      : []),
+    { key: 'account', label: 'Account' },
+  ];
+  const tab = options.some((option) => option.key === hash) ? hash : 'overview';
+  const selectTab = (key: string) => {
+    window.history.pushState(
+      null,
+      '',
+      `${window.location.pathname}${window.location.search}#${key}`,
+    );
+    setHash(key);
+  };
+  const pane = (key: string, children: ReactNode) => (
+    <div hidden={tab !== key}>
+      <TabPanel id="subscriber" value={key}>
+        {children}
+      </TabPanel>
+    </div>
+  );
   const canAdd = account.state === 'Active';
   const activeOfferings = new Set(
     products.status === 'ok' ? products.data.map((p) => p.productOffering.id) : [],
@@ -369,83 +442,126 @@ function Card({
           )
         }
       />
-      <AccountSummary
-        account={account}
-        today={context.businessDate}
-        settlement={settlement.status === 'ok' ? settlement.data : null}
-        onChanged={reload}
-      />
-
-      <Panel
-        title="Active products"
-        right={
-          products.status === 'ok' ? (
-            <span className="bss-panel-count">{products.data.length}</span>
-          ) : undefined
-        }
-      >
-        <TableHead columns={PRODUCT_COLUMNS} />
-        <ListState
-          resource={products}
-          columns={PRODUCT_COLUMNS}
-          errorTitle="Failed to load products"
-          empty={{
-            title: 'No active products',
-            text: 'Add an offering from the catalog to start charging.',
-            ...(canAdd ? { action: addButton } : {}),
-          }}
-          total={(data) => data.length}
-          rows={(data) => data}
-          onResetFilters={() => {}}
-        >
-          {(rows) =>
-            rows.map((product) => (
-              <ProductRow
-                key={product.id}
-                account={account}
-                product={product}
-                onRefresh={reload}
-                onTopUp={(amount) => {
-                  setMoneyAmount(amount);
-                  setMoney('topup');
-                }}
-                onDone={(message, accepted) => {
-                  toast(message);
-                  if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
-                  reload();
-                }}
-              />
-            ))
-          }
-        </ListState>
-      </Panel>
-
-      {account.ratingType === 'prepaid' && (
-        <FailedCommands accountId={account.id} version={version} onRetried={reload} />
-      )}
-
-      <AccountBills
-        account={account}
-        version={version}
-        bills={bills}
-        onOpen={setOpenBill}
-        onCompleted={reload}
-      />
-      <PaymentsPanel accountId={account.id} version={version} />
-      <RefundsPanel accountId={account.id} version={version} />
-
-      {account.ratingType === 'prepaid' && (
-        <BalanceActions
-          balance={balance}
-          accountId={account.id}
-          version={version}
-          onChanged={reload}
+      <div data-ui="ui.subscriber.tabs">
+        <Tabs
+          id="subscriber"
+          label="Subscriber sections"
+          options={options}
+          value={tab}
+          onChange={selectTab}
         />
-      )}
-
-      <div className="bss-two-col">
-        <History account={account} charges={charges} transactions={transactions} />
       </div>
+      {pane(
+        'account',
+        <>
+          {' '}
+          <AccountSummary
+            account={account}
+            today={context.businessDate}
+            settlement={settlement.status === 'ok' ? settlement.data : null}
+            onChanged={reload}
+          />
+        </>,
+      )}
+      {pane(
+        'overview',
+        <div className="subscriber-overview">
+          <div className="subscriber-overview-main">
+            <Panel
+              title="Active products"
+              right={
+                products.status === 'ok' ? (
+                  <span className="bss-panel-count">{products.data.length}</span>
+                ) : undefined
+              }
+            >
+              <TableHead columns={PRODUCT_COLUMNS} />
+              <ListState
+                resource={products}
+                columns={PRODUCT_COLUMNS}
+                errorTitle="Failed to load products"
+                empty={{
+                  title: 'No active products',
+                  text: 'Add an offering from the catalog to start charging.',
+                  ...(canAdd ? { action: addButton } : {}),
+                }}
+                total={(data) => data.length}
+                rows={(data) => data}
+                onResetFilters={() => {}}
+              >
+                {(rows) =>
+                  rows.map((product) => (
+                    <ProductRow
+                      key={product.id}
+                      account={account}
+                      product={product}
+                      onRefresh={reload}
+                      onTopUp={(amount) => {
+                        setMoneyAmount(amount);
+                        setMoney('topup');
+                      }}
+                      onDone={(message, accepted) => {
+                        toast(message);
+                        if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
+                        reload();
+                      }}
+                    />
+                  ))
+                }
+              </ListState>
+            </Panel>
+          </div>
+          <aside className="subscriber-overview-rail" />
+        </div>,
+      )}
+      {account.ratingType === 'prepaid' &&
+        pane(
+          'commands',
+          <>
+            <FailedCommands
+              accountId={account.id}
+              version={version}
+              onRetried={reload}
+              onCount={setFailedCount}
+            />
+            <Link className="bss-link" href={`/prepaid-commands?account=${account.id}`}>
+              Prepaid commands
+            </Link>
+          </>,
+        )}
+      {pane(
+        'bills',
+        <>
+          <Button onClick={() => setPaying(true)} disabled={bills.status !== 'ok'}>
+            Record payment
+          </Button>
+          <AccountBills
+            account={account}
+            version={version}
+            bills={bills}
+            onOpen={setOpenBill}
+            onCompleted={reload}
+          />
+        </>,
+      )}
+      {pane(
+        'payments',
+        <>
+          <PaymentsPanel accountId={account.id} version={version} onCount={setPaymentCount} />
+          <RefundsPanel accountId={account.id} version={version} onCount={setRefundCount} />
+        </>,
+      )}
+      {account.ratingType === 'prepaid' &&
+        pane(
+          'balance',
+          <BalanceActions
+            balance={balance}
+            accountId={account.id}
+            version={version}
+            onChanged={reload}
+          />,
+        )}
+      <History account={account} charges={charges} transactions={transactions} tab={tab} />
 
       {paying && bills.status === 'ok' && (
         <RecordPaymentModal
@@ -1032,66 +1148,85 @@ function History({
   account,
   charges,
   transactions,
+  tab,
 }: {
+  tab: string;
   account: Account;
   charges: ResourceWithRetry<Charge[]>;
   transactions: ResourceWithRetry<Transaction[]>;
 }) {
   return (
     <>
-      <Panel title="Charge history" subtitle="AppliedCustomerBillingRate">
-        <TableHead columns={CHARGE_COLUMNS} />
-        <SimpleList
-          resource={charges}
-          columns={CHARGE_COLUMNS}
-          errorTitle="Failed to load charges"
-          empty={{ title: 'No charges', text: 'Charges appear after the first billing run.' }}
-          render={(c) => ({
-            date: c.runDate,
-            period: (
-              <div>
-                <span className="num">
-                  {c.period.start} – {lastDay(c.period.end)}
-                </span>
-                <div className="bss-secondary">{c.productOffering?.name ?? 'Transfer fee'}</div>
-              </div>
-            ),
-            days: c.prorated ? (
-              <span className="bss-prorated">
-                {c.billableDays} of {c.periodDays}
-              </span>
-            ) : (
-              <span className="bss-dash">—</span>
-            ),
-            amount: <Amount cents={toCents(c.amount.value)} />,
-          })}
-        />
-      </Panel>
-      <Panel title="Transaction history" subtitle={account.currency}>
-        <TableHead columns={TX_COLUMNS} />
-        <SimpleList
-          resource={transactions}
-          columns={TX_COLUMNS}
-          errorTitle="Failed to load transactions"
-          empty={{ title: 'No transactions', text: 'No payments or charges on this account.' }}
-          keyOf={(t) => `${t.type}:${t.id}`}
-          render={(t) => ({
-            date: t.date,
-            type: (
-              <div>
-                {TYPE_LABEL[t.type] ?? t.type}
-                <div className="bss-secondary">{t.note}</div>
-              </div>
-            ),
-            amount: (
-              <span className="amount-strong">
-                <Amount cents={toCents(t.amount.value)} signed />
-              </span>
-            ),
-            after: <Amount cents={toCents(t.balanceAfter.value)} />,
-          })}
-        />
-      </Panel>
+      <div hidden={tab !== 'charges'}>
+        <TabPanel id="subscriber" value="charges">
+          <section data-ui="ui.subscriber.charges">
+            <Panel title="Charge history" subtitle="AppliedCustomerBillingRate">
+              <TableHead columns={CHARGE_COLUMNS} />
+              <SimpleList
+                resource={charges}
+                columns={CHARGE_COLUMNS}
+                errorTitle="Failed to load charges"
+                empty={{ title: 'No charges', text: 'Charges appear after the first billing run.' }}
+                render={(c) => ({
+                  date: c.runDate,
+                  period: (
+                    <div>
+                      <span className="num">
+                        {c.period.start} – {lastDay(c.period.end)}
+                      </span>
+                      <div className="bss-secondary">
+                        {c.productOffering?.name ?? 'Transfer fee'}
+                      </div>
+                    </div>
+                  ),
+                  days: c.prorated ? (
+                    <span className="bss-prorated">
+                      {c.billableDays} of {c.periodDays}
+                    </span>
+                  ) : (
+                    <span className="bss-dash">—</span>
+                  ),
+                  amount: <Amount cents={toCents(c.amount.value)} />,
+                })}
+              />
+            </Panel>
+          </section>
+        </TabPanel>
+      </div>
+      <div hidden={tab !== 'transactions'}>
+        <TabPanel id="subscriber" value="transactions">
+          <section data-ui="ui.subscriber.transactions">
+            <Panel title="Transaction history" subtitle={account.currency}>
+              <TableHead columns={TX_COLUMNS} />
+              <SimpleList
+                resource={transactions}
+                columns={TX_COLUMNS}
+                errorTitle="Failed to load transactions"
+                empty={{
+                  title: 'No transactions',
+                  text: 'No payments or charges on this account.',
+                }}
+                keyOf={(t) => `${t.type}:${t.id}`}
+                render={(t) => ({
+                  date: t.date,
+                  type: (
+                    <div>
+                      {TYPE_LABEL[t.type] ?? t.type}
+                      <div className="bss-secondary">{t.note}</div>
+                    </div>
+                  ),
+                  amount: (
+                    <span className="amount-strong">
+                      <Amount cents={toCents(t.amount.value)} signed />
+                    </span>
+                  ),
+                  after: <Amount cents={toCents(t.balanceAfter.value)} />,
+                })}
+              />
+            </Panel>
+          </section>
+        </TabPanel>
+      </div>
     </>
   );
 }

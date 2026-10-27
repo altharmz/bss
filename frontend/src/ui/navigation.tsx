@@ -57,8 +57,13 @@ export function Tabs<K extends string>({
           }}
         >
           {option.label}
-          {option.count !== undefined && <span className="count">{option.count}</span>}
-          {option.badge}
+          {option.count !== undefined && (
+            <>
+              {' '}
+              <span className="count">{option.count}</span>
+            </>
+          )}
+          {option.badge && <> {option.badge}</>}
         </button>
       ))}
     </div>

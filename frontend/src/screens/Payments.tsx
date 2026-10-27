@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   loadPayment,
   loadPayments,
@@ -80,12 +80,24 @@ function paymentCells(payment: PaymentRecord, timeZone: string) {
 }
 
 /** The subscriber card's Payments panel. */
-export function PaymentsPanel({ accountId, version }: { accountId: string; version: number }) {
+export function PaymentsPanel({
+  accountId,
+  version,
+  onCount,
+}: {
+  accountId: string;
+  version: number;
+  onCount?: (count: number | undefined) => void;
+}) {
   const { timeZone } = useSystemContext();
   const [open, setOpen] = useState<string | null>(null);
   const payments = useResource(`payments:${accountId}:${version}`, (signal) =>
     loadPayments({ account: accountId, status: null }, signal),
   );
+  const count = payments.status === 'ok' ? payments.data.length : undefined;
+  useEffect(() => {
+    onCount?.(count);
+  }, [count, onCount]);
   return (
     <div data-ui="ui.subscriber.payments">
       <Panel

@@ -57,6 +57,24 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       await page.screenshot({ path: `/web/.shots/${name}-${width}.png`, fullPage: true });
+      if (name.startsWith('card-')) {
+        for (const tab of [
+          'Bills',
+          'Payments',
+          'Charges',
+          'Transactions',
+          ...(name === 'card-prepaid' ? ['Balance actions', 'Commands'] : []),
+          'Account',
+        ]) {
+          await page.getByRole('tab', { name: new RegExp(`^${tab}`) }).click();
+          await expect(page.getByRole('tabpanel')).toBeVisible();
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+          await page.screenshot({
+            path: `/web/.shots/${name}-${tab.toLowerCase().replace(' ', '-')}-${width}.png`,
+            fullPage: true,
+          });
+        }
+      }
     }
   }
 });

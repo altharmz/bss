@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { Menu, TabPanel, Tabs } from './kit';
+import { Badge, Menu, TabPanel, Tabs } from './kit';
 import { TableFooter, TableRow } from './Table';
 
 function Sections() {
@@ -27,6 +27,23 @@ function Sections() {
 }
 
 describe('Ledger navigation', () => {
+  it('separates loaded counts and badges from tab labels in accessible names', () => {
+    render(
+      <Tabs
+        id="counts"
+        label="Loaded sections"
+        value="payments"
+        onChange={() => {}}
+        options={[
+          { key: 'payments', label: 'Payments', count: 0 },
+          { key: 'commands', label: 'Commands', badge: <Badge kind="info">1</Badge> },
+        ]}
+      />,
+    );
+    expect(screen.getByRole('tab', { name: 'Payments 0' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Commands 1' })).toBeTruthy();
+  });
+
   it('selects and focuses tabs with arrows and Home/End and links the panel', () => {
     render(<Sections />);
     const tabs = screen.getAllByRole('tab');
