@@ -191,3 +191,10 @@ figures. `emphasis="figure"` enlarges inputs; `emphasis="answer"` enlarges and e
 the answer label. Optional negative/muted tones affect the value. Operators follow the
 figure at their index; divider indices insert rules before figures. The actions slot
 sits beside the figures. `Panel` uses a 44 px header only when a title is provided.
+
+### Ledger success toast (slice 3b2b2a)
+
+`useToast()` accepts `(message, action?: { label, onClick })`. Each call replaces the
+previous message and action and starts a fresh six-second timeout. Toasts appear at the
+bottom-left. `ToastMessage` shares the visual rendering with the gallery's static
+`preview`; the gallery also offers a live Show toast action.

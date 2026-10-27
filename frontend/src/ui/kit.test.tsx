@@ -70,7 +70,7 @@ describe('Toast', () => {
     return <Button onClick={() => show('Run for 2026-09-26 started')}>go</Button>;
   }
 
-  it('shows one message and hides it after 3.2 s', () => {
+  it('shows one message and hides it after 6 s', () => {
     vi.useFakeTimers();
     render(
       <ToastProvider>
@@ -79,9 +79,44 @@ describe('Toast', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'go' }));
     expect(screen.getByRole('status').textContent).toBe('Run for 2026-09-26 started');
-    act(() => vi.advanceTimersByTime(3199));
+    act(() => vi.advanceTimersByTime(5999));
     expect(screen.queryByRole('status')).not.toBeNull();
     act(() => vi.advanceTimersByTime(1));
     expect(screen.queryByRole('status')).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it('runs the action and replaces both message and action with a fresh timeout', () => {
+    vi.useFakeTimers();
+    const onClick = vi.fn();
+    function Actions() {
+      const show = useToast();
+      return (
+        <>
+          <Button onClick={() => show('Payment recorded', { label: 'View', onClick })}>
+            first
+          </Button>
+          <Button onClick={() => show('Copied')}>second</Button>
+        </>
+      );
+    }
+    render(
+      <ToastProvider>
+        <Actions />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'first' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View' }));
+    expect(onClick).toHaveBeenCalledOnce();
+    act(() => vi.advanceTimersByTime(5000));
+    fireEvent.click(screen.getByRole('button', { name: 'second' }));
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status').textContent).toBe('Copied');
+    expect(screen.queryByRole('button', { name: 'View' })).toBeNull();
+    act(() => vi.advanceTimersByTime(5999));
+    expect(screen.getByRole('status').textContent).toBe('Copied');
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByRole('status')).toBeNull();
+    vi.useRealTimers();
   });
 });

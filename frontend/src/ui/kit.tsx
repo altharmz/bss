@@ -253,33 +253,54 @@ export function Modal({
   );
 }
 
-// --- toast: one at a time, bottom right, hides after 3.2 s ---
+// --- toast: one at a time, bottom left, hides after 6 s ---
 
-const TOAST_MS = 3200;
-const ToastContext = createContext<(message: ReactNode) => void>(() => {});
+const TOAST_MS = 6000;
+type ToastAction = { label: string; onClick: () => void };
+type ShowToast = (message: ReactNode, action?: ToastAction) => void;
+const ToastContext = createContext<ShowToast>(() => {});
+
+export function ToastMessage({
+  message,
+  action,
+  preview = false,
+}: {
+  message: ReactNode;
+  action?: ToastAction | undefined;
+  preview?: boolean;
+}) {
+  return (
+    <div className={`bss-toast${preview ? ' bss-toast-preview' : ''}`} role="status">
+      <span>{message}</span>
+      {action && (
+        <button type="button" onClick={action.onClick}>
+          {action.label}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [message, setMessage] = useState<ReactNode>(null);
+  const [action, setAction] = useState<ToastAction>();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const show = useCallback((text: ReactNode) => {
+  const show = useCallback<ShowToast>((text, nextAction) => {
     clearTimeout(timer.current);
     setMessage(text);
+    setAction(nextAction);
     timer.current = setTimeout(() => setMessage(null), TOAST_MS);
   }, []);
   useEffect(() => () => clearTimeout(timer.current), []);
   return (
     <ToastContext.Provider value={show}>
       {children}
-      {message !== null && (
-        <div className="bss-toast" role="status">
-          {message}
-        </div>
-      )}
+      {message !== null && <ToastMessage message={message} action={action} />}
     </ToastContext.Provider>
   );
 }
 
-export function useToast(): (message: ReactNode) => void {
+export function useToast(): ShowToast {
   return useContext(ToastContext);
 }
 

@@ -25,17 +25,38 @@ import {
   Segmented,
   SelectField,
   TextInput,
+  ToastMessage,
+  useToast,
 } from '../ui/kit';
 import './screens.css';
 
 /** Ledger Components artboard: live controls without screen-specific requests. */
 export function UiKitScreen() {
+  const toast = useToast();
   const [tab, setTab] = useState('overview');
   const [mode, setMode] = useState('prepaid');
   const [money, setMoney] = useState('42.10');
   return (
     <div className="ui-kit" data-ui="ui.kit">
       <h1>UI kit</h1>
+      <section>
+        <h2>Success toast</h2>
+        <ToastMessage
+          preview
+          message="Payment recorded · 120.00 EUR"
+          action={{ label: 'View', onClick: () => toast('Payment opened') }}
+        />
+        <Button
+          onClick={() =>
+            toast('Payment recorded · 120.00 EUR', {
+              label: 'View',
+              onClick: () => toast('Payment opened'),
+            })
+          }
+        >
+          Show toast
+        </Button>
+      </section>
       <section>
         <h2>Page header and summaries</h2>
         <PageHeader

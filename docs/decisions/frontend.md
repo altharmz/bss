@@ -2,6 +2,8 @@
 
 ## Ledger v2: visual redesign (designed 2026-10-26)
 
+- Built slice 3b2b2a: bottom-left success toast with optional action, single-message replacement and six-second lifetime, plus shared static/live gallery previews. Split 3b2b2 for size; Note callers, Dialog/Modal mapping and D7 Footer/write-state gallery remain in 3b2b2b. No request changes or design deviations.
+
 - Built slice 3b2b1: semantic KeyValue, prepaid/postpaid MoneyStrip, PageHeader with PageTitle compatibility, and Ledger Panel geometry; summary gallery and seeded pages reviewed at both widths. Split remaining 3b2b scope into 3b2b2 (Note caller migration, Dialog/Footer/write states and Toast) for size. The summary strip wraps its contents when the viewport cannot fit the artboard’s full-width equation and actions, preserving the no-horizontal-scroll requirement. No request changes.
 
 - Slice 3b2a built Note (info/warning/negative icons, roles, lead and code) and stable business-zone failure timestamps; gallery reviewed at both widths. Split remaining primitives and screen migrations into 3b2b. Deviation: bootstrap ErrorBlock has no system context, so omits its timestamp rather than assuming a zone; call and Retry remain available. No requests changed.

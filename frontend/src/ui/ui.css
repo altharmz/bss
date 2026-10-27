@@ -569,19 +569,35 @@
 /* --- toast --- */
 .bss-toast {
   position: fixed;
-  right: 24px;
+  left: 24px;
   bottom: 24px;
   z-index: 20;
-  padding: 10px 14px;
-  border-radius: var(--r-panel);
-  background: var(--ink);
-  color: var(--color-on-primary);
-  font-size: var(--fs-13);
-  box-shadow: var(--shadow-toast);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-ink-1);
+  color: var(--color-bg);
+  font: var(--type-body);
+  box-shadow: var(--elev-popover);
 }
-.bss-toast a {
-  color: inherit;
-  text-decoration: underline;
+.bss-toast button {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-tint);
+  font: var(--type-body-strong);
+  cursor: pointer;
+}
+.bss-toast button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.bss-toast-preview {
+  position: static;
+  width: fit-content;
 }
 
 .bss-date-wrap .bss-input {

@@ -2905,7 +2905,9 @@ describe('product actions', () => {
       within(dialog).getByText('Unused paid days from 2026-10-10 are credited to the balance.'),
     ).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: 'End on a date' }));
-    await screen.findByRole('status');
+    expect(
+      await screen.findByText('Mobile L: end on a date accepted, the billing worker completes it'),
+    ).toBeTruthy();
     expect(JSON.parse(String(posts(fetchMock)[0]?.[1]?.body))).toMatchObject({
       requestedStartDate: '2026-10-10T12:00:00+03:00',
       productOrderItem: [{ action: 'delete', product: { id: P1, '@type': 'ProductRef' } }],
