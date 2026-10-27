@@ -1,3 +1,5 @@
+import { Footer } from './FinancialForms';
+import { orderRefusal } from '../api/orderErrors';
 import { submitDialogPrimary } from '../ui/kit';
 import { useState } from 'react';
 import type { components as T637 } from '../api/generated/tmf637';
@@ -54,6 +56,7 @@ function NumberModal({
   const [numberId, setNumberId] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
+  const [code, setCode] = useState<string | undefined>();
   const [uncertain, setUncertain] = useState(false);
   const refs = product.status === 'ok' ? (product.data.realizingResource ?? []) : [];
   const specificationId =
@@ -71,6 +74,8 @@ function NumberModal({
     ['active', 'created', 'pendingActive', 'suspended'].includes(product.data.status ?? '');
   async function submit() {
     setBusy(true);
+    setProblem('');
+    setCode(undefined);
     try {
       const result = await changeNumber(accountId, productId, numberId);
       if (result.state === 'completed') {
@@ -82,11 +87,11 @@ function NumberModal({
           id: result.id,
           label: 'Subscriber number change',
         });
-      } else
-        setProblem(
-          result.productOrderErrorMessage?.map((e) => e.reason).join(' ') ||
-            `Order ${result.state}`,
-        );
+      } else {
+        const refusal = orderRefusal(result.productOrderErrorMessage ?? [], result.state);
+        setProblem(refusal.problem);
+        setCode(refusal.code);
+      }
     } catch (error) {
       setProblem(`${explain(error)}. Check product and order history before submitting again.`);
       setUncertain(true);
@@ -102,7 +107,10 @@ function NumberModal({
       onClose={onClose}
       ui="ui.subscriber.number"
       footer={
-        <>
+        <Footer
+          write={{ busy, problem: problem || null, unsure: uncertain, code }}
+          onRefresh={onClose}
+        >
           <Button onClick={onClose}>Close</Button>
           {editable && (
             <Button
@@ -113,10 +121,10 @@ function NumberModal({
               Change number
             </Button>
           )}
-        </>
+        </Footer>
       }
     >
-      <div className="bss-modal-body">
+      <fieldset disabled={busy} className="bss-write-fields bss-modal-body">
         {product.status === 'loading' && <p>Loading number…</p>}
         {product.status === 'error' && (
           <ErrorBlock
@@ -146,8 +154,7 @@ function NumberModal({
             </p>
           </>
         )}
-        {problem && <div role="alert">{problem}</div>}
-      </div>
+      </fieldset>
     </Modal>
   );
 }

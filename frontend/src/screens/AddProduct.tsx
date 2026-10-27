@@ -1,3 +1,4 @@
+import { Footer } from './FinancialForms';
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
@@ -80,6 +81,7 @@ export function AddProductModal({
   );
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string[]>([]);
+  const [code, setCode] = useState<string | undefined>();
   const [numberId, setNumberId] = useState(draft?.numberId ?? '');
   const [uncertain, setUncertain] = useState(false);
 
@@ -124,9 +126,10 @@ export function AddProductModal({
     if (offeringId === null || chosen === undefined) return;
     setBusy(true);
     setProblem([]);
+    setCode(undefined);
     try {
       if (draft !== undefined) {
-        await replaceDraft(
+        const result = await replaceDraft(
           draft.orderId,
           offeringId,
           start,
@@ -134,9 +137,14 @@ export function AddProductModal({
           needsNumber ? numberId : undefined,
           draft.itemId,
         );
+        if (result.state === 'rejected') {
+          setProblem([result.refusal.problem]);
+          setCode(result.refusal.code);
+          return;
+        }
         toast('Draft updated');
       } else {
-        await orderAdd(
+        const result = await orderAdd(
           account.id,
           offeringId,
           start,
@@ -144,6 +152,11 @@ export function AddProductModal({
           needsNumber ? numberId : undefined,
           newIdempotencyKey(),
         );
+        if (result.state === 'rejected') {
+          setProblem([result.refusal.problem]);
+          setCode(result.refusal.code);
+          return;
+        }
         toast(
           <>
             Draft saved · <Link href={`/orders?account=${account.id}`}>Open in Orders</Link>
@@ -171,6 +184,7 @@ export function AddProductModal({
     if (first === null || offeringId === null || chosen === undefined) return;
     setBusy(true);
     setProblem([]);
+    setCode(undefined);
     try {
       const result = await orderAdd(
         account.id,
@@ -191,7 +205,8 @@ export function AddProductModal({
           label: `Order for ${chosen.name}`,
         });
       } else {
-        setProblem(result.reasons.length ? result.reasons : [`The order was ${result.state}.`]);
+        setProblem([result.refusal.problem]);
+        setCode(result.refusal.code);
       }
     } catch (error) {
       setProblem([`${explain(error)}. Close and check the subscriber before submitting again.`]);
@@ -210,30 +225,33 @@ export function AddProductModal({
       ui="ui.subscriber.addProduct"
       subtitle={`${account.customerName} · ${accountLabel(account.id)} · billing day ${account.cycleDay}`}
       footer={
-        <>
-          {problem.length > 0 && (
-            <Note tone="negative" className="footer-push">
-              {problem.join(' ')}
-            </Note>
-          )}
+        <Footer
+          write={{
+            busy,
+            problem: problem.length ? problem.join(' ') : null,
+            unsure: uncertain,
+            code,
+          }}
+          onRefresh={onClose}
+        >
           <Button onClick={onClose}>Cancel</Button>
+          {draft === undefined && (
+            <Button
+              data-ui="ui.addProduct.saveDraft"
+              disabled={!draftReady || busy || uncertain}
+              onClick={() => void saveDraft()}
+            >
+              Save as draft
+            </Button>
+          )}
           {draft === undefined ? (
-            <>
-              <Button
-                data-ui="ui.addProduct.saveDraft"
-                disabled={!draftReady || busy || uncertain}
-                onClick={() => void saveDraft()}
-              >
-                Save as draft
-              </Button>
-              <Button
-                variant="primary"
-                disabled={!ready || busy || uncertain}
-                onClick={() => void confirm()}
-              >
-                {start === today ? 'Activate' : `Activate from ${start}`}
-              </Button>
-            </>
+            <Button
+              variant="primary"
+              disabled={!ready || busy || uncertain}
+              onClick={() => void confirm()}
+            >
+              {start === today ? 'Activate' : `Activate from ${start}`}
+            </Button>
           ) : (
             <Button
               variant="primary"
@@ -244,10 +262,10 @@ export function AddProductModal({
               Save draft
             </Button>
           )}
-        </>
+        </Footer>
       }
     >
-      <div className="bss-modal-body">
+      <fieldset disabled={busy} className="bss-write-fields bss-modal-body">
         <section>
           <div className="bss-step-head">
             1. Offering <span className="caption">Active offerings only</span>
@@ -348,7 +366,7 @@ export function AddProductModal({
             )}
           </div>
         </section>
-      </div>
+      </fieldset>
     </Modal>
   );
 }

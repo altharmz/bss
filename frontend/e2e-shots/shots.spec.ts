@@ -116,6 +116,37 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         await page.screenshot({ path: `/web/.shots/${name}-menu-${width}.png` });
         await expect(menu).toBeVisible();
         await actions.press('Escape');
+        if (name === 'card-postpaid') {
+          await page.route(
+            '**/tmf-api/productOrderingManagement/v5/productOrder',
+            async (route) => {
+              if (route.request().method() !== 'POST') return route.continue();
+              await route.fulfill({
+                status: 201,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                  id: 'preview-refusal',
+                  state: 'rejected',
+                  productOrderErrorMessage: [
+                    { code: 'openModifyItem', reason: 'another order changes this product' },
+                  ],
+                }),
+              });
+            },
+          );
+          await actions.click();
+          await page.getByRole('menuitem', { name: 'End on a date…' }).click();
+          const refused = page.getByRole('dialog');
+          await refused.getByRole('button', { name: 'End on a date', exact: true }).click();
+          await expect(refused.getByRole('alert')).toContainText('Refused.');
+          await expect(refused.getByRole('alert')).toContainText('openModifyItem');
+          await expect(
+            refused.getByRole('button', { name: 'End on a date', exact: true }),
+          ).toBeInViewport({ ratio: 1 });
+          await page.screenshot({ path: `/web/.shots/dialog-refused-order-${width}.png` });
+          await refused.getByRole('button', { name: 'Cancel', exact: true }).click();
+          await page.unroute('**/tmf-api/productOrderingManagement/v5/productOrder');
+        }
         for (const tab of [
           'Bills',
           'Payments',

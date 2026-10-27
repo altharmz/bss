@@ -687,3 +687,10 @@ Submit remains available. Number forms retain their existing button appearance. 
 from a single-line input activates the enabled footer primary; textarea, destructive,
 disabled, destructive End/cancel panels and transfer-confirm actions are excluded.
 No request bodies or markers change.
+
+TMF622 writes in Add product, Edit draft, product status/end, offering/number change and
+Orders retain refused outcomes in their open dialog. The shared write footer shows
+“Refused.”, an operator explanation and the server code; unknown codes retain the
+server reason. Deactivate opens the existing End on a date dialog prefilled with today;
+confirming today preserves the immediate delete request. Same-day status Undo remains
+tracked in G2b.

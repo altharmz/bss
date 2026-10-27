@@ -64,19 +64,20 @@ export function loadNumberProducts(id: string, signal: AbortSignal) {
 }
 
 export async function changeNumber(accountId: string, productId: string, numberId: string) {
-  return postJson<{ id: string; state: string; productOrderErrorMessage?: { reason?: string }[] }>(
-    PATHS.orders,
-    {
-      '@type': 'ProductOrder',
-      billingAccount: { id: accountId, '@type': 'BillingAccountRef' },
-      productOrderItem: [
-        {
-          '@type': 'ProductOrderItem',
-          id: '1',
-          action: 'modify',
-          product: { ...numberProduct(numberId), id: productId },
-        },
-      ],
-    },
-  );
+  return postJson<{
+    id: string;
+    state: string;
+    productOrderErrorMessage?: { code?: string; reason?: string }[];
+  }>(PATHS.orders, {
+    '@type': 'ProductOrder',
+    billingAccount: { id: accountId, '@type': 'BillingAccountRef' },
+    productOrderItem: [
+      {
+        '@type': 'ProductOrderItem',
+        id: '1',
+        action: 'modify',
+        product: { ...numberProduct(numberId), id: productId },
+      },
+    ],
+  });
 }

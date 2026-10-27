@@ -1,3 +1,4 @@
+import { orderRefusal, type OrderError } from './orderErrors';
 // What the screens load and send, mapped from the generated spec types onto exactly what
 // the UI needs. The TMF types make every attribute optional; our API always sends the
 // ones read here, so a missing one is an error (shown in the error block), never a
@@ -1274,14 +1275,16 @@ type OrderBody = T622['schemas']['ProductOrder'];
 export interface OrderOutcome {
   id: string;
   state: string; // completed | inProgress (prepaid: the worker finishes it) | rejected
-  reasons: string[]; // productOrderErrorMessage[].reason when rejected
+  errors: OrderError[];
+  refusal: ReturnType<typeof orderRefusal>;
 }
 
 function outcome(order: OrderBody): OrderOutcome {
   return {
     id: order.id ?? '', // always sent; only an inProgress order is followed by it
     state: need(order.state, 'order state'),
-    reasons: (order.productOrderErrorMessage ?? []).map((m) => m.reason ?? m.code ?? 'rejected'),
+    errors: order.productOrderErrorMessage ?? [],
+    refusal: orderRefusal(order.productOrderErrorMessage ?? [], order.state),
   };
 }
 

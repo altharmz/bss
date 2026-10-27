@@ -191,7 +191,9 @@ describe('number inventory', () => {
       [`POST ${PATHS.orders}`]: () =>
         json({
           state: 'rejected',
-          productOrderErrorMessage: [{ reason: 'Number no longer available' }],
+          productOrderErrorMessage: [
+            { code: 'numberUnavailable', reason: 'Number no longer available' },
+          ],
         }),
     });
     render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
@@ -200,7 +202,9 @@ describe('number inventory', () => {
     await screen.findByRole('option', { name: stock.value });
     fireEvent.change(screen.getByRole('combobox'), { target: { value: N1 } });
     fireEvent.click(screen.getByText('Change number'));
-    expect(await screen.findByText('Number no longer available')).toBeTruthy();
+    expect(
+      await screen.findByText('This subscriber number is unavailable. Choose another number.'),
+    ).toBeTruthy();
     expect(
       JSON.parse(
         String(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')?.[1]?.body),

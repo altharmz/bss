@@ -443,11 +443,13 @@ describe('subscriber card', () => {
       expectUi('ui.subscriber.deactivate'),
     );
     fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
-    expect(within(row).getByText('Deactivate?')).toBeTruthy();
-    fireEvent.click(within(row).getByRole('button', { name: 'No' }));
+    expect(within(screen.getByRole('dialog')).getByLabelText('Date')).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
     expect(completed).toBe(0);
     fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
-    fireEvent.click(within(row).getByRole('button', { name: 'Yes' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'End on a date' }),
+    );
 
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
@@ -474,7 +476,7 @@ describe('subscriber card', () => {
     );
   });
 
-  it('shows the reasons of a rejected order in the row', async () => {
+  it('keeps a rejected deactivation in its dialog', async () => {
     backend({
       [`POST ${ORDERS}`]: () =>
         json(
@@ -492,8 +494,14 @@ describe('subscriber card', () => {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
     fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
-    fireEvent.click(within(row).getByRole('button', { name: 'Yes' }));
-    expect(await within(row).findByText('Rejected: the billing account is Suspended')).toBeTruthy();
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'End on a date' }),
+    );
+    expect(
+      await within(screen.getByRole('dialog')).findByText(
+        'The billing account must be active for this order.',
+      ),
+    ).toBeTruthy();
     expect(screen.queryByRole('status')).toBeNull(); // no success toast
   });
 
@@ -810,10 +818,43 @@ describe('add product', () => {
     await within(dialog).findByTestId('first-charge');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Activate' }));
     expect(
-      await within(dialog).findByText('productOffering Fiber 100 is not for sale'),
+      await within(dialog).findByText('This offering is no longer available for sale.'),
     ).toBeTruthy();
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
+
+  it.each(['Activate', 'Save as draft'])(
+    'keeps a refused %s submission and offering selection',
+    async (action) => {
+      backend({
+        ...catalog,
+        [preview('2026-10-01')]: () => json(FIRST_CHARGE),
+        [`POST ${ORDERS}`]: () =>
+          json(
+            {
+              id: 'r1',
+              state: 'rejected',
+              productOrderErrorMessage: [{ code: 'openModifyItem', reason: 'server detail' }],
+            },
+            { status: 201 },
+          ),
+      });
+      const dialog = await openModal();
+      const choice = (await within(dialog).findAllByRole('radio'))[1] as HTMLElement;
+      fireEvent.click(choice);
+      await within(dialog).findByTestId('first-charge');
+      fireEvent.click(within(dialog).getByRole('button', { name: action }));
+      const alert = await within(dialog).findByRole('alert');
+      expect(alert.textContent).toContain('Refused.');
+      expect(alert.textContent).toContain(
+        'Another order already changes this product. Undo that change first.',
+      );
+      expect(alert.textContent).toContain('openModifyItem');
+      expect(alert.closest('.bss-write-actions')).toBeNull();
+      expect(choice.getAttribute('aria-checked')).toBe('true');
+      expect(screen.getByRole('dialog')).toBe(dialog);
+    },
+  );
 
   it('shows why there is no preview (the server message of a 422)', async () => {
     backend({
@@ -1916,7 +1957,9 @@ describe('prepaid orders and commands', () => {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
     fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
-    fireEvent.click(within(row).getByRole('button', { name: 'Yes' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'End on a date' }),
+    );
     return stub;
   }
 
@@ -3120,6 +3163,89 @@ describe('product actions', () => {
     });
   });
 
+  it('shows a Resume refusal after Suspend completes and the card reloads', async () => {
+    let suspended = false;
+    const { fetchMock } = backend({
+      [`GET ${INTERNAL}/products`]: () =>
+        json([product(P1, { status: suspended ? 'suspended' : 'active' })], { total: 1 }),
+      [`POST ${ORDERS}`]: () => {
+        if (!suspended) {
+          suspended = true;
+          return completed();
+        }
+        return json(
+          {
+            id: 'r1',
+            state: 'rejected',
+            productOrderErrorMessage: [
+              { code: 'openModifyItem', reason: 'another order already changes its status today' },
+            ],
+          },
+          { status: 201 },
+        );
+      },
+    });
+    await open();
+    let row = await waitFor(() => productRow('Mobile L'));
+    openMenu(row);
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'Suspend…' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Suspend' }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter(([url]) => url === `${INTERNAL}/products`)).toHaveLength(
+        2,
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    row = await waitFor(() => productRow('Mobile L'));
+    openMenu(row);
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: 'Resume…' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Resume' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain('Refused.');
+    expect(alert.textContent).toContain(
+      'Another order already changes this product. Undo that change first.',
+    );
+    expect(within(alert).getByText('openModifyItem').className).toContain('code');
+    expect(alert.closest('.bss-write-actions')).toBeNull();
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect((within(dialog).getByLabelText('Date') as HTMLInputElement).value).toBe('2026-10-01');
+  });
+
+  it.each([
+    ['Suspend', 'active'],
+    ['Resume', 'suspended'],
+    ['End on a date', 'active'],
+  ])('keeps %s inputs and maps a refused order above its footer', async (action, status) => {
+    backend({
+      ...products([product(P1, { status })]),
+      [`POST ${ORDERS}`]: () =>
+        json(
+          {
+            id: 'r1',
+            state: 'rejected',
+            productOrderErrorMessage: [{ code: 'openModifyItem', reason: 'server reason' }],
+          },
+          { status: 201 },
+        ),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    openMenu(row);
+    fireEvent.click(within(productMenu(row)).getByRole('menuitem', { name: `${action}…` }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-11-03' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: action }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain(
+      'Another order already changes this product. Undo that change first.',
+    );
+    expect(alert.textContent).toContain('openModifyItem');
+    expect(alert.closest('.bss-write-actions')).toBeNull();
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect((within(dialog).getByLabelText('Date') as HTMLInputElement).value).toBe('2026-11-03');
+  });
+
   it('keeps the dialog open and shows the reasons of a rejected order', async () => {
     backend({
       [`POST ${ORDERS}`]: () =>
@@ -3140,7 +3266,7 @@ describe('product actions', () => {
     const dialog = screen.getByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-11-03' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend' }));
-    expect(await within(dialog).findByText('Rejected: the product is not active')).toBeTruthy();
+    expect(await within(dialog).findByText('the product is not active')).toBeTruthy();
     expect((within(dialog).getByLabelText('Date') as HTMLInputElement).value).toBe('2026-11-03');
     expect(screen.queryByRole('status')).toBeNull();
   });
@@ -3511,7 +3637,7 @@ describe('change offering', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Change offering' }));
     expect(await within(dialog).findByRole('alert')).toHaveProperty(
       'textContent',
-      expect.stringContaining('a prepaid offering changes at its renewal on 2026-10-20'),
+      expect.stringContaining('Choose the prepaid product’s renewal date for the offering change.'),
     );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Change offering' }));
     await waitFor(() =>

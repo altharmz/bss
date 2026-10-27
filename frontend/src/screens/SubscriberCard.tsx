@@ -8,7 +8,6 @@ import {
   loadProducts,
   loadSettlement,
   loadTransactions,
-  orderDelete,
   undoDeactivation,
   undoPendingChange,
   type Account,
@@ -988,41 +987,12 @@ function ProductRow({
 }) {
   const context = useSystemContext();
   const [changing, setChanging] = useState<ProductAction | null>(null);
-  const [confirming, setConfirming] = useState(false);
+  const [immediateEnd, setImmediateEnd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const note = statusNote(product);
   const ending = product.status === 'pendingTerminate';
   const name = product.productOffering.name;
-
-  async function deactivate() {
-    setBusy(true);
-    setProblem(null);
-    try {
-      const result = await orderDelete(account.id, product.id);
-      if (result.state === 'completed') {
-        onDone(
-          product.startDate > context.businessDate
-            ? `${name} cancelled before its start`
-            : `${name} deactivated as of ${context.businessDate}`,
-        );
-      } else if (result.state === 'inProgress') {
-        // a prepaid account: the billing worker ends the product (OrderWatch follows)
-        onDone(`${name}: deactivation accepted, the billing worker completes it shortly`, {
-          id: result.id,
-          label: `Deactivation of ${name}`,
-        });
-      } else {
-        setProblem(`Rejected: ${result.reasons.join(' ') || result.state}`);
-        setConfirming(false);
-      }
-    } catch (error) {
-      setProblem(explain(error));
-      setConfirming(false);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function undo() {
     setBusy(true);
@@ -1130,21 +1100,14 @@ function ProductRow({
             >
               Undo deactivation
             </Button>
-          ) : confirming ? (
-            <span className="bss-confirm">
-              <span className="ask">Deactivate?</span>
-              <Button variant="danger" small disabled={busy} onClick={() => void deactivate()}>
-                Yes
-              </Button>
-              <Button small disabled={busy} onClick={() => setConfirming(false)}>
-                No
-              </Button>
-            </span>
           ) : (
             <>
               <ProductActionsMenu
                 items={offeredChanges(product, account.ratingType)}
-                onPick={(change) => setChanging(change)}
+                onPick={(change) => {
+                  setImmediateEnd(false);
+                  setChanging(change);
+                }}
               />{' '}
               {fundingWait !== null && (
                 <>
@@ -1164,7 +1127,10 @@ function ProductRow({
                 tone="negative"
                 small
                 data-ui="ui.subscriber.deactivate"
-                onClick={() => setConfirming(true)}
+                onClick={() => {
+                  setImmediateEnd(true);
+                  setChanging('end');
+                }}
               >
                 Deactivate
               </Button>
@@ -1186,6 +1152,7 @@ function ProductRow({
       )}
       {changing !== null && changing !== 'offering' && (
         <ProductChangeDialog
+          immediateEnd={immediateEnd}
           change={changing}
           account={account}
           product={product}

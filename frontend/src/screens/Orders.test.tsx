@@ -380,14 +380,22 @@ describe('order writes', () => {
         json({
           id: O1,
           state: 'rejected',
-          productOrderErrorMessage: [{ code: 'x', reason: 'The offering is retired' }],
+          productOrderErrorMessage: [
+            { code: 'offeringNotSellable', reason: 'The offering is retired' },
+          ],
         }),
     });
     open();
     const dialog = await openOrder('C0000001');
     press(dialog, 'Submit');
     expectUi('ui.orders.submitDraft');
-    expect(await within(dialog).findByText('The offering is retired')).toBeTruthy();
+    const refusal = await within(dialog).findByRole('alert');
+    expect(refusal.textContent).toContain('Refused.');
+    expect(refusal.textContent).toContain('offeringNotSellable');
+    expect(refusal.closest('.bss-write-actions')).toBeNull();
+    expect(
+      await within(dialog).findByText('This offering is no longer available for sale.'),
+    ).toBeTruthy();
     expect(within(dialog).queryByRole('button', { name: 'Submit' })).toBeNull(); // no longer a draft
     expect(within(dialog).getByRole('button', { name: 'Delete' })).toBeTruthy();
     expect(sent(fetchMock)[0]?.call).toBe(`PATCH ${ORDERS}/${O1}`);

@@ -1,3 +1,5 @@
+import { orderRefusal } from '../api/orderErrors';
+import { Footer } from './FinancialForms';
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
@@ -363,6 +365,7 @@ function OrderModal({
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [code, setCode] = useState<string | undefined>();
   const [unsure, setUnsure] = useState(false);
   const [reason, setReason] = useState('');
   const [description, setDescription] = useState(order.description ?? '');
@@ -402,6 +405,7 @@ function OrderModal({
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setProblem(null);
+    setCode(undefined);
     setUnsure(false);
     try {
       await action();
@@ -420,6 +424,7 @@ function OrderModal({
   const open = (next: Panel) => {
     setPanel(panel === next ? null : next);
     setProblem(null);
+    setCode(undefined);
     setUnsure(false);
   };
 
@@ -436,11 +441,13 @@ function OrderModal({
         setOrder({
           ...order,
           state: result.state as NonNullable<Order['state']>,
-          productOrderErrorMessage: result.reasons.map((r) => ({
+          productOrderErrorMessage: result.errors.map((error) => ({
             '@type': 'ProductOrderErrorMessage',
-            reason: r,
+            ...error,
           })),
         });
+        setProblem(result.refusal.problem);
+        setCode(result.refusal.code);
         setPanel(null);
         onChanged();
       }
@@ -468,23 +475,13 @@ function OrderModal({
       ui="ui.orders.detail"
       onClose={onClose}
       footer={
-        <>
-          {problem !== null && (
-            <Note tone="negative" className="footer-push">
-              {unsure ? `Unsure whether it was saved: ${problem}` : problem}{' '}
-              {unsure && (
-                <Button
-                  small
-                  onClick={() => {
-                    onChanged();
-                    onClose();
-                  }}
-                >
-                  Refresh
-                </Button>
-              )}
-            </Note>
-          )}
+        <Footer
+          write={{ busy, problem, unsure, code }}
+          onRefresh={() => {
+            onChanged();
+            onClose();
+          }}
+        >
           {canDelete && (
             <Button data-ui="ui.orders.deleteDraft" disabled={busy} onClick={() => open('delete')}>
               Delete
@@ -528,7 +525,7 @@ function OrderModal({
             </Button>
           )}
           <Button onClick={onClose}>Close</Button>
-        </>
+        </Footer>
       }
     >
       <div className="bss-modal-body">
@@ -655,10 +652,10 @@ function OrderModal({
             </Link>
           </div>
         )}
-        {(order.productOrderErrorMessage ?? []).length > 0 && (
+        {problem === null && (order.productOrderErrorMessage ?? []).length > 0 && (
           <div className="bss-run-error inline" data-ui="ui.orders.errors" role="alert">
             {(order.productOrderErrorMessage ?? []).map((m, i) => (
-              <div key={i}>{m.reason ?? m.message ?? m.code}</div>
+              <div key={i}>{orderRefusal([m]).problem}</div>
             ))}
           </div>
         )}

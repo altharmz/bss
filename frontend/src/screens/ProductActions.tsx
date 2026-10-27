@@ -1,3 +1,4 @@
+import { Footer } from './FinancialForms';
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useRef, useState } from 'react';
@@ -6,6 +7,7 @@ import {
   loadSellableOfferings,
   orderOfferingChange,
   orderProductChange,
+  orderDelete,
   type Account,
   type AccountProduct,
   type FirstCharge,
@@ -96,6 +98,7 @@ export function ProductActionsMenu({
 
 export function ProductChangeDialog({
   change,
+  immediateEnd = false,
   account,
   product,
   onClose,
@@ -103,6 +106,7 @@ export function ProductChangeDialog({
   onRefresh,
 }: {
   change: ProductChange;
+  immediateEnd?: boolean;
   account: Account;
   product: AccountProduct;
   onClose: () => void;
@@ -115,6 +119,7 @@ export function ProductChangeDialog({
   const [day, setDay] = useState(today);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [code, setCode] = useState<string | undefined>();
   const [unsure, setUnsure] = useState(false);
   const saving = useRef(false);
   const name = product.productOffering.name;
@@ -137,27 +142,37 @@ export function ProductChangeDialog({
     saving.current = true;
     setBusy(true);
     setProblem(null);
+    setCode(undefined);
     setUnsure(false);
     try {
-      const result = await orderProductChange(
-        account.id,
-        product.id,
-        change,
-        day,
-        context.timeZone,
-      );
+      const result =
+        immediateEnd && change === 'end' && day === today
+          ? await orderDelete(account.id, product.id)
+          : await orderProductChange(account.id, product.id, change, day, context.timeZone);
       if (result.state === 'completed') {
-        onDone(`${name}: ${TITLE[change].toLowerCase()} recorded for ${day}`);
+        onDone(
+          immediateEnd && change === 'end' && day === today
+            ? product.startDate > today
+              ? `${name} cancelled before its start`
+              : `${name} deactivated as of ${today}`
+            : `${name}: ${TITLE[change].toLowerCase()} recorded for ${day}`,
+        );
       } else if (result.state === 'inProgress') {
         onDone(
-          `${name}: ${TITLE[change].toLowerCase()} accepted, the billing worker completes it`,
+          immediateEnd && change === 'end' && day === today
+            ? `${name}: deactivation accepted, the billing worker completes it shortly`
+            : `${name}: ${TITLE[change].toLowerCase()} accepted, the billing worker completes it`,
           {
             id: result.id,
-            label: `${TITLE[change]} of ${name}`,
+            label:
+              immediateEnd && change === 'end' && day === today
+                ? `Deactivation of ${name}`
+                : `${TITLE[change]} of ${name}`,
           },
         );
       } else {
-        setProblem(`Rejected: ${result.reasons.join(' ') || result.state}`);
+        setProblem(result.refusal.problem);
+        setCode(result.refusal.code);
       }
     } catch (error) {
       if (uncertain(error)) {
@@ -176,38 +191,29 @@ export function ProductChangeDialog({
     <Modal
       onSubmit={change === 'end' ? undefined : submitDialogPrimary}
       title={`${TITLE[change]}: ${name}`}
-      width={520}
+      width={change === 'end' ? 400 : 520}
       onClose={() => {
         if (!saving.current) onClose();
       }}
       ui="ui.subscriber.productChange"
       footer={
-        <>
-          {problem !== null && (
-            <Note tone="negative" className="bss-product-error">
-              {problem}
-            </Note>
-          )}
-          {unsure && (
-            <Button
-              onClick={() => {
-                onClose();
-                onRefresh();
-              }}
-            >
-              Refresh
-            </Button>
-          )}
+        <Footer
+          write={{ busy, problem, unsure, code }}
+          onRefresh={() => {
+            onClose();
+            onRefresh();
+          }}
+        >
           <Button disabled={busy} onClick={onClose}>
             Cancel
           </Button>
           <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>
             {TITLE[change]}
           </Button>
-        </>
+        </Footer>
       }
     >
-      <div className="bss-modal-body">
+      <fieldset disabled={busy} className="bss-write-fields bss-modal-body">
         <section>
           <div className="bss-step-head">{change === 'end' ? 'End on' : 'Date'}</div>
           <TextInput
@@ -221,7 +227,7 @@ export function ProductChangeDialog({
           {!valid && <Note tone="negative">Enter a date as YYYY-MM-DD.</Note>}
         </section>
         <p className="bss-secondary">{explanation}</p>
-      </div>
+      </fieldset>
     </Modal>
   );
 }
@@ -257,6 +263,7 @@ export function ChangeOfferingDialog({
   const [filter, setFilter] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [code, setCode] = useState<string | undefined>();
   const [unsure, setUnsure] = useState(false);
   const saving = useRef(false);
   const name = product.productOffering.name;
@@ -288,6 +295,7 @@ export function ChangeOfferingDialog({
     saving.current = true;
     setBusy(true);
     setProblem(null);
+    setCode(undefined);
     setUnsure(false);
     try {
       const result = await orderOfferingChange(
@@ -305,7 +313,8 @@ export function ChangeOfferingDialog({
           label: `Change of ${name} to ${chosen.name}`,
         });
       } else {
-        setProblem(`Rejected: ${result.reasons.join(' ') || result.state}`);
+        setProblem(result.refusal.problem);
+        setCode(result.refusal.code);
       }
     } catch (error) {
       if (uncertain(error)) {
@@ -330,22 +339,13 @@ export function ChangeOfferingDialog({
       }}
       ui="ui.subscriber.offeringChange"
       footer={
-        <>
-          {problem !== null && (
-            <Note tone="negative" className="bss-product-error">
-              {problem}
-            </Note>
-          )}
-          {unsure && (
-            <Button
-              onClick={() => {
-                onClose();
-                onRefresh();
-              }}
-            >
-              Refresh
-            </Button>
-          )}
+        <Footer
+          write={{ busy, problem, unsure, code }}
+          onRefresh={() => {
+            onClose();
+            onRefresh();
+          }}
+        >
           <Button disabled={busy} onClick={onClose}>
             Cancel
           </Button>
@@ -356,10 +356,10 @@ export function ChangeOfferingDialog({
           >
             Change offering
           </Button>
-        </>
+        </Footer>
       }
     >
-      <div className="bss-modal-body">
+      <fieldset disabled={busy} className="bss-write-fields bss-modal-body">
         <section>
           <div className="bss-step-head">
             1. New offering
@@ -450,7 +450,7 @@ export function ChangeOfferingDialog({
             )}
           </div>
         </section>
-      </div>
+      </fieldset>
     </Modal>
   );
 }

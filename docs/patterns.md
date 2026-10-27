@@ -258,3 +258,12 @@ The card uses Tabs/TabPanel with selected keys in the URL hash. Empty, unknown o
 ### Ledger recent activity (slice 7a)
 
 Overview uses the first eight already loaded transactions in server order. The rail pairs note/type and signed amount with the business date and balanceAfter; dates are date-only API values, so no local time conversion is applied. All transactions selects the mounted Transactions pane without fetching. Empty and failed reads remain distinct; prepaid accounts explain ledger versus reserved funds.
+
+### Order refusal copy (GUI review G2a)
+
+`api/orderErrors.ts` maps TMF622 business codes to operator sentences and falls back to
+unknown codes' server reason. `OrderOutcome` preserves the raw errors and exposes
+`refusal: {problem, code}` for Footer. Number changes use the same mapper on their raw
+order response. A rejected order never calls the success/close callback. The exported
+JSON code list is checked against both the TypeScript mapping and backend problem tuples.
+Edit draft saves through AddProductModal; its order detail owns Submit.
