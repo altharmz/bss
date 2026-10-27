@@ -89,16 +89,13 @@ ordinary-user denial and sign-out as well as the existing billing screens.
 
 ### Subscribers list (`ui.subscribers.list`) - `screens/Subscribers.tsx`
 
-Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
-
-Ledger v2: account StatusPill, neutral-positive Amount and a copyable BA Id column alongside Subscriber no.
-
-One row per **billing account** (a customer with two accounts is two rows): subscriber
-number (first 8 hex digits of the account id, upper case), name, the account's state
-pill, balance (negative highlighted), active product count, cycle day. Search by name or
-number; segmented filter by account state (All / Active / Suspended / Closed); "Negative
-balance: N". A row opens the card. No per-row requests: one account list and one product
-list, grouped client-side.
+Ledger v2 slice 5: PageHeader shows the filtered count and New subscriber action. The
+300 px search (Name, BA id or subscriber no.) has an icon and `/` focus shortcut outside
+editable fields. Account state and mode filters retain counts; Reset filters appears when
+active. Negative balance N stays at the right. The page table shows Name, copyable BA Id,
+account StatusPill, Mode, Products, Cycle day (— for prepaid), and Balance EUR without a
+currency suffix. Over limit appears strictly below the negative credit limit. Query-aware
+no-results names the active Status and Mode. A row opens the card; reads are unchanged.
 API: `GET /tmf-api/accountManagement/v5/billingAccount` (all pages),
 `GET /tmf-api/productInventory/v5/product?status=active&fields=billingAccount` (all pages).
 

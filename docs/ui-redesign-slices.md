@@ -136,7 +136,7 @@ Status: `todo` · `done: <commit subject>` · `split`
 | 3b2b2b1 | Dialog foundation and Modal compatibility | S/M/L Dialog with context, step and Ledger header/body/footer; Modal width boundary tests; size gallery reviewed at both widths | done: Build Ledger dialogs and modal size compatibility |
 | 3b2b2b2 | Notes caller migration, Footer and write states | Migrate every bss-warning/bss-hint/bss-inline-error caller to Note preserving text/markers and remove static inline styles in touched files; D7 Footer refused/unsure/busy states; refused code and unsure primary hiding tests; gallery dialog write states reviewed at both widths | done: Adopt Ledger notes and dialog write states |
 | 4 | Shell: sidebar, top bar, business-date chip | Chip drift states tested from the context; sidebar matches the artboard | done: Restyle the shell and show business-date drift |
-| 5 | Subscribers list | Search and `/`, filters with counts, over-limit flag; matches Subscribers.dc.html at 1280 | todo |
+| 5 | Subscribers list | Search and `/`, filters with counts, over-limit flag; matches Subscribers.dc.html at 1280 | done: Restyle the Subscribers list with Ledger filters and balances |
 | 6 | Subscriber card: header, money strip, tabs | Every existing panel in its tab with markers kept; hash deep links; both strip variants | todo |
 | 7 | Subscriber card: Overview (products table, pending sub-row, In progress steps, activity rail) | Matches SubscriberCard.dc.html at 1280 and 1600 | todo |
 | 8 | Billing runs: header actions, latest-run band, inline outcomes, history selection | "Retry N failed" only for a failed latest run; outcomes inline; requests unchanged | todo |

@@ -32,6 +32,65 @@
   color: var(--num-disabled);
 }
 
+.bss-subscribers-screen {
+  display: block;
+}
+.bss-subscribers-table .head > .cell {
+  white-space: nowrap;
+}
+.bss-subscribers-table {
+  margin: 0 calc(-1 * var(--space-xl));
+}
+.bss-subscriber-search {
+  position: relative;
+  flex: 0 0 300px;
+}
+.bss-subscriber-search .bss-input {
+  width: 100%;
+  padding-left: 30px;
+  padding-right: 30px;
+}
+.bss-subscriber-search svg {
+  position: absolute;
+  left: 10px;
+  top: 9px;
+  fill: none;
+  stroke: var(--color-ink-3);
+  stroke-width: 1.5;
+}
+.bss-subscriber-search kbd {
+  position: absolute;
+  right: 8px;
+  top: 7px;
+  padding: 0 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font: var(--type-code);
+  color: var(--color-ink-3);
+}
+.bss-subscriber-negative {
+  margin-left: auto;
+  color: var(--color-ink-3);
+  font: var(--type-label);
+  white-space: nowrap;
+}
+.bss-subscriber-negative .neg-count {
+  font: var(--type-code);
+}
+.bss-subscriber-mode {
+  color: var(--color-ink-2);
+}
+.bss-subscriber-balance {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  white-space: nowrap;
+}
+.bss-subscribers-table .bss-name {
+  font: var(--type-body-strong);
+}
+
 /* --- subscriber card --- */
 .bss-back {
   align-self: flex-start;

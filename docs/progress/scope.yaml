@@ -352,6 +352,7 @@ items:
   - {id: ui.shell.operator, area: ui, stage: 5, title: "Operator footer menu trigger"}
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
   - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
+  - {id: ui.subscribers.prepaid, area: ui, stage: 5, title: "Subscribers prepaid account mode"}
   - {id: ui.products, area: ui, stage: 5, title: "Products screen: every status, filters, rows"}
   - {id: ui.products.status, area: ui, stage: 5, title: "Products status filter"}
   - {id: ui.products.accountChip, area: ui, stage: 5, title: "Products account filter chip"}

@@ -221,3 +221,11 @@ with `businessDate(context.now, context.timeZone)`; drift is calendar-day arithm
 independent of the browser clock and time zone. The chip has `ui.shell.businessDate`;
 the operator summary has `ui.shell.operator`. Session has no display-name field, so
 login and its first two uppercase characters appear in the footer.
+
+### Ledger Subscribers list (slice 5)
+
+Subscribers uses PageHeader's wrapping filters and the page-level table, with a 300 px
+search and `/` shortcut outside editable fields. The count follows all client-side
+filters. Name, BA Id, account status, mode, products, cycle and final currency-free balance
+form its seven columns. The over-limit Flag precedes Amount only below the credit-limit
+boundary; NoResults receives query and labelled Status/Mode filters.

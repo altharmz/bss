@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { loadSubscribers, type Account, type AccountState, type RatingMode } from '../api/bss';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
 import { hrefOf, useRouter } from '../app/router';
-import { matchesShortId, shortId } from '../format/ids';
+import { matchesShortId } from '../format/ids';
 import { formatInt } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
-import { Button, PageTitle, Panel, StatusPill, Segmented, TextInput, useToast } from '../ui/kit';
+import { Button, Flag, PageHeader, StatusPill, Segmented, TextInput, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { NewSubscriberModal } from './SubscriberForms';
@@ -18,13 +18,13 @@ import './screens.css';
 // products from one product list (status=active), grouped - no request per row (D4).
 
 export const COLUMNS: Column[] = [
-  { key: 'no', label: 'Subscriber no.', width: '110px', mono: true },
-  { key: 'name', label: 'Name', width: '1fr' },
-  { key: 'account', label: 'Account', width: '130px' },
+  { key: 'name', label: 'Name', width: 'minmax(0, 1.6fr)' },
+  { key: 'account', label: 'Account', width: '140px' },
   { key: 'status', label: 'Status', width: '120px' },
-  { key: 'balance', label: 'Balance', width: '170px', align: 'right', mono: true },
-  { key: 'products', label: 'Active products', width: '110px', align: 'right', mono: true },
-  { key: 'cycle', label: 'Cycle day', width: '110px', align: 'right', mono: true },
+  { key: 'mode', label: 'Mode', width: '96px' },
+  { key: 'products', label: 'Products', width: '80px', align: 'right', mono: true },
+  { key: 'cycle', label: 'Cycle day', width: '88px', align: 'right', mono: true },
+  { key: 'balance', label: 'Balance EUR', width: '180px', align: 'right' },
 ];
 
 type StateFilter = 'All' | AccountState;
@@ -56,12 +56,34 @@ export function SubscribersScreen() {
   const subscribers = useResource('subscribers', loadSubscribers);
   const [creating, setCreating] = useState(false);
   const toast = useToast();
+  const search = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const focusSearch = (event: KeyboardEvent) => {
+      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest('input, textarea, select, [contenteditable="true"]')
+      )
+        return;
+      event.preventDefault();
+      search.current?.querySelector('input')?.focus();
+    };
+    window.addEventListener('keydown', focusSearch);
+    return () => window.removeEventListener('keydown', focusSearch);
+  }, []);
 
   const accounts = subscribers.status === 'ok' ? subscribers.data.accounts : [];
   const countOf = (filter: StateFilter) =>
     filter === 'All' ? accounts.length : accounts.filter((a) => a.state === filter).length;
   const modeCount = (filter: ModeFilter) =>
     filter === 'All' ? accounts.length : accounts.filter((a) => a.ratingType === filter).length;
+  const visibleAccounts = accounts.filter(
+    (a) =>
+      (state === 'All' || a.state === state) &&
+      (mode === 'All' || a.ratingType === mode) &&
+      matches(a, query),
+  );
+  const filtered = query !== '' || state !== 'All' || mode !== 'All';
   const negative = accounts.filter((a) => a.balanceCents < 0).length;
   const reset = () => {
     setQuery('');
@@ -70,16 +92,7 @@ export function SubscribersScreen() {
   };
 
   return (
-    <div className="bss-screen" data-ui="ui.subscribers.list">
-      <div className="bss-title-row">
-        <PageTitle
-          title="Subscribers"
-          count={subscribers.status === 'ok' ? formatInt(accounts.length) : undefined}
-        />
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          + New subscriber
-        </Button>
-      </div>
+    <div className="bss-screen bss-subscribers-screen" data-ui="ui.subscribers.list">
       {creating && (
         <NewSubscriberModal
           onClose={() => setCreating(false)}
@@ -90,39 +103,61 @@ export function SubscribersScreen() {
           }}
         />
       )}
-      <div className="bss-toolbar">
-        <TextInput
-          width={340}
-          placeholder="Search by name or subscriber number"
-          aria-label="Search subscribers"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        <Segmented
-          label="Account state"
-          value={state}
-          onChange={setState}
-          options={STATES.map((key) => ({
-            key,
-            label: key,
-            ...(subscribers.status === 'ok' ? { count: countOf(key) } : {}),
-          }))}
-        />
-        <Segmented
-          label="Account mode"
-          value={mode}
-          onChange={setMode}
-          options={MODES.map(({ key, label }) => ({
-            key,
-            label,
-            ...(subscribers.status === 'ok' ? { count: modeCount(key) } : {}),
-          }))}
-        />
-        <span className="right">
-          Negative balance: <span className="neg-count">{formatInt(negative)}</span>
-        </span>
-      </div>
-      <Panel>
+      <PageHeader
+        title="Subscribers"
+        count={subscribers.status === 'ok' ? formatInt(visibleAccounts.length) : undefined}
+        actions={
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            New subscriber
+          </Button>
+        }
+        filters={
+          <>
+            <div className="bss-subscriber-search" ref={search}>
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14">
+                <circle cx="6" cy="6" r="4.5" />
+                <path d="M9.5 9.5L13 13" />
+              </svg>
+              <TextInput
+                placeholder="Name, BA id or subscriber no."
+                aria-label="Search subscribers"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+              <kbd aria-hidden="true">/</kbd>
+            </div>
+            <Segmented
+              label="Account state"
+              value={state}
+              onChange={setState}
+              options={STATES.map((key) => ({
+                key,
+                label: key,
+                ...(subscribers.status === 'ok' ? { count: countOf(key) } : {}),
+              }))}
+            />
+            <Segmented
+              label="Account mode"
+              value={mode}
+              onChange={setMode}
+              options={MODES.map(({ key, label }) => ({
+                key,
+                label,
+                ...(subscribers.status === 'ok' ? { count: modeCount(key) } : {}),
+              }))}
+            />
+            {filtered && (
+              <Button variant="quiet" onClick={reset}>
+                Reset filters
+              </Button>
+            )}
+            <span className="bss-subscriber-negative">
+              Negative balance <span className="neg-count">{formatInt(negative)}</span>
+            </span>
+          </>
+        }
+      />
+      <div role="table" aria-label="Subscribers" className="bss-subscribers-table">
         <TableHead columns={COLUMNS} />
         <ListState
           resource={subscribers}
@@ -130,17 +165,17 @@ export function SubscribersScreen() {
           errorTitle="Failed to load subscribers"
           empty={{
             title: 'No subscribers yet',
-            text: 'Create one with + New subscriber.',
+            text: 'Create one with New subscriber.',
           }}
           total={(data) => data.accounts.length}
-          rows={(data) =>
-            data.accounts.filter(
-              (a) =>
-                (state === 'All' || a.state === state) &&
-                (mode === 'All' || a.ratingType === mode) &&
-                matches(a, query),
-            )
-          }
+          rows={() => visibleAccounts}
+          query={query}
+          filters={[
+            ...(state !== 'All' ? [{ label: 'Status', value: state }] : []),
+            ...(mode !== 'All'
+              ? [{ label: 'Mode', value: mode === 'prepaid' ? 'Prepaid' : 'Postpaid' }]
+              : []),
+          ]}
           onResetFilters={reset}
         >
           {(rows, data) => {
@@ -160,32 +195,39 @@ export function SubscribersScreen() {
                         navigate(hrefOf({ name: 'subscriber', accountId: account.id }))
                       }
                       cells={{
-                        no: (
-                          <span className="bss-subno" title={account.customerId}>
-                            {shortId(account.customerId)}
-                          </span>
-                        ),
                         name: (
                           <div className="ellipsis">
                             <span className="bss-name">{account.customerName}</span>
                             {(perCustomer.get(account.customerId) ?? 0) > 1 && (
                               <span className="bss-secondary"> · {account.name}</span>
                             )}
-                            {account.ratingType === 'prepaid' && (
-                              <span className="bss-secondary" data-ui="ui.subscribers.prepaid">
-                                {' '}
-                                · prepaid
-                              </span>
-                            )}
                           </div>
                         ),
                         account: <Id prefix="BA-" id={account.id} />,
                         status: <StatusPill kind="account" status={account.state} />,
+                        mode: (
+                          <span
+                            className="bss-subscriber-mode"
+                            data-ui={
+                              account.ratingType === 'prepaid'
+                                ? 'ui.subscribers.prepaid'
+                                : undefined
+                            }
+                          >
+                            {account.ratingType === 'prepaid' ? 'Prepaid' : 'Postpaid'}
+                          </span>
+                        ),
                         balance: (
-                          <Amount cents={account.balanceCents} currency={account.currency} />
+                          <span className="bss-subscriber-balance">
+                            {account.creditLimitCents !== null &&
+                              account.balanceCents < -account.creditLimitCents && (
+                                <Flag>Over limit</Flag>
+                              )}
+                            <Amount cents={account.balanceCents} />
+                          </span>
                         ),
                         products: <span className={active ? '' : 'bss-zero'}>{active}</span>,
-                        cycle: `Day ${account.cycleDay}`,
+                        cycle: account.ratingType === 'prepaid' ? '—' : account.cycleDay,
                       }}
                     />
                   );
@@ -198,7 +240,7 @@ export function SubscribersScreen() {
             );
           }}
         </ListState>
-      </Panel>
+      </div>
     </div>
   );
 }

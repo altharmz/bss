@@ -82,26 +82,25 @@ describe('subscribers list', () => {
 
     const ivan = rowOf(/Ivan Petrov/) as HTMLElement;
     const cells = within(ivan).getAllByRole('cell');
-    expect(cells[2]?.textContent).toBe('BA-11111111');
+    expect(cells[1]?.textContent).toBe('BA-11111111');
     expect(within(ivan).getByRole('button', { name: `Copy ${A1}` })).toBeTruthy();
-    expect(cells[0]?.textContent).toBe('AAAA1111'); // the customer's short id
-    expect(cells[3]?.textContent).toBe('Active');
-    expect(cells[4]?.textContent).toBe('1,250.40USD');
-    expect(cells[5]?.textContent).toBe('2');
-    expect(cells[6]?.textContent).toBe('Day 5');
+    expect(cells[2]?.textContent).toBe('Active');
+    expect(cells[6]?.textContent).toBe('1,250.40');
+    expect(cells[4]?.textContent).toBe('2');
+    expect(cells[5]?.textContent).toBe('5');
 
     const anna = rowOf(/Anna Smirnova/) as HTMLElement;
     expect(within(anna).getByText('Suspended').className).toContain('pill-paused');
     const negative = within(anna).getByText('−116.13');
     expect(negative.parentElement?.className).toContain('negative');
-    expect(within(anna).getAllByRole('cell')[5]?.firstElementChild?.className).toBe('bss-zero');
+    expect(within(anna).getAllByRole('cell')[4]?.firstElementChild?.className).toBe('bss-zero');
 
     // a customer with two accounts is two rows, told apart by the account name
     expect(rowOf(/Romashka HQ/)).toBeTruthy();
     expect(rowOf(/Romashka branch/)).toBeTruthy();
     expect(screen.getByText('Showing 4 of 4')).toBeTruthy();
     expect(screen.getByText('Amounts in billing account currency')).toBeTruthy();
-    expect(screen.getByText('Negative balance:').textContent).toContain('1');
+    expect(screen.getByText('Negative balance').textContent).toContain('1');
   });
 
   it('filters by the real account state, with counts', async () => {
@@ -115,7 +114,7 @@ describe('subscribers list', () => {
         .map((b) => b.textContent),
     ).toEqual(['All4', 'Active2', 'Suspended1', 'Closed1']);
     fireEvent.click(within(group).getByRole('button', { name: /^Suspended/ }));
-    expect(dataRows().map((r) => within(r).getAllByRole('cell')[1]?.textContent)).toEqual([
+    expect(dataRows().map((r) => within(r).getAllByRole('cell')[0]?.textContent)).toEqual([
       'Anna Smirnova',
     ]);
     expect(screen.getByText('Showing 1 of 4')).toBeTruthy();
@@ -133,7 +132,8 @@ describe('subscribers list', () => {
     backend(() => json(rows, { total: rows.length }));
     await open();
     await screen.findByText('Ivan Petrov');
-    expect(screen.getAllByText('· prepaid')).toHaveLength(1);
+    expect(within(rowOf(/Dmitri Sokolov/) as HTMLElement).getByText('Prepaid')).toBeTruthy();
+    expectUi('ui.subscribers.prepaid');
     const group = screen.getByRole('group', { name: 'Account mode' });
     expect(
       within(group)
@@ -142,7 +142,7 @@ describe('subscribers list', () => {
     ).toEqual(['All5', 'Postpaid4', 'Prepaid1']);
     fireEvent.click(within(group).getByRole('button', { name: /^Prepaid/ }));
     expect(dataRows()).toHaveLength(1);
-    expect(rowOf(/Dmitri Sokolov/)?.textContent).toContain('prepaid');
+    expect(rowOf(/Dmitri Sokolov/)?.textContent).toContain('Prepaid');
     fireEvent.click(within(group).getByRole('button', { name: /^Postpaid/ }));
     expect(dataRows()).toHaveLength(4);
     expect(screen.getByText('Showing 4 of 5')).toBeTruthy();
@@ -159,10 +159,71 @@ describe('subscribers list', () => {
     expect(rowOf(/Ivan Petrov/)).toBeTruthy();
     expect(dataRows()).toHaveLength(1);
     fireEvent.change(search, { target: { value: 'nobody' } });
-    expect(screen.getByText('No matches')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+    expect(screen.getByText('Nothing matches “nobody”')).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Reset filters' })[0] as HTMLElement);
     expect(dataRows()).toHaveLength(4);
     expect((search as HTMLInputElement).value).toBe('');
+  });
+
+  it('flags only balances strictly below the credit limit', async () => {
+    const rows = [
+      accountBody(A1, IVAN, {
+        creditLimit: { unit: 'EUR', value: 100 },
+        accountBalance: balance(-100),
+      }),
+      accountBody(A2, ANNA, {
+        creditLimit: { unit: 'EUR', value: 100 },
+        accountBalance: balance(-100.01),
+      }),
+      accountBody(A3, ROMASHKA, { accountBalance: balance(-500) }),
+    ];
+    backend(() => json(rows, { total: rows.length }));
+    await open();
+    await screen.findByText('Ivan Petrov');
+    expect(within(rowOf(/Ivan Petrov/) as HTMLElement).queryByText('Over limit')).toBeNull();
+    expect(within(rowOf(/Anna Smirnova/) as HTMLElement).getByText('Over limit')).toBeTruthy();
+    expect(within(rowOf(/Romashka/) as HTMLElement).queryByText('Over limit')).toBeNull();
+  });
+
+  it('focuses the search with slash except while editing a field', async () => {
+    backend();
+    await open();
+    const search = screen.getByPlaceholderText('Name, BA id or subscriber no.');
+    fireEvent.keyDown(document.body, { key: '/' });
+    expect(document.activeElement).toBe(search);
+    const input = document.createElement('input');
+    document.body.append(input);
+    input.focus();
+    fireEvent.keyDown(input, { key: '/' });
+    expect(document.activeElement).toBe(input);
+    input.remove();
+  });
+
+  it('shows the filtered header count and query with active filters in no results', async () => {
+    backend();
+    await open();
+    await screen.findByText('Ivan Petrov');
+    const heading = screen.getByRole('heading', { name: 'Subscribers' })
+      .parentElement as HTMLElement;
+    expect(heading.querySelector('.count')?.textContent).toBe('4');
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Account state' })).getByRole('button', {
+        name: /^Suspended/,
+      }),
+    );
+    expect(heading.querySelector('.count')?.textContent).toBe('1');
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Account mode' })).getByRole('button', {
+        name: /^Prepaid/,
+      }),
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search subscribers' }), {
+      target: { value: 'nobody' },
+    });
+    expect(heading.querySelector('.count')?.textContent).toBe('0');
+    expect(screen.getByText('Nothing matches “nobody”')).toBeTruthy();
+    expect(screen.getByText('with Status')).toHaveProperty('textContent', 'with Status Suspended');
+    expect(screen.getByText('with Mode')).toHaveProperty('textContent', 'with Mode Prepaid');
   });
 
   it('opens the card on a row click', async () => {
@@ -190,7 +251,7 @@ describe('subscribers list', () => {
     backend(() => json([], { total: 0 }));
     await open();
     expect(await screen.findByText('No subscribers yet')).toBeTruthy();
-    expect(screen.getByText('Create one with + New subscriber.')).toBeTruthy();
+    expect(screen.getByText('Create one with New subscriber.')).toBeTruthy();
   });
 });
 
@@ -216,7 +277,7 @@ describe('new subscriber', () => {
       [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: () => tmfError(503, 'Unavailable'),
     });
     await open();
-    fireEvent.click(screen.getByRole('button', { name: '+ New subscriber' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
     const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
     fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
     fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
@@ -242,7 +303,7 @@ describe('new subscriber', () => {
       [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: pending, // the card it opens
     });
     await open();
-    fireEvent.click(screen.getByRole('button', { name: '+ New subscriber' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
     const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
     expectUi('ui.subscribers.new');
     const create = within(dialog).getByRole('button', { name: 'Create subscriber' });
@@ -297,7 +358,7 @@ describe('new subscriber', () => {
       [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: pending,
     });
     await open();
-    fireEvent.click(screen.getByRole('button', { name: '+ New subscriber' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
     const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
     fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
     fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
@@ -325,7 +386,7 @@ describe('new subscriber', () => {
       [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: pending,
     });
     await open();
-    fireEvent.click(screen.getByRole('button', { name: '+ New subscriber' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
     const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Organization' }));
     fireEvent.change(within(dialog).getByLabelText('Organization name'), {
@@ -350,7 +411,7 @@ describe('new subscriber', () => {
       [`POST ${ACCOUNTS}`]: () => tmfError(422, 'Unprocessable Entity'),
     });
     await open();
-    fireEvent.click(screen.getByRole('button', { name: '+ New subscriber' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
     const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
     fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
     fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });

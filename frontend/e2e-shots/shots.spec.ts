@@ -37,6 +37,8 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         await page
           .locator('[data-ui="ui.subscribers.list"] [role="row"].clickable')
           .first()
+          .getByRole('cell')
+          .first()
           .click();
         await expect(page.locator('[data-ui="ui.subscriber.card"] h1')).toBeVisible();
         await expect(page.getByTestId('skeleton')).toHaveCount(0);

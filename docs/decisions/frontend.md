@@ -2,6 +2,8 @@
 
 ## Ledger v2: visual redesign (designed 2026-10-26)
 
+- Built slice 5: Subscribers PageHeader/filtered count, icon search and slash shortcut, wrapping counted state/mode filters, descriptive no-results, seven-column page table and strict over-limit Flag. Existing prepaid marker moves to Mode. Boundary, shortcut, placeholder, no-results and filtered-count tests added; requests unchanged. No design deviations.
+
 - Built slice 4: Ledger sidebar, brand/environment Tag, active-item hairline, operator footer and breadcrumbs/business-date chip; context-only zone-aware drift and initials tests. Missing-field deviation: Session and Context expose no display name, so the footer shows the session login and its first two uppercase characters. Requests and menu behavior unchanged.
 
 - Built slice 3b2b2b2: every legacy note caller now uses Note with text/markers preserved; static footer styles removed. Shared Footer adds D7 refusal/unsure notes, primary Refresh replacement and stable-width busy actions/disabled fields; four write-state previews and Numbers capture coverage added. Deviation under “When the spec is wrong”: ApiError lacks a server code, so live refusals omit it; optional presentation-code rendering is tested directly and previewed without altering the loader. Gallery uses one column at 1280 and two at 1600 so fixed M dialogs fit without horizontal scrolling. Requests unchanged.
