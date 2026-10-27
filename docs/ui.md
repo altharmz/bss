@@ -36,6 +36,14 @@ operation the screen calls (`frontend/src/api/bss.ts`).
 
 ### Shell (`ui.shell`)
 
+Ledger v2 slice 4: the 216 px subtle sidebar has a BSS Admin brand/environment Tag,
+28 px navigation items and a hairline active item. The footer trigger
+(`ui.shell.operator`) contains login initials, login and role, preserving the operator
+menu. The 48 px top bar holds breadcrumbs and the segmented business-date chip
+(`ui.shell.businessDate`). Drift uses the context instant in its business zone, with
+warning styling and calendar-day ahead/behind wording. No display-name field exists,
+so the footer uses the session login and its first two characters.
+
 The failed-run indicator uses the shared failed Badge.
 
 Sidebar with the navigation (Subscribers, Catalog, Billing runs - each with its count;

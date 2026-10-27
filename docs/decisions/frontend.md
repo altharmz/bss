@@ -2,6 +2,8 @@
 
 ## Ledger v2: visual redesign (designed 2026-10-26)
 
+- Built slice 4: Ledger sidebar, brand/environment Tag, active-item hairline, operator footer and breadcrumbs/business-date chip; context-only zone-aware drift and initials tests. Missing-field deviation: Session and Context expose no display name, so the footer shows the session login and its first two uppercase characters. Requests and menu behavior unchanged.
+
 - Built slice 3b2b2b2: every legacy note caller now uses Note with text/markers preserved; static footer styles removed. Shared Footer adds D7 refusal/unsure notes, primary Refresh replacement and stable-width busy actions/disabled fields; four write-state previews and Numbers capture coverage added. Deviation under “When the spec is wrong”: ApiError lacks a server code, so live refusals omit it; optional presentation-code rendering is tested directly and previewed without altering the loader. Gallery uses one column at 1280 and two at 1600 so fixed M dialogs fit without horizontal scrolling. Requests unchanged.
 
 - Built slice 3b2b2b1: S/M/L Dialog, context and step header, padded body, quiet close control and subtle footer; Modal maps widths at 440/620 boundaries. Static size gallery and width/semantic tests cover the foundation. Split 3b2b2b for size: legacy Note classes occur across more than the spec's nine files; all caller migrations, D7 Footer and write-state gallery remain explicitly in 3b2b2b2. No requests changed.

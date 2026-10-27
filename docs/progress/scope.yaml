@@ -348,6 +348,8 @@ items:
   - {id: ui.session.menu, area: ui, stage: 5, title: "Operator menu: role, password, users and sign out"}
   - {id: ui.users.list, area: ui, stage: 5, title: "Administrator users list"}
   - {id: ui.users.manage, area: ui, stage: 5, title: "Create, edit, disable and reset users"}
+  - {id: ui.shell.businessDate, area: ui, stage: 5, title: "Business-date chip and context-based drift"}
+  - {id: ui.shell.operator, area: ui, stage: 5, title: "Operator footer menu trigger"}
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
   - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
   - {id: ui.products, area: ui, stage: 5, title: "Products screen: every status, filters, rows"}

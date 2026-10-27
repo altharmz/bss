@@ -5,11 +5,11 @@ import { countOrders } from '../api/orders';
 import { getPage } from '../api/client';
 import { useResource } from '../api/useResource';
 import { formatInt } from '../format/money';
-import { utcLabel } from '../format/dates';
+import { businessDate, utcLabel } from '../format/dates';
 import { useCrumbs, useNavVersion, type SystemContext } from './context';
 import { Link, useRouter, type Route } from './router';
 import './shell.css';
-import { Badge } from '../ui/kit';
+import { Badge, Tag } from '../ui/kit';
 import { SignOut, useSession } from './session';
 
 // The frame around every screen: sidebar (brand, navigation, operator) and top bar
@@ -59,6 +59,21 @@ interface NavItem {
   count: string;
   failed?: boolean;
   active: (route: Route) => boolean;
+}
+
+export function operatorInitials(login: string, displayName?: string): string {
+  const words = displayName?.trim().split(/\s+/);
+  return (
+    words && words.length >= 2 ? `${words[0]?.[0] ?? ''}${words[1]?.[0] ?? ''}` : login.slice(0, 2)
+  ).toUpperCase();
+}
+
+function driftLabel(context: SystemContext): string | null {
+  const wallDate = businessDate(context.now, context.timeZone);
+  const days = Math.round((Date.parse(context.businessDate) - Date.parse(wallDate)) / 86_400_000);
+  if (days === 0) return null;
+  const count = Math.abs(days);
+  return `${count} ${count === 1 ? 'day' : 'days'} ${days < 0 ? 'behind' : 'ahead of'} the wall clock`;
 }
 
 export function Sidebar({ context }: { context: SystemContext }) {
@@ -177,8 +192,8 @@ export function Sidebar({ context }: { context: SystemContext }) {
     <aside className="bss-sidebar">
       <div className="bss-brand">
         <span className="mark">B</span>
-        <span className="name">BSS Console</span>
-        <span className="env">{context.environment.toUpperCase()}</span>
+        <span className="name">BSS Admin</span>
+        <Tag>{context.environment.toUpperCase()}</Tag>
       </div>
       <nav className="bss-nav" aria-label="Main">
         {sections.map((section) => (
@@ -190,6 +205,7 @@ export function Sidebar({ context }: { context: SystemContext }) {
               <Link
                 key={item.href}
                 href={item.href}
+                className={item.active(route) ? 'is-active' : undefined}
                 aria-current={item.active(route) ? 'page' : undefined}
               >
                 {item.label}
@@ -205,8 +221,14 @@ export function Sidebar({ context }: { context: SystemContext }) {
       </nav>
       <div className="bss-operator">
         <details data-ui="ui.session.menu">
-          <summary>
-            <span className="who">{session?.username}</span> · {session?.role}
+          <summary data-ui="ui.shell.operator">
+            <span className="avatar" aria-hidden="true">
+              {operatorInitials(session?.username ?? '')}
+            </span>
+            <span className="identity">
+              <span className="who">{session?.username}</span>
+              <span className="role">{session?.role}</span>
+            </span>
           </summary>
           <nav aria-label="User menu">
             <Link href="/change-password">Change password</Link>
@@ -220,6 +242,7 @@ export function Sidebar({ context }: { context: SystemContext }) {
 
 export function TopBar({ context }: { context: SystemContext | null }) {
   const crumbs = useCrumbs();
+  const drift = context ? driftLabel(context) : null;
   return (
     <header className="bss-topbar">
       <nav className="bss-crumbs" aria-label="Breadcrumbs">
@@ -229,19 +252,24 @@ export function TopBar({ context }: { context: SystemContext | null }) {
             {crumb.href !== undefined && i < crumbs.length - 1 ? (
               <Link href={crumb.href}>{crumb.label}</Link>
             ) : (
-              <span className="current">{crumb.label}</span>
+              <span className="current" aria-current="page">
+                {crumb.label}
+              </span>
             )}
           </Fragment>
         ))}
       </nav>
       {context !== null && (
-        <div className="bss-sysinfo">
-          <span>
-            Business date <span className="value">{context.businessDate}</span>
+        <div
+          className={`bss-business-date${drift ? ' is-warning' : ''}`}
+          data-ui="ui.shell.businessDate"
+        >
+          <span className="label">Business date</span>
+          <span className="value">
+            {context.businessDate}
+            <span className="zone">{utcLabel(context.utcOffset)}</span>
           </span>
-          <span>
-            Time zone <span className="value">{utcLabel(context.utcOffset)}</span>
-          </span>
+          {drift && <span className="drift">{drift}</span>}
         </div>
       )}
     </header>

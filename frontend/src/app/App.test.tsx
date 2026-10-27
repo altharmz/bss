@@ -58,6 +58,23 @@ function start(path: string) {
 }
 
 describe('routes', () => {
+  it('marks the active sidebar item and puts operator identity in the footer trigger', async () => {
+    backend();
+    start('/subscribers');
+    const nav = await screen.findByRole('navigation', { name: 'Main' });
+    const active = within(nav).getByRole('link', { name: /Subscribers/ });
+    expect(active.classList.contains('is-active')).toBe(true);
+    expect(active.getAttribute('aria-current')).toBe('page');
+    expect(within(nav).getByRole('link', { name: 'Parties' }).classList.contains('is-active')).toBe(
+      false,
+    );
+    const trigger = expectUi('ui.shell.operator');
+    expect(trigger.tagName).toBe('SUMMARY');
+    expect(within(trigger).getByText('i.petrova')).toBeTruthy();
+    expect(within(trigger).getByText('admin')).toBeTruthy();
+    expect(within(trigger).getByText('I.')).toBeTruthy();
+    expect(screen.getByText('BSS Admin')).toBeTruthy();
+  });
   it.each([
     ['/subscribers', { name: 'subscribers' }],
     [`/subscribers/${ID}`, { name: 'subscriber', accountId: ID }],

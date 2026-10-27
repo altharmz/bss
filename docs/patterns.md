@@ -212,3 +212,12 @@ double padding. Escape, overlay clicks and the close button preserve closing beh
 ### Ledger write footer (slice 3b2b2b2)
 
 `Footer` keeps Cancel/Close and write buttons as direct children. It disables buttons while busy, reserves space for the write action’s spinner and both labels to keep its width stable while busy, and replaces write actions with primary Refresh when unsure. Refusals use a negative Note with “Refused.”; uncertain outcomes use the D7 warning and `useWrite.failedCall`. Optional `write.code` is presentation data; current ApiError has no code, so live refusals omit it. Editable forms using Footer wrap fields in a disabled fieldset while busy. UI kit shows idle, busy, refused and unsure dialogs; Numbers is included in reference captures.
+
+### Ledger shell (slice 4)
+
+`Shell` keeps existing navigation requests and session-menu semantics. Sidebar active
+links use `is-active` as well as `aria-current`. `TopBar` compares `context.businessDate`
+with `businessDate(context.now, context.timeZone)`; drift is calendar-day arithmetic,
+independent of the browser clock and time zone. The chip has `ui.shell.businessDate`;
+the operator summary has `ui.shell.operator`. Session has no display-name field, so
+login and its first two uppercase characters appear in the footer.
