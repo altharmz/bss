@@ -428,6 +428,14 @@ and Enter does not submit on that step.
      ≥ 1536 px), with a 32 px gap.
    - Other tabs are full width.
 
+### D13 Currency (2026-10-27, GUI review B5)
+
+Every "EUR" in this file (column headers such as "Price EUR", "Shortfall <X> EUR.",
+"Top up <x> EUR", "Record <x> EUR") stands for the currency of the account concerned, or
+the system currency where no account is involved. It is never a literal: amounts go
+through `Amount`, and a column header names a currency only when every loaded row shares
+it. Built from [gui-review-plan.md](gui-review-plan.md) slice G1 on.
+
 ## Slice specs
 
 ### Slice 1: tokens, fonts, legacy aliases, style guard test, `make web-shots`

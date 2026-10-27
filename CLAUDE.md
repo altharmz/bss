@@ -143,21 +143,20 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   [docs/next-slices-design.md](docs/next-slices-design.md); the orchestrator prompt is in
   [docs/run-slices.md](docs/run-slices.md) and the screen shapes in
   [docs/patterns.md](docs/patterns.md).
-- **Now: UI redesign "Ledger" v2** (visual only, no API change), slices 1-16, all
-  decisions made. To run it, act as the orchestrator in
-  [docs/ui-redesign-slices.md](docs/ui-redesign-slices.md): one fresh subagent per slice,
-  sequentially, each committing through the hook. The slice specs are in
-  [docs/ui-redesign-design.md](docs/ui-redesign-design.md), and the handoff is in
+- **Now: GUI review fixes merged with the rest of the Ledger v2 redesign** (2026-10-27),
+  all decisions made: [docs/gui-review-plan.md](docs/gui-review-plan.md). Its tracker
+  interleaves fix slices G1-G15 (bugs B1-B28, MCP/GUI parity P1-P16, improvements
+  I1-I13, data-quality scripts D1-D5) with redesign slices R7b-R16. To run it, act as the
+  orchestrator its "Orchestrator" section describes: one fresh subagent per row,
+  sequentially, each committing through the hook. Redesign specs:
+  [docs/ui-redesign-design.md](docs/ui-redesign-design.md); handoff
   `design-ref/design_handoff_bss_admin_v2/` (read-only, never edited).
-- **Backlog:** sidebar regrouping + global Orders screen, decided 2026-10-21
-  ([frontend.md](docs/decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21));
-  UI vs MCP gap slices 2 and 4 ([plan](docs/ui-mcp-gap-plan.md));
-  progress drift check + per-item deployed
-  status; APP_PORT / `make down` profiles (two stacks with vps-lab); vps-lab guard
-  backport; changing `billCycleDay` (open question); subscriber-card visual review.
-- **Open checks:** network isolation of app/MCP; demo data in prod (pending); DB
-  pool confirmed on the VPS; restore drill from a cron-made dump; pytest
-  container shows `(unhealthy)`. Detail for all of these: [docs/status.md](docs/status.md).
+- **Backlog / open checks** (Track C of the plan, need the human): restore drill; DB pool
+  confirmed on the VPS; APP_PORT / `make down` profiles, vps-lab guard backport; pytest
+  container `(unhealthy)`; network isolation of app/MCP; `"ask"` rules and cloud startup;
+  progress drift check + per-item deployed status. Changing `billCycleDay` stays out
+  (PATCH is a 409). Demo data in prod: decided, the stand keeps operator data and only
+  the plan's D scripts change it. Detail: [docs/status.md](docs/status.md).
 
 ## Where the decisions are
 

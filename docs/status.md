@@ -531,7 +531,7 @@ shipped).
   127.0.0.1:18081. Since UI user management, application authentication protects
   business routes on those paths too; health probes remain public. A private app/MCP
   network and a Caddy-side alias remain a separate infrastructure task.
-- **Demo data in prod: decision pending.** `make seed` refuses prod on purpose. If prod
+- **Demo data in prod: decided 2026-10-27** ([gui-review-plan.md](gui-review-plan.md#decisions): the stand keeps operator-created data; only the plan's D scripts, run by the human, change it). Earlier note: `make seed` refuses prod on purpose. If prod
   gets demo data, it can only be current state: history cannot be backdated through the
   API (prices and orders in the past are refused), and the seed builds its history with a
   FixedClock in-process, which is not an option against prod.

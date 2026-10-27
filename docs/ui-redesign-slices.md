@@ -5,6 +5,11 @@ specifies slice N. The handoff is `design-ref/design_handoff_bss_admin_v2/` (rea
 **Nothing needs the human's approval.** The human only starts the run and deploys
 afterwards.
 
+> **2026-10-27: the remaining rows (7b-16) now run from the merged tracker in
+> [gui-review-plan.md](gui-review-plan.md), interleaved with the GUI review fixes.** Their
+> status is kept there; the table below is history from row 7b on. D13 (currency) in the
+> design applies to every remaining row.
+
 ## Start (the human pastes this into Codex)
 
 > Read CLAUDE.md, then docs/ui-redesign-slices.md, and act as the orchestrator described in
