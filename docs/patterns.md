@@ -229,3 +229,7 @@ search and `/` shortcut outside editable fields. The count follows all client-si
 filters. Name, BA Id, account status, mode, products, cycle and final currency-free balance
 form its seven columns. The over-limit Flag precedes Amount only below the credit-limit
 boundary; NoResults receives query and labelled Status/Mode filters.
+
+### Ledger subscriber header (slice 6a)
+
+The subscriber identity uses a borderless semantic header with a page title, account StatusPill and mode Tag. The metadata row uses the customer StatusPill and existing account links. Account actions use Menu with per-item ui markers; postpaid Record payment and conditional Delete… live in More actions. Money strips, Account summary and tab migration follow in 6b.

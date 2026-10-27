@@ -292,7 +292,8 @@ describe('record payment', () => {
     });
     await open();
     await waitFor(() => billRow('BL-B1000001'));
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
     expectUi('ui.subscriber.recordPayment');
     fireEvent.change(within(dialog).getByLabelText('Amount'), { target: { value: '1,500.5' } });
@@ -322,7 +323,8 @@ describe('record payment', () => {
     });
     await open();
     await waitFor(() => billRow('BL-B1000001'));
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
     fireEvent.change(within(dialog).getByLabelText('Amount'), { target: { value: '350' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'cash' }));
@@ -362,7 +364,8 @@ describe('record payment', () => {
     backend({ [`POST ${PAYMENT}`]: () => tmfError(409, 'Conflict') });
     await open();
     await waitFor(() => billRow('BL-B1000001'));
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
     fireEvent.change(within(dialog).getByLabelText('Amount'), { target: { value: '100' } });
     fireEvent.click(within(dialog).getByLabelText(/Apply to specific bills/));
@@ -386,7 +389,8 @@ describe('record payment', () => {
     });
     await open();
     await within(panel('Bills')).findByText('No bills');
-    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
     expect(within(dialog).getByText(/No open bill/)).toBeTruthy();
     fireEvent.change(within(dialog).getByLabelText('Amount'), { target: { value: '10' } });

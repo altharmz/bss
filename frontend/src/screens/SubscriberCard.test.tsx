@@ -236,10 +236,14 @@ describe('subscriber card', () => {
     await open();
     const heading = screen.getByRole('heading', { name: /Olga Kuznetsova/ });
     expectUi('ui.subscriber.card');
-    expect(within(heading).getByText('Active').className).toContain('status-pill');
+    expect(within(heading.parentElement as HTMLElement).getByText('Active').className).toContain(
+      'status-pill',
+    );
     expect(screen.getByText('CCCC2222')).toBeTruthy(); // subscriber no.
     expect(screen.getAllByText('BA-AAAA1111').length).toBeGreaterThan(0);
-    expect(await screen.findByText('Active', { selector: '.bss-meta .value' })).toBeTruthy();
+    expect(
+      await screen.findByText('Active', { selector: '.subscriber-meta .status-pill' }),
+    ).toBeTruthy();
 
     const kpis = panel('Billing account');
     const balance = within(kpis).getByText('−5,784.19');
@@ -259,7 +263,7 @@ describe('subscriber card', () => {
   it('cannot add products to a suspended account', async () => {
     backend({}, { ...ACCOUNT, state: 'Suspended' });
     await open();
-    const add = screen.getByRole('button', { name: '+ Add product' }) as HTMLButtonElement;
+    const add = screen.getByRole('button', { name: 'Add product' }) as HTMLButtonElement;
     expect(add.disabled).toBe(true);
     expect(screen.getByText('Unavailable for suspended accounts')).toBeTruthy();
   });
@@ -467,7 +471,7 @@ describe('add product', () => {
 
   async function openModal() {
     await open();
-    fireEvent.click(screen.getByRole('button', { name: '+ Add product' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add product' }));
     return screen.getByRole('dialog', { name: 'Add product' });
   }
 
@@ -1047,7 +1051,7 @@ describe('delete a billing account', () => {
   };
   const LIST = '/tmf-api/accountManagement/v5/billingAccount?offset=0&limit=100';
   const DELETE_KEY = `DELETE ${ACCOUNT_URL}`;
-  const deleteButton = () => screen.queryByRole('button', { name: 'Delete' });
+  const deleteButton = () => screen.queryByRole('menuitem', { name: 'Delete…' });
   const deletes = (calls: string[]) => calls.filter((c) => c.startsWith('DELETE'));
 
   it('is offered for an empty postpaid account: DELETE with no body, then the list', async () => {
@@ -1060,6 +1064,7 @@ describe('delete a billing account', () => {
     });
     await open();
     await screen.findByText('No active products');
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     await waitFor(() => expect(deleteButton()).toBeTruthy());
     expectUi('ui.subscriber.delete');
     fireEvent.click(deleteButton() as HTMLElement);
@@ -1080,6 +1085,7 @@ describe('delete a billing account', () => {
     await open();
     await screen.findByText('Fiber 100');
     await screen.findByText('Transaction history');
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     expect(deleteButton()).toBeNull();
   });
 
@@ -1101,6 +1107,7 @@ describe('delete a billing account', () => {
     await open();
     await new Promise((resolve) => setTimeout(resolve, 30));
     await screen.findByText('Transaction history');
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     expect(deleteButton()).toBeNull();
   });
 
@@ -1115,12 +1122,14 @@ describe('delete a billing account', () => {
     );
     await open();
     await new Promise((resolve) => setTimeout(resolve, 30));
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     expect(deleteButton()).toBeNull();
   });
 
   it('shows the 409 as close it instead and keeps the dialog', async () => {
     backend({ ...EMPTY, [DELETE_KEY]: () => tmfError(409, 'billingAccount has charges') });
     await open();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     await waitFor(() => expect(deleteButton()).toBeTruthy());
     fireEvent.click(deleteButton() as HTMLElement);
     const dialog = await screen.findByRole('dialog', { name: 'Delete billing account' });
@@ -1891,7 +1900,7 @@ describe('prepaid orders and commands', () => {
       [`GET ${CMD}/${ORDER_ID}`]: () => json(command({ state: 'completed', outcome: 'funded' })),
     });
     await open();
-    fireEvent.click(screen.getByRole('button', { name: '+ Add product' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add product' }));
     const dialog = screen.getByRole('dialog', { name: 'Add product' });
     fireEvent.click((await within(dialog).findAllByRole('radio'))[0] as HTMLElement);
     const activate = await within(dialog).findByRole('button', { name: /^Activate/ });
@@ -1974,7 +1983,7 @@ describe('prepaid first-charge preview in Add product', () => {
 
   async function chooseOffering() {
     await open();
-    fireEvent.click(screen.getByRole('button', { name: '+ Add product' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add product' }));
     const dialog = screen.getByRole('dialog', { name: 'Add product' });
     fireEvent.click((await within(dialog).findAllByRole('radio'))[0] as HTMLElement);
     return dialog;
@@ -3310,5 +3319,21 @@ describe('change offering', () => {
       expect(within(dialog).getByRole('alert').textContent).toContain('offeringChangeNotAtRenewal'),
     );
     expect(screen.getByRole('dialog')).toBe(dialog);
+  });
+});
+
+describe('Ledger subscriber header', () => {
+  it('uses the account identity header and opens postpaid payment from More actions', async () => {
+    backend();
+    await open();
+    const heading = screen.getByRole('heading', { name: 'Olga Kuznetsova' });
+    expect(heading.closest('.bss-panel')).toBeNull();
+    expect(screen.getByText('POSTPAID')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add product' }).className).toContain('secondary');
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    expectUi('ui.subscriber.moreActions');
+    expect(screen.queryByRole('menuitem', { name: 'Delete…' })).toBeNull();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Record payment' }));
+    expect(await screen.findByRole('dialog', { name: 'Record payment' })).toBeTruthy();
   });
 });

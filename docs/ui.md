@@ -124,6 +124,9 @@ API: `POST/PATCH /tmf-api/partyManagement/v5/{individual|organization}`,
 
 ### Subscriber card (`ui.subscriber.card`) - `screens/SubscriberCard.tsx`
 
+Ledger v2 slice 6a: the identity header has account/customer statuses, a PREPAID or POSTPAID Tag, BA Id, subscriber number, financial-account and Orders links, and the prepaid daily schedule. Add product is secondary. More actions opens Record payment for postpaid and offers Delete… only for an empty deletable account. Money strips and tabs remain in slice 6b.
+
+
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: account/product StatusPill, copyable BA Id in the meta line, and neutral-positive movement Amounts. Product actions use the shared keyboard Menu, retaining labels and markers.

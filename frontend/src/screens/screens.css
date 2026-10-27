@@ -798,3 +798,55 @@
   top: auto;
   right: auto;
 }
+
+/* Ledger subscriber identity header; money and panels migrate in slice 6b. */
+.subscriber-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.subscriber-heading-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.subscriber-heading-row h1 {
+  margin: 0;
+  font: var(--type-page);
+  letter-spacing: var(--tracking-page);
+}
+.subscriber-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.subscriber-add-unavailable {
+  text-align: right;
+  font: var(--type-label);
+  color: var(--color-ink-3);
+}
+.subscriber-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  font: var(--type-label);
+  color: var(--color-ink-3);
+}
+.subscriber-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+.subscriber-meta > :not(:first-child)::before {
+  content: '·';
+  margin-right: var(--space-xs);
+  color: var(--color-ink-4);
+}
+.subscriber-money-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}

@@ -366,6 +366,7 @@ items:
   - {id: ui.subscriber.number, area: ui, stage: 5, title: "Product number and order-based number change"}
   - {id: ui.subscribers.new, area: ui, stage: 5, title: "New subscriber: party, customer, billing account"}
   - {id: ui.subscriber.edit, area: ui, stage: 5, title: "Edit subscriber: names, statuses, credit limit"}
+  - {id: ui.subscriber.moreActions, area: ui, stage: 5, title: "Subscriber account actions menu"}
   - {id: ui.subscriber.card, area: ui, stage: 5, title: "Subscriber card: account, products, charges, transactions"}
   - {id: ui.subscriber.addProduct, area: ui, stage: 5, title: "Add product, with first-charge preview"}
   - {id: ui.subscriber.deactivate, area: ui, stage: 5, title: "Deactivate a product"}

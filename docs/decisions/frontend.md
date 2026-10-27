@@ -2,6 +2,8 @@
 
 ## Ledger v2: visual redesign (designed 2026-10-26)
 
+- Built slice 6a: subscriber identity header without a panel, account/customer pills, uppercase mode Tag, metadata links and daily prepaid schedule; secondary Add product and More actions with postpaid payment and conditional negative Delete. Split slice 6 for size: both money strips, Account summary and all tabs/panel migration stay in 6b. Existing money entry buttons and panels remain until 6b; requests unchanged.
+
 - Built slice 5: Subscribers PageHeader/filtered count, icon search and slash shortcut, wrapping counted state/mode filters, descriptive no-results, seven-column page table and strict over-limit Flag. Existing prepaid marker moves to Mode. Boundary, shortcut, placeholder, no-results and filtered-count tests added; requests unchanged. No design deviations.
 
 - Built slice 4: Ledger sidebar, brand/environment Tag, active-item hairline, operator footer and breadcrumbs/business-date chip; context-only zone-aware drift and initials tests. Missing-field deviation: Session and Context expose no display name, so the footer shows the session login and its first two uppercase characters. Requests and menu behavior unchanged.

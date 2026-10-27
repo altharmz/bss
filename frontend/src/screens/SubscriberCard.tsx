@@ -28,7 +28,7 @@ import { accountLabel, shortId } from '../format/ids';
 import { formatCents, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
-import { Button, Panel, StatusPill, useToast } from '../ui/kit';
+import { Button, Menu, Panel, StatusPill, Tag, useToast } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
@@ -233,88 +233,121 @@ function Card({
     products.status === 'ok' ? products.data.map((p) => p.productOffering.id) : [],
   );
   const addButton = (
-    <Button variant="primary" disabled={!canAdd} onClick={() => setAdding(true)}>
-      + Add product
+    <Button variant="secondary" disabled={!canAdd} onClick={() => setAdding(true)}>
+      Add product
     </Button>
   );
 
   return (
     <>
-      <Panel>
-        <div className="bss-card-header">
-          <div>
-            <h1>
-              {account.customerName} <StatusPill kind="account" status={account.state} />
-            </h1>
-            <div className="bss-meta">
-              <span>
-                Subscriber no. <span className="value">{shortId(account.customerId)}</span>
-              </span>
-              <span>
-                Billing account <Id prefix="BA-" id={account.id} />
-              </span>
-              <span>
-                Customer{' '}
-                <span className="value">
-                  {customerStatus.status === 'ok' ? customerStatus.data : '…'}
-                </span>
-              </span>
-            </div>
-          </div>
-          <div className="bss-card-action">
-            <Button onClick={() => setEditing(true)}>Edit</Button>{' '}
-            {deletable && (
-              <>
-                <Button
-                  variant="quiet"
-                  tone="negative"
-                  data-ui="ui.subscriber.delete"
-                  onClick={() => setDeleting(true)}
-                >
-                  Delete
-                </Button>{' '}
-              </>
-            )}
-            <Button onClick={() => setPaying(true)} disabled={bills.status !== 'ok'}>
-              Record payment
-            </Button>{' '}
-            {account.ratingType === 'prepaid' &&
-              (
-                [
-                  ['topup', 'Top up'],
-                  ['adjust', 'Adjust'],
-                  ['hold', 'Hold funds'],
-                ] as const
-              ).map(([form, label]) => (
-                <span key={form}>
-                  <Button
-                    onClick={() => {
-                      setMoneyAmount(undefined);
-                      setMoney(form);
-                    }}
-                    disabled={balance.status !== 'ok' || balance.data === null}
-                  >
-                    {label}
-                  </Button>{' '}
-                </span>
-              ))}
-            {account.ratingType === 'prepaid' && (
-              <>
-                <Button
-                  onClick={() => setTransferring(true)}
-                  disabled={balance.status !== 'ok' || balance.data === null || transferWatched}
-                >
-                  Transfer
-                </Button>{' '}
-              </>
-            )}
+      <header className="subscriber-header">
+        <div className="subscriber-heading-row">
+          <h1>{account.customerName}</h1>
+          <StatusPill kind="account" status={account.state} />
+          <Tag>{account.ratingType.toUpperCase()}</Tag>
+          <div className="subscriber-header-actions">
             {addButton}
-            {!canAdd && (
-              <div className="caption">Unavailable for {account.state.toLowerCase()} accounts</div>
-            )}
+            <Button onClick={() => setEditing(true)}>Edit</Button>
+            <Menu
+              label="More actions"
+              ui="ui.subscriber.moreActions"
+              items={[
+                ...(account.ratingType === 'postpaid'
+                  ? [
+                      {
+                        label: 'Record payment',
+                        disabled: bills.status !== 'ok',
+                        onClick: () => setPaying(true),
+                      },
+                    ]
+                  : []),
+                ...(deletable
+                  ? [
+                      {
+                        label: 'Delete…',
+                        tone: 'negative' as const,
+                        ui: 'ui.subscriber.delete',
+                        onClick: () => setDeleting(true),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
           </div>
         </div>
-      </Panel>
+        {!canAdd && (
+          <div className="subscriber-add-unavailable">
+            Unavailable for {account.state.toLowerCase()} accounts
+          </div>
+        )}
+        <div className="subscriber-meta">
+          <Id prefix="BA-" id={account.id} />
+          <span>
+            Subscriber no. <span className="num">{shortId(account.customerId)}</span>
+          </span>
+          <span>
+            Customer{' '}
+            {customerStatus.status === 'ok' ? (
+              <StatusPill kind="customer" status={customerStatus.data} />
+            ) : (
+              '…'
+            )}
+          </span>
+          {account.financialAccount !== null && (
+            <span data-ui="ui.subscriber.financialAccount">
+              Financial account{' '}
+              <Link className="bss-link" href={hrefOf({ name: 'financialAccounts' })}>
+                {account.financialAccount.name}
+              </Link>
+            </span>
+          )}
+          <Link
+            className="bss-link"
+            data-ui="ui.subscriber.orders"
+            href={`/orders?account=${account.id}`}
+          >
+            Orders
+          </Link>
+          {account.ratingType === 'prepaid' && <span>Charged daily at {context.billingRunAt}</span>}
+        </div>
+      </header>
+      {account.ratingType === 'prepaid' && (
+        <div className="subscriber-money-actions">
+          <Button onClick={() => setPaying(true)} disabled={bills.status !== 'ok'}>
+            Record payment
+          </Button>
+          {account.ratingType === 'prepaid' &&
+            (
+              [
+                ['topup', 'Top up'],
+                ['adjust', 'Adjust'],
+                ['hold', 'Hold funds'],
+              ] as const
+            ).map(([form, label]) => (
+              <span key={form}>
+                <Button
+                  onClick={() => {
+                    setMoneyAmount(undefined);
+                    setMoney(form);
+                  }}
+                  disabled={balance.status !== 'ok' || balance.data === null}
+                >
+                  {label}
+                </Button>{' '}
+              </span>
+            ))}
+          {account.ratingType === 'prepaid' && (
+            <>
+              <Button
+                onClick={() => setTransferring(true)}
+                disabled={balance.status !== 'ok' || balance.data === null || transferWatched}
+              >
+                Transfer
+              </Button>{' '}
+            </>
+          )}
+        </div>
+      )}
 
       <BillingAccountPanel
         account={account}
@@ -512,31 +545,7 @@ function BillingAccountPanel({
   const available =
     account.creditLimitCents === null ? null : account.balanceCents + account.creditLimitCents;
   return (
-    <Panel
-      title="Billing account"
-      right={
-        <span className="bss-secondary">
-          <Link
-            className="bss-link"
-            data-ui="ui.subscriber.orders"
-            href={`/orders?account=${account.id}`}
-          >
-            Orders
-          </Link>
-          {' · '}
-          {account.financialAccount !== null && (
-            <span data-ui="ui.subscriber.financialAccount">
-              Financial account{' '}
-              <Link className="bss-link" href={hrefOf({ name: 'financialAccounts' })}>
-                {account.financialAccount.name}
-              </Link>
-              {' · '}
-            </span>
-          )}
-          BillingAccount <span className="num">{accountLabel(account.id)}</span>
-        </span>
-      }
-    >
+    <Panel title="Billing account">
       <div className="bss-kpis">
         <div className="bss-kpi">
           <div className="label">{prepaid ? 'Ledger' : 'Balance'}</div>
