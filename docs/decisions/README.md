@@ -2,7 +2,7 @@
 
 The project's decisions and design detail, by area. [CLAUDE.md](../../CLAUDE.md) keeps
 only what every session needs and points here; read the file for an area before
-changing it, and record a new decision in it. Status history: [status.md](../status.md).
+changing it, and record a new decision in it.
 
 | File | Sections (headings kept from the old CLAUDE.md) |
 |---|---|

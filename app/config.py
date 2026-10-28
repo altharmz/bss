@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     log_level: str = "info"
     database_url: str = "postgresql://app:app@db:5432/app"
     # Seconds per connection attempt, and the longest a request waits for a pooled
-    # connection. 3 s turned a short database stall into 500s (docs/status.md), so 10 s.
+    # connection. 3 s turned a short database stall into 500s, so 10 s (docs/decisions/infra.md).
     db_connect_timeout: int = 10
     # The API's connection pool (app/db.py): at most this many connections to postgres,
     # whatever the number of requests in flight (37 usable on the VPS's postgres).
