@@ -22,7 +22,7 @@ up: ## Start the local stack (app + postgres, hot reload)
 	@$(MAKE) --no-print-directory wait-local
 
 down: ## Stop the local stack (volumes are kept)
-	docker compose down
+	docker compose --profile '*' down
 
 restart: down up ## Restart the local stack
 
@@ -151,7 +151,7 @@ spec-verify-upstream: ## Re-fetch the spec blob SHAs from GitHub and compare wit
 	python3 scripts/spec-verify-upstream.py
 
 smoke: ## Smoke-test the local instance
-	./scripts/smoke.sh http://localhost:8080
+	./scripts/smoke.sh http://$$(docker compose port app 8080)
 
 deploy: ## Build locally and ship to the VPS
 	./scripts/deploy.sh
@@ -228,7 +228,7 @@ wait-local:
 	for i in $$(seq 1 30); do \
 	  cid=$$(docker compose ps -q app); \
 	  st=$$(docker inspect -f '{{.State.Health.Status}}' $$cid 2>/dev/null || echo starting); \
-	  if [ "$$st" = "healthy" ]; then echo "app is healthy on http://localhost:8080"; exit 0; fi; \
+	  if [ "$$st" = "healthy" ]; then echo "app is healthy on http://$$(docker compose port app 8080)"; exit 0; fi; \
 	  if [ "$$st" = "unhealthy" ]; then docker compose logs --tail=50 app; exit 1; fi; \
 	  sleep 2; \
 	done; \

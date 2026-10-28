@@ -44,7 +44,7 @@ Everything runs in containers; Node never runs on the host. Keep the repository 
 Linux filesystem (not under `/mnt/c`), or hot reload breaks.
 
 ```bash
-make up            # app + local postgres, hot reload on http://localhost:8080
+make up            # app + local postgres, hot reload on http://localhost:8081 (APP_PORT)
 make migrate       # schema to head
 make seed          # demo data through the public TMF API (local only; re-run is a no-op)
 make web-install   # once: npm ci into the node_modules volume

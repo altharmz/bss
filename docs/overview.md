@@ -133,7 +133,7 @@ flowchart LR
   ([billing-worker.md](billing-worker.md#ownership-and-takeover)).
 
 Locally (WSL2) `docker compose` adds `compose.override.yaml`: a local PostgreSQL (`db`),
-the app with hot reload on `127.0.0.1:8080`, and Node-only-in-containers services for the
+the app with hot reload on `127.0.0.1:8081` (`APP_PORT`), and Node-only-in-containers services for the
 UI. There is no long-running local worker (`make worker-once`). See
 [operations.md](operations.md).
 

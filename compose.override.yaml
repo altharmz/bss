@@ -24,7 +24,9 @@ services:
       # and by the tests (tests/contract.py, tests/test_enum_lock.py).
       - ./spec:/app/spec:ro
     ports:
-      - "127.0.0.1:8080:8080"
+      # host port from APP_PORT (.env or the shell), default 8081: 8080 belongs to the
+      # vps-lab stack on the same workstation
+      - "127.0.0.1:${APP_PORT:-8081}:8080"
     environment:
       APP_ENV: dev
       LOG_LEVEL: debug
