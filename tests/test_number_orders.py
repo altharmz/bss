@@ -34,6 +34,47 @@ def refs(uid):
     return [{"id": uid, "@type": "ResourceRef", "@referredType": "LogicalResource"}]
 
 
+@pytest.mark.parametrize(
+    "source_requires,target_requires", [(False, True), (True, False), (False, False), (True, True)]
+)
+def test_offering_change_preserves_number_requirement(api, source_requires, target_requires):
+    source = apidata.sellable_offering(api, name="Source")
+    target = apidata.sellable_offering(api, name="Target")
+    for offering, required in [(source, source_requires), (target, target_requires)]:
+        if required:
+            response = api.patch(
+                offering["productSpecification"]["href"],
+                {"resourceSpecification": [{"id": "msisdn", "@type": "ResourceSpecificationRef"}]},
+            )
+            assert response.status_code == 200, response.text
+    account = apidata.account(api)
+    api.clock.set(timeline.START + timedelta(hours=9))
+    uid = number(api)["id"] if source_requires else None
+    purchase = add(api, (source, account), uid)
+    product = apidata.product_of(api, purchase)
+    order = apidata.order(
+        api,
+        account,
+        {
+            "id": "1",
+            "action": "modify",
+            "product": {"id": product["id"], "@type": "ProductRef"},
+            "productOffering": {"id": target["id"], "@type": "ProductOfferingRef"},
+        },
+    )
+    if source_requires != target_requires:
+        assert order["state"] == "rejected"
+        assert [error["code"] for error in order["productOrderErrorMessage"]] == [
+            "numberRequirementDiffers"
+        ]
+        assert api.get(product["href"]).json()["productOffering"]["id"] == source["id"]
+    else:
+        assert order["state"] == "completed"
+        assert api.get(product["href"]).json()["productOffering"]["id"] == target["id"]
+    if uid:
+        assert api.get(product["href"]).json()["realizingResource"][0]["id"] == uid
+
+
 def add(api, shop, uid=None, day=None):
     offering, account = shop
     item = apidata.add_item(offering)

@@ -3388,10 +3388,12 @@ describe('change offering', () => {
     id,
     name,
     externalIdentifier: [{ id: name.toUpperCase(), externalIdentifierType: 'offeringCode' }],
-    productSpecification: { name: 'Spec' },
+    productSpecification: { id: 'same-spec', name: 'Spec' },
     productOfferingPrice: [{ id: price }],
   });
   const catalog = {
+    [`GET /tmf-api/productCatalogManagement/v5/productOffering/${O1}`]: () =>
+      json({ ...offering(O1, 'Mobile L', 'pr1'), lifecycleStatus: 'Active' }),
     [CATALOG]: () =>
       json([offering(O1, 'Mobile L', 'pr1'), offering(O2, 'Fiber 100', 'pr2')], { total: 2 }),
     [PRICES]: () =>
@@ -3441,6 +3443,49 @@ describe('change offering', () => {
     expect(dialog).toBe(expectUi('ui.subscriber.offeringChange'));
     return { row, dialog };
   }
+
+  it('filters out offerings using another specification even when the current offering is retired', async () => {
+    backend({
+      ...catalog,
+      [`GET /tmf-api/productCatalogManagement/v5/productOffering/${O1}`]: () =>
+        json({ ...offering(O1, 'Mobile L', 'pr1'), lifecycleStatus: 'Retired', isSellable: false }),
+      [CATALOG]: () =>
+        json(
+          [
+            offering(O2, 'Fiber 100', 'pr2'),
+            {
+              ...offering('other', 'Other specification', 'pr2'),
+              productSpecification: { id: 'other-spec' },
+            },
+          ],
+          { total: 2 },
+        ),
+    });
+    const { dialog } = await openDialog();
+    expect(await within(dialog).findByRole('radio', { name: /Fiber 100/ })).toBeTruthy();
+    expect(within(dialog).queryByRole('radio', { name: /Other specification/ })).toBeNull();
+  });
+
+  it('explains when no other offering uses the current specification', async () => {
+    backend({
+      ...catalog,
+      [CATALOG]: () =>
+        json(
+          [
+            {
+              ...offering(O2, 'Other specification', 'pr2'),
+              productSpecification: { id: 'other-spec' },
+            },
+          ],
+          { total: 1 },
+        ),
+    });
+    const { dialog } = await openDialog();
+    expect(
+      await within(dialog).findByText("No other offering uses this product's specification."),
+    ).toBeTruthy();
+    expect(within(dialog).queryByRole('radio')).toBeNull();
+  });
 
   it('is not offered for an ending product, a pending offering change or an unstarted prepaid product', async () => {
     backend(

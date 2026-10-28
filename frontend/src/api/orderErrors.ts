@@ -7,6 +7,8 @@ export const ORDER_ERRORS: Record<string, string> = {
   noRecurringPrice: 'No recurring price is available in the account currency on this date.',
   numberNotRequired: 'This product does not require a subscriber number.',
   numberRequired: 'Choose exactly one subscriber number.',
+  numberRequirementDiffers:
+    'Choose an offering with the same subscriber number requirement as this product.',
   numberUnavailable: 'This subscriber number is unavailable. Choose another number.',
   offeringChangeNotAtRenewal: 'Choose the prepaid product’s renewal date for the offering change.',
   offeringNotSellable: 'This offering is no longer available for sale.',

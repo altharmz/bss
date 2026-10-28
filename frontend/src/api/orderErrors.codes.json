@@ -6,6 +6,7 @@
   "noRecurringPrice",
   "numberNotRequired",
   "numberRequired",
+  "numberRequirementDiffers",
   "numberUnavailable",
   "offeringChangeNotAtRenewal",
   "offeringNotSellable",

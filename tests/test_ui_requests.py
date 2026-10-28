@@ -1407,6 +1407,13 @@ def ui_offering_item(product_id, offering_id):
     }
 
 
+def test_offering_change_current_specification_read_as_the_ui_sends_it(api):
+    offering = apidata.sellable_offering(api)
+    response = api.get(f"{apidata.CATALOG}/productOffering/{offering['id']}")
+    assert response.status_code == 200, response.text
+    assert response.json()["productSpecification"]["id"] == offering["productSpecification"]["id"]
+
+
 def test_postpaid_offering_change_as_the_ui_sends_it(api):
     """ChangeOfferingDialog: the preview read for the chosen day, the modify order on the
     product's next charge date, and the pending change it leaves (with its Undo order)."""

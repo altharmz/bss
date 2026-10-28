@@ -206,7 +206,8 @@ API: `POST .../productOrder`, `POST .../cancelProductOrder`,
 
 **Change offering…** (`ui.subscriber.changeOffering`, active or suspended, no end, no pending
 offering change; prepaid needs `paidThrough`) opens `ui.subscriber.offeringChange`: pick an
-active offering (not the current one), see the first-charge preview for the date, submit one
+active offering using the current offering's product specification (not the current one),
+see the first-charge preview for the date, submit one
 `modify` item with the new `productOffering` (no status). Postpaid: date from today, default the
 next charge date; the old offering is billed until D-1 and the new one from D. Prepaid: the date
 is fixed to `max(paidThrough, today)`, the change applies at a funded renewal and shows as a

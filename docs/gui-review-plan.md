@@ -137,7 +137,8 @@ Rows run strictly in order.
 | G2a | Refused orders shown in their dialog (B1, I4; refusal portion) | UI + code-parity test | Every order write retains mapped refusals and codes above its actions | done: Show refused product orders in their dialog (B1, I4) |
 | G2b | Same-day Undo and future suspension coverage (B1, I5; Undo portion) | internal API + UI | undoableStatusChange, today's Undo suspension/resumption and dedicated future-suspension Undo coverage | done: Offer same-day status Undo in product menus (B1, I5) |
 | G3 | Writes survive refreshes; sidebar counts update (B6, B10) | UI | A refetch between "Release hold" and "Yes" still sends the PATCH. A create bumps the counts | done: Preserve dialogs across refreshes and update sidebar counts (B6, B10) |
-| G4 | Subscriber numbers end to end (B3/P1, P11, I2, P13) | TMF622 refusal code + UI | Spec "Requires a subscriber number" and the characteristics are pinned. Change offering is filtered by spec. `numberRequirementDiffers` is tested. The e2e numbered prepaid transfer is written | todo |
+| G4a | Compatible offering changes (I2) | TMF622 refusal code + UI | Change offering is filtered by spec. `numberRequirementDiffers` is tested | done: Preserve subscriber number requirements when changing offerings (I2) |
+| G4b | Subscriber numbers end to end (B3/P1, P11, P13) | UI | Spec "Requires a subscriber number" and the characteristics are pinned. The e2e numbered prepaid transfer is written | todo |
 | R7b | Subscriber card: products, pending sub-row, In progress steps | UI (redesign) | As in ui-redesign-slices.md row 7b, keeping G2's Undo and G3's dialog ownership | todo |
 | G5 | Subscriber products and prepaid wording (B8, B23, B24, I6, I10) | internal API + UI | nextCharge = the first charging run (backend test: a product started today gives tomorrow's run). "Starts". Prepaid shortfall gating. Drafts on the card | todo |
 | R8 | Billing runs: header actions, latest-run band, inline outcomes, history selection | UI (redesign) | As in row 8 | todo |
@@ -287,6 +288,10 @@ dialog, overlapping B18; the today request stays unchanged. G14 retains B18 veri
   request; the count resources re-request after a create.
 
 ### G4: subscriber numbers end to end (B3/P1, P11, I2, P13)
+
+Split by ID: G4a owns I2 (the requirement refusal and same-specification offering
+filter). G4b retains B3/P1, P11 and P13, including all spec-editor documents, number
+wording and the numbered prepaid transfer scenario written now and run in R16.
 
 - Spec editor (`Specifications.tsx`, `api/bss.ts` `SpecificationFields`): the checkbox
   and the characteristics editor per decisions B3 and P11. Create and patch bodies are
