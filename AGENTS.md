@@ -19,4 +19,8 @@ deploy.
 
 ## Task board
 
-Follow the [Task board](CLAUDE.md#task-board) section in CLAUDE.md (statuses, session-start protocol, project ids, `agent:codex` label).
+Read [docs/board.md](docs/board.md) before any board operation (statuses, project ids, `gh`
+commands, merge and close rules; your label is `agent:codex`). On "continue" or at session
+start, follow the protocol in [.claude/commands/continue.md](.claude/commands/continue.md);
+Codex does not run Claude commands, so open and follow that file. The short rules are in the
+[Task board](CLAUDE.md#task-board) section of CLAUDE.md.
