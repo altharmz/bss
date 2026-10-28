@@ -261,7 +261,5 @@ account, no gap over the threshold, in all four paths; without the call all four
 
 The internal API exposes the runs (`GET /internal/v1/billingRun`, `/{id}`,
 `/{id}/accounts?status=`) and accepts catch-up and retry requests
-([api/internal.md](api/internal.md)). **The admin UI's Billing runs screen - latest run,
-history, failed badge, catch-up and retry buttons - is planned, not built**
-(`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`: "no" in
-[PROGRESS.md](PROGRESS.md)). Until then the endpoints are called directly.
+([api/internal.md](api/internal.md)). The admin UI's Billing runs screen (latest run,
+history, failed badge, catch-up and retry buttons) uses them.

@@ -87,8 +87,7 @@ line below when built. Wherever its values differ from the v1 handoff, this entr
 
 The human delegated every design decision on 2026-10-24. The UI for the remaining
 prepaid actions and for MCP parity is designed in
-[next-slices-design.md](../next-slices-design.md), and its progress is tracked in
-[next-slices.md](../next-slices.md). Slice 10 supersedes "No writes in this screen"
+[next-slices-design.md](../next-slices-design.md) (done; see `git log`). Slice 10 supersedes "No writes in this screen"
 below. Each slice adds its own entry here when built.
 
 ## Slice 1: prepaid first-charge preview in Add product (2026-10-24)
