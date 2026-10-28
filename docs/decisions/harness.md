@@ -9,12 +9,12 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 
 ## Development cycle and gates
 
-- **One local test run per cycle**: develop -> commit (the pre-commit hook runs lint and
-  tests) -> push. Deploying is the human's, outside the cycle.
+- **One local test run per cycle**: develop -> commit (the pre-commit hook runs lint, the
+  smoke tests and the tests the change affects) -> push. Deploying is the human's, outside the cycle.
   `make check` (ci Hypothesis profile, docs-check, UI and browser tests) runs only when
   asked for a specific change.
 - **Pre-commit hook** (`scripts/pre-commit.sh`, installed by `make hooks` as a symlink):
-  `make lint` + `make test`, plus `web-lint`/`web-test` when `frontend/` or `spec/` is
+  `make lint`, then `make test-smoke` + `make test-changed` (below; 2026-10-28), plus `web-lint`/`web-test` when `frontend/` or `spec/` is
   staged, `make docs-check` (~7 s) when `app/`, `alembic/`, `spec/`, `scripts/docs/` or
   `tests/docs_collect.py` is, and the guard cases when `.claude/` is. A commit of
   Markdown files only (outside `spec/` and `scripts/docs/`, which feed tests and the
@@ -76,6 +76,46 @@ harness files, the quote-aware `guard.py` (485 lines, 360 cases), `decisions-che
 `retired.md`, the Edit-only / no-heredoc / no-output-filtering rules, and the per-change
 checklist (negative proofs, three test runs, a second local run before deploying).
 
+## The hook's tests: smoke plus affected (2026-10-28)
+
+The full suite takes about 7 minutes on the workstation (30 on a CI runner), too long for
+every commit. The hook (`scripts/pre-commit.sh`) therefore runs:
+
+- `make lint`;
+- `make test-smoke`: the `smoke`-marked tests ([CI](#ci-2026-10-28)) and the two shell
+  scripts' own cases, about 1.5 minutes;
+- `make test-changed`: `pytest -n auto --testmon` ([pytest-testmon](https://github.com/tarpas/pytest-testmon),
+  pinned in `requirements-dev.txt`), which runs the tests that executed code that changed
+  since their last recorded run, plus new tests and tests that failed last time. When
+  nothing was affected it costs about 20 s (collection and start-up).
+
+Untouched by this: **the full suite is not run by the hook.** It runs nightly in CI, as
+`workflow_dispatch`, and by hand with `make test`. **Run `make test` before opening a PR
+that touches billing, migrations or the API** (what CI's smoke run and the hook's affected
+set can miss).
+
+How testmon fits our setup (checked 2026-10-28): it works with xdist (`-n auto`), with the
+`oneoff` compose service and with the bind-mounted sources. Its data file is
+`.testmon/.testmondata` (`TESTMON_DATAFILE` in `compose.override.yaml`, a bind mount of the
+gitignored `.testmon/`, created by the Makefile before a run; per checkout, so each
+worktree has its own). Limits, which the hook rules around:
+
+- **Selection is off under `-m`/`-k`**, so smoke and affected are two separate runs and the
+  affected run is never filtered.
+- **The first run on a checkout (or after deleting `.testmon/`) is the whole suite**, a
+  little slower than `make test` while it records; later runs are incremental.
+- **It follows Python code only.** An edit to a data file the tests read (a spec in
+  `spec/`, `docs/progress/scope.yaml`, `frontend/src`, `pyproject.toml`, the dependency
+  pins, the `Dockerfile` or compose files) selects nothing: the hook runs the full
+  `make test` when the commit stages one of those. It also does so for `app/worker/`,
+  whose tests run it in subprocesses that testmon does not follow (the connector start-up
+  tests are subprocesses too, so `make test` before a PR covers those), and for
+  `alembic/`, because migrations are too costly to trust to selection.
+- Comment-only and formatting-only edits select nothing; a reverted change reselects the
+  same tests.
+- **If the selection looks wrong or stale, delete `.testmon/`** to force a fresh recording
+  (the next `make test-changed` is then the whole suite).
+
 ## CI (2026-10-28)
 
 `.github/workflows/ci.yml`, GitHub Actions on `ubuntu-latest`; private repository on the
@@ -85,7 +125,7 @@ with `--durations`); it runs nightly, not on every push.
 
 - **Pull request to master and push to master:** `make lint`, `make docs-check` and
   `make test-smoke` (`pytest -n auto -m smoke`, about 110 s of summed test time, 307
-  tests). A pull request run is cancelled when a newer push supersedes it; a run on master
+  tests; also what the pre-commit hook runs). A pull request run is cancelled when a newer push supersedes it; a run on master
   never is, so every commit there keeps its result.
 - **Nightly (01:30 UTC, 04:30 Moscow) and `workflow_dispatch`:** `make lint`,
   `make docs-check` and the whole `make test`. Scheduled runs use the default branch.

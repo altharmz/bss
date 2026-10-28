@@ -7,6 +7,7 @@
 **/__pycache__
 **/*.pyc
 .pytest_cache
+.testmon
 .ruff_cache
 .venv
 tests

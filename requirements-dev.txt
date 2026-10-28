@@ -11,3 +11,6 @@ openapi-schema-validator==0.9.0
 hypothesis==6.168.3
 # make test runs the suite with -n auto; every test has its own cloned database.
 pytest-xdist==3.8.0
+# The pre-commit hook runs only the tests a change affects (make test-changed); the data
+# file is .testmon/.testmondata, see docs/decisions/harness.md.
+pytest-testmon==2.2.0

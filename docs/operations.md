@@ -58,8 +58,9 @@ unverified until a local `make check` passes** (`docs/cloud.md`).
 ## Hooks
 
 - **Pre-commit** (`scripts/pre-commit.sh`, installed by `make hooks`): refuses the commit
-  unless the working tree is exactly what is committed, then `make lint` and `make test`
-  (plus `make web-lint` and `make web-test` when `frontend/` or `spec/` is staged,
+  unless the working tree is exactly what is committed, then `make lint`, `make test-smoke`
+  and `make test-changed` (the smoke tests and the tests the change affects; the full
+  `make test` is nightly in CI and by hand before a PR; plus `make web-lint` and `make web-test` when `frontend/` or `spec/` is staged,
   `make docs-check` when the generated docs' sources are; nothing for Markdown only); keeps a
   full log of every run under `.git/pre-commit-logs/`. Never skipped; it is the one local
   test run of a development cycle ([decisions/harness.md](decisions/harness.md#development-cycle-and-gates)).

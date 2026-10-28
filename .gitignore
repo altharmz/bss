@@ -19,3 +19,5 @@ backups/
 frontend/.e2e/
 
 frontend/.shots/
+# make test-changed: pytest-testmon's data (which test ran which code)
+.testmon/

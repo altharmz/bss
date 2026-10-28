@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Installed as .git/hooks/pre-commit by `make hooks` (symlink, so edits here take effect
-# immediately). The one local test run of a development cycle: lint + test before every
-# commit (the guard blocks --no-verify). Deploying does not test again.
+# immediately). The one local test run of a development cycle: lint + tests before every
+# commit (the guard blocks --no-verify): lint, the smoke tests and the tests the change
+# affects, not the full suite. Deploying does not test again.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
@@ -79,7 +80,20 @@ fi
 # actually a tty, so this keeps the hook from ever blocking on stdin in a non-interactive
 # context (GUI clients, editors) as well as a plain terminal commit.
 run make lint || fail "make lint"
-run make test || fail "make test"
+
+# Tests: the smoke subset (always) plus the tests this change affects (pytest-testmon, which
+# follows the Python code each test ran). The full suite is nightly in CI and `make test`
+# by hand (2026-10-28). testmon cannot see data files, so a commit that changes one the
+# tests read - the specs, the scope file, the UI sources, the dependency pins, the
+# image or compose files - runs the full suite instead. So does app/worker/ (its tests
+# run it in subprocesses, which testmon does not follow) and alembic/ (migrations are too
+# costly to trust to selection).
+if grep -qE '^(spec|frontend/src|app/worker|alembic)/|^(docs/progress/scope\.yaml|scripts/ui_mcp_parity\.py|pyproject\.toml|requirements.*\.txt|constraints.*\.txt|Dockerfile|compose.*\.yaml)$' <<<"$staged"; then
+  run make test || fail "make test"
+else
+  run make test-smoke || fail "make test-smoke"
+  run make test-changed || fail "make test-changed"
+fi
 
 # The generated docs/api and docs/db (~7 s), when their sources change: regenerated here,
 # so a commit that leaves them stale is refused with the files to stage.

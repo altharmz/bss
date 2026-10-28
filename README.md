@@ -56,7 +56,7 @@ make web-dev       # admin UI on http://localhost:5173
 ## Checks and deploy
 
 ```bash
-make lint && make test   # ruff; pytest, one throwaway database per test
+make lint && make test   # ruff; the full suite (pytest, one throwaway database per test); the commit hook runs the smoke and affected tests only
 make check               # on demand: lint, test (ci), docs-check, web-lint, web-test, web-e2e
 make verify              # = make deploy: ship to the VPS and smoke-test it there
 ```
