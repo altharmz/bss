@@ -70,6 +70,9 @@ item owned by the other agent.
 
 ### Merging and closing
 
+Committing straight to `master` is fine, except for an item labelled `needs-human`: that
+work goes on a branch and a PR.
+
 An agent may merge a PR (`gh pr merge`) and close an issue (`gh issue close`) once all
 checks pass and the work is verified against the acceptance criteria. If the PR, or the
 issue it fixes, is labelled `needs-human`, do it **only after the human's explicit approval
