@@ -46,10 +46,10 @@ expect() {
   rm -f "${calls}"
 }
 
-expect 0 "lint test" "a free lock runs the checks at once"
+expect 0 "lint test-smoke test-changed" "a free lock runs the checks at once"
 
 hold 1 "echo released >>${calls}"
-expect 0 "released lint test" "a held lock: the checks run after it is released"
+expect 0 "released lint test-smoke test-changed" "a held lock: the checks run after it is released"
 grep -q 'waiting for them' "${tmp}/out" || {
   echo 'FAIL a held lock: no waiting message' >&2
   failed=$((failed + 1))

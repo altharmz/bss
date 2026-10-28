@@ -17,11 +17,12 @@ it, and record new decisions there.
 
 ```
 make up / down / logs / ps   # local stack (app + postgres, hot reload)
-make test      # pytest in the container      make lint / fmt   # ruff check / auto-format
+make test      # FULL suite in the container make lint / fmt   # ruff check / auto-format
 make migrate   # alembic upgrade head locally make worker-once   # one billing-worker wake-up
 make seed      # local demo data (refuses prod) make psql        # local db (needs a TTY)
 make smoke     # smoke-test the local instance make mcp-smoke    # local MCP connector checks
 make check     # on demand only: lint, test (ci profile), docs-check, web-lint/test/e2e
+make test-smoke / test-changed   # smoke subset / only affected tests (the hook runs both); CI: docs/decisions/harness.md#ci-2026-10-28
 make docs      # regenerate docs/api + docs/db  make progress    # docs/PROGRESS.md (slow, on request)
 make hooks     # install pre-commit (lint + test) and pre-push (secrets) hooks
 make mcp-token-create NAME= SCOPE= / mcp-tokens / mcp-token-revoke ID=   # local MCP tokens
@@ -61,10 +62,12 @@ slips against these rules; it is a pattern matcher, not a security boundary
 ## Working style
 
 - **One development cycle: develop -> commit -> push, with one local test run.**
-  The pre-commit hook runs `make lint` + `make test` (+ `web-lint`/`web-test` when
-  `frontend/` or `spec/` is staged, `docs-check` when the generated docs' sources are;
-  nothing for a Markdown-only commit) and is that run. Commit and push when you judge
-  the change ready - no approval needed.
+  The pre-commit hook runs `make lint`, the smoke tests and the tests the change affects
+  (pytest-testmon), **not the full suite** (+ `web-lint`/`web-test` when `frontend/` or
+  `spec/` is staged, `docs-check` when the generated docs' sources are; nothing for a
+  Markdown-only commit) and is that run. Commit and push when you judge the change
+  ready - no approval needed. **Before opening a PR that touches billing, migrations or
+  the API, run `make test` (the full suite, ~7 min) locally**; CI runs it nightly.
 - **Commit granularity:** one commit per finished slice (code, tests, migration,
   generated docs together). Fold status, hand-off and process/CLAUDE.md edits into
   the next slice commit or one batched commit; amend or squash unpushed commits

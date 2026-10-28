@@ -8,6 +8,8 @@ import pytest
 from app.billing.funding import InsufficientFunds, Source, SourceAmount, reconcile, select_sources
 from app.billing.model import InconsistentState
 
+pytestmark = pytest.mark.smoke
+
 
 def source(**kwargs):
     return replace(

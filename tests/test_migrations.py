@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from alembic import command
 
 
+@pytest.mark.smoke
 def test_alembic_upgrade_head_on_clean_database(temp_db_url):
     command.upgrade(Config("alembic.ini"), "head")
 
@@ -364,6 +365,7 @@ def test_0007_on_existing_abrs(temp_db_url):
         ).fetchone() == (0,)
 
 
+@pytest.mark.smoke
 def test_cloned_test_databases_are_at_the_current_head(db_conn):
     """Most tests get their database from a template migrated once per session
     (conftest.template_db). It must be at the head of the migration scripts."""

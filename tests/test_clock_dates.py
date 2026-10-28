@@ -5,10 +5,14 @@ database runs on, so a date taken from created_at cannot pass."""
 
 from datetime import date, timedelta
 
+import pytest
+
 from tests import apidata
 from tests.apidata import RATE
 from tests.test_billing_db import add, at, bill, delete, run_row
 from tests.timeline import midnight, z
+
+pytestmark = pytest.mark.smoke
 
 
 def test_product_creation_date_is_the_clock_of_its_order(api, db_conn):

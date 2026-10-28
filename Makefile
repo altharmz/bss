@@ -12,7 +12,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e web-shots docs docs-check mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke
+.PHONY: help up down restart logs ps shell test test-smoke test-changed lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e web-shots docs docs-check mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -69,10 +69,24 @@ mcp-token-revoke: ## Revoke a local MCP static token (ID=<id>) or OAuth grant (G
 		exit 1; \
 	fi
 
-test: ## Run the test suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the scripts' own cases
+test: ## The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the scripts' own cases: nightly in CI, by hand before a PR
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
+	@mkdir -p .testmon
 	docker compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto
+
+test-smoke: ## The smoke subset (pytest -m smoke) and the scripts' own cases: what CI runs on pull requests and master
+	./scripts/test-billing-status-check.sh
+	./scripts/test-pre-commit-lock.sh
+	@mkdir -p .testmon
+	docker compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto -m smoke
+
+# pytest-testmon runs the tests whose code changed since their last recorded run, plus new and
+# previously failed ones (selection is off under -m or -k, so this never filters). The first
+# run on a fresh checkout is the whole suite; it records into .testmon/.testmondata.
+test-changed: ## Only the tests affected by the change since their last run (pytest-testmon); the pre-commit hook runs it after test-smoke
+	@mkdir -p .testmon
+	docker compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto --testmon
 
 seed: ## LOCAL demo data through the public TMF API (tests/seed.py); refuses APP_ENV=prod; a second run is a no-op
 	docker compose run --rm app python -m tests.seed

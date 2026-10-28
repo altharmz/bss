@@ -6,6 +6,8 @@ import pytest
 
 from app.clock import FixedClock, SystemClock
 
+pytestmark = pytest.mark.smoke
+
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 FORBIDDEN = re.compile(r"\bdatetime\.(now|utcnow|today)\s*\(|\bdate\.today\s*\(|\btime\.time\s*\(")
 

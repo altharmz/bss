@@ -3,7 +3,11 @@ tools after it, and MCP clients accept tool names of at most 64 characters of th
 
 import re
 
+import pytest
+
 from app.main import app
+
+pytestmark = pytest.mark.smoke
 
 NAME = re.compile(r"^[a-z0-9_]+$")
 

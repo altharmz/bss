@@ -9,6 +9,10 @@ import hashlib
 import re
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.smoke
+
 SPEC_DIR = Path(__file__).resolve().parent.parent / "spec"
 NOT_SPECS = {"README.md", "SHA256SUMS"}
 

@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import anyio
 import httpx2
+import pytest
 from mcp.client.auth import OAuthClientProvider
 from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
@@ -27,6 +28,8 @@ from bss_mcp.operations import OPERATIONS
 from bss_mcp.server import build_app
 from bss_mcp.store import Store
 from tests.test_mcp_oauth import PASSWORD, USERS
+
+pytestmark = pytest.mark.smoke
 
 REDIRECT = "http://localhost:33418/callback"
 

@@ -8,6 +8,8 @@ import pytest
 from app.api import tmfjson
 from tests import contract, tmf_gaps
 
+pytestmark = pytest.mark.smoke
+
 NUMBER = {
     "@type": "LogicalResource",
     "name": "Subscriber number",

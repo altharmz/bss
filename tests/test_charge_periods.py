@@ -12,6 +12,8 @@ from hypothesis import strategies as st
 from app.billing.core import charge_period, compute
 from tests.billing_sim import OFFERING_B, Ledger, account, price, product, rng
 
+pytestmark = pytest.mark.smoke
+
 
 def recurring(unit, length=1, amount="100.00", **over):
     return replace(price(amount, **over), recurring_period=unit, recurring_period_length=length)

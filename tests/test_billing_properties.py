@@ -11,11 +11,14 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal
 
+import pytest
 from hypothesis import event, given
 from hypothesis import strategies as st
 
 from app.billing.model import Price, Product
 from tests.billing_sim import OFFERING_B, Ledger, account, midnight, price, product
+
+pytestmark = pytest.mark.smoke
 
 BASE = date(2027, 11, 1)  # the horizon covers Feb 2028 (leap year)
 HORIZON = 300

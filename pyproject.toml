@@ -27,6 +27,7 @@ testpaths = ["tests"]
 addopts = "-q"
 pythonpath = ["."]
 markers = [
+    "smoke: the CI gate on pull requests and master (make test-smoke); the nightly run runs everything",
     "capability(id): proves a worker capability of docs/progress/scope.yaml (make progress runs these tests)",
 ]
 cache_dir = "/tmp/pytest_cache"

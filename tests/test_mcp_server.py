@@ -33,6 +33,7 @@ def count(api, url: str) -> int:
 # --- authentication ---
 
 
+@pytest.mark.smoke
 def test_no_token_is_a_401_that_points_to_the_resource_metadata(mcp):
     response = mcp.rpc("tools/list", None, token=None)
     assert response.status_code == 401
@@ -61,6 +62,7 @@ def test_a_revoked_token_is_a_401(mcp):
 # --- scopes ---
 
 
+@pytest.mark.smoke
 def test_a_read_token_sees_only_the_read_tools(mcp):
     read = mcp.tools(mcp.token("reader", "read"))
     everything = mcp.tools(mcp.token("writer", "write"))
@@ -259,6 +261,7 @@ def test_the_connector_refuses_to_start_when_bss_never_answers(mcp_settings):
         _start(mcp_settings, httpx2.MockTransport(refuse))
 
 
+@pytest.mark.smoke
 def test_the_connector_starts_against_bss(mcp_settings):
     _start(
         mcp_settings, httpx2.ASGITransport(app=_app_answering({"service": "bss", "status": "ok"}))
@@ -294,5 +297,6 @@ def test_token_names_are_unique(mcp_settings):
         store.create_static_token("ci", "write")
 
 
+@pytest.mark.smoke
 def test_healthz(mcp):
     assert mcp.client.get("/healthz").json() == {"status": "ok"}

@@ -73,6 +73,12 @@ services:
     healthcheck:
       disable: true
     ports: !reset []
+    # pytest-testmon's data (make test-changed): .testmon/ is gitignored and survives
+    # --rm; the Makefile creates it first, so docker does not create it owned by root
+    volumes:
+      - ./.testmon:/testmon
+    environment:
+      TESTMON_DATAFILE: /testmon/.testmondata
     profiles: [tools]
     depends_on:
       db:

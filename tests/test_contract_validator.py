@@ -10,6 +10,8 @@ import pytest
 
 from tests import contract
 
+pytestmark = pytest.mark.smoke
+
 REF = {"@type": "ProductOfferingPriceRef", "id": "42", "href": "/x/42", "name": "Monthly"}
 VALUE = {
     "@type": "ProductOfferingPrice",

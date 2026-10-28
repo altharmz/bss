@@ -8,7 +8,10 @@ A missing spec file is a failure, never a skip.
 import json
 from pathlib import Path
 
+import pytest
 import yaml
+
+pytestmark = pytest.mark.smoke
 
 SPEC_DIR = Path(__file__).resolve().parent.parent / "spec"
 

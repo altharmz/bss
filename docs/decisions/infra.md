@@ -62,7 +62,7 @@ compose.prod.yaml         VPS only (shared network + alias, DATABASE_URL, limits
 scripts/init.sh           one-time: fills in placeholders, creates .env/.env.prod
 scripts/deploy.sh         build -> save -> ssh load -> migrate -> up -> healthcheck -> smoke
 scripts/smoke.sh          HTTP smoke test against a base URL
-scripts/pre-commit.sh     make lint + make test; installed via `make hooks`
+scripts/pre-commit.sh     make lint + smoke + affected tests (harness.md); installed via `make hooks`
 scripts/pre-push.sh       refuses pushes adding bcrypt hashes / .env* paths, deletions,
                           non-fast-forwards; installed via `make hooks`
 frontend/                 admin UI (stage 5): Vite + React + TypeScript; see "Frontend conventions"
@@ -173,7 +173,9 @@ would attach the prod container to both `lab` and `shared`).
   on master before its first deploy (`cloud/catalog-integrity`, the
   `billing_run.started_at` comment), so the local stack, migrated to `0005` before the
   edit, still has the old comment text; production gets the edited one.
-- Before every commit: `make lint && make test`. Small, focused commits.
+- Before every commit: the pre-commit hook (`make lint`, smoke and affected tests); the
+  full `make test` before a PR that touches billing, migrations or the API. Small, focused
+  commits.
 
 ## DB connection pool
 
