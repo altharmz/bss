@@ -2053,3 +2053,35 @@ def test_the_ui_event_lists_are_the_servers():
         for api, body in re.findall(r"(TMF\d{3}): \[(.*?)\]", block, re.S)
     }
     assert found == {api: set(types) for api, types in EVENT_TYPES.items()}
+
+
+def test_same_day_status_undo_as_the_ui_sends_it(api):
+    offering = apidata.sellable_offering(api)
+    account = apidata.account(api)
+    api.clock.set(api.clock.now().replace(day=2))
+    day = api.clock.now().date().isoformat()
+    product = apidata.product_of(api, apidata.order(api, account, apidata.add_item(offering)))
+    listing = f"/internal/v1/billingAccount/{account['id']}/products"
+    for status, restored in [("suspended", "active"), ("active", "suspended")]:
+        if status == "active":
+            api.post(
+                ORDER, ui_product_order(account, ui_status_item(product["id"], "suspended"), day)
+            )
+            api.clock.set(api.clock.now().replace(day=api.clock.now().day + 1))
+            day = api.clock.now().date().isoformat()
+        changed = api.post(
+            ORDER, ui_product_order(account, ui_status_item(product["id"], status), day)
+        )
+        assert changed.status_code == 201 and changed.json()["state"] == "completed", changed.text
+        row = next(p for p in api.get(listing).json() if p["id"] == product["id"])
+        order_id = row["undoableStatusChange"]["productOrder"]["id"]
+        result = api.post_raw(
+            "/tmf-api/productOrderingManagement/v5/cancelProductOrder",
+            '{"@type":"CancelProductOrder","productOrder":{"id":"'
+            + order_id
+            + '","@type":"ProductOrderRef"}}',
+        )
+        assert result.status_code == 201, result.text
+        assert api.get(product["href"]).json()["status"] == restored
+        row = next(p for p in api.get(listing).json() if p["id"] == product["id"])
+        assert row["undoableStatusChange"] is None

@@ -3787,3 +3787,77 @@ describe('Ledger subscriber tabs', () => {
     ).toBeTruthy();
   });
 });
+
+describe('same-day status Undo', () => {
+  const products = (rows: object[]) => ({
+    [`GET ${INTERNAL}/products`]: () => json(rows, { total: rows.length }),
+  });
+  const posts = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
+    fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
+  const openMenu = (row: HTMLElement) =>
+    fireEvent.click(within(row).getByRole('button', { name: 'Actions ▾' }));
+  it.each([
+    ['suspended', 'Undo suspension', 'Resume…'],
+    ['active', 'Undo resumption', 'Suspend…'],
+  ])('cancels an applied %s change through its menu', async (status, label, opposite) => {
+    const { fetchMock } = backend({
+      ...products([
+        product(P1, {
+          status,
+          undoableStatusChange: {
+            date: '2026-10-05',
+            status,
+            productOrder: { id: 'ord-today' },
+          },
+        }),
+      ]),
+      [`POST /tmf-api/productOrderingManagement/v5/cancelProductOrder`]: () =>
+        json({ id: 'k1', state: 'done', '@type': 'CancelProductOrder' }, { status: 201 }),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    openMenu(row);
+    const menu = productMenu(row);
+    expect(within(menu).queryByRole('menuitem', { name: opposite })).toBeNull();
+    const undo = within(menu).getByRole('menuitem', { name: label });
+    expect(undo).toBe(expectUi('ui.subscriber.undoStatusChange'));
+    fireEvent.click(undo);
+    await screen.findByRole('status');
+    expect(String(posts(fetchMock)[0]?.[1]?.body)).toBe(
+      JSON.stringify({
+        '@type': 'CancelProductOrder',
+        productOrder: { id: 'ord-today', '@type': 'ProductOrderRef' },
+      }),
+    );
+  });
+
+  it('undoes a future suspension from its pending line', async () => {
+    const { fetchMock } = backend({
+      ...products([
+        product(P1, {
+          pendingChanges: [
+            {
+              kind: 'status',
+              date: '2026-11-03',
+              status: 'suspended',
+              productOrder: { id: 'ord-future' },
+            },
+          ],
+        }),
+      ]),
+      [`POST /tmf-api/productOrderingManagement/v5/cancelProductOrder`]: () =>
+        json({ id: 'k1', state: 'done', '@type': 'CancelProductOrder' }, { status: 201 }),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    expect(within(row).getByText('Suspends on 2026-11-03')).toBeTruthy();
+    fireEvent.click(within(row).getByRole('button', { name: 'Undo' }));
+    await screen.findByRole('status');
+    expect(String(posts(fetchMock)[0]?.[1]?.body)).toBe(
+      JSON.stringify({
+        '@type': 'CancelProductOrder',
+        productOrder: { id: 'ord-future', '@type': 'ProductOrderRef' },
+      }),
+    );
+  });
+});

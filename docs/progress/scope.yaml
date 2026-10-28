@@ -530,6 +530,8 @@ items:
   - {id: ui.subscriber.charges, area: ui, stage: 5, title: "Subscriber Charges tab history"}
   - {id: ui.subscriber.transactions, area: ui, stage: 5, title: "Subscriber Transactions tab history"}
 
+  - {id: ui.subscriber.undoStatusChange, area: ui, stage: 5, title: "Undo today’s suspension or resumption"}
+
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}
   - {id: ui.notFound, area: ui, reason: "not-found page, not a product feature"}

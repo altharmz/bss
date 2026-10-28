@@ -66,3 +66,10 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
 
 - `GET /internal/v1/eventSubscription` (slice 23): an operator view of the live hubs, like the prepaid
   commands; not a TMF extension. Entry: [frontend.md](frontend.md#slice-23-event-subscriptions-hubs-and-system-panel-2026-10-26).
+
+- GUI review G2b (B1/I5): open products expose nullable `undoableStatusChange`
+  `{date, status, productOrder: {id}}` for an applied status change today. Eligibility
+  checks the completed order's items with the cancellation rules, including termination
+  and number constraints; yesterday's and cancelled changes are absent. The read makes
+  no mutation. Same-day suspension/resumption replay tests pin cancellation and restored
+  status; future suspension retains its existing pending Undo. No migration or TMF change.

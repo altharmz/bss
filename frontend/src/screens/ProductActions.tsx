@@ -50,7 +50,8 @@ export function offeredChanges(
   product: AccountProduct,
   ratingType?: Account['ratingType'],
 ): ProductAction[] {
-  const statusPending = product.pendingChanges.some((c) => c.kind === 'status');
+  const statusPending =
+    !!product.undoableStatusChange || product.pendingChanges.some((c) => c.kind === 'status');
   const items: ProductAction[] = [];
   if (product.status === 'active' && !statusPending) items.push('suspend');
   if (
@@ -77,21 +78,39 @@ export function offeredChanges(
 export function ProductActionsMenu({
   items,
   onPick,
+  undoable,
+  onUndo,
+  busy,
 }: {
+  undoable?: AccountProduct['undoableStatusChange'];
+  onUndo?: () => void;
+  busy?: boolean;
   items: ProductAction[];
   onPick: (change: ProductAction) => void;
 }) {
-  if (items.length === 0) return null;
+  if (items.length === 0 && !undoable) return null;
   return (
     <Menu
       label="Actions ▾"
       trigger="Actions ▾"
       ui="ui.subscriber.productActions"
-      items={items.map((item) => ({
-        label: `${TITLE[item]}…`,
-        ui: CHANGE_UI[item],
-        onClick: () => onPick(item),
-      }))}
+      items={[
+        ...(undoable
+          ? [
+              {
+                label: undoable.status === 'suspended' ? 'Undo suspension' : 'Undo resumption',
+                ui: 'ui.subscriber.undoStatusChange',
+                disabled: !!busy,
+                onClick: () => onUndo?.(),
+              },
+            ]
+          : []),
+        ...items.map((item) => ({
+          label: `${TITLE[item]}…`,
+          ui: CHANGE_UI[item],
+          onClick: () => onPick(item),
+        })),
+      ]}
     />
   );
 }

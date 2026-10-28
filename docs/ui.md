@@ -182,6 +182,11 @@ API: `POST /tmf-api/productOrderingManagement/v5/productOrder`.
 
 ### Product actions (`ui.subscriber.productActions`) and pending changes
 
+An applied status change today exposes Undo suspension or Undo resumption in the product
+menu (`ui.subscriber.undoStatusChange`), replacing the opposite status action. It cancels
+the referenced order with the existing cancelProductOrder request. Future suspensions
+retain their pending-line Undo; errors stay beside the product.
+
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 **Actions ▾** on a product row lists what the row allows: **Suspend…** (`ui.subscriber.suspend`,

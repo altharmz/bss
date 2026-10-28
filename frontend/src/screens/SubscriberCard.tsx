@@ -1012,7 +1012,9 @@ function ProductRow({
     setProblem(null);
     try {
       await undoPendingChange(orderId);
-      onDone(`${name}: the pending change was cancelled`);
+      onDone(
+        `${name}: the ${product.undoableStatusChange ? 'status' : 'pending'} change was cancelled`,
+      );
     } catch (error) {
       setProblem(explain(error));
     } finally {
@@ -1103,6 +1105,12 @@ function ProductRow({
           ) : (
             <>
               <ProductActionsMenu
+                undoable={product.undoableStatusChange}
+                busy={busy}
+                onUndo={() => {
+                  if (product.undoableStatusChange)
+                    void undoChange(product.undoableStatusChange.productOrder.id);
+                }}
                 items={offeredChanges(product, account.ratingType)}
                 onPick={(change) => {
                   setImmediateEnd(false);

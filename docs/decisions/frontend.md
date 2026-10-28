@@ -2,6 +2,8 @@
 
 ## GUI review fixes
 
+- G2b (B1/I5 Undo portion): the product menu offers same-day Undo suspension/resumption from the internal eligibility field instead of the opposite status action. The existing cancelProductOrder body is pinned in component and backend replay tests; dedicated future-suspension Undo regressions preserve the already-present pending action. Guard.sh rejects the prescribed targeted container npm command, so allowed make targets and the hook provide verification. No primitive change.
+
 - G2a (B1/I4 refusal portion): all TMF622 order callers preserve codes and show mapped operator explanations via the D7 Footer; backend AST/JSON parity pins all 23 emitted refusal codes. Suspend → successful reload → refused Resume coverage confirms the action-row Note layout was the defect in that sequence; refused submits do not reload the card. Status/end parametrized coverage plus add, offering, number and draft-submit screen tests retain inputs and requests. Edit draft has Save draft only; submission belongs to its order detail and uses the same mapping. Deactivate reuses the existing End on a date dialog (B18 overlap needed to keep refusals in a dialog), retaining today's delete body and later dated body. G2b retains all same-day Undo/internal API work and I5. Tests are grouped with each screen's fixtures rather than one cross-screen parametrized test; prescribed targeted npm invocation remains guard-blocked, so verification uses make targets and the hook.
 
 G1b browser verification also updates stale pre-redesign smoke selectors for navigation,
