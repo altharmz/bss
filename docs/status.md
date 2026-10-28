@@ -483,8 +483,8 @@ all 53 generated pages. No scope changes, commit or deployment in this task.
    Remaining: progress-report drift enforcement in the pre-commit/release gates and
    per-item deployed status from `docs/progress/deployed.txt`. The remote identity
    marker above does not implement per-item deployment coverage.
-3. **Remaining Phase 2** (APP_PORT, localhost:8080 references, stopping all profiles
-   with make down) remains deferred; exact acceptance criteria are in Open checks.
+3. **Phase 2** (APP_PORT, localhost:8080 references, stopping all profiles with make
+   down) is done (issue #2); see Open checks.
 4. **Backport vps-lab guard changes** (ports 8444 and 2053) remains parked; the push
    policy is done. Harness edits require a reviewed diff and human approval.
 5. **Cloud startup/resume validation:** still unproven in an actual supported client;
@@ -535,24 +535,14 @@ shipped).
   gets demo data, it can only be current state: history cannot be backdated through the
   API (prices and orders in the past are refused), and the seed builds its history with a
   FixedClock in-process, which is not an option against prod.
-- **Two stacks side by side with vps-lab** (both on this workstation). **Done: the local
-  db no longer publishes 5432** (2026-10-03; tests and the app reach `db` on `lab`, `make
-  psql` goes through compose exec). Proven: after `make up` nothing listens on host 5432;
-  with another process holding `127.0.0.1:5432`, `make test` created and started `db`
-  and passed (before the change it failed with "Bind for 127.0.0.1:5432 failed: port is
-  already allocated" while vps-lab's db was up). Still open: `APP_PORT=8081` for bss (the
-  publish in `compose.override.yaml`, and the Makefile's `smoke` and health wait, which
-  say `localhost:8080` literally); `make down` must also stop the profiled services
-  (`web`, `web-offline`, `tools`, ...), which a plain `docker compose down` leaves running.
-  Until then, do not run bss's app and vps-lab's app at the same time (both use 8080).
-- **Phase 2, rest of the two-stack fix (APP_PORT=8081, localhost:8080 refs, make down
-  profiles) - specified, deferred.** The spec (2026-10-03): app host port from
-  `APP_PORT`, default 8081; every hardcoded `localhost:8080` in the repo (Makefile,
-  scripts/, frontend/, playwright config, docs) driven by it; `make down` also stops
-  profiled services. Negative proofs: the stack starts and `make smoke` passes with
-  something on host port 8080; a busy `APP_PORT` makes the health wait fail non-zero; no
-  bss container after `make down`. Then `make verify` up to (not including) deploy.
-  Touches Makefile, compose files, maybe scripts/: diff first.
+- **Two stacks side by side with vps-lab: done** (issue #2). The local db no longer
+  publishes 5432 (2026-10-03). The app publishes `127.0.0.1:${APP_PORT:-8081}` (the
+  vps-lab stack keeps 8080); `make smoke` and the health wait ask `docker compose port
+  app 8080`, so nothing hardcodes a host port; `make down` runs `--profile '*'`. Proven
+  (2026-10-28) with a listener holding 8080: `make up` and `make smoke` pass on 8081; a
+  listener on `APP_PORT=8099` makes `up` exit 1 ("address already in use"); a service
+  started with `--profile tools up -d` is gone after `make down`. A `compose run`
+  container is not touched by `down` (unchanged). `make clean` is unchanged (no profile).
 - **DB connections: pooled (2026-10-20), confirm on the VPS.** The API takes
   connections from a pool of at most 10 (`DB_POOL_SIZE`) instead of opening two per
   request; this also cut `make test`. To confirm after the deploy: at most 10 bss API
