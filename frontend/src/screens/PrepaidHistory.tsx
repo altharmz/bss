@@ -1,3 +1,4 @@
+import { useWriteLock, writeLock } from '../api/WriteLock';
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useRef, useState, type ReactNode } from 'react';
@@ -7,7 +8,6 @@ import { uncertain } from './submissionKey';
 import {
   cancelAction,
   editNote,
-  loadBalanceAction,
   loadBalanceActions,
   removeAction,
   type BalanceAction,
@@ -78,13 +78,13 @@ export function BalanceActions({
   balance,
   accountId,
   version,
-  onChanged,
+  onOpen,
 }: {
   balance: ResourceWithRetry<PrepaidBalance | null>;
   accountId: string;
   version: number;
-  /** A write succeeded: the card reloads (the version bumps). */
-  onChanged: () => void;
+  /** The card owns the selected action dialog across list reloads. */
+  onOpen: (id: string) => void;
 }) {
   if (balance.status === 'ok' && balance.data !== null) {
     return (
@@ -92,7 +92,7 @@ export function BalanceActions({
         accountId={accountId}
         bucketId={balance.data.bucketId}
         version={version}
-        onChanged={onChanged}
+        onOpen={onOpen}
       />
     );
   }
@@ -115,15 +115,14 @@ function ActionsPanel({
   accountId,
   bucketId,
   version,
-  onChanged,
+  onOpen,
 }: {
   accountId: string;
   bucketId: string;
   version: number;
-  onChanged: () => void;
+  onOpen: (id: string) => void;
 }) {
   const { timeZone } = useSystemContext();
-  const [open, setOpen] = useState<BalanceAction | null>(null);
   const actions = useResource(`balance-actions:${accountId}:${bucketId}:${version}`, (signal) =>
     loadBalanceActions(accountId, bucketId, signal),
   );
@@ -148,7 +147,7 @@ function ActionsPanel({
               <TableRow
                 key={a.id}
                 columns={COLUMNS}
-                onClick={() => setOpen(a)}
+                onClick={() => onOpen(a.id)}
                 cells={{
                   requested: when(a.requestedDate, timeZone),
                   action: actionLabel(a),
@@ -168,14 +167,6 @@ function ActionsPanel({
           }
         </ListState>
       </div>
-      {open !== null && (
-        <ActionDialog
-          id={open.id}
-          load={(signal) => loadBalanceAction(open.id, accountId, signal)}
-          onClose={() => setOpen(null)}
-          onChanged={onChanged}
-        />
-      )}
     </Panel>
   );
 }
@@ -274,6 +265,7 @@ function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged:
   const [problem, setProblem] = useState<string | null>(null);
   const [unsure, setUnsure] = useState(false);
   const running = useRef(false);
+  const { begin } = useWriteLock();
 
   const { kind, status } = action;
   const amount = formatCents(Math.abs(action.cents));
@@ -306,11 +298,17 @@ function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged:
   async function run(write: () => Promise<void>, message: string) {
     if (running.current) return;
     running.current = true;
+    const release = begin();
+    const before = writeLock.sent();
     setBusy(true);
     setProblem(null);
     setUnsure(false);
     try {
       await write();
+      if (writeLock.sent() === before) {
+        setProblem('Not sent. Try again.');
+        return;
+      }
       toast(message);
       onChanged();
     } catch (error) {
@@ -321,6 +319,7 @@ function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged:
           : explain(error),
       );
     } finally {
+      release();
       running.current = false;
       setBusy(false);
     }

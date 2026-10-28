@@ -2676,6 +2676,46 @@ describe('prepaid balance actions', () => {
       );
     });
 
+    it.each([false, true])(
+      'keeps the release confirmation alive across an injected card refetch (failed=%s) and sends once',
+      async (failed) => {
+        let accountReads = 0;
+        const { dialog, fetchMock, calls } = await detailOf(hold, 'Hold', {
+          [`PATCH ${PREPAY}/reserveBalance/${T4}`]: () => json({ ...hold, status: 'cancelled' }),
+          [`POST ${PREPAY}/topupBalance`]: () => json(topup, { status: 201 }),
+          [`GET /tmf-api/accountManagement/v5/billingAccount/${A}`]: () => {
+            accountReads += 1;
+            return failed && accountReads > 1 ? tmfError(503, 'Temporary failure') : json(PREPAID);
+          },
+        });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Release hold' }));
+        // A separate completed write injects a real card reload while confirmation is open.
+        fireEvent.click(screen.getByRole('button', { name: 'Top up' }));
+        const form = await screen.findByRole('dialog', { name: 'Top up' });
+        fireEvent.change(within(form).getByLabelText('Amount'), { target: { value: '1' } });
+        fireEvent.click(within(form).getByRole('button', { name: 'Top up' }));
+        await waitFor(() => expect(calls.filter((call) => call === OWN).length).toBeGreaterThan(1));
+        if (failed) {
+          await screen.findByText('Failed to refresh the billing account');
+          expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+        }
+        expect(screen.getByRole('dialog', { name: 'Balance action' })).toBe(dialog);
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+        await waitFor(() =>
+          expect(writes(fetchMock)).toEqual([
+            [
+              'PATCH',
+              `${PREPAY}/reserveBalance/${T4}`,
+              '{"status":"cancelled","reason":"Pre-authorisation"}',
+            ],
+          ]),
+        );
+        await waitFor(() =>
+          expect(screen.queryByRole('dialog', { name: 'Balance action' })).toBeNull(),
+        );
+      },
+    );
+
     it('releases a hold without a reason with a stated one, which ReserveBalance_Update requires', async () => {
       const bare = { ...hold, reason: undefined };
       const { dialog, fetchMock } = await detailOf(bare, 'Hold', {

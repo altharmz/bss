@@ -22,7 +22,8 @@ const OFFERINGS = '/tmf-api/productCatalogManagement/v5/productOffering';
 // parity: GET ${ACCOUNTS}
 // parity: GET ${OFFERINGS}
 function useCount(path: string): string {
-  const total = useResource(path, (signal) =>
+  const version = useNavVersion();
+  const total = useResource(`${path}:${version}`, (signal) =>
     getPage(`${path}?limit=1&fields=id`, signal).then((page) => page.total),
   );
   return total.status === 'ok' ? formatInt(total.data) : '';
@@ -49,7 +50,8 @@ function useCommandsNav(): boolean {
 }
 
 function useOrderCount(): string {
-  const total = useResource('nav:orders', countOrders);
+  const version = useNavVersion();
+  const total = useResource(`nav:orders:${version}`, countOrders);
   return total.status === 'ok' ? formatInt(total.data) : '';
 }
 

@@ -1,3 +1,4 @@
+import { WriteLockProvider } from '../api/WriteLock';
 import { UiKitScreen } from '../screens/UiKit';
 import { getJson } from '../api/client';
 import { useResource } from '../api/useResource';
@@ -106,11 +107,13 @@ export function App() {
     <RouterProvider>
       <CrumbsProvider>
         <NavVersionProvider>
-          <ToastProvider>
-            <SessionGate>
-              <Root />
-            </SessionGate>
-          </ToastProvider>
+          <WriteLockProvider>
+            <ToastProvider>
+              <SessionGate>
+                <Root />
+              </SessionGate>
+            </ToastProvider>
+          </WriteLockProvider>
         </NavVersionProvider>
       </CrumbsProvider>
     </RouterProvider>

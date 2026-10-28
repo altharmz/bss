@@ -39,7 +39,7 @@ export function ProductNumber({
   );
 }
 
-function NumberModal({
+export function NumberModal({
   accountId,
   productId,
   onClose,

@@ -267,3 +267,18 @@ unknown codes' server reason. `OrderOutcome` preserves the raw errors and expose
 order response. A rejected order never calls the success/close callback. The exported
 JSON code list is checked against both the TypeScript mapping and backend problem tuples.
 Edit draft saves through AddProductModal; its order detail owns Submit.
+
+### Refresh-safe writes (GUI review G3)
+
+`api/WriteLock` supplies a shared counter via `WriteLockProvider`/`useWriteLock`.
+Transport writes acquire/release it, and `useWrite` holds it across the complete action
+callback. Nested writes cannot unlock each other. `usePolled` pauses background reads
+while locked; card reloads queue through `writeLock.afterWrites`. `useResource` accepts
+an optional third `keepPrevious` argument for same-entity refreshes: keep the mounted
+view and pause its reload while locked. Failed background reloads retain that view and
+expose `refreshError` with Retry. Entity navigation still needs a keyed owner.
+Card dialogs belong to card state, outside list rows, with stable product/action ids;
+number and balance-action panels pass their selection up. Shared writes whose callback
+resolves without a transport request show “Not sent. Try again.” instead of success.
+Successful count-changing writes invalidate `NavVersionProvider`; all sidebar count
+resources include that version in their key.

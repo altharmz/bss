@@ -1,3 +1,5 @@
+import { writeLock } from '../api/WriteLock';
+import { loadBalanceAction } from '../api/history';
 import { Note } from '../ui/Note';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
@@ -43,9 +45,9 @@ import {
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
-import { ProductNumber } from './ProductNumber';
+import { NumberModal } from './ProductNumber';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
-import { BalanceActions } from './PrepaidHistory';
+import { ActionDialog, BalanceActions } from './PrepaidHistory';
 import {
   ChangeOfferingDialog,
   offeredChanges,
@@ -106,10 +108,9 @@ const TYPE_LABEL: Record<string, string> = {
 export function SubscriberCardScreen({ accountId }: { accountId: string }) {
   const [version, setVersion] = useState(0); // bumped after an order: reload everything
   const toast = useToast();
-  // accepted transfers and prepaid orders are followed here, above the card, which unmounts
-  // while it reloads
+  // Accepted transfers and prepaid orders are followed independently of card refreshes.
   const [watches, setWatches] = useState<Watched[]>([]);
-  const reload = useCallback(() => setVersion((v) => v + 1), []);
+  const reload = useCallback(() => writeLock.afterWrites(() => setVersion((v) => v + 1)), []);
   const follow = useCallback((added: Watched) => setWatches((all) => [...all, added]), []);
   const dismiss = useCallback(
     (id: string) => setWatches((all) => all.filter((w) => w.id !== id)),
@@ -123,8 +124,10 @@ export function SubscriberCardScreen({ accountId }: { accountId: string }) {
     },
     [toast, reload, dismiss],
   );
-  const account = useResource(`account:${accountId}:${version}`, (signal) =>
-    loadAccount(accountId, signal),
+  const account = useResource(
+    `account:${accountId}:${version}`,
+    (signal) => loadAccount(accountId, signal),
+    true,
   );
   const crumb = account.status === 'ok' ? account.data.customerName : accountLabel(accountId);
   useSetCrumbs(
@@ -151,6 +154,13 @@ export function SubscriberCardScreen({ accountId }: { accountId: string }) {
             onRetry={account.retry}
           />
         </Panel>
+      )}
+      {account.refreshError && (
+        <ErrorBlock
+          title="Failed to refresh the billing account"
+          error={account.refreshError}
+          onRetry={account.retry}
+        />
       )}
       {watches.map((w) =>
         w.kind === 'transfer' ? (
@@ -198,6 +208,13 @@ function Card({
   const context = useSystemContext();
   const toast = useToast();
   const { navigate } = useRouter();
+  const [productDialog, setProductDialog] = useState<{
+    product: AccountProduct;
+    change: ProductAction;
+    immediate: boolean;
+  } | null>(null);
+  const [balanceAction, setBalanceAction] = useState<string | null>(null);
+  const [numberProduct, setNumberProduct] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState(false);
   const [money, setMoney] = useState<MoneyForm | null>(null);
@@ -215,10 +232,13 @@ function Card({
   const settlement = useResource(`settlement:${account.id}:${version}`, (signal) =>
     loadSettlement(account.id, signal),
   );
-  const balance = useResource(`prepaid:${account.id}:${version}`, (signal) =>
-    account.ratingType === 'prepaid'
-      ? loadPrepaidBalance(account.id, signal)
-      : Promise.resolve(null),
+  const balance = useResource(
+    `prepaid:${account.id}:${version}`,
+    (signal) =>
+      account.ratingType === 'prepaid'
+        ? loadPrepaidBalance(account.id, signal)
+        : Promise.resolve(null),
+    true,
   );
   const bills = useBills(account, version);
   const charges = useResource(`charges:${account.id}:${version}`, (signal) =>
@@ -494,7 +514,10 @@ function Card({
                       key={product.id}
                       account={account}
                       product={product}
-                      onRefresh={reload}
+                      onNumber={() => setNumberProduct(product.id)}
+                      onPick={(change, immediate) =>
+                        setProductDialog({ product, change, immediate })
+                      }
                       onTopUp={(amount) => {
                         setMoneyAmount(amount);
                         setMoney('topup');
@@ -614,11 +637,34 @@ function Card({
             balance={balance}
             accountId={account.id}
             version={version}
-            onChanged={reload}
+            onOpen={setBalanceAction}
           />,
         )}
       <History account={account} charges={charges} transactions={transactions} tab={tab} />
 
+      {balanceAction !== null && (
+        <ActionDialog
+          id={balanceAction}
+          load={(signal) => loadBalanceAction(balanceAction, account.id, signal)}
+          onClose={() => setBalanceAction(null)}
+          onChanged={() => {
+            setBalanceAction(null);
+            reload();
+          }}
+        />
+      )}
+      {numberProduct !== null && (
+        <NumberModal
+          accountId={account.id}
+          productId={numberProduct}
+          onClose={() => setNumberProduct(null)}
+          onDone={(message, accepted) => {
+            toast(message);
+            if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
+            reload();
+          }}
+        />
+      )}
       {paying && bills.status === 'ok' && (
         <RecordPaymentModal
           account={account}
@@ -693,6 +739,36 @@ function Card({
         />
       )}
 
+      {productDialog !== null && productDialog.change === 'offering' && (
+        <ChangeOfferingDialog
+          account={account}
+          product={productDialog.product}
+          onClose={() => setProductDialog(null)}
+          onRefresh={reload}
+          onDone={(message, accepted) => {
+            setProductDialog(null);
+            toast(message);
+            if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
+            reload();
+          }}
+        />
+      )}
+      {productDialog !== null && productDialog.change !== 'offering' && (
+        <ProductChangeDialog
+          immediateEnd={productDialog.immediate}
+          change={productDialog.change}
+          account={account}
+          product={productDialog.product}
+          onClose={() => setProductDialog(null)}
+          onRefresh={reload}
+          onDone={(message, accepted) => {
+            setProductDialog(null);
+            toast(message);
+            if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
+            reload();
+          }}
+        />
+      )}
       {adding && (
         <AddProductModal
           account={account}
@@ -976,18 +1052,18 @@ function ProductRow({
   account,
   product,
   onDone,
-  onRefresh,
   onTopUp,
+  onPick,
+  onNumber,
 }: {
   account: Account;
   product: AccountProduct;
   onDone: (message: string, accepted?: PendingOrder) => void;
-  onRefresh: () => void;
   onTopUp: (amount: string) => void;
+  onPick: (change: ProductAction, immediate: boolean) => void;
+  onNumber: () => void;
 }) {
   const context = useSystemContext();
-  const [changing, setChanging] = useState<ProductAction | null>(null);
-  const [immediateEnd, setImmediateEnd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const note = statusNote(product);
@@ -1048,7 +1124,9 @@ function ProductRow({
                 </>
               )}
               <div className="bss-code">{code}</div>
-              <ProductNumber accountId={account.id} productId={product.id} onDone={onDone} />
+              <Button small onClick={onNumber}>
+                Subscriber number
+              </Button>
               {product.pendingChanges.map((c) => (
                 <div
                   key={c.productOrder.id}
@@ -1113,8 +1191,7 @@ function ProductRow({
                 }}
                 items={offeredChanges(product, account.ratingType)}
                 onPick={(change) => {
-                  setImmediateEnd(false);
-                  setChanging(change);
+                  onPick(change, false);
                 }}
               />{' '}
               {fundingWait !== null && (
@@ -1136,8 +1213,7 @@ function ProductRow({
                 small
                 data-ui="ui.subscriber.deactivate"
                 onClick={() => {
-                  setImmediateEnd(true);
-                  setChanging('end');
+                  onPick('end', true);
                 }}
               >
                 Deactivate
@@ -1146,32 +1222,6 @@ function ProductRow({
           ),
         }}
       />
-      {changing === 'offering' && (
-        <ChangeOfferingDialog
-          account={account}
-          product={product}
-          onClose={() => setChanging(null)}
-          onRefresh={onRefresh}
-          onDone={(message, accepted) => {
-            setChanging(null);
-            onDone(message, accepted);
-          }}
-        />
-      )}
-      {changing !== null && changing !== 'offering' && (
-        <ProductChangeDialog
-          immediateEnd={immediateEnd}
-          change={changing}
-          account={account}
-          product={product}
-          onClose={() => setChanging(null)}
-          onRefresh={onRefresh}
-          onDone={(message, accepted) => {
-            setChanging(null);
-            onDone(message, accepted);
-          }}
-        />
-      )}
     </div>
   );
 }

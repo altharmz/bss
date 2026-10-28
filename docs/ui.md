@@ -699,3 +699,9 @@ Orders retain refused outcomes in their open dialog. The shared write footer sho
 server reason. Deactivate opens the existing End on a date dialog prefilled with today;
 confirming today preserves the immediate delete request. Same-day status Undo remains
 tracked in G2b.
+
+Subscriber-card refreshes preserve open dialogs and entered values. Product changes,
+subscriber-number changes and balance-action details are owned outside list rows using
+stable ids. Writes pause background polling and defer card reloads until their requests
+finish; a confirmation that resolves without a request shows “Not sent. Try again.”
+Subscriber create/delete, offering create/delete and order POSTs refresh sidebar counts.

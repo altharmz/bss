@@ -1,3 +1,4 @@
+import { useWriteLock, writeLock } from '../api/WriteLock';
 import { DialogFooter } from '../ui/kit';
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
@@ -46,17 +47,22 @@ type Editable = AccountRecord & { financial?: { id: string; name: string } | nul
 
 /** Save/Delete outcome state shared by both dialogs. */
 export function useWrite(onDone: (message: string) => void) {
+  const { begin } = useWriteLock();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [unsure, setUnsure] = useState(false);
   const [failedCall, setFailedCall] = useState<string | undefined>();
   async function run(action: () => Promise<string>) {
+    const release = begin();
+    const before = writeLock.sent();
     setBusy(true);
     setProblem(null);
     setUnsure(false);
     setFailedCall(undefined);
     try {
-      onDone(await action());
+      const message = await action();
+      if (writeLock.sent() === before) setProblem('Not sent. Try again.');
+      else onDone(message);
     } catch (error) {
       if (uncertain(error)) {
         setUnsure(true);
@@ -66,6 +72,7 @@ export function useWrite(onDone: (message: string) => void) {
         setProblem(explain(error));
       }
     } finally {
+      release();
       setBusy(false);
     }
   }

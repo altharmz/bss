@@ -73,8 +73,17 @@ describe('Ledger write footer', () => {
     expect(refresh).toHaveBeenCalledOnce();
   });
 
-  it('disables cancel and marks the primary busy while retaining its label', () => {
-    render(<Harness action={() => new Promise(() => {})} />);
+  it('disables cancel and marks the primary busy while retaining its label', async () => {
+    let finish!: (value: string) => void;
+    render(
+      <Harness
+        action={() =>
+          new Promise((resolve) => {
+            finish = resolve;
+          })
+        }
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
     const primary = screen.getByRole('button', { name: 'Record payment' }) as HTMLButtonElement;
     expect(primary.disabled).toBe(true);
@@ -82,5 +91,16 @@ describe('Ledger write footer', () => {
     expect((screen.getByRole('button', { name: 'Cancel' }) as HTMLButtonElement).disabled).toBe(
       true,
     );
+    finish('done');
+    await screen.findByText('Not sent. Try again.');
+  });
+
+  it('shows Not sent when the confirmed callback resolves without sending a request', async () => {
+    render(<Harness action={async () => 'saved'} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Record payment' }));
+    expect(await screen.findByText('Not sent. Try again.')).toBeTruthy();
+    expect(
+      (screen.getByRole('button', { name: 'Record payment' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 });
