@@ -123,9 +123,9 @@ stay in the slice trackers in `docs/` and an issue only links to them. Rules in 
   (P1-P7, [decision](docs/decisions/prepaid.md)), subscriber numbers
   ([release evidence](docs/subscriber-number-release.md)), every MCP operation in the UI
   with the UI/MCP parity check, and the Ledger v2 redesign.
-- **Planned code work** lives in the slice trackers: [next-slices.md](docs/next-slices.md),
-  [gui-review-plan.md](docs/gui-review-plan.md) (fix slices G1-G15 interleaved with redesign
-  slices R7b-R16; run it as the orchestrator its "Orchestrator" section describes),
+- **Planned code work:** the GUI fix slices G4b-G15 interleaved with redesign slices
+  R7b-R16 are board issues, listed in run order in epic #43 (rules, orchestrator and subagent
+  prompt are in the epic); other slice trackers: [next-slices.md](docs/next-slices.md),
   [prepaid-slices.md](docs/prepaid-slices.md). Specs: [ui-redesign-design.md](docs/ui-redesign-design.md),
   [patterns.md](docs/patterns.md); the handoff `design-ref/design_handoff_bss_admin_v2/` is read-only.
 - **Everything else open** (bugs, human-only checks, ideas) is a board issue. Changing

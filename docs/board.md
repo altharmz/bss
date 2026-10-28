@@ -5,11 +5,11 @@ How work is tracked on the GitHub Project board. Read this before any board oper
 in [.claude/commands/continue.md](../.claude/commands/continue.md).
 
 GitHub Project **BSS** (private, owner `altharmz`, repo `altharmz/bss`). It tracks
-**issues**: bugs, human-only tasks, ideas and small tasks. The slice trackers in `docs/`
-([next-slices.md](next-slices.md), [gui-review-plan.md](gui-review-plan.md),
-[prepaid-slices.md](prepaid-slices.md)) stay the source of truth for planned code
-work: a code slice lives there, and an issue for it only links to it. Never copy a spec
-into an issue.
+**issues**: bugs, human-only tasks, ideas and small tasks. The GUI review and redesign
+slices (G4b-G15, R7b-R16) are issues carrying their own spec and decisions, ordered by the
+task list of epic #43. The older slice trackers in `docs/` ([next-slices.md](next-slices.md),
+[prepaid-slices.md](prepaid-slices.md)) stay the source of truth for their slices: an issue
+for one of those only links to it.
 
 **IDs** (looked up 2026-10-28; `gh project field-list 1 --owner altharmz` if they change):
 

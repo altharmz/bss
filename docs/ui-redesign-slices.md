@@ -5,10 +5,9 @@ specifies slice N. The handoff is `design-ref/design_handoff_bss_admin_v2/` (rea
 **Nothing needs the human's approval.** The human only starts the run and deploys
 afterwards.
 
-> **2026-10-27: the remaining rows (7b-16) now run from the merged tracker in
-> [gui-review-plan.md](gui-review-plan.md), interleaved with the GUI review fixes.** Their
-> status is kept there; the table below is history from row 7b on. D13 (currency) in the
-> design applies to every remaining row.
+> **2026-10-28: the slice tracker is the task list of epic #43** (R7b-R16 interleaved with
+> the GUI review fixes G4b-G15, one GitHub issue per slice). Done slices are in `git log`.
+> D13 (currency) in the design applies to every remaining row.
 
 ## Start (the human pastes this into Codex)
 
@@ -30,8 +29,8 @@ code, tests or docs yourself, apart from the one tracker fix described in step 3
    is not, stop and report.
 3. Run `make ps`. If the local stack is down, run `make up`. Then run `make migrate` and
    `make seed` (seed is idempotent: it does nothing when its data exists).
-4. Find the first row of the table below whose status is not `done`. That is where you
-   start, and it is also how an interrupted run resumes.
+4. Find the first open slice issue in the task list of epic #43. That is where you start,
+   and it is also how an interrupted run resumes.
 
 ### For each slice, strictly one at a time
 
@@ -122,37 +121,3 @@ code, tests or docs yourself, apart from the one tracker fix described in step 3
 >    If you stopped, say why and what remains.
 
 ---
-
-## Slices
-
-Status: `todo` · `done: <commit subject>` · `split`
-
-| # | Slice | Done when | Status |
-|---|---|---|---|
-| 1 | Tokens, fonts, legacy aliases, style guard test, `make web-shots` | v2 tokens and fonts live; every screen works through the aliases; the guard test passes; shots are written | done: Establish Ledger tokens and visual reference captures |
-| 2a | Button, fields, Segmented, initial `/ui-kit` | Busy Button, radio Segmented and native field behavior tested; controls gallery at both widths | done: Build Ledger buttons, fields and segmented controls |
-| 2b1 | Explicit status families and attribute primitives | Every D4 mapping has a rendering test; StatusPill/Tag/Flag/Badge match Components; gallery shows all D4 values and attribute variants | done: Build explicit Ledger status families and attribute primitives |
-| 2b2 | Status and control caller migrations, Amount and Id | Every Pill caller migrated and Pill/old status tokens deleted; danger-outline callers migrated and compatibility removed; Amount and Id adopted per slice 2; gallery adds amounts and ids; all touched screen inline styles removed | done: Adopt Ledger status, amount and identifier primitives across callers |
-| 3a | Table foundations, delayed skeletons and descriptive no-results | Density, keyboard activation/selection, sticky header, delayed skeleton and query/filter tests; gallery reviewed at both widths | done: Build Ledger table foundations and list-state previews |
-| 3b1 | Tabs and Menu; structured Table footer and row menu actions; ProductActions migration | Keyboard and aria tested; range styles and row action isolation tested; gallery and card shots reviewed | done: Build Ledger tabs and action menus |
-| 3b2a | Error failure timestamps and Note foundation | Failure instant retained across rerenders and formatted in business zone; Note roles, lead, icon and code tested; notes gallery reviewed at both widths | done: Build Ledger notes and business-zone failure timestamps |
-| 3b2b1 | Summary primitives and page/panel foundations | KeyValue, prepaid/postpaid MoneyStrip, PageHeader with PageTitle wrapper and Panel match Components; semantic/slot tests and gallery at both widths | done: Build Ledger summary primitives and page headers |
-| 3b2b2a | Success toast and gallery | D8 bottom-left toast with optional action, single-message replacement, fresh 6 s timeout and tests; static/live gallery reviewed at both widths | done: Build Ledger success toast actions and six-second lifetime |
-| 3b2b2b1 | Dialog foundation and Modal compatibility | S/M/L Dialog with context, step and Ledger header/body/footer; Modal width boundary tests; size gallery reviewed at both widths | done: Build Ledger dialogs and modal size compatibility |
-| 3b2b2b2 | Notes caller migration, Footer and write states | Migrate every bss-warning/bss-hint/bss-inline-error caller to Note preserving text/markers and remove static inline styles in touched files; D7 Footer refused/unsure/busy states; refused code and unsure primary hiding tests; gallery dialog write states reviewed at both widths | done: Adopt Ledger notes and dialog write states |
-| 4 | Shell: sidebar, top bar, business-date chip | Chip drift states tested from the context; sidebar matches the artboard | done: Restyle the shell and show business-date drift |
-| 5 | Subscribers list | Search and `/`, filters with counts, over-limit flag; matches Subscribers.dc.html at 1280 | done: Restyle the Subscribers list with Ledger filters and balances |
-| 6a | Subscriber card: header | Ledger identity/meta, secondary Add product, More actions payment/delete with tests | done: Restyle subscriber identity and account actions |
-| 6b1 | Subscriber card: money strips and Account summary | Both D12 money strips, boundary/figure tests and semantic Account KeyValue, existing actions/markers and eager loaders kept; visual review | done: Build subscriber money strips and Account summary |
-| 6b2 | Subscriber card: tabs and Overview grid | Every existing panel in its tab with markers kept and request timing unchanged; hash deep links/fallback and loaded counts; prepaid-only tabs absent for postpaid; Overview two-column grid; Account summary in Account tab; all remaining slice 6 tests and visual review | done: Organize subscriber panels into Ledger tabs |
-| 7a | Subscriber card: Recent activity rail | First eight loaded movements, signed amounts and balance after, empty/error states, prepaid note and Transactions tab link; reviewed at both widths | done: Add subscriber Recent activity rail |
-| 7b | Subscriber card: products, pending sub-row and In progress steps | Finish slice 7 products compact columns and row menu, pending sub-row/Undo; all command-phase steps and D9 copy; move accepted watches into Overview without unmounting polling across Card reloads; tests and both-width review | todo |
-| 8 | Billing runs: header actions, latest-run band, inline outcomes, history selection | "Retry N failed" only for a failed latest run; outcomes inline; requests unchanged | todo |
-| 9 | Product catalog: lifecycle groups, offering detail with stepper, other tabs restyled | Groups, search and stepper tested; matches Catalog.dc.html | todo |
-| 10 | Add product dialog | L two-column layout; shortfall makes Top up primary and Add disabled | todo |
-| 11 | Money dialogs: transfer (3 steps), top-up, adjust, hold, record payment | Acknowledgement gates the transfer; outcome labels; write states | todo |
-| 12 | Sweep 1: Products, Orders, Numbers, Parties, subscriber forms | No inline style or old pattern left in these files; kinds tested | todo |
-| 13 | Sweep 2: Prepaid commands, Accounts, Bills, Payments, Balances, Billing settings | The same for these files | todo |
-| 14 | Sweep 3: Integrations, Users, sign-in, password, not found; delete the legacy layer; dark theme | `legacy-tokens.css`, `Modal` and `PageTitle` gone; guard (d)(e) pass; Theme menu works; dark shots | todo |
-| 15 | Inspector at ≥ 1536 px (Subscribers, Catalog) | matchMedia tests; no new requests; matches the -1600 artboards | todo |
-| 16 | Visual QA, e2e, release evidence | `make web-e2e` green; `docs/ui-redesign-release.md` written; CLAUDE.md updated | todo |
