@@ -65,6 +65,9 @@ has 'git[[:space:]]+(reset[[:space:]]+--hard|clean[[:space:]]+-[a-z]*f)' &&
   block "destructive git operations are the human's call."
 has 'git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push([[:space:]][^;&|]*)?[[:space:]](--force|--force-with-lease|--force-if-includes|--mirror|--delete|--prune|-[[:alpha:]]*[fd][[:alpha:]]*|[+:][^[:space:]]*)([=[:space:];&|]|$)' &&
   block "force, delete, mirror, prune and +/: refspec pushes are forbidden."
+# --- merges go through CI: no --admin override, no merging through the raw API ---
+has 'gh[[:space:]]+pr[[:space:]]+merge[[:space:]].*--admin|gh[[:space:]]+api[[:space:]].*pulls/[^[:space:]]*/merge' &&
+  block "gh pr merge --admin and API merges bypass the checks; merge only with green CI (docs/board.md)."
 if $cloud && has 'git([[:space:]]+-[^[:space:]]+)*[[:space:]]+push([^[:alnum:]_-]|$)'; then
   has 'push[[:space:]]+-u[[:space:]]+origin[[:space:]]+cloud/[^[:space:];&|]+([[:space:]]+[0-9]*>&?[[:space:]]*[^[:space:];&|]+)*[[:space:]]*$' ||
     block "cloud sessions push only as: git push -u origin cloud/<topic>."
