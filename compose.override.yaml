@@ -59,6 +59,23 @@ services:
     network_mode: none
     command: ["ruff", "--version"]
 
+  # `app` without the image's HEALTHCHECK, for long one-off runs (make test): the probe
+  # targets /healthz, which nothing serves while pytest runs here, so the container would
+  # sit in `health: starting` and could turn `unhealthy` in docker ps. `app` itself keeps
+  # its check (make up waits on it). Only started explicitly: docker compose run oneoff ...
+  oneoff:
+    extends:
+      service: app
+    # extends does not see compose.yaml's `app`: without this it would build its own image
+    image: ${IMAGE_NAME:-bss-app}:${TAG:-dev}
+    healthcheck:
+      disable: true
+    ports: !reset []
+    profiles: [tools]
+    depends_on:
+      db:
+        condition: service_healthy
+
   # The MCP connector (bss_mcp/, docs/mcp.md): the same dev image in its own process.
   # Reaches the app over HTTP only (BSS_API_URL), never the database: no DATABASE_URL.
   # OAuth clients and tokens live in SQLite on the mcp_data volume, not in the bss

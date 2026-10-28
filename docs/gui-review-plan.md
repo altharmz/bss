@@ -434,7 +434,7 @@ is the priority:
    reboot).
 4. **APP_PORT / `make down` profiles** (status.md spec of 2026-10-03), then the vps-lab
    guard backport and the two vps-lab-template fixes.
-5. **pytest container `(unhealthy)`**: disable the healthcheck for one-off runs in compose.
+5. **pytest container `(unhealthy)`**: done, issue #4 (the `oneoff` service).
 6. **Network isolation** of app/MCP (vps-infra).
 7. **`"ask"` rules** verification and **cloud startup validation** (docs/cloud.md).
 8. **Progress drift enforcement and per-item deployed status.**

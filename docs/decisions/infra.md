@@ -105,6 +105,9 @@ would attach the prod container to both `lab` and `shared`).
   - **worker** (`compose.prod.yaml`): `[[ -n $(find /tmp/worker-alive -mmin -3) ]]`
     (`$$` in the file). GNU find 4.10 compares `-mmin` exactly, no rounding: 179 s
     passes, 181 s fails, missing fails.
+  - **One-off runs** (`make test`): the `oneoff` service in `compose.override.yaml` is `app`
+    with `healthcheck: disable: true` (nothing serves `/healthz` while pytest runs); `app`
+    keeps its check because `make up` waits on it.
   - Both: interval 60 s, timeout 3 s, retries 3, start period 30 s with `start_interval`
     2 s (Engine 25+ / Compose 2.20.2+; the VPS and WSL run Engine 29.7.2, Compose
     v5.5.0). A container is healthy ~2 s after start; a failure shows as `unhealthy`
