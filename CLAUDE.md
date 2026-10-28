@@ -152,8 +152,8 @@ UI's write requests are pinned on both sides ([frontend.md](docs/decisions/front
   [docs/ui-redesign-design.md](docs/ui-redesign-design.md); handoff
   `design-ref/design_handoff_bss_admin_v2/` (read-only, never edited).
 - **Backlog / open checks** (Track C of the plan, need the human): restore drill; DB pool
-  confirmed on the VPS; APP_PORT / `make down` profiles, vps-lab guard backport; pytest
-  container `(unhealthy)`; network isolation of app/MCP; `"ask"` rules and cloud startup;
+  confirmed on the VPS; vps-lab guard backport;
+  network isolation of app/MCP; `"ask"` rules and cloud startup;
   progress drift check + per-item deployed status. Changing `billCycleDay` stays out
   (PATCH is a 409). Demo data in prod: decided, the stand keeps operator data and only
   the plan's D scripts change it. Detail: [docs/status.md](docs/status.md).

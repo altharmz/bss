@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Minimal HTTP contract check. Usage: scripts/smoke.sh http://localhost:8080
+# Minimal HTTP contract check. Usage: scripts/smoke.sh http://localhost:8081
 set -euo pipefail
 
-BASE="${1:-http://localhost:8080}"
+BASE="${1:-http://localhost:8081}"
 fail() { printf '\033[1;31mSMOKE FAILED:\033[0m %s\n' "$*" >&2; exit 1; }
 
 code="$(curl -sS -o /tmp/smoke.out -w '%{http_code}' --max-time 5 "${BASE}/healthz")" \

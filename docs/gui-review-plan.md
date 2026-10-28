@@ -432,8 +432,8 @@ is the priority:
 2. **Restore drill** from the first cron-made dump (status.md "Open checks").
 3. **DB pool confirmation on the VPS** (at most 10 sessions; it answers after the nightly
    reboot).
-4. **APP_PORT / `make down` profiles** (status.md spec of 2026-10-03), then the vps-lab
-   guard backport and the two vps-lab-template fixes.
+4. **APP_PORT / `make down` profiles**: done, issue #2. Still open: the vps-lab guard
+   backport and the two vps-lab-template fixes (issue #3).
 5. **pytest container `(unhealthy)`**: done, issue #4 (the `oneoff` service).
 6. **Network isolation** of app/MCP (vps-infra).
 7. **`"ask"` rules** verification and **cloud startup validation** (docs/cloud.md).

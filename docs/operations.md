@@ -8,7 +8,7 @@ named in brackets below), which win where the two differ.
 
 Everything runs in containers: `docker compose` merges `compose.yaml` with
 `compose.override.yaml` (local PostgreSQL `db`, the app with hot reload on
-`127.0.0.1:8080`, read-only source mounts; Node services for the UI). **Use the make
+`127.0.0.1:8081` (`APP_PORT`), read-only source mounts; Node services for the UI). **Use the make
 targets; do not invent commands** (CLAUDE.md, "Commands").
 
 | Target | What |
@@ -20,7 +20,7 @@ targets; do not invent commands** (CLAUDE.md, "Commands").
 | `make psql` | interactive psql in the local db (the db port is not published) |
 | `make test` | `pytest -n auto` in the app container |
 | `make lint` / `make fmt` | ruff check + format check / auto-format (the writable `tools` service) |
-| `make smoke` | `scripts/smoke.sh http://localhost:8080`: `/healthz`, `/`, `/billing-status` |
+| `make smoke` | `scripts/smoke.sh` against the published app port: `/healthz`, `/`, `/billing-status` |
 | `make progress` | regenerate [PROGRESS.md](PROGRESS.md) from [progress/scope.yaml](progress/scope.yaml) and the code |
 | `make docs` / `make docs-check` | regenerate [api/](api/README.md) and [db/](db/README.md) / fail if the committed ones differ |
 | `make clean` | stop the stack **and drop the local database volume** |
