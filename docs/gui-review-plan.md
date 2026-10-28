@@ -23,26 +23,20 @@ these change the work:
 
 | ID | What the code shows |
 |---|---|
-| B1 | The product-change dialogs already read `state` and set a "Rejected: …" problem (`screens/ProductActions.tsx` `submit`). They render it as a `Note` **inside the footer action row**, unlike the D7 refused state built in slice 3b2b2b2 (a Note above the footer). The `openModifyItem` reason never reaches the operator. Likely causes: the footer squeezes the Note, or the dialog remounts on the card reload (the same mechanism as B6). G2 confirms which one with a test first. `pendingChanges` lists only status changes dated **after** today (`app/repository/products.py` `pending_changes`), so a same-day suspension has no Undo. |
-| B2 | `Dialog` (`ui/kit.tsx`) has no max-height and no scrolling body. Every tall dialog overflows the viewport. Two "missing" functions were really below the fold: **Delete billing account** in Edit subscriber (`SubscriberForms.tsx`) and **Delete category/catalog** in their edit dialogs (`Classification.tsx`). |
 | B3 | The number picker exists in Add product and Edit draft (`AddProduct.tsx`, via `requiresNumber`). *Change number* exists too (`ProductNumber.tsx`). Both show only when the product specification references the `msisdn` resource specification. No spec on the stand does, and the local seed's "Mobile Voice & Data" doesn't either. The backend fixes `product.requires_msisdn` when the product is added (`app/ordering/numbers.py`). It refuses a number on a product that does not require one (`numberNotRequired`). It refuses an offering change combined with a number change ("change the offering and the number in separate orders"). It refuses to change a spec's msisdn requirement once the spec has been ordered (`app/api/catalog.py`). The UI cannot set the requirement at all, because the spec editor has no field for it. |
-| B5 | The literal `'Balance EUR'` in `screens/Subscribers.tsx`. Its source is the redesign plan: slices 7, 9, 10 and 11 of [ui-redesign-design.md](ui-redesign-design.md) write "EUR" literally. Fixed at the source by D13 there. |
 | B7 | `GET /internal/v1/billingRun` already pages (`offset`/`limit`, newest first). The screen reads only the first page. |
 | B8 | `_next_charge` (`app/internal/accounts.py`) returns the next cycle boundary after today. It ignores that the first prorated period is charged by the next daily run. |
-| P6, P9, P10 | The calls exist (`deleteBillingAccount`, `deleteCustomer`, `deleteOffering`, `deleteCategory`/`deleteCatalog`). They are unreachable (B2) or hard to find. They become reachable through G1, and G7/G11 verify them. |
+| P6, P9, P10 | The calls exist (`deleteBillingAccount`, `deleteCustomer`, `deleteOffering`, `deleteCategory`/`deleteCatalog`). They are unreachable (B2) or hard to find. They became reachable with G1b (done); G7/G11 verify them. |
 | P12 | The backend refuses `voucher` ("no voucher management", `app/api/topup.py`). |
 | P14 | `accumulatedBalance` is read but only merged into bucket rows (`api/balances.ts`). It is never shown as its own record. |
 | P16 | TMF676 `paymentDate` is read-only in our API (`app/api/payment.py`). `correlatorId` is an accepted document. |
 | Parity check | `tests/test_ui_mcp_parity.py` is per operation. It passed because every P row's operation is called somewhere. The review's gaps are at the attribute and placement level, so this plan tracks them by ID. The check stays per operation. |
 
-The review's "~840 autotests" is stale. The hook runs 1,495 backend tests and 284
-frontend tests in each timezone.
-
 ## Decisions
 
 ### Process
 
-1. **Merged order:** finish the shared-component defects first (G1-G4). After that,
+1. **Merged order:** finish the shared-component defects first (G1-G4, now only G4b left). After that,
    each redesign slice is followed by the behaviour fixes for the same screens, so
    behaviour work lands on restyled code and no screen is touched twice in a row by
    unrelated work.
@@ -68,19 +62,11 @@ frontend tests in each timezone.
 
 | ID | Decision |
 |---|---|
-| B1 + I4 | A new module `api/orderErrors.ts` maps every `productOrderErrorMessage.code` the backend emits to an operator sentence, and falls back to `reason`. Every TMF622 POST/submit caller uses it: Add product, Edit draft submit, product change, Change offering, Change number, Deactivate/End and the Orders draft submit. A `rejected` result shows the D7 refused state (the Note above the footer, with the code in mono) and keeps the dialog open with its inputs. |
-| B1 Undo | Internal `AccountProduct` gains `undoableStatusChange`: `{date, status, productOrder: {id}}` or null. It is the status change dated today that is already applied and whose order `cancelProductOrder` still accepts. The row menu offers **Undo suspension** / **Undo resumption** in place of the opposite action that day. It cancels through the existing cancel call, like the offering-change Undo. |
-| I5 | A future-dated suspension already shows as a pending change with Undo. G2 adds the missing test only. |
-| B2 | `Dialog` gets a `max-height: calc(100dvh - 2 × --space-8)` column layout: a fixed header, a scrolling body (`overflow: auto`, `min-height: 0`) and a fixed footer. The overlay never scrolls. Enter in a single-line input submits through the footer primary when it is enabled. It does not submit from a textarea, on the transfer confirm step (D7), or from a destructive primary. |
 | B3 / P1 | **No new API.** Numbers belong to products whose specification requires them, and that stays the rule (it is the backend design: claims, quarantine, release on end). The GUI gains what was missing: the spec editor's **Requires a subscriber number** checkbox (G4). It becomes read-only with the server's 409 text once the spec has been ordered. The existing pickers and *Change number* then appear. *Assign number* to a product whose spec does not require one is **refused by design** (`numberNotRequired`). Products already sold without a number stay without one. On the stand, numbered products come from a numbered spec (D4). |
 | I2 | *Change offering* lists only offerings with the same product specification as the product's current offering. The API keeps accepting any offering, except that a change whose target spec's msisdn requirement differs from `product.requires_msisdn` is rejected with the new code `numberRequirementDiffers`. That check keeps the number claims consistent. Linking the stand's existing Mobile spec is impossible, because it has been ordered; D4 creates a numbered spec instead. |
-| B4 | `Menu` renders its item list in a portal on `document.body`, positioned under its trigger with `position: fixed`. It flips up when the space below is smaller than the list. It closes on scroll and resize. This applies to every Menu. |
-| B5 | Subscribers: the header reads "Balance" plus the currency when all loaded rows share one, otherwise "Balance". Each amount shows its own currency through `Amount`. No currency literal anywhere in `src/` outside tests and `UiKit.tsx` samples. A style-guard check enforces that (`/\b(EUR\|RUB\|USD)\b/` in a non-test `.tsx` string literal fails). |
-| B6 | Dialogs opened from the subscriber card are owned by a card-level state keyed by stable ids (account id, product id, action id), not by list rows. A refetch never unmounts them. Polling and list refetches pause while a dialog has a write in flight (a `WriteLock` context with a counter). A confirm that resolves without sending its request shows "Not sent. Try again." |
 | B7 | Billing runs history pages with the Orders pager (`ORDER_PAGE`-style offset pages of 20) on the existing endpoint. No date filter. |
 | B8 | Internal `nextCharge` becomes the business date of the first billing run that will write a charge for the product. It is computed with the worker's own due rule (billing-core.md "When a period is charged"), not with the cycle boundary. A product starting after today shows "Starts <date>" instead of "Activated". |
 | B9 | The Add product preview shows "Balance after this charge" = account balance − unbilled charges (the card's loaded `charges`, passed in) − this charge. The label becomes "Balance after unbilled charges and this one". |
-| B10 | Writes that change a sidebar count (subscriber create/delete, any order POST, offering create/delete) bump the shell's `version` that the count resources are keyed by. |
 | B11 | The shared money validation checks the sign before the decimals: "Amount must be greater than 0". |
 | B12 | `Checkbox` renders as `<label class="bss-check"><input/> text</label>`. The event-type list becomes a full-width wrapped checklist with no horizontal scroll. |
 | B13 | Order items read "Suspend <product name>", "Resume <product name>", "Change <product> to <offering>", "Change number of <product>", "Add <offering>", "End <product>". Names come from the item when present, else from one TMF637 GET per product, done only in the order dialog. The order dialog shows the target status. |
@@ -105,7 +91,7 @@ frontend tests in each timezone.
 | P6 | The customer dialog lists the customer's billing accounts, each with Delete (an inline confirm; the server's 409 shown in place). Delete customer is enabled once none remain. "Remove billing accounts first" links to that list. |
 | P7 | New offering adds description, isSellable (default on) and categories (a multi-select from `loadCategories`). |
 | P8 | The offering dialog's Prices table gains "Add price": one-time or recurring, amount and currency (the system currency), valid from a date of today or later. It sends a TMF620 price POST plus the offering's price reference PATCH, through the same calls MCP uses. Edit, End and Delete exist and stay. |
-| P9, P10 | Verified reachable after G1. P9: Delete is in the offering ⋯ menu for In design (R9). |
+| P9, P10 | Reachable since G1b (done). P9: Delete is in the offering ⋯ menu for In design (R9). |
 | P11 | The spec editor adds "Requires a subscriber number" (see B3) and a characteristics editor: rows of name, value type (string / integer / boolean), description, configurable, and values (comma-separated, the first is the default). These are stored as TMF620 `productSpecCharacteristic` documents with no ordering behaviour. |
 | P12 | Voucher: **not built.** The backend refuses vouchers (no voucher management) and adding it is out of scope. Number: Top up gains an optional "Number" select of the account's active numbers (TMF654 `logicalResource`). |
 | P13 | Verified in G4's end-to-end scenario (a numbered transfer). |
@@ -129,15 +115,12 @@ Status: `todo` · `done: <commit subject>` · `split`. R rows are specified in
 [ui-redesign-design.md](ui-redesign-design.md) ("Slice N"). G rows are specified below.
 Rows run strictly in order.
 
+**Done (see `git log`):** G1a (B4, B5), G1b (B2), G2a (B1, I4), G2b (B1, I5), G3 (B6, B10)
+and G4a (I2). Their findings, decisions and specs are removed from this file; the code,
+tests and `docs/decisions/` hold them. GitHub issues for them were closed on 2026-10-28.
+
 | # | Slice | Kind | Done when | Status |
 |---|---|---|---|---|
-| G1 | Dialogs fit the viewport, menus escape their card, no hard-coded currency (B2, B4, B5) | UI | Split by ID: G1a then G1b | split |
-| G1a | Menus escape their card; no hard-coded currency (B4, B5) | UI | Portal/flip-up/dismissal regression tests; every single-row menu item present; subscriber single/mixed currencies; currency guard | done: Keep menus visible and show account currencies (B4, B5) |
-| G1b | Dialogs fit the viewport and submit from single-line inputs (B2) | UI | Fixed header/footer with scrolling body inherited by Modal; optional onSubmit wired to every form primary, with disabled/textarea/destructive/transfer-confirm exclusions; structure and Enter tests; new frontend/e2e/dialogs.spec.ts at 1366×768 and 1920×900 checks New category, Edit subscriber with media, New offering and Add product primaries with toBeInViewport(); run make web-e2e once; screenshots and visual review | done: Keep dialog actions visible and submit enabled forms with Enter (B2) |
-| G2a | Refused orders shown in their dialog (B1, I4; refusal portion) | UI + code-parity test | Every order write retains mapped refusals and codes above its actions | done: Show refused product orders in their dialog (B1, I4) |
-| G2b | Same-day Undo and future suspension coverage (B1, I5; Undo portion) | internal API + UI | undoableStatusChange, today's Undo suspension/resumption and dedicated future-suspension Undo coverage | done: Offer same-day status Undo in product menus (B1, I5) |
-| G3 | Writes survive refreshes; sidebar counts update (B6, B10) | UI | A refetch between "Release hold" and "Yes" still sends the PATCH. A create bumps the counts | done: Preserve dialogs across refreshes and update sidebar counts (B6, B10) |
-| G4a | Compatible offering changes (I2) | TMF622 refusal code + UI | Change offering is filtered by spec. `numberRequirementDiffers` is tested | done: Preserve subscriber number requirements when changing offerings (I2) |
 | G4b | Subscriber numbers end to end (B3/P1, P11, P13) | UI | Spec "Requires a subscriber number" and the characteristics are pinned. The e2e numbered prepaid transfer is written | todo |
 | R7b | Subscriber card: products, pending sub-row, In progress steps | UI (redesign) | As in ui-redesign-slices.md row 7b, keeping G2's Undo and G3's dialog ownership | todo |
 | G5 | Subscriber products and prepaid wording (B8, B23, B24, I6, I10) | internal API + UI | nextCharge = the first charging run (backend test: a product started today gives tomorrow's run). "Starts". Prepaid shortfall gating. Drafts on the card | todo |
@@ -235,72 +218,15 @@ Act as the orchestrator described in [ui-redesign-slices.md](ui-redesign-slices.
 
 ## Slice specs
 
-### G1: dialogs, menus, currency (B2, B4, B5)
-
-- `Dialog` per decision B2 (CSS in `ui/ui.css`; the body is the scroll container;
-  `Modal` inherits). Enter-to-submit: `Dialog` takes an optional `onSubmit`. The footer
-  primary of every form dialog is wired to it; the exclusions are as in the decision.
-- `Menu` per decision B4. Keyboard, focus return, outside click and Escape stay as tested
-  in 3b1.
-- B5 per decision, plus the currency guard in `ui/styleGuard.test.ts`.
-- Tests: Dialog structure (the body element is the scroll container; Enter submits from an
-  input, not from a textarea or a disabled primary); Menu portal (items are outside the
-  card's DOM subtree, all items present for one row, flip-up when near the bottom with
-  `getBoundingClientRect` mocked); the Subscribers header for one and for mixed
-  currencies; the guard. A new e2e spec `frontend/e2e/dialogs.spec.ts` at 1366×768 and
-  1920×900 asserts `toBeInViewport()` for the four primaries (run `make web-e2e` once).
-
-G1 is split by ID because B2 includes migrating legacy dialogs whose footers are nested
-inside loaded child components, plus wiring each form's Enter handler. G1a implements B4
-and B5 only. G1b retains **all** B2 implementation and test requirements above, including
-`frontend/e2e/dialogs.spec.ts`, the two viewport sizes, and one `make web-e2e` run.
-
-### G2: refused orders and same-day Undo (B1, I4, I5)
-
-Split for size: G2a owns the refusal mapping/callers and code-parity coverage (B1/I4).
-G2b retains the complete internal-API and menu Undo feature (B1), its backend/request
-coverage, generated API docs and the dedicated future-suspension regression (I5).
-G2a also reuses the End on a date dialog for Deactivate to keep its refused order in a
-dialog, overlapping B18; the today request stays unchanged. G14 retains B18 verification.
-
-- First, a component test reproducing B1: Suspend completed, then Resume answered with 201
-  `rejected` / `openModifyItem` across a card reload. Fix the cause it shows (footer layout,
-  remount, or both).
-- `api/orderErrors.ts` per decision B1. List the codes from the backend
-  (`app/ordering/process.py`, `numbers.py`, `prepaid.py`, `cancel.py`): every
-  `(code, …)` problem tuple. The test asserts that every backend code has an entry: a
-  backend test greps the codes and compares them with a JSON list the frontend exports to
-  `frontend/src/api/orderErrors.codes.json`.
-- Migrate every TMF622 caller to the D7 `Footer` refused state.
-- Internal: `undoableStatusChange` in `open_products` (`app/internal/accounts.py`), with
-  a backend test for today's suspension (present), yesterday's (absent) and a cancelled
-  one (absent). Run `make docs`. Decision entry in docs/decisions/internal-api.md.
-- Menu: Undo suspension / Undo resumption per decision.
-- Tests: refused state per caller (one parametrized test), the Undo request, the future
-  suspension's pending Undo (I5).
-
-### G3: writes survive refreshes; counts (B6, B10)
-
-- Per decisions B6 and B10. The `WriteLock` context lives in `api/`; `usePolled` and the
-  card's reload respect it.
-- Tests: release hold with a refetch injected between the click and Yes (the PATCH is sent
-  once); polling paused during a write; "Not sent" when the confirm resolves without a
-  request; the count resources re-request after a create.
-
 ### G4: subscriber numbers end to end (B3/P1, P11, I2, P13)
 
-Split by ID: G4a owns I2 (the requirement refusal and same-specification offering
-filter). G4b retains B3/P1, P11 and P13, including all spec-editor documents, number
+G4a (I2, the requirement refusal and same-specification offering filter) is done.
+G4b below owns B3/P1, P11 and P13, including all spec-editor documents, number
 wording and the numbered prepaid transfer scenario written now and run in R16.
 
 - Spec editor (`Specifications.tsx`, `api/bss.ts` `SpecificationFields`): the checkbox
   and the characteristics editor per decisions B3 and P11. Create and patch bodies are
   pinned. A 409 on the requirement shows in place.
-- Backend: `numberRequirementDiffers` in `_modify_problems` for an offering change.
-  Tests: target spec requires a number while the product does not, and the reverse;
-  the same requirement is accepted. Decision entry in docs/decisions/tmf-api.md.
-- Change offering: filter by specification; the empty-state text "No other offering uses
-  this product's specification."
 - Copy: ProductNumber for a product without a requirement: "This product's offering does
   not use subscriber numbers. Offerings whose specification requires a number ask for one
   when the product is added." New subscriber: "After creating the account, add a product.
