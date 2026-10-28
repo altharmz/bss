@@ -311,8 +311,7 @@ tokens or passwords (a test checks the log for each).
   is the volume `mcp-data` (`/data/mcp.db`).
 - **`MCP_USERS` in `.env.prod` is required**: `deploy.sh` refuses to start without it
   (checked before any network step, never printed), and so does compose.
-- **Routing** (vps-infra's Caddy, requested in
-  [vps-infra-change-request.md](vps-infra-change-request.md#2026-10-11-route-the-mcp-connector)):
+- **Routing** (vps-infra's Caddy):
   ten exact, case-sensitive paths of the bss site (`vpn2811.duckdns.org:8445` and, since
   2026-10-12, `bss2811.duckdns.org` - 443 is the host's nginx SNI router, which passes that
   name as raw TLS to Caddy's :8445; Caddy holds its certificate) bypass basic auth

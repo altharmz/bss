@@ -227,7 +227,7 @@ History - the open check before the pool:
   alone ask for more than 37 - the concrete argument for a pool (max N) later. A cheaper
   alternative to a pool: **cap concurrent DB connections from the API** - a semaphore
   around connect, or a smaller threadpool limit (e.g. 10) - which bounds the worst case
-  without a pool's lifecycle issues (`--reload`, per-test databases). Decision deferred.
+  without a pool's lifecycle issues (`--reload`, per-test databases). Superseded: the pool above was built.
 
 ## Shared infrastructure (vps-infra)
 
