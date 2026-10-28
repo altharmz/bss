@@ -107,7 +107,6 @@ A read-only slice replays the query strings its component test asserts.
 - `docs/progress/scope.yaml`: one line per marker, `{id: ui.<area>.<name>, area: ui,
   stage: 5, title: "..."}`.
 - The decision entry the slice section names (what was built, tests, deviations).
-- Row N of `docs/next-slices.md`: `done: <commit subject>`.
 
 ## Ledger v2 styles and visual references
 

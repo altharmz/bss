@@ -250,7 +250,7 @@ database can store the mode.
 
 ## Acceptance criteria
 
-Remaining slices, their order, done criteria and estimate: [prepaid-slices.md](prepaid-slices.md).
+All prepaid slices are done; the slice history is in `git log` and [decisions/prepaid.md](decisions/prepaid.md).
 
 - Numbers: a duplicate or malformed `value` is refused; a locked, busy or unknown number
   rejects the order; a number realizes at most one live product; termination and

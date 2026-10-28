@@ -1,6 +1,6 @@
 # Next slices: design (decided 2026-10-24)
 
-Every design decision for [next-slices.md](next-slices.md), made in advance. The human
+Every design decision for the next-slices tracker (all slices done; the tracker was removed, see `git log`), made in advance. The human
 delegated the decisions on 2026-10-24 ("make all required decisions yourself based on
 TMF best practices"). They follow TMF where TMF defines something and the existing
 decisions where it does not. **An implementing session builds what this file says and

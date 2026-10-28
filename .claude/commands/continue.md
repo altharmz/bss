@@ -15,8 +15,8 @@ Build the picture before touching code, in this order:
    still-blocked ones in one line each.
 5. **Ready**: take the top item not owned by another agent and not `needs-human`. Add your
    agent label, move it to Doing, create the branch, start.
-6. Nothing in Ready: report the Inbox items that need triage and the next item of
-   [next-slices.md](../../docs/next-slices.md), propose what to do, and do not pick work on your own.
+6. Nothing in Ready: report the Inbox items that need triage and the next slice in
+   epic #43's task list, propose what to do, and do not pick work on your own.
 
 Open with a short summary (Doing / Waiting / Ready / Inbox counts, and what you are
 taking), then work.
