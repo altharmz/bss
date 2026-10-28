@@ -68,6 +68,9 @@ slips against these rules; it is a pattern matcher, not a security boundary
   Markdown-only commit) and is that run. Commit and push when you judge the change
   ready - no approval needed. **Before opening a PR that touches billing, migrations or
   the API, run `make test` (the full suite, ~7 min) locally**; CI runs it nightly.
+- **Branches:** commit straight to `master` unless the item has the `needs-human` label;
+  for such an item work on a branch and open a PR (merging it needs the human's approval,
+  see [board.md](docs/board.md)).
 - **Commit granularity:** one commit per finished slice (code, tests, migration,
   generated docs together). Fold status, hand-off and process/CLAUDE.md edits into
   the next slice commit or one batched commit; amend or squash unpushed commits
@@ -110,7 +113,7 @@ stay in the slice trackers in `docs/` and an issue only links to them. Rules in 
 
 - Read [docs/board.md](docs/board.md) before any board operation (statuses, ids, `gh`
   commands, merge/close rules).
-- Statuses: Inbox, Ready, Doing, Waiting, Done. Board order in Ready is priority.
+- Statuses: Inbox, Ready, Doing, Waiting, Done. Take from Ready by priority label (P0-P3), then board order among equals.
 - WIP limit: 1 item per agent. Claim an item with your label (`agent:claude` /
   `agent:codex`) and move it to Doing in one step; never touch the other agent's items.
 - Never start work from Inbox without the human's OK; never move a `needs-human` item

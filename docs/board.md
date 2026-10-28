@@ -21,14 +21,15 @@ slice tracker (design and decisions only).
 
 Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
 (anything near the VPN rules), `needs-human`, and the owner labels `agent:claude` and
-`agent:codex`.
+`agent:codex`. Priority labels: `P0` urgent, `P1` high, `P2` normal, `P3` low (one per issue).
 
 ### Statuses
 
 - **Inbox**: new, not triaged; scope, priority or value still unclear. Never start work
   from Inbox without the human's OK.
 - **Ready**: triaged, with a clear goal, acceptance criteria as a task-list checklist,
-  labels and no open blockers. Board order is priority, top first.
+  labels and no open blockers. Take the next item by priority label: P0 first, then P1,
+  P2, P3. Among several with the same label, take the one highest on the board.
 - **Doing**: actively worked on. WIP limit: 1 item per agent. It has an owner label
   (`agent:claude`, `agent:codex` or `needs-human`) and, for code work, a branch
   `issue-<n>-<slug>` (cloud sessions: `cloud/issue-<n>-<slug>`, the only pushable form).
@@ -68,6 +69,9 @@ agent label; claim it by adding yours and moving it to Doing in one step. Never 
 item owned by the other agent.
 
 ### Merging and closing
+
+Committing straight to `master` is fine, except for an item labelled `needs-human`: that
+work goes on a branch and a PR.
 
 An agent may merge a PR (`gh pr merge`) and close an issue (`gh issue close`) once all
 checks pass and the work is verified against the acceptance criteria. If the PR, or the
