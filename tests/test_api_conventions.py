@@ -45,6 +45,7 @@ def stored_amounts(db_conn) -> list[Decimal]:
 # --- Money ---
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize("literal", ["1234567890.12", "0.10", "19.99"])
 def test_money_goes_out_as_a_json_number_and_parses_back_exactly(api, literal):
     created = api.post_raw(PRICE, price_json(literal))
@@ -61,6 +62,7 @@ def test_incoming_amount_is_stored_exactly(api, db_conn):
     assert stored_amounts(db_conn) == [Decimal("19.99")]
 
 
+@pytest.mark.smoke
 def test_incoming_amount_never_passes_through_float(api, db_conn):
     # As a float this literal is exactly 19.99 and would be accepted. Parsed as Decimal it
     # has 21 decimals and must be rejected - so a 422 proves no float was involved.
@@ -96,6 +98,7 @@ def test_fastapi_own_body_parsing_goes_through_float():
     assert seen != [Decimal(literal)]
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize("literal", ["19.999", "0.001", "1e-3"])
 def test_more_than_two_decimals_is_rejected_not_rounded(api, db_conn, literal):
     response = api.post_raw(PRICE, price_json(literal))
@@ -233,6 +236,7 @@ def test_fields_selects_top_level_attributes(api):
 # --- POST / PATCH ---
 
 
+@pytest.mark.smoke
 def test_post_returns_201_with_location_of_the_new_resource(api):
     created = api.post(SPEC, spec_body(description="FTTH"))
     assert created.status_code == 201
@@ -254,6 +258,7 @@ def test_meta_attributes_are_accepted_unknown_business_attributes_are_not(api):
     assert len(api.get(SPEC).json()) == 1
 
 
+@pytest.mark.smoke
 def test_missing_mandatory_field_is_422_and_malformed_json_is_400(api):
     missing = api.post(SPEC, {"@type": "ProductSpecification", "name": "Fiber"})
     assert missing.status_code == 422
@@ -277,6 +282,7 @@ def test_server_managed_attributes_are_rejected_on_post(api):
     assert api.post(SPEC, spec_body(lastUpdate="2020-01-01T00:00:00Z")).status_code == 201
 
 
+@pytest.mark.smoke
 def test_patch_is_a_merge_patch(api):
     href = api.post(SPEC, spec_body(description="FTTH")).json()["href"]
     patched = api.patch(href, {"name": "Fiber 2", "description": None})
@@ -287,6 +293,7 @@ def test_patch_is_a_merge_patch(api):
     assert api.get(href).json() == body
 
 
+@pytest.mark.smoke
 def test_patch_accepts_the_four_formats_of_the_specs(api):
     """Formats in full: tests/test_api_patch_formats.py."""
     href = api.post(SPEC, spec_body()).json()["href"]
@@ -301,6 +308,7 @@ def test_patch_accepts_the_four_formats_of_the_specs(api):
     )
 
 
+@pytest.mark.smoke
 def test_patch_rejects_read_only_attributes(api):
     href = api.post(SPEC, spec_body()).json()["href"]
     for body in ({"id": "1"}, {"href": "/x"}, {"lastUpdate": "2020-01-01T00:00:00Z"}):
@@ -317,6 +325,7 @@ def test_patch_rejects_read_only_attributes(api):
 # --- errors ---
 
 
+@pytest.mark.smoke
 def test_unknown_resources_and_routes_answer_with_a_tmf_error(api):
     missing = api.get(f"{SPEC}/00000000-0000-0000-0000-000000000000")
     assert missing.status_code == 404
@@ -351,6 +360,7 @@ def test_unsupported_methods_are_405_with_a_tmf_error(api, method):
     assert api.get(href).status_code == 200
 
 
+@pytest.mark.smoke
 def test_unhandled_exception_is_a_tmf_500_without_details(api, monkeypatch):
     def boom(*args, **kwargs):
         raise RuntimeError("secret internal detail")

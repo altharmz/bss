@@ -3,6 +3,7 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+import pytest
 from psycopg import errors
 from psycopg.types.range import Range
 
@@ -18,6 +19,8 @@ from tests.factories import (
     rejected,
     world,
 )
+
+pytestmark = pytest.mark.smoke
 
 
 def _price(conn, offering_id, start, end, currency="USD"):

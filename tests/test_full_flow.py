@@ -6,10 +6,14 @@ contract-checked."""
 from datetime import timedelta
 from decimal import Decimal
 
+import pytest
+
 from tests import apidata, timeline
 from tests.apiclient import decimals
 from tests.apidata import ACCOUNT, CATALOG, ORDER, PAYMENT, PRODUCT, RATE
 from tests.timeline import iso, midnight, z
+
+pytestmark = pytest.mark.smoke
 
 
 def test_full_flow(api):

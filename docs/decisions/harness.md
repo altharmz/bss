@@ -76,6 +76,38 @@ harness files, the quote-aware `guard.py` (485 lines, 360 cases), `decisions-che
 `retired.md`, the Edit-only / no-heredoc / no-output-filtering rules, and the per-change
 checklist (negative proofs, three test runs, a second local run before deploying).
 
+## CI (2026-10-28)
+
+`.github/workflows/ci.yml`, GitHub Actions on `ubuntu-latest`; private repository on the
+Free plan (2000 Linux minutes a month, 2 vCPUs per runner), so what runs where is chosen
+for cost. The full suite is about 30 minutes there (3550 s of summed test time, measured
+with `--durations`); it runs nightly, not on every push.
+
+- **Pull request to master and push to master:** `make lint`, `make docs-check` and
+  `make test-smoke` (`pytest -n auto -m smoke`, about 110 s of summed test time, 307
+  tests). A pull request run is cancelled when a newer push supersedes it; a run on master
+  never is, so every commit there keeps its result.
+- **Nightly (01:30 UTC, 04:30 Moscow) and `workflow_dispatch`:** `make lint`,
+  `make docs-check` and the whole `make test`. Scheduled runs use the default branch.
+  Their concurrency group is separate, so they neither wait for nor cancel a push run.
+- **The smoke marker** (`pyproject.toml`; `tests/test_smoke_marker.py` keeps it
+  registered and every area marked): billing core (rating, charging, funding,
+  settlement, charge periods, constraints, price chain), the TMF contract (contract
+  validator, enum lock, operation ids, spec provenance, health, order states, catalog,
+  ten conventions tests on money, errors and PATCH, the round trip), migrations on an
+  empty database (upgrade to head, clones at head), and the MCP connector (SDK client,
+  start, health, 401 without a token, read scope, tool drift). A new test is not smoke by
+  default: mark one only where it guards what the gate exists for, and keep the set near
+  two minutes of summed time.
+- **No secrets:** compose needs `POSTGRES_PASSWORD`, which is `.env` locally; the
+  workflow generates a random one per run (masked) for that run's own throwaway postgres.
+  The workflow reads no repository secret, has `contents: read` only, and touches neither
+  the VPS nor deploying. Actions are pinned to commit SHAs.
+- **Image:** the dev image is built by `docker/build-push-action` with the GitHub Actions
+  layer cache, then compose uses it as `bss-app:dev` like locally.
+- **Not in CI:** the web checks (`web-lint`, `web-test`, `web-e2e`), which need `npm ci`
+  and a browser. Branch protection is the human's to set.
+
 ## Codex compatibility
 
 `AGENTS.md` points Codex at CLAUDE.md. `.codex/hooks.json` runs `.codex/guard.sh` (sets

@@ -9,6 +9,8 @@ from psycopg.types.range import Range
 from app.repository import billing, catalog, payments
 from tests.factories import NOW, T0, account, offering
 
+pytestmark = pytest.mark.smoke
+
 
 @pytest.mark.parametrize("amount", ["1234567890.12", "0.01", "9999999999.99"])
 def test_decimal_roundtrip(db_conn, amount):

@@ -13,6 +13,8 @@ from tests import apidata
 from tests.apidata import CATALOG, ORDER
 from tests.timeline import START, iso, midnight
 
+pytestmark = pytest.mark.smoke
+
 PRICES = f"{CATALOG}/productOfferingPrice"
 
 

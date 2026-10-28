@@ -58,6 +58,7 @@ def scope_exclusions() -> set[tuple[str, str]]:
 # --- the drift check ---
 
 
+@pytest.mark.smoke
 def test_the_tools_are_the_api_operations_minus_the_scope_exclusions():
     excluded = scope_exclusions()
     assert EXCLUDED == excluded  # the runtime image's copy (it has no docs/)

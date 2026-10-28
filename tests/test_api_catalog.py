@@ -3,9 +3,13 @@
 from datetime import timedelta
 from decimal import Decimal
 
+import pytest
+
 from tests import timeline
 from tests.apiclient import decimals
 from tests.timeline import NOW, iso, z
+
+pytestmark = pytest.mark.smoke
 
 BASE = "/tmf-api/productCatalogManagement/v5"
 SPEC = f"{BASE}/productSpecification"

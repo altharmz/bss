@@ -39,6 +39,8 @@ from app.billing.settlement import (
     validate,
 )
 
+pytestmark = pytest.mark.smoke
+
 D = Decimal
 ZERO = D("0.00")
 _ids = count(1)

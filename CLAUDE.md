@@ -22,6 +22,7 @@ make migrate   # alembic upgrade head locally make worker-once   # one billing-w
 make seed      # local demo data (refuses prod) make psql        # local db (needs a TTY)
 make smoke     # smoke-test the local instance make mcp-smoke    # local MCP connector checks
 make check     # on demand only: lint, test (ci profile), docs-check, web-lint/test/e2e
+make test-smoke   # pytest -m smoke: the CI gate subset; CI (nightly = full make test): docs/decisions/harness.md#ci-2026-10-28
 make docs      # regenerate docs/api + docs/db  make progress    # docs/PROGRESS.md (slow, on request)
 make hooks     # install pre-commit (lint + test) and pre-push (secrets) hooks
 make mcp-token-create NAME= SCOPE= / mcp-tokens / mcp-token-revoke ID=   # local MCP tokens

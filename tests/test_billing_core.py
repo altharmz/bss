@@ -19,6 +19,8 @@ from tests.billing_sim import (
     rng,
 )
 
+pytestmark = pytest.mark.smoke
+
 D = Decimal
 P300 = price("300.00")
 
