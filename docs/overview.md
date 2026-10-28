@@ -151,7 +151,6 @@ a session or a service credential even when reached directly on the shared netwo
 - Health/billing status and the service identity root remain public. Interactive
   `/docs`, `/redoc` and `/openapi.json` HTTP endpoints are disabled; tooling uses
   in-process OpenAPI.
-- Network isolation remains a separate infrastructure follow-up.
 
 See [user management](decisions/users.md) for the implemented security contract.
 

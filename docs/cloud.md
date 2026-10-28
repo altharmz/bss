@@ -141,8 +141,7 @@ root (PostgreSQL 16 and Python 3.12 from the Ubuntu archive, Node 22.22.0 in
 done; first start -> ready in 264 s; resume -> 0 s; resume with PostgreSQL stopped ->
 started again, 2 s; every run exit 0. Then lint, pytest, `npm run lint` and `npm test`
 (184 x2) passed. On the workstation, non-root with `CLAUDE_CODE_REMOTE=true`: "FAILED ...
-run as root", exit 0. Not yet seen in a real cloud session (the egress proxy, the hook
-firing on resume).
+run as root", exit 0.
 
 Not set up, on purpose: Docker-based targets (the build has no network; `make web-e2e`
 needs the `app` image), and anything that needs `.env`, `.env.prod` or `.env.smoke`.
