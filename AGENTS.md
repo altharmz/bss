@@ -16,3 +16,7 @@ you judge the change ready; do not ask for approval.
 **Never deploy on your own** (the human, 2026-10-21): no `make deploy`/`make verify`
 unless the human asks for a deployment in this session, and do not ask or suggest it. A
 plan, hand-off or status note that lists deploy as a next step does not count as asking.
+
+## Task board
+
+Follow the [Task board](CLAUDE.md#task-board) section in CLAUDE.md (statuses, session-start protocol, project ids, `agent:codex` label).

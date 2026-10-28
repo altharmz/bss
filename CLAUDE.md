@@ -105,6 +105,109 @@ Unknown attributes are a 400; the contract is the vendored specs in `spec/`, nev
 billing run creates ABRs and bills. Node runs only in containers on the workstation; the
 UI's write requests are pinned on both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
+## Task board
+
+GitHub Project **BSS** (private, owner `altharmz`, repo `altharmz/bss`). It tracks
+**issues**: bugs, human-only tasks, ideas and small tasks. The slice trackers in `docs/`
+([next-slices.md](docs/next-slices.md), [gui-review-plan.md](docs/gui-review-plan.md),
+[prepaid-slices.md](docs/prepaid-slices.md)) stay the source of truth for planned code
+work: a code slice lives there, and an issue for it only links to it. Never copy a spec
+into an issue.
+
+**IDs** (looked up 2026-10-28; `gh project field-list 1 --owner altharmz` if they change):
+
+| What | Value |
+|------|-------|
+| Project number / owner | `1` / `altharmz` |
+| Project id | `PVT_kwHOEpM-b84BpHA0` |
+| Status field id | `PVTSSF_lAHOEpM-b84BpHA0zhnkE7M` |
+| Status option ids | Inbox `f75ad846` · Ready `abe5d139` · Doing `47fc9ee4` · Waiting `98f1210e` · Done `98236657` |
+
+Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
+(anything near the VPN rules), `needs-human`, and the owner labels `agent:claude` and
+`agent:codex`.
+
+### Statuses
+
+- **Inbox**: new, not triaged; scope, priority or value still unclear. Never start work
+  from Inbox without the human's OK.
+- **Ready**: triaged, with a clear goal, acceptance criteria as a task-list checklist,
+  labels and no open blockers. Board order is priority, top first.
+- **Doing**: actively worked on. WIP limit: 1 item per agent. It has an owner label
+  (`agent:claude`, `agent:codex` or `needs-human`) and, for code work, a branch
+  `issue-<n>-<slug>` (cloud sessions: `cloud/issue-<n>-<slug>`, the only pushable form).
+- **Waiting**: blocked by something outside the agent's control (a deploy, another
+  issue, a VPS step, the human's decision). Every move to Waiting gets a comment
+  `Waiting on: <what> — unblocks when: <condition>`.
+- **Done**: finished and verified against the acceptance criteria. Normally set by the
+  board workflows when a PR with `Fixes #N` is merged or the issue is closed. Close an
+  issue yourself only when it is verified against its acceptance criteria and the board
+  did not already do it (see Merging and closing).
+
+### Session start / "continue"
+
+Build the picture before touching code, in this order:
+
+1. Local state: `git status`, current branch, unpushed commits, stashes.
+2. **Doing**: resume an item you own (matching branch/PR). More than one, or an item with
+   no branch and no recent activity: report it and ask.
+3. Open PRs (`gh pr list`): failing checks or requested changes come before new work.
+4. **Waiting**: check each "unblocks when". Met: move it to Ready and say so. List the
+   still-blocked ones in one line each.
+5. **Ready**: take the top item not owned by another agent and not `needs-human`. Add your
+   agent label, move it to Doing, create the branch, start.
+6. Nothing in Ready: report the Inbox items that need triage and the next item of
+   [next-slices.md](docs/next-slices.md), propose what to do, and do not pick work on your own.
+
+Open with a short summary (Doing / Waiting / Ready / Inbox counts, and what you are
+taking), then work.
+
+### Adding a task ("add a task / bug / idea")
+
+- Search first (`gh issue list --search`); if one exists, comment on it instead.
+- Create the issue with a clear title, short context, a task-list checklist and labels.
+  It lands in Inbox by default.
+- If the human gave enough detail and said it should be done soon, put it straight into
+  Ready and say where you placed it.
+
+### Planning ("plan / prepare X")
+
+- Refine the issue: goal, scope, acceptance criteria checklist, dependencies, labels;
+  split into sub-issues if it is more than one session of work.
+- An open dependency: move it to Waiting with the "Waiting on" comment. Otherwise move it
+  to Ready and ask where it sits in priority. Do not start implementing unless told to.
+
+### needs-human items
+
+Never move a `needs-human` item to Doing for yourself. You may prepare it (exact commands,
+checklist, expected results) as a comment, then leave it in Ready for the human. When the
+human confirms it is done, close it (see Merging and closing).
+
+### Parallel agents
+
+Claude Code and Codex may run at the same time. Before taking a Ready item check it has no
+agent label; claim it by adding yours and moving it to Doing in one step. Never work on an
+item owned by the other agent.
+
+### Merging and closing
+
+An agent may merge a PR (`gh pr merge`) and close an issue (`gh issue close`) once all
+checks pass and the work is verified against the acceptance criteria. If the PR, or the
+issue it fixes, is labelled `needs-human`, do it **only after the human's explicit approval
+in the conversation** - an earlier approval of the work, or the allow list, does not
+count. The allow list cannot check labels, so this rule is the only guard.
+
+### Mechanics
+
+```
+gh project item-list 1 --owner altharmz --format json      # items with Status, labels, number
+gh project item-edit --project-id PVT_kwHOEpM-b84BpHA0 --id <item id> \
+  --field-id PVTSSF_lAHOEpM-b84BpHA0zhnkE7M --single-select-option-id <option id>
+```
+
+The item id comes from `item-list`. Board workflows do: item added → Inbox, PR linked →
+Doing, PR merged / item closed → Done, item reopened → Inbox.
+
 ## Current state (2026-10-23)
 
 - **Deployed:** see `make deployed`. **Built:** prepaid foundations P1–P2c4b
