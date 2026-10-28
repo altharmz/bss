@@ -2,15 +2,15 @@
 
 Simplified on 2026-10-20 (the human: keep only the really important rules; one local
 test run per development cycle; commit and push need no approval). Since 2026-10-21
-deploying is the human's call: the agent deploys only when asked and never asks or
-suggests it; what is deployed is `make deployed`, a file only deploy.sh writes
-([infra.md](infra.md#local-deploy-record-2026-10-21)).
+deployment is the human's and outside development (2026-10-28): the agent's work ends at
+the merge to master, and it neither tracks nor reasons about what is deployed
+(`deploy.sh`, `make deployed` and `.deployed` are the human's tools,
+[infra.md](infra.md#local-deploy-record-2026-10-21)).
 
 ## Development cycle and gates
 
 - **One local test run per cycle**: develop -> commit (the pre-commit hook runs lint and
-  tests) -> push. Deploying is separate and only on the human's request (manually or
-  by asking the agent, `/ship`). `make verify` is `make deploy`; it does not test again.
+  tests) -> push. Deploying is the human's, outside the cycle.
   `make check` (ci Hypothesis profile, docs-check, UI and browser tests) runs only when
   asked for a specific change.
 - **Pre-commit hook** (`scripts/pre-commit.sh`, installed by `make hooks` as a symlink):
@@ -121,7 +121,7 @@ naming `get_refund`.
 
 `make progress` writes `docs/PROGRESS.md` (committed, plain Markdown) and
 `docs/progress/status.json` (the same data, machine-readable): per area (db, api, ui,
-worker) the share of items implemented, tested and deployed, then the item table, the
+worker) the share of items implemented, and tested, then the item table, the
 unscoped and the excluded items.
 
 - **Scope:** `docs/progress/scope.yaml`, hand-maintained and editable by agents within
@@ -171,8 +171,6 @@ unscoped and the excluded items.
   passed-filter removed it counted `GET /healthz`, `POST /payment` and `payment` (and
   the rest they touch). Not proven: the wait for the sessions to end - five runs
   without it lost nothing. 18/18 and 57/57 today.
-- **Deployed:** "unknown" until `deploy.sh` writes `docs/progress/deployed.txt`
-  (approved, not built).
 - **Unscoped:** a table, operation or marker in the code that is neither an item nor
   excluded makes `make progress` exit 1 (after writing the files).
 - **How it runs:** `tests/progress_collect.py` in the app container (scope.yaml arrives

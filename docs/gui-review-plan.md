@@ -119,7 +119,7 @@ frontend tests in each timezone.
 | I10 | The subscriber card shows the account's draft and in-progress orders in the Overview, above Products, with an Open link. Drafts show the item price (the offering's price at the requested start). |
 | I11 | Orders shows newest first without an API change. It reads `X-Total-Count`, then requests the last page and walks backwards. After a write, only the changed row is refetched; a skeleton shows only on the first load. |
 | billCycleDay | Not in this plan. PATCH stays a 409, and the open question in billing-core.md stays as it is. |
-| Demo data in prod | The deployed instance is a demo stand. It keeps the data the operators create there. The D scripts are the only way to change it, and the human runs them. The "Demo data in prod" item in status.md closes with this decision. |
+| Demo data in prod | The deployed instance is a demo stand. It keeps the data the operators create there. The D scripts are the only way to change it, and the human runs them. |
 
 ---
 
@@ -415,7 +415,7 @@ dry-run output, through `make tunnel` (the app on localhost:18081).
 | ID | Script / decision |
 |---|---|
 | D1 | `rename_accounts.py`: billing accounts whose name does not start with their party's name become `<given> <family> main` (individual) or `<organization> corporate`. PATCH `name` only. |
-| D2 | **No script.** Rated history is immutable and bills were issued. History before 2026-10-21 stays, and docs/status.md records 2026-10-21 as the cut-over to USD magnitudes. The next stand reset (a vps-infra operation by the human) rebuilds history from the USD seed. |
+| D2 | **No script.** Rated history is immutable and bills were issued. History before 2026-10-21 stays, and 2026-10-21 is the cut-over to USD magnitudes. The next stand reset (a vps-infra operation by the human) rebuilds history from the USD seed. |
 | D3 | `retire_test_data.py`: offerings and specs whose name or code matches `^MCP `, `TMF-E2E-`, `Prepaid Verifier`, `MCP Coverage`, `MCP-DEMO-`, `MCP Isolated` become Retired and isSellable=false. Test billing accounts with no open product become Closed. Nothing is deleted. The data the GUI test created stays, as the review asks. |
 | D4 | `seed_numbers.py`: creates numbers `12025550100`-`12025550119` (skipping existing ones). Creates the spec "Mobile Voice & Data (numbered)", which requires a number, and offerings "Mobile S" `MOB-NS` and "Mobile L" `MOB-NL` with the current USD prices of MOB-S/MOB-L. Existing mobile products cannot get numbers (decision B3). |
 | D5 | `catalog_tree.py`: reuses "Mobile Plans" and "Consumer Catalog 2026" when present. Creates the categories Home Internet and TV and the catalog "Business Catalog 2026", and assigns every active offering by specification name. |
@@ -429,15 +429,15 @@ harness or the VPS, which need a reviewed diff or the human at the terminal. The
 is the priority:
 
 1. **Release checks** after the human deploys R16 (below).
-2. **Restore drill** from the first cron-made dump (status.md "Open checks").
+2. **Restore drill** from the first cron-made dump (issue #9).
 3. **DB pool confirmation on the VPS** (at most 10 sessions; it answers after the nightly
    reboot).
-4. **APP_PORT / `make down` profiles** (status.md spec of 2026-10-03), then the vps-lab
+4. **APP_PORT / `make down` profiles** (issues #2 and #3), then the vps-lab
    guard backport and the two vps-lab-template fixes.
 5. **pytest container `(unhealthy)`**: done, issue #4 (the `oneoff` service).
 6. **Network isolation** of app/MCP (vps-infra).
 7. **`"ask"` rules** verification and **cloud startup validation** (docs/cloud.md).
-8. **Progress drift enforcement and per-item deployed status.**
+8. **Progress drift enforcement** (issue #7).
 
 The subscriber-card visual review in the CLAUDE.md backlog is folded into the release
 checks.

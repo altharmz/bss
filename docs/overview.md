@@ -21,13 +21,10 @@ code by `make progress` into [PROGRESS.md](PROGRESS.md) against
 | 1 | Database schema and repository functions | built: 41 scoped database items, migrations through `0030` ([db/](db/README.md)) |
 | 2 | TMF Open API backend (8 APIs) | built: 152 scoped API items, including internal/service routes, in PROGRESS.md |
 | 3 | Billing core (pure) and its database adapter | built ([domain.md](domain.md#billing)) |
-| 4 | Billing worker: daily runs, catch-up/retry, on-demand bills and documents | built: worker 15/15 proven ([billing-worker.md](billing-worker.md)); Billing runs UI built and deployed |
+| 4 | Billing worker: daily runs, catch-up/retry, on-demand bills and documents | built: worker 15/15 proven ([billing-worker.md](billing-worker.md)); Billing runs UI built |
 | 5 | Admin UI (React) and its internal API | built: 27/27 UI items, including Billing runs and bill settlement ([ui.md](ui.md)) |
 
 Implementation and test coverage are measured for all four areas in PROGRESS.md.
-The latest verified release is `7ad101e` (2026-10-20); CLAUDE.md records its checks.
-Per-item deployed coverage in the generated tracker remains unknown until its separate
-commit-to-coverage integration is implemented.
 
 The input/read-completeness slice adds strict TMF write queries and type checks,
 historical order price quotes, product prices/navigation, and daily bill-cycle reads

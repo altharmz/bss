@@ -3,14 +3,14 @@
 FastAPI + PostgreSQL BSS on the TMF Open APIs, with a React admin UI. Developed locally
 in WSL2, deployed to a remote VPS. Design detail and decisions live in
 [`docs/decisions/`](docs/decisions/README.md): read the file for an area before changing
-it, and record new decisions there. Status history: [docs/status.md](docs/status.md).
+it, and record new decisions there.
 
 ## Environments
 
 | Where | What runs there |
 |-------|-----------------|
 | WSL2 (Ubuntu) | full dev loop: build, run, tests, lint |
-| VPS `vps-test` (Debian 12, 1 vCPU, 1931 MB RAM) | the deployed instance - pre-built image, no build |
+| VPS `vps-test` (Debian 12, 1 vCPU, 1931 MB RAM) | the human's deployed instance; not part of development |
 | Cloud session (claude.ai/code) | branches only, no Docker, no VPS: [docs/cloud.md](docs/cloud.md) |
 
 ## Commands
@@ -21,18 +21,16 @@ make test      # pytest in the container      make lint / fmt   # ruff check / a
 make migrate   # alembic upgrade head locally make worker-once   # one billing-worker wake-up
 make seed      # local demo data (refuses prod) make psql        # local db (needs a TTY)
 make smoke     # smoke-test the local instance make mcp-smoke    # local MCP connector checks
-make deploy    # build locally, ship to the VPS, health + remote/web/MCP smoke
-make verify    # = make deploy (the commit was already tested by the pre-commit hook)
-make deployed  # last deploy (.deployed, written only by deploy.sh) + commits not deployed yet
 make check     # on demand only: lint, test (ci profile), docs-check, web-lint/test/e2e
 make docs      # regenerate docs/api + docs/db  make progress    # docs/PROGRESS.md (slow, on request)
-make remote CMD="..." [SERVICE=mcp]   # one-off command on the VPS image
-make ssh / tunnel                     # VPS shell / app on localhost:18081
 make hooks     # install pre-commit (lint + test) and pre-push (secrets) hooks
 make mcp-token-create NAME= SCOPE= / mcp-tokens / mcp-token-revoke ID=   # local MCP tokens
 make web-install   # npm ci (the only step that downloads)
 make web-dev / web-build / web-lint / web-test / web-types / web-fmt / web-e2e / web-shots
 ```
+
+The VPS and deploying (`make deploy`, `remote`, `ssh`, `tunnel`, `deployed`) are the human's
+tools, not part of development: see Working style.
 
 ## Hard constraints
 
@@ -51,8 +49,7 @@ make web-dev / web-build / web-lint / web-test / web-types / web-fmt / web-e2e /
   `.env.example`); no `docker compose config` without `--quiet`, no `run/exec ... env`.
   Never export `.env.prod` into a shell that also runs the local stack. A production MCP
   token is created by the human, not a session; never add an unauthenticated MCP mode.
-- Migrations already on `master` are immutable. A shipped migration makes a rollback
-  manual (`alembic downgrade` on the VPS) - the image tag alone does not restore the schema.
+- Migrations already on `master` are immutable.
 - The VPS reboots nightly at 03:00: everything must come back on its own.
 - Git: never force-push, delete remote branches or rewrite remote history; never skip
   the hooks (`--no-verify`). Cloud sessions push only `git push -u origin cloud/<topic>`.
@@ -72,11 +69,10 @@ slips against these rules; it is a pattern matcher, not a security boundary
   generated docs together). Fold status, hand-off and process/CLAUDE.md edits into
   the next slice commit or one batched commit; amend or squash unpushed commits
   instead of stacking fix-ups (pushed history stays untouched).
-- **Deploying is the human's decision.** Never run `make deploy`/`make verify`/`/ship` on
-  your own, and never ask or suggest whether to deploy; the human deploys manually or asks
-  you to, then use `/ship` and do not re-run tests first. What is deployed: `make
-  deployed`; never write `.deployed` or record a deployment in the docs by hand.
-  Nothing beyond the hook is required: targeted tests while developing, `make check`,
+- **Deployment is the human's, outside development: your work ends at the merge to
+  master.** Never run `make deploy`/`verify`/`remote`/`ssh`/`tunnel` or `/ship`, never
+  track, ask about or suggest a deploy, and never write `.deployed` or record a deployment
+  in the docs. Nothing beyond the hook is required: targeted tests while developing, `make check`,
   `make web-e2e`, `make progress` or a negative proof are optional - run one when you
   judge it worth its time. This section overrides process steps in older plans and
   hand-offs (separate commit approvals, three backend passes, release proofs, deploy steps).
@@ -87,7 +83,6 @@ slips against these rules; it is a pattern matcher, not a security boundary
   without its change (optional), run only that test - `docker compose run --rm app pytest tests/<file>.py
   -k <name>` before the fix or with the change reverted - never a full suite.
 - Propose a plan before a data-model change or a large design change; otherwise act.
-- Say "it works on the server" only after a deploy (`make deploy` reports health and smoke).
 - When a container misbehaves, read `make logs` before changing code.
 - If the guard blocks something you believe is legitimate, say so instead of working
   around it.
@@ -136,7 +131,7 @@ Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
 - **Doing**: actively worked on. WIP limit: 1 item per agent. It has an owner label
   (`agent:claude`, `agent:codex` or `needs-human`) and, for code work, a branch
   `issue-<n>-<slug>` (cloud sessions: `cloud/issue-<n>-<slug>`, the only pushable form).
-- **Waiting**: blocked by something outside the agent's control (a deploy, another
+- **Waiting**: blocked by something outside the agent's control (another
   issue, a VPS step, the human's decision). Every move to Waiting gets a comment
   `Waiting on: <what> — unblocks when: <condition>`.
 - **Done**: finished and verified against the acceptance criteria. Normally set by the
@@ -208,58 +203,19 @@ gh project item-edit --project-id PVT_kwHOEpM-b84BpHA0 --id <item id> \
 The item id comes from `item-list`. Board workflows do: item added → Inbox, PR linked →
 Doing, PR merged / item closed → Done, item reopened → Inbox.
 
-## Current state (2026-10-23)
+## Current state
 
-- **Deployed:** see `make deployed`. **Built:** prepaid foundations P1–P2c4b
-  (`0034`–`0042`) retain source-pinned funding, command retries, funded intervals and
-  atomic posting. P3a isolates daily prepaid billing. P3b adds effective entitlement
-  and independent manual suspension (`0043`). P3c accepts immediate prepaid add
-  orders with tax-inclusive holds and number claims, and completes their full
-  product/order tree atomically in the worker. P3d adds future-start intents and
-  pre-grant cancellation. P3e produces renewals at paid-through and resumes after a
-  credit (checkpoint 1). P3f adds manual suspend/resume orders and the prepaid close
-  guard. P3g credits unused dates on termination. P3h applies offering changes at a
-  funded renewal (`0044`). P3i exposes internal command list/detail/retry with MCP tools.
-  P4a adds the `balance_action` schema and adjustment/transfer/reversal sources (`0045`).
-  P4b adds the Idempotency-Key response journal on the order POST (`0046`).
-  P4c serves TMF654 bucket/accumulatedBalance reads and the TMF654 hub. P4d adds
-  `topupBalance` and the top-up every direct payment on a prepaid account records. P4e adds
-  `adjustBalance` (credit, debit limited to spendable funds, exact-source cancellation). P4f adds `reserveBalance` operator holds that lapse before
-  any later spend. P4g accepts `transferBalance` (hold + queued command). P4h1 completes fee-free transfers in the worker. P4h2 posts transfer fees as one-time charges (`0047`: a fee ABR has no product). P4i serves `balanceActionHistory` and pins the 12 events and held-funds refunds.
-  P4h-P4i complete transfers with fees and add history, events and refunds. P5a enables
-  prepaid accounts on TMF666 (bucket at creation, no positive creditLimit, mode fixed
-  after history) and adds required/available/shortfall to the first-charge preview. P5b gives the six
-  journaled POST tools (`create_order`, `create_payment`, topup/adjust/reserve/transfer) an explicit
-  `idempotency_key`; `make mcp-smoke` runs one top-up and one purchase. P6a adds the UI account-mode switch and
-  filter and the prepaid card (ledger, available, reserved, paid-through, shortfall). P6b adds the
-  top-up, adjustment and hold forms (one Idempotency-Key per submission, same-key retry). P6c1 adds
-  the transfer by number with a finality confirmation and polls the accepted transfer; P6c2
-  follows `inProgress` prepaid orders through their command and retries technical failures.
-- **Number release evidence:** 1,495 backend tests, 284 frontend tests in each
-  timezone, browser checks, lint and docs passed. All number scope items tested.
-  [Release evidence](docs/subscriber-number-release.md).
-- **Next:** the prepaid tracker is complete (P7: mixed-mode seed, runbook, [release evidence](docs/prepaid-release.md));
-  [tracker](docs/prepaid-slices.md), [scope](docs/prepaid-plan.md), [decision](docs/decisions/prepaid.md).
-  Next is [docs/next-slices.md](docs/next-slices.md): Phase A (slices 1-8, finish prepaid)
-  is done on 2026-10-25 and Phase B (slices 9-24, every MCP operation in the UI, plus the
-  UI/MCP parity check in `tests/test_ui_mcp_parity.py`) on 2026-10-26. Decisions are in
-  [docs/next-slices-design.md](docs/next-slices-design.md); the orchestrator prompt is in
-  [docs/run-slices.md](docs/run-slices.md) and the screen shapes in
-  [docs/patterns.md](docs/patterns.md).
-- **Now: GUI review fixes merged with the rest of the Ledger v2 redesign** (2026-10-27),
-  all decisions made: [docs/gui-review-plan.md](docs/gui-review-plan.md). Its tracker
-  interleaves fix slices G1-G15 (bugs B1-B28, MCP/GUI parity P1-P16, improvements
-  I1-I13, data-quality scripts D1-D5) with redesign slices R7b-R16. To run it, act as the
-  orchestrator its "Orchestrator" section describes: one fresh subagent per row,
-  sequentially, each committing through the hook. Redesign specs:
-  [docs/ui-redesign-design.md](docs/ui-redesign-design.md); handoff
-  `design-ref/design_handoff_bss_admin_v2/` (read-only, never edited).
-- **Backlog / open checks** (Track C of the plan, need the human): restore drill; DB pool
-  confirmed on the VPS; APP_PORT / `make down` profiles, vps-lab guard backport; pytest
-  container `(unhealthy)`; network isolation of app/MCP; `"ask"` rules and cloud startup;
-  progress drift check + per-item deployed status. Changing `billCycleDay` stays out
-  (PATCH is a 409). Demo data in prod: decided, the stand keeps operator data and only
-  the plan's D scripts change it. Detail: [docs/status.md](docs/status.md).
+- **Built:** the TMF APIs with the billing worker, the MCP connector, the prepaid line
+  (P1-P7, [decision](docs/decisions/prepaid.md)), subscriber numbers
+  ([release evidence](docs/subscriber-number-release.md)), every MCP operation in the UI
+  with the UI/MCP parity check, and the Ledger v2 redesign.
+- **Planned code work** lives in the slice trackers: [next-slices.md](docs/next-slices.md),
+  [gui-review-plan.md](docs/gui-review-plan.md) (fix slices G1-G15 interleaved with redesign
+  slices R7b-R16; run it as the orchestrator its "Orchestrator" section describes),
+  [prepaid-slices.md](docs/prepaid-slices.md). Specs: [ui-redesign-design.md](docs/ui-redesign-design.md),
+  [patterns.md](docs/patterns.md); the handoff `design-ref/design_handoff_bss_admin_v2/` is read-only.
+- **Everything else open** (bugs, human-only checks, ideas) is a board issue. Changing
+  `billCycleDay` stays out (PATCH is a 409). History is `git log` and the closed PRs.
 
 ## Where the decisions are
 

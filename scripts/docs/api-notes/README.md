@@ -38,6 +38,5 @@ assert those `@type` values explicitly.
 **Not the contract:** FastAPI's own `/openapi.json` and `/docs`. Responses are plain dicts
 written by `tmfjson`, so the generated OpenAPI has no response schemas. The contract is
 `spec/`; the UI's TypeScript types are generated from it (`frontend/scripts/gen-types.mjs`).
-`/docs`, `/redoc` and `/openapi.json` are served by FastAPI's defaults (`app/main.py`
-does not disable them); whether they stay exposed in production is an open decision
-(docs/status.md, "Next session").
+`/docs`, `/redoc` and `/openapi.json` are disabled (`app/main.py`,
+`test_no_interactive_api_docs`); the in-process OpenAPI stays available to tooling.

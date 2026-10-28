@@ -19,8 +19,6 @@ Status is derived, never written by hand:
                 (expectUi); db: a passing test's database got rows in the table
                 (pg_stat_user_tables); api: a passing test sent a request the app routes
                 to the operation
-  deployed      "unknown" until deploy.sh records the deployed commit
-                (docs/progress/deployed.txt, step 5 of the tracker)
 
 Exits 1 (after writing the outputs) when the scope is invalid, a test is marked with a
 capability that scope.yaml does not list, a test calls expectUi with an id that is not
@@ -125,7 +123,6 @@ def build(backend: dict, ui_markers: list[dict], ui_tested: list[str]) -> tuple[
                 "title": item["title"],
                 "implemented": done,
                 "tested": tested,
-                "deployed": None,  # unknown
             }
         )
 
@@ -145,7 +142,6 @@ def build(backend: dict, ui_markers: list[dict], ui_tested: list[str]) -> tuple[
             "items": len(mine),
             "implemented": sum(i["implemented"] for i in mine),
             "tested": sum(i["tested"] for i in mine),
-            "deployed": None,
         }
     excluded = [
         {"id": e["id"], "area": e["area"], "reason": e["reason"]}
@@ -170,23 +166,22 @@ def render(status: dict) -> str:
         "implemented and tested when a test marked with the capability passes and none fails.",
         "Tested (ui): a passing component test saw the marker on screen (`expectUi`). Tested",
         "(db): a passing test's database got rows in the table. Tested (api): a passing test",
-        "sent a request the app routes to the operation. Deployed: unknown until `deploy.sh`",
-        "records the deployed commit.",
+        "sent a request the app routes to the operation.",
         "",
-        "| Area | Items | Implemented | Tested | Deployed |",
-        "|---|---|---|---|---|",
+        "| Area | Items | Implemented | Tested |",
+        "|---|---|---|---|",
     ]
     for area in AREAS:
         a = status["areas"][area]
         tested = "n/a" if a["tested"] is None else percent(a["tested"], a["items"])
-        out.append(f"| {AREA_TITLES[area]} | {a['items']} | {percent(a['implemented'], a['items'])} | {tested} | unknown |")
+        out.append(f"| {AREA_TITLES[area]} | {a['items']} | {percent(a['implemented'], a['items'])} | {tested} |")
     for area in AREAS:
-        out += ["", f"## {AREA_TITLES[area]}", "", "| Id | Stage | Title | Implemented | Tested | Deployed |", "|---|---|---|---|---|---|"]
+        out += ["", f"## {AREA_TITLES[area]}", "", "| Id | Stage | Title | Implemented | Tested |", "|---|---|---|---|---|"]
         for i in status["items"]:
             if i["area"] == area:
                 done = "yes" if i["implemented"] else "no"
                 tested = "n/a" if i["tested"] is None else ("yes" if i["tested"] else "no")
-                out.append(f"| `{i['id']}` | {i['stage']} | {i['title']} | {done} | {tested} | unknown |")
+                out.append(f"| `{i['id']}` | {i['stage']} | {i['title']} | {done} | {tested} |")
     out += ["", "## Unscoped", ""]
     if status["unscoped"]:
         out.append("In the code but neither planned nor excluded in `scope.yaml` - add them to one of the two:")

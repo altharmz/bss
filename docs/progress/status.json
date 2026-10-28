@@ -1,25 +1,21 @@
 {
   "areas": {
     "api": {
-      "deployed": null,
       "implemented": 160,
       "items": 188,
       "tested": 160
     },
     "db": {
-      "deployed": null,
       "implemented": 43,
       "items": 43,
       "tested": 43
     },
     "ui": {
-      "deployed": null,
       "implemented": 35,
       "items": 35,
       "tested": 35
     },
     "worker": {
-      "deployed": null,
       "implemented": 15,
       "items": 15,
       "tested": 15
@@ -40,7 +36,6 @@
   "items": [
     {
       "area": "db",
-      "deployed": null,
       "id": "db.subscriber_number",
       "implemented": true,
       "stage": 5,
@@ -49,7 +44,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.number_assignment",
       "implemented": true,
       "stage": 5,
@@ -58,7 +52,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf639.hub.create",
       "implemented": true,
       "stage": 5,
@@ -67,7 +60,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf639.hub.get",
       "implemented": true,
       "stage": 5,
@@ -76,7 +68,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf639.hub.delete",
       "implemented": true,
       "stage": 5,
@@ -85,7 +76,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf639.resource.list",
       "implemented": true,
       "stage": 5,
@@ -94,7 +84,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf639.resource.create",
       "implemented": true,
       "stage": 5,
@@ -103,7 +92,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf639.resource.get",
       "implemented": true,
       "stage": 5,
@@ -112,7 +100,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf639.resource.patch",
       "implemented": true,
       "stage": 5,
@@ -121,7 +108,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf639.resource.delete",
       "implemented": true,
       "stage": 5,
@@ -130,7 +116,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.bucket.list",
       "implemented": false,
       "stage": 5,
@@ -139,7 +124,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.bucket.get",
       "implemented": false,
       "stage": 5,
@@ -148,7 +132,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.topupBalance.list",
       "implemented": false,
       "stage": 5,
@@ -157,7 +140,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.topupBalance.create",
       "implemented": false,
       "stage": 5,
@@ -166,7 +148,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.topupBalance.patch",
       "implemented": false,
       "stage": 5,
@@ -175,7 +156,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.topupBalance.get",
       "implemented": false,
       "stage": 5,
@@ -184,7 +164,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.topupBalance.delete",
       "implemented": false,
       "stage": 5,
@@ -193,7 +172,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.adjustBalance.list",
       "implemented": false,
       "stage": 5,
@@ -202,7 +180,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.adjustBalance.create",
       "implemented": false,
       "stage": 5,
@@ -211,7 +188,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.adjustBalance.patch",
       "implemented": false,
       "stage": 5,
@@ -220,7 +196,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.adjustBalance.get",
       "implemented": false,
       "stage": 5,
@@ -229,7 +204,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.adjustBalance.delete",
       "implemented": false,
       "stage": 5,
@@ -238,7 +212,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.transferBalance.list",
       "implemented": false,
       "stage": 5,
@@ -247,7 +220,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.transferBalance.create",
       "implemented": false,
       "stage": 5,
@@ -256,7 +228,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.transferBalance.patch",
       "implemented": false,
       "stage": 5,
@@ -265,7 +236,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.transferBalance.get",
       "implemented": false,
       "stage": 5,
@@ -274,7 +244,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.transferBalance.delete",
       "implemented": false,
       "stage": 5,
@@ -283,7 +252,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.reserveBalance.list",
       "implemented": false,
       "stage": 5,
@@ -292,7 +260,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.reserveBalance.create",
       "implemented": false,
       "stage": 5,
@@ -301,7 +268,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.reserveBalance.patch",
       "implemented": false,
       "stage": 5,
@@ -310,7 +276,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.reserveBalance.get",
       "implemented": false,
       "stage": 5,
@@ -319,7 +284,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.reserveBalance.delete",
       "implemented": false,
       "stage": 5,
@@ -328,7 +292,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.accumulatedBalance.list",
       "implemented": false,
       "stage": 5,
@@ -337,7 +300,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.accumulatedBalance.get",
       "implemented": false,
       "stage": 5,
@@ -346,7 +308,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.balanceActionHistory.list",
       "implemented": false,
       "stage": 5,
@@ -355,7 +316,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.balanceActionHistory.get",
       "implemented": false,
       "stage": 5,
@@ -364,7 +324,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.hub.create",
       "implemented": false,
       "stage": 5,
@@ -373,7 +332,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf654.hub.delete",
       "implemented": false,
       "stage": 5,
@@ -382,7 +340,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.app_user",
       "implemented": true,
       "stage": 5,
@@ -391,7 +348,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.app_session",
       "implemented": true,
       "stage": 5,
@@ -400,7 +356,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.app_user_audit",
       "implemented": true,
       "stage": 5,
@@ -409,7 +364,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.session.create",
       "implemented": true,
       "stage": 5,
@@ -418,7 +372,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.session.get",
       "implemented": true,
       "stage": 5,
@@ -427,7 +380,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.session.delete",
       "implemented": true,
       "stage": 5,
@@ -436,7 +388,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.session.password",
       "implemented": true,
       "stage": 5,
@@ -445,7 +396,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.users.list",
       "implemented": true,
       "stage": 5,
@@ -454,7 +404,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.users.create",
       "implemented": true,
       "stage": 5,
@@ -463,7 +412,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.users.patch",
       "implemented": true,
       "stage": 5,
@@ -472,7 +420,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.financial_account",
       "implemented": true,
       "stage": 5,
@@ -481,7 +428,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.financialAccount.list",
       "implemented": true,
       "stage": 5,
@@ -490,7 +436,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.financialAccount.get",
       "implemented": true,
       "stage": 5,
@@ -499,7 +444,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.financialAccount.create",
       "implemented": true,
       "stage": 5,
@@ -508,7 +452,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.financialAccount.patch",
       "implemented": true,
       "stage": 5,
@@ -517,7 +460,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.financialAccount.delete",
       "implemented": true,
       "stage": 5,
@@ -526,7 +468,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.party_account",
       "implemented": true,
       "stage": 5,
@@ -535,7 +476,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.partyAccount.list",
       "implemented": true,
       "stage": 5,
@@ -544,7 +484,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.partyAccount.get",
       "implemented": true,
       "stage": 5,
@@ -553,7 +492,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.partyAccount.create",
       "implemented": true,
       "stage": 5,
@@ -562,7 +500,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.partyAccount.patch",
       "implemented": true,
       "stage": 5,
@@ -571,7 +508,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.partyAccount.delete",
       "implemented": true,
       "stage": 5,
@@ -580,7 +516,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.settlementAccount.list",
       "implemented": true,
       "stage": 5,
@@ -589,7 +524,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.settlementAccount.get",
       "implemented": true,
       "stage": 5,
@@ -598,7 +532,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.settlementAccount.create",
       "implemented": true,
       "stage": 5,
@@ -607,7 +540,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.settlementAccount.patch",
       "implemented": true,
       "stage": 5,
@@ -616,7 +548,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.settlementAccount.delete",
       "implemented": true,
       "stage": 5,
@@ -625,7 +556,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.financialAccounts.list",
       "implemented": true,
       "stage": 5,
@@ -634,7 +564,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.financialAccount",
       "implemented": true,
       "stage": 5,
@@ -643,7 +572,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.refund",
       "implemented": true,
       "stage": 5,
@@ -652,7 +580,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.refund_source",
       "implemented": true,
       "stage": 5,
@@ -661,7 +588,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.customer_bill_on_demand",
       "implemented": true,
       "stage": 5,
@@ -670,7 +596,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.bill_format",
       "implemented": true,
       "stage": 5,
@@ -679,7 +604,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.bill_presentation_media",
       "implemented": true,
       "stage": 5,
@@ -688,7 +612,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.account_presentation_media",
       "implemented": true,
       "stage": 5,
@@ -697,7 +620,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.onDemand",
       "implemented": true,
       "stage": 5,
@@ -706,7 +628,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.billDocument",
       "implemented": true,
       "stage": 5,
@@ -715,7 +636,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf676.refund.list",
       "implemented": true,
       "stage": 5,
@@ -724,7 +644,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf676.refund.get",
       "implemented": true,
       "stage": 5,
@@ -733,7 +652,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf676.refund.create",
       "implemented": true,
       "stage": 5,
@@ -742,7 +660,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.customerBillOnDemand.list",
       "implemented": true,
       "stage": 5,
@@ -751,7 +668,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.customerBillOnDemand.get",
       "implemented": true,
       "stage": 5,
@@ -760,7 +676,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.customerBillOnDemand.create",
       "implemented": true,
       "stage": 5,
@@ -769,7 +684,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billFormat.list",
       "implemented": true,
       "stage": 5,
@@ -778,7 +692,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billFormat.get",
       "implemented": true,
       "stage": 5,
@@ -787,7 +700,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billFormat.create",
       "implemented": true,
       "stage": 5,
@@ -796,7 +708,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billFormat.patch",
       "implemented": true,
       "stage": 5,
@@ -805,7 +716,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billFormat.delete",
       "implemented": true,
       "stage": 5,
@@ -814,7 +724,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billPresentationMedia.list",
       "implemented": true,
       "stage": 5,
@@ -823,7 +732,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billPresentationMedia.get",
       "implemented": true,
       "stage": 5,
@@ -832,7 +740,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billPresentationMedia.create",
       "implemented": true,
       "stage": 5,
@@ -841,7 +748,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billPresentationMedia.patch",
       "implemented": true,
       "stage": 5,
@@ -850,7 +756,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billPresentationMedia.delete",
       "implemented": true,
       "stage": 5,
@@ -859,7 +764,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.category",
       "implemented": true,
       "stage": 2,
@@ -868,7 +772,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.product_catalog",
       "implemented": true,
       "stage": 2,
@@ -877,7 +780,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.catalog_category",
       "implemented": true,
       "stage": 2,
@@ -886,7 +788,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.offering_category",
       "implemented": true,
       "stage": 2,
@@ -895,7 +796,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.category.list",
       "implemented": true,
       "stage": 2,
@@ -904,7 +804,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.category.get",
       "implemented": true,
       "stage": 2,
@@ -913,7 +812,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.category.create",
       "implemented": true,
       "stage": 2,
@@ -922,7 +820,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.category.patch",
       "implemented": true,
       "stage": 2,
@@ -931,7 +828,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productCatalog.list",
       "implemented": true,
       "stage": 2,
@@ -940,7 +836,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productCatalog.get",
       "implemented": true,
       "stage": 2,
@@ -949,7 +844,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productCatalog.create",
       "implemented": true,
       "stage": 2,
@@ -958,7 +852,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productCatalog.patch",
       "implemented": true,
       "stage": 2,
@@ -967,7 +860,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.category.delete",
       "implemented": true,
       "stage": 5,
@@ -976,7 +868,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productCatalog.delete",
       "implemented": true,
       "stage": 5,
@@ -985,7 +876,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.catalog_job",
       "implemented": true,
       "stage": 5,
@@ -994,7 +884,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.exportJob.list",
       "implemented": true,
       "stage": 5,
@@ -1003,7 +892,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.exportJob.get",
       "implemented": true,
       "stage": 5,
@@ -1012,7 +900,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.exportJob.create",
       "implemented": true,
       "stage": 5,
@@ -1021,7 +908,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.exportJob.delete",
       "implemented": true,
       "stage": 5,
@@ -1030,7 +916,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.importJob.list",
       "implemented": true,
       "stage": 5,
@@ -1039,7 +924,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.importJob.get",
       "implemented": true,
       "stage": 5,
@@ -1048,7 +932,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.importJob.create",
       "implemented": true,
       "stage": 5,
@@ -1057,7 +940,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.importJob.delete",
       "implemented": true,
       "stage": 5,
@@ -1066,7 +948,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.product_specification",
       "implemented": true,
       "stage": 1,
@@ -1075,7 +956,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.product_offering",
       "implemented": true,
       "stage": 1,
@@ -1084,7 +964,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.product_offering_price",
       "implemented": true,
       "stage": 1,
@@ -1093,7 +972,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.party",
       "implemented": true,
       "stage": 1,
@@ -1102,7 +980,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.customer",
       "implemented": true,
       "stage": 1,
@@ -1111,7 +988,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.billing_account",
       "implemented": true,
       "stage": 1,
@@ -1120,7 +996,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.product_order",
       "implemented": true,
       "stage": 1,
@@ -1129,7 +1004,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.product_order_item",
       "implemented": true,
       "stage": 1,
@@ -1138,7 +1012,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.product_order_error_message",
       "implemented": true,
       "stage": 2,
@@ -1147,7 +1020,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.cancel_product_order",
       "implemented": true,
       "stage": 5,
@@ -1156,7 +1028,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.event_subscription",
       "implemented": true,
       "stage": 5,
@@ -1165,7 +1036,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.billing_cycle_specification",
       "implemented": true,
       "stage": 5,
@@ -1174,7 +1044,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.event",
       "implemented": true,
       "stage": 5,
@@ -1183,7 +1052,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.event_delivery",
       "implemented": true,
       "stage": 5,
@@ -1192,7 +1060,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.hub.create",
       "implemented": true,
       "stage": 5,
@@ -1201,7 +1068,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.hub.delete",
       "implemented": true,
       "stage": 5,
@@ -1210,7 +1076,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf622.hub.create",
       "implemented": true,
       "stage": 5,
@@ -1219,7 +1084,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf622.hub.delete",
       "implemented": true,
       "stage": 5,
@@ -1228,7 +1092,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf629.hub.create",
       "implemented": true,
       "stage": 5,
@@ -1237,7 +1100,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf629.hub.get",
       "implemented": true,
       "stage": 5,
@@ -1246,7 +1108,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf629.hub.delete",
       "implemented": true,
       "stage": 5,
@@ -1255,7 +1116,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.hub.create",
       "implemented": true,
       "stage": 5,
@@ -1264,7 +1124,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.hub.delete",
       "implemented": true,
       "stage": 5,
@@ -1273,7 +1132,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf637.hub.create",
       "implemented": true,
       "stage": 5,
@@ -1282,7 +1140,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf637.hub.delete",
       "implemented": true,
       "stage": 5,
@@ -1291,7 +1148,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.hub.create",
       "implemented": true,
       "stage": 5,
@@ -1300,7 +1156,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.hub.delete",
       "implemented": true,
       "stage": 5,
@@ -1309,7 +1164,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf676.hub.create",
       "implemented": true,
       "stage": 5,
@@ -1318,7 +1172,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf676.hub.delete",
       "implemented": true,
       "stage": 5,
@@ -1327,7 +1180,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.hub.create",
       "implemented": true,
       "stage": 5,
@@ -1336,7 +1188,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.hub.delete",
       "implemented": true,
       "stage": 5,
@@ -1345,7 +1196,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.product",
       "implemented": true,
       "stage": 1,
@@ -1354,7 +1204,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.product_offering_change",
       "implemented": true,
       "stage": 5,
@@ -1363,7 +1212,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.product_status_change",
       "implemented": true,
       "stage": 5,
@@ -1372,7 +1220,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.applied_customer_billing_rate",
       "implemented": true,
       "stage": 1,
@@ -1381,7 +1228,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.customer_bill",
       "implemented": true,
       "stage": 1,
@@ -1390,7 +1236,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.billing_run",
       "implemented": true,
       "stage": 1,
@@ -1399,7 +1244,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.payment",
       "implemented": true,
       "stage": 1,
@@ -1408,7 +1252,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.billing_run_account",
       "implemented": true,
       "stage": 4,
@@ -1417,7 +1260,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.worker_request",
       "implemented": true,
       "stage": 4,
@@ -1426,7 +1268,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.bill_allocation",
       "implemented": true,
       "stage": 5,
@@ -1435,7 +1276,6 @@
     },
     {
       "area": "db",
-      "deployed": null,
       "id": "db.customer_bill_state_change",
       "implemented": true,
       "stage": 5,
@@ -1444,7 +1284,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productSpecification.list",
       "implemented": true,
       "stage": 2,
@@ -1453,7 +1292,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productSpecification.get",
       "implemented": true,
       "stage": 2,
@@ -1462,7 +1300,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productSpecification.create",
       "implemented": true,
       "stage": 2,
@@ -1471,7 +1308,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productSpecification.patch",
       "implemented": true,
       "stage": 2,
@@ -1480,7 +1316,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productOffering.list",
       "implemented": true,
       "stage": 2,
@@ -1489,7 +1324,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productOffering.get",
       "implemented": true,
       "stage": 2,
@@ -1498,7 +1332,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productOffering.create",
       "implemented": true,
       "stage": 2,
@@ -1507,7 +1340,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productOffering.patch",
       "implemented": true,
       "stage": 2,
@@ -1516,7 +1348,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productOfferingPrice.list",
       "implemented": true,
       "stage": 2,
@@ -1525,7 +1356,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productOfferingPrice.get",
       "implemented": true,
       "stage": 2,
@@ -1534,7 +1364,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productOfferingPrice.create",
       "implemented": true,
       "stage": 2,
@@ -1543,7 +1372,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productOfferingPrice.patch",
       "implemented": true,
       "stage": 2,
@@ -1552,7 +1380,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productSpecification.delete",
       "implemented": true,
       "stage": 5,
@@ -1561,7 +1388,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productOffering.delete",
       "implemented": true,
       "stage": 5,
@@ -1570,7 +1396,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf620.productOfferingPrice.delete",
       "implemented": true,
       "stage": 5,
@@ -1579,7 +1404,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.individual.list",
       "implemented": true,
       "stage": 2,
@@ -1588,7 +1412,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.individual.get",
       "implemented": true,
       "stage": 2,
@@ -1597,7 +1420,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.individual.create",
       "implemented": true,
       "stage": 2,
@@ -1606,7 +1428,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.individual.patch",
       "implemented": true,
       "stage": 2,
@@ -1615,7 +1436,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.individual.delete",
       "implemented": true,
       "stage": 5,
@@ -1624,7 +1444,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.organization.list",
       "implemented": true,
       "stage": 2,
@@ -1633,7 +1452,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.organization.get",
       "implemented": true,
       "stage": 2,
@@ -1642,7 +1460,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.organization.create",
       "implemented": true,
       "stage": 2,
@@ -1651,7 +1468,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.organization.patch",
       "implemented": true,
       "stage": 2,
@@ -1660,7 +1476,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf632.organization.delete",
       "implemented": true,
       "stage": 5,
@@ -1669,7 +1484,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf629.customer.list",
       "implemented": true,
       "stage": 2,
@@ -1678,7 +1492,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf629.customer.get",
       "implemented": true,
       "stage": 2,
@@ -1687,7 +1500,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf629.customer.create",
       "implemented": true,
       "stage": 2,
@@ -1696,7 +1508,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf629.customer.patch",
       "implemented": true,
       "stage": 2,
@@ -1705,7 +1516,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf629.customer.delete",
       "implemented": true,
       "stage": 5,
@@ -1714,7 +1524,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billingCycleSpecification.list",
       "implemented": true,
       "stage": 2,
@@ -1723,7 +1532,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billingCycleSpecification.get",
       "implemented": true,
       "stage": 2,
@@ -1732,7 +1540,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billingAccount.list",
       "implemented": true,
       "stage": 2,
@@ -1741,7 +1548,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billingAccount.get",
       "implemented": true,
       "stage": 2,
@@ -1750,7 +1556,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billingAccount.create",
       "implemented": true,
       "stage": 2,
@@ -1759,7 +1564,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billingAccount.patch",
       "implemented": true,
       "stage": 2,
@@ -1768,7 +1572,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billingAccount.delete",
       "implemented": true,
       "stage": 5,
@@ -1777,7 +1580,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.extensionSchema.get",
       "implemented": true,
       "stage": 2,
@@ -1786,7 +1588,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf676.payment.list",
       "implemented": true,
       "stage": 2,
@@ -1795,7 +1596,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf676.payment.get",
       "implemented": true,
       "stage": 2,
@@ -1804,7 +1604,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf676.payment.create",
       "implemented": true,
       "stage": 2,
@@ -1813,7 +1612,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf622.productOrder.list",
       "implemented": true,
       "stage": 2,
@@ -1822,7 +1620,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf622.productOrder.get",
       "implemented": true,
       "stage": 2,
@@ -1831,7 +1628,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf622.productOrder.create",
       "implemented": true,
       "stage": 2,
@@ -1840,7 +1636,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf622.productOrder.patch",
       "implemented": true,
       "stage": 5,
@@ -1849,7 +1644,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf637.product.create",
       "implemented": true,
       "stage": 5,
@@ -1858,7 +1652,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf637.product.patch",
       "implemented": true,
       "stage": 5,
@@ -1867,7 +1660,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf637.product.delete",
       "implemented": true,
       "stage": 5,
@@ -1876,7 +1668,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billingCycleSpecification.create",
       "implemented": true,
       "stage": 5,
@@ -1885,7 +1676,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billingCycleSpecification.patch",
       "implemented": true,
       "stage": 5,
@@ -1894,7 +1684,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf666.billingCycleSpecification.delete",
       "implemented": true,
       "stage": 5,
@@ -1903,7 +1692,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf622.productOrder.delete",
       "implemented": true,
       "stage": 5,
@@ -1912,7 +1700,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf622.cancelProductOrder.list",
       "implemented": true,
       "stage": 5,
@@ -1921,7 +1708,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf622.cancelProductOrder.get",
       "implemented": true,
       "stage": 5,
@@ -1930,7 +1716,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf622.cancelProductOrder.create",
       "implemented": true,
       "stage": 5,
@@ -1939,7 +1724,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf637.product.list",
       "implemented": true,
       "stage": 2,
@@ -1948,7 +1732,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf637.product.get",
       "implemented": true,
       "stage": 2,
@@ -1957,7 +1740,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.billCycle.list",
       "implemented": true,
       "stage": 2,
@@ -1966,7 +1748,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.billCycle.get",
       "implemented": true,
       "stage": 2,
@@ -1975,7 +1756,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.customerBill.list",
       "implemented": true,
       "stage": 2,
@@ -1984,7 +1764,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.customerBill.get",
       "implemented": true,
       "stage": 2,
@@ -1993,7 +1772,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.customerBill.patch",
       "implemented": true,
       "stage": 5,
@@ -2002,7 +1780,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.appliedCustomerBillingRate.list",
       "implemented": true,
       "stage": 2,
@@ -2011,7 +1788,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.tmf678.appliedCustomerBillingRate.get",
       "implemented": true,
       "stage": 2,
@@ -2020,7 +1796,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.context.get",
       "implemented": true,
       "stage": 5,
@@ -2029,7 +1804,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.firstCharge.get",
       "implemented": true,
       "stage": 5,
@@ -2038,7 +1812,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.accountProducts.list",
       "implemented": true,
       "stage": 5,
@@ -2047,7 +1820,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.accountCharges.list",
       "implemented": true,
       "stage": 5,
@@ -2056,7 +1828,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.accountTransactions.list",
       "implemented": true,
       "stage": 5,
@@ -2065,7 +1836,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.accountSettlement.get",
       "implemented": true,
       "stage": 5,
@@ -2074,7 +1844,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.billDetail.get",
       "implemented": true,
       "stage": 5,
@@ -2083,7 +1852,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.priceChange.create",
       "implemented": true,
       "stage": 5,
@@ -2092,7 +1860,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.billingRun.list",
       "implemented": true,
       "stage": 4,
@@ -2101,7 +1868,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.billingRun.get",
       "implemented": true,
       "stage": 4,
@@ -2110,7 +1876,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.billingRunAccounts.list",
       "implemented": true,
       "stage": 4,
@@ -2119,7 +1884,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.billingRun.catchUp",
       "implemented": true,
       "stage": 4,
@@ -2128,7 +1892,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.internal.billingRun.retry",
       "implemented": true,
       "stage": 4,
@@ -2137,7 +1900,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.service.healthz",
       "implemented": true,
       "stage": "template",
@@ -2146,7 +1908,6 @@
     },
     {
       "area": "api",
-      "deployed": null,
       "id": "api.service.billingStatus",
       "implemented": true,
       "stage": 4,
@@ -2155,7 +1916,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.session.signIn",
       "implemented": true,
       "stage": 5,
@@ -2164,7 +1924,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.session.password",
       "implemented": true,
       "stage": 5,
@@ -2173,7 +1932,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.session.menu",
       "implemented": true,
       "stage": 5,
@@ -2182,7 +1940,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.users.list",
       "implemented": true,
       "stage": 5,
@@ -2191,7 +1948,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.users.manage",
       "implemented": true,
       "stage": 5,
@@ -2200,7 +1956,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.shell",
       "implemented": true,
       "stage": 5,
@@ -2209,7 +1964,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscribers.list",
       "implemented": true,
       "stage": 5,
@@ -2218,7 +1972,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.numbers.list",
       "implemented": true,
       "stage": 5,
@@ -2227,7 +1980,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.numbers.create",
       "implemented": true,
       "stage": 5,
@@ -2236,7 +1988,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.numbers.detail",
       "implemented": true,
       "stage": 5,
@@ -2245,7 +1996,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.number",
       "implemented": true,
       "stage": 5,
@@ -2254,7 +2004,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscribers.new",
       "implemented": true,
       "stage": 5,
@@ -2263,7 +2012,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.edit",
       "implemented": true,
       "stage": 5,
@@ -2272,7 +2020,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.card",
       "implemented": true,
       "stage": 5,
@@ -2281,7 +2028,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.addProduct",
       "implemented": true,
       "stage": 5,
@@ -2290,7 +2036,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.deactivate",
       "implemented": true,
       "stage": 5,
@@ -2299,7 +2044,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.undoDeactivation",
       "implemented": true,
       "stage": 5,
@@ -2308,7 +2052,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.bills",
       "implemented": true,
       "stage": 5,
@@ -2317,7 +2060,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.billDetail",
       "implemented": true,
       "stage": 5,
@@ -2326,7 +2068,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.billHold",
       "implemented": true,
       "stage": 5,
@@ -2335,7 +2076,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.recordPayment",
       "implemented": true,
       "stage": 5,
@@ -2344,7 +2084,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.recordRefund",
       "implemented": true,
       "stage": 5,
@@ -2353,7 +2092,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.refunds",
       "implemented": true,
       "stage": 5,
@@ -2362,7 +2100,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.billNow",
       "implemented": true,
       "stage": 5,
@@ -2371,7 +2108,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.subscriber.billRequests",
       "implemented": true,
       "stage": 5,
@@ -2380,7 +2116,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.catalog.list",
       "implemented": true,
       "stage": 5,
@@ -2389,7 +2124,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.catalog.offeringDetail",
       "implemented": true,
       "stage": 5,
@@ -2398,7 +2132,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.catalog.lifecycle",
       "implemented": true,
       "stage": 5,
@@ -2407,7 +2140,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.catalog.changePrice",
       "implemented": true,
       "stage": 5,
@@ -2416,7 +2148,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.catalog.newOffering",
       "implemented": true,
       "stage": 5,
@@ -2425,7 +2156,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.billingRuns.list",
       "implemented": true,
       "stage": 4,
@@ -2434,7 +2164,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.billingRuns.catchUp",
       "implemented": true,
       "stage": 4,
@@ -2443,7 +2172,6 @@
     },
     {
       "area": "ui",
-      "deployed": null,
       "id": "ui.billingRuns.retry",
       "implemented": true,
       "stage": 4,
@@ -2452,7 +2180,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.runLifecycle",
       "implemented": true,
       "stage": 4,
@@ -2461,7 +2188,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.takeover",
       "implemented": true,
       "stage": 4,
@@ -2470,7 +2196,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.doubleStart",
       "implemented": true,
       "stage": 4,
@@ -2479,7 +2204,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.failureIsolation",
       "implemented": true,
       "stage": 4,
@@ -2488,7 +2212,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.wholeRunFailure",
       "implemented": true,
       "stage": 4,
@@ -2497,7 +2220,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.completedAllOk",
       "implemented": true,
       "stage": 4,
@@ -2506,7 +2228,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.requestQueue",
       "implemented": true,
       "stage": 4,
@@ -2515,7 +2236,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.statusFlips",
       "implemented": true,
       "stage": 4,
@@ -2524,7 +2244,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.scheduler",
       "implemented": true,
       "stage": 4,
@@ -2533,7 +2252,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.signals",
       "implemented": true,
       "stage": 4,
@@ -2542,7 +2260,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.billIssue",
       "implemented": true,
       "stage": 5,
@@ -2551,7 +2268,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.billSettle",
       "implemented": true,
       "stage": 5,
@@ -2560,7 +2276,6 @@
     },
     {
       "area": "worker",
-      "deployed": null,
       "id": "worker.eventDelivery",
       "implemented": true,
       "stage": 5,

@@ -6,316 +6,315 @@ has the operation (api), a `data-ui` marker exists in `frontend/src` (ui). Worke
 implemented and tested when a test marked with the capability passes and none fails.
 Tested (ui): a passing component test saw the marker on screen (`expectUi`). Tested
 (db): a passing test's database got rows in the table. Tested (api): a passing test
-sent a request the app routes to the operation. Deployed: unknown until `deploy.sh`
-records the deployed commit.
+sent a request the app routes to the operation.
 
-| Area | Items | Implemented | Tested | Deployed |
-|---|---|---|---|---|
-| Database | 43 | 43/43 (100%) | 43/43 (100%) | unknown |
-| API | 188 | 160/188 (85%) | 160/188 (85%) | unknown |
-| UI | 35 | 35/35 (100%) | 35/35 (100%) | unknown |
-| Worker | 15 | 15/15 (100%) | 15/15 (100%) | unknown |
+| Area | Items | Implemented | Tested |
+|---|---|---|---|
+| Database | 43 | 43/43 (100%) | 43/43 (100%) |
+| API | 188 | 160/188 (85%) | 160/188 (85%) |
+| UI | 35 | 35/35 (100%) | 35/35 (100%) |
+| Worker | 15 | 15/15 (100%) | 15/15 (100%) |
 
 ## Database
 
-| Id | Stage | Title | Implemented | Tested | Deployed |
-|---|---|---|---|---|---|
-| `db.subscriber_number` | 5 | Subscriber-number inventory (TMF639) | yes | yes | unknown |
-| `db.number_assignment` | 5 | Effective-dated number assignment history | yes | yes | unknown |
-| `db.app_user` | 5 | Application users and roles | yes | yes | unknown |
-| `db.app_session` | 5 | Revocable application sessions | yes | yes | unknown |
-| `db.app_user_audit` | 5 | User management audit | yes | yes | unknown |
-| `db.financial_account` | 5 | Financial accounts (TMF666) | yes | yes | unknown |
-| `db.party_account` | 5 | Party and settlement accounts (TMF666) | yes | yes | unknown |
-| `db.refund` | 5 | Completed cash refunds (TMF676) | yes | yes | unknown |
-| `db.refund_source` | 5 | Credit consumed by refunds | yes | yes | unknown |
-| `db.customer_bill_on_demand` | 5 | On-demand bill requests (TMF678) | yes | yes | unknown |
-| `db.bill_format` | 5 | Bill formats (TMF666) | yes | yes | unknown |
-| `db.bill_presentation_media` | 5 | Bill presentation media (TMF666) | yes | yes | unknown |
-| `db.account_presentation_media` | 5 | Account presentation preferences | yes | yes | unknown |
-| `db.category` | 2 | Catalog categories (TMF620) | yes | yes | unknown |
-| `db.product_catalog` | 2 | Product catalogs (TMF620) | yes | yes | unknown |
-| `db.catalog_category` | 2 | Catalog root category membership | yes | yes | unknown |
-| `db.offering_category` | 2 | Category offering membership | yes | yes | unknown |
-| `db.catalog_job` | 5 | Catalog import and export jobs (TMF620) | yes | yes | unknown |
-| `db.product_specification` | 1 | Product specifications (TMF620) | yes | yes | unknown |
-| `db.product_offering` | 1 | Product offerings (TMF620) | yes | yes | unknown |
-| `db.product_offering_price` | 1 | Offering prices (TMF620) | yes | yes | unknown |
-| `db.party` | 1 | Parties: individuals and organizations (TMF632) | yes | yes | unknown |
-| `db.customer` | 1 | Customers (TMF629) | yes | yes | unknown |
-| `db.billing_account` | 1 | Billing accounts (TMF666) | yes | yes | unknown |
-| `db.product_order` | 1 | Product orders (TMF622) | yes | yes | unknown |
-| `db.product_order_item` | 1 | Product order items (TMF622) | yes | yes | unknown |
-| `db.product_order_error_message` | 2 | Order rejection reasons (TMF622 productOrderErrorMessage) | yes | yes | unknown |
-| `db.cancel_product_order` | 5 | Order cancellations (TMF622 cancelProductOrder) | yes | yes | unknown |
-| `db.event_subscription` | 5 | Hub event subscriptions (every API) | yes | yes | unknown |
-| `db.billing_cycle_specification` | 5 | Named billing cycle specifications (TMF666) | yes | yes | unknown |
-| `db.event` | 5 | Events some hub wanted (outbox) | yes | yes | unknown |
-| `db.event_delivery` | 5 | Event deliveries to hub callbacks | yes | yes | unknown |
-| `db.product` | 1 | Products (TMF637) | yes | yes | unknown |
-| `db.product_offering_change` | 5 | Offering changes (TMF622 modify items) | yes | yes | unknown |
-| `db.product_status_change` | 5 | Suspensions and resumptions (TMF622 modify items with product.status) | yes | yes | unknown |
-| `db.applied_customer_billing_rate` | 1 | Charges and refunds - ABRs (TMF678) | yes | yes | unknown |
-| `db.customer_bill` | 1 | Customer bills (TMF678) | yes | yes | unknown |
-| `db.billing_run` | 1 | Billing runs, one per date | yes | yes | unknown |
-| `db.payment` | 1 | Payments (TMF676) | yes | yes | unknown |
-| `db.billing_run_account` | 4 | Per-(run, account) outcomes: ok / failed / blocked | yes | yes | unknown |
-| `db.worker_request` | 4 | UI request queue for the worker (catch-up, retry) | yes | yes | unknown |
-| `db.bill_allocation` | 5 | What paid a bill: payments and credit notes (TMF678 appliedPayment) | yes | yes | unknown |
-| `db.customer_bill_state_change` | 5 | Bill state history | yes | yes | unknown |
+| Id | Stage | Title | Implemented | Tested |
+|---|---|---|---|---|
+| `db.subscriber_number` | 5 | Subscriber-number inventory (TMF639) | yes | yes |
+| `db.number_assignment` | 5 | Effective-dated number assignment history | yes | yes |
+| `db.app_user` | 5 | Application users and roles | yes | yes |
+| `db.app_session` | 5 | Revocable application sessions | yes | yes |
+| `db.app_user_audit` | 5 | User management audit | yes | yes |
+| `db.financial_account` | 5 | Financial accounts (TMF666) | yes | yes |
+| `db.party_account` | 5 | Party and settlement accounts (TMF666) | yes | yes |
+| `db.refund` | 5 | Completed cash refunds (TMF676) | yes | yes |
+| `db.refund_source` | 5 | Credit consumed by refunds | yes | yes |
+| `db.customer_bill_on_demand` | 5 | On-demand bill requests (TMF678) | yes | yes |
+| `db.bill_format` | 5 | Bill formats (TMF666) | yes | yes |
+| `db.bill_presentation_media` | 5 | Bill presentation media (TMF666) | yes | yes |
+| `db.account_presentation_media` | 5 | Account presentation preferences | yes | yes |
+| `db.category` | 2 | Catalog categories (TMF620) | yes | yes |
+| `db.product_catalog` | 2 | Product catalogs (TMF620) | yes | yes |
+| `db.catalog_category` | 2 | Catalog root category membership | yes | yes |
+| `db.offering_category` | 2 | Category offering membership | yes | yes |
+| `db.catalog_job` | 5 | Catalog import and export jobs (TMF620) | yes | yes |
+| `db.product_specification` | 1 | Product specifications (TMF620) | yes | yes |
+| `db.product_offering` | 1 | Product offerings (TMF620) | yes | yes |
+| `db.product_offering_price` | 1 | Offering prices (TMF620) | yes | yes |
+| `db.party` | 1 | Parties: individuals and organizations (TMF632) | yes | yes |
+| `db.customer` | 1 | Customers (TMF629) | yes | yes |
+| `db.billing_account` | 1 | Billing accounts (TMF666) | yes | yes |
+| `db.product_order` | 1 | Product orders (TMF622) | yes | yes |
+| `db.product_order_item` | 1 | Product order items (TMF622) | yes | yes |
+| `db.product_order_error_message` | 2 | Order rejection reasons (TMF622 productOrderErrorMessage) | yes | yes |
+| `db.cancel_product_order` | 5 | Order cancellations (TMF622 cancelProductOrder) | yes | yes |
+| `db.event_subscription` | 5 | Hub event subscriptions (every API) | yes | yes |
+| `db.billing_cycle_specification` | 5 | Named billing cycle specifications (TMF666) | yes | yes |
+| `db.event` | 5 | Events some hub wanted (outbox) | yes | yes |
+| `db.event_delivery` | 5 | Event deliveries to hub callbacks | yes | yes |
+| `db.product` | 1 | Products (TMF637) | yes | yes |
+| `db.product_offering_change` | 5 | Offering changes (TMF622 modify items) | yes | yes |
+| `db.product_status_change` | 5 | Suspensions and resumptions (TMF622 modify items with product.status) | yes | yes |
+| `db.applied_customer_billing_rate` | 1 | Charges and refunds - ABRs (TMF678) | yes | yes |
+| `db.customer_bill` | 1 | Customer bills (TMF678) | yes | yes |
+| `db.billing_run` | 1 | Billing runs, one per date | yes | yes |
+| `db.payment` | 1 | Payments (TMF676) | yes | yes |
+| `db.billing_run_account` | 4 | Per-(run, account) outcomes: ok / failed / blocked | yes | yes |
+| `db.worker_request` | 4 | UI request queue for the worker (catch-up, retry) | yes | yes |
+| `db.bill_allocation` | 5 | What paid a bill: payments and credit notes (TMF678 appliedPayment) | yes | yes |
+| `db.customer_bill_state_change` | 5 | Bill state history | yes | yes |
 
 ## API
 
-| Id | Stage | Title | Implemented | Tested | Deployed |
-|---|---|---|---|---|---|
-| `api.tmf639.hub.create` | 5 | TMF639 POST /hub | yes | yes | unknown |
-| `api.tmf639.hub.get` | 5 | TMF639 GET /hub/{id} | yes | yes | unknown |
-| `api.tmf639.hub.delete` | 5 | TMF639 DELETE /hub/{id} | yes | yes | unknown |
-| `api.tmf639.resource.list` | 5 | TMF639 GET /resource | yes | yes | unknown |
-| `api.tmf639.resource.create` | 5 | TMF639 POST /resource | yes | yes | unknown |
-| `api.tmf639.resource.get` | 5 | TMF639 GET /resource/{id} | yes | yes | unknown |
-| `api.tmf639.resource.patch` | 5 | TMF639 PATCH /resource/{id} | yes | yes | unknown |
-| `api.tmf639.resource.delete` | 5 | TMF639 DELETE /resource/{id} | yes | yes | unknown |
-| `api.tmf654.bucket.list` | 5 | TMF654 GET /bucket | no | no | unknown |
-| `api.tmf654.bucket.get` | 5 | TMF654 GET /bucket/{id} | no | no | unknown |
-| `api.tmf654.topupBalance.list` | 5 | TMF654 GET /topupBalance | no | no | unknown |
-| `api.tmf654.topupBalance.create` | 5 | TMF654 POST /topupBalance | no | no | unknown |
-| `api.tmf654.topupBalance.patch` | 5 | TMF654 PATCH /topupBalance/{id} | no | no | unknown |
-| `api.tmf654.topupBalance.get` | 5 | TMF654 GET /topupBalance/{id} | no | no | unknown |
-| `api.tmf654.topupBalance.delete` | 5 | TMF654 DELETE /topupBalance/{id} | no | no | unknown |
-| `api.tmf654.adjustBalance.list` | 5 | TMF654 GET /adjustBalance | no | no | unknown |
-| `api.tmf654.adjustBalance.create` | 5 | TMF654 POST /adjustBalance | no | no | unknown |
-| `api.tmf654.adjustBalance.patch` | 5 | TMF654 PATCH /adjustBalance/{id} | no | no | unknown |
-| `api.tmf654.adjustBalance.get` | 5 | TMF654 GET /adjustBalance/{id} | no | no | unknown |
-| `api.tmf654.adjustBalance.delete` | 5 | TMF654 DELETE /adjustBalance/{id} | no | no | unknown |
-| `api.tmf654.transferBalance.list` | 5 | TMF654 GET /transferBalance | no | no | unknown |
-| `api.tmf654.transferBalance.create` | 5 | TMF654 POST /transferBalance | no | no | unknown |
-| `api.tmf654.transferBalance.patch` | 5 | TMF654 PATCH /transferBalance/{id} | no | no | unknown |
-| `api.tmf654.transferBalance.get` | 5 | TMF654 GET /transferBalance/{id} | no | no | unknown |
-| `api.tmf654.transferBalance.delete` | 5 | TMF654 DELETE /transferBalance/{id} | no | no | unknown |
-| `api.tmf654.reserveBalance.list` | 5 | TMF654 GET /reserveBalance | no | no | unknown |
-| `api.tmf654.reserveBalance.create` | 5 | TMF654 POST /reserveBalance | no | no | unknown |
-| `api.tmf654.reserveBalance.patch` | 5 | TMF654 PATCH /reserveBalance/{id} | no | no | unknown |
-| `api.tmf654.reserveBalance.get` | 5 | TMF654 GET /reserveBalance/{id} | no | no | unknown |
-| `api.tmf654.reserveBalance.delete` | 5 | TMF654 DELETE /reserveBalance/{id} | no | no | unknown |
-| `api.tmf654.accumulatedBalance.list` | 5 | TMF654 GET /accumulatedBalance | no | no | unknown |
-| `api.tmf654.accumulatedBalance.get` | 5 | TMF654 GET /accumulatedBalance/{id} | no | no | unknown |
-| `api.tmf654.balanceActionHistory.list` | 5 | TMF654 GET /balanceActionHistory | no | no | unknown |
-| `api.tmf654.balanceActionHistory.get` | 5 | TMF654 GET /balanceActionHistory/{id} | no | no | unknown |
-| `api.tmf654.hub.create` | 5 | TMF654 POST /hub | no | no | unknown |
-| `api.tmf654.hub.delete` | 5 | TMF654 DELETE /hub/{id} | no | no | unknown |
-| `api.internal.session.create` | 5 | Sign in | yes | yes | unknown |
-| `api.internal.session.get` | 5 | Current session | yes | yes | unknown |
-| `api.internal.session.delete` | 5 | Sign out | yes | yes | unknown |
-| `api.internal.session.password` | 5 | Change own password | yes | yes | unknown |
-| `api.internal.users.list` | 5 | List users (admin) | yes | yes | unknown |
-| `api.internal.users.create` | 5 | Create user (admin) | yes | yes | unknown |
-| `api.internal.users.patch` | 5 | Manage user (admin) | yes | yes | unknown |
-| `api.tmf666.financialAccount.list` | 5 | List financial accounts | yes | yes | unknown |
-| `api.tmf666.financialAccount.get` | 5 | Get a financial account | yes | yes | unknown |
-| `api.tmf666.financialAccount.create` | 5 | Create a financial account | yes | yes | unknown |
-| `api.tmf666.financialAccount.patch` | 5 | Patch a financial account | yes | yes | unknown |
-| `api.tmf666.financialAccount.delete` | 5 | Delete an unlinked financial account | yes | yes | unknown |
-| `api.tmf666.partyAccount.list` | 5 | List party accounts | yes | yes | unknown |
-| `api.tmf666.partyAccount.get` | 5 | Get a party account | yes | yes | unknown |
-| `api.tmf666.partyAccount.create` | 5 | Create a party account | yes | yes | unknown |
-| `api.tmf666.partyAccount.patch` | 5 | Patch a party account | yes | yes | unknown |
-| `api.tmf666.partyAccount.delete` | 5 | Delete a party account | yes | yes | unknown |
-| `api.tmf666.settlementAccount.list` | 5 | List settlement accounts | yes | yes | unknown |
-| `api.tmf666.settlementAccount.get` | 5 | Get a settlement account | yes | yes | unknown |
-| `api.tmf666.settlementAccount.create` | 5 | Create a settlement account | yes | yes | unknown |
-| `api.tmf666.settlementAccount.patch` | 5 | Patch a settlement account | yes | yes | unknown |
-| `api.tmf666.settlementAccount.delete` | 5 | Delete a settlement account | yes | yes | unknown |
-| `api.tmf676.refund.list` | 5 | List refunds | yes | yes | unknown |
-| `api.tmf676.refund.get` | 5 | Get a refund | yes | yes | unknown |
-| `api.tmf676.refund.create` | 5 | Record a completed refund | yes | yes | unknown |
-| `api.tmf678.customerBillOnDemand.list` | 5 | List on-demand bill requests | yes | yes | unknown |
-| `api.tmf678.customerBillOnDemand.get` | 5 | Get an on-demand bill request | yes | yes | unknown |
-| `api.tmf678.customerBillOnDemand.create` | 5 | Request an off-cycle bill | yes | yes | unknown |
-| `api.tmf666.billFormat.list` | 5 | List bill formats | yes | yes | unknown |
-| `api.tmf666.billFormat.get` | 5 | Get a bill format | yes | yes | unknown |
-| `api.tmf666.billFormat.create` | 5 | Create a bill format | yes | yes | unknown |
-| `api.tmf666.billFormat.patch` | 5 | Patch a bill format | yes | yes | unknown |
-| `api.tmf666.billFormat.delete` | 5 | Delete an unused bill format | yes | yes | unknown |
-| `api.tmf666.billPresentationMedia.list` | 5 | List bill presentation media | yes | yes | unknown |
-| `api.tmf666.billPresentationMedia.get` | 5 | Get a bill presentation medium | yes | yes | unknown |
-| `api.tmf666.billPresentationMedia.create` | 5 | Create a bill presentation medium | yes | yes | unknown |
-| `api.tmf666.billPresentationMedia.patch` | 5 | Patch a bill presentation medium | yes | yes | unknown |
-| `api.tmf666.billPresentationMedia.delete` | 5 | Delete an unused bill presentation medium | yes | yes | unknown |
-| `api.tmf620.category.list` | 2 | List categories | yes | yes | unknown |
-| `api.tmf620.category.get` | 2 | Get a category | yes | yes | unknown |
-| `api.tmf620.category.create` | 2 | Create a category | yes | yes | unknown |
-| `api.tmf620.category.patch` | 2 | Patch a category | yes | yes | unknown |
-| `api.tmf620.productCatalog.list` | 2 | List product catalogs | yes | yes | unknown |
-| `api.tmf620.productCatalog.get` | 2 | Get a product catalog | yes | yes | unknown |
-| `api.tmf620.productCatalog.create` | 2 | Create a product catalog | yes | yes | unknown |
-| `api.tmf620.productCatalog.patch` | 2 | Patch a product catalog | yes | yes | unknown |
-| `api.tmf620.category.delete` | 5 | Delete an empty category | yes | yes | unknown |
-| `api.tmf620.productCatalog.delete` | 5 | Delete a product catalog | yes | yes | unknown |
-| `api.tmf620.exportJob.list` | 5 | List export jobs | yes | yes | unknown |
-| `api.tmf620.exportJob.get` | 5 | Get an export job | yes | yes | unknown |
-| `api.tmf620.exportJob.create` | 5 | Export the catalog as a data: URL | yes | yes | unknown |
-| `api.tmf620.exportJob.delete` | 5 | Delete an export job | yes | yes | unknown |
-| `api.tmf620.importJob.list` | 5 | List import jobs | yes | yes | unknown |
-| `api.tmf620.importJob.get` | 5 | Get an import job | yes | yes | unknown |
-| `api.tmf620.importJob.create` | 5 | Import a catalog document (all or nothing) | yes | yes | unknown |
-| `api.tmf620.importJob.delete` | 5 | Delete an import job | yes | yes | unknown |
-| `api.tmf620.hub.create` | 5 | Subscribe to TMF620 events | yes | yes | unknown |
-| `api.tmf620.hub.delete` | 5 | Unsubscribe from TMF620 events | yes | yes | unknown |
-| `api.tmf622.hub.create` | 5 | Subscribe to TMF622 events | yes | yes | unknown |
-| `api.tmf622.hub.delete` | 5 | Unsubscribe from TMF622 events | yes | yes | unknown |
-| `api.tmf629.hub.create` | 5 | Subscribe to TMF629 events | yes | yes | unknown |
-| `api.tmf629.hub.get` | 5 | Get a TMF629 subscription | yes | yes | unknown |
-| `api.tmf629.hub.delete` | 5 | Unsubscribe from TMF629 events | yes | yes | unknown |
-| `api.tmf632.hub.create` | 5 | Subscribe to TMF632 events | yes | yes | unknown |
-| `api.tmf632.hub.delete` | 5 | Unsubscribe from TMF632 events | yes | yes | unknown |
-| `api.tmf637.hub.create` | 5 | Subscribe to TMF637 events | yes | yes | unknown |
-| `api.tmf637.hub.delete` | 5 | Unsubscribe from TMF637 events | yes | yes | unknown |
-| `api.tmf666.hub.create` | 5 | Subscribe to TMF666 events | yes | yes | unknown |
-| `api.tmf666.hub.delete` | 5 | Unsubscribe from TMF666 events | yes | yes | unknown |
-| `api.tmf676.hub.create` | 5 | Subscribe to TMF676 events | yes | yes | unknown |
-| `api.tmf676.hub.delete` | 5 | Unsubscribe from TMF676 events | yes | yes | unknown |
-| `api.tmf678.hub.create` | 5 | Subscribe to TMF678 events | yes | yes | unknown |
-| `api.tmf678.hub.delete` | 5 | Unsubscribe from TMF678 events | yes | yes | unknown |
-| `api.tmf620.productSpecification.list` | 2 | List product specifications | yes | yes | unknown |
-| `api.tmf620.productSpecification.get` | 2 | Get a product specification | yes | yes | unknown |
-| `api.tmf620.productSpecification.create` | 2 | Create a product specification | yes | yes | unknown |
-| `api.tmf620.productSpecification.patch` | 2 | Patch a product specification | yes | yes | unknown |
-| `api.tmf620.productOffering.list` | 2 | List product offerings | yes | yes | unknown |
-| `api.tmf620.productOffering.get` | 2 | Get a product offering | yes | yes | unknown |
-| `api.tmf620.productOffering.create` | 2 | Create a product offering | yes | yes | unknown |
-| `api.tmf620.productOffering.patch` | 2 | Patch a product offering (lifecycle, prices) | yes | yes | unknown |
-| `api.tmf620.productOfferingPrice.list` | 2 | List offering prices | yes | yes | unknown |
-| `api.tmf620.productOfferingPrice.get` | 2 | Get an offering price | yes | yes | unknown |
-| `api.tmf620.productOfferingPrice.create` | 2 | Create an offering price | yes | yes | unknown |
-| `api.tmf620.productOfferingPrice.patch` | 2 | Patch an offering price (end it) | yes | yes | unknown |
-| `api.tmf620.productSpecification.delete` | 5 | Delete an unused product specification | yes | yes | unknown |
-| `api.tmf620.productOffering.delete` | 5 | Delete a never-ordered offering | yes | yes | unknown |
-| `api.tmf620.productOfferingPrice.delete` | 5 | Delete a price of a never-ordered offering | yes | yes | unknown |
-| `api.tmf632.individual.list` | 2 | List individuals | yes | yes | unknown |
-| `api.tmf632.individual.get` | 2 | Get an individual | yes | yes | unknown |
-| `api.tmf632.individual.create` | 2 | Create an individual | yes | yes | unknown |
-| `api.tmf632.individual.patch` | 2 | Patch an individual | yes | yes | unknown |
-| `api.tmf632.individual.delete` | 5 | Delete an unreferenced individual | yes | yes | unknown |
-| `api.tmf632.organization.list` | 2 | List organizations | yes | yes | unknown |
-| `api.tmf632.organization.get` | 2 | Get an organization | yes | yes | unknown |
-| `api.tmf632.organization.create` | 2 | Create an organization | yes | yes | unknown |
-| `api.tmf632.organization.patch` | 2 | Patch an organization | yes | yes | unknown |
-| `api.tmf632.organization.delete` | 5 | Delete an unreferenced organization | yes | yes | unknown |
-| `api.tmf629.customer.list` | 2 | List customers | yes | yes | unknown |
-| `api.tmf629.customer.get` | 2 | Get a customer | yes | yes | unknown |
-| `api.tmf629.customer.create` | 2 | Create a customer | yes | yes | unknown |
-| `api.tmf629.customer.patch` | 2 | Patch a customer | yes | yes | unknown |
-| `api.tmf629.customer.delete` | 5 | Delete a customer without accounts | yes | yes | unknown |
-| `api.tmf666.billingCycleSpecification.list` | 2 | List billing cycle specifications | yes | yes | unknown |
-| `api.tmf666.billingCycleSpecification.get` | 2 | Get a billing cycle specification | yes | yes | unknown |
-| `api.tmf666.billingAccount.list` | 2 | List billing accounts (with balance) | yes | yes | unknown |
-| `api.tmf666.billingAccount.get` | 2 | Get a billing account | yes | yes | unknown |
-| `api.tmf666.billingAccount.create` | 2 | Create a billing account | yes | yes | unknown |
-| `api.tmf666.billingAccount.patch` | 2 | Patch a billing account | yes | yes | unknown |
-| `api.tmf666.billingAccount.delete` | 5 | Delete a billing account without history | yes | yes | unknown |
-| `api.tmf666.extensionSchema.get` | 2 | Serve the BssBillingAccount extension schema | yes | yes | unknown |
-| `api.tmf676.payment.list` | 2 | List payments | yes | yes | unknown |
-| `api.tmf676.payment.get` | 2 | Get a payment | yes | yes | unknown |
-| `api.tmf676.payment.create` | 2 | Record a payment | yes | yes | unknown |
-| `api.tmf622.productOrder.list` | 2 | List product orders | yes | yes | unknown |
-| `api.tmf622.productOrder.get` | 2 | Get a product order | yes | yes | unknown |
-| `api.tmf622.productOrder.create` | 2 | Place a product order (add / modify / delete / noChange items) | yes | yes | unknown |
-| `api.tmf622.productOrder.patch` | 5 | Patch an order's description, category, priority, externalId | yes | yes | unknown |
-| `api.tmf637.product.create` | 5 | Add a product (through an add order) | yes | yes | unknown |
-| `api.tmf637.product.patch` | 5 | Schedule a product's end (through a delete order) | yes | yes | unknown |
-| `api.tmf637.product.delete` | 5 | End a product today (through a delete order) | yes | yes | unknown |
-| `api.tmf666.billingCycleSpecification.create` | 5 | Name a billing cycle specification | yes | yes | unknown |
-| `api.tmf666.billingCycleSpecification.patch` | 5 | Patch a stored billing cycle specification | yes | yes | unknown |
-| `api.tmf666.billingCycleSpecification.delete` | 5 | Delete an unused billing cycle specification | yes | yes | unknown |
-| `api.tmf622.productOrder.delete` | 5 | Delete a rejected order | yes | yes | unknown |
-| `api.tmf622.cancelProductOrder.list` | 5 | List order cancellations | yes | yes | unknown |
-| `api.tmf622.cancelProductOrder.get` | 5 | Get an order cancellation | yes | yes | unknown |
-| `api.tmf622.cancelProductOrder.create` | 5 | Cancel a completed order before it takes effect | yes | yes | unknown |
-| `api.tmf637.product.list` | 2 | List products | yes | yes | unknown |
-| `api.tmf637.product.get` | 2 | Get a product | yes | yes | unknown |
-| `api.tmf678.billCycle.list` | 2 | List daily billing cycles | yes | yes | unknown |
-| `api.tmf678.billCycle.get` | 2 | Get a daily billing cycle | yes | yes | unknown |
-| `api.tmf678.customerBill.list` | 2 | List customer bills | yes | yes | unknown |
-| `api.tmf678.customerBill.get` | 2 | Get a customer bill | yes | yes | unknown |
-| `api.tmf678.customerBill.patch` | 5 | Hold or release a customer bill | yes | yes | unknown |
-| `api.tmf678.appliedCustomerBillingRate.list` | 2 | List charges and refunds (ABRs) | yes | yes | unknown |
-| `api.tmf678.appliedCustomerBillingRate.get` | 2 | Get a charge or refund (ABR) | yes | yes | unknown |
-| `api.internal.context.get` | 5 | System context: business date, zone, operator | yes | yes | unknown |
-| `api.internal.firstCharge.get` | 5 | First-charge preview of an add order | yes | yes | unknown |
-| `api.internal.accountProducts.list` | 5 | An account's not-ended products | yes | yes | unknown |
-| `api.internal.accountCharges.list` | 5 | An account's charges (ABRs with proration) | yes | yes | unknown |
-| `api.internal.accountTransactions.list` | 5 | An account's ledger with balance after | yes | yes | unknown |
-| `api.internal.accountSettlement.get` | 5 | An account's bills owed, unused credit, overdue and on hold | yes | yes | unknown |
-| `api.internal.billDetail.get` | 5 | A bill with charges, sources, history and allowed states | yes | yes | unknown |
-| `api.internal.priceChange.create` | 5 | Atomic price change of a live offering (D-W21) | yes | yes | unknown |
-| `api.internal.billingRun.list` | 4 | List billing runs (newest first) | yes | yes | unknown |
-| `api.internal.billingRun.get` | 4 | Get a billing run | yes | yes | unknown |
-| `api.internal.billingRunAccounts.list` | 4 | A run's per-account outcomes | yes | yes | unknown |
-| `api.internal.billingRun.catchUp` | 4 | Queue a catch-up to a date | yes | yes | unknown |
-| `api.internal.billingRun.retry` | 4 | Queue a retry of a failed run | yes | yes | unknown |
-| `api.service.healthz` | template | Liveness with a database check | yes | yes | unknown |
-| `api.service.billingStatus` | 4 | Freshness signal for the external monitor | yes | yes | unknown |
+| Id | Stage | Title | Implemented | Tested |
+|---|---|---|---|---|
+| `api.tmf639.hub.create` | 5 | TMF639 POST /hub | yes | yes |
+| `api.tmf639.hub.get` | 5 | TMF639 GET /hub/{id} | yes | yes |
+| `api.tmf639.hub.delete` | 5 | TMF639 DELETE /hub/{id} | yes | yes |
+| `api.tmf639.resource.list` | 5 | TMF639 GET /resource | yes | yes |
+| `api.tmf639.resource.create` | 5 | TMF639 POST /resource | yes | yes |
+| `api.tmf639.resource.get` | 5 | TMF639 GET /resource/{id} | yes | yes |
+| `api.tmf639.resource.patch` | 5 | TMF639 PATCH /resource/{id} | yes | yes |
+| `api.tmf639.resource.delete` | 5 | TMF639 DELETE /resource/{id} | yes | yes |
+| `api.tmf654.bucket.list` | 5 | TMF654 GET /bucket | no | no |
+| `api.tmf654.bucket.get` | 5 | TMF654 GET /bucket/{id} | no | no |
+| `api.tmf654.topupBalance.list` | 5 | TMF654 GET /topupBalance | no | no |
+| `api.tmf654.topupBalance.create` | 5 | TMF654 POST /topupBalance | no | no |
+| `api.tmf654.topupBalance.patch` | 5 | TMF654 PATCH /topupBalance/{id} | no | no |
+| `api.tmf654.topupBalance.get` | 5 | TMF654 GET /topupBalance/{id} | no | no |
+| `api.tmf654.topupBalance.delete` | 5 | TMF654 DELETE /topupBalance/{id} | no | no |
+| `api.tmf654.adjustBalance.list` | 5 | TMF654 GET /adjustBalance | no | no |
+| `api.tmf654.adjustBalance.create` | 5 | TMF654 POST /adjustBalance | no | no |
+| `api.tmf654.adjustBalance.patch` | 5 | TMF654 PATCH /adjustBalance/{id} | no | no |
+| `api.tmf654.adjustBalance.get` | 5 | TMF654 GET /adjustBalance/{id} | no | no |
+| `api.tmf654.adjustBalance.delete` | 5 | TMF654 DELETE /adjustBalance/{id} | no | no |
+| `api.tmf654.transferBalance.list` | 5 | TMF654 GET /transferBalance | no | no |
+| `api.tmf654.transferBalance.create` | 5 | TMF654 POST /transferBalance | no | no |
+| `api.tmf654.transferBalance.patch` | 5 | TMF654 PATCH /transferBalance/{id} | no | no |
+| `api.tmf654.transferBalance.get` | 5 | TMF654 GET /transferBalance/{id} | no | no |
+| `api.tmf654.transferBalance.delete` | 5 | TMF654 DELETE /transferBalance/{id} | no | no |
+| `api.tmf654.reserveBalance.list` | 5 | TMF654 GET /reserveBalance | no | no |
+| `api.tmf654.reserveBalance.create` | 5 | TMF654 POST /reserveBalance | no | no |
+| `api.tmf654.reserveBalance.patch` | 5 | TMF654 PATCH /reserveBalance/{id} | no | no |
+| `api.tmf654.reserveBalance.get` | 5 | TMF654 GET /reserveBalance/{id} | no | no |
+| `api.tmf654.reserveBalance.delete` | 5 | TMF654 DELETE /reserveBalance/{id} | no | no |
+| `api.tmf654.accumulatedBalance.list` | 5 | TMF654 GET /accumulatedBalance | no | no |
+| `api.tmf654.accumulatedBalance.get` | 5 | TMF654 GET /accumulatedBalance/{id} | no | no |
+| `api.tmf654.balanceActionHistory.list` | 5 | TMF654 GET /balanceActionHistory | no | no |
+| `api.tmf654.balanceActionHistory.get` | 5 | TMF654 GET /balanceActionHistory/{id} | no | no |
+| `api.tmf654.hub.create` | 5 | TMF654 POST /hub | no | no |
+| `api.tmf654.hub.delete` | 5 | TMF654 DELETE /hub/{id} | no | no |
+| `api.internal.session.create` | 5 | Sign in | yes | yes |
+| `api.internal.session.get` | 5 | Current session | yes | yes |
+| `api.internal.session.delete` | 5 | Sign out | yes | yes |
+| `api.internal.session.password` | 5 | Change own password | yes | yes |
+| `api.internal.users.list` | 5 | List users (admin) | yes | yes |
+| `api.internal.users.create` | 5 | Create user (admin) | yes | yes |
+| `api.internal.users.patch` | 5 | Manage user (admin) | yes | yes |
+| `api.tmf666.financialAccount.list` | 5 | List financial accounts | yes | yes |
+| `api.tmf666.financialAccount.get` | 5 | Get a financial account | yes | yes |
+| `api.tmf666.financialAccount.create` | 5 | Create a financial account | yes | yes |
+| `api.tmf666.financialAccount.patch` | 5 | Patch a financial account | yes | yes |
+| `api.tmf666.financialAccount.delete` | 5 | Delete an unlinked financial account | yes | yes |
+| `api.tmf666.partyAccount.list` | 5 | List party accounts | yes | yes |
+| `api.tmf666.partyAccount.get` | 5 | Get a party account | yes | yes |
+| `api.tmf666.partyAccount.create` | 5 | Create a party account | yes | yes |
+| `api.tmf666.partyAccount.patch` | 5 | Patch a party account | yes | yes |
+| `api.tmf666.partyAccount.delete` | 5 | Delete a party account | yes | yes |
+| `api.tmf666.settlementAccount.list` | 5 | List settlement accounts | yes | yes |
+| `api.tmf666.settlementAccount.get` | 5 | Get a settlement account | yes | yes |
+| `api.tmf666.settlementAccount.create` | 5 | Create a settlement account | yes | yes |
+| `api.tmf666.settlementAccount.patch` | 5 | Patch a settlement account | yes | yes |
+| `api.tmf666.settlementAccount.delete` | 5 | Delete a settlement account | yes | yes |
+| `api.tmf676.refund.list` | 5 | List refunds | yes | yes |
+| `api.tmf676.refund.get` | 5 | Get a refund | yes | yes |
+| `api.tmf676.refund.create` | 5 | Record a completed refund | yes | yes |
+| `api.tmf678.customerBillOnDemand.list` | 5 | List on-demand bill requests | yes | yes |
+| `api.tmf678.customerBillOnDemand.get` | 5 | Get an on-demand bill request | yes | yes |
+| `api.tmf678.customerBillOnDemand.create` | 5 | Request an off-cycle bill | yes | yes |
+| `api.tmf666.billFormat.list` | 5 | List bill formats | yes | yes |
+| `api.tmf666.billFormat.get` | 5 | Get a bill format | yes | yes |
+| `api.tmf666.billFormat.create` | 5 | Create a bill format | yes | yes |
+| `api.tmf666.billFormat.patch` | 5 | Patch a bill format | yes | yes |
+| `api.tmf666.billFormat.delete` | 5 | Delete an unused bill format | yes | yes |
+| `api.tmf666.billPresentationMedia.list` | 5 | List bill presentation media | yes | yes |
+| `api.tmf666.billPresentationMedia.get` | 5 | Get a bill presentation medium | yes | yes |
+| `api.tmf666.billPresentationMedia.create` | 5 | Create a bill presentation medium | yes | yes |
+| `api.tmf666.billPresentationMedia.patch` | 5 | Patch a bill presentation medium | yes | yes |
+| `api.tmf666.billPresentationMedia.delete` | 5 | Delete an unused bill presentation medium | yes | yes |
+| `api.tmf620.category.list` | 2 | List categories | yes | yes |
+| `api.tmf620.category.get` | 2 | Get a category | yes | yes |
+| `api.tmf620.category.create` | 2 | Create a category | yes | yes |
+| `api.tmf620.category.patch` | 2 | Patch a category | yes | yes |
+| `api.tmf620.productCatalog.list` | 2 | List product catalogs | yes | yes |
+| `api.tmf620.productCatalog.get` | 2 | Get a product catalog | yes | yes |
+| `api.tmf620.productCatalog.create` | 2 | Create a product catalog | yes | yes |
+| `api.tmf620.productCatalog.patch` | 2 | Patch a product catalog | yes | yes |
+| `api.tmf620.category.delete` | 5 | Delete an empty category | yes | yes |
+| `api.tmf620.productCatalog.delete` | 5 | Delete a product catalog | yes | yes |
+| `api.tmf620.exportJob.list` | 5 | List export jobs | yes | yes |
+| `api.tmf620.exportJob.get` | 5 | Get an export job | yes | yes |
+| `api.tmf620.exportJob.create` | 5 | Export the catalog as a data: URL | yes | yes |
+| `api.tmf620.exportJob.delete` | 5 | Delete an export job | yes | yes |
+| `api.tmf620.importJob.list` | 5 | List import jobs | yes | yes |
+| `api.tmf620.importJob.get` | 5 | Get an import job | yes | yes |
+| `api.tmf620.importJob.create` | 5 | Import a catalog document (all or nothing) | yes | yes |
+| `api.tmf620.importJob.delete` | 5 | Delete an import job | yes | yes |
+| `api.tmf620.hub.create` | 5 | Subscribe to TMF620 events | yes | yes |
+| `api.tmf620.hub.delete` | 5 | Unsubscribe from TMF620 events | yes | yes |
+| `api.tmf622.hub.create` | 5 | Subscribe to TMF622 events | yes | yes |
+| `api.tmf622.hub.delete` | 5 | Unsubscribe from TMF622 events | yes | yes |
+| `api.tmf629.hub.create` | 5 | Subscribe to TMF629 events | yes | yes |
+| `api.tmf629.hub.get` | 5 | Get a TMF629 subscription | yes | yes |
+| `api.tmf629.hub.delete` | 5 | Unsubscribe from TMF629 events | yes | yes |
+| `api.tmf632.hub.create` | 5 | Subscribe to TMF632 events | yes | yes |
+| `api.tmf632.hub.delete` | 5 | Unsubscribe from TMF632 events | yes | yes |
+| `api.tmf637.hub.create` | 5 | Subscribe to TMF637 events | yes | yes |
+| `api.tmf637.hub.delete` | 5 | Unsubscribe from TMF637 events | yes | yes |
+| `api.tmf666.hub.create` | 5 | Subscribe to TMF666 events | yes | yes |
+| `api.tmf666.hub.delete` | 5 | Unsubscribe from TMF666 events | yes | yes |
+| `api.tmf676.hub.create` | 5 | Subscribe to TMF676 events | yes | yes |
+| `api.tmf676.hub.delete` | 5 | Unsubscribe from TMF676 events | yes | yes |
+| `api.tmf678.hub.create` | 5 | Subscribe to TMF678 events | yes | yes |
+| `api.tmf678.hub.delete` | 5 | Unsubscribe from TMF678 events | yes | yes |
+| `api.tmf620.productSpecification.list` | 2 | List product specifications | yes | yes |
+| `api.tmf620.productSpecification.get` | 2 | Get a product specification | yes | yes |
+| `api.tmf620.productSpecification.create` | 2 | Create a product specification | yes | yes |
+| `api.tmf620.productSpecification.patch` | 2 | Patch a product specification | yes | yes |
+| `api.tmf620.productOffering.list` | 2 | List product offerings | yes | yes |
+| `api.tmf620.productOffering.get` | 2 | Get a product offering | yes | yes |
+| `api.tmf620.productOffering.create` | 2 | Create a product offering | yes | yes |
+| `api.tmf620.productOffering.patch` | 2 | Patch a product offering (lifecycle, prices) | yes | yes |
+| `api.tmf620.productOfferingPrice.list` | 2 | List offering prices | yes | yes |
+| `api.tmf620.productOfferingPrice.get` | 2 | Get an offering price | yes | yes |
+| `api.tmf620.productOfferingPrice.create` | 2 | Create an offering price | yes | yes |
+| `api.tmf620.productOfferingPrice.patch` | 2 | Patch an offering price (end it) | yes | yes |
+| `api.tmf620.productSpecification.delete` | 5 | Delete an unused product specification | yes | yes |
+| `api.tmf620.productOffering.delete` | 5 | Delete a never-ordered offering | yes | yes |
+| `api.tmf620.productOfferingPrice.delete` | 5 | Delete a price of a never-ordered offering | yes | yes |
+| `api.tmf632.individual.list` | 2 | List individuals | yes | yes |
+| `api.tmf632.individual.get` | 2 | Get an individual | yes | yes |
+| `api.tmf632.individual.create` | 2 | Create an individual | yes | yes |
+| `api.tmf632.individual.patch` | 2 | Patch an individual | yes | yes |
+| `api.tmf632.individual.delete` | 5 | Delete an unreferenced individual | yes | yes |
+| `api.tmf632.organization.list` | 2 | List organizations | yes | yes |
+| `api.tmf632.organization.get` | 2 | Get an organization | yes | yes |
+| `api.tmf632.organization.create` | 2 | Create an organization | yes | yes |
+| `api.tmf632.organization.patch` | 2 | Patch an organization | yes | yes |
+| `api.tmf632.organization.delete` | 5 | Delete an unreferenced organization | yes | yes |
+| `api.tmf629.customer.list` | 2 | List customers | yes | yes |
+| `api.tmf629.customer.get` | 2 | Get a customer | yes | yes |
+| `api.tmf629.customer.create` | 2 | Create a customer | yes | yes |
+| `api.tmf629.customer.patch` | 2 | Patch a customer | yes | yes |
+| `api.tmf629.customer.delete` | 5 | Delete a customer without accounts | yes | yes |
+| `api.tmf666.billingCycleSpecification.list` | 2 | List billing cycle specifications | yes | yes |
+| `api.tmf666.billingCycleSpecification.get` | 2 | Get a billing cycle specification | yes | yes |
+| `api.tmf666.billingAccount.list` | 2 | List billing accounts (with balance) | yes | yes |
+| `api.tmf666.billingAccount.get` | 2 | Get a billing account | yes | yes |
+| `api.tmf666.billingAccount.create` | 2 | Create a billing account | yes | yes |
+| `api.tmf666.billingAccount.patch` | 2 | Patch a billing account | yes | yes |
+| `api.tmf666.billingAccount.delete` | 5 | Delete a billing account without history | yes | yes |
+| `api.tmf666.extensionSchema.get` | 2 | Serve the BssBillingAccount extension schema | yes | yes |
+| `api.tmf676.payment.list` | 2 | List payments | yes | yes |
+| `api.tmf676.payment.get` | 2 | Get a payment | yes | yes |
+| `api.tmf676.payment.create` | 2 | Record a payment | yes | yes |
+| `api.tmf622.productOrder.list` | 2 | List product orders | yes | yes |
+| `api.tmf622.productOrder.get` | 2 | Get a product order | yes | yes |
+| `api.tmf622.productOrder.create` | 2 | Place a product order (add / modify / delete / noChange items) | yes | yes |
+| `api.tmf622.productOrder.patch` | 5 | Patch an order's description, category, priority, externalId | yes | yes |
+| `api.tmf637.product.create` | 5 | Add a product (through an add order) | yes | yes |
+| `api.tmf637.product.patch` | 5 | Schedule a product's end (through a delete order) | yes | yes |
+| `api.tmf637.product.delete` | 5 | End a product today (through a delete order) | yes | yes |
+| `api.tmf666.billingCycleSpecification.create` | 5 | Name a billing cycle specification | yes | yes |
+| `api.tmf666.billingCycleSpecification.patch` | 5 | Patch a stored billing cycle specification | yes | yes |
+| `api.tmf666.billingCycleSpecification.delete` | 5 | Delete an unused billing cycle specification | yes | yes |
+| `api.tmf622.productOrder.delete` | 5 | Delete a rejected order | yes | yes |
+| `api.tmf622.cancelProductOrder.list` | 5 | List order cancellations | yes | yes |
+| `api.tmf622.cancelProductOrder.get` | 5 | Get an order cancellation | yes | yes |
+| `api.tmf622.cancelProductOrder.create` | 5 | Cancel a completed order before it takes effect | yes | yes |
+| `api.tmf637.product.list` | 2 | List products | yes | yes |
+| `api.tmf637.product.get` | 2 | Get a product | yes | yes |
+| `api.tmf678.billCycle.list` | 2 | List daily billing cycles | yes | yes |
+| `api.tmf678.billCycle.get` | 2 | Get a daily billing cycle | yes | yes |
+| `api.tmf678.customerBill.list` | 2 | List customer bills | yes | yes |
+| `api.tmf678.customerBill.get` | 2 | Get a customer bill | yes | yes |
+| `api.tmf678.customerBill.patch` | 5 | Hold or release a customer bill | yes | yes |
+| `api.tmf678.appliedCustomerBillingRate.list` | 2 | List charges and refunds (ABRs) | yes | yes |
+| `api.tmf678.appliedCustomerBillingRate.get` | 2 | Get a charge or refund (ABR) | yes | yes |
+| `api.internal.context.get` | 5 | System context: business date, zone, operator | yes | yes |
+| `api.internal.firstCharge.get` | 5 | First-charge preview of an add order | yes | yes |
+| `api.internal.accountProducts.list` | 5 | An account's not-ended products | yes | yes |
+| `api.internal.accountCharges.list` | 5 | An account's charges (ABRs with proration) | yes | yes |
+| `api.internal.accountTransactions.list` | 5 | An account's ledger with balance after | yes | yes |
+| `api.internal.accountSettlement.get` | 5 | An account's bills owed, unused credit, overdue and on hold | yes | yes |
+| `api.internal.billDetail.get` | 5 | A bill with charges, sources, history and allowed states | yes | yes |
+| `api.internal.priceChange.create` | 5 | Atomic price change of a live offering (D-W21) | yes | yes |
+| `api.internal.billingRun.list` | 4 | List billing runs (newest first) | yes | yes |
+| `api.internal.billingRun.get` | 4 | Get a billing run | yes | yes |
+| `api.internal.billingRunAccounts.list` | 4 | A run's per-account outcomes | yes | yes |
+| `api.internal.billingRun.catchUp` | 4 | Queue a catch-up to a date | yes | yes |
+| `api.internal.billingRun.retry` | 4 | Queue a retry of a failed run | yes | yes |
+| `api.service.healthz` | template | Liveness with a database check | yes | yes |
+| `api.service.billingStatus` | 4 | Freshness signal for the external monitor | yes | yes |
 
 ## UI
 
-| Id | Stage | Title | Implemented | Tested | Deployed |
-|---|---|---|---|---|---|
-| `ui.financialAccounts.list` | 5 | Financial accounts: owner, balance per currency, contained accounts | yes | yes | unknown |
-| `ui.subscriber.financialAccount` | 5 | Subscriber card: link to the account's financial account | yes | yes | unknown |
-| `ui.session.signIn` | 5 | Sign in and return to the requested page | yes | yes | unknown |
-| `ui.session.password` | 5 | Change own password, including required first change | yes | yes | unknown |
-| `ui.session.menu` | 5 | Operator menu: role, password, users and sign out | yes | yes | unknown |
-| `ui.users.list` | 5 | Administrator users list | yes | yes | unknown |
-| `ui.users.manage` | 5 | Create, edit, disable and reset users | yes | yes | unknown |
-| `ui.shell` | 5 | Shell: sidebar, top bar with business date and zone | yes | yes | unknown |
-| `ui.subscribers.list` | 5 | Subscribers list | yes | yes | unknown |
-| `ui.numbers.list` | 5 | Subscriber-number inventory and search | yes | yes | unknown |
-| `ui.numbers.create` | 5 | Create an inventory number | yes | yes | unknown |
-| `ui.numbers.detail` | 5 | Number details, assignments and lock/unlock | yes | yes | unknown |
-| `ui.subscriber.number` | 5 | Product number and order-based number change | yes | yes | unknown |
-| `ui.subscribers.new` | 5 | New subscriber: party, customer, billing account | yes | yes | unknown |
-| `ui.subscriber.edit` | 5 | Edit subscriber: names, statuses, credit limit | yes | yes | unknown |
-| `ui.subscriber.card` | 5 | Subscriber card: account, products, charges, transactions | yes | yes | unknown |
-| `ui.subscriber.addProduct` | 5 | Add product, with first-charge preview | yes | yes | unknown |
-| `ui.subscriber.deactivate` | 5 | Deactivate a product | yes | yes | unknown |
-| `ui.subscriber.undoDeactivation` | 5 | Undo a pending deactivation (cancel its order) | yes | yes | unknown |
-| `ui.subscriber.bills` | 5 | Bills panel on the subscriber card | yes | yes | unknown |
-| `ui.subscriber.billDetail` | 5 | Bill dialog: charges, payments, history | yes | yes | unknown |
-| `ui.subscriber.billHold` | 5 | Put a bill on hold / release it | yes | yes | unknown |
-| `ui.subscriber.recordPayment` | 5 | Record payment, optionally to chosen bills | yes | yes | unknown |
-| `ui.subscriber.recordRefund` | 5 | Record a payout from unused credit | yes | yes | unknown |
-| `ui.subscriber.refunds` | 5 | Recorded refund history with payout metadata | yes | yes | unknown |
-| `ui.subscriber.billNow` | 5 | Request an on-demand bill | yes | yes | unknown |
-| `ui.subscriber.billRequests` | 5 | On-demand bill status and resulting bill | yes | yes | unknown |
-| `ui.catalog.list` | 5 | Product catalog | yes | yes | unknown |
-| `ui.catalog.offeringDetail` | 5 | Offering detail dialog | yes | yes | unknown |
-| `ui.catalog.lifecycle` | 5 | Offering lifecycle step (Activate / Retire) | yes | yes | unknown |
-| `ui.catalog.changePrice` | 5 | Change price of a live offering | yes | yes | unknown |
-| `ui.catalog.newOffering` | 5 | New offering | yes | yes | unknown |
-| `ui.billingRuns.list` | 4 | Billing runs: latest run, history, failed badge in the nav | yes | yes | unknown |
-| `ui.billingRuns.catchUp` | 4 | Catch up to a date | yes | yes | unknown |
-| `ui.billingRuns.retry` | 4 | Retry a failed run | yes | yes | unknown |
+| Id | Stage | Title | Implemented | Tested |
+|---|---|---|---|---|
+| `ui.financialAccounts.list` | 5 | Financial accounts: owner, balance per currency, contained accounts | yes | yes |
+| `ui.subscriber.financialAccount` | 5 | Subscriber card: link to the account's financial account | yes | yes |
+| `ui.session.signIn` | 5 | Sign in and return to the requested page | yes | yes |
+| `ui.session.password` | 5 | Change own password, including required first change | yes | yes |
+| `ui.session.menu` | 5 | Operator menu: role, password, users and sign out | yes | yes |
+| `ui.users.list` | 5 | Administrator users list | yes | yes |
+| `ui.users.manage` | 5 | Create, edit, disable and reset users | yes | yes |
+| `ui.shell` | 5 | Shell: sidebar, top bar with business date and zone | yes | yes |
+| `ui.subscribers.list` | 5 | Subscribers list | yes | yes |
+| `ui.numbers.list` | 5 | Subscriber-number inventory and search | yes | yes |
+| `ui.numbers.create` | 5 | Create an inventory number | yes | yes |
+| `ui.numbers.detail` | 5 | Number details, assignments and lock/unlock | yes | yes |
+| `ui.subscriber.number` | 5 | Product number and order-based number change | yes | yes |
+| `ui.subscribers.new` | 5 | New subscriber: party, customer, billing account | yes | yes |
+| `ui.subscriber.edit` | 5 | Edit subscriber: names, statuses, credit limit | yes | yes |
+| `ui.subscriber.card` | 5 | Subscriber card: account, products, charges, transactions | yes | yes |
+| `ui.subscriber.addProduct` | 5 | Add product, with first-charge preview | yes | yes |
+| `ui.subscriber.deactivate` | 5 | Deactivate a product | yes | yes |
+| `ui.subscriber.undoDeactivation` | 5 | Undo a pending deactivation (cancel its order) | yes | yes |
+| `ui.subscriber.bills` | 5 | Bills panel on the subscriber card | yes | yes |
+| `ui.subscriber.billDetail` | 5 | Bill dialog: charges, payments, history | yes | yes |
+| `ui.subscriber.billHold` | 5 | Put a bill on hold / release it | yes | yes |
+| `ui.subscriber.recordPayment` | 5 | Record payment, optionally to chosen bills | yes | yes |
+| `ui.subscriber.recordRefund` | 5 | Record a payout from unused credit | yes | yes |
+| `ui.subscriber.refunds` | 5 | Recorded refund history with payout metadata | yes | yes |
+| `ui.subscriber.billNow` | 5 | Request an on-demand bill | yes | yes |
+| `ui.subscriber.billRequests` | 5 | On-demand bill status and resulting bill | yes | yes |
+| `ui.catalog.list` | 5 | Product catalog | yes | yes |
+| `ui.catalog.offeringDetail` | 5 | Offering detail dialog | yes | yes |
+| `ui.catalog.lifecycle` | 5 | Offering lifecycle step (Activate / Retire) | yes | yes |
+| `ui.catalog.changePrice` | 5 | Change price of a live offering | yes | yes |
+| `ui.catalog.newOffering` | 5 | New offering | yes | yes |
+| `ui.billingRuns.list` | 4 | Billing runs: latest run, history, failed badge in the nav | yes | yes |
+| `ui.billingRuns.catchUp` | 4 | Catch up to a date | yes | yes |
+| `ui.billingRuns.retry` | 4 | Retry a failed run | yes | yes |
 
 ## Worker
 
-| Id | Stage | Title | Implemented | Tested | Deployed |
-|---|---|---|---|---|---|
-| `worker.onDemand` | 5 | Issue on-demand bills without moving monthly anchors | yes | yes | unknown |
-| `worker.billDocument` | 5 | Snapshot issued JSON documents with presentation preferences | yes | yes | unknown |
-| `worker.runLifecycle` | 4 | start_run answers every case: new, completed (no-op), failed (reopen), running | yes | yes | unknown |
-| `worker.takeover` | 4 | Takeover of a running run whose owner died; ok accounts untouched | yes | yes | unknown |
-| `worker.doubleStart` | 4 | A second worker while the lock is held backs off and writes nothing | yes | yes | unknown |
-| `worker.failureIsolation` | 4 | A failed account blocks only itself; after a fix it catches up its dates in order | yes | yes | unknown |
-| `worker.wholeRunFailure` | 4 | A whole-run failure does not advance past its date; retried with backoff | yes | yes | unknown |
-| `worker.completedAllOk` | 4 | A run is completed only when every member account is ok | yes | yes | unknown |
-| `worker.requestQueue` | 4 | Catch-up and retry requests from the UI queue are processed | yes | yes | unknown |
-| `worker.statusFlips` | 4 | Status flips (created -> active, pendingTerminate -> terminated) by run date | yes | yes | unknown |
-| `worker.scheduler` | 4 | Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday | yes | yes | unknown |
-| `worker.signals` | 4 | SIGTERM finishes the current account; SIGKILL leaves nothing half-written | yes | yes | unknown |
-| `worker.billIssue` | 5 | The run validates and issues the bills it writes (new -> validated -> sent; credit notes and zero bills settled) | yes | yes | unknown |
-| `worker.billSettle` | 5 | Every run applies unused credit to open bills, oldest first | yes | yes | unknown |
-| `worker.eventDelivery` | 5 | Due events are POSTed to hub callbacks, retried with backoff | yes | yes | unknown |
+| Id | Stage | Title | Implemented | Tested |
+|---|---|---|---|---|
+| `worker.onDemand` | 5 | Issue on-demand bills without moving monthly anchors | yes | yes |
+| `worker.billDocument` | 5 | Snapshot issued JSON documents with presentation preferences | yes | yes |
+| `worker.runLifecycle` | 4 | start_run answers every case: new, completed (no-op), failed (reopen), running | yes | yes |
+| `worker.takeover` | 4 | Takeover of a running run whose owner died; ok accounts untouched | yes | yes |
+| `worker.doubleStart` | 4 | A second worker while the lock is held backs off and writes nothing | yes | yes |
+| `worker.failureIsolation` | 4 | A failed account blocks only itself; after a fix it catches up its dates in order | yes | yes |
+| `worker.wholeRunFailure` | 4 | A whole-run failure does not advance past its date; retried with backoff | yes | yes |
+| `worker.completedAllOk` | 4 | A run is completed only when every member account is ok | yes | yes |
+| `worker.requestQueue` | 4 | Catch-up and retry requests from the UI queue are processed | yes | yes |
+| `worker.statusFlips` | 4 | Status flips (created -> active, pendingTerminate -> terminated) by run date | yes | yes |
+| `worker.scheduler` | 4 | Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday | yes | yes |
+| `worker.signals` | 4 | SIGTERM finishes the current account; SIGKILL leaves nothing half-written | yes | yes |
+| `worker.billIssue` | 5 | The run validates and issues the bills it writes (new -> validated -> sent; credit notes and zero bills settled) | yes | yes |
+| `worker.billSettle` | 5 | Every run applies unused credit to open bills, oldest first | yes | yes |
+| `worker.eventDelivery` | 5 | Due events are POSTed to hub callbacks, retried with backoff | yes | yes |
 
 ## Unscoped
 
