@@ -2676,6 +2676,46 @@ describe('prepaid balance actions', () => {
       );
     });
 
+    it.each([false, true])(
+      'keeps the release confirmation alive across an injected card refetch (failed=%s) and sends once',
+      async (failed) => {
+        let accountReads = 0;
+        const { dialog, fetchMock, calls } = await detailOf(hold, 'Hold', {
+          [`PATCH ${PREPAY}/reserveBalance/${T4}`]: () => json({ ...hold, status: 'cancelled' }),
+          [`POST ${PREPAY}/topupBalance`]: () => json(topup, { status: 201 }),
+          [`GET /tmf-api/accountManagement/v5/billingAccount/${A}`]: () => {
+            accountReads += 1;
+            return failed && accountReads > 1 ? tmfError(503, 'Temporary failure') : json(PREPAID);
+          },
+        });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Release hold' }));
+        // A separate completed write injects a real card reload while confirmation is open.
+        fireEvent.click(screen.getByRole('button', { name: 'Top up' }));
+        const form = await screen.findByRole('dialog', { name: 'Top up' });
+        fireEvent.change(within(form).getByLabelText('Amount'), { target: { value: '1' } });
+        fireEvent.click(within(form).getByRole('button', { name: 'Top up' }));
+        await waitFor(() => expect(calls.filter((call) => call === OWN).length).toBeGreaterThan(1));
+        if (failed) {
+          await screen.findByText('Failed to refresh the billing account');
+          expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+        }
+        expect(screen.getByRole('dialog', { name: 'Balance action' })).toBe(dialog);
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+        await waitFor(() =>
+          expect(writes(fetchMock)).toEqual([
+            [
+              'PATCH',
+              `${PREPAY}/reserveBalance/${T4}`,
+              '{"status":"cancelled","reason":"Pre-authorisation"}',
+            ],
+          ]),
+        );
+        await waitFor(() =>
+          expect(screen.queryByRole('dialog', { name: 'Balance action' })).toBeNull(),
+        );
+      },
+    );
+
     it('releases a hold without a reason with a stated one, which ReserveBalance_Update requires', async () => {
       const bare = { ...hold, reason: undefined };
       const { dialog, fetchMock } = await detailOf(bare, 'Hold', {
@@ -3348,10 +3388,12 @@ describe('change offering', () => {
     id,
     name,
     externalIdentifier: [{ id: name.toUpperCase(), externalIdentifierType: 'offeringCode' }],
-    productSpecification: { name: 'Spec' },
+    productSpecification: { id: 'same-spec', name: 'Spec' },
     productOfferingPrice: [{ id: price }],
   });
   const catalog = {
+    [`GET /tmf-api/productCatalogManagement/v5/productOffering/${O1}`]: () =>
+      json({ ...offering(O1, 'Mobile L', 'pr1'), lifecycleStatus: 'Active' }),
     [CATALOG]: () =>
       json([offering(O1, 'Mobile L', 'pr1'), offering(O2, 'Fiber 100', 'pr2')], { total: 2 }),
     [PRICES]: () =>
@@ -3401,6 +3443,49 @@ describe('change offering', () => {
     expect(dialog).toBe(expectUi('ui.subscriber.offeringChange'));
     return { row, dialog };
   }
+
+  it('filters out offerings using another specification even when the current offering is retired', async () => {
+    backend({
+      ...catalog,
+      [`GET /tmf-api/productCatalogManagement/v5/productOffering/${O1}`]: () =>
+        json({ ...offering(O1, 'Mobile L', 'pr1'), lifecycleStatus: 'Retired', isSellable: false }),
+      [CATALOG]: () =>
+        json(
+          [
+            offering(O2, 'Fiber 100', 'pr2'),
+            {
+              ...offering('other', 'Other specification', 'pr2'),
+              productSpecification: { id: 'other-spec' },
+            },
+          ],
+          { total: 2 },
+        ),
+    });
+    const { dialog } = await openDialog();
+    expect(await within(dialog).findByRole('radio', { name: /Fiber 100/ })).toBeTruthy();
+    expect(within(dialog).queryByRole('radio', { name: /Other specification/ })).toBeNull();
+  });
+
+  it('explains when no other offering uses the current specification', async () => {
+    backend({
+      ...catalog,
+      [CATALOG]: () =>
+        json(
+          [
+            {
+              ...offering(O2, 'Other specification', 'pr2'),
+              productSpecification: { id: 'other-spec' },
+            },
+          ],
+          { total: 1 },
+        ),
+    });
+    const { dialog } = await openDialog();
+    expect(
+      await within(dialog).findByText("No other offering uses this product's specification."),
+    ).toBeTruthy();
+    expect(within(dialog).queryByRole('radio')).toBeNull();
+  });
 
   it('is not offered for an ending product, a pending offering change or an unstarted prepaid product', async () => {
     backend(
@@ -3785,5 +3870,79 @@ describe('Ledger subscriber tabs', () => {
     expect(
       screen.getByRole('tabpanel').querySelector('[data-ui="ui.subscriber.account"]'),
     ).toBeTruthy();
+  });
+});
+
+describe('same-day status Undo', () => {
+  const products = (rows: object[]) => ({
+    [`GET ${INTERNAL}/products`]: () => json(rows, { total: rows.length }),
+  });
+  const posts = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
+    fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
+  const openMenu = (row: HTMLElement) =>
+    fireEvent.click(within(row).getByRole('button', { name: 'Actions ▾' }));
+  it.each([
+    ['suspended', 'Undo suspension', 'Resume…'],
+    ['active', 'Undo resumption', 'Suspend…'],
+  ])('cancels an applied %s change through its menu', async (status, label, opposite) => {
+    const { fetchMock } = backend({
+      ...products([
+        product(P1, {
+          status,
+          undoableStatusChange: {
+            date: '2026-10-05',
+            status,
+            productOrder: { id: 'ord-today' },
+          },
+        }),
+      ]),
+      [`POST /tmf-api/productOrderingManagement/v5/cancelProductOrder`]: () =>
+        json({ id: 'k1', state: 'done', '@type': 'CancelProductOrder' }, { status: 201 }),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    openMenu(row);
+    const menu = productMenu(row);
+    expect(within(menu).queryByRole('menuitem', { name: opposite })).toBeNull();
+    const undo = within(menu).getByRole('menuitem', { name: label });
+    expect(undo).toBe(expectUi('ui.subscriber.undoStatusChange'));
+    fireEvent.click(undo);
+    await screen.findByRole('status');
+    expect(String(posts(fetchMock)[0]?.[1]?.body)).toBe(
+      JSON.stringify({
+        '@type': 'CancelProductOrder',
+        productOrder: { id: 'ord-today', '@type': 'ProductOrderRef' },
+      }),
+    );
+  });
+
+  it('undoes a future suspension from its pending line', async () => {
+    const { fetchMock } = backend({
+      ...products([
+        product(P1, {
+          pendingChanges: [
+            {
+              kind: 'status',
+              date: '2026-11-03',
+              status: 'suspended',
+              productOrder: { id: 'ord-future' },
+            },
+          ],
+        }),
+      ]),
+      [`POST /tmf-api/productOrderingManagement/v5/cancelProductOrder`]: () =>
+        json({ id: 'k1', state: 'done', '@type': 'CancelProductOrder' }, { status: 201 }),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    expect(within(row).getByText('Suspends on 2026-11-03')).toBeTruthy();
+    fireEvent.click(within(row).getByRole('button', { name: 'Undo' }));
+    await screen.findByRole('status');
+    expect(String(posts(fetchMock)[0]?.[1]?.body)).toBe(
+      JSON.stringify({
+        '@type': 'CancelProductOrder',
+        productOrder: { id: 'ord-future', '@type': 'ProductOrderRef' },
+      }),
+    );
   });
 });

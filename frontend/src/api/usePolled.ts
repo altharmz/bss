@@ -1,3 +1,4 @@
+import { useWriteLock } from './WriteLock';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { Resource } from './useResource';
 
@@ -32,6 +33,7 @@ export function usePolled<T>(
   intervalMs: number,
   until?: number,
 ): Polled<T> {
+  const { locked } = useWriteLock();
   const [attempt, setAttempt] = useState(0);
   const [tick, setTick] = useState(0);
   const id = `${key}#${attempt}`;
@@ -75,7 +77,7 @@ export function usePolled<T>(
 
   // a background refresh: never shows loading, only replaces the data of the same key
   useEffect(() => {
-    if (tick === 0) return;
+    if (tick === 0 || locked) return;
     const owner = idRef.current;
     const controller = new AbortController();
     run(controller.signal).then(
@@ -97,7 +99,7 @@ export function usePolled<T>(
       },
     );
     return () => controller.abort();
-  }, [tick]);
+  }, [tick, locked]);
 
   const current: State<T> =
     state.id === id ? state : { id, value: { status: 'loading' }, version: 0, refreshError: null };
@@ -108,10 +110,10 @@ export function usePolled<T>(
     active(current.value.data);
 
   useEffect(() => {
-    if (!polling) return;
+    if (!polling || locked) return;
     const timer = setTimeout(() => setTick((n) => n + 1), intervalMs);
     return () => clearTimeout(timer);
-  }, [polling, current.version, intervalMs]);
+  }, [polling, current.version, intervalMs, locked]);
 
   useEffect(() => {
     if (until === undefined) return;

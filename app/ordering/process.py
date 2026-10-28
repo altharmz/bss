@@ -520,6 +520,17 @@ def _modify_problems(
         return [("openModifyItem", f"another order already changes its offering on {day}")]
     if products.offering_on(conn, product["id"], start) == item.product_offering_id:
         return [("offeringUnchanged", f"the product is on this offering on {start} already")]
+    if (
+        number_orders.offering_requires(conn, item.product_offering_id)
+        != product["requires_msisdn"]
+    ):
+        return [
+            (
+                "numberRequirementDiffers",
+                "the target specification's subscriber number requirement differs"
+                " from the product's",
+            )
+        ]
     return _add_problems(conn, item, account, start, quotes)
 
 

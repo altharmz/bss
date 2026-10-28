@@ -34,6 +34,11 @@ def granted(api, db_conn, monkeypatch):
     cheaper = apidata.sellable_offering(
         api, value=5, tax=[{"@type": "TaxItem", "taxCategory": "VAT", "taxRate": 20}]
     )
+    response = api.patch(
+        cheaper["productSpecification"]["href"],
+        {"resourceSpecification": [{"id": "msisdn", "@type": "ResourceSpecificationRef"}]},
+    )
+    assert response.status_code == 200, response.text
     off, acc = shop(api, db_conn)
     order = purchase(api, off, acc)
     assert tick(db_conn, api.clock.now()).prepaid_commands == [UUID(order["id"])]

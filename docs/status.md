@@ -558,12 +558,11 @@ shipped).
   request; this also cut `make test`. To confirm after the deploy: at most 10 bss API
   sessions in `pg_stat_activity` under load, and the app answers after the nightly
   reboot. [infra.md](decisions/infra.md#db-connection-pool).
-- **The pytest container shows `(unhealthy)` during `make test`**: the image's
-  HEALTHCHECK probes `/healthz`, which nothing serves while pytest runs in the `app`
-  service. Harmless for `run --rm`, but noise in `docker ps`. Since the 60 s interval
-  `unhealthy` needs 3 failed probes after the 30 s start period - longer than a `make
-  test` run (~70-90 s) - so it should show `health: starting` instead (not observed). Fix later in compose
-  (e.g. disable the healthcheck for one-off runs); compose change, needs the human's OK.
+- **The pytest container showed a health state during `make test`** (issue #4): the image's
+  HEALTHCHECK probes `/healthz`, which nothing serves while pytest runs. `make test` now runs
+  in the `oneoff` service (compose.override.yaml: `app` with the healthcheck disabled, no
+  ports); `app` keeps its check. Proven: `docker inspect` of a `oneoff` container shows
+  `Test: [NONE]`, image `bss-app:dev`. `make test` itself is the pre-commit run.
 - **Restore drill** from a cron-made dump. On 2026-09-30 `~/infra/backups` on the VPS was empty and no backup
   cron was installed; this is being fixed in vps-infra. Use the first cron-made `bss` dump:
   `pg_restore --list` on the server (no databases created and no `pg_restore` into a

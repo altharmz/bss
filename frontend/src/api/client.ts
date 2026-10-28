@@ -1,3 +1,5 @@
+import { writeLock } from './WriteLock';
+
 // Fetch wrapper for the TMF and internal APIs (same origin: Vite's proxy locally, the
 // shared Caddy on the VPS). Every failure becomes an ApiError carrying what the error
 // block shows: the call and its outcome, e.g. "GET /tmf-api/... → 503 Service Unavailable".
@@ -65,29 +67,45 @@ export async function request(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  let response: Response;
+  const writing = !['GET', 'HEAD'].includes(method);
+  const release = writing ? writeLock.begin() : () => {};
+  if (writing) writeLock.requested();
   try {
-    response = await fetch(path, {
-      ...init,
-      method,
-      credentials: 'same-origin',
-      headers: {
-        Accept: 'application/json',
-        ...(!['GET', 'HEAD'].includes(method) ? { 'X-Bss-Request': '1' } : {}),
-        ...(init.headers as Record<string, string>),
-      },
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    throw new ApiError(method, path, 0, 'Network error');
-  }
-  if (!response.ok) {
-    if (response.status === 401 && (path !== '/internal/v1/session' || method === 'DELETE')) {
-      window.dispatchEvent(new Event('bss:unauthorized'));
+    let response: Response;
+    try {
+      response = await fetch(path, {
+        ...init,
+        method,
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          ...(!['GET', 'HEAD'].includes(method) ? { 'X-Bss-Request': '1' } : {}),
+          ...(init.headers as Record<string, string>),
+        },
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+      throw new ApiError(method, path, 0, 'Network error');
     }
-    throw await failure(method, path, response);
+    if (!response.ok) {
+      if (response.status === 401 && (path !== '/internal/v1/session' || method === 'DELETE')) {
+        window.dispatchEvent(new Event('bss:unauthorized'));
+      }
+      throw await failure(method, path, response);
+    }
+    if (
+      response.ok &&
+      ((path === '/tmf-api/productOrderingManagement/v5/productOrder' && method === 'POST') ||
+        (/^\/tmf-api\/(accountManagement\/v5\/billingAccount|productCatalogManagement\/v5\/productOffering)(\/[^/]+)?$/.test(
+          path,
+        ) &&
+          ['POST', 'DELETE'].includes(method)))
+    )
+      window.dispatchEvent(new Event('bss:countsChanged'));
+    return response;
+  } finally {
+    release();
   }
-  return response;
 }
 
 /** POST a JSON body. The caller passes the JSON text when it must control number tokens

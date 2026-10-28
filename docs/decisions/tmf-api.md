@@ -1,5 +1,13 @@
 # TMF API: conventions and mappings (TMF632, 629, 666, 676, 637, 678, 622)
 
+GUI review G4a (I2): an offering-change modify item rejects with
+`numberRequirementDiffers` when the target specification's MSISDN requirement differs
+from the product's immutable `requires_msisdn`. Both directions are refused; equal
+requirements remain accepted across specifications. This uses the existing 201 rejected
+order/error-message shape, preserves number claims, and requires no migration. The UI
+offers only same-specification alternatives; API clients may still change between
+specifications whose number requirements agree. Four backend cases pin this rule.
+
 The approved [refund/bill-delivery milestone](billing-completion.md) adds TMF676
 refunds, TMF678 customerBillOnDemand, and TMF666 billFormat/billPresentationMedia.
 It extends account billStructure with writable format/media preferences while

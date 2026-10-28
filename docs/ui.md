@@ -182,6 +182,11 @@ API: `POST /tmf-api/productOrderingManagement/v5/productOrder`.
 
 ### Product actions (`ui.subscriber.productActions`) and pending changes
 
+An applied status change today exposes Undo suspension or Undo resumption in the product
+menu (`ui.subscriber.undoStatusChange`), replacing the opposite status action. It cancels
+the referenced order with the existing cancelProductOrder request. Future suspensions
+retain their pending-line Undo; errors stay beside the product.
+
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 **Actions ▾** on a product row lists what the row allows: **Suspend…** (`ui.subscriber.suspend`,
@@ -201,7 +206,8 @@ API: `POST .../productOrder`, `POST .../cancelProductOrder`,
 
 **Change offering…** (`ui.subscriber.changeOffering`, active or suspended, no end, no pending
 offering change; prepaid needs `paidThrough`) opens `ui.subscriber.offeringChange`: pick an
-active offering (not the current one), see the first-charge preview for the date, submit one
+active offering using the current offering's product specification (not the current one),
+see the first-charge preview for the date, submit one
 `modify` item with the new `productOffering` (no status). Postpaid: date from today, default the
 next charge date; the old offering is billed until D-1 and the new one from D. Prepaid: the date
 is fixed to `max(paidThrough, today)`, the change applies at a funded renewal and shows as a
@@ -694,3 +700,9 @@ Orders retain refused outcomes in their open dialog. The shared write footer sho
 server reason. Deactivate opens the existing End on a date dialog prefilled with today;
 confirming today preserves the immediate delete request. Same-day status Undo remains
 tracked in G2b.
+
+Subscriber-card refreshes preserve open dialogs and entered values. Product changes,
+subscriber-number changes and balance-action details are owned outside list rows using
+stable ids. Writes pause background polling and defer card reloads until their requests
+finish; a confirmation that resolves without a request shows “Not sent. Try again.”
+Subscriber create/delete, offering create/delete and order POSTs refresh sidebar counts.

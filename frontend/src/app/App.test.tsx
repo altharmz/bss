@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { request } from '../api/client';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { expectUi } from '../test/expectUi';
 import {
@@ -58,6 +59,29 @@ function start(path: string) {
 }
 
 describe('routes', () => {
+  it.each([
+    ['POST', '/tmf-api/accountManagement/v5/billingAccount'],
+    ['DELETE', '/tmf-api/accountManagement/v5/billingAccount/a1'],
+    ['POST', '/tmf-api/productOrderingManagement/v5/productOrder'],
+    ['POST', '/tmf-api/productCatalogManagement/v5/productOffering'],
+    ['DELETE', '/tmf-api/productCatalogManagement/v5/productOffering/o1'],
+  ])('refreshes sidebar count resources after %s %s', async (method, path) => {
+    const { calls, fetchMock } = backend();
+    start('/subscribers');
+    await screen.findByRole('navigation', { name: 'Main' });
+    await waitFor(() =>
+      expect(calls.filter((call) => call === `GET ${OFFERINGS}`)).toHaveLength(1),
+    );
+    fetchMock.mockImplementationOnce(async () => json({ id: ID }, { status: 201 }));
+    await act(async () => {
+      await request(method, path);
+    });
+    await waitFor(() => {
+      for (const resource of [`GET ${ACCOUNTS}`, `GET ${OFFERINGS}`, NAV_ORDERS]) {
+        expect(calls.filter((call) => call === resource)).toHaveLength(2);
+      }
+    });
+  });
   it('marks the active sidebar item and puts operator identity in the footer trigger', async () => {
     backend();
     start('/subscribers');

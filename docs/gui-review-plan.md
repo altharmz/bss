@@ -135,9 +135,10 @@ Rows run strictly in order.
 | G1a | Menus escape their card; no hard-coded currency (B4, B5) | UI | Portal/flip-up/dismissal regression tests; every single-row menu item present; subscriber single/mixed currencies; currency guard | done: Keep menus visible and show account currencies (B4, B5) |
 | G1b | Dialogs fit the viewport and submit from single-line inputs (B2) | UI | Fixed header/footer with scrolling body inherited by Modal; optional onSubmit wired to every form primary, with disabled/textarea/destructive/transfer-confirm exclusions; structure and Enter tests; new frontend/e2e/dialogs.spec.ts at 1366×768 and 1920×900 checks New category, Edit subscriber with media, New offering and Add product primaries with toBeInViewport(); run make web-e2e once; screenshots and visual review | done: Keep dialog actions visible and submit enabled forms with Enter (B2) |
 | G2a | Refused orders shown in their dialog (B1, I4; refusal portion) | UI + code-parity test | Every order write retains mapped refusals and codes above its actions | done: Show refused product orders in their dialog (B1, I4) |
-| G2b | Same-day Undo and future suspension coverage (B1, I5; Undo portion) | internal API + UI | undoableStatusChange, today's Undo suspension/resumption and dedicated future-suspension Undo coverage | todo |
-| G3 | Writes survive refreshes; sidebar counts update (B6, B10) | UI | A refetch between "Release hold" and "Yes" still sends the PATCH. A create bumps the counts | todo |
-| G4 | Subscriber numbers end to end (B3/P1, P11, I2, P13) | TMF622 refusal code + UI | Spec "Requires a subscriber number" and the characteristics are pinned. Change offering is filtered by spec. `numberRequirementDiffers` is tested. The e2e numbered prepaid transfer is written | todo |
+| G2b | Same-day Undo and future suspension coverage (B1, I5; Undo portion) | internal API + UI | undoableStatusChange, today's Undo suspension/resumption and dedicated future-suspension Undo coverage | done: Offer same-day status Undo in product menus (B1, I5) |
+| G3 | Writes survive refreshes; sidebar counts update (B6, B10) | UI | A refetch between "Release hold" and "Yes" still sends the PATCH. A create bumps the counts | done: Preserve dialogs across refreshes and update sidebar counts (B6, B10) |
+| G4a | Compatible offering changes (I2) | TMF622 refusal code + UI | Change offering is filtered by spec. `numberRequirementDiffers` is tested | done: Preserve subscriber number requirements when changing offerings (I2) |
+| G4b | Subscriber numbers end to end (B3/P1, P11, P13) | UI | Spec "Requires a subscriber number" and the characteristics are pinned. The e2e numbered prepaid transfer is written | todo |
 | R7b | Subscriber card: products, pending sub-row, In progress steps | UI (redesign) | As in ui-redesign-slices.md row 7b, keeping G2's Undo and G3's dialog ownership | todo |
 | G5 | Subscriber products and prepaid wording (B8, B23, B24, I6, I10) | internal API + UI | nextCharge = the first charging run (backend test: a product started today gives tomorrow's run). "Starts". Prepaid shortfall gating. Drafts on the card | todo |
 | R8 | Billing runs: header actions, latest-run band, inline outcomes, history selection | UI (redesign) | As in row 8 | todo |
@@ -288,6 +289,10 @@ dialog, overlapping B18; the today request stays unchanged. G14 retains B18 veri
 
 ### G4: subscriber numbers end to end (B3/P1, P11, I2, P13)
 
+Split by ID: G4a owns I2 (the requirement refusal and same-specification offering
+filter). G4b retains B3/P1, P11 and P13, including all spec-editor documents, number
+wording and the numbered prepaid transfer scenario written now and run in R16.
+
 - Spec editor (`Specifications.tsx`, `api/bss.ts` `SpecificationFields`): the checkbox
   and the characteristics editor per decisions B3 and P11. Create and patch bodies are
   pinned. A 409 on the requirement shows in place.
@@ -429,7 +434,7 @@ is the priority:
    reboot).
 4. **APP_PORT / `make down` profiles** (status.md spec of 2026-10-03), then the vps-lab
    guard backport and the two vps-lab-template fixes.
-5. **pytest container `(unhealthy)`**: disable the healthcheck for one-off runs in compose.
+5. **pytest container `(unhealthy)`**: done, issue #4 (the `oneoff` service).
 6. **Network isolation** of app/MCP (vps-infra).
 7. **`"ask"` rules** verification and **cloud startup validation** (docs/cloud.md).
 8. **Progress drift enforcement and per-item deployed status.**

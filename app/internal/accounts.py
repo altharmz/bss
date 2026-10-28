@@ -25,6 +25,7 @@ from app.billing.model import Account, BillingState, DateRange, MissingPrice, Pr
 from app.billing.prepaid import IntervalQuote, TaxQuote
 from app.config import settings
 from app.internal.context import no_query
+from app.ordering.cancel import undoable_status_change
 from app.repository import billing, catalog, funding, parties, products
 from app.repository._sql import Row
 
@@ -291,7 +292,8 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
     """The account's products that are not ended (created, pendingActive, active,
     pendingTerminate, suspended), oldest start first. `price` is the recurring price in
     the account's currency valid today, or on the start date for a product that has not
-    started; null if there is none."""
+    started; null if there is none. `undoableStatusChange` is an applied status change
+    today whose completed order can still be cancelled; null otherwise."""
     _params(request)
     tz = ZoneInfo(settings.billing_tz)
     today = clock.today()
@@ -306,6 +308,7 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
         )
         changes = billing.offering_changes(conn, [p["id"] for p in rows])
         pending = products.pending_changes(conn, [p["id"] for p in rows], today)
+        undoable = {p["id"]: undoable_status_change(conn, p, today) for p in rows}
         cores = {p["id"]: billing.core_product(p, changes.get(p["id"], ())) for p in rows}
         prices = billing.load_recurring_prices(
             conn, [o for p in cores.values() for o in p.offering_ids]
@@ -345,6 +348,7 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                 "nextChargeDate": prepaid_views[p["id"]]["paidThrough"]
                 if p["id"] in prepaid_views
                 else nxt,
+                "undoableStatusChange": undoable[p["id"]],
                 "pendingChanges": [_pending_change(c) for c in pending.get(p["id"], [])],
                 **prepaid_views.get(p["id"], {}),
             }

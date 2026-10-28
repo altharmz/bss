@@ -47,8 +47,10 @@ export function isOverdue(bill: Bill, today: string): boolean {
 
 export function useBills(account: Account, version: number): ResourceWithRetry<Bill[]> {
   const context = useSystemContext();
-  return useResource(`bills:${account.id}:${version}`, (signal) =>
-    loadBills(account.id, context.timeZone, signal),
+  return useResource(
+    `bills:${account.id}:${version}`,
+    (signal) => loadBills(account.id, context.timeZone, signal),
+    true,
   );
 }
 

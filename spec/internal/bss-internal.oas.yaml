@@ -843,6 +843,21 @@ components:
             shortfall: {type: number}
             observedAt: {type: string, format: date-time}
         nextChargeDate: {$ref: '#/components/schemas/NullableBusinessDate'}
+        undoableStatusChange:
+          description: Applied status change today whose order can still be cancelled.
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [date, status, productOrder]
+          properties:
+            date: {$ref: '#/components/schemas/BusinessDate'}
+            status: {type: string, enum: [suspended, active]}
+            productOrder:
+              type: object
+              additionalProperties: false
+              required: [id]
+              properties:
+                id: {type: string, format: uuid}
         pendingChanges:
           description: >-
             Status and offering changes not yet in effect, by date; [] when there is none.

@@ -73,3 +73,48 @@ def test_a_prepaid_change_at_paid_through_is_pending_until_the_funded_renewal(
     pay(db_conn, UUID(granted.acc["id"]), "18", api.clock.now())
     tick(db_conn, at(first["due"], 0))
     assert listed(api, granted.acc)[first["id"]]["pendingChanges"] == []
+
+
+def test_same_day_status_undo_eligibility(api):
+    a = apidata.sellable_offering(api)
+    acc = apidata.account(api)
+    product = add(api, acc, a, OCT2, on=at(date(2026, 10, 1)))
+    day = date(2026, 10, 5)
+    order = change(api, acc, product, "suspended", day, on=at(day))
+    assert listed(api, acc)[product["id"]]["undoableStatusChange"] == {
+        "date": day.isoformat(),
+        "status": "suspended",
+        "productOrder": {"id": order["id"]},
+    }
+    api.clock.set(at(day + timedelta(days=1)))
+    assert listed(api, acc)[product["id"]]["undoableStatusChange"] is None
+    api.clock.set(at(day))
+    assert api.post(CANCEL, cancel_body(order)).status_code == 201
+    assert listed(api, acc)[product["id"]]["undoableStatusChange"] is None
+
+
+def test_future_suspension_pending_undo_restores_active(api):
+    a = apidata.sellable_offering(api)
+    acc = apidata.account(api)
+    product = add(api, acc, a, OCT2, on=at(OCT2))
+    order = change(api, acc, product, "suspended", NOV3, on=at(date(2026, 10, 5)))
+    row = listed(api, acc)[product["id"]]
+    assert row["undoableStatusChange"] is None
+    assert row["pendingChanges"][0]["productOrder"]["id"] == order["id"]
+    assert api.post(CANCEL, cancel_body(order)).status_code == 201
+    row = listed(api, acc)[product["id"]]
+    assert row["pendingChanges"] == [] and row["status"] == "active"
+
+
+def test_same_day_status_undo_hidden_when_termination_blocks_cancellation(api):
+    offering = apidata.sellable_offering(api)
+    acc = apidata.account(api)
+    product = add(api, acc, offering, OCT2, on=at(OCT2))
+    day = date(2026, 10, 5)
+    change(api, acc, product, "suspended", day, on=at(day))
+    assert listed(api, acc)[product["id"]]["undoableStatusChange"] is not None
+    ended = apidata.order(
+        api, acc, apidata.delete_item(product["id"]), requestedStartDate="2026-11-03T00:00:00Z"
+    )
+    assert ended["state"] == "completed"
+    assert listed(api, acc)[product["id"]]["undoableStatusChange"] is None

@@ -161,6 +161,39 @@ def _status_problem(conn: psycopg.Connection, item: Row, product: Row, today: da
     return None
 
 
+def undoable_status_change(conn: psycopg.Connection, product: Row, today: date) -> Row | None:
+    """An applied change today whose whole completed order can still be undone."""
+    for change in products.status_changes_of(conn, product["id"]):
+        if change["change_date"] != today or change["applied_at"] is None:
+            continue
+        item = orders.get_order_item(conn, change["changed_by_item_id"])
+        order = orders.get_order(conn, item["product_order_id"])
+        if order["state"] != "completed":
+            continue
+        account = parties.get_billing_account(conn, order["billing_account_id"])
+        items = orders.items_of(conn, order["id"])
+        if any(
+            _item_problem(
+                conn,
+                entry,
+                products.get_product(conn, entry["product_id"])
+                | {"rating_type": account["rating_type"], "currency": account["currency"]},
+                today,
+                account["bill_cycle_day"],
+            )
+            is not None
+            for entry in items
+            if entry["action"] != "noChange"
+        ) or number_orders.cancellation_problem(conn, items):
+            continue
+        return {
+            "date": change["change_date"],
+            "status": change["status"],
+            "productOrder": {"id": str(order["id"])},
+        }
+    return None
+
+
 def cancel_order(
     conn: psycopg.Connection, request: CancelRequest, *, now: datetime, today: date
 ) -> Row:

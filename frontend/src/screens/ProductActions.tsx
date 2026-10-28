@@ -4,6 +4,7 @@ import { Note } from '../ui/Note';
 import { useRef, useState } from 'react';
 import {
   loadFirstCharge,
+  loadOfferingDetail,
   loadSellableOfferings,
   orderOfferingChange,
   orderProductChange,
@@ -50,7 +51,8 @@ export function offeredChanges(
   product: AccountProduct,
   ratingType?: Account['ratingType'],
 ): ProductAction[] {
-  const statusPending = product.pendingChanges.some((c) => c.kind === 'status');
+  const statusPending =
+    !!product.undoableStatusChange || product.pendingChanges.some((c) => c.kind === 'status');
   const items: ProductAction[] = [];
   if (product.status === 'active' && !statusPending) items.push('suspend');
   if (
@@ -77,21 +79,39 @@ export function offeredChanges(
 export function ProductActionsMenu({
   items,
   onPick,
+  undoable,
+  onUndo,
+  busy,
 }: {
+  undoable?: AccountProduct['undoableStatusChange'];
+  onUndo?: () => void;
+  busy?: boolean;
   items: ProductAction[];
   onPick: (change: ProductAction) => void;
 }) {
-  if (items.length === 0) return null;
+  if (items.length === 0 && !undoable) return null;
   return (
     <Menu
       label="Actions ▾"
       trigger="Actions ▾"
       ui="ui.subscriber.productActions"
-      items={items.map((item) => ({
-        label: `${TITLE[item]}…`,
-        ui: CHANGE_UI[item],
-        onClick: () => onPick(item),
-      }))}
+      items={[
+        ...(undoable
+          ? [
+              {
+                label: undoable.status === 'suspended' ? 'Undo suspension' : 'Undo resumption',
+                ui: 'ui.subscriber.undoStatusChange',
+                disabled: !!busy,
+                onClick: () => onUndo?.(),
+              },
+            ]
+          : []),
+        ...items.map((item) => ({
+          label: `${TITLE[item]}…`,
+          ui: CHANGE_UI[item],
+          onClick: () => onPick(item),
+        })),
+      ]}
     />
   );
 }
@@ -272,6 +292,9 @@ export function ChangeOfferingDialog({
   const offerings = useResource('offerings', (signal) =>
     loadSellableOfferings(context.now, account.currency, signal),
   );
+  const currentOffering = useResource(`offering:${product.productOffering.id}`, (signal) =>
+    loadOfferingDetail(product.productOffering.id, signal),
+  );
   const previewKey = offeringId !== null && valid ? `change:${offeringId}|${day}` : 'none';
   const preview = useResource<FirstCharge | null>(previewKey, (signal) =>
     offeringId !== null && valid
@@ -284,6 +307,8 @@ export function ChangeOfferingDialog({
       ? offerings.data.filter(
           (o) =>
             o.id !== product.productOffering.id &&
+            currentOffering.status === 'ok' &&
+            o.specificationId === currentOffering.data.specification?.id &&
             o.priceCents !== null &&
             (!q || o.name.toLowerCase().includes(q) || (o.code ?? '').toLowerCase().includes(q)),
         )
@@ -373,7 +398,16 @@ export function ChangeOfferingDialog({
             />
           </div>
           <div className="bss-offer-list" role="radiogroup" aria-label="Offering">
-            {offerings.status === 'loading' && <SkeletonRows columns={OFFER_COLUMNS} rows={3} />}
+            {(offerings.status === 'loading' || currentOffering.status === 'loading') && (
+              <SkeletonRows columns={OFFER_COLUMNS} rows={3} />
+            )}
+            {currentOffering.status === 'error' && (
+              <ErrorBlock
+                title="Failed to load the current offering"
+                error={currentOffering.error}
+                onRetry={currentOffering.retry}
+              />
+            )}
             {offerings.status === 'error' && (
               <ErrorBlock
                 title="Failed to load offerings"
@@ -381,11 +415,13 @@ export function ChangeOfferingDialog({
                 onRetry={offerings.retry}
               />
             )}
-            {offerings.status === 'ok' && visible.length === 0 && (
-              <div className="bss-state">
-                <div className="text">No other active offerings.</div>
-              </div>
-            )}
+            {offerings.status === 'ok' &&
+              currentOffering.status === 'ok' &&
+              visible.length === 0 && (
+                <div className="bss-state">
+                  <div className="text">No other offering uses this product's specification.</div>
+                </div>
+              )}
             {visible.map((offer) => (
               <div
                 key={offer.id}

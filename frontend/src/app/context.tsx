@@ -79,6 +79,10 @@ const NavVersionValue = createContext<{ version: number; refresh: () => void }>(
 export function NavVersionProvider({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState(0);
   const refresh = useCallback(() => setVersion((v) => v + 1), []);
+  useEffect(() => {
+    window.addEventListener('bss:countsChanged', refresh);
+    return () => window.removeEventListener('bss:countsChanged', refresh);
+  }, [refresh]);
   const value = useMemo(() => ({ version, refresh }), [version, refresh]);
   return <NavVersionValue.Provider value={value}>{children}</NavVersionValue.Provider>;
 }
