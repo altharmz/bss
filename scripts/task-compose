@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+"""The local Compose entry point. No task identity or secrets are created here."""
+
+from task_runtime import main
+
+if __name__ == "__main__":
+    main()

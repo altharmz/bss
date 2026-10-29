@@ -27,29 +27,38 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ../bss-task
     env:
       # the nightly and manual runs run everything; the rest runs the smoke tests only
       FULL: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # compose requires POSTGRES_PASSWORD (it is in .env locally, which is not committed).
-      # A throwaway value for this run's own postgres container: nothing real is involved.
-      - name: Generate the test-only database password
+      # The wrapper requires a linked task worktree and an external development file.
+      # Preserve the existing checks, using only a disposable CI credential.
+      - name: Prepare isolated CI worktree
+        working-directory: ${{ github.workspace }}
         run: |
+          task="issue-${GITHUB_RUN_ID}-ci-${GITHUB_RUN_ATTEMPT}"
+          git worktree add -b "$task" ../bss-task HEAD
+          mkdir -p ../bss-task/.task "$HOME/.config/bss/tasks/$task"
+          printf '{"version":1,"task_id":"%s","app_port":21000,"mcp_port":21001,"web_port":21002}\n' "$task" > ../bss-task/.task/runtime.json
           password="$(openssl rand -hex 16)"
           echo "::add-mask::${password}"
-          echo "POSTGRES_PASSWORD=${password}" >> "$GITHUB_ENV"
+          (umask 077; printf 'POSTGRES_PASSWORD=%s\n' "$password" > "$HOME/.config/bss/tasks/$task/.env")
+          echo "BSS_CI_TASK=$task" >> "$GITHUB_ENV"
 
       # The dev image make lint / make test run in (compose.override.yaml: target dev,
-      # bss-app:dev). Built here with a layer cache so the pinned dependency layers are
+      # task-specific image). Built here with a layer cache so pinned dependency layers are
       # not reinstalled on every run; compose then finds the image and does not build.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: .
+          context: ${{ github.workspace }}/../bss-task
           target: dev
-          tags: bss-app:dev
+          tags: bss-${{ env.BSS_CI_TASK }}-app:dev
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max

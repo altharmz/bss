@@ -13,7 +13,7 @@ the merge to master, and it neither tracks nor reasons about what is deployed
   smoke tests and the tests the change affects) -> push. Deploying is the human's, outside the cycle.
   `make check` (ci Hypothesis profile, docs-check, UI and browser tests) runs only when
   asked for a specific change.
-- **Pre-commit hook** (`scripts/pre-commit.sh`, installed by `make hooks` as a symlink):
+- **Pre-commit hook** (`scripts/pre-commit.sh`, invoked by the shared worktree dispatcher):
   `make lint`, then `make test-smoke` + `make test-changed` (below; 2026-10-28), plus `web-lint`/`web-test` when `frontend/` or `spec/` is
   staged, `make docs-check` (~7 s) when `app/`, `alembic/`, `spec/`, `scripts/docs/` or
   `tests/docs_collect.py` is, and the guard cases when `.claude/` is. A commit of
@@ -46,10 +46,11 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 - `make test` takes about 8 minutes (1,433 tests, 2026-10-20). Timing-based tests (`test_worker_heartbeat.py`, the thread
   tests in `test_order_concurrency.py`/`test_billing_db.py`) can fail under full load;
   rerun once before suspecting a regression.
-- To check an *older* commit on its own, use a worktree: `make down`, `git worktree add
-  ../bss-check <commit>`, there `COMPOSE_PROJECT_NAME=bss-check IMAGE_NAME=bss-check-app
-  POSTGRES_PASSWORD=throwaway make lint test` (compose.yaml pins `name: bss`), then
-  `docker compose down -v` with the same variables and `git worktree remove`.
+- Local runtime now requires a linked task worktree, explicit metadata and external
+  development secrets: [setup and isolation](../worktrees.md). The primary checkout is
+  administration-only. `make hooks` installs stable shared dispatchers that execute the
+  invoking worktree's scripts, replacing the old primary-dependent symlinks. Existing
+  per-worktree logs and the repository-wide heavy-check lock are preserved (#76).
 
 ## The guard
 

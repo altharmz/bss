@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Installed as .git/hooks/pre-push by `make hooks` (symlink, so edits here take effect
-# immediately). Refuses a push when a commit being pushed
+# Invoked by the shared worktree dispatcher installed by `make hooks`.
+# Refuses a push when a commit being pushed
 #   - adds a line containing a bcrypt hash ($2a$/$2b$/$2y$ + cost), unless that line carries
 #     the marker `pre-push: allow-dummy-hash` (a known dummy, e.g. a test fixture);
 #   - adds or changes a path matching (^|/)\.env (.env.example excepted);

@@ -24,9 +24,8 @@ services:
       # and by the tests (tests/contract.py, tests/test_enum_lock.py).
       - ./spec:/app/spec:ro
     ports:
-      # host port from APP_PORT (.env or the shell), default 8081: 8080 belongs to the
-      # vps-lab stack on the same workstation
-      - "127.0.0.1:${APP_PORT:-8081}:8080"
+      # Explicit task-local host port from scripts/task-compose.
+      - "127.0.0.1:${APP_PORT:?use scripts/task-compose}:8080"
     environment:
       APP_ENV: dev
       LOG_LEVEL: debug
@@ -50,7 +49,7 @@ services:
     build:
       context: .
       target: dev
-    image: ${IMAGE_NAME:-bss-app}:${TAG:-dev}
+    image: ${IMAGE_NAME:?use scripts/task-compose}:${TAG:-dev}
     profiles: [tools]
     volumes:
       - ./app:/app/app
@@ -69,7 +68,7 @@ services:
     extends:
       service: app
     # extends does not see compose.yaml's `app`: without this it would build its own image
-    image: ${IMAGE_NAME:-bss-app}:${TAG:-dev}
+    image: ${IMAGE_NAME:?use scripts/task-compose}:${TAG:-dev}
     healthcheck:
       disable: true
     ports: !reset []
@@ -94,7 +93,7 @@ services:
     build:
       context: .
       target: dev
-    image: ${IMAGE_NAME:-bss-app}:${TAG:-dev}
+    image: ${IMAGE_NAME:?use scripts/task-compose}:${TAG:-dev}
     command: ["uvicorn", "bss_mcp.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
     volumes:
       - ./app:/app/app:ro
@@ -102,12 +101,12 @@ services:
       - ./spec:/app/spec:ro
       - mcp_data:/data
     ports:
-      - "127.0.0.1:8090:8080"
+      - "127.0.0.1:${MCP_PORT:?use scripts/task-compose}:8080"
     environment:
       APP_ENV: dev
       LOG_LEVEL: debug
       BSS_API_URL: http://app:8080
-      MCP_PUBLIC_URL: http://localhost:8090
+      MCP_PUBLIC_URL: ${MCP_PUBLIC_URL:?use scripts/task-compose}
       MCP_STORE: /data/mcp.db
       # name:<scrypt hash>[,name:<hash>] - the OAuth login (slice 2); in .env, never committed
       MCP_USERS: ${MCP_USERS:-}
@@ -135,7 +134,7 @@ services:
         RUN mkdir -p /web/node_modules /home/node/.npm && chown -R node:node /web /home/node/.npm
         USER node
         WORKDIR /web
-    image: bss-web:dev
+    image: ${WEB_IMAGE_NAME:?use scripts/task-compose}:dev
     profiles: [web]
     volumes: &web-volumes
       - ./frontend:/web
@@ -145,7 +144,7 @@ services:
     environment:
       API_URL: http://app:8080
     ports:
-      - "127.0.0.1:5173:5173"
+      - "127.0.0.1:${WEB_PORT:?use scripts/task-compose}:5173"
     depends_on:
       app:
         condition: service_healthy
@@ -154,7 +153,7 @@ services:
 
   web-offline:
     build: *web-build
-    image: bss-web:dev
+    image: ${WEB_IMAGE_NAME:?use scripts/task-compose}:dev
     profiles: [web]
     volumes: *web-volumes
     network_mode: none
@@ -163,7 +162,7 @@ services:
   # and /internal to the local app - the closest local stand-in for the shared Caddy.
   web-preview:
     build: *web-build
-    image: bss-web:dev
+    image: ${WEB_IMAGE_NAME:?use scripts/task-compose}:dev
     profiles: [web]
     volumes: *web-volumes
     environment:
