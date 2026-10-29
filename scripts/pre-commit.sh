@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# Installed as .git/hooks/pre-commit by `make hooks` (symlink, so edits here take effect
-# immediately). The one local test run of a development cycle: lint + tests before every
+# Invoked by the shared worktree dispatcher installed by `make hooks`.
+# The one local test run of a development cycle: lint + tests before every
 # commit (the guard blocks --no-verify): lint, the smoke tests and the tests the change
 # affects, not the full suite. Deploying does not test again.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
+
+if [[ "$(git rev-parse --absolute-git-dir)" == "$(git rev-parse --path-format=absolute --git-common-dir)" ]]; then
+  echo 'pre-commit: primary checkout is administration-only; commit in a linked task worktree' >&2
+  exit 1
+fi
 
 # Every run keeps its full output in the git directory (never tracked, no .gitignore
 # needed; in a worktree, that worktree's own git dir), one file per run, the last

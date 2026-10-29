@@ -7,6 +7,14 @@ it, and record new decisions there.
 
 ## Environments
 
+Local work uses **1 task = 1 branch = 1 git worktree = 1 agent context**.
+The primary checkout stays clean on `master` for administration only; implementation,
+commits, runtime and generated artifacts belong in linked task worktrees. Never switch
+branches inside a task worktree or mutate sibling worktrees. All local Compose operations
+go through `scripts/task-compose` (the Make targets use it). Set explicit ports in the
+ignored `.task/runtime.json`; development secrets live outside worktrees at
+`~/.config/bss/tasks/<task_id>/.env`. Setup and schema: [worktrees.md](docs/worktrees.md).
+
 | Where | What runs there |
 |-------|-----------------|
 | WSL2 (Ubuntu) | full dev loop: build, run, tests, lint |

@@ -29,7 +29,7 @@ rel="${abs#"$project"/}"
 # date is a failure ("run make web-install"), never an install.
 if [[ "$rel" == frontend/* && "$rel" =~ \.(ts|tsx|js|mjs|css|json|html)$ ]]; then
   cd "$project" || fail "cannot cd to $project"
-  out="$(docker compose run --rm -T --no-deps -e f="${rel#frontend/}" web-offline \
+  out="$(./scripts/task-compose run --rm -T --no-deps -e f="${rel#frontend/}" web-offline \
     sh -c 'sh scripts/check-deps.sh && npx prettier --write --log-level warn "$f"' 2>&1)"
   rc=$?
   out="$(grep -v '^ *Container ' <<<"$out")"
@@ -50,7 +50,7 @@ cd "$project" || fail "cannot cd to $project"
 
 # --force-exclude: honour extend-exclude (alembic/versions) even for explicit paths.
 # One container start: format, then fix what ruff check can.
-out="$(docker compose run --rm -T -e f="$rel" tools \
+out="$(./scripts/task-compose run --rm -T -e f="$rel" tools \
   sh -c 'ruff format --quiet --force-exclude "$f" &&
          ruff check --fix --quiet --output-format concise --force-exclude "$f"' 2>&1)"
 rc=$?

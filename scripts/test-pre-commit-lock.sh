@@ -5,6 +5,9 @@
 set -uo pipefail
 
 hook="$(cd "$(dirname "$0")" && pwd)/pre-commit.sh"
+# This fixture creates foreign repositories. Git hooks export absolute GIT_DIR in a
+# linked worktree; never let that select the caller's real repository in the fixture.
+while IFS= read -r variable; do unset "$variable"; done < <(git rev-parse --local-env-vars)
 tmp="$(mktemp -d)"
 trap 'wait; rm -rf "${tmp}"' EXIT
 repo="${tmp}/repo"
@@ -13,11 +16,12 @@ mkdir -p "${tmp}/bin" "${repo}"
 printf '#!/bin/sh\necho "$1" >>"%s"\n' "${calls}" >"${tmp}/bin/make"
 chmod +x "${tmp}/bin/make"
 export PATH="${tmp}/bin:${PATH}"
-git -C "${repo}" init -q
-git -C "${repo}" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+git init -q "${tmp}/primary"
+git -C "${tmp}/primary" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+git -C "${tmp}/primary" worktree add -q -b issue-1-lock "${repo}"
 echo one >"${repo}/tracked.txt"
 git -C "${repo}" add tracked.txt
-lock="${repo}/.git/pre-commit.lock"
+lock="${tmp}/primary/.git/pre-commit.lock"
 total=0
 failed=0
 

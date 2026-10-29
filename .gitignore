@@ -1,6 +1,8 @@
 .env
 .env.prod
 .env.smoke
+# Non-secret identity and explicit ports, local to each task worktree.
+.task/
 # make deploy: the last deployed commit; written only by scripts/deploy.sh
 .deployed
 .deployed.tmp
