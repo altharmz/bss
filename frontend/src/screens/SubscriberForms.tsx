@@ -209,7 +209,8 @@ export function NewSubscriberModal({
               checked={initialProduct}
               onChange={(e) => setInitialProduct(e.target.checked)}
             />{' '}
-            Add an initial product and select its subscriber number after creating the account
+            After creating the account, add a product. Offerings that need a subscriber number ask
+            for one.
           </label>
         </section>
       </div>

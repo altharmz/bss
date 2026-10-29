@@ -1,8 +1,12 @@
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
+import { Footer } from './FinancialForms';
+import { Field } from './SubscriberForms';
+import { uncertain } from './submissionKey';
 import {
   createSpecification,
+  characteristicFields,
   deleteSpecification,
   NEXT_LIFECYCLE,
   patchSpecification,
@@ -12,7 +16,7 @@ import {
   type Specification,
   type SpecificationFields,
 } from '../api/bss';
-import { explain } from '../api/client';
+import { ApiError, explain } from '../api/client';
 import { useSystemContext } from '../app/context';
 import { businessDate } from '../format/dates';
 import { formatInt } from '../format/money';
@@ -21,8 +25,8 @@ import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import type { ResourceWithRetry } from '../api/useResource';
 
-// Catalog tab "Specifications": TMF620 productSpecification records. Characteristics and
-// the other documents stay API/MCP; billing never reads a specification. Design:
+// Catalog tab "Specifications": TMF620 productSpecification records, subscriber-number
+// requirement and descriptive characteristics. Billing never reads these characteristics. Design:
 // docs/next-slices-design.md section 11.
 
 const COLUMNS: Column[] = [
@@ -131,6 +135,8 @@ function fieldsOf(spec: Specification | null): SpecificationFields {
     version: spec?.version ?? '',
     productNumber: spec?.productNumber ?? '',
     lifecycleStatus: spec?.status ?? 'In Design',
+    requiresNumber: (spec?.resourceSpecification ?? []).some((ref) => ref.id === 'msisdn'),
+    characteristics: characteristicFields(spec),
   };
 }
 
@@ -152,6 +158,8 @@ export function SpecificationModal({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [requirementLocked, setRequirementLocked] = useState(false);
+  const [unsure, setUnsure] = useState(false);
   const set = (key: keyof SpecificationFields) => (value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
 
@@ -165,7 +173,22 @@ export function SpecificationModal({
           ? [spec.status]
           : [spec.status, next];
   const changes = spec === null ? null : specificationChanges(spec, form);
-  const ready = form.name.trim() !== '' && (spec === null || changes !== null);
+  const validCharacteristics = form.characteristics.every(
+    (row) =>
+      row.name.trim() !== '' &&
+      (row.values.trim() === '' ||
+        row.values
+          .split(',')
+          .every((value) =>
+            row.valueType === 'integer'
+              ? /^-?\d+$/.test(value.trim()) && Number.isSafeInteger(Number(value.trim()))
+              : row.valueType === 'boolean'
+                ? ['true', 'false'].includes(value.trim())
+                : value.trim() !== '',
+          )),
+  );
+  const ready =
+    form.name.trim() !== '' && validCharacteristics && (spec === null || changes !== null);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -174,6 +197,15 @@ export function SpecificationModal({
       await action();
     } catch (error) {
       setProblem(explain(error));
+      setUnsure(uncertain(error));
+      if (
+        error instanceof ApiError &&
+        error.status === 409 &&
+        explain(error).includes('msisdn requirement cannot change')
+      ) {
+        setRequirementLocked(true);
+        setForm((f) => ({ ...f, requiresNumber: fieldsOf(spec).requiresNumber }));
+      }
       setConfirming(false);
     } finally {
       setBusy(false);
@@ -204,12 +236,7 @@ export function SpecificationModal({
       onClose={onClose}
       ui={spec === null ? 'ui.catalog.newSpecification' : 'ui.catalog.editSpecification'}
       footer={
-        <>
-          {problem !== null && (
-            <Note tone="negative" className="footer-push">
-              {problem}
-            </Note>
-          )}
+        <Footer write={{ busy, problem, unsure }} onRefresh={onClose}>
           {spec !== null &&
             used === 0 &&
             (confirming ? (
@@ -241,53 +268,181 @@ export function SpecificationModal({
           <Button variant="primary" disabled={!ready || busy} onClick={() => void save()}>
             {spec === null ? 'Create' : 'Save'}
           </Button>
-        </>
+        </Footer>
       }
     >
-      <div className="bss-modal-body bss-form">
-        <label>
-          Name
-          <TextInput value={form.name} onChange={(e) => set('name')(e.target.value)} />
-        </label>
-        <label>
-          Description
-          <TextInput
-            value={form.description}
-            onChange={(e) => set('description')(e.target.value)}
-          />
-        </label>
-        <div className="bss-form-pair">
+      <div className="bss-modal-body">
+        <fieldset disabled={busy} className="bss-form bss-write-fields">
           <label>
-            Brand
-            <TextInput value={form.brand} onChange={(e) => set('brand')(e.target.value)} />
+            Name
+            <TextInput value={form.name} onChange={(e) => set('name')(e.target.value)} />
+          </label>
+          <label data-ui="ui.catalog.specificationNumberRequirement">
+            <input
+              type="checkbox"
+              checked={form.requiresNumber}
+              disabled={requirementLocked}
+              onChange={(e) => setForm({ ...form, requiresNumber: e.target.checked })}
+            />
+            Requires a subscriber number
+          </label>
+          <section data-ui="ui.catalog.specificationCharacteristics" className="bss-form">
+            <h3>Characteristics</h3>
+            <p className="bss-secondary">
+              Records only; these do not change ordering. Values are comma-separated; the first is
+              the default.
+            </p>
+            {form.characteristics.map((row, index) => {
+              const update = (change: Partial<typeof row>) =>
+                setForm({
+                  ...form,
+                  characteristics: form.characteristics.map((item, i) =>
+                    i === index ? { ...item, ...change } : item,
+                  ),
+                });
+              return (
+                <fieldset
+                  key={index}
+                  data-ui="ui.catalog.specificationCharacteristic"
+                  className="bss-form bss-write-fields"
+                  aria-label={`Characteristic ${index + 1}`}
+                >
+                  <Field label="Characteristic name">
+                    <TextInput
+                      value={row.name}
+                      onChange={(e) => update({ name: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Value type">
+                    <select
+                      className="bss-input"
+                      value={row.valueType}
+                      onChange={(e) =>
+                        update({
+                          valueType: e.target.value,
+                          values: e.target.value === 'boolean' ? '' : row.values,
+                        })
+                      }
+                    >
+                      {!['string', 'integer', 'boolean'].includes(row.valueType) && (
+                        <option value={row.valueType}>{row.valueType}</option>
+                      )}
+                      {['string', 'integer', 'boolean'].map((type) => (
+                        <option key={type}>{type}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Characteristic description">
+                    <TextInput
+                      value={row.description}
+                      onChange={(e) => update({ description: e.target.value })}
+                    />
+                  </Field>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={row.configurable}
+                      onChange={(e) => update({ configurable: e.target.checked })}
+                    />
+                    Configurable
+                  </label>
+                  <Field label="Values">
+                    <TextInput
+                      disabled={row.valueType === 'boolean'}
+                      value={row.values}
+                      onChange={(e) => update({ values: e.target.value })}
+                    />
+                  </Field>
+                  {row.valueType === 'boolean' && (
+                    <Note tone="info">
+                      Predefined boolean values are not supported by the catalog API. The value type
+                      and configurable setting are stored.
+                    </Note>
+                  )}
+                  <Button
+                    data-ui="ui.catalog.removeCharacteristic"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        characteristics: form.characteristics.filter((_, i) => i !== index),
+                      })
+                    }
+                  >
+                    Remove characteristic
+                  </Button>
+                </fieldset>
+              );
+            })}
+            {!validCharacteristics && (
+              <Note tone="negative">
+                Enter a name and values matching the value type (integers or true / false).
+              </Note>
+            )}
+            <Button
+              data-ui="ui.catalog.addCharacteristic"
+              onClick={() =>
+                setForm({
+                  ...form,
+                  characteristics: [
+                    ...form.characteristics,
+                    {
+                      name: '',
+                      description: '',
+                      valueType: 'string',
+                      configurable: false,
+                      values: '',
+                    },
+                  ],
+                })
+              }
+            >
+              Add characteristic
+            </Button>
+          </section>
+          <label>
+            Description
+            <TextInput
+              value={form.description}
+              onChange={(e) => set('description')(e.target.value)}
+            />
+          </label>
+          <div className="bss-form-pair">
+            <label>
+              Brand
+              <TextInput value={form.brand} onChange={(e) => set('brand')(e.target.value)} />
+            </label>
+            <label>
+              Version
+              <TextInput
+                mono
+                value={form.version}
+                onChange={(e) => set('version')(e.target.value)}
+              />
+            </label>
+          </div>
+          <label>
+            Product number
+            <TextInput
+              mono
+              value={form.productNumber}
+              onChange={(e) => set('productNumber')(e.target.value)}
+            />
           </label>
           <label>
-            Version
-            <TextInput mono value={form.version} onChange={(e) => set('version')(e.target.value)} />
+            Lifecycle status
+            <select
+              className="bss-input"
+              value={form.lifecycleStatus}
+              onChange={(e) => set('lifecycleStatus')(e.target.value)}
+            >
+              {lifecycles.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+            </select>
           </label>
-        </div>
-        <label>
-          Product number
-          <TextInput
-            mono
-            value={form.productNumber}
-            onChange={(e) => set('productNumber')(e.target.value)}
-          />
-        </label>
-        <label>
-          Lifecycle status
-          <select
-            className="bss-input"
-            value={form.lifecycleStatus}
-            onChange={(e) => set('lifecycleStatus')(e.target.value)}
-          >
-            {lifecycles.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </label>
+        </fieldset>
       </div>
     </Modal>
   );
