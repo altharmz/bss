@@ -296,6 +296,17 @@ function bodies(fetchMock: ReturnType<typeof stubFetch>['fetchMock']) {
 }
 
 describe('new subscriber', () => {
+  it('explains when the initial product asks for a subscriber number', async () => {
+    backend();
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
+    expect(
+      await screen.findByText(
+        'After creating the account, add a product. Offerings that need a subscriber number ask for one.',
+      ),
+    ).toBeTruthy();
+  });
+
   it('keeps the created account when the optional initial-product step cannot load', async () => {
     const { fetchMock } = backend(undefined, {
       [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),

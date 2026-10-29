@@ -58,6 +58,11 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       await page.screenshot({ path: `/web/.shots/${name}-${width}.png`, fullPage: true });
+      if (name === 'subscribers') {
+        await page.getByRole('button', { name: 'New subscriber', exact: true }).click();
+        await page.screenshot({ path: `/web/.shots/dialog-new-subscriber-${width}.png` });
+        await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+      }
       if (name === 'users' || name === 'financial-accounts') {
         const user = name === 'users';
         await page
@@ -101,6 +106,20 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         });
         await page.screenshot({ path: `/web/.shots/dialog-category-${width}.png` });
         await category.getByRole('button', { name: 'Cancel' }).click();
+        await page.getByRole('button', { name: 'Specifications', exact: true }).click();
+        await page.getByRole('button', { name: '+ New specification' }).click();
+        const specification = page.getByRole('dialog', { name: 'New product specification' });
+        await specification.getByLabel('Name', { exact: true }).fill('Numbered mobile');
+        await specification.getByLabel('Requires a subscriber number').check();
+        await specification.getByRole('button', { name: 'Add characteristic' }).click();
+        await specification.getByLabel('Characteristic name', { exact: true }).fill('Color');
+        await specification.getByLabel('Values', { exact: true }).fill('blue, green');
+        await expect(
+          specification.getByRole('button', { name: 'Create', exact: true }),
+        ).toBeInViewport({ ratio: 1 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+        await page.screenshot({ path: `/web/.shots/dialog-specification-${width}.png` });
+        await specification.getByRole('button', { name: 'Cancel' }).click();
       }
       if (name.startsWith('card-')) {
         const actions = page.locator('[data-ui="ui.subscriber.productActions"]').first();
@@ -116,6 +135,23 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         await page.screenshot({ path: `/web/.shots/${name}-menu-${width}.png` });
         await expect(menu).toBeVisible();
         await actions.press('Escape');
+        await page.getByRole('button', { name: 'Subscriber number', exact: true }).first().click();
+        const number = page.getByRole('dialog', { name: 'Subscriber number' });
+        await expect(
+          number.getByText(/This product's offering does not use subscriber numbers/),
+        ).toBeVisible();
+        await page.screenshot({ path: `/web/.shots/dialog-product-number-${name}-${width}.png` });
+        await number.getByRole('button', { name: 'Close', exact: true }).last().click();
+        if (name === 'card-prepaid') {
+          await page.getByRole('button', { name: 'Transfer', exact: true }).click();
+          const transfer = page.getByRole('dialog', { name: 'Transfer funds' });
+          await expect(
+            transfer.getByText(/This account has no active product with a subscriber number/),
+          ).toBeVisible();
+          await page.screenshot({ path: `/web/.shots/dialog-transfer-${width}.png` });
+          await transfer.getByRole('button', { name: 'Cancel' }).click();
+        }
+
         if (name === 'card-postpaid') {
           await page.route(
             '**/tmf-api/productOrderingManagement/v5/productOrder',

@@ -292,6 +292,75 @@ def test_specification_writes_as_the_ui_sends_them(api):
     assert api.get(spec_url).status_code == 404
 
 
+@pytest.mark.parametrize(
+    "value_type,values", [("string", ["red", "blue"]), ("integer", [1, 2]), ("boolean", [])]
+)
+def test_numbered_specification_documents_as_the_ui_sends_them(api, value_type, values):
+    """G4b editor create/patch documents, pinned in Catalog.test.tsx."""
+    resource = [{"id": "msisdn", "@type": "ResourceSpecificationRef"}]
+    characteristic = {
+        "@type": "CharacteristicSpecification",
+        "name": "Option",
+        "description": "Choices",
+        "configurable": True,
+        "valueType": value_type,
+        "characteristicValueSpecification": [
+            {
+                "@type": f"{value_type.capitalize()}CharacteristicValueSpecification",
+                "valueType": value_type,
+                "isDefault": index == 0,
+                "value": value,
+            }
+            for index, value in enumerate(values)
+        ],
+    }
+    created = api.post(
+        f"{CATALOG}/productSpecification",
+        {
+            "@type": "ProductSpecification",
+            "name": "Numbered",
+            "lifecycleStatus": "In Design",
+            "resourceSpecification": resource,
+            "productSpecCharacteristic": [characteristic],
+        },
+    )
+    assert created.status_code == 201, created.text
+    spec = created.json()
+    assert spec["resourceSpecification"] == resource
+    assert spec["productSpecCharacteristic"] == [characteristic]
+    plain = api.post(
+        f"{CATALOG}/productSpecification",
+        {"name": "Plain", "@type": "ProductSpecification", "lifecycleStatus": "In Design"},
+    ).json()
+    enabled = {
+        "@type": "CharacteristicSpecification",
+        "name": "Enabled",
+        "description": "",
+        "configurable": False,
+        "valueType": "integer",
+        "characteristicValueSpecification": [
+            {
+                "@type": "IntegerCharacteristicValueSpecification",
+                "valueType": "integer",
+                "isDefault": index == 0,
+                "value": value,
+            }
+            for index, value in enumerate([1, 2])
+        ],
+    }
+    changed = api.patch(
+        plain["href"], {"resourceSpecification": resource, "productSpecCharacteristic": [enabled]}
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["productSpecCharacteristic"] == [enabled]
+    removed = api.patch(
+        plain["href"], {"resourceSpecification": [], "productSpecCharacteristic": []}
+    )
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["resourceSpecification"] == []
+    assert removed.json()["productSpecCharacteristic"] == []
+
+
 def test_offering_and_price_edits_as_the_ui_sends_them(api):
     """offeringChanges(), patchOffering(), patchPrice(), endPrice() and the deletes: bodies
     pinned in Catalog.test.tsx."""

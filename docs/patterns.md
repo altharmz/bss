@@ -281,3 +281,15 @@ number and balance-action panels pass their selection up. Shared writes whose ca
 resolves without a transport request show “Not sent. Try again.” instead of success.
 Successful count-changing writes invalidate `NavVersionProvider`; all sidebar count
 resources include that version in their key.
+
+
+### Specification documents (GUI review G4b)
+
+`Specifications.tsx` combines text fields, a subscriber-number requirement checkbox and
+repeatable characteristic fieldsets inside the scrolling dialog body, using the shared
+write Footer. A requirement-specific 409 restores and locks that checkbox while keeping
+other edits. Arrays are replaced only when edited; unrelated resource references and
+untouched characteristic documents are preserved. Characteristic rows validate typed values
+before serializing TMF620 documents; the first comma-separated value is default.
+Boolean metadata remains editable, but values are disabled because the API's vendored
+polymorphic mapping rejects boolean value documents.

@@ -211,7 +211,8 @@ export function PrepaidTransferModal({
               )}
               {own.status === 'ok' && numbers.length === 0 && (
                 <Note tone="negative">
-                  This account has no active product with a number, so it cannot send a transfer.
+                  This account has no active product with a subscriber number, so it cannot send a
+                  transfer. Only products whose specification requires a number carry one.
                 </Note>
               )}
               {numbers.length > 0 && (

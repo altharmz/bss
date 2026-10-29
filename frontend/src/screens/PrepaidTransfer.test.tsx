@@ -1,7 +1,9 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { json, stubFetch, tmfError } from '../test/fetch';
-import { TransferWatch } from './PrepaidTransfer';
+import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
+import { toAccount, PATHS } from '../api/bss';
+import { accountBody } from '../test/fixtures';
 import { POLL_CAP_MS, watch as follow } from './watched';
 
 const ID = 'f0000001-0000-4000-8000-000000000001';
@@ -110,4 +112,34 @@ describe('following an accepted transfer', () => {
     expect(calls).toBe(failed);
     expect(onSettled).not.toHaveBeenCalled();
   });
+});
+
+it('explains why an account without numbered active products cannot transfer', async () => {
+  const account = toAccount(
+    accountBody(
+      ID,
+      { id: 'customer', name: 'Subscriber' },
+      { ratingType: 'prepaid' },
+    ) as Parameters<typeof toAccount>[0],
+  );
+  stubFetch({
+    [`GET ${PATHS.products}?billingAccount.id=${ID}&status=active&offset=0&limit=100`]: () =>
+      json([], { total: 0 }),
+  });
+  render(
+    <PrepaidTransferModal
+      account={account}
+      balance={{ bucketId: 'bucket', availableCents: 1000, reservedCents: 0, ledgerCents: 1000 }}
+      onClose={() => {}}
+      onAccepted={() => {}}
+    />,
+  );
+  expect(
+    await screen.findByText(
+      'This account has no active product with a subscriber number, so it cannot send a transfer. Only products whose specification requires a number carry one.',
+    ),
+  ).toBeTruthy();
+  expect(
+    (screen.getByRole('button', { name: 'Review transfer' }) as HTMLButtonElement).disabled,
+  ).toBe(true);
 });

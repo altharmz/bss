@@ -816,6 +816,8 @@ export interface Specification {
   version: string | null;
   productNumber: string | null;
   updated: string | null; // lastUpdate, an instant
+  resourceSpecification?: SpecBody['resourceSpecification'];
+  productSpecCharacteristic?: SpecBody['productSpecCharacteristic'];
 }
 
 export function toSpecification(spec: SpecBody): Specification {
@@ -828,6 +830,8 @@ export function toSpecification(spec: SpecBody): Specification {
     version: spec.version ?? null,
     productNumber: spec.productNumber ?? null,
     updated: spec.lastUpdate ?? null,
+    resourceSpecification: spec.resourceSpecification,
+    productSpecCharacteristic: spec.productSpecCharacteristic,
   };
 }
 
@@ -1219,7 +1223,7 @@ export async function deletePrice(id: string): Promise<void> {
 
 // --- product specifications (TMF620): records only, billing never reads them ---
 
-/** The simple fields the UI edits; the characteristics and other documents stay API/MCP.
+/** Text, subscriber-number requirement and descriptive characteristics edited by the UI.
  * An empty optional text is null on edit (merge patch removes it) and left out on create. */
 export interface SpecificationFields {
   name: string;
@@ -1228,6 +1232,68 @@ export interface SpecificationFields {
   version: string;
   productNumber: string;
   lifecycleStatus: Lifecycle;
+  requiresNumber: boolean;
+  characteristics: CharacteristicFields[];
+}
+
+export interface CharacteristicFields {
+  name: string;
+  valueType: string;
+  description: string;
+  configurable: boolean;
+  values: string;
+  original?: NonNullable<SpecBody['productSpecCharacteristic']>[number];
+}
+
+export function characteristicFields(spec: Specification | null): CharacteristicFields[] {
+  return (spec?.productSpecCharacteristic ?? []).map((c) => ({
+    name: c.name ?? '',
+    valueType: c.valueType ?? 'string',
+    description: c.description ?? '',
+    configurable: c.configurable ?? false,
+    values: (c.characteristicValueSpecification ?? [])
+      .map((v) => String('value' in v ? v.value : ''))
+      .join(', '),
+    original: c,
+  }));
+}
+
+export function characteristicDocuments(rows: CharacteristicFields[]) {
+  return rows.map((row) => {
+    if (row.original) {
+      const initial = characteristicFields({
+        productSpecCharacteristic: [row.original],
+      } as Specification)[0];
+      if (JSON.stringify(row) === JSON.stringify(initial)) return row.original;
+    }
+    return {
+      ...row.original,
+      '@type': row.original?.['@type'] ?? 'CharacteristicSpecification',
+      name: row.name.trim(),
+      description: row.description.trim(),
+      valueType: row.valueType,
+      configurable: row.configurable,
+      characteristicValueSpecification:
+        row.values.trim() === ''
+          ? []
+          : row.values.split(',').map((text, index) => ({
+              '@type':
+                row.valueType === 'boolean'
+                  ? 'BooleanCharacteristicValueSpecification'
+                  : row.valueType === 'integer'
+                    ? 'IntegerCharacteristicValueSpecification'
+                    : 'StringCharacteristicValueSpecification',
+              valueType: row.valueType,
+              isDefault: index === 0,
+              value:
+                row.valueType === 'boolean'
+                  ? text.trim() === 'true'
+                  : row.valueType === 'integer'
+                    ? Number(text.trim())
+                    : text.trim(),
+            })),
+    };
+  });
 }
 
 const SPEC_TEXT = ['description', 'brand', 'version', 'productNumber'] as const;
@@ -1239,6 +1305,10 @@ export async function createSpecification(form: SpecificationFields): Promise<Sp
     lifecycleStatus: form.lifecycleStatus,
   };
   for (const key of SPEC_TEXT) if (form[key].trim()) body[key] = form[key].trim();
+  if (form.requiresNumber)
+    body.resourceSpecification = [{ id: 'msisdn', '@type': 'ResourceSpecificationRef' }];
+  if (form.characteristics.length)
+    body.productSpecCharacteristic = characteristicDocuments(form.characteristics);
   return toSpecification(await postJson<SpecBody>(PATHS.specifications, body));
 }
 
@@ -1246,20 +1316,28 @@ export async function createSpecification(form: SpecificationFields): Promise<Sp
 export function specificationChanges(
   before: Specification,
   form: SpecificationFields,
-): Record<string, string | null> | null {
-  const changes: Record<string, string | null> = {};
+): Record<string, unknown> | null {
+  const changes: Record<string, unknown> = {};
   if (form.name.trim() !== before.name) changes.name = form.name.trim();
   for (const key of SPEC_TEXT) {
     const now = form[key].trim();
     if (now !== (before[key] ?? '')) changes[key] = now === '' ? null : now;
   }
   if (form.lifecycleStatus !== before.status) changes.lifecycleStatus = form.lifecycleStatus;
+  const required = (before.resourceSpecification ?? []).some((ref) => ref.id === 'msisdn');
+  if (required !== form.requiresNumber)
+    changes.resourceSpecification = [
+      ...(before.resourceSpecification ?? []).filter((ref) => ref.id !== 'msisdn'),
+      ...(form.requiresNumber ? [{ id: 'msisdn', '@type': 'ResourceSpecificationRef' }] : []),
+    ];
+  if (JSON.stringify(form.characteristics) !== JSON.stringify(characteristicFields(before)))
+    changes.productSpecCharacteristic = characteristicDocuments(form.characteristics);
   return Object.keys(changes).length === 0 ? null : changes;
 }
 
 export async function patchSpecification(
   id: string,
-  changes: Record<string, string | null>,
+  changes: Record<string, unknown>,
 ): Promise<void> {
   await patchJson(`${PATHS.specifications}/${id}`, changes);
 }

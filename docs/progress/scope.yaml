@@ -442,6 +442,11 @@ items:
   - {id: ui.catalog.specifications, area: ui, stage: 5, title: "Catalog tab: product specifications"}
   - {id: ui.catalog.newSpecification, area: ui, stage: 5, title: "New product specification"}
   - {id: ui.catalog.editSpecification, area: ui, stage: 5, title: "Edit a product specification"}
+  - {id: ui.catalog.specificationNumberRequirement, area: ui, stage: 5, title: "Specification subscriber-number requirement"}
+  - {id: ui.catalog.specificationCharacteristics, area: ui, stage: 5, title: "Specification characteristic rows"}
+  - {id: ui.catalog.specificationCharacteristic, area: ui, stage: 5, title: "Specification characteristic fields"}
+  - {id: ui.catalog.addCharacteristic, area: ui, stage: 5, title: "Add a specification characteristic"}
+  - {id: ui.catalog.removeCharacteristic, area: ui, stage: 5, title: "Remove a specification characteristic"}
   - {id: ui.catalog.deleteSpecification, area: ui, stage: 5, title: "Delete an unused product specification"}
   - {id: ui.catalog.categories, area: ui, stage: 5, title: "Catalog tab: categories tree"}
   - {id: ui.catalog.newCategory, area: ui, stage: 5, title: "New category"}

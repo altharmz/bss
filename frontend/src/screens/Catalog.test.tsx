@@ -1,6 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { offeringCode } from '../api/bss';
+import {
+  offeringCode,
+  toSpecification,
+  characteristicFields,
+  characteristicDocuments,
+  specificationChanges,
+} from '../api/bss';
 import { App } from '../app/App';
 import { validity } from './Catalog';
 import { expectUi } from '../test/expectUi';
@@ -674,6 +680,174 @@ describe('specifications', () => {
     expect((call?.[1]?.headers as Record<string, string>)['Content-Type']).toBe(
       'application/merge-patch+json',
     );
+  });
+
+  it.each(['string', 'integer', 'boolean'])(
+    'creates numbered specifications with %s characteristics',
+    async (valueType) => {
+      const { fetchMock } = specBackend({
+        [`POST ${CAT}/productSpecification`]: () =>
+          json({ id: 's9', name: 'Numbered' }, { status: 201 }),
+      });
+      await openTab();
+      fireEvent.click(screen.getByRole('button', { name: '+ New specification' }));
+      const dialog = screen.getByRole('dialog');
+      fireEvent.change(field(dialog, /^Name/), { target: { value: 'Numbered' } });
+      fireEvent.click(field(dialog, /Requires a subscriber number/));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Add characteristic' }));
+      fireEvent.change(field(dialog, /Characteristic name/), { target: { value: 'Option' } });
+      fireEvent.change(field(dialog, /Characteristic description/), {
+        target: { value: 'Choices' },
+      });
+      fireEvent.change(field(dialog, /Value type/), { target: { value: valueType } });
+      fireEvent.click(field(dialog, /Configurable/));
+      const values =
+        valueType === 'integer' ? [1, 2] : valueType === 'boolean' ? [] : ['red', 'blue'];
+      if (valueType === 'boolean') {
+        expect((field(dialog, /^Values/) as HTMLInputElement).disabled).toBe(true);
+        expect(
+          within(dialog).getByText(/Predefined boolean values are not supported/),
+        ).toBeTruthy();
+      } else fireEvent.change(field(dialog, /^Values/), { target: { value: values.join(', ') } });
+      expectUi('ui.catalog.specificationNumberRequirement');
+      expectUi('ui.catalog.specificationCharacteristics');
+      expectUi('ui.catalog.specificationCharacteristic');
+      expectUi('ui.catalog.addCharacteristic');
+      expectUi('ui.catalog.removeCharacteristic');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+      await screen.findByRole('status');
+      const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+      expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+        '@type': 'ProductSpecification',
+        name: 'Numbered',
+        lifecycleStatus: 'In Design',
+        resourceSpecification: [{ id: 'msisdn', '@type': 'ResourceSpecificationRef' }],
+        productSpecCharacteristic: [
+          {
+            '@type': 'CharacteristicSpecification',
+            name: 'Option',
+            description: 'Choices',
+            configurable: true,
+            valueType,
+            characteristicValueSpecification: values.map((value, index) => ({
+              '@type': `${valueType[0]?.toUpperCase()}${valueType.slice(1)}CharacteristicValueSpecification`,
+              valueType,
+              isDefault: index === 0,
+              value,
+            })),
+          },
+        ],
+      });
+    },
+  );
+
+  it('patches the number requirement and characteristics', async () => {
+    const { fetchMock } = specBackend({
+      [`PATCH ${CAT}/productSpecification/s1`]: () => json({ id: 's1', name: 'Mobile' }),
+    });
+    await openTab();
+    fireEvent.click(specRow('Mobile Voice & Data'));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(field(dialog, /Requires a subscriber number/));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add characteristic' }));
+    fireEvent.change(field(dialog, /Characteristic name/), { target: { value: 'Enabled' } });
+    fireEvent.change(field(dialog, /Value type/), { target: { value: 'integer' } });
+    fireEvent.change(field(dialog, /^Values/), { target: { value: 'invalid' } });
+    expect(
+      (within(dialog).getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.change(field(dialog, /^Values/), { target: { value: '1, 2' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    expect(
+      JSON.parse(
+        String(fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')?.[1]?.body),
+      ),
+    ).toEqual({
+      resourceSpecification: [{ id: 'msisdn', '@type': 'ResourceSpecificationRef' }],
+      productSpecCharacteristic: [
+        {
+          '@type': 'CharacteristicSpecification',
+          name: 'Enabled',
+          description: '',
+          configurable: false,
+          valueType: 'integer',
+          characteristicValueSpecification: [1, 2].map((value, index) => ({
+            '@type': 'IntegerCharacteristicValueSpecification',
+            valueType: 'integer',
+            isDefault: index === 0,
+            value,
+          })),
+        },
+      ],
+    });
+  });
+
+  it('loads and removes the requirement and characteristic list with exact empty arrays', async () => {
+    const { fetchMock } = specBackend({
+      [SPECS_URL]: () =>
+        json(
+          [
+            {
+              ...SPEC_ROWS[0],
+              resourceSpecification: [{ id: 'msisdn', '@type': 'ResourceSpecificationRef' }],
+              productSpecCharacteristic: [
+                {
+                  '@type': 'CharacteristicSpecification',
+                  name: 'Color',
+                  valueType: 'string',
+                  characteristicValueSpecification: [
+                    {
+                      '@type': 'StringCharacteristicValueSpecification',
+                      value: 'blue',
+                      isDefault: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          { total: 1 },
+        ),
+      [`PATCH ${CAT}/productSpecification/s1`]: () => json({ id: 's1', name: 'Mobile' }),
+    });
+    await openTab();
+    fireEvent.click(specRow('Mobile Voice & Data'));
+    const dialog = screen.getByRole('dialog');
+    expect((field(dialog, /Requires a subscriber number/) as HTMLInputElement).checked).toBe(true);
+    expect((field(dialog, /Characteristic name/) as HTMLInputElement).value).toBe('Color');
+    expect((field(dialog, /^Values/) as HTMLInputElement).value).toBe('blue');
+    expect(
+      (within(dialog).getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.click(field(dialog, /Requires a subscriber number/));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove characteristic' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    expect(
+      JSON.parse(
+        String(fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')?.[1]?.body),
+      ),
+    ).toEqual({ resourceSpecification: [], productSpecCharacteristic: [] });
+  });
+
+  it('locks the requirement on an ordering conflict, preserves other edits and shows server text', async () => {
+    specBackend({
+      [`PATCH ${CAT}/productSpecification/s1`]: () =>
+        tmfError(409, 'resourceSpecification: the msisdn requirement cannot change after ordering'),
+    });
+    await openTab();
+    fireEvent.click(specRow('Mobile Voice & Data'));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(field(dialog, /Requires a subscriber number/));
+    fireEvent.change(field(dialog, /Brand/), { target: { value: 'Other' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect((await within(dialog).findByRole('alert')).textContent).toContain(
+      'the msisdn requirement cannot change after ordering',
+    );
+    expect((field(dialog, /Requires a subscriber number/) as HTMLInputElement).disabled).toBe(true);
+    expect((field(dialog, /Requires a subscriber number/) as HTMLInputElement).checked).toBe(false);
+    expect((field(dialog, /Brand/) as HTMLInputElement).value).toBe('Other');
   });
 
   it('offers no lifecycle step after Retired', async () => {
@@ -1580,5 +1754,50 @@ describe('import and export jobs', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
     expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Import job deleted');
     expect(bodyOf(fetchMock, 'DELETE')).toBeUndefined();
+  });
+});
+
+it('preserves unedited TMF documents and unrelated resource references', () => {
+  const original = {
+    '@type': 'CharacteristicSpecification',
+    id: 'characteristic',
+    name: 'Color',
+    valueType: 'string',
+    configurable: false,
+    characteristicValueSpecification: [
+      {
+        '@type': 'StringCharacteristicValueSpecification',
+        value: 'blue',
+        isDefault: false,
+        regex: 'blue',
+      },
+    ],
+  };
+  const specification = toSpecification({
+    '@type': 'ProductSpecification',
+    id: 'spec',
+    name: 'Numbered',
+    lifecycleStatus: 'Active',
+    resourceSpecification: [{ '@type': 'ResourceSpecificationRef', id: 'other' }],
+    productSpecCharacteristic: [original],
+  });
+  const characteristics = characteristicFields(specification);
+  expect(characteristicDocuments(characteristics)).toEqual([original]);
+  expect(
+    specificationChanges(specification, {
+      name: 'Numbered',
+      description: '',
+      brand: '',
+      version: '',
+      productNumber: '',
+      lifecycleStatus: 'Active',
+      requiresNumber: true,
+      characteristics,
+    }),
+  ).toEqual({
+    resourceSpecification: [
+      { '@type': 'ResourceSpecificationRef', id: 'other' },
+      { id: 'msisdn', '@type': 'ResourceSpecificationRef' },
+    ],
   });
 });

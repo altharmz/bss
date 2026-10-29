@@ -311,6 +311,22 @@ and a row's dialog edit name, description, brand, version, product number and th
 still shows). **New offering** has **New specification...**, which preselects the new one.
 API: `POST|PATCH|DELETE .../productSpecification` (merge patch of changed fields only).
 
+G4b: **Requires a subscriber number** stores the `msisdn` resource-specification reference.
+After the server refuses a requirement change on an ordered specification, the checkbox
+returns to its saved state and becomes read-only, with the server message shown in place.
+Characteristics have name, string/integer/boolean value type, description, configurable,
+and comma-separated values (first is default); add/remove rows in the same editor.
+They are descriptive documents with no ordering behaviour. Predefined boolean values
+are unavailable because the catalog API rejects that subtype's values; boolean metadata
+is stored without a value list. Existing unrelated references and untouched documents stay.
+
+Product's Subscriber number dialog explains when its offering does not use numbers.
+New subscriber explains that the product added after account creation asks for a number
+when required. Transfer refusal explains why only products requiring numbers can send.
+The disposable numbered prepaid transfer browser scenario is written in
+`frontend/e2e/numbered-transfer.spec.ts` for execution in R16.
+
+
 ### Categories and Catalogs tabs (`ui.catalog.categories`, `ui.catalog.catalogs`) - `screens/Classification.tsx`
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.

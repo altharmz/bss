@@ -176,6 +176,22 @@ describe('number inventory', () => {
     });
   });
 
+  it('explains why a product without a number requirement cannot acquire one', async () => {
+    stubFetch({
+      [`GET ${PATHS.products}/product`]: () =>
+        json({ id: 'product', status: 'active', productSpecification: { id: 'spec' } }),
+      [`GET ${PATHS.specifications}/spec`]: () => json({ resourceSpecification: [] }),
+    });
+    render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
+    fireEvent.click(screen.getByText('Subscriber number'));
+    expect(
+      await screen.findByText(
+        "This product's offering does not use subscriber numbers. Offerings whose specification requires a number ask for one when the product is added.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Change number' })).toBeNull();
+  });
+
   it('changes a product number through a modify order and shows business rejection', async () => {
     const { fetchMock } = stubFetch({
       [`GET ${PATHS.products}/product`]: () =>
