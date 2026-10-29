@@ -26,6 +26,14 @@ block	git commit -n -m x
 block	git -c core.hooksPath=/dev/null commit -m x
 block	git push --force
 block	git push origin +master
+block	git push --force origin master
+block	git push -f origin master
+block	git push --force-with-lease origin master
+block	gh pr merge 12 --squash --admin
+block	gh pr merge --admin --squash --delete-branch
+block	gh api -X PUT repos/o/r/pulls/12/merge
+allow	gh pr merge 12 --squash --delete-branch
+allow	gh pr checks 12 --watch
 block	git push --no-verify
 block	git push origin :old
 block	cat .env.prod

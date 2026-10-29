@@ -70,14 +70,39 @@ item owned by the other agent.
 
 ### Merging and closing
 
-Committing straight to `master` is fine, except for an item labelled `needs-human`: that
-work goes on a branch and a PR.
+All work goes on a branch and a PR; nothing is pushed to `master` directly. An agent merges
+its own PR, and closes an issue (`gh issue close`) once it is verified against the
+acceptance criteria and the board did not already close it.
 
-An agent may merge a PR (`gh pr merge`) and close an issue (`gh issue close`) once all
-checks pass and the work is verified against the acceptance criteria. If the PR, or the
-issue it fixes, is labelled `needs-human`, do it **only after the human's explicit approval
-in the conversation** - an earlier approval of the work, or the allow list, does not
-count. The allow list cannot check labels, so this rule is the only guard.
+**Flow**
+
+1. Open the PR with `Fixes #N` in the description.
+2. Before a PR that touches billing, migrations or the API, run `make test` (the full
+   suite) locally.
+3. Wait for CI: `gh pr checks --watch`.
+4. Every check green: `gh pr merge --squash --delete-branch`.
+5. CI red: fix it on the same branch and push. If you cannot, move the item to Waiting with
+   a comment (`Waiting on: <what> — unblocks when: <condition>`) and leave the PR open.
+
+**Never self-merge** (these wait for the human's review and explicit approval in the
+conversation; an earlier approval of the work or the allow list does not count):
+
+- an item, or a PR, labelled `needs-human`;
+- a PR that touches `CLAUDE.md`, `AGENTS.md`, `docs/board.md`, `.claude/` (settings, hooks,
+  commands), the guard and its cases, `scripts/pre-commit.sh` or `.github/workflows/`.
+
+**Never**, for any PR: `gh pr merge --admin`, merging with failing or pending checks, a
+direct push to `master`, a force-push. The allow list cannot check labels or paths, so the
+two self-merge exclusions above rest on you; the guard blocks `--admin`, API merges and
+force pushes.
+
+**Red master.** If `master` goes red (a push run or the nightly full run), the first step of
+the next "continue" is: revert the offending PR (on a branch, as a PR), open an issue for
+it, then carry on in the normal order. The revert PR follows the same flow.
+
+**Repo setting.** The repository allows squash merges only and deletes merged branches
+(`gh repo edit --enable-squash-merge --enable-merge-commit=false
+--enable-rebase-merge=false --delete-branch-on-merge`); this is the human's setting, not an agent's.
 
 ### Mechanics
 

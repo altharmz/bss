@@ -5,7 +5,11 @@ description: Session start - build the picture from git, the board and open PRs,
 Follow this when the human says "continue" or starts a session. Read [docs/board.md](../../docs/board.md)
 first for the statuses, ids and `gh` commands used below.
 
-Build the picture before touching code, in this order:
+Build the picture before touching code. **First, check `master`**: `gh run list --branch master
+--limit 5`. If the latest push run or the nightly full run failed, revert the offending PR
+(a branch and a PR), open an issue for it, then carry on - see board.md "Red master".
+
+Then, in this order:
 
 1. Local state: `git status`, current branch, unpushed commits, stashes.
 2. **Doing**: resume an item you own (matching branch/PR). More than one, or an item with
