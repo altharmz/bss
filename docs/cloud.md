@@ -17,8 +17,9 @@ from the same probe is `docs/archive/cloud-coverage-report.md`.
   line with the log's tail, is the first thing in the session's context.
 - What the cloud can prove is listed below; it is a subset of the gate. In particular no
   Docker image is built here, the e2e smoke does not run, and nothing can reach the VPS.
-  The human checks out the branch on the workstation and runs `make check` (lint, test,
-  docs-check, web-lint, web-test, web-e2e) before merging, then deploys it. Until then, a green cloud run is a hint, not a result.
+  A workstation session runs `make check` (lint, test, docs-check, web-lint, web-test,
+  web-e2e) before merge. Until then, a green cloud run is a hint, not a result. Deployment
+  is outside development and is not part of this flow.
 - The rules of CLAUDE.md still hold here (no `.env*`, guard blocks are reported, not worked around).
 - **Cloud mode: `CLAUDE_CODE_REMOTE=true`**, which Claude Code itself sets in every cloud
   session and never on the workstation - nothing to configure. Only the exact value
@@ -90,7 +91,7 @@ proxy refused the CONNECT (403), so nothing reached the VPS. Do not repeat it.
 - **The pre-commit hook is not installed** in a fresh clone (`.git/hooks/` holds only
   samples) and **would not pass here**: run once by hand, `scripts/pre-commit.sh` failed
   at `make lint` (image build, apt exit 100). Commit with `git commit --no-verify` and say
-  so in the commit message; the local `make verify` is the gate.
+  so in the commit message; the local `make check` before merge is the gate.
 - **`git push` works** (since `1c9f98e`): settings.json allows `git push`, `git push
   origin:*` and `git push -u origin:*`, so a push never stalls on a prompt. In cloud mode
   the guard lets it through only to a `cloud/*` branch named on the command line: `git
