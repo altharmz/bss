@@ -2,12 +2,16 @@
 description: Session start - build the picture from git, the board and open PRs, then take the highest-priority Ready item
 ---
 
-Follow this when the human says "continue" or starts a session. Read [docs/board.md](../../docs/board.md)
-first for the statuses, ids and `gh` commands used below.
+Follow this when the human says "continue" or starts a session without a concrete task. Read
+[docs/board.md](../../docs/board.md) first for the statuses, ids and `gh` commands used below.
+A concrete request takes precedence: check its local state and only the board or PR state it
+needs. Do not run the full startup sequence or take unrelated Ready work.
 
-Build the picture before touching code. **First, check `master`**: `gh run list --branch master
---limit 5`. If the latest push run or the nightly full run failed, revert the offending PR
-(a branch and a PR), open an issue for it, then carry on - see board.md "Red master".
+For the full protocol, build the picture before touching code. **First, check `master`**:
+`gh run list --branch master --limit 5`. If the latest push run or the nightly full run failed,
+revert the offending PR (a branch and a PR), open an issue for it, then carry on - see board.md
+"Red master". Use the compact board snapshot in board.md "Mechanics"; fetch the full body only
+for the issue being considered.
 
 Then, in this order:
 

@@ -16,19 +16,25 @@ it, and record new decisions there.
 ## Commands
 
 ```
-make up / down / logs / ps   # local stack (app + postgres, hot reload)
-make test      # FULL suite in the container make lint / fmt   # ruff check / auto-format
-make migrate   # alembic upgrade head locally make worker-once   # one billing-worker wake-up
-make seed      # local demo data (refuses prod) make psql        # local db (needs a TTY)
-make smoke     # smoke-test the local instance make mcp-smoke    # local MCP connector checks
-make check     # on demand only: lint, test (ci profile), docs-check, web-lint/test/e2e
-make test-smoke / test-changed   # smoke subset / only affected tests (the hook runs both); CI: docs/decisions/harness.md#ci-2026-10-28
-make docs      # regenerate docs/api + docs/db  make progress    # docs/PROGRESS.md (slow, on request)
-make hooks     # install pre-commit (lint + test) and pre-push (secrets) hooks
-make mcp-token-create NAME= SCOPE= / mcp-tokens / mcp-token-revoke ID=   # local MCP tokens
-make web-install   # npm ci (the only step that downloads)
+make up / down / logs / ps       # local stack (app + postgres, hot reload)
+make test                       # FULL suite in the container
+make lint / fmt                 # ruff check / auto-format
+make migrate                    # alembic upgrade head locally
+make worker-once                # one billing-worker wake-up
+make seed                       # local demo data (refuses prod)
+make psql                       # local db (needs a TTY)
+make smoke / mcp-smoke          # local app / MCP connector checks
+make check                      # on demand: lint, full test, docs, UI and browser checks
+make test-smoke / test-changed  # smoke subset / affected tests (the hook runs both)
+make docs                       # regenerate docs/api + docs/db
+make progress                   # docs/PROGRESS.md (slow, on request)
+make hooks                      # install pre-commit and pre-push hooks
+make mcp-token-create NAME= SCOPE= / mcp-tokens / mcp-token-revoke ID=
+make web-install                # npm ci (the only step that downloads)
 make web-dev / web-build / web-lint / web-test / web-types / web-fmt / web-e2e / web-shots
 ```
+
+CI and the hook's test selection: [harness.md](docs/decisions/harness.md#ci-2026-10-28).
 
 The VPS and deploying (`make deploy`, `remote`, `ssh`, `tunnel`, `deployed`) are the human's
 tools, not part of development: see Working style.
@@ -123,7 +129,9 @@ stay in the slice trackers in `docs/` and an issue only links to them. Rules in 
   or pending checks, or push to `master`. Details: board.md.
 - Never start work from Inbox without the human's OK; never move a `needs-human` item
   to Doing for yourself.
-- On "continue" or at session start, follow [.claude/commands/continue.md](.claude/commands/continue.md).
+- On "continue", or at session start without a concrete request, follow
+  [.claude/commands/continue.md](.claude/commands/continue.md). A concrete request takes
+  precedence: inspect only the state it needs and do not take unrelated Ready work.
 
 ## Current state
 

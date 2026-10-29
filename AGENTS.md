@@ -20,7 +20,9 @@ deploy.
 ## Task board
 
 Read [docs/board.md](docs/board.md) before any board operation (statuses, project ids, `gh`
-commands, merge and close rules; your label is `agent:codex`). On "continue" or at session
-start, follow the protocol in [.claude/commands/continue.md](.claude/commands/continue.md);
-Codex does not run Claude commands, so open and follow that file. The short rules are in the
-[Task board](CLAUDE.md#task-board) section of CLAUDE.md.
+commands, merge and close rules; your label is `agent:codex`). On "continue", or at session
+start without a concrete request, follow the protocol in
+[.claude/commands/continue.md](.claude/commands/continue.md); a concrete request takes
+precedence and does not trigger unrelated Ready work. Codex does not run Claude commands, so
+open and follow that file. The short rules are in the [Task board](CLAUDE.md#task-board) section
+of CLAUDE.md.

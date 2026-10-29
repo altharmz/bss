@@ -106,8 +106,18 @@ it, then carry on in the normal order. The revert PR follows the same flow.
 
 ### Mechanics
 
+Start with a compact snapshot of all open items (the default page size is 30), excluding Done;
+do not pull every issue body into the session. Fetch the full body only for an issue being
+considered, using explicit JSON fields (the human-readable view can query deprecated Projects
+classic fields and fail):
+
 ```
-gh project item-list 1 --owner altharmz --format json      # items with Status, labels, number
+gh project item-list 1 --owner altharmz --limit 100 --format json | jq -r '
+  .items | map(select(.status != "Done")) | group_by(.status)[] |
+  "\(.[0].status): \(length)",
+  (.[] | "  #\(.content.number // "-") [\(.labels | join(","))] \(.title)")'
+gh issue view <n> --json number,title,body,labels,comments
+
 gh project item-edit --project-id PVT_kwHOEpM-b84BpHA0 --id <item id> \
   --field-id PVTSSF_lAHOEpM-b84BpHA0zhnkE7M --single-select-option-id <option id>
 ```

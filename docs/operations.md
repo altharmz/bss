@@ -37,7 +37,7 @@ for test speed - not crash-safe; recover with `make clean && make up` ([decision
 
 | Suite | Command | What it covers |
 |---|---|---|
-| Backend | `make test` (`pytest -n auto`; 586 tests) | every test gets its own database cloned from a template migrated to head and dropped afterwards (`tests/conftest.py`); every API response is validated against `spec/` (`tests/apiclient.py`); hypothesis properties with 50 examples (`dev`) or 200 in `make verify` (`ci`, `HYPOTHESIS_PROFILE`) |
+| Backend | `make test` (`pytest -n auto`) | every test gets its own database cloned from a template migrated to head and dropped afterwards (`tests/conftest.py`); every API response is validated against `spec/` (`tests/apiclient.py`); hypothesis properties with 50 examples (`dev`) or 200 in `make check` (`ci`, `HYPOTHESIS_PROFILE`) |
 | Migrations | part of `make test` | upgrade on an empty database, downgrade to base and up again, as a NOSUPERUSER database owner like production, data-carrying upgrades of 0002 and 0004, and 0005's comments (`tests/test_migrations.py`, `tests/test_nonsuperuser_migration.py`) |
 | Worker processes | part of `make test` | real `python -m app.worker` processes on a pinned clock, SIGTERM and SIGKILL (`tests/test_worker_signals.py`) |
 | UI unit/component | `make web-test` | vitest, twice (UTC and `America/New_York`) |
@@ -47,20 +47,21 @@ for test speed - not crash-safe; recover with `make clean && make up` ([decision
 
 ### In a cloud session
 
-See [cloud.md](cloud.md). No Docker image can be built there (the build has no network)
-and Node is blocked on the host, so only the backend runs: `bash scripts/cloud-setup.sh`
-(PostgreSQL 16 on the host, a pinned Python 3.12 venv in `/opt/bss-venv`), then ruff and
-`pytest -n auto -p no:cacheprovider` against the host database. The documentation
-generators run the same way (`python -m tests.docs_collect > .docs/collected.json`, then
-`python3 scripts/docs/generate.py`). **Cloud work is pushed to a branch and counts as
-unverified until a local `make check` passes** (`docs/cloud.md`).
+See [cloud.md](cloud.md). No Docker image can be built there (the build has no network);
+Python and Node checks run on the host after `bash scripts/cloud-setup.sh` (PostgreSQL 16,
+a pinned Python 3.12 venv in `/opt/bss-venv`, and the locked npm dependencies). Run ruff and
+`pytest -n auto -p no:cacheprovider` against the host database, plus the web checks described
+in cloud.md. The documentation generators run the same way (`python -m tests.docs_collect >
+.docs/collected.json`, then `python3 scripts/docs/generate.py`). **Cloud work is pushed to a
+branch and counts as unverified until a local `make check` passes** (`docs/cloud.md`).
 
 ## Hooks
 
 - **Pre-commit** (`scripts/pre-commit.sh`, installed by `make hooks`): refuses the commit
   unless the working tree is exactly what is committed, then `make lint`, `make test-smoke`
   and `make test-changed` (the smoke tests and the tests the change affects; the full
-  `make test` is nightly in CI and by hand before a PR; plus `make web-lint` and `make web-test` when `frontend/` or `spec/` is staged,
+  `make test` is nightly in CI and by hand before a PR that touches billing, migrations or
+  the API; plus `make web-lint` and `make web-test` when `frontend/` or `spec/` is staged,
   `make docs-check` when the generated docs' sources are; nothing for Markdown only); keeps a
   full log of every run under `.git/pre-commit-logs/`. Never skipped; it is the one local
   test run of a development cycle ([decisions/harness.md](decisions/harness.md#development-cycle-and-gates)).
@@ -192,6 +193,7 @@ not a hostile agent** ([decisions/harness.md](decisions/harness.md#the-guard)):
   `.claude/hooks/test-guard.sh`.
 - `.claude/hooks/format.sh`: formats edited Python (ruff) and UI files (prettier) in
   containers.
-- **Approval rules**: none for commit, push or deploy - the pre-commit hook's lint and
-  tests are the gate; cloud sessions push only to `cloud/*` branches; a data-model or
-  large design change starts with a plan (CLAUDE.md, "Working style").
+- **Approval rules**: commit and push need none. Agents merge their own PRs only under the
+  [board rules](board.md#merging-and-closing); deployment is human-only and outside
+  development. Cloud sessions push only to `cloud/*` branches; a data-model or large design
+  change starts with a plan (CLAUDE.md, "Working style").
