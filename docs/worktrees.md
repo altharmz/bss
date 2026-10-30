@@ -10,7 +10,9 @@ Do not switch branches in that worktree or mutate sibling worktrees.
 
 ## Task preparation
 
-Git, GitHub CLI with repository/project read access, and host Python 3 are required.
+Git, GitHub CLI with repository/project write access, and host Python 3 are required.
+Agent identity is detected from `CODEX_THREAD_ID` or `CLAUDECODE`; otherwise set
+`BSS_TASK_AGENT=codex` or `BSS_TASK_AGENT=claude`. Unknown identities fail closed.
 Only the primary checkout on clean `master` is accepted; staged, tracked and non-ignored
 untracked changes fail. Local commits ahead of or diverging from `origin/master` fail;
 there is no stash, reset, rebase or history merge. Tracked secret paths in either the
@@ -26,8 +28,9 @@ Missing/multiple priority labels, incomplete responses, duplicate items or a fil
 sorted or non-unique board view fail rather than inventing an order. Ready remains the
 triage source of truth; the helper does not interpret dependencies from free-form prose.
 
-The helper reads GitHub only. Claim the returned issue under the existing ownership/WIP
-rules before implementation. It creates no issue, label, status, PR or remote branch.
+The helper checks the agent's Doing WIP limit, rechecks the selected item's eligibility,
+adds its existing ownership label, verifies the claim, moves Ready to Doing, then verifies
+again before reporting success. It creates no issue, label definition, PR or remote branch.
 The title is normalized to ASCII lowercase kebab form (fallback `task`) and truncated
 so the whole branch is at most 80 characters. Existing branch/path/registration
 collisions fail without reuse. A lock in the common Git directory serializes preparation
@@ -43,14 +46,23 @@ still race later startup; task-compose's checks and Docker's bind failure handle
 without killing a listener or silently changing ports.
 
 The result includes issue/title, branch, worktree, three ports, external secret path
-and file-existence status, plus a `cd` command in human output. No secret file is opened,
-created, copied or validated. Provision the external file manually before starting Compose.
-Metadata uses the same schema validator as task-compose without its secret-reading step.
+and credential existence/creation status, agent and Doing status, plus a `cd` command in
+human output. Missing credentials are created exclusively with a fresh random 256-bit
+development-only `POSTGRES_PASSWORD`, directory mode 0700 and file mode 0600.
+Existing regular task credentials are preserved and validated by task-compose's context
+check. Symlink paths and multiply linked secret files are refused. No primary secret is
+opened or used as a source. Generated values never appear in output.
 
 On failure after creation, only this invocation's unchanged worktree and branch are
 removed, without force. New commits or unexpected working-tree changes are preserved
 and named for manual review. Existing branches/worktrees, secrets and Docker resources
-are never deleted. A successful primary fast-forward is retained on later failure.
+are never deleted. Newly generated credentials are also retained and their path reported
+on failure, since another process may already have adopted them. An acknowledged remote
+claim/status is compensated only while its expected labels, status and open state still
+match. Unacknowledged writes or concurrent changes are preserved and reported for review.
+GitHub has no conditional label/status mutation: rechecks detect observed races, but
+cannot provide a cross-clone atomic claim. The common Git lock serializes this checkout.
+A successful primary fast-forward is retained on later failure.
 SIGINT/SIGTERM trigger rollback; a hard kill or machine crash can require manual recovery.
 
 ## Local configuration
@@ -73,11 +85,12 @@ excluding the repository's reserved VPN ports. Startup allocates the explicit po
 described above; there is no separate reservation registry. Metadata survives terminal/agent
 restarts and reboot.
 
-Provision development secrets manually **outside** the worktree:
+Development secrets live **outside** the worktree:
 `~/.config/bss/tasks/<task_id>/.env`, or, when explicitly set,
 `$XDG_CONFIG_HOME/bss/tasks/<task_id>/.env` (XDG_CONFIG_HOME must be absolute and external).
-Use restrictive permissions (directory 700, file 600). No helper creates or copies this
-file. Never copy `.env`, `.env.prod` or `.env.smoke` from the primary checkout.
+`make start-task` creates a missing file; an existing directory must have mode 700
+for creation. Existing files are never overwritten. Never copy `.env`, `.env.prod`
+or `.env.smoke` from the primary checkout.
 Task worktrees must not contain these files. Existing primary secret files stay untouched.
 
 The external file needs a fresh development-only `POSTGRES_PASSWORD`. Optional keys are

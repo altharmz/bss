@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host-only startup cases: disposable Git remotes and a read-only fake GitHub CLI."""
+"""Host-only startup cases with disposable repositories and fake GitHub writes."""
 
 import contextlib
 import fcntl
@@ -27,6 +27,7 @@ def connection(rows):
 
 def issue(number=81, priority="P2", **overrides):
     data = {
+        "id": f"issue-{number}",
         "number": number,
         "title": "Subscriber search" if number == 81 else f"Task {number}",
         "state": "OPEN",
@@ -65,6 +66,7 @@ class StartupTests(unittest.TestCase):
             BSS_TEST_BOARD=str(self.base / "board.json"),
             BSS_TEST_PRS=str(self.base / "prs.json"),
             BSS_TEST_CALLS=str(self.base / "calls.jsonl"),
+            BSS_TASK_AGENT="codex",
         )
         self.call(["git", "init", "--bare", "-q", "-b", "master", str(self.remote)], cwd=self.base)
         self.call(["git", "init", "-q", "-b", "master", str(self.primary)], cwd=self.base)
@@ -88,11 +90,30 @@ class StartupTests(unittest.TestCase):
             f"#!{sys.executable}\n"
             "import json, os, sys\n"
             "args = sys.argv[1:]\n"
-            "assert args[:2] == ['api', 'graphql']\n"
-            "assert not any('mutation' in a for a in args), 'GitHub writes forbidden'\n"
             "with open(os.environ['BSS_TEST_CALLS'], 'a') as output:\n"
             " output.write(json.dumps(args) + '\\n')\n"
+            "board_path = os.environ['BSS_TEST_BOARD']\n"
+            "with open(board_path) as source: board = json.load(source)\n"
+            "rows = [r for p in board for r in p['node']['items']['nodes']]\n"
+            "if args[:2] == ['issue', 'edit']:\n"
+            " if os.environ.get('BSS_TEST_FAIL') == 'claim' and '--add-label' in args: sys.exit(1)\n"
+            " row = next(r for r in rows if str(r['content']['number']) == args[2])\n"
+            " labels = row['content']['labels']['nodes']\n"
+            " if '--add-label' in args: labels.append({'name': args[-1]})\n"
+            " else: labels[:] = [n for n in labels if n['name'] != args[-1]]\n"
+            " row['content']['labels']['totalCount'] = len(labels)\n"
+            " with open(board_path, 'w') as output: json.dump(board, output)\n"
+            " sys.exit(0)\n"
             "document = next(a for a in args if a.startswith('query='))\n"
+            "if 'mutation' in document:\n"
+            " if os.environ.get('BSS_TEST_FAIL') == 'status': sys.exit(1)\n"
+            " item = next(a[5:] for a in args if a.startswith('item='))\n"
+            " option = next(a[7:] for a in args if a.startswith('option='))\n"
+            " row = next(r for r in rows if r['id'] == item)\n"
+            " row['fieldValueByName']['name'] = 'Doing' if option == '47fc9ee4' else 'Ready'\n"
+            " with open(board_path, 'w') as output: json.dump(board, output)\n"
+            " print(json.dumps({'data': {'updated': True}}))\n"
+            " sys.exit(0)\n"
             "cursor = next((a for a in args if a.startswith('cursor=')), None)\n"
             "index = int(cursor.rsplit('-', 1)[1]) if cursor else 0\n"
             "key = 'BSS_TEST_BOARD' if 'items(first:' in document else 'BSS_TEST_PRS'\n"
@@ -352,6 +373,9 @@ class StartupTests(unittest.TestCase):
         self.rejected("no worktree created; review branch issue-81-subscriber-search")
         self.assertFalse(self.destination().exists())
         self.assertEqual(self.git("branch", "--format=%(refname:short)"), "master")
+
+        self.assertEqual(task.status(self.remote_item()), "Ready")
+        self.assertNotIn("agent:codex", task.ownership(self.remote_item()))
         self.assertTrue(lock.exists())
 
     def test_existing_remote_branch_excludes_issue(self):
@@ -451,14 +475,14 @@ class StartupTests(unittest.TestCase):
         self.assertEqual(set(metadata), {"version", "task_id", "app_port", "mcp_port", "web_port"})
         self.assertEqual((result["app_port"] - 21000) % 3, 0)
         self.assertLessEqual(result["web_port"], 21998)
-        self.assertFalse(result["secret_exists"])
+        self.assertTrue(result["secret_exists"])
         self.assertEqual(Path(result["worktree"]), self.destination())
         self.assertEqual(self.git("status", "--porcelain"), "")
 
     def test_secret_existence_only_and_ignored_primary_secret_untouched(self):
         secret = self.base / "config/bss/tasks/issue-81-subscriber-search/.env"
         secret.parent.mkdir(parents=True)
-        secret.write_text(MARKER)  # Deliberately not a valid dotenv: startup must not parse it.
+        secret.write_text("POSTGRES_PASSWORD=" + MARKER)
         primary_secret = self.primary / ".env"
         primary_secret.write_text(MARKER)
         original = Path.open
@@ -477,7 +501,7 @@ class StartupTests(unittest.TestCase):
         self.assertTrue(result["secret_exists"])
         self.assertEqual(result["secret_file"], str(secret))
         self.assertNotIn(MARKER, json.dumps(result))
-        self.assertEqual(secret.read_text(), MARKER)
+        self.assertEqual(secret.read_text(), "POSTGRES_PASSWORD=" + MARKER)
         self.assertEqual(primary_secret.read_text(), MARKER)
 
     def test_relative_and_internal_secret_paths_fail(self):
@@ -543,7 +567,7 @@ class StartupTests(unittest.TestCase):
         self.rejected("preserved changed task")
         self.assertEqual((self.destination() / "unexpected").read_text().strip(), "keep")
 
-    def test_human_output_and_read_only_github(self):
+    def test_human_output_and_github_transaction(self):
         result = self.cli()
         self.assertEqual(result.returncode, 0, result.stderr)
         for fragment in [
@@ -555,13 +579,125 @@ class StartupTests(unittest.TestCase):
             "MCP port:",
             "Web port:",
             "Secret file:",
-            "Secret exists: no",
+            "Secret exists: yes",
+            "Secret created: yes",
+            "Claim: agent:codex / Doing",
             "Next: cd '",
         ]:
             self.assertIn(fragment, result.stdout)
         calls = Path(self.env["BSS_TEST_CALLS"]).read_text().splitlines()
         self.assertTrue(calls)
-        self.assertTrue(all("mutation" not in line for line in calls))
+        self.assertTrue(any("mutation" in line for line in calls))
+
+    def remote_item(self):
+        return json.loads(Path(self.env["BSS_TEST_BOARD"]).read_text())[0]["node"]["items"]["nodes"][0]
+
+    def test_claim_doing_and_disposable_credential(self):
+        result = self.result()
+        item = self.remote_item()
+        self.assertIn("agent:codex", task.ownership(item))
+        self.assertEqual(task.status(item), "Doing")
+        secret = Path(result["secret_file"])
+        self.assertEqual(secret.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(secret.parent.stat().st_mode & 0o777, 0o700)
+        value = secret.read_text().split("=", 1)[1].strip()
+        self.assertEqual(len(value), 64)
+        self.assertNotIn(value, json.dumps(result))
+
+    def test_failed_claim_and_status_leave_no_local_task(self):
+        for failure in ("claim", "status"):
+            with self.subTest(failure=failure):
+                self.env["BSS_TEST_FAIL"] = failure
+                self.rejected("command failed")
+                self.assertFalse(self.destination().exists())
+                self.assertEqual(task.status(self.remote_item()), "Ready")
+                self.assertNotIn("agent:codex", task.ownership(self.remote_item()))
+
+    def test_wip_limit(self):
+        active = issue(90, labels=connection([{"name": "agent:codex"}]))
+        active["fieldValueByName"]["name"] = "Doing"
+        self.board([issue(), active])
+        self.rejected("WIP limit")
+
+    def test_claim_race_after_selection(self):
+        choose = task.select_issue
+
+        def race(items, represented):
+            result = choose(items, represented)
+            self.board([issue(labels=connection([{"name": "P2"}, {"name": "agent:claude"}]))])
+            return result
+
+        with (
+            patch.dict(os.environ, self.env, clear=True),
+            contextlib.chdir(self.primary),
+            patch.object(task, "select_issue", race),
+            self.assertRaises(task.StartupError),
+        ):
+            task.start()
+        self.assertFalse(self.destination().exists())
+        self.assertEqual(task.ownership(self.remote_item()), {"P2", "agent:claude"})
+
+    def test_symlinked_secret_refused_without_reading_target(self):
+        target = self.primary / ".env"
+        target.write_text(MARKER)
+        secret = self.base / "config/bss/tasks/issue-81-subscriber-search/.env"
+        secret.parent.mkdir(parents=True)
+        secret.symlink_to(target)
+        self.rejected("symlinked")
+        self.assertEqual(target.read_text(), MARKER)
+
+    def test_changed_remote_state_is_preserved_on_failure(self):
+        def fail_report(_result):
+            item = issue(labels=connection([{"name": "P2"}, {"name": "agent:claude"}]))
+            item["fieldValueByName"]["name"] = "Waiting"
+            self.board([item])
+            raise OSError("output failed")
+
+        with (
+            patch.dict(os.environ, self.env, clear=True),
+            contextlib.chdir(self.primary),
+            contextlib.redirect_stderr(io.StringIO()) as errors,
+            self.assertRaises(OSError),
+        ):
+            task.start(on_ready=fail_report)
+        self.assertIn("preserved uncertain remote state", errors.getvalue())
+        self.assertEqual(task.status(self.remote_item()), "Waiting")
+        self.assertEqual(task.ownership(self.remote_item()), {"P2", "agent:claude"})
+        self.assertFalse(self.destination().exists())
+
+    def test_failure_retains_new_credential_and_compensates_remote(self):
+        def fail_report(result):
+            self.assertTrue(result["secret_created"])
+            raise OSError("output failed")
+
+        with (
+            patch.dict(os.environ, self.env, clear=True),
+            contextlib.chdir(self.primary),
+            contextlib.redirect_stderr(io.StringIO()) as errors,
+            self.assertRaises(OSError),
+        ):
+            task.start(on_ready=fail_report)
+        secret = self.base / "config/bss/tasks/issue-81-subscriber-search/.env"
+        self.assertTrue(secret.exists())
+        self.assertNotIn(secret.read_text().split("=", 1)[1].strip(), errors.getvalue())
+        self.assertFalse(self.destination().exists())
+        self.assertEqual(task.status(self.remote_item()), "Ready")
+        self.assertNotIn("agent:codex", task.ownership(self.remote_item()))
+
+    def test_modified_runtime_is_preserved(self):
+        def fail_report(result):
+            (Path(result["worktree"]) / ".task/runtime.json").write_text("changed")
+            raise OSError("output failed")
+
+        with (
+            patch.dict(os.environ, self.env, clear=True),
+            contextlib.chdir(self.primary),
+            contextlib.redirect_stderr(io.StringIO()) as errors,
+            self.assertRaises(OSError),
+        ):
+            task.start(on_ready=fail_report)
+        self.assertIn("preserved changed runtime metadata", errors.getvalue())
+        self.assertEqual((self.destination() / ".task/runtime.json").read_text(), "changed")
 
     def test_invocation_lock(self):
         common = Path(self.git("rev-parse", "--path-format=absolute", "--git-common-dir"))
