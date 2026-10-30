@@ -73,7 +73,7 @@ class StartupTests(unittest.TestCase):
         self.git("config", "user.name", "Startup test")
         self.git("config", "user.email", "startup@example.test")
         (self.primary / "scripts").mkdir()
-        for name in ("start_task.py", "task_runtime.py", "task_telemetry.py"):
+        for name in ("start_task.py", "task_runtime.py", "task_telemetry.py", "worker_slots.py"):
             shutil.copy2(SCRIPTS / name, self.primary / "scripts" / name)
         shutil.copy2(SCRIPTS.parent / "Makefile", self.primary / "Makefile")
         (self.primary / ".gitignore").write_text(".task/\n.env\n__pycache__/\n")
@@ -96,7 +96,8 @@ class StartupTests(unittest.TestCase):
             "with open(board_path) as source: board = json.load(source)\n"
             "rows = [r for p in board for r in p['node']['items']['nodes']]\n"
             "if args[:2] == ['issue', 'edit']:\n"
-            " if os.environ.get('BSS_TEST_FAIL') == 'claim' and '--add-label' in args: sys.exit(1)\n"
+            " if os.environ.get('BSS_TEST_FAIL') == 'claim' and '--add-label' in args:\n"
+            "  sys.exit(1)\n"
             " row = next(r for r in rows if str(r['content']['number']) == args[2])\n"
             " labels = row['content']['labels']['nodes']\n"
             " if '--add-label' in args: labels.append({'name': args[-1]})\n"
@@ -590,7 +591,9 @@ class StartupTests(unittest.TestCase):
         self.assertTrue(any("mutation" in line for line in calls))
 
     def remote_item(self):
-        return json.loads(Path(self.env["BSS_TEST_BOARD"]).read_text())[0]["node"]["items"]["nodes"][0]
+        return json.loads(Path(self.env["BSS_TEST_BOARD"]).read_text())[0]["node"]["items"][
+            "nodes"
+        ][0]
 
     def test_claim_doing_and_disposable_credential(self):
         result = self.result()
@@ -704,6 +707,177 @@ class StartupTests(unittest.TestCase):
         with (common / "start-task.lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             self.rejected("another start-task invocation")
+
+    def test_slot_startup_through_make(self):
+        result = self.cli("SLOT=worker1", "JSON=1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        slot = self.base / "primary checkout-agents/worker1"
+        self.assertEqual(data["slot"], "worker1")
+        self.assertEqual(Path(data["worktree"]), slot / "repo")
+        self.assertEqual(self.git("branch", "--show-current", cwd=slot / "repo"), data["branch"])
+        self.assertEqual(json.loads((slot / "active.json").read_text())["task_id"], data["branch"])
+        self.assertEqual(
+            task.validate_metadata(json.loads((slot / "repo/.task/runtime.json").read_text()))[0],
+            data["branch"],
+        )
+
+    def test_slot_lock_rejects_another_invocation(self):
+        self.env["BSS_SLOT"] = "worker1"
+        slot = self.base / "primary checkout-agents/worker1"
+        slot.mkdir(parents=True)
+        with (slot / "slot.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self.rejected("locked by another invocation")
+        self.assertEqual(task.status(self.remote_item()), "Ready")
+
+    def test_registered_slot_without_repo_is_not_reused(self):
+        self.env["BSS_SLOT"] = "worker1"
+        slot = self.base / "primary checkout-agents/worker1"
+        repo = self.add_worktree(destination=slot / "repo")
+        shutil.rmtree(repo)  # Simulate filesystem loss while Git still registers the worktree.
+        self.rejected("overlaps a registered worktree")
+        (self.base / "extra").mkdir()
+        self.env["BSS_WORKER_ROOT"] = str(self.base / "extra/../primary checkout-agents")
+        self.rejected("overlaps a registered worktree")
+        self.assertIn(repo, dict(task.worktrees(self.primary)))
+
+    def test_slot_rollback_preserves_modified_worktree_and_reservation(self):
+        self.env["BSS_SLOT"] = "worker1"
+        slot = self.base / "primary checkout-agents/worker1"
+
+        def fail_report(result):
+            (Path(result["worktree"]) / "unexpected").write_text(MARKER)
+            raise OSError("injected failure")
+
+        with (
+            patch.dict(os.environ, self.env, clear=True),
+            contextlib.chdir(self.primary),
+            contextlib.redirect_stderr(io.StringIO()) as errors,
+            self.assertRaises(OSError),
+        ):
+            task.start(fail_report)
+        self.assertEqual((slot / "repo/unexpected").read_text(), MARKER)
+        self.assertTrue((slot / "active.json").exists())
+        self.assertIn("preserved slot reservation", errors.getvalue())
+
+    def test_unsafe_slots_fail_before_claim(self):
+        for name in (
+            "../worker1",
+            "/foo",
+            "worker/1",
+            ".",
+            "..",
+            "Worker1",
+            "a" * 33,
+            "worker1;touch injected",
+            "worker1`touch injected`",
+        ):
+            with self.subTest(name=name):
+                self.env["BSS_SLOT"] = name
+                self.rejected("slot must be")
+                self.assertEqual(task.status(self.remote_item()), "Ready")
+        self.assertFalse((self.primary / "injected").exists())
+
+    def test_slot_occupancy_and_symlinks_preserved(self):
+        self.env["BSS_SLOT"] = "worker1"
+        slot = self.base / "primary checkout-agents/worker1"
+        slot.mkdir(parents=True)
+        repo = slot / "repo"
+        repo.mkdir()
+        (repo / "keep").write_text(MARKER)
+        self.rejected("occupied")
+        self.assertEqual((repo / "keep").read_text(), MARKER)
+        (repo / "keep").unlink()
+        repo.rmdir()
+        (slot / "active.json").write_text(MARKER)
+        self.rejected("occupied")
+        (slot / "active.json").unlink()
+        repo.symlink_to(self.primary, target_is_directory=True)
+        self.rejected("occupied")
+        self.assertTrue(repo.is_symlink())
+
+    def test_worker_root_override_and_symlink_rejection(self):
+        self.env.update(BSS_SLOT="qa1", BSS_WORKER_ROOT="relative")
+        self.rejected("must be absolute")
+        alias = self.base / "alias"
+        alias.symlink_to(self.base, target_is_directory=True)
+        self.env["BSS_WORKER_ROOT"] = str(alias)
+        self.rejected("symlinked")
+        self.env["BSS_WORKER_ROOT"] = str(self.primary / "workers")
+        self.rejected("overlaps")
+        self.env["BSS_WORKER_ROOT"] = str(self.base / "custom pool")
+        self.assertEqual(Path(self.result()["worktree"]), self.base / "custom pool/qa1/repo")
+
+    def test_slot_rollback_and_persistent_state(self):
+        self.env["BSS_SLOT"] = "worker1"
+        slot = self.base / "primary checkout-agents/worker1"
+        (slot / "state").mkdir(parents=True)
+        (slot / "state/keep").write_text(MARKER)
+
+        def fail_report(_result):
+            raise OSError("injected failure")
+
+        with (
+            patch.dict(os.environ, self.env, clear=True),
+            contextlib.chdir(self.primary),
+            contextlib.redirect_stderr(io.StringIO()),
+            self.assertRaises(OSError),
+        ):
+            task.start(fail_report)
+        self.assertTrue(slot.is_dir())
+        self.assertFalse((slot / "repo").exists())
+        self.assertFalse((slot / "active.json").exists())
+        self.assertEqual((slot / "state/keep").read_text(), MARKER)
+        self.assertEqual(task.status(self.remote_item()), "Ready")
+        self.assertEqual(self.result()["slot"], "worker1")
+
+    def test_changed_slot_state_is_preserved(self):
+        self.env["BSS_SLOT"] = "worker1"
+        slot = self.base / "primary checkout-agents/worker1"
+
+        def fail_report(_result):
+            (slot / "active.json").write_text("changed")
+            raise OSError("injected failure")
+
+        with (
+            patch.dict(os.environ, self.env, clear=True),
+            contextlib.chdir(self.primary),
+            contextlib.redirect_stderr(io.StringIO()) as errors,
+            self.assertRaises(OSError),
+        ):
+            task.start(fail_report)
+        self.assertEqual((slot / "active.json").read_text(), "changed")
+        self.assertIn("preserved slot reservation", errors.getvalue())
+
+    def test_two_slots_retain_task_port_and_owner_isolation(self):
+        self.env["BSS_SLOT"] = "worker1"
+        first = self.result()
+        self.env.update(BSS_SLOT="worker2", BSS_TASK_OWNER="claude")
+        self.board([issue(82)])
+        second = self.result()
+        for key in ("branch", "worktree", "secret_file", "app_port", "mcp_port", "web_port"):
+            self.assertNotEqual(first[key], second[key], key)
+        self.assertEqual(second["agent"], "agent:claude")
+        self.assertEqual(second["slot"], "worker2")
+
+    def test_release_slot_requires_absent_unregistered_repo_then_allows_reuse(self):
+        self.env["BSS_SLOT"] = "worker1"
+        first = self.result()
+        slot = Path(first["worktree"]).parent
+        rejected = self.call(["make", "release-slot"], check=False)
+        self.assertNotEqual(rejected.returncode, 0)
+        # Test fixture models an operator's safe manual worktree removal.
+        (slot / "repo/.task/runtime.json").unlink()
+        self.git("worktree", "remove", str(slot / "repo"))
+        self.rejected("occupied")
+        released = self.call(["make", "release-slot"], check=False)
+        self.assertEqual(released.returncode, 0, released.stderr)
+        self.assertTrue(slot.is_dir())
+        self.board([issue(82)])
+        second = self.result()
+        self.assertEqual(first["worktree"], second["worktree"])
+        self.assertNotEqual(first["branch"], second["branch"])
 
 
 if __name__ == "__main__":

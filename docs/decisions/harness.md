@@ -9,6 +9,21 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 
 ## Development cycle and gates
 
+### Persistent worker slots (2026-10-30, #85)
+
+The canonical cross-client local workflow is [worktrees.md](../worktrees.md).
+`make start-task SLOT=worker1` prepares the existing issue-specific branch at a stable
+`<checkout-name>-agents/worker1/repo` path, with optional absolute `BSS_WORKER_ROOT`.
+Keep runtime identity issue-specific; path reuse must not reuse Compose state or credentials.
+Slot occupancy is a locked local reservation, separate from observational telemetry;
+unknown state fails closed. Explicit `release-slot` only acknowledges safe prior worktree
+removal and preserves the persistent directory/state. Omitting SLOT supports existing
+task-specific startup paths during migration. Existing board ownership labels and WIP
+policy remain intact; explicit BSS_TASK_OWNER separates policy ownership from client
+detection. Slots have no provider labels and task/session cardinality remains many-to-one.
+Successful startup adds the validated slot to workflow event metadata using the existing
+schema, with no telemetry migration or inferred model/usage/provider values.
+
 ### Persistent task telemetry (2026-10-30, #82)
 
 Telemetry is observational and **fail-open**: a failed write produces a bounded warning
@@ -45,7 +60,8 @@ task Compose operations, including those used by normal Make targets. `start-tas
 records successful preparation. The `--url` and `--check` helpers do not create events.
 No operation arguments, subprocess output, prompt/response, code, diffs, secret values
 or arbitrary environment data are collected. Only allowlisted operation names and
-validated branch/session identities enter SQL; metadata is currently empty.
+validated branch/session identities enter SQL; startup metadata may contain a validated
+worker slot, while other event metadata remains empty.
 
 Codex's UUID thread identifier is the reliable session source currently supported.
 Other runtimes may provide an explicit UUID in `BSS_TELEMETRY_SESSION_ID`; without a

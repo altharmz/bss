@@ -7,9 +7,11 @@ it, and record new decisions there.
 
 ## Environments
 
-Local work uses **1 task = 1 branch = 1 git worktree = 1 agent context**.
-When starting new work, run `make start-task` from the primary checkout. Do not manually
-select a backlog issue or create its task branch/worktree. Use exactly the returned
+Local work uses **1 active task = 1 issue = 1 branch = 1 git worktree = 1 worker slot**.
+Slots are provider-neutral; a task may span multiple agent sessions. The shared lifecycle
+for every client is [worktrees.md](docs/worktrees.md).
+When starting new work, run `make start-task SLOT=worker1` (the chosen free slot) from
+the primary checkout. Do not manually select a backlog issue or create its task branch/worktree. Use exactly the returned
 issue, branch and worktree. If it fails, stop and report the failure instead of bypassing
 it. A concrete human request still takes precedence over unrelated Ready work.
 

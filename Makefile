@@ -17,9 +17,16 @@ HYPOTHESIS_PROFILE ?= dev
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
-.PHONY: start-task
+ifneq ($(origin SLOT), undefined)
+export BSS_SLOT := $(SLOT)
+endif
+
+.PHONY: start-task release-slot
 start-task: ## Prepare the next eligible Ready issue in a linked worktree (JSON=1 for agents)
 	@python3 -B scripts/start_task.py $(if $(filter 1,$(JSON)),--json,)
+
+release-slot: ## Release a slot after its task worktree was safely removed (SLOT=worker1)
+	@python3 -B scripts/start_task.py --release-slot
 
 up: ## Start the local stack (app + postgres, hot reload)
 	./scripts/task-compose up -d --build

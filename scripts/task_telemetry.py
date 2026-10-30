@@ -101,7 +101,7 @@ def literal(value):
     return "'" + value.replace("'", "''") + "'"
 
 
-def event_sql(task, operation, result, duration_ms, environ):
+def event_sql(task, operation, result, duration_ms, environ, slot=None):
     match = re.fullmatch(r"issue-([1-9][0-9]*)-[a-z0-9-]+", task)
     if not match or len(task) > 80 or operation not in OPERATIONS:
         raise ValueError("invalid telemetry identity or operation")
@@ -110,6 +110,9 @@ def event_sql(task, operation, result, duration_ms, environ):
     ):
         raise ValueError("invalid telemetry result or duration")
     duration = "NULL" if duration_ms is None else str(duration_ms)
+    if slot is not None and not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", slot):
+        raise ValueError("invalid worker slot")
+    metadata = "'{}'" if slot is None else literal('{"slot":"' + slot + '"}')
     task_value = literal(task)
     statements = [
         "BEGIN;",
@@ -133,18 +136,20 @@ def event_sql(task, operation, result, duration_ms, environ):
         )
     statements.extend(
         [
-            "INSERT INTO workflow_events(task_id, session_id, event_type, result, duration_ms) "
-            f"VALUES ({task_value}, {session_value}, {literal(operation)}, {result}, {duration});",
+            "INSERT INTO workflow_events(task_id, session_id, event_type, result, "
+            "duration_ms, metadata) "
+            f"VALUES ({task_value}, {session_value}, {literal(operation)}, "
+            f"{result}, {duration}, {metadata});",
             "COMMIT;",
         ]
     )
     return "\n".join(statements)
 
 
-def record(task, operation, result, duration_ms):
+def record(task, operation, result, duration_ms, slot=None):
     """Fail open, with a visible but content-free warning. Never print DB stderr."""
     try:
-        sql(event_sql(task, operation, result, duration_ms, os.environ))
+        sql(event_sql(task, operation, result, duration_ms, os.environ, slot))
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
         print(
             "telemetry: event not recorded; run make telemetry-up to check storage", file=sys.stderr
