@@ -20,7 +20,7 @@ import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { addDays, isIsoDate } from '../format/dates';
 import { formatCents } from '../format/money';
-import { Button, Menu, Modal, TextInput } from '../ui/kit';
+import { Button, Menu, Modal, TextInput, type MenuItem } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Preview } from './AddProduct';
 import { uncertain } from './submissionKey';
@@ -82,18 +82,19 @@ export function ProductActionsMenu({
   undoable,
   onUndo,
   busy,
+  extra = [],
 }: {
+  extra?: MenuItem[];
   undoable?: AccountProduct['undoableStatusChange'];
   onUndo?: () => void;
   busy?: boolean;
   items: ProductAction[];
   onPick: (change: ProductAction) => void;
 }) {
-  if (items.length === 0 && !undoable) return null;
+  if (items.length === 0 && !undoable && extra.length === 0) return null;
   return (
     <Menu
       label="Actions ▾"
-      trigger="Actions ▾"
       ui="ui.subscriber.productActions"
       items={[
         ...(undoable
@@ -106,6 +107,7 @@ export function ProductActionsMenu({
               },
             ]
           : []),
+        ...extra,
         ...items.map((item) => ({
           label: `${TITLE[item]}…`,
           ui: CHANGE_UI[item],

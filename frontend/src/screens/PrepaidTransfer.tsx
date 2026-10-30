@@ -15,9 +15,10 @@ import { usePolled } from '../api/usePolled';
 import { useResource } from '../api/useResource';
 import { accountLabel } from '../format/ids';
 import { formatCents, parseAmount, toCents } from '../format/money';
-import { Button, Modal, Panel, Segmented, TextInput } from '../ui/kit';
+import { Button, Modal, Segmented, TextInput } from '../ui/kit';
 import { uncertain, useSubmissionKey } from './submissionKey';
 import { POLL_MS, watch, type Watched } from './watched';
+import { WatchProgress } from './WatchProgress';
 
 // Transfer of prepaid funds to another subscriber, by number (docs/decisions/frontend.md
 // P6c1). Accepting a transfer moves nothing: the sender's funds are held and the billing
@@ -298,10 +299,12 @@ export function PrepaidTransferModal({
  * and the worker still finishes it) and offers a manual check. */
 export function TransferWatch({
   watched,
+  accountId,
   onSettled,
   onDismiss,
 }: {
   watched: Watched;
+  accountId?: string;
   onSettled: (message: string) => void;
   onDismiss: () => void;
 }) {
@@ -322,12 +325,18 @@ export function TransferWatch({
     }
   }, [status, description, watched.label]);
 
-  if (status === 'completed' || status === 'failed') return null;
   const late = status === 'created' && transfer.refreshError === null && transfer.capped;
   return (
-    <Panel>
-      <div data-ui="ui.subscriber.prepaid.transferWatch" role="status">
-        {transfer.status === 'error' || transfer.refreshError !== null ? (
+    <div className="subscriber-watch" data-ui="ui.subscriber.prepaid.transferWatch" role="status">
+      <WatchProgress
+        lastCheckedAt={transfer.lastCheckedAt}
+        phase={status === 'completed' ? 'completed' : status === 'failed' ? 'rejected' : 'waiting'}
+      >
+        {status === 'completed' || status === 'failed' ? (
+          <>
+            Transfer of {watched.label} {status}
+          </>
+        ) : transfer.status === 'error' || transfer.refreshError !== null ? (
           <>
             Could not check the transfer of {watched.label} (
             {explain(transfer.status === 'error' ? transfer.error : transfer.refreshError)}).{' '}
@@ -338,7 +347,15 @@ export function TransferWatch({
         ) : late ? (
           <>
             The transfer of {watched.label} is still waiting for the billing worker. The amount
-            stays held and the worker completes it on its next wake-up.{' '}
+            stays held and the worker completes it on its next wake-up. Still running. It continues
+            in{' '}
+            <a
+              className="bss-link"
+              href={`/prepaid-commands${accountId ? `?account=${accountId}` : ''}`}
+            >
+              Prepaid commands
+            </a>
+            .{' '}
             <Button small onClick={transfer.refresh}>
               Check now
             </Button>{' '}
@@ -349,7 +366,7 @@ export function TransferWatch({
         ) : (
           <>Transfer of {watched.label} accepted, waiting for the billing worker…</>
         )}
-      </div>
-    </Panel>
+      </WatchProgress>
+    </div>
   );
 }

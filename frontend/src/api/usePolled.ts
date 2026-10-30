@@ -11,6 +11,7 @@ import type { Resource } from './useResource';
 // `capped`: a bounded wait (a transfer the worker completes within minutes). retry() reloads from scratch; refresh() reloads in the background now.
 
 export type Polled<T> = Resource<T> & {
+  lastCheckedAt: string | null;
   refreshError: Error | null;
   capped: boolean; // `until` has passed: polling stopped, the data may be out of date
   retry: () => void;
@@ -18,6 +19,7 @@ export type Polled<T> = Resource<T> & {
 };
 
 interface State<T> {
+  lastCheckedAt: string | null;
   id: string; // key#attempt the value belongs to
   value: Resource<T>;
   version: number; // +1 per answer, so the timer re-arms after each one
@@ -39,6 +41,7 @@ export function usePolled<T>(
   const id = `${key}#${attempt}`;
   const idRef = useRef(id);
   const [state, setState] = useState<State<T>>({
+    lastCheckedAt: null,
     id,
     value: { status: 'loading' },
     version: 0,
@@ -56,6 +59,7 @@ export function usePolled<T>(
       (data) => {
         if (controller.signal.aborted) return;
         setState((s) => ({
+          lastCheckedAt: new Date().toISOString(),
           id,
           value: { status: 'ok', data },
           version: s.version + 1,
@@ -65,6 +69,7 @@ export function usePolled<T>(
       (error: unknown) => {
         if (controller.signal.aborted) return;
         setState((s) => ({
+          lastCheckedAt: new Date().toISOString(),
           id,
           value: { status: 'error', error: asError(error) },
           version: s.version + 1,
@@ -85,7 +90,13 @@ export function usePolled<T>(
         if (controller.signal.aborted) return;
         setState((s) =>
           s.id === owner && s.value.status === 'ok'
-            ? { ...s, value: { status: 'ok', data }, version: s.version + 1, refreshError: null }
+            ? {
+                ...s,
+                lastCheckedAt: new Date().toISOString(),
+                value: { status: 'ok', data },
+                version: s.version + 1,
+                refreshError: null,
+              }
             : s,
         );
       },
@@ -93,7 +104,12 @@ export function usePolled<T>(
         if (controller.signal.aborted) return;
         setState((s) =>
           s.id === owner && s.value.status === 'ok'
-            ? { ...s, version: s.version + 1, refreshError: asError(error) }
+            ? {
+                ...s,
+                lastCheckedAt: new Date().toISOString(),
+                version: s.version + 1,
+                refreshError: asError(error),
+              }
             : s,
         );
       },
@@ -102,7 +118,9 @@ export function usePolled<T>(
   }, [tick, locked]);
 
   const current: State<T> =
-    state.id === id ? state : { id, value: { status: 'loading' }, version: 0, refreshError: null };
+    state.id === id
+      ? state
+      : { id, lastCheckedAt: null, value: { status: 'loading' }, version: 0, refreshError: null };
   const polling =
     current.value.status === 'ok' &&
     current.refreshError === null &&
@@ -123,5 +141,12 @@ export function usePolled<T>(
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const refresh = useCallback(() => setTick((n) => n + 1), []);
-  return { ...current.value, refreshError: current.refreshError, capped, retry, refresh };
+  return {
+    ...current.value,
+    lastCheckedAt: current.lastCheckedAt,
+    refreshError: current.refreshError,
+    capped,
+    retry,
+    refresh,
+  };
 }

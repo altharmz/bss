@@ -15,6 +15,7 @@ import { formatCents, toCents } from '../format/money';
 import { Button, Panel } from '../ui/kit';
 import { ErrorBlock } from '../ui/states';
 import { POLL_MS, type Watched } from './watched';
+import { WatchProgress } from './WatchProgress';
 
 // A prepaid order is accepted before it is done: the billing worker completes it, and the
 // answer to the order POST is `inProgress` (docs/decisions/prepaid.md P3c-P3g). The order's id
@@ -80,10 +81,14 @@ function TechnicalFailure({
 /** Follows an accepted prepaid order through its command (see the file comment). */
 export function OrderWatch({
   watched,
+  accountId,
+  onTopUp,
   onSettled,
   onDismiss,
 }: {
   watched: Watched;
+  accountId?: string;
+  onTopUp?: (amount: string) => void;
   onSettled: (message: string) => void;
   onDismiss: () => void;
 }) {
@@ -98,6 +103,9 @@ export function OrderWatch({
   const data = command.status === 'ok' ? command.data : null;
   const outcome = data?.state === 'completed' ? (data.outcome ?? 'funded') : null;
   const reason = data?.reason ?? null;
+  const topUpAmount = data?.needs_topup
+    ? formatCents(toCents(data.needs_topup.shortfall)).replace(/,/g, '')
+    : null;
   const settle = useEffectEvent(onSettled);
   useEffect(() => {
     if (outcome === null) return;
@@ -105,7 +113,6 @@ export function OrderWatch({
     settle(`${watched.label} ${word}${outcome !== 'funded' && reason ? `: ${reason}` : ''}`);
   }, [outcome, reason, watched.label]);
 
-  if (outcome !== null) return null;
   const dismiss = (
     <Button small onClick={onDismiss}>
       Dismiss
@@ -117,9 +124,26 @@ export function OrderWatch({
     </Button>
   );
   return (
-    <Panel>
-      <div data-ui="ui.subscriber.prepaid.orderWatch" role="status">
-        {command.status === 'error' || command.refreshError !== null ? (
+    <div className="subscriber-watch" data-ui="ui.subscriber.prepaid.orderWatch" role="status">
+      <WatchProgress
+        lastCheckedAt={command.lastCheckedAt}
+        phase={
+          outcome !== null
+            ? 'completed'
+            : data?.state === 'failedTechnical'
+              ? 'failed'
+              : data?.needs_topup != null
+                ? 'funding'
+                : data && data.dueDate > context.businessDate
+                  ? 'scheduled'
+                  : 'waiting'
+        }
+      >
+        {outcome !== null ? (
+          <>
+            {watched.label} {OUTCOME[outcome] ?? outcome}
+          </>
+        ) : command.status === 'error' || command.refreshError !== null ? (
           <>
             Could not check {watched.label} (
             {explain(command.status === 'error' ? command.error : command.refreshError)}).{' '}
@@ -141,7 +165,13 @@ export function OrderWatch({
             {formatCents(toCents(data.needs_topup.required))}, the account has{' '}
             {formatCents(toCents(data.needs_topup.available))} (short{' '}
             {formatCents(toCents(data.needs_topup.shortfall))}). It completes by itself once the
-            account is funded. {check} {dismiss}
+            account is funded.{' '}
+            {onTopUp && topUpAmount !== null && (
+              <Button small onClick={() => onTopUp(topUpAmount)}>
+                Top up
+              </Button>
+            )}{' '}
+            {check} {dismiss}
           </>
         ) : data.dueDate > context.businessDate ? (
           <>
@@ -151,13 +181,17 @@ export function OrderWatch({
         ) : command.capped ? (
           <>
             {watched.label} is still waiting for the billing worker. It completes on the
-            worker&apos;s next wake-up. {check} {dismiss}
+            worker&apos;s next wake-up. Still running. It continues in{' '}
+            <a className="bss-link" href={`/orders?account=${accountId ?? data.billingAccount.id}`}>
+              Orders
+            </a>
+            . {check} {dismiss}
           </>
         ) : (
           <>{watched.label} accepted, waiting for the billing worker…</>
         )}
-      </div>
-    </Panel>
+      </WatchProgress>
+    </div>
   );
 }
 
