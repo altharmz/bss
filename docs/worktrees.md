@@ -100,6 +100,13 @@ empty disables OAuth sign-in). No production or smoke credentials are needed.
 
 ## Runtime
 
+Harness metrics use a separate persistent PostgreSQL service: `make telemetry-up`
+starts/migrates it, `make telemetry-health` checks it, `make telemetry-test` tests its
+schema and `make telemetry-down` stops it without removing data. Normal lifecycle
+operations record metrics automatically and warn without failing when storage is down.
+The shared `bss-telemetry-data` volume is independent of all task runtimes and worktrees;
+task cleanup must never remove it. See [telemetry policy and schema](decisions/harness.md#persistent-task-telemetry-2026-10-30-82).
+
 Use the existing Make targets. For direct local Compose operations use
 `./scripts/task-compose <command>`, never raw `docker compose`. The wrapper explicitly
 selects the worktree's local Compose files and external secret file. It derives:

@@ -6,7 +6,10 @@ import re
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
+
+from task_telemetry import record
 
 RESERVED_PORTS = frozenset({443, 500, 992, 1194, 4500, 5555, 8444})
 
@@ -272,7 +275,15 @@ def main():
         if args[0] in {"up", "start", "restart", "run"}:
             check_ports(command, env, root, values)
         os.chdir(root)
-        os.execvpe("docker", command + profiles + args, env)  # noqa: S606, S607 - explicit argv
+        started = time.monotonic()
+        result = subprocess.run(command + profiles + args, env=env, check=False)  # noqa: S603
+        record(
+            values["COMPOSE_PROJECT_NAME"].removeprefix("bss-"),
+            args[0],
+            result.returncode,
+            int((time.monotonic() - started) * 1000),
+        )
+        sys.exit(result.returncode)
     except (InvalidRuntime, OSError) as error:
         print(f"task-compose: {error}", file=sys.stderr)
         sys.exit(1)
