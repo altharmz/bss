@@ -9,6 +9,54 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 
 ## Development cycle and gates
 
+### Persistent task telemetry (2026-10-30, #82)
+
+Telemetry is observational and **fail-open**: a failed write produces a bounded warning
+on stderr without changing the workflow's exit status. Writes have a three-second timeout;
+they never start infrastructure, retry, queue JSON files, or persist data in a worktree.
+Use `make telemetry-up` once to start the shared local database and migrate it;
+`telemetry-health`, `telemetry-migrate`, `telemetry-down` and `telemetry-test` manage/check it.
+Management failures fail the management target. Normal task targets remain usable offline.
+
+`compose.telemetry.yaml` is a separate fixed `bss-telemetry` project with named volume
+`bss-telemetry-data`. It has no network or published ports; the repository writer reaches
+PostgreSQL over its container-local socket through Docker exec. The fixed bootstrap
+password is not a credential boundary: Docker access already grants database access.
+No task dotenv file or inherited Docker/Compose selectors enter the telemetry commands.
+Task `down`, `clean`, worktree removal and branch deletion cannot select this project or
+volume. `telemetry-down` preserves the volume. Future `finish-task` must preserve it too
+(there is currently no finish target). There is deliberately no volume deletion target.
+This is local harness infrastructure, never application or production infrastructure.
+
+The schema lives in numbered SQL migrations under `scripts/telemetry/`, independently
+of application Alembic. Migrations are transactional and serialized by an advisory lock;
+the initial migration is idempotent and records version 1 in `schema_versions`. Keep
+applied migrations immutable; add numbered, repeat-safe migrations for future changes.
+`telemetry-test` checks the real schema, including null usage, multiple sessions per task
+and bounds, in a transaction that is rolled back.
+
+`tasks` identifies the issue branch (including start/end/outcome); `agent_sessions` has
+many sessions per task, provider, nullable model/external identity and start/end;
+`workflow_events` records task, optional session, operation, timestamp, numeric result,
+nullable duration and bounded JSONB metadata; `usage_samples` stores nullable token
+counts and exact numeric estimated cost, currency and bounded pricing metadata.
+Automatic collection upserts task/session identity and appends an event after validated
+task Compose operations, including those used by normal Make targets. `start-task`
+records successful preparation. The `--url` and `--check` helpers do not create events.
+No operation arguments, subprocess output, prompt/response, code, diffs, secret values
+or arbitrary environment data are collected. Only allowlisted operation names and
+validated branch/session identities enter SQL; metadata is currently empty.
+
+Codex's UUID thread identifier is the reliable session source currently supported.
+Other runtimes may provide an explicit UUID in `BSS_TELEMETRY_SESSION_ID`; without a
+reliable identity events have no session. A session key includes task and provider, so
+one thread cannot accidentally associate events with a different task. Unknown model,
+usage, pricing and cost stay NULL; there is no inference from logs or fabricated zero
+usage. End timestamps/outcome remain NULL until a future explicit completion lifecycle
+can establish them; `down` only stops runtime and does not imply task completion.
+Startup duration is NULL because startup currently does not measure it. Historical
+rows are retained indefinitely; no task cleanup cascades or automatic deletion exist.
+
 - **One local test run per cycle**: develop -> commit (the pre-commit hook runs lint, the
   smoke tests and the tests the change affects) -> push. Deploying is the human's, outside the cycle.
   `make check` (ci Hypothesis profile, docs-check, UI and browser tests) runs only when

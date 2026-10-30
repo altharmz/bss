@@ -232,6 +232,23 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 runtime-check: ## Validate task runtime helpers without Docker or secrets
 	python3 -B scripts/test_task_runtime.py
 	python3 -B scripts/test_start_task.py
+	python3 -B scripts/test_task_telemetry.py
+
+.PHONY: telemetry-up telemetry-down telemetry-migrate telemetry-health telemetry-test
+telemetry-test: ## Test the running telemetry schema (all test data rolled back)
+	python3 -B scripts/test_telemetry_database.py
+
+telemetry-up: ## Start shared persistent telemetry storage and apply its migrations
+	python3 -B scripts/task_telemetry.py up
+
+telemetry-down: ## Stop shared telemetry storage, preserving its volume
+	python3 -B scripts/task_telemetry.py down
+
+telemetry-migrate: ## Apply versioned telemetry schema migrations
+	python3 -B scripts/task_telemetry.py migrate
+
+telemetry-health: ## Check shared telemetry database and schema
+	python3 -B scripts/task_telemetry.py health
 
 hooks: ## Install the pre-commit (lint + test) and pre-push (secrets) hooks
 	python3 scripts/install-hooks.py

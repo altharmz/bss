@@ -73,7 +73,7 @@ class StartupTests(unittest.TestCase):
         self.git("config", "user.name", "Startup test")
         self.git("config", "user.email", "startup@example.test")
         (self.primary / "scripts").mkdir()
-        for name in ("start_task.py", "task_runtime.py"):
+        for name in ("start_task.py", "task_runtime.py", "task_telemetry.py"):
             shutil.copy2(SCRIPTS / name, self.primary / "scripts" / name)
         shutil.copy2(SCRIPTS.parent / "Makefile", self.primary / "Makefile")
         (self.primary / ".gitignore").write_text(".task/\n.env\n__pycache__/\n")

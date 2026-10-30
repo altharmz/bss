@@ -66,7 +66,7 @@ class RuntimeTests(unittest.TestCase):
             cwd=self.primary,
         )
         (self.work / "scripts").mkdir()
-        for name in ("task-compose", "task_runtime.py", "install-hooks.py"):
+        for name in ("task-compose", "task_runtime.py", "task_telemetry.py", "install-hooks.py"):
             shutil.copy2(SCRIPTS / name, self.work / "scripts" / name)
         self.metadata = {
             "version": 1,
@@ -139,6 +139,19 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn(str(self.work / "compose.yaml"), args)
         self.assertIn(str(self.work / "compose.override.yaml"), args)
         self.assertNotIn("fixture-secret-never-output", result.stdout)
+
+    def test_workflow_result_survives_telemetry_failure(self):
+        (self.bin / "docker").write_text(
+            "#!/usr/bin/env python3\nimport sys\n"
+            "if 'psql' in sys.argv: sys.exit(1)\n"
+            "if sys.argv[-2:] == ['config','--quiet']: sys.exit(0)\n"
+            "print('workflow-output')\nsys.exit(7)\n"
+        )
+        result = self.wrapper("ps")
+        self.assertEqual(result.returncode, 7)
+        self.assertEqual(result.stdout, "workflow-output\n")
+        self.assertIn("telemetry: event not recorded", result.stderr)
+        self.assertNotIn("fixture-secret-never-output", result.stderr)
 
     def test_missing_or_invalid_metadata(self):
         path = self.work / ".task/runtime.json"

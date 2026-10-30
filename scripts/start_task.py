@@ -19,6 +19,7 @@ import unicodedata
 from pathlib import Path
 
 from task_runtime import RESERVED_PORTS, InvalidRuntime, unique_fields, validate_metadata
+from task_telemetry import record
 
 PROJECT = "PVT_kwHOEpM-b84BpHA0"
 STATUS_FIELD = "PVTSSF_lAHOEpM-b84BpHA0zhnkE7M"
@@ -609,6 +610,7 @@ def interrupted(_signum, _frame):
 
 
 def print_result(result, json_output):
+    record(result["branch"], "start-task", 0, None)
     if json_output:
         print(json.dumps(result), flush=True)
     else:
