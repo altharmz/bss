@@ -62,6 +62,7 @@ import { watch, type Watched } from './watched';
 import { PaymentsPanel } from './Payments';
 import { AccountBills, RefundAction, RefundsPanel } from './AccountActions';
 import { DeleteSubscriberModal, EditSubscriberModal } from './SubscriberForms';
+import { SubscriberOrders } from './SubscriberOrders';
 import './screens.css';
 
 // Screen 2. Everything about one billing account. Products change only through TMF622
@@ -389,7 +390,7 @@ function Card({
         <div className="subscriber-meta">
           <Id prefix="BA-" id={account.id} />
           <span>
-            Subscriber no. <span className="num">{shortId(account.customerId)}</span>
+            Customer no. <span className="num">{shortId(account.customerId)}</span>
           </span>
           <span>
             Customer{' '}
@@ -500,6 +501,12 @@ function Card({
         'overview',
         <div className="subscriber-overview">
           <div className="subscriber-overview-main">
+            <SubscriberOrders
+              account={account}
+              version={version}
+              onChanged={reload}
+              onWatch={(id, label) => onWatch(watch('order', id, label))}
+            />
             <Panel
               title="Active products"
               right={
@@ -780,6 +787,11 @@ function Card({
       )}
       {productDialog !== null && productDialog.change !== 'offering' && (
         <ProductChangeDialog
+          onTopUp={(amount) => {
+            setProductDialog(null);
+            setMoneyAmount(amount);
+            setMoney('topup');
+          }}
           immediateEnd={productDialog.immediate}
           change={productDialog.change}
           account={account}
@@ -799,6 +811,10 @@ function Card({
           account={account}
           activeOfferingIds={activeOfferings}
           onClose={() => setAdding(false)}
+          onDraftSaved={() => {
+            setAdding(false);
+            reload();
+          }}
           onTopUp={(amount) => {
             setAdding(false);
             setMoneyAmount(amount);
@@ -1161,7 +1177,11 @@ function ProductRow({
           ),
           activated: (
             <>
-              <span>{product.startDate}</span>
+              <span>
+                {product.startDate > context.businessDate
+                  ? `Starts ${product.startDate}`
+                  : product.startDate}
+              </span>
               {product.nextChargeDate !== null && (
                 <span className="subscriber-product-next">
                   Next charge <span>{product.nextChargeDate}</span>

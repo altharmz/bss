@@ -2161,3 +2161,34 @@ def test_same_day_status_undo_as_the_ui_sends_it(api):
         assert api.get(product["href"]).json()["status"] == restored
         row = next(p for p in api.get(listing).json() if p["id"] == product["id"])
         assert row["undoableStatusChange"] is None
+
+
+def test_subscriber_overview_unfinished_order_reads_as_the_ui_makes_them(api):
+    """Overview reuses Orders' account/state pages; draft prices use attached catalog rates."""
+    offering = apidata.sellable_offering(api)
+    account = apidata.account(api)
+    other = apidata.account(api)
+    api.clock.set(api.clock.now().replace(day=2))
+    body = {
+        "@type": "ProductOrder",
+        "billingAccount": {"id": account["id"], "@type": "BillingAccountRef"},
+        "requestedStartDate": "2026-10-06T12:00:00+03:00",
+        "requestedInitialState": "draft",
+        "productOrderItem": [apidata.add_item(offering)],
+    }
+    draft = api.post(ORDER, body).json()
+    assert draft["state"] == "draft"
+    for state in ("draft", "acknowledged", "inProgress"):
+        page = api.get(f"{ORDER}?billingAccount.id={account['id']}&state={state}&offset=0&limit=50")
+        assert page.status_code == 200, page.text
+        assert [o["id"] for o in page.json()] == ([draft["id"]] if state == "draft" else [])
+        assert (
+            api.get(
+                f"{ORDER}?billingAccount.id={other['id']}&state={state}&offset=0&limit=50"
+            ).json()
+            == []
+        )
+    catalog = api.get(offering["href"]).json()
+    for ref in catalog["productOfferingPrice"]:
+        rate = api.get(f"{apidata.CATALOG}/productOfferingPrice/{ref['id']}")
+        assert rate.status_code == 200 and rate.json()["price"]["unit"] == "USD"

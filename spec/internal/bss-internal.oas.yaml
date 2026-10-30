@@ -842,7 +842,10 @@ components:
             available: {type: number}
             shortfall: {type: number}
             observedAt: {type: string, format: date-time}
-        nextChargeDate: {$ref: '#/components/schemas/NullableBusinessDate'}
+        nextChargeDate:
+          description: First future run that will write a recurring charge; prepaid renewal is its paid-through date.
+          allOf:
+            - {$ref: '#/components/schemas/NullableBusinessDate'}
         undoableStatusChange:
           description: Applied status change today whose order can still be cancelled.
           type: object

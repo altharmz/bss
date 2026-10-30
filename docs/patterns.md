@@ -308,3 +308,7 @@ inside the persistently mounted Card Overview pane. Never key the progress by re
 version or conditionally unmount it on a tab switch. WatchProgress renders command phases
 and usePolled.lastCheckedAt in the business time zone without changing timers or requests.
 Terminal settlement still dismisses the watch and toasts the result immediately.
+
+### Subscriber unfinished orders (GUI review G5)
+
+SubscriberOrders reuses loadOrderPage for each of draft, acknowledged and inProgress, paging by account and state. Open reuses OrderModal, with refresh and watch ownership retained by the card. DraftPrice selects the attached recurring catalog price valid at the requested start’s business-zone midnight; reads and failures remain distinct. Immediate prepaid Add product and expired Resume disable submission while the server preview is unavailable or reports a shortfall, and reuse Preview’s Top up handoff.

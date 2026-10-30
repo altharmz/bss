@@ -106,7 +106,7 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 A subscriber is three TMF resources; **there is no delete** (an account carries products,
 bills and payments - it can be Closed). **+ New subscriber** (list header): a person
 (given + family name) or an organization (name), the account name (default "<name>
-main"), billing cycle day 1-28 (default 1) and an optional credit limit; the currency is
+main"), postpaid billing cycle day 1-28 (default 1) and an optional credit limit; the currency is
 the UI currency. Three calls in reference order: the party (TMF632), the customer engaging
 it with status **Active** (TMF629), the billing account (TMF666, `BssBillingAccount`, the
 credit limit as an exact number token). A failure stops there and names what was already
@@ -124,18 +124,18 @@ API: `POST/PATCH /tmf-api/partyManagement/v5/{individual|organization}`,
 
 ### Subscriber card (`ui.subscriber.card`) - `screens/SubscriberCard.tsx`
 
-Ledger v2 slice 6a: the identity header has account/customer statuses, a PREPAID or POSTPAID Tag, BA Id, subscriber number, financial-account and Orders links, and the prepaid daily schedule. Add product is secondary. More actions opens Record payment for postpaid and offers Delete… only for an empty deletable account. Slice 6b1 adds both full-width MoneyStrips and a semantic Account KeyValue summary with the existing Refund action and financial-account link. Prepaid shows the loaded ledger/reserved/available equation, earliest paid-through with a business-date relative hint, shortfall, suspension causes and Commands link; its primary is Top up and Hold replaces the strip label Hold funds. Postpaid shows Balance, strict over-limit warning, cycle/next bill and bill dues, with primary Record payment. Prepaid balance failures render a Note below the strip. Slice 6b2 adds hash-linked Overview, Bills, Payments, Charges, Transactions, Account and prepaid-only Balance actions/Commands tabs. Existing panels remain mounted in hidden panes, preserving eager reads, retries, polling and dialog state. Counts reuse loaded lists; histories display 20+ at the loaded limit. Overview reserves a 320 px rail (400 px at 1536 px) beside its existing products; slice 7a adds Recent activity from the first eight already loaded transactions, with signed amounts, balance after, empty/error states, a prepaid ledger note and an All transactions link selecting its tab. Slice 7b adds compact products with separate Status and Since columns, one ellipsis action menu, and full-width pending-change/Undo sub-rows. Next charge remains a Since caption; Number has no value in the loaded summary, so its lazy dialog remains a menu action. Account summary and Refund live in Account; Bills contains Record payment and Bill now. Accepted watches render in the Overview In progress panel as Accepted, worker/funding/scheduled, and completion/failure steps. They stay mounted through card reloads and tab changes; last-check times use the business zone, and capped watches link to account-filtered Orders or Prepaid commands. Settlement keeps the existing immediate dismissal and toast.
+Ledger v2 slice 6a: the identity header has account/customer statuses, a PREPAID or POSTPAID Tag, BA Id, customer number, financial-account and Orders links, and the prepaid daily schedule. Add product is secondary. More actions opens Record payment for postpaid and offers Delete… only for an empty deletable account. Slice 6b1 adds both full-width MoneyStrips and a semantic Account KeyValue summary with the existing Refund action and financial-account link. Prepaid shows the loaded ledger/reserved/available equation, earliest paid-through with a business-date relative hint, shortfall, suspension causes and Commands link; its primary is Top up and Hold replaces the strip label Hold funds. Postpaid shows Balance, strict over-limit warning, cycle/next bill and bill dues, with primary Record payment. Prepaid balance failures render a Note below the strip. Slice 6b2 adds hash-linked Overview, Bills, Payments, Charges, Transactions, Account and prepaid-only Balance actions/Commands tabs. Existing panels remain mounted in hidden panes, preserving eager reads, retries, polling and dialog state. Counts reuse loaded lists; histories display 20+ at the loaded limit. Overview reserves a 320 px rail (400 px at 1536 px) beside its existing products; slice 7a adds Recent activity from the first eight already loaded transactions, with signed amounts, balance after, empty/error states, a prepaid ledger note and an All transactions link selecting its tab. Slice 7b adds compact products with separate Status and Since columns, one ellipsis action menu, and full-width pending-change/Undo sub-rows. Next charge remains a Since caption; Number has no value in the loaded summary, so its lazy dialog remains a menu action. Account summary and Refund live in Account; Bills contains Record payment and Bill now. Accepted watches render in the Overview In progress panel as Accepted, worker/funding/scheduled, and completion/failure steps. They stay mounted through card reloads and tab changes; last-check times use the business zone, and capped watches link to account-filtered Orders or Prepaid commands. Settlement keeps the existing immediate dismissal and toast.
 
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: account/product StatusPill, copyable BA Id in the meta line, and neutral-positive movement Amounts. Product actions use the shared keyboard Menu in a document-body portal, positioned below its trigger or flipped above when needed, and dismissed on scroll/resize; labels and markers stay.
 
-Header with name, state, subscriber number, billing account (`BA-xxxxxxxx`), customer
+Header with name, state, customer number, billing account (`BA-xxxxxxxx`), customer
 status, and **+ Add product** (disabled for a non-Active account, with the reason - the
 same rule ordering enforces). Billing account panel: balance, currency, cycle day (and the
 next cycle), credit limit, available incl. credit. Active products (offering, code,
-specification, activated, next charge, price, status note for `created` /
+specification, start date (Starts for future dates), next charge, price, status note for `created` /
 `pendingTerminate`), charge history (period, "N of M" days when prorated, amount) and
 transaction history (signed amount, balance after).
 API: `GET .../billingAccount/{id}`, `GET /tmf-api/customer/v5/customer/{id}`,
@@ -273,14 +273,14 @@ today's price); 2. start date (min = business date); 3. **first-charge preview c
 the backend** - period, billable days of period days, price, amount, when it is charged
 and billed, the following full period, balance after, and a credit-limit warning that
 never blocks. Confirm places a TMF622 add order; a rejection shows its reasons. The copy
-follows the end-of-day rule: nothing is "charged on confirmation" - an order completed
+for postpaid follows the end-of-day rule: an order completed
 today is charged by the run of max(start, tomorrow).
 On a **prepaid** account (`ui.addProduct.prepaidPreview`) the preview shows period, price,
 "paid in full in advance", **To pay now** (or **To pay on {date}**), Available, Shortfall
 (only when > 0) and Ledger after (start today only). A shortfall with a start today adds a
 warning and **Top up {n}** (`ui.addProduct.topUpShortfall`), which closes this dialog and
 opens the card's Top-up form with the amount typed in; a future start only shows a hint.
-Submit stays enabled; the server's refusal shows as for any rejected order.
+Immediate activation is disabled while the preview reports a shortfall; Save as draft stays available. Future activation remains available because funds are checked on its start date. Prepaid copy says Paid from the balance on <date> and omits the cycle day.
 API: `GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true`,
 `GET .../productOfferingPrice?priceType=recurring`,
 `GET /internal/v1/billingAccount/{id}/firstCharge?productOffering.id=&startDate=`,
@@ -722,3 +722,5 @@ subscriber-number changes and balance-action details are owned outside list rows
 stable ids. Writes pause background polling and defer card reloads until their requests
 finish; a confirmation that resolves without a request shows “Not sent. Try again.”
 Subscriber create/delete, offering create/delete and order POSTs refresh sidebar counts.
+
+G5 subscriber card: Customer no. identifies the customer; future products show Starts <date>. Next charge is the first future run that writes a charge, including an uncharged first prorated period. Overview lists account-scoped draft, acknowledged and in-progress orders above Products, with the requested-start offering price for drafts and Open to the existing order dialog. Prepaid Add product says Paid from the balance on <date>, hides cycle-day context, and disables immediate activation on a server-preview shortfall. Resume at or after paid-through likewise loads the preview and offers the existing Top up handoff. New prepaid subscriber forms hide cycle day and retain the API-required default of 1.

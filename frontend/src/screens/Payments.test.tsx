@@ -190,6 +190,12 @@ describe('payments panel on the subscriber card', () => {
         json(accountBody(A1, { id: C, name: 'Ivan Ivanov' })),
       [`GET /tmf-api/customer/v5/customer/${C}`]: () =>
         json({ id: C, name: 'Ivan Ivanov', status: 'Active', '@type': 'Customer' }),
+      ...Object.fromEntries(
+        ['draft', 'acknowledged', 'inProgress'].map((state) => [
+          `GET /tmf-api/productOrderingManagement/v5/productOrder?billingAccount.id=${A1}&state=${state}&offset=0&limit=50`,
+          () => json([], { total: 0 }),
+        ]),
+      ),
       [`GET ${INTERNAL}/products`]: () => json([], { total: 0 }),
       [`GET ${INTERNAL}/charges?limit=20`]: () => json([], { total: 0 }),
       [`GET ${INTERNAL}/transactions?limit=20`]: () => json([], { total: 0 }),

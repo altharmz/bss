@@ -234,9 +234,9 @@ def test_open_products_with_next_charge_and_price(api, offering):
     rows = {p["id"]: p for p in decimals(response)}
     assert set(rows) == {running["id"], future["id"], ending["id"]}
     assert {pid: (p["status"], p["nextChargeDate"]) for pid, p in rows.items()} == {
-        running["id"]: ("active", "2026-11-01"),
+        running["id"]: ("active", "2026-10-16"),
         future["id"]: ("created", "2026-11-05"),
-        ending["id"]: ("pendingTerminate", None),  # ends Oct 25, before the next cycle
+        ending["id"]: ("pendingTerminate", "2026-10-16"),
     }
     assert rows[ending["id"]]["terminationDate"] == "2026-10-25"
     first = rows[running["id"]]
@@ -339,3 +339,19 @@ def test_an_unknown_internal_path_is_a_tmf_error(api):
     response = api.get(f"{BASE}/nothing")
     assert response.status_code == 404
     assert response.json()["@type"] == "Error"
+
+
+@pytest.mark.parametrize("start", [date(2026, 10, 10), date(2026, 10, 15)])
+def test_next_charge_is_first_uncharged_run_not_cycle_boundary(api, db_conn, offering, start):
+    account = apidata.account(api)
+    product = add(api, account, offering, start, on=at(start))
+    api.clock.set(at(date(2026, 10, 15)))
+    path = f"{BASE}/billingAccount/{account['id']}/products"
+    [unpaid] = api.get(path).json()
+    assert unpaid["id"] == product["id"]
+    assert unpaid["nextChargeDate"] == "2026-10-16"
+    [charge] = bill(db_conn, account, date(2026, 10, 16)).abrs
+    assert charge.period.start == start
+    api.clock.set(at(date(2026, 10, 16)))
+    [paid] = api.get(path).json()
+    assert paid["nextChargeDate"] == "2026-11-01"
