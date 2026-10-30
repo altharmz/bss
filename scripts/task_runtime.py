@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+RESERVED_PORTS = frozenset({443, 500, 992, 1194, 4500, 5555, 8444})
+
 
 class InvalidRuntime(Exception):
     pass
@@ -42,18 +44,8 @@ def git(*args):
     return result.stdout.strip()
 
 
-def context():
-    root = Path(git("rev-parse", "--show-toplevel")).resolve()
-    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
-    own = Path(git("rev-parse", "--absolute-git-dir")).resolve()
-    if own == common:
-        raise InvalidRuntime("primary checkout is administration-only; use a linked task worktree")
-    try:
-        data = json.loads(
-            (root / ".task/runtime.json").read_text(), object_pairs_hook=unique_fields
-        )
-    except (OSError, ValueError):
-        raise InvalidRuntime("missing or invalid .task/runtime.json") from None
+def validate_metadata(data, branch=None):
+    """Validate identity/ports only, without Git, Docker or development secrets."""
     keys = {"version", "task_id", "app_port", "mcp_port", "web_port"}
     if not isinstance(data, dict) or set(data) != keys:
         raise InvalidRuntime(
@@ -70,13 +62,29 @@ def context():
         raise InvalidRuntime(
             "task_id must be issue-<number>-<lowercase-kebab-slug>, at most 80 characters"
         )
-    if git("symbolic-ref", "--quiet", "--short", "HEAD") != task:
+    if branch is not None and branch != task:
         raise InvalidRuntime("task_id must match the current branch; do not switch task branches")
     ports = [data[key] for key in ("app_port", "mcp_port", "web_port")]
     if any(type(port) is not int or not 1024 <= port <= 65535 for port in ports):
         raise InvalidRuntime("ports must be integers from 1024 through 65535")
-    if len(set(ports)) != 3 or set(ports) & {1194, 4500, 5555, 8444}:
+    if len(set(ports)) != 3 or set(ports) & RESERVED_PORTS:
         raise InvalidRuntime("ports must be distinct and must not use reserved VPN ports")
+    return task, ports
+
+
+def context():
+    root = Path(git("rev-parse", "--show-toplevel")).resolve()
+    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
+    own = Path(git("rev-parse", "--absolute-git-dir")).resolve()
+    if own == common:
+        raise InvalidRuntime("primary checkout is administration-only; use a linked task worktree")
+    try:
+        data = json.loads(
+            (root / ".task/runtime.json").read_text(), object_pairs_hook=unique_fields
+        )
+    except (OSError, ValueError):
+        raise InvalidRuntime("missing or invalid .task/runtime.json") from None
+    task, ports = validate_metadata(data, git("symbolic-ref", "--quiet", "--short", "HEAD"))
     config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
     if not config.is_absolute():
         raise InvalidRuntime("XDG_CONFIG_HOME must be absolute")

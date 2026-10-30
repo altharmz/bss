@@ -17,6 +17,10 @@ HYPOTHESIS_PROFILE ?= dev
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
 
+.PHONY: start-task
+start-task: ## Prepare the next eligible Ready issue in a linked worktree (JSON=1 for agents)
+	@python3 -B scripts/start_task.py $(if $(filter 1,$(JSON)),--json,)
+
 up: ## Start the local stack (app + postgres, hot reload)
 	./scripts/task-compose up -d --build
 	@$(MAKE) --no-print-directory wait-local
@@ -227,6 +231,7 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 
 runtime-check: ## Validate task runtime helpers without Docker or secrets
 	python3 -B scripts/test_task_runtime.py
+	python3 -B scripts/test_start_task.py
 
 hooks: ## Install the pre-commit (lint + test) and pre-push (secrets) hooks
 	python3 scripts/install-hooks.py

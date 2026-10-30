@@ -8,6 +8,11 @@ it, and record new decisions there.
 ## Environments
 
 Local work uses **1 task = 1 branch = 1 git worktree = 1 agent context**.
+When starting new work, run `make start-task` from the primary checkout. Do not manually
+select a backlog issue or create its task branch/worktree. Use exactly the returned
+issue, branch and worktree. If it fails, stop and report the failure instead of bypassing
+it. A concrete human request still takes precedence over unrelated Ready work.
+
 The primary checkout stays clean on `master` for administration only; implementation,
 commits, runtime and generated artifacts belong in linked task worktrees. Never switch
 branches inside a task worktree or mutate sibling worktrees. All local Compose operations
