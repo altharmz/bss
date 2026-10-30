@@ -161,6 +161,12 @@ function backend(routes: Record<string, Handler> = {}, account: object = ACCOUNT
     [`GET ${INTERNAL}/charges?limit=20`]: () => json(CHARGES, { total: 2 }),
     [`GET ${INTERNAL}/transactions?limit=20`]: () => json(TRANSACTIONS, { total: 3 }),
     [`GET ${INTERNAL}/settlement`]: () => json(NO_SETTLEMENT),
+    ...Object.fromEntries(
+      ['draft', 'acknowledged', 'inProgress'].map((state) => [
+        `GET /tmf-api/productOrderingManagement/v5/productOrder?billingAccount.id=${A}&state=${state}&offset=0&limit=50`,
+        () => json([], { total: 0 }),
+      ]),
+    ),
     // asked only of a prepaid account: no command failed technically
     [`GET /internal/v1/prepaid/command?billingAccount.id=${A}&state=failedTechnical&offset=0&limit=100`]:
       () => json([], { total: 0 }),
@@ -709,11 +715,26 @@ describe('add product', () => {
   });
 
   it('saves the choice as a draft: requestedInitialState draft under an Idempotency-Key, a toast links to Orders', async () => {
+    let saved = false;
     const { fetchMock } = backend({
       ...catalog,
       [preview('2026-10-01')]: () => json(FIRST_CHARGE),
-      [`POST ${ORDERS}`]: () =>
-        json({ id: 'o', state: 'draft', '@type': 'ProductOrder' }, { status: 201 }),
+      [`GET ${ORDERS}?billingAccount.id=${A}&state=draft&offset=0&limit=50`]: () =>
+        json(
+          saved
+            ? [{ id: 'a0000000-0000-4000-8000-000000000001', state: 'draft', productOrderItem: [] }]
+            : [],
+          {
+            total: saved ? 1 : 0,
+          },
+        ),
+      [`POST ${ORDERS}`]: () => {
+        saved = true;
+        return json(
+          { id: 'a0000000-0000-4000-8000-000000000001', state: 'draft', '@type': 'ProductOrder' },
+          { status: 201 },
+        );
+      },
     });
     const dialog = await openModal();
     const save = within(dialog).getByRole('button', { name: 'Save as draft' });
@@ -727,6 +748,11 @@ describe('add product', () => {
     expect(toast.textContent).toBe('Draft saved · Open in Orders');
     expect(within(toast).getByRole('link').getAttribute('href')).toBe(`/orders?account=${A}`);
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(
+      await within(expectUi('ui.subscriber.unfinishedOrders')).findByRole('button', {
+        name: 'Open',
+      }),
+    ).toBeTruthy();
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({
       '@type': 'ProductOrder',
@@ -2281,6 +2307,9 @@ describe('prepaid first-charge preview in Add product', () => {
     expect(within(box).getByTestId('prepaid-required').textContent).toBe('780.00 USD');
     const text = box.textContent ?? '';
     expect(text).toContain('To pay now');
+    expect(within(dialog).getByText('Paid from the balance on 2026-10-01')).toBeTruthy();
+    expect(within(dialog).queryByText(/billing run of/)).toBeNull();
+    expect(within(dialog).queryByText(/billing day/)).toBeNull();
     expect(text).toContain('paid in full in advance, no proration');
     expect(text).toContain('2026-10-01 – 2026-10-31');
     expect(text).toContain('Available120.00 USD');
@@ -2290,10 +2319,13 @@ describe('prepaid first-charge preview in Add product', () => {
     expect(text).toContain('Submitting holds the full interval with its taxes');
     expect(within(dialog).queryByTestId('first-charge')).toBeNull();
     expect(within(dialog).getByText(/Insufficient funds: top up at least 660.00 USD/)).toBeTruthy();
-    // submit stays enabled with a shortfall
+    expect(
+      (within(dialog).getByRole('button', { name: 'Save as draft' }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    // An immediate prepaid charge waits for sufficient server-preview funds.
     expect(
       (within(dialog).getByRole('button', { name: 'Activate' }) as HTMLButtonElement).disabled,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url).includes('/firstCharge')),
     ).toHaveLength(1);
@@ -2336,6 +2368,14 @@ describe('prepaid first-charge preview in Add product', () => {
       target: { value: '2026-10-20' },
     });
     await within(dialog).findByText('To pay on 2026-10-20');
+    expect(within(dialog).getByText('Paid from the balance on 2026-10-20')).toBeTruthy();
+    expect(
+      (
+        within(dialog).getByRole('button', {
+          name: 'Activate from 2026-10-20',
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
     expect(
       within(dialog).getByText(
         'Funds are checked on 2026-10-20; nothing is held now. Top up before then.',
@@ -3154,6 +3194,8 @@ describe('product actions', () => {
 
   it('resumes a prepaid product today (date fixed) and follows the accepted order', async () => {
     const { fetchMock } = prepaidBackend({
+      [`GET ${INTERNAL}/firstCharge?productOffering.id=${O1}&startDate=2026-10-01`]: () =>
+        json({ ...FIRST_CHARGE, shortfall: usd(0), required: usd(585), available: usd(900) }),
       ...products([
         product(P1, {
           status: 'suspended',
@@ -3195,6 +3237,7 @@ describe('product actions', () => {
     expect(
       within(dialog).getByText(/The paid interval has ended: resuming starts a new interval/),
     ).toBeTruthy();
+    await within(dialog).findByTestId('prepaid-required');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Resume' }));
 
     expect(await screen.findByText('Resume of Mobile L completed')).toBeTruthy();
@@ -4051,5 +4094,150 @@ describe('same-day status Undo', () => {
         productOrder: { id: 'ord-future', '@type': 'ProductOrderRef' },
       }),
     );
+  });
+});
+
+// G5: account-scoped unfinished orders precede the products, including draft prices.
+describe('subscriber Overview orders', () => {
+  it('loads all three unfinished states and shows the requested-start offering price', async () => {
+    const list = (state: string) =>
+      `GET ${ORDERS}?billingAccount.id=${A}&state=${state}&offset=0&limit=50`;
+    const { calls } = backend({
+      [list('draft')]: () =>
+        json(
+          [
+            {
+              id: 'a0000000-0000-4000-8000-000000000002',
+              state: 'draft',
+              billingAccount: { id: A },
+              requestedStartDate: '2026-10-06T09:00:00Z',
+              productOrderItem: [
+                { id: '1', action: 'add', productOffering: { id: O2, name: 'Draft Fiber' } },
+              ],
+            },
+          ],
+          { total: 1 },
+        ),
+      [list('acknowledged')]: () =>
+        json(
+          [
+            {
+              id: 'a0000000-0000-4000-8000-000000000003',
+              state: 'acknowledged',
+              productOrderItem: [],
+            },
+          ],
+          { total: 1 },
+        ),
+      [list('inProgress')]: () =>
+        json(
+          [
+            {
+              id: 'a0000000-0000-4000-8000-000000000004',
+              state: 'inProgress',
+              productOrderItem: [],
+            },
+          ],
+          { total: 1 },
+        ),
+      [`GET /tmf-api/productCatalogManagement/v5/productOffering/${O2}`]: () =>
+        json({
+          id: O2,
+          name: 'Draft Fiber',
+          lifecycleStatus: 'Active',
+          productOfferingPrice: [{ id: 'old-draft-price' }, { id: 'draft-price' }],
+        }),
+      'GET /tmf-api/productCatalogManagement/v5/productOfferingPrice/old-draft-price': () =>
+        json({
+          id: 'old-draft-price',
+          name: 'Earlier rate',
+          priceType: 'recurring',
+          price: usd(111),
+          validFor: { endDateTime: '2026-10-05T21:00:00Z' },
+        }),
+      'GET /tmf-api/productCatalogManagement/v5/productOfferingPrice/draft-price': () =>
+        json({
+          id: 'draft-price',
+          name: 'Draft rate',
+          priceType: 'recurring',
+          price: usd(777),
+          validFor: { startDateTime: '2026-10-05T21:00:00Z', endDateTime: '2026-10-06T21:00:00Z' },
+        }),
+      'GET /tmf-api/productOrderingManagement/v5/cancelProductOrder?productOrder.id=a0000000-0000-4000-8000-000000000002&offset=0&limit=100':
+        () => json([], { total: 0 }),
+    });
+    await open();
+    const box = expectUi('ui.subscriber.unfinishedOrders');
+    await within(box).findByText('777.00');
+    expect(within(box).getByText('Draft Fiber')).toBeTruthy();
+    expect(within(box).getAllByRole('button', { name: 'Open' })).toHaveLength(3);
+    for (const state of ['draft', 'acknowledged', 'inProgress'])
+      expect(calls).toContain(list(state));
+    expect(
+      box.compareDocumentPosition(screen.getByText('Active products')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    fireEvent.click(within(box).getAllByRole('button', { name: 'Open' })[0] as HTMLElement);
+    expect(await screen.findByRole('dialog', { name: /Order/ })).toBeTruthy();
+    expectUi('ui.subscriber.openOrder');
+  });
+
+  it('labels the customer and future product start explicitly', async () => {
+    backend();
+    await open();
+    expect(screen.getByText(/Customer no\./)).toBeTruthy();
+    expect(await screen.findByText('Starts 2026-10-06')).toBeTruthy();
+  });
+});
+
+describe('prepaid Resume funding gate', () => {
+  it('waits for the server preview and hands its shortfall to Top up without ordering', async () => {
+    const { fetchMock } = backend(
+      {
+        [`GET ${INTERNAL}/products`]: () =>
+          json(
+            [
+              product(P1, {
+                status: 'suspended',
+                suspensionCause: 'manual',
+                paidThrough: '2026-10-01',
+              }),
+            ],
+            { total: 1 },
+          ),
+        [`GET /tmf-api/prepayBalanceManagement/v4/bucket?partyAccount.id=${A}&offset=0&limit=100`]:
+          () =>
+            json(
+              [
+                {
+                  id: BUCKET,
+                  remainingValue: { amount: 5, units: 'USD' },
+                  reservedValue: { amount: 0, units: 'USD' },
+                },
+              ],
+              { total: 1 },
+            ),
+        [`GET ${INTERNAL}/firstCharge?productOffering.id=${O1}&startDate=2026-10-01`]: () =>
+          json({ ...FIRST_CHARGE, required: usd(585), available: usd(5), shortfall: usd(580) }),
+      },
+      accountBody(A, { id: C, name: 'Olga Kuznetsova' }, { ratingType: 'prepaid' }),
+    );
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    fireEvent.click(productAction(row, 'Resume…'));
+    const dialog = screen.getByRole('dialog', { name: 'Resume: Mobile L' });
+    expect(
+      (within(dialog).getByRole('button', { name: 'Resume' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    const topup = await within(dialog).findByRole('button', { name: 'Top up 580.00' });
+    expectUi('ui.subscriber.resumePreview');
+    expect(
+      (within(dialog).getByRole('button', { name: 'Resume' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Resume' }));
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+    fireEvent.click(topup);
+    const form = await screen.findByRole('dialog', { name: 'Top up' });
+    expect((within(form).getByLabelText('Amount') as HTMLInputElement).value).toBe('580.00');
   });
 });

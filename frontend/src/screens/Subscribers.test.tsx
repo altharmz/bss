@@ -405,6 +405,7 @@ describe('new subscriber', () => {
     });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Prepaid' }));
     expect(within(dialog).queryByLabelText('Credit limit, USD (optional)')).toBeNull();
+    expect(within(dialog).queryByLabelText('Billing cycle day (1-28)')).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
     await screen.findByRole('status');
     const account = bodies(fetchMock)[2];

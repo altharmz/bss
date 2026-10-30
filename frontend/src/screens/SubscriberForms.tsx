@@ -92,8 +92,8 @@ export function NewSubscriberModal({
     kind === 'Individual'
       ? givenName.trim() !== '' && familyName.trim() !== ''
       : organizationName.trim() !== '';
-  const day = cycleDayOf(cycleDay);
   const prepaid = mode === 'prepaid';
+  const day = prepaid ? 1 : cycleDayOf(cycleDay);
   // a prepaid account has no credit: the field is hidden and nothing is sent
   const credit = prepaid ? { ok: true, value: null } : limitOf(limit);
   const effectiveAccountName = accountName.trim() || `${name} main`;
@@ -179,14 +179,16 @@ export function NewSubscriberModal({
               onChange={(e) => setAccountName(e.target.value)}
             />
           </Field>
-          <Field label="Billing cycle day (1-28)">
-            <TextInput
-              mono
-              width={80}
-              value={cycleDay}
-              onChange={(e) => setCycleDay(e.target.value)}
-            />
-          </Field>
+          {!prepaid && (
+            <Field label="Billing cycle day (1-28)">
+              <TextInput
+                mono
+                width={80}
+                value={cycleDay}
+                onChange={(e) => setCycleDay(e.target.value)}
+              />
+            </Field>
+          )}
           {!prepaid && (
             <Field label={`Credit limit, ${context.currency} (optional)`}>
               <TextInput
@@ -200,7 +202,10 @@ export function NewSubscriberModal({
           {day === null && <Note tone="negative">The cycle day is 1 to 28.</Note>}
           {!credit.ok && <Note tone="negative">Enter a credit limit with at most 2 decimals.</Note>}
           <div className="caption">
-            Currency {context.currency}. The cycle day and the currency cannot be changed later.
+            Currency {context.currency}.{' '}
+            {prepaid
+              ? 'The currency cannot be changed later.'
+              : 'The cycle day and the currency cannot be changed later.'}
             {prepaid && ' A prepaid account spends only funds it holds; it takes no credit limit.'}
           </div>
           <label>

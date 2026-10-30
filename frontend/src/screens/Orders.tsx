@@ -346,7 +346,7 @@ function EditDraft({
   );
 }
 
-function OrderModal({
+export function OrderModal({
   order: initial,
   onClose,
   onChanged,

@@ -261,16 +261,30 @@ def _prepaid_first_charge(
     )
 
 
-def _next_charge(product: Row, today: date, cycle_day: int) -> date | None:
-    """The first day of the next period to be charged: the start date while the product
-    has not started, otherwise the next cycle day after today - or none if the product
-    ends by then."""
-    if product["start_date"] > today:
-        nxt = product["start_date"]
-    else:
-        nxt = cycle_period(today, cycle_day).end
-    end = product["termination_date"]
-    return None if end is not None and end <= nxt else nxt
+def _next_charge(state: BillingState, today: date, tz: ZoneInfo) -> date | None:
+    """First future run with a recurring charge, using the worker's due calculation.
+
+    Tomorrow sees today's completed orders. Stored charges distinguish an unpaid first
+    period from an already charged one; status alone never decides billing eligibility.
+    """
+    product = state.products[0]
+    tomorrow = today + timedelta(days=1)
+    first = max(tomorrow, product.start_date)
+    boundary = product_charge_period(
+        product,
+        max(today, product.start_date),
+        state.prices,
+        state.account.currency,
+        state.account.bill_cycle_day,
+        tz,
+    ).end
+    candidates = sorted(
+        {first, max(tomorrow, boundary), *(c.day for c in product.changes if c.day > today)}
+    )
+    for day in candidates:
+        if any(abr.kind == "recurring" for abr in compute(state, day, tz).abrs):
+            return day
+    return None
 
 
 def _pending_change(c: Row) -> dict[str, Any]:
@@ -313,21 +327,30 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
         prices = billing.load_recurring_prices(
             conn, [o for p in cores.values() for o in p.offering_ids]
         )
+        stored = billing.load_abrs(conn, row["id"]) if account.rating_type == "postpaid" else ()
     items = []
     for p in rows:
         core = cores[p["id"]]
-        nxt = _next_charge(p, today, account.bill_cycle_day)
+        nxt = None
         try:
             price = price_at(core, max(today, p["start_date"]), prices, account.currency, tz)
-            if p["start_date"] <= today:
-                nxt = product_charge_period(
-                    core, today, prices, account.currency, account.bill_cycle_day, tz
-                ).end
-                nxt = min([nxt, *(c.day for c in core.changes if c.day > today)])
-                if p["termination_date"] is not None and p["termination_date"] <= nxt:
-                    nxt = None
         except MissingPrice:
             price = None
+        if account.rating_type != "prepaid":
+            try:
+                nxt = _next_charge(
+                    BillingState(
+                        account=account,
+                        products=(core,),
+                        prices=prices,
+                        abrs=tuple(a for a in stored if a.product_id == core.id),
+                        bills=(),
+                    ),
+                    today,
+                    tz,
+                )
+            except MissingPrice:
+                pass  # a missing future price must not hide today's price
         items.append(
             {
                 "id": str(p["id"]),

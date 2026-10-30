@@ -203,3 +203,9 @@ def test_close_allowed_once_everything_ended_and_credit_kept(api, db_conn):
     assert response.json()["state"] == "Closed"
     balance = response.json()["accountBalance"][0]["amount"]["value"]
     assert D(str(balance)) == D(30)
+
+
+def test_next_charge_of_prepaid_remains_the_paid_through_renewal(api, granted):
+    acc, (first, _) = granted
+    shown = view(api, acc, first)
+    assert shown["nextChargeDate"] == shown["paidThrough"] == first["due"].isoformat()

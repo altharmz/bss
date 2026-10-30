@@ -114,7 +114,13 @@ export function AddProductModal({
         : Promise.resolve(false),
   );
   const needsNumber = requirement.status === 'ok' && requirement.data;
-  const ready = first !== null && requirement.status === 'ok' && (!needsNumber || numberId !== '');
+  const shortNow =
+    account.ratingType === 'prepaid' &&
+    start === today &&
+    first?.shortfall !== undefined &&
+    toCents(first.shortfall.value) > 0;
+  const ready =
+    !shortNow && first !== null && requirement.status === 'ok' && (!needsNumber || numberId !== '');
 
   const draftReady =
     chosen !== undefined &&
@@ -181,7 +187,7 @@ export function AddProductModal({
   }
 
   async function confirm() {
-    if (first === null || offeringId === null || chosen === undefined) return;
+    if (!ready || first === null || offeringId === null || chosen === undefined) return;
     setBusy(true);
     setProblem([]);
     setCode(undefined);
@@ -223,7 +229,7 @@ export function AddProductModal({
       width={720}
       onClose={onClose}
       ui="ui.subscriber.addProduct"
-      subtitle={`${account.customerName} · ${accountLabel(account.id)} · billing day ${account.cycleDay}`}
+      subtitle={`${account.customerName} · ${accountLabel(account.id)}${account.ratingType === 'prepaid' ? '' : ` · billing day ${account.cycleDay}`}`}
       footer={
         <Footer
           write={{
@@ -344,9 +350,11 @@ export function AddProductModal({
           <Note tone="info">
             {!startValid
               ? `the start date cannot be before ${today}`
-              : start === today
-                ? `today · the charge is written by the billing run of ${runOf(start, today)}`
-                : `the charge is written by the billing run of ${start}`}
+              : account.ratingType === 'prepaid'
+                ? `Paid from the balance on ${start}`
+                : start === today
+                  ? `today · the charge is written by the billing run of ${runOf(start, today)}`
+                  : `the charge is written by the billing run of ${start}`}
           </Note>
         </section>
 

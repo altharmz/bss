@@ -19,7 +19,7 @@ import type { PendingOrder } from '../api/commands';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { addDays, isIsoDate } from '../format/dates';
-import { formatCents } from '../format/money';
+import { formatCents, toCents } from '../format/money';
 import { Button, Menu, Modal, TextInput, type MenuItem } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Preview } from './AddProduct';
@@ -126,7 +126,9 @@ export function ProductChangeDialog({
   onClose,
   onDone,
   onRefresh,
+  onTopUp,
 }: {
+  onTopUp?: (amount: string) => void;
   change: ProductChange;
   immediateEnd?: boolean;
   account: Account;
@@ -146,7 +148,22 @@ export function ProductChangeDialog({
   const saving = useRef(false);
   const name = product.productOffering.name;
   const valid = isIsoDate(day);
-  const expired = prepaid && product.paidThrough != null && product.paidThrough < today;
+  const expired = prepaid && product.paidThrough != null && product.paidThrough <= day;
+
+  const chargesNow = change === 'resume' && expired && day <= today;
+  const preview = useResource<FirstCharge | null>(
+    `resume:${product.id}:${day}:${chargesNow}`,
+    (signal) =>
+      chargesNow && valid
+        ? loadFirstCharge(account.id, product.productOffering.id, today, signal)
+        : Promise.resolve(null),
+  );
+  const short =
+    preview.status === 'ok' &&
+    preview.data?.shortfall !== undefined &&
+    toCents(preview.data.shortfall.value) > 0;
+  const ready =
+    valid && (!chargesNow || (preview.status === 'ok' && preview.data !== null && !short));
 
   const explanation =
     change === 'end'
@@ -160,7 +177,7 @@ export function ProductChangeDialog({
         : 'Billing does not change while a product is suspended: it is charged by its dates.';
 
   async function submit() {
-    if (!valid || saving.current) return;
+    if (!ready || saving.current) return;
     saving.current = true;
     setBusy(true);
     setProblem(null);
@@ -229,7 +246,7 @@ export function ProductChangeDialog({
           <Button disabled={busy} onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>
+          <Button variant="primary" disabled={!ready || busy} onClick={() => void submit()}>
             {TITLE[change]}
           </Button>
         </Footer>
@@ -249,6 +266,17 @@ export function ProductChangeDialog({
           {!valid && <Note tone="negative">Enter a date as YYYY-MM-DD.</Note>}
         </section>
         <p className="bss-secondary">{explanation}</p>
+        {chargesNow && (
+          <div data-ui="ui.subscriber.resumePreview">
+            <Preview
+              preview={preview}
+              account={account}
+              start={today}
+              today={today}
+              onTopUp={onTopUp}
+            />
+          </div>
+        )}
       </fieldset>
     </Modal>
   );
