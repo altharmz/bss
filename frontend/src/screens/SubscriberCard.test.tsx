@@ -196,6 +196,36 @@ function productMenu(row: HTMLElement) {
   return menu;
 }
 
+function productAction(row: HTMLElement, name: string) {
+  const trigger = within(row).getByRole('button', { name: 'Actions ▾' });
+  if (trigger.getAttribute('aria-expanded') !== 'true') fireEvent.click(trigger);
+  return within(productMenu(row)).getByRole('menuitem', { name });
+}
+
+describe('Ledger compact products', () => {
+  it('uses separate product/status/since columns and one ellipsis menu', async () => {
+    backend();
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    expect(row.querySelector('.bss-row')?.className).toContain('density-compact');
+    expect(screen.getByRole('columnheader', { name: 'Product' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Number' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Since' })).toBeTruthy();
+    expect(within(row).getByText('Active').closest('[role="cell"]')).not.toBe(
+      within(row).getByText('Mobile L').closest('[role="cell"]'),
+    );
+    expect(within(row).queryByRole('button', { name: 'Deactivate' })).toBeNull();
+    const trigger = within(row).getByRole('button', { name: 'Actions ▾' });
+    expect(trigger.textContent).not.toContain('Actions');
+    fireEvent.click(trigger);
+    expect(within(productMenu(row)).getByRole('menuitem', { name: 'Deactivate' })).toBeTruthy();
+    expect(
+      within(productMenu(row)).getByRole('menuitem', { name: 'Subscriber number' }),
+    ).toBeTruthy();
+    expect(screen.queryByText('In progress')).toBeNull();
+  });
+});
+
 describe('Ledger recent activity', () => {
   it('reuses the first eight loaded movements with signed amounts and balance after', async () => {
     const movements = Array.from({ length: 20 }, (_, i) => ({
@@ -274,7 +304,7 @@ function productRow(name: string): HTMLElement {
     .getAllByRole('row')
     .find((r) => within(r).queryByText(name));
   if (!row) throw new Error(`no product row ${name} yet`); // lets waitFor retry
-  return row;
+  return row.closest('.bss-product-row') as HTMLElement;
 }
 
 describe('subscriber card', () => {
@@ -418,7 +448,7 @@ describe('subscriber card', () => {
     expect(within(active).getByText('2026-10-28')).toBeTruthy();
     expect(within(active).getByText('1,290.00')).toBeTruthy();
     expect(within(active).getByText('/ mo')).toBeTruthy();
-    expect(within(active).getByRole('button', { name: 'Deactivate' })).toBeTruthy();
+    expect(productAction(active, 'Deactivate')).toBeTruthy();
 
     const ending = productRow('Fiber 100');
     expect(within(ending).getByText('ends 2026-10-13')).toBeTruthy();
@@ -439,14 +469,12 @@ describe('subscriber card', () => {
     });
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
-    expect(within(row).getByRole('button', { name: 'Deactivate' })).toBe(
-      expectUi('ui.subscriber.deactivate'),
-    );
-    fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
+    expect(productAction(row, 'Deactivate')).toBe(expectUi('ui.subscriber.deactivate'));
+    fireEvent.click(productAction(row, 'Deactivate'));
     expect(within(screen.getByRole('dialog')).getByLabelText('Date')).toBeTruthy();
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
     expect(completed).toBe(0);
-    fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
+    fireEvent.click(productAction(row, 'Deactivate'));
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', { name: 'End on a date' }),
     );
@@ -493,7 +521,7 @@ describe('subscriber card', () => {
     });
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
-    fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
+    fireEvent.click(productAction(row, 'Deactivate'));
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', { name: 'End on a date' }),
     );
@@ -1956,12 +1984,44 @@ describe('prepaid orders and commands', () => {
     const stub = base({ [`POST ${ORDERS}`]: inProgress, ...routes });
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
-    fireEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
+    fireEvent.click(productAction(row, 'Deactivate'));
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', { name: 'End on a date' }),
     );
     return stub;
   }
+
+  it('keeps the Overview watch mounted through a card refresh and tab changes', async () => {
+    let accountReads = 0;
+    let release: ((response: Response) => void) | undefined;
+    const { calls } = await deactivate({
+      [`GET /tmf-api/accountManagement/v5/billingAccount/${A}`]: () =>
+        ++accountReads === 1
+          ? json(PREPAID)
+          : new Promise<Response>((resolve) => {
+              release = resolve;
+            }),
+      [`GET ${CMD}/${ORDER_ID}`]: () => json(command()),
+    });
+    const steps = await screen.findByRole('list', { name: 'Command steps' });
+    const progress = expectUi('ui.subscriber.inProgress');
+    expect(screen.getByRole('tabpanel').contains(progress)).toBe(true);
+    const watched = expectUi('ui.subscriber.prepaid.orderWatch');
+    expect(progress.contains(watched)).toBe(true);
+    expect(within(steps).getByText('Accepted')).toBeTruthy();
+    expect(within(steps).getByText('Waiting for the worker').getAttribute('aria-current')).toBe(
+      'step',
+    );
+    await waitFor(() => expect(release).toBeDefined());
+    release?.(json(PREPAID));
+    await waitFor(() => expect(expectUi('ui.subscriber.prepaid.orderWatch')).toBe(watched));
+    selectTab('Transactions');
+    expect(document.contains(watched)).toBe(true);
+    expect(watched.closest('[hidden]')).toBeTruthy();
+    selectTab('Overview');
+    expect(expectUi('ui.subscriber.prepaid.orderWatch')).toBe(watched);
+    expect(calls.filter((call) => call === `GET ${CMD}/${ORDER_ID}`)).toHaveLength(1);
+  });
 
   it('does not report an accepted prepaid order as a failure, and settles when the worker is done', async () => {
     await deactivate({
@@ -1989,6 +2049,7 @@ describe('prepaid orders and commands', () => {
     });
     const note = await screen.findByText(/needs a top-up/);
     expectUi('ui.subscriber.prepaid.orderWatch');
+    expect(screen.getByText('Needs top-up').getAttribute('aria-current')).toBe('step');
     expect(note.parentElement?.textContent).toContain('requires 650.00');
     expect(note.parentElement?.textContent).toContain('short 550.00');
     expect(screen.queryByText(/technical/)).toBeNull();
@@ -2023,6 +2084,7 @@ describe('prepaid orders and commands', () => {
       },
     });
     await screen.findByText(/connection reset/);
+    expect(screen.getByText('Failed (technical)').getAttribute('aria-current')).toBe('step');
     expect(expectUi('ui.subscriber.prepaid.orderWatch').textContent).toContain(
       'retries by itself after 2026-10-01 09:01',
     );
@@ -2914,7 +2976,13 @@ describe('product actions', () => {
       expectUi('ui.subscriber.productActions'),
     );
     openMenu(active);
-    expect(items(active)).toEqual(['Suspend…', 'Change offering…', 'End on a date…']);
+    expect(items(active)).toEqual([
+      'Subscriber number',
+      'Deactivate',
+      'Suspend…',
+      'Change offering…',
+      'End on a date…',
+    ]);
     expect(within(productMenu(active)).getByRole('menuitem', { name: 'Suspend…' })).toBe(
       expectUi('ui.subscriber.suspend'),
     );
@@ -2923,14 +2991,25 @@ describe('product actions', () => {
     );
     const suspended = productRow('Fiber 100');
     openMenu(suspended);
-    expect(items(suspended)).toEqual(['Resume…', 'Change offering…', 'End on a date…']);
+    expect(items(suspended)).toEqual([
+      'Subscriber number',
+      'Deactivate',
+      'Resume…',
+      'Change offering…',
+      'End on a date…',
+    ]);
     expect(within(productMenu(suspended)).getByRole('menuitem', { name: 'Resume…' })).toBe(
       expectUi('ui.subscriber.resume'),
     );
     // a pending status change leaves no second one; an ending product only its Undo
     const pending = productRow('Pending 1');
     openMenu(pending);
-    expect(items(pending)).toEqual(['Change offering…', 'End on a date…']);
+    expect(items(pending)).toEqual([
+      'Subscriber number',
+      'Deactivate',
+      'Change offering…',
+      'End on a date…',
+    ]);
     expect(menuOf(productRow('Ending 1'))).toBeNull();
   });
 
@@ -2967,18 +3046,31 @@ describe('product actions', () => {
     await open();
     const funding = await waitFor(() => productRow('Mobile L'));
     openMenu(funding);
-    expect(items(funding)).toEqual(['Change offering…', 'End on a date…']);
+    expect(items(funding)).toEqual([
+      'Subscriber number',
+      'Top up',
+      'Deactivate',
+      'Change offering…',
+      'End on a date…',
+    ]);
     expect(within(funding).getByText(/Waiting for funds: short 17\.75/)).toBeTruthy();
     openMenu(productRow('Fiber 100'));
-    expect(items(productRow('Fiber 100'))).toEqual(['Change offering…', 'End on a date…']);
+    expect(items(productRow('Fiber 100'))).toEqual([
+      'Subscriber number',
+      'Deactivate',
+      'Change offering…',
+      'End on a date…',
+    ]);
     openMenu(productRow('Manual 1'));
     expect(items(productRow('Manual 1'))).toEqual([
+      'Subscriber number',
+      'Deactivate',
       'Resume…',
       'Change offering…',
       'End on a date…',
     ]);
 
-    fireEvent.click(within(funding).getByRole('button', { name: 'Top up' }));
+    fireEvent.click(productAction(funding, 'Top up'));
     const form = await screen.findByRole('dialog', { name: /Top up/ });
     expect((within(form).getByLabelText('Amount') as HTMLInputElement).value).toBe('17.75');
   });
@@ -3334,6 +3426,12 @@ describe('product actions', () => {
     await open();
     const row = await waitFor(() => productRow('Mobile L'));
     const lines = within(row).getAllByText(/on 2026-1/);
+    for (const line of lines) {
+      const subrow = line.closest('.subscriber-pending-change');
+      expect(subrow?.getAttribute('role')).toBe('row');
+      expect(subrow?.parentElement).toBe(row);
+      expect(within(subrow as HTMLElement).getByText('Pending change')).toBeTruthy();
+    }
     expect(lines.map((l) => l.textContent?.replace(/Undo$/, '').trim())).toEqual([
       'Suspends on 2026-11-03',
       'Changes to Basic 20 on 2026-11-01',
@@ -3601,6 +3699,7 @@ describe('change offering', () => {
   });
 
   it('fixes the prepaid date at paidThrough, shows the funds preview and follows an accepted order', async () => {
+    let finish: (() => void) | undefined;
     const { fetchMock } = backend(
       {
         ...catalog,
@@ -3621,24 +3720,29 @@ describe('change offering', () => {
         [`POST ${ORDERS}`]: () =>
           json({ id: 'oa', state: 'inProgress', '@type': 'ProductOrder' }, { status: 201 }),
         'GET /internal/v1/prepaid/command/oa': () =>
-          json({
-            id: 'oa',
-            kind: 'order',
-            state: 'completed',
-            outcome: 'funded',
-            billingAccount: { id: A, name: 'Olga' },
-            dueDate: '2026-10-01',
-            createdAt: '2026-10-01T06:00:00Z',
-            attempts: 1,
-            attemptedAt: null,
-            nextRetryAt: null,
-            reason: null,
-            error: null,
-            needs_topup: null,
-            productOrder: null,
-            products: [],
-            billingRun: null,
-            bills: [],
+          new Promise<Response>((resolve) => {
+            finish = () =>
+              resolve(
+                json({
+                  id: 'oa',
+                  kind: 'order',
+                  state: 'completed',
+                  outcome: 'funded',
+                  billingAccount: { id: A, name: 'Olga' },
+                  dueDate: '2026-10-01',
+                  createdAt: '2026-10-01T06:00:00Z',
+                  attempts: 1,
+                  attemptedAt: null,
+                  nextRetryAt: null,
+                  reason: null,
+                  error: null,
+                  needs_topup: null,
+                  productOrder: null,
+                  products: [],
+                  billingRun: null,
+                  bills: [],
+                }),
+              );
           }),
       },
       PREPAID,
@@ -3661,10 +3765,13 @@ describe('change offering', () => {
     expect(body.requestedStartDate).toBe('2026-10-20T12:00:00+03:00');
     expect(body.productOrderItem[0].productOffering.id).toBe(O2);
     expect(body.productOrderItem[0].product).toEqual({ id: P1, '@type': 'ProductRef' });
-    expect(await screen.findByRole('status')).toHaveProperty(
-      'textContent',
-      expect.stringContaining('accepted'),
+    const accepted = await screen.findByText(
+      'Mobile L: change to Fiber 100 accepted, the billing worker completes it',
     );
+    expect(accepted.closest('[role="status"]')).toBeTruthy();
+    await waitFor(() => expect(finish).toBeDefined());
+    finish?.();
+    await screen.findByText('Change of Mobile L to Fiber 100 completed');
   });
 
   it('uses today for a prepaid product whose paid interval has ended', async () => {

@@ -293,3 +293,18 @@ untouched characteristic documents are preserved. Characteristic rows validate t
 before serializing TMF620 documents; the first comma-separated value is default.
 Boolean metadata remains editable, but values are disabled because the API's vendored
 polymorphic mapping rejects boolean value documents.
+
+### Ledger subscriber products and progress (slice 7b)
+
+Products use compact rows with separate status/since cells. ProductActionsMenu accepts
+extra MenuItem entries so Subscriber number, Top up and Deactivate share its ellipsis
+trigger; the Actions accessible name remains. Pending changes and deactivation Undo
+render as full-width sibling sub-rows. AccountProduct has no number value, so Number
+shows a dash and the existing number dialog remains lazy. Next charge remains a Since
+caption, preserving its existing value.
+
+Accepted watch state belongs to SubscriberCardScreen; its rendered progress is placed
+inside the persistently mounted Card Overview pane. Never key the progress by refresh
+version or conditionally unmount it on a tab switch. WatchProgress renders command phases
+and usePolled.lastCheckedAt in the business time zone without changing timers or requests.
+Terminal settlement still dismisses the watch and toasts the result immediately.

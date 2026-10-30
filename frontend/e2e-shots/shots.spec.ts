@@ -135,7 +135,8 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         await page.screenshot({ path: `/web/.shots/${name}-menu-${width}.png` });
         await expect(menu).toBeVisible();
         await actions.press('Escape');
-        await page.getByRole('button', { name: 'Subscriber number', exact: true }).first().click();
+        await actions.click();
+        await page.getByRole('menuitem', { name: 'Subscriber number', exact: true }).click();
         const number = page.getByRole('dialog', { name: 'Subscriber number' });
         await expect(
           number.getByText(/This product's offering does not use subscriber numbers/),

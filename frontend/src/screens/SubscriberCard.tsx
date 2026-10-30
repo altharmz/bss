@@ -69,11 +69,12 @@ import './screens.css';
 // Bills: Record payment (TMF676) and a bill's hold/release (TMF678 PATCH) reload it too.
 
 const PRODUCT_COLUMNS: Column[] = [
-  { key: 'offering', label: 'Offering', width: '1fr' },
-  { key: 'activated', label: 'Activated', width: '140px', mono: true },
-  { key: 'next', label: 'Next charge', width: '170px', mono: true },
-  { key: 'price', label: 'Price', width: '170px', align: 'right', mono: true },
-  { key: 'actions', label: 'Actions', width: '300px' },
+  { key: 'offering', label: 'Product', width: 'minmax(0, 1fr)' },
+  { key: 'number', label: 'Number', width: '72px', mono: true },
+  { key: 'status', label: 'Status', width: '100px' },
+  { key: 'activated', label: 'Since', width: '92px', mono: true },
+  { key: 'price', label: 'Price', width: '140px', align: 'right', mono: true },
+  { key: 'actions', label: 'Actions', width: '40px', kind: 'actions' },
 ];
 const CHARGE_COLUMNS: Column[] = [
   { key: 'date', label: 'Date', width: '92px', mono: true },
@@ -162,23 +163,6 @@ export function SubscriberCardScreen({ accountId }: { accountId: string }) {
           onRetry={account.retry}
         />
       )}
-      {watches.map((w) =>
-        w.kind === 'transfer' ? (
-          <TransferWatch
-            key={w.id}
-            watched={w}
-            onSettled={(message) => settled(w.id, message)}
-            onDismiss={() => dismiss(w.id)}
-          />
-        ) : (
-          <OrderWatch
-            key={w.id}
-            watched={w}
-            onSettled={(message) => settled(w.id, message)}
-            onDismiss={() => dismiss(w.id)}
-          />
-        ),
-      )}
       {account.status === 'ok' && (
         <Card
           account={account.data}
@@ -186,6 +170,34 @@ export function SubscriberCardScreen({ accountId }: { accountId: string }) {
           reload={reload}
           transferWatched={watches.some((w) => w.kind === 'transfer')}
           onWatch={follow}
+          progress={(onTopUp) =>
+            watches.length > 0 ? (
+              <div data-ui="ui.subscriber.inProgress">
+                <Panel title="In progress">
+                  {watches.map((w) =>
+                    w.kind === 'transfer' ? (
+                      <TransferWatch
+                        key={w.id}
+                        watched={w}
+                        accountId={accountId}
+                        onSettled={(message) => settled(w.id, message)}
+                        onDismiss={() => dismiss(w.id)}
+                      />
+                    ) : (
+                      <OrderWatch
+                        key={w.id}
+                        watched={w}
+                        accountId={accountId}
+                        onTopUp={onTopUp}
+                        onSettled={(message) => settled(w.id, message)}
+                        onDismiss={() => dismiss(w.id)}
+                      />
+                    ),
+                  )}
+                </Panel>
+              </div>
+            ) : null
+          }
         />
       )}
     </div>
@@ -198,12 +210,14 @@ function Card({
   reload,
   transferWatched,
   onWatch,
+  progress,
 }: {
   account: Account;
   version: number;
   reload: () => void;
   transferWatched: boolean;
   onWatch: (watched: Watched) => void;
+  progress: (onTopUp: (amount: string) => void) => ReactNode;
 }) {
   const context = useSystemContext();
   const toast = useToast();
@@ -494,7 +508,14 @@ function Card({
                 ) : undefined
               }
             >
-              <TableHead columns={PRODUCT_COLUMNS} />
+              <TableHead
+                columns={PRODUCT_COLUMNS.map((column) =>
+                  column.key === 'price'
+                    ? { ...column, label: `Price ${account.currency}` }
+                    : column,
+                )}
+                density="compact"
+              />
               <ListState
                 resource={products}
                 columns={PRODUCT_COLUMNS}
@@ -532,6 +553,10 @@ function Card({
                 }
               </ListState>
             </Panel>
+            {progress((amount) => {
+              setMoneyAmount(amount);
+              setMoney('topup');
+            })}
           </div>
           <aside
             className="subscriber-overview-rail"
@@ -1112,46 +1137,12 @@ function ProductRow({
     <div className="bss-product-row">
       <TableRow
         columns={PRODUCT_COLUMNS}
-        className="product-row-height"
+        density="compact"
         cells={{
           offering: (
             <div>
               <span className="bss-name">{name}</span>
-              {note && (
-                <>
-                  {' '}
-                  <StatusPill kind="product" status={note.status} label={note.label} />
-                </>
-              )}
               <div className="bss-code">{code}</div>
-              <Button small onClick={onNumber}>
-                Subscriber number
-              </Button>
-              {product.pendingChanges.map((c) => (
-                <div
-                  key={c.productOrder.id}
-                  className="bss-secondary"
-                  data-ui="ui.subscriber.pendingChange"
-                >
-                  {c.kind === 'status'
-                    ? c.status === 'suspended'
-                      ? `Suspends on ${c.date}`
-                      : `Resumes on ${c.date}`
-                    : `Changes to ${c.productOffering?.name ?? 'another offering'} on ${c.date}${
-                        account.ratingType === 'prepaid' && c.date < context.businessDate
-                          ? ' (waits for funds)'
-                          : ''
-                      }`}{' '}
-                  <Button
-                    small
-                    disabled={busy}
-                    data-ui="ui.subscriber.undoChange"
-                    onClick={() => void undoChange(c.productOrder.id)}
-                  >
-                    Undo
-                  </Button>
-                </div>
-              ))}
               {fundingWait !== null && (
                 <div className="bss-secondary">
                   Waiting for funds: short {formatCents(toCents(fundingWait.shortfall))}
@@ -1160,8 +1151,24 @@ function ProductRow({
               {problem !== null && <Note tone="negative">{problem}</Note>}
             </div>
           ),
-          activated: product.startDate,
-          next: product.nextChargeDate ?? <span className="bss-dash">—</span>,
+          number: <span className="bss-dash">—</span>,
+          status: (
+            <StatusPill
+              kind="product"
+              status={product.status}
+              {...(note ? { label: note.label } : {})}
+            />
+          ),
+          activated: (
+            <>
+              <span>{product.startDate}</span>
+              {product.nextChargeDate !== null && (
+                <span className="subscriber-product-next">
+                  Next charge <span>{product.nextChargeDate}</span>
+                </span>
+              )}
+            </>
+          ),
           price:
             product.price === null ? (
               <span className="bss-dash">—</span>
@@ -1171,57 +1178,87 @@ function ProductRow({
                 <span className="bss-secondary">/ {product.recurringChargePeriod ?? 'mo'}</span>
               </>
             ),
-          actions: ending ? (
-            <Button
-              small
-              disabled={busy}
-              data-ui="ui.subscriber.undoDeactivation"
-              onClick={() => void undo()}
-            >
-              Undo deactivation
-            </Button>
+          actions: !ending ? (
+            <ProductActionsMenu
+              undoable={product.undoableStatusChange}
+              busy={busy}
+              onUndo={() => {
+                if (product.undoableStatusChange)
+                  void undoChange(product.undoableStatusChange.productOrder.id);
+              }}
+              items={offeredChanges(product, account.ratingType)}
+              onPick={(change) => onPick(change, false)}
+              extra={[
+                { label: 'Subscriber number', onClick: onNumber },
+                ...(fundingWait !== null
+                  ? [
+                      {
+                        label: 'Top up',
+                        ui: 'ui.subscriber.topUpProduct',
+                        onClick: () =>
+                          onTopUp(formatCents(toCents(fundingWait.shortfall)).replace(/,/g, '')),
+                      },
+                    ]
+                  : []),
+                {
+                  label: 'Deactivate',
+                  tone: 'negative',
+                  ui: 'ui.subscriber.deactivate',
+                  onClick: () => onPick('end', true),
+                },
+              ]}
+            />
           ) : (
-            <>
-              <ProductActionsMenu
-                undoable={product.undoableStatusChange}
-                busy={busy}
-                onUndo={() => {
-                  if (product.undoableStatusChange)
-                    void undoChange(product.undoableStatusChange.productOrder.id);
-                }}
-                items={offeredChanges(product, account.ratingType)}
-                onPick={(change) => {
-                  onPick(change, false);
-                }}
-              />{' '}
-              {fundingWait !== null && (
-                <>
-                  <Button
-                    small
-                    data-ui="ui.subscriber.topUpProduct"
-                    onClick={() =>
-                      onTopUp(formatCents(toCents(fundingWait.shortfall)).replace(/,/g, ''))
-                    }
-                  >
-                    Top up
-                  </Button>{' '}
-                </>
-              )}
-              <Button
-                variant="quiet"
-                tone="negative"
-                small
-                data-ui="ui.subscriber.deactivate"
-                onClick={() => {
-                  onPick('end', true);
-                }}
-              >
-                Deactivate
-              </Button>
-            </>
+            <Menu
+              label="Subscriber number"
+              items={[{ label: 'Subscriber number', onClick: onNumber }]}
+            />
           ),
         }}
       />
+      {ending && (
+        <div className="subscriber-pending-change" role="row">
+          <span className="subscriber-pending-label">Pending change</span>
+          <span>Ends on {product.terminationDate}</span>
+          <Button
+            small
+            disabled={busy}
+            data-ui="ui.subscriber.undoDeactivation"
+            onClick={() => void undo()}
+          >
+            Undo deactivation
+          </Button>
+        </div>
+      )}
+      {product.pendingChanges.map((c) => (
+        <div
+          key={c.productOrder.id}
+          className="subscriber-pending-change"
+          role="row"
+          data-ui="ui.subscriber.pendingChange"
+        >
+          <span className="subscriber-pending-label">Pending change</span>
+          <span>
+            {c.kind === 'status'
+              ? c.status === 'suspended'
+                ? `Suspends on ${c.date}`
+                : `Resumes on ${c.date}`
+              : `Changes to ${c.productOffering?.name ?? 'another offering'} on ${c.date}${
+                  account.ratingType === 'prepaid' && c.date < context.businessDate
+                    ? ' (waits for funds)'
+                    : ''
+                }`}
+          </span>{' '}
+          <Button
+            small
+            disabled={busy}
+            data-ui="ui.subscriber.undoChange"
+            onClick={() => void undoChange(c.productOrder.id)}
+          >
+            Undo
+          </Button>
+        </div>
+      ))}
     </div>
   );
 }
