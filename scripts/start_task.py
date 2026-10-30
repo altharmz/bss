@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare one Ready issue. GitHub is read-only; no secrets or containers are touched."""
+"""Claim and prepare one Ready issue, including disposable development credentials."""
 
 import argparse
 import contextlib
@@ -7,10 +7,12 @@ import fcntl
 import json
 import os
 import re
+import secrets
 import shlex
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import unicodedata
@@ -19,6 +21,8 @@ from pathlib import Path
 from task_runtime import RESERVED_PORTS, InvalidRuntime, unique_fields, validate_metadata
 
 PROJECT = "PVT_kwHOEpM-b84BpHA0"
+STATUS_FIELD = "PVTSSF_lAHOEpM-b84BpHA0zhnkE7M"
+READY, DOING = "abe5d139", "47fc9ee4"
 REPOSITORY = "altharmz/bss"
 PORT_START, PORT_END = 21000, 21998
 TASK_BRANCH = re.compile(r"^(?:cloud/)?issue-([1-9][0-9]*)-")
@@ -43,7 +47,7 @@ query($project: ID!, $cursor: String) {
       nodes { id fieldValueByName(name: "Status") {
         ... on ProjectV2ItemFieldSingleSelectValue { name }
       } content { ... on Issue {
-        number title state repository { nameWithOwner }
+        id number title state repository { nameWithOwner }
         labels(first: 100) { totalCount nodes { name } }
         blockedBy(first: 100) { totalCount nodes { state } }
         linkedBranches(first: 100) { totalCount nodes { ref { name } } }
@@ -153,7 +157,7 @@ def query(document, **variables):
         return data["data"]
     except (ValueError, KeyError, TypeError):
         raise StartupError(
-            "invalid or incomplete GitHub response; check project read access"
+            "invalid or incomplete GitHub response; check repository/project access"
         ) from None
 
 
@@ -228,12 +232,130 @@ def select_issue(items, represented):
             raise StartupError(
                 f"ambiguous priority for Ready issue #{issue['number']}: need one P0–P3"
             )
-        choices.append((int(next(iter(priority))[1]), position, issue))
+        choices.append((int(next(iter(priority))[1]), position, dict(issue, item_id=item["id"])))
     if not choices:
         raise StartupError(
             "no eligible Ready issue (blocked, claimed, branches/worktrees/PRs excluded)"
         )
     return min(choices, key=lambda choice: choice[:2])[2]
+
+
+def agent_label():
+    agent = os.environ.get("BSS_TASK_AGENT")
+    if agent is None:
+        agent = "codex" if os.environ.get("CODEX_THREAD_ID") else (
+            "claude" if os.environ.get("CLAUDECODE") else None
+        )
+    if agent not in {"codex", "claude"}:
+        raise StartupError("set BSS_TASK_AGENT to codex or claude (cannot identify agent)")
+    return f"agent:{agent}"
+
+
+def snapshot():
+    return pages(BOARD_QUERY, board_page, project=PROJECT)
+
+
+def ownership(item):
+    return {n["name"] for n in nodes(item["content"]["labels"])}
+
+
+def status(item):
+    return (item.get("fieldValueByName") or {}).get("name")
+
+
+def check_wip(items, agent, selected=None):
+    for item in items:
+        if item["id"] != selected and status(item) == "Doing" and item.get("content"):
+            if agent in ownership(item):
+                raise StartupError(f"WIP limit: {agent} already owns a Doing item")
+
+
+def set_status(issue, option):
+    query(
+        """mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+          updateProjectV2ItemFieldValue(input: {projectId: $project, itemId: $item,
+            fieldId: $field, value: {singleSelectOptionId: $option}}) {
+            projectV2Item { id }
+          }
+        }""",
+        project=PROJECT, item=issue["item_id"], field=STATUS_FIELD, option=option,
+    )
+
+
+class Claim:
+    """Compensate only an acknowledged, still-recognizable remote mutation."""
+
+    def __init__(self, issue, agent):
+        self.issue, self.agent = issue, agent
+        self.claimed = self.active = False
+
+    def acquire(self):
+        items = snapshot()
+        check_wip(items, self.agent)
+        candidate = select_issue([i for i in items if i["id"] == self.issue["item_id"]], set())
+        if candidate != self.issue:
+            raise StartupError("Ready selection changed before claim; retry")
+        self.before = ownership(next(i for i in items if i["id"] == self.issue["item_id"]))
+        run("gh", "issue", "edit", str(self.issue["number"]), "--repo", REPOSITORY,
+            "--add-label", self.agent)
+        self.claimed = True
+        self.verify("Ready")
+        set_status(self.issue, DOING)
+        self.active = True
+        self.verify("Doing")
+
+    def verify(self, expected="Doing"):
+        items = snapshot()
+        check_wip(items, self.agent, self.issue["item_id"])
+        matches = [i for i in items if i["id"] == self.issue["item_id"]]
+        if len(matches) != 1 or status(matches[0]) != expected or (
+            ownership(matches[0]) != self.before | {self.agent}
+        ) or matches[0]["content"]["state"] != "OPEN":
+            raise StartupError("remote claim changed concurrently; review issue ownership/status")
+
+    def rollback(self):
+        if not self.claimed:
+            print("start-task: claim not acknowledged; review remote state before retrying",
+                  file=sys.stderr)
+            return
+        try:
+            self.verify("Doing" if self.active else "Ready")
+            if self.active:
+                set_status(self.issue, READY)
+                self.verify("Ready")
+            run("gh", "issue", "edit", str(self.issue["number"]), "--repo", REPOSITORY,
+                "--remove-label", self.agent)
+            print("start-task: rolled back claim and status", file=sys.stderr)
+        except (StartupError, OSError, ValueError, KeyError, TypeError):
+            print("start-task: preserved uncertain remote state; review issue "
+                  f"#{self.issue['number']} ownership/status", file=sys.stderr)
+
+
+def provision_secret(path):
+    # Reject every symlink component before any creation; never resolve an alias
+    # into protected primary/master secrets, even for an existing task credential.
+    for part in [path, *path.parents]:
+        if part.is_symlink():
+            raise StartupError("refusing symlinked development secret path")
+    if path.exists():
+        if not path.is_file() or path.stat().st_nlink != 1:
+            raise StartupError("development secret is not a regular file")
+        return False
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if stat.S_IMODE(path.parent.stat().st_mode) != 0o700:
+        raise StartupError("development secret directory must have mode 0700")
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    except FileExistsError:
+        raise StartupError("development secret appeared concurrently; retry") from None
+    # Keep newly generated credentials on failure: never delete a credential that
+    # a concurrent process may already have adopted. Report path, never its value.
+    with os.fdopen(descriptor, "w") as output:
+        os.fchmod(output.fileno(), 0o600)
+        output.write(f"POSTGRES_PASSWORD={secrets.token_hex(32)}\n")
+        output.flush()
+        os.fsync(output.fileno())
+    return True
 
 
 def reservations(trees):
@@ -284,7 +406,10 @@ def secret_file(task, trees, destination):
     config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
     if not config.is_absolute():
         raise StartupError("XDG_CONFIG_HOME must be absolute and external")
-    path = (config / "bss/tasks" / task / ".env").resolve()
+    path = config / "bss/tasks" / task / ".env"
+    for part in [path, *path.parents]:
+        if part.is_symlink():
+            raise StartupError("refusing symlinked development secret path")
     roots = [p for p, _ in trees] + [destination]
     if any(path.is_relative_to(root) or config.resolve().is_relative_to(root) for root in roots):
         raise StartupError("development secret path must be external to all worktrees")
@@ -296,13 +421,30 @@ def write_runtime(output, data):
     output.write("\n")
 
 
-def rollback(root, branch, destination, base, metadata_created):
+def rollback(root, branch, destination, base, metadata_created, expected_metadata):
     # Never force removal, and never discard a commit created by a hook/user.
     unchanged = git("rev-parse", f"refs/heads/{branch}", cwd=root) == base
     attached = dict(worktrees(root)).get(destination) == branch
     if unchanged and attached:
+        ignored = git("ls-files", "--others", "--ignored", "--exclude-standard", "-z",
+                      cwd=destination).split("\0")
+        allowed = {"", ".task/runtime.json"} if metadata_created else {""}
+        if any(name not in allowed for name in ignored):
+            print(f"start-task: preserved changed task (ignored files): {destination}",
+                  file=sys.stderr)
+            return
         if metadata_created:
-            (destination / ".task/runtime.json").unlink(missing_ok=True)
+            metadata = destination / ".task/runtime.json"
+            try:
+                current = metadata.lstat()
+                if metadata.is_symlink() or (current.st_dev, current.st_ino) != metadata_created:
+                    raise ValueError
+                if json.loads(metadata.read_text()) != expected_metadata:
+                    raise ValueError
+            except (OSError, ValueError):
+                print(f"start-task: preserved changed runtime metadata: {metadata}", file=sys.stderr)
+                return
+            metadata.unlink()
         removed = run("git", "worktree", "remove", "--", str(destination), cwd=root, check=False)
         attached = removed.returncode != 0
     if unchanged and not attached:
@@ -351,7 +493,8 @@ def create(root, branch, destination, base, ports, report_ready=None):
         if metadata.exists() or metadata.is_symlink():
             raise StartupError("runtime metadata unexpectedly already exists")
         with metadata.open("x+") as output:
-            metadata_created = True
+            created_stat = os.fstat(output.fileno())
+            metadata_created = (created_stat.st_dev, created_stat.st_ino)
             write_runtime(output, runtime(branch, ports))
             output.flush()
             output.seek(0)
@@ -364,7 +507,7 @@ def create(root, branch, destination, base, ports, report_ready=None):
     except BaseException:
         if created:
             try:
-                rollback(root, branch, destination, base, metadata_created)
+                rollback(root, branch, destination, base, metadata_created, runtime(branch, ports))
             except (StartupError, OSError):
                 print(
                     f"start-task: cleanup failed; review {destination} / {branch}", file=sys.stderr
@@ -379,6 +522,7 @@ def create(root, branch, destination, base, ports, report_ready=None):
 
 def start(on_ready=None):
     root, common = primary()
+    agent = agent_label()
     with (common / "start-task.lock").open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -404,7 +548,9 @@ def start(on_ready=None):
             represented.add(issue_of(name))
         prs = pages(PR_QUERY, lambda response: response["repository"]["pullRequests"])
         represented.update(issue_of(pr["headRefName"]) for pr in prs)
-        issue = select_issue(pages(BOARD_QUERY, board_page, project=PROJECT), represented)
+        items = snapshot()
+        check_wip(items, agent)
+        issue = select_issue(items, represented)
         branch = branch_name(issue["number"], issue["title"])
         destination = (root.parent / f"{root.name}-worktrees" / branch).resolve()
         if destination.exists() or destination.is_symlink() or destination in dict(trees):
@@ -423,7 +569,6 @@ def start(on_ready=None):
         ):
             raise StartupError(f"branch collision: {branch}")
         secret = secret_file(branch, trees, destination)
-        exists = secret.is_file()  # Stat only. Never open, create, copy or validate secrets.
         with allocate(used) as ports:
             result = dict(
                 issue=issue["number"],
@@ -434,17 +579,28 @@ def start(on_ready=None):
                 mcp_port=ports[1],
                 web_port=ports[2],
                 secret_file=str(secret),
-                secret_exists=exists,
+                secret_exists=True,
+                agent=agent,
+                status="Doing",
             )
-            # Reporting is the commit point: even an output failure rolls back safely.
-            create(
-                root,
-                branch,
-                destination,
-                base,
-                ports,
-                report_ready=(lambda: on_ready(result)) if on_ready is not None else None,
-            )
+            claim = Claim(issue, agent)
+            try:
+                claim.acquire()
+
+                def ready():
+                    result["secret_created"] = provision_secret(secret)
+                    run(sys.executable, "-B", str(destination / "scripts/task_runtime.py"),
+                        "--check", cwd=destination)
+                    claim.verify()
+                    if on_ready is not None:
+                        on_ready(result)
+
+                create(root, branch, destination, base, ports, report_ready=ready)
+            except BaseException:
+                claim.rollback()
+                if secret.exists():
+                    print(f"start-task: preserved development credential: {secret}", file=sys.stderr)
+                raise
         return result
 
 
@@ -462,6 +618,8 @@ def print_result(result, json_output):
             f"\nMCP port: {result['mcp_port']}\nWeb port: {result['web_port']}"
             f"\nSecret file: {result['secret_file']}"
             f"\nSecret exists: {'yes' if result['secret_exists'] else 'no'}"
+            f"\nClaim: {result['agent']} / {result['status']}"
+            f"\nSecret created: {'yes' if result['secret_created'] else 'no'}"
             f"\nNext: cd {shlex.quote(result['worktree'])}",
             flush=True,
         )
