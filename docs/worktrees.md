@@ -1,14 +1,61 @@
 # Local task worktrees
 
 Use **1 task = 1 branch = 1 git worktree = 1 agent context**. The primary checkout
-is administration-only and stays clean on `master`. Fetch `origin`, then manually create
-an `issue-<number>-<lowercase-kebab-slug>` branch/worktree from fresh `origin/master`,
-normally under `/home/petrg/projects/bss-worktrees/<branch>`. Start the agent there.
+is administration-only and stays clean on `master`. Run `make start-task` there
+(`make start-task JSON=1` for one JSON result on stdout). It fetches/prunes `origin`,
+fast-forwards `master`, and prepares an `issue-<number>-<lowercase-kebab-slug>` branch
+from that fetched `origin/master` in the sibling `<checkout-name>-worktrees/<branch>`
+directory. Start the agent in the returned directory.
 Do not switch branches in that worktree or mutate sibling worktrees.
+
+## Task preparation
+
+Git, GitHub CLI with repository/project read access, and host Python 3 are required.
+Only the primary checkout on clean `master` is accepted; staged, tracked and non-ignored
+untracked changes fail. Local commits ahead of or diverging from `origin/master` fail;
+there is no stash, reset, rebase or history merge. Tracked secret paths in either the
+current or incoming tree are refused before checkout; ignored primary secrets are untouched.
+
+Selection follows [board.md](board.md): open BSS issues in Ready, P0 before P1 before P2
+before P3, then ascending manual board position. `blocked`, `needs-human`, any `agent:`
+owner label and open GitHub blocking dependencies exclude an issue. Doing, Waiting,
+Inbox and Done are not backlog candidates. Existing local/remote task branches (including
+cloud task branches), registered worktrees, GitHub-linked branches, and open PRs by task
+branch or closing reference exclude their issue; this command never resumes tasks.
+Missing/multiple priority labels, incomplete responses, duplicate items or a filtered,
+sorted or non-unique board view fail rather than inventing an order. Ready remains the
+triage source of truth; the helper does not interpret dependencies from free-form prose.
+
+The helper reads GitHub only. Claim the returned issue under the existing ownership/WIP
+rules before implementation. It creates no issue, label, status, PR or remote branch.
+The title is normalized to ASCII lowercase kebab form (fallback `task`) and truncated
+so the whole branch is at most 80 characters. Existing branch/path/registration
+collisions fail without reuse. A lock in the common Git directory serializes preparation
+for this checkout; it is not a daemon or a cross-clone claim service.
+
+Ports are allocated from **21000–21998**, in aligned blocks `(21000,21001,21002)`,
+`(21003,21004,21005)`, …, `(21996,21997,21998)`, for app/MCP/web respectively. The first
+block whose ports are absent from every registered worktree's runtime metadata and
+can all bind to loopback TCP is selected; repository-reserved ports are excluded.
+Reservations count even with a stopped stack. Invalid reservation files fail closed.
+Sockets stay held until the metadata is written, then are released. Another listener can
+still race later startup; task-compose's checks and Docker's bind failure handle that
+without killing a listener or silently changing ports.
+
+The result includes issue/title, branch, worktree, three ports, external secret path
+and file-existence status, plus a `cd` command in human output. No secret file is opened,
+created, copied or validated. Provision the external file manually before starting Compose.
+Metadata uses the same schema validator as task-compose without its secret-reading step.
+
+On failure after creation, only this invocation's unchanged worktree and branch are
+removed, without force. New commits or unexpected working-tree changes are preserved
+and named for manual review. Existing branches/worktrees, secrets and Docker resources
+are never deleted. A successful primary fast-forward is retained on later failure.
+SIGINT/SIGTERM trigger rollback; a hard kill or machine crash can require manual recovery.
 
 ## Local configuration
 
-Create `.task/runtime.json` in the task worktree (ignored, excluded from builds):
+`start-task` writes `.task/runtime.json` in the task worktree (ignored, excluded from builds):
 
 ```json
 {
@@ -22,8 +69,9 @@ Create `.task/runtime.json` in the task worktree (ignored, excluded from builds)
 
 These are the only fields. The task id must match the branch, follow the issue naming
 convention, and be at most 80 characters. Ports must be distinct integers in 1024–65535,
-excluding the repository's reserved VPN ports. Choose free ports explicitly; there is
-no allocator or reservation registry. Metadata survives terminal/agent restarts and reboot.
+excluding the repository's reserved VPN ports. Startup allocates the explicit ports as
+described above; there is no separate reservation registry. Metadata survives terminal/agent
+restarts and reboot.
 
 Provision development secrets manually **outside** the worktree:
 `~/.config/bss/tasks/<task_id>/.env`, or, when explicitly set,
@@ -67,8 +115,8 @@ Docker's bind error handles a race after that check. No listener is killed and n
 is silently changed. Do not edit identity/ports while its stack is active; stop it first.
 
 `make down` stops only this task and keeps its volumes. Existing `make clean` deletes
-only this project's volumes; it is destructive. No lifecycle or cleanup automation is
-provided. Browser cookies are not isolated by port; use separate browser contexts when
+only this project's volumes; it is destructive. Finishing/removing tasks and cleaning
+volumes remain manual. Browser cookies are not isolated by port; use separate browser contexts when
 working with multiple task UIs.
 
 ## Hooks and checks

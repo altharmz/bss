@@ -21,9 +21,9 @@ Then, in this order:
 3. Open PRs (`gh pr list`): failing checks or requested changes come before new work.
 4. **Waiting**: check each "unblocks when". Met: move it to Ready and say so. List the
    still-blocked ones in one line each.
-5. **Ready**: take an item with the highest priority label (P0, then P1, P2, P3) that is
-   not owned by another agent and not `needs-human`; if several share that label, take the one highest on the board. Add your
-   agent label, move it to Doing, create the branch, start.
+5. **Ready**: use `make start-task` from the primary checkout, following CLAUDE.md.
+   Claim only the returned issue with your agent label and Doing status, and start in
+   its returned worktree. The helper prepares local resources; it does not claim the board.
 6. Nothing in Ready: report the Inbox items that need triage and the next slice in
    epic #43's task list, propose what to do, and do not pick work on your own.
 
