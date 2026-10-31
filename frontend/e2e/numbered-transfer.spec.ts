@@ -1,12 +1,17 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { signIn } from './auth';
 
-// G4b / P13: written now; R16 runs this against the disposable local seeded stack
-// with its billing worker running. All setup uses the public APIs; no staging data.
+// Fresh local catalog fixture is priced at business midnight by the same clock
+// mechanism as the seed. The browser attaches its UI-created numbered specification;
+// purchases and transfer must complete through the real task-local billing worker.
 test('numbered prepaid subscribers complete a transfer by subscriber number', async ({ page }) => {
   test.setTimeout(360_000);
   await page.goto('/catalog');
   await signIn(page);
+  // Submitting credentials is asynchronous; wait for the authenticated screen
+  // before using its session cookie for API fixture setup.
+  await expect(page.getByRole('heading', { name: 'Product catalog', exact: true })).toBeVisible();
   const suffix = Date.now().toString();
   const name = `Numbered prepaid ${suffix}`;
   const catalog = '/tmf-api/productCatalogManagement/v5';
@@ -15,9 +20,17 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
     expect(response.status(), await response.text()).toBe(201);
     return (await response.json()) as { id: string; href: string };
   };
-  const context = (await (await page.request.get('/internal/v1/context')).json()) as {
+  const contextResponse = await page.request.get('/internal/v1/context');
+  expect(contextResponse.status(), await contextResponse.text()).toBe(200);
+  const context = (await contextResponse.json()) as {
     currency: string;
   };
+  expect(context.currency).toMatch(/^[A-Z]{3}$/);
+  const fixture = JSON.parse(readFileSync('/web/.e2e/numbered-offering.json', 'utf8')) as {
+    id: string;
+    currency: string;
+  };
+  expect(fixture.currency).toBe(context.currency);
   await page.getByRole('button', { name: 'Specifications', exact: true }).click();
   await page.getByRole('button', { name: '+ New specification' }).click();
   const editor = page.getByRole('dialog', { name: 'New product specification' });
@@ -31,22 +44,19 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
   await editor.getByRole('button', { name: 'Create', exact: true }).click();
   const spec = (await (await specResponse).json()) as { id: string };
   await expect(editor).toBeHidden();
-  const price = await post(`${catalog}/productOfferingPrice`, {
-    '@type': 'ProductOfferingPrice',
-    name,
-    lifecycleStatus: 'Active',
-    priceType: 'recurring',
-    recurringChargePeriodType: 'monthly',
-    price: { unit: context.currency, value: 1 },
+  const offeringResponse = await page.request.patch(`${catalog}/productOffering/${fixture.id}`, {
+    headers: { 'X-Bss-Request': '1', 'Content-Type': 'application/merge-patch+json' },
+    data: {
+      name,
+      productSpecification: { id: spec.id, '@type': 'ProductSpecificationRef' },
+    },
   });
-  const offering = await post(`${catalog}/productOffering`, {
-    '@type': 'ProductOffering',
-    name,
-    lifecycleStatus: 'Active',
-    isSellable: true,
-    productSpecification: { id: spec.id, '@type': 'ProductSpecificationRef' },
-    productOfferingPrice: [{ id: price.id, '@type': 'ProductOfferingPriceRef' }],
-  });
+  expect(offeringResponse.status(), await offeringResponse.text()).toBe(200);
+  const offering = (await offeringResponse.json()) as {
+    id: string;
+    productSpecification: { id: string };
+  };
+  expect(offering.productSpecification.id).toBe(spec.id);
   const accounts: string[] = [];
   const digits = [`${suffix}0`, `${suffix}1`];
   for (const [index, value] of digits.entries()) {
@@ -55,7 +65,7 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
       givenName: 'Numbered',
       familyName: `${suffix}-${index}`,
     });
-    const customer = await post('/tmf-api/customerManagement/v5/customer', {
+    const customer = await post('/tmf-api/customer/v5/customer', {
       '@type': 'Customer',
       name: `${name} ${index}`,
       status: 'Active',

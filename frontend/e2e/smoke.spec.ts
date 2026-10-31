@@ -218,7 +218,7 @@ test('prepaid: Pavel Orlov tops up and orders, Vera Lebedeva waits for funds, co
     page.getByText(/ordered: accepted, the billing worker completes it shortly/),
   ).toBeVisible();
 
-  // 4. Vera Lebedeva: funding-suspended product with the top-up link
+  // 4. Vera Lebedeva: funding-suspended product with its Top up menu action
   await page.goto('/subscribers');
   await page.getByRole('row').filter({ hasText: 'Vera Lebedeva' }).click();
   await expect(page.getByRole('heading', { name: /Vera Lebedeva/ })).toBeVisible();
@@ -226,7 +226,18 @@ test('prepaid: Pavel Orlov tops up and orders, Vera Lebedeva waits for funds, co
   await expect(page.locator('[data-ui="ui.subscriber.prepaid.shortfall"]')).toContainText(
     /renewal needs/,
   );
-  await expect(page.locator('[data-ui="ui.subscriber.topUpProduct"]').first()).toBeVisible();
+  const waitingProduct = page
+    .locator('.bss-product-row')
+    .filter({ hasText: 'Waiting for funds: short' })
+    .first();
+  await waitingProduct.getByRole('button', { name: 'Actions ▾', exact: true }).click();
+  const productTopUp = page.locator('[data-ui="ui.subscriber.topUpProduct"]');
+  await expect(productTopUp).toBeVisible();
+  await productTopUp.click();
+  const renewalTopUp = page.getByRole('dialog', { name: 'Top up', exact: true });
+  await expect(renewalTopUp).toBeVisible();
+  await renewalTopUp.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(renewalTopUp).toBeHidden();
 
   // 5. the Prepaid commands list
   await page.goto('/prepaid-commands');

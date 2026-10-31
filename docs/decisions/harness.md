@@ -9,6 +9,22 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 
 ## Development cycle and gates
 
+### Task commit and push (2026-10-31, #89)
+
+`make commit MESSAGE=... FILES=...` requires a JSON list of exact intended filenames;
+`make push` publishes only the validated task branch. Both reuse task quality safety
+checks and require the normal shared hooks. Index/worktree state survives failures,
+and publication refuses incompatible remote ancestry or unexpected destinations.
+See [worktrees.md](../worktrees.md#commit-and-publish-a-task) for the interface and
+transitional PR workflow boundary. Attempts and results use existing telemetry events;
+successful commit hashes are bounded operational metadata, with no messages or diffs.
+
+The guard permits the exact read-only hook-path query, including its literal Python
+argv form and the original hook-rejection diagnostic in lifecycle source. It continues
+to reject other hook-path occurrences, configuration mutations/overrides, and hook
+bypass flags. Whole interpreter bodies
+are never exempted. Regression cases cover both read-only source and actual bypasses.
+
 ### Persistent worker slots (2026-10-30, #85)
 
 The canonical cross-client local workflow is [worktrees.md](../worktrees.md).
@@ -60,8 +76,9 @@ task Compose operations, including those used by normal Make targets. `start-tas
 records successful preparation. The `--url` and `--check` helpers do not create events.
 No operation arguments, subprocess output, prompt/response, code, diffs, secret values
 or arbitrary environment data are collected. Only allowlisted operation names and
-validated branch/session identities enter SQL; startup metadata may contain a validated
-worker slot, while other event metadata remains empty.
+validated branch/session identities enter SQL. Task lifecycle metadata may contain a
+validated worker slot; successful commit/push results may also contain the commit hash.
+Other event metadata remains empty.
 
 Codex's UUID thread identifier is the reliable session source currently supported.
 Other runtimes may provide an explicit UUID in `BSS_TELEMETRY_SESSION_ID`; without a

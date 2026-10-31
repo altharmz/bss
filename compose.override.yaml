@@ -2,7 +2,7 @@
 # Never shipped to the VPS. Local dev runs its own postgres on the `lab` network; the
 # shared infrastructure from vps-infra is never needed (or started) for development.
 services:
-  app:
+  app: &local-app
     build:
       context: .
       target: dev
@@ -37,6 +37,17 @@ services:
       db:
         condition: service_healthy
     networks: [lab]
+
+  # Browser purchase/transfer acceptance needs the actual asynchronous dispatcher.
+  # Started and removed only by web-e2e; never publishes a host port.
+  e2e-worker:
+    <<: *local-app
+    profiles: [web]
+    image: ${IMAGE_NAME:?use scripts/task-compose}:${TAG:-dev}
+    ports: []
+    healthcheck:
+      disable: true
+    command: ["python", "-m", "app.worker"]
 
   # Writable twin of `app` for code-mutating tooling (make fmt, .claude/hooks/format.sh).
   # `app` keeps its read-only source mounts. Same dev image, so the same ruff version.
