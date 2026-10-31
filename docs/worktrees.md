@@ -51,12 +51,14 @@ task branch. There is no automatic task completion or runtime/volume cleanup tar
 
 Git, GitHub CLI with repository/project write access, and host Python 3 are required.
 Agent identity is detected from `CODEX_THREAD_ID` or `CLAUDECODE`; otherwise set
-`BSS_TASK_OWNER=codex` or `BSS_TASK_OWNER=claude` to select an existing board ownership
-identity. This explicit policy identity takes precedence over detection and the legacy
-`BSS_TASK_AGENT` alias. Another client can use the same lifecycle under an explicitly
-chosen existing owner; this does not claim it is Codex/Claude in telemetry. There are
-no per-slot labels and the existing per-owner WIP limit still applies. Unknown owners
-fail closed; this change does not introduce additional board ownership labels.
+`BSS_TASK_OWNER` to the client identity, for example `codex`, `claude` or `kimi`.
+Owner names are 1–32 lowercase ASCII letters, digits or hyphens, beginning with a letter.
+The corresponding `agent:<owner>` board label must already exist; startup creates no label
+definition. The explicit identity takes precedence over detection and the legacy
+`BSS_TASK_AGENT` alias. Malformed owners fail closed, and a missing GitHub label fails the
+claim without silently selecting another owner. There are no per-slot labels: any client can
+use any free slot, and the existing per-owner WIP limit still applies. Successful startup
+telemetry records the validated `client` and `slot` as separate metadata fields.
 Only the primary checkout on clean `master` is accepted; staged, tracked and non-ignored
 untracked changes fail. Local commits ahead of or diverging from `origin/master` fail;
 there is no stash, reset, rebase or history merge. Tracked secret paths in either the

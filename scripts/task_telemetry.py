@@ -133,6 +133,7 @@ def event_sql(
     pr_number=None,
     pr_status=None,
     ci_state=None,
+    client=None,
 ):
     match = re.fullmatch(r"issue-([1-9][0-9]*)-[a-z0-9-]+", task)
     if not match or len(task) > 80 or operation not in OPERATIONS:
@@ -144,7 +145,14 @@ def event_sql(
     duration = "NULL" if duration_ms is None else str(duration_ms)
     if slot is not None and not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", slot):
         raise ValueError("invalid worker slot")
-    metadata = "'{}'" if slot is None else literal('{"slot":"' + slot + '"}')
+    if client is not None and (
+        operation != "start-task" or not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", client)
+    ):
+        raise ValueError("invalid telemetry client")
+    fields = {"slot": slot, "client": client}
+    metadata = literal(
+        json.dumps({key: value for key, value in fields.items() if value is not None}, separators=(",", ":"))
+    )
     if commit_hash is not None:
         if operation not in {"commit", "push"} or not re.fullmatch(
             r"[0-9a-f]{40}|[0-9a-f]{64}", commit_hash
@@ -233,6 +241,7 @@ def record(
     pr_number=None,
     pr_status=None,
     ci_state=None,
+    client=None,
 ):
     """Fail open, with a visible but content-free warning. Never print DB stderr."""
     try:
@@ -248,6 +257,7 @@ def record(
                 pr_number,
                 pr_status,
                 ci_state,
+                client,
             )
         )
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):

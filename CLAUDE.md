@@ -138,8 +138,9 @@ stay in the slice trackers in `docs/` and an issue only links to them. Rules in 
 - Read [docs/board.md](docs/board.md) before any board operation (statuses, ids, `gh`
   commands, merge/close rules).
 - Statuses: Inbox, Ready, Doing, Waiting, Done. Take from Ready by priority label (P0-P3), then board order among equals.
-- WIP limit: 1 item per agent. Claim an item with your label (`agent:claude` /
-  `agent:codex`) and move it to Doing in one step; never touch the other agent's items.
+- WIP limit: 1 item per agent. Claim an item with your `agent:<client>` label (for example
+  `agent:claude`, `agent:codex` or `agent:kimi`) and move it to Doing in one step; never
+  touch another agent's items.
 - Merging: open a PR with `Fixes #N`, wait with `gh pr checks --watch`, and if every check
   is green merge with `gh pr merge --squash --delete-branch`. Never self-merge a
   `needs-human` item or a PR touching CLAUDE.md, AGENTS.md, docs/board.md, `.claude/`,

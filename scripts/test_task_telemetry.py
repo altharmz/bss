@@ -104,6 +104,28 @@ class TelemetryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             telemetry.event_sql("issue-85-example", "start-task", 0, None, {}, "../worker1")
 
+    def test_start_task_records_client_separately_from_slot(self):
+        for client in ("codex", "claude", "kimi", "future-client"):
+            with self.subTest(client=client):
+                statement = telemetry.event_sql(
+                    "issue-100-example",
+                    "start-task",
+                    0,
+                    None,
+                    {},
+                    slot="worker2",
+                    client=client,
+                )
+                self.assertIn(f'"client":"{client}"', statement)
+                self.assertIn('"slot":"worker2"', statement)
+        for client in ("Kimi", "../kimi", "kimi_client"):
+            with self.subTest(client=client), self.assertRaises(ValueError):
+                telemetry.event_sql(
+                    "issue-100-example", "start-task", 0, None, {}, client=client
+                )
+        with self.assertRaises(ValueError):
+            telemetry.event_sql("issue-100-example", "up", 0, None, {}, client="kimi")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

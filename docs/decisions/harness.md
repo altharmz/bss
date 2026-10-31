@@ -9,6 +9,16 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 
 ## Development cycle and gates
 
+### Client-general task ownership (2026-10-31, #100)
+
+`BSS_TASK_OWNER` accepts a validated lowercase client slug rather than only Codex or Claude.
+The existing `agent:<client>` GitHub label supplies board ownership and the per-client WIP
+limit; `agent:kimi` joins the existing labels. Worker slots remain provider-neutral and may
+be reused by different clients over time. Successful startup telemetry records validated
+`client` and `slot` metadata independently, with no schema migration or inferred session,
+model or usage identity. Codex/Claude detection and the legacy `BSS_TASK_AGENT` alias remain
+compatible.
+
 ### Task merge and completion (2026-10-31, #91)
 
 `make merge-task` composes existing readiness with the repository's squash-only policy
@@ -138,8 +148,9 @@ task Compose operations, including those used by normal Make targets. `start-tas
 records successful preparation. The `--url` and `--check` helpers do not create events.
 No operation arguments, subprocess output, prompt/response, code, diffs, secret values
 or arbitrary environment data are collected. Only allowlisted operation names and
-validated branch/session identities enter SQL. Task lifecycle metadata may contain a
-validated worker slot; successful commit/push results may also contain the commit hash.
+validated branch/session identities enter SQL. Startup metadata contains independently
+validated client and worker-slot identities; other task lifecycle metadata may contain a
+validated worker slot. Successful commit/push results may also contain the commit hash.
 PR lifecycle results may contain a positive PR number and allowlisted readiness/CI states.
 Other event metadata remains empty.
 
