@@ -262,3 +262,41 @@ and refuses custom hooks or configured `core.hooksPath`. Hook logs remain per-wo
 the heavy-check lock remains in the common Git directory. Concurrent coding/runtime is
 supported; existing pre-commit heavy checks still queue. Cloud setup is unchanged and
 is not a way to initialize concurrent local worktrees.
+
+## Task pull requests and readiness
+
+From the task checkout, use `make create-pr` to publish the current branch through the
+existing safe push helper and create its PR against `master` in `altharmz/bss`. Commit
+all intended changes first. The title defaults to the latest commit subject; optional
+`PR_TITLE=...` and `PR_BODY_FILE=/absolute/path/to/body.md` supply a title and description.
+A separate `Fixes #N` line is always appended for the inferred task issue. The body file
+is passed through a temporary file, never shell interpolation. Without a body file the
+description identifies the implementation issue.
+
+A matching open PR is reused, after checking its repository, task head, base and issue
+reference. Conflicting, closed, merged or ambiguous PR history fails before publication.
+Creation is confirmed by rereading GitHub and checking the published head against local
+HEAD. A failed or unconfirmed mutation leaves the branch and PR inspectable; it does not
+close a PR or undo publication. Retrying discovers an existing matching PR.
+
+`make check-pr` prints a JSON readiness object with PR number/URL, CI state, mergeability,
+GitHub merge state, review decision, human approval requirement, commits behind the base
+and bounded reason codes. It does not publish, merge, update branches or write approvals.
+Unexpected origin URLs, GitHub hosts or task identities are refused. The helper exits 0
+for ready, 1 for failed or missing/invalid state, 2 for pending, and 3 for policy blocked.
+GNU Make reports nonzero recipes as its own error status; read the JSON `status` field.
+
+Ready requires checks present and passing, matching local and PR heads, a clean task
+checkout, a synchronized base, a nondraft mergeable PR and GitHub's clean merge state.
+Failed checks or conflicts report failed; pending checks, unknown mergeability, stale
+heads/bases or uncommitted changes never report ready. Required reviews, requested
+changes, GitHub policy blocks and human-review gates report blocked. The complete
+paginated PR file list is checked against GitHub's file count; incomplete lists fail.
+Issue/PR `needs-human` labels and the protected instruction/hook/workflow paths in board
+policy always require the human. A GitHub approval cannot establish explicit approval
+in the conversation; those gates remain blocked for human handling. No wait mode is
+implemented: rerun `make check-pr` to poll.
+
+Validated creation/readiness attempts and outcomes emit fail-open telemetry with bounded
+PR number, readiness status, CI state, duration and slot metadata. No body, review text,
+file list or API payload enters telemetry. These targets neither merge nor finish tasks.

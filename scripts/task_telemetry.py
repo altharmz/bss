@@ -38,6 +38,10 @@ OPERATIONS = frozenset(
         "commit",
         "push-attempt",
         "push",
+        "create-pr-attempt",
+        "create-pr",
+        "check-pr-attempt",
+        "check-pr",
     }
 )
 
@@ -109,7 +113,18 @@ def literal(value):
     return "'" + value.replace("'", "''") + "'"
 
 
-def event_sql(task, operation, result, duration_ms, environ, slot=None, commit_hash=None):
+def event_sql(
+    task,
+    operation,
+    result,
+    duration_ms,
+    environ,
+    slot=None,
+    commit_hash=None,
+    pr_number=None,
+    pr_status=None,
+    ci_state=None,
+):
     match = re.fullmatch(r"issue-([1-9][0-9]*)-[a-z0-9-]+", task)
     if not match or len(task) > 80 or operation not in OPERATIONS:
         raise ValueError("invalid telemetry identity or operation")
@@ -127,6 +142,29 @@ def event_sql(task, operation, result, duration_ms, environ, slot=None, commit_h
         ):
             raise ValueError("invalid commit identity")
         metadata = literal(json.dumps({"slot": slot, "commit_hash": commit_hash}))
+    if any(value is not None for value in (pr_number, pr_status, ci_state)):
+        if operation not in {"create-pr", "check-pr"}:
+            raise ValueError("invalid PR metadata operation")
+        if pr_number is not None and (type(pr_number) is not int or pr_number <= 0):
+            raise ValueError("invalid PR number")
+        if pr_status not in {
+            None,
+            "created",
+            "existing",
+            "missing",
+            "ready",
+            "failed",
+            "pending",
+            "blocked",
+        }:
+            raise ValueError("invalid PR status")
+        if ci_state not in {None, "unknown", "passed", "failed", "pending"}:
+            raise ValueError("invalid CI state")
+        metadata = literal(
+            json.dumps(
+                {"slot": slot, "pr_number": pr_number, "pr_status": pr_status, "ci_state": ci_state}
+            )
+        )
     task_value = literal(task)
     statements = [
         "BEGIN;",
@@ -160,10 +198,33 @@ def event_sql(task, operation, result, duration_ms, environ, slot=None, commit_h
     return "\n".join(statements)
 
 
-def record(task, operation, result, duration_ms, slot=None, commit_hash=None):
+def record(
+    task,
+    operation,
+    result,
+    duration_ms,
+    slot=None,
+    commit_hash=None,
+    pr_number=None,
+    pr_status=None,
+    ci_state=None,
+):
     """Fail open, with a visible but content-free warning. Never print DB stderr."""
     try:
-        sql(event_sql(task, operation, result, duration_ms, os.environ, slot, commit_hash))
+        sql(
+            event_sql(
+                task,
+                operation,
+                result,
+                duration_ms,
+                os.environ,
+                slot,
+                commit_hash,
+                pr_number,
+                pr_status,
+                ci_state,
+            )
+        )
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
         print(
             "telemetry: event not recorded; run make telemetry-up to check storage", file=sys.stderr

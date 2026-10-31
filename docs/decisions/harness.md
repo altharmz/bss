@@ -9,6 +9,20 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 
 ## Development cycle and gates
 
+### Task pull requests and readiness (2026-10-31, #90)
+
+`make create-pr` validates task context, publishes through the existing safe push helper,
+and creates or confirms the task's PR against master with `Fixes #N`. `make check-pr`
+reports structured readiness across checks, mergeability, review policy, human gates and
+base synchronization. Both use explicit repository selectors and refuse conflicting or
+incomplete state. Protected paths and `needs-human` labels remain policy blocked; neither
+command merges. The optional wait mode is not implemented. See the
+[command contracts](../worktrees.md#task-pull-requests-and-readiness).
+
+Creation/readiness attempts and results use fail-open telemetry. Only validated PR number,
+allowlisted readiness/CI states, duration and slot enter metadata; descriptions, reviews,
+paths and API payloads do not. No telemetry schema change is needed.
+
 ### Task commit and push (2026-10-31, #89)
 
 `make commit MESSAGE=... FILES=...` requires a JSON list of exact intended filenames;
@@ -78,6 +92,7 @@ No operation arguments, subprocess output, prompt/response, code, diffs, secret 
 or arbitrary environment data are collected. Only allowlisted operation names and
 validated branch/session identities enter SQL. Task lifecycle metadata may contain a
 validated worker slot; successful commit/push results may also contain the commit hash.
+PR lifecycle results may contain a positive PR number and allowlisted readiness/CI states.
 Other event metadata remains empty.
 
 Codex's UUID thread identifier is the reliable session source currently supported.
