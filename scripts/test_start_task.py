@@ -708,6 +708,25 @@ class StartupTests(unittest.TestCase):
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             self.rejected("another start-task invocation")
 
+    def test_owner_identities_and_validation(self):
+        for owner in ("codex", "claude", "kimi", "future-client"):
+            with (
+                self.subTest(owner=owner),
+                patch.dict(os.environ, {**self.env, "BSS_TASK_OWNER": owner}, clear=True),
+            ):
+                self.assertEqual(task.agent_label(), f"agent:{owner}")
+        for owner in (None, "", "Kimi", "../kimi", "kimi_client", "a" * 33):
+            environment = {**self.env, "BSS_TASK_OWNER": owner}
+            if owner is None:
+                for key in ("BSS_TASK_OWNER", "BSS_TASK_AGENT", "CODEX_THREAD_ID", "CLAUDECODE"):
+                    environment.pop(key, None)
+            with (
+                self.subTest(owner=owner),
+                patch.dict(os.environ, environment, clear=True),
+                self.assertRaisesRegex(task.StartupError, "BSS_TASK_OWNER must be"),
+            ):
+                task.agent_label()
+
     def test_slot_startup_through_make(self):
         result = self.cli("SLOT=worker1", "JSON=1")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -721,6 +740,18 @@ class StartupTests(unittest.TestCase):
             task.validate_metadata(json.loads((slot / "repo/.task/runtime.json").read_text()))[0],
             data["branch"],
         )
+
+    def test_kimi_owner_is_independent_of_worker2(self):
+        self.env["BSS_TASK_OWNER"] = "kimi"
+        result = self.cli("SLOT=worker2", "JSON=1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["agent"], "agent:kimi")
+        self.assertEqual(data["slot"], "worker2")
+        self.assertEqual(
+            Path(data["worktree"]), self.base / "primary checkout-agents/worker2/repo"
+        )
+        self.assertIn("agent:kimi", task.ownership(self.remote_item()))
 
     def test_slot_lock_rejects_another_invocation(self):
         self.env["BSS_SLOT"] = "worker1"

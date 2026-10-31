@@ -243,20 +243,25 @@ def select_issue(items, represented):
     return min(choices, key=lambda choice: choice[:2])[2]
 
 
-def agent_label():
-    # Board ownership is a policy identity, independent of the client using a slot.
-    agent = os.environ.get("BSS_TASK_OWNER", os.environ.get("BSS_TASK_AGENT"))
-    if agent is None:
-        agent = (
+def task_owner():
+    owner = os.environ.get("BSS_TASK_OWNER", os.environ.get("BSS_TASK_AGENT"))
+    if owner is None:
+        owner = (
             "codex"
             if os.environ.get("CODEX_THREAD_ID")
             else ("claude" if os.environ.get("CLAUDECODE") else None)
         )
-    if agent not in {"codex", "claude"}:
+    if owner is None or not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", owner):
         raise StartupError(
-            "set BSS_TASK_OWNER to codex or claude (existing board ownership policy)"
+            "BSS_TASK_OWNER must be 1–32 lowercase letters, digits or hyphens, "
+            "starting with a letter"
         )
-    return f"agent:{agent}"
+    return owner
+
+
+def agent_label():
+    # Owner/client identity and worker-slot allocation are independent.
+    return f"agent:{task_owner()}"
 
 
 def snapshot():
@@ -666,7 +671,14 @@ def interrupted(_signum, _frame):
 
 
 def print_result(result, json_output):
-    record(result["branch"], "start-task", 0, None, slot=result.get("slot"))
+    record(
+        result["branch"],
+        "start-task",
+        0,
+        None,
+        slot=result.get("slot"),
+        client=result["agent"].removeprefix("agent:"),
+    )
     if json_output:
         print(json.dumps(result), flush=True)
     else:

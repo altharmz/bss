@@ -20,8 +20,9 @@ slice tracker (design and decisions only).
 | Status option ids | Inbox `f75ad846` · Ready `abe5d139` · Doing `47fc9ee4` · Waiting `98f1210e` · Done `98236657` |
 
 Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
-(anything near the VPN rules), `needs-human`, and the owner labels `agent:claude` and
-`agent:codex`. Priority labels: `P0` urgent, `P1` high, `P2` normal, `P3` low (one per issue).
+(anything near the VPN rules), `needs-human`, and per-client owner labels such as
+`agent:claude`, `agent:codex` and `agent:kimi`. Priority labels: `P0` urgent, `P1` high,
+`P2` normal, `P3` low (one per issue).
 
 ### Statuses
 
@@ -30,9 +31,9 @@ Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
 - **Ready**: triaged, with a clear goal, acceptance criteria as a task-list checklist,
   labels and no open blockers. Take the next item by priority label: P0 first, then P1,
   P2, P3. Among several with the same label, take the one highest on the board.
-- **Doing**: actively worked on. WIP limit: 1 item per agent. It has an owner label
-  (`agent:claude`, `agent:codex` or `needs-human`) and, for code work, a branch
-  `issue-<n>-<slug>` (cloud sessions: `cloud/issue-<n>-<slug>`, the only pushable form).
+- **Doing**: actively worked on. WIP limit: 1 item per agent. It has an `agent:<client>`
+  owner label (or `needs-human`) and, for code work, a branch `issue-<n>-<slug>` (cloud
+  sessions: `cloud/issue-<n>-<slug>`, the only pushable form).
 - **Waiting**: blocked by something outside the agent's control (another
   issue, a VPS step, the human's decision). Every move to Waiting gets a comment
   `Waiting on: <what> — unblocks when: <condition>`.
