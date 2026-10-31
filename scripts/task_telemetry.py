@@ -5,6 +5,7 @@
 # ruff: noqa: S607, S608
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -33,6 +34,10 @@ OPERATIONS = frozenset(
         "format",
         "check",
         "review-task",
+        "commit-attempt",
+        "commit",
+        "push-attempt",
+        "push",
     }
 )
 
@@ -104,7 +109,7 @@ def literal(value):
     return "'" + value.replace("'", "''") + "'"
 
 
-def event_sql(task, operation, result, duration_ms, environ, slot=None):
+def event_sql(task, operation, result, duration_ms, environ, slot=None, commit_hash=None):
     match = re.fullmatch(r"issue-([1-9][0-9]*)-[a-z0-9-]+", task)
     if not match or len(task) > 80 or operation not in OPERATIONS:
         raise ValueError("invalid telemetry identity or operation")
@@ -116,6 +121,12 @@ def event_sql(task, operation, result, duration_ms, environ, slot=None):
     if slot is not None and not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", slot):
         raise ValueError("invalid worker slot")
     metadata = "'{}'" if slot is None else literal('{"slot":"' + slot + '"}')
+    if commit_hash is not None:
+        if operation not in {"commit", "push"} or not re.fullmatch(
+            r"[0-9a-f]{40}|[0-9a-f]{64}", commit_hash
+        ):
+            raise ValueError("invalid commit identity")
+        metadata = literal(json.dumps({"slot": slot, "commit_hash": commit_hash}))
     task_value = literal(task)
     statements = [
         "BEGIN;",
@@ -149,10 +160,10 @@ def event_sql(task, operation, result, duration_ms, environ, slot=None):
     return "\n".join(statements)
 
 
-def record(task, operation, result, duration_ms, slot=None):
+def record(task, operation, result, duration_ms, slot=None, commit_hash=None):
     """Fail open, with a visible but content-free warning. Never print DB stderr."""
     try:
-        sql(event_sql(task, operation, result, duration_ms, os.environ, slot))
+        sql(event_sql(task, operation, result, duration_ms, os.environ, slot, commit_hash))
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
         print(
             "telemetry: event not recorded; run make telemetry-up to check storage", file=sys.stderr

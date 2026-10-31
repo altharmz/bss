@@ -194,8 +194,10 @@ From the task worktree, use these repository-owned quality commands:
   lint, full backend tests (including runtime-helper and migration tests), generated
   docs checks, frontend lint/type checks, unit tests, and browser smoke checks, using
   the CI Hypothesis profile, plus the existing guard regression cases. It stops on
-  failure. The browser check builds and seeds this task's runtime; docs checks can
-  regenerate documentation. Screenshot capture
+  failure. The browser check builds and seeds this task's runtime, prepares a fresh
+  catalog fixture priced at business midnight, and runs a temporary task-local billing
+  worker so purchases and transfers complete. It removes the worker and fixture files
+  after the browser run. Docs checks can regenerate documentation. Screenshot capture
   (`web-shots`) remains an explicit visual-review tool, not a correctness assertion.
 - `make review-task` reports JSON lines with issue/task identity, slot (`null` for legacy
   worktrees), runtime metadata, and modified, staged and untracked filenames. It checks
@@ -214,6 +216,44 @@ fail before telemetry because they cannot safely establish an identity. Child ru
 commands retain their own existing telemetry. No filenames, diffs or output enter events.
 These commands reuse existing checks; pre-commit's change-sensitive test selection and
 pre-push's outgoing-commit secret checks remain the normal commit/push gates.
+
+## Commit and publish a task
+
+From the task checkout, explicitly select filenames, including deletions:
+
+```sh
+make commit MESSAGE="Describe the finished slice" FILES='["scripts/example.py", "docs/example.md"]'
+make push
+```
+
+`FILES` is a JSON array of exact repository-relative filenames, never a directory,
+glob or pathspec. Both commands validate task/slot identity, primary cleanliness,
+protected/secret paths and the installed shared hook dispatchers. Inherited `GIT_*`
+overrides are refused except presentation-only `GIT_PAGER`. Commit stages only the
+selected changes, refuses unrelated staged files and partially staged files, and invokes
+normal `git commit` with hooks.
+Git and its hooks receive no outer Make control variables or commit arguments in the
+environment: command-line file selections cannot pollute nested fixture commands,
+and inherited Make dry-run flags cannot bypass the hook's validation.
+Empty selections and unchanged filenames fail. Existing hooks can also refuse omitted
+tracked changes or untracked code: include intended files explicitly, or inspect and
+resolve the unrelated work yourself. Failure preserves the index and working tree;
+no automatic unstaging, stash, reset, amendment or cleanup occurs.
+
+Push explicitly publishes `HEAD` to this task's same-named branch on `origin`, setting
+upstream when needed. It refuses mismatched/multiple fetch and push destinations,
+unexpected upstream, mirror configuration, missing remote master, a remote master
+outside task ancestry, and remote task history outside local ancestry. It inspects
+outgoing commits for protected paths, then runs the normal pre-push hook. Tags and
+submodule publication are disabled; no force option or unrelated ref is published.
+Fetch inspection updates `FETCH_HEAD` without selecting other local branches. A
+concurrent incompatible remote update is rejected by Git. Reinspect failures instead
+of bypassing the target. These commands do not create PRs, merge, or finish a task.
+
+Validated attempts and final success/failure emit fail-open telemetry with duration,
+task/session/slot identity, and the successful commit hash. Messages, filenames,
+source and diffs are never telemetry metadata. Invalid task contexts fail before
+telemetry can safely establish identity.
 
 Run `make hooks` once from either checkout. Shared stable dispatchers resolve the invoking
 worktree and execute its `scripts/pre-commit.sh` / `scripts/pre-push.sh`, preserving stdin

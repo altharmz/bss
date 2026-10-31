@@ -11,6 +11,16 @@ import task_telemetry as telemetry
 
 
 class TelemetryTests(unittest.TestCase):
+    def test_commit_and_push_metadata_is_bounded(self):
+        for operation in ("commit", "push"):
+            statement = telemetry.event_sql(
+                "issue-89-example", operation, 0, 42, {}, "worker1", "a" * 40
+            )
+            self.assertIn('"commit_hash": "' + "a" * 40, statement)
+            self.assertIn('"slot": "worker1"', statement)
+        with self.assertRaises(ValueError):
+            telemetry.event_sql("issue-89-example", "commit", 0, 1, {}, commit_hash="message text")
+
     def test_only_operational_identity_is_collected(self):
         statement = telemetry.event_sql(
             "issue-82-example",

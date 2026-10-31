@@ -1,5 +1,15 @@
 # guard.sh cases: <expect>\t<command>; expect = allow|block, cloud-* runs with CLAUDE_CODE_REMOTE=true.
 allow	make test
+allow	git config --get core.hooksPath
+allow	git config --get-all core.hooksPath
+allow	python3 -c 'from pathlib import Path; Path("example.py").write_text("""query = ["git", "config", "--get", "core.hooksPath"]""")'
+allow	python3 -c 'print(["git", "config", "--get", "core.hooksPath"])'
+allow	python3 -c 'source = """require(configured.returncode == 1, "custom core.hooksPath is unsupported; run make hooks")"""'
+block	git config core.hooksPath /dev/null
+block	git config --local core.hooksPath /dev/null
+block	git config --unset core.hooksPath
+block	git config --get core.hooksPath; git -c core.hooksPath=/dev/null commit -m x
+block	python3 -c 'import subprocess; subprocess.run(["git", "config", "core.hooksPath", "/dev/null"])'
 allow	git commit -F /tmp/x/msg
 allow	git push
 allow	git push origin master

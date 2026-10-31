@@ -56,7 +56,22 @@ has '(>|(^|[[:space:];&|])(tee|rm|mv|cp|ln|touch|truncate|sed[[:space:]]+-i[^[:s
 # --- the commit gate: tests always run before a commit ---
 # (cloud sessions have no Docker, so the hook cannot run there: docs/cloud.md)
 if ! $cloud; then
-  has 'git[[:space:]].*--no-verify|git([[:space:]]+-[^[:space:]]+)*[[:space:]]+commit[[:space:]]([^;&|]*[[:space:]])?-[a-zA-Z]*n[a-zA-Z]*([[:space:]]|$)|core\.hooksPath' &&
+  has 'git[[:space:]].*--no-verify|git([[:space:]]+-[^[:space:]]+)*[[:space:]]+commit[[:space:]]([^;&|]*[[:space:]])?-[a-zA-Z]*n[a-zA-Z]*([[:space:]]|$)' &&
+    block "the pre-commit (lint + test) and pre-push hooks are never skipped."
+  # Only exempt the exact read-only query, including its literal Python argv form
+  # when writing lifecycle source. Other occurrences remain fail-closed. Do not
+  # exempt whole heredocs: interpreters can execute commands inside them.
+  hook_queries="$(python3 - "$cmd" <<'PY'
+import re, sys
+text = sys.argv[1]
+text = re.sub(r'\bgit\s+config\s+--get(?:-all)?\s+core\.hooksPath(?=\s*(?:$|[;&|]))', 'readonly-hook-query', text)
+text = re.sub(r'''(["'])config\1,\s*(["'])--get(?:-all)?\2,\s*(["'])core\.hooksPath\3(?=\s*\])''', 'readonly-hook-query', text)
+# The rejection diagnostic in the original blocked source is inert as well.
+text = re.sub(r'''(["'])custom core\.hooksPath is unsupported; run make hooks\1''', 'hook-rejection-diagnostic', text)
+print(text)
+PY
+)" || block "cannot safely inspect hook-path configuration."
+  grep -Eq 'core\.hooksPath' <<<"$hook_queries" &&
     block "the pre-commit (lint + test) and pre-push hooks are never skipped."
 fi
 

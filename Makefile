@@ -159,8 +159,9 @@ web-e2e: ## e2e smoke (Playwright) on the built UI and the seeded local stack; b
 	@$(MAKE) --no-print-directory web-build
 	mkdir -p frontend/.e2e
 	$(E2E_USERS) cleanup
-	$(E2E_USERS) prepare
-	./scripts/task-compose run --rm e2e; rc=$$?; $(E2E_USERS) cleanup || rc=1; ./scripts/task-compose rm -sf web-preview >/dev/null 2>&1; exit $$rc
+	$(E2E_USERS) prepare --numbered-offering
+	./scripts/task-compose up -d e2e-worker
+	./scripts/task-compose run --rm e2e; rc=$$?; $(E2E_USERS) cleanup || rc=1; ./scripts/task-compose rm -sf web-preview e2e-worker >/dev/null 2>&1; exit $$rc
 
 web-shots: ## Capture Ledger UI reference PNGs at 1280 and 1600 px
 	rm -rf frontend/.shots
@@ -248,6 +249,7 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 	@echo "docs-check: docs/api and docs/db match the code"
 
 runtime-check: ## Validate task runtime helpers without Docker or secrets
+	python3 -B scripts/test_task_git.py
 	python3 -B scripts/test_task_quality.py
 	python3 -B scripts/test_task_runtime.py
 	python3 -B scripts/test_start_task.py
@@ -292,3 +294,12 @@ runtime-context:
 	@./scripts/task-compose --check
 
 up down restart logs ps shell psql mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke test test-smoke test-changed seed worker-once migrate lint fmt web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e web-shots smoke progress docs clean wait-local: | runtime-context
+
+.PHONY: commit push
+commit: export MESSAGE := $(MESSAGE)
+commit: export FILES := $(FILES)
+commit: ## Commit explicit task files (FILES JSON array; MESSAGE required)
+	@python3 -B scripts/task_git.py commit
+
+push: ## Publish only the current validated task branch to origin
+	@python3 -B scripts/task_git.py push
