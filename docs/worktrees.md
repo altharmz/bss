@@ -184,6 +184,37 @@ working with multiple task UIs.
 
 ## Hooks and checks
 
+From the task worktree, use these repository-owned quality commands:
+
+- `make format` validates local task safety and runs the existing backend `fmt` and
+  frontend `web-fmt` sequentially. It stops on formatter failure; frontend dependencies
+  must already be installed with `make web-install`. Whitespace errors are allowed here
+  so formatting can repair them. Formatters may update files but never stage them.
+- `make check` validates task safety and runs the existing comprehensive local check:
+  lint, full backend tests (including runtime-helper and migration tests), generated
+  docs checks, frontend lint/type checks, unit tests, and browser smoke checks, using
+  the CI Hypothesis profile, plus the existing guard regression cases. It stops on
+  failure. The browser check builds and seeds this task's runtime; docs checks can
+  regenerate documentation. Screenshot capture
+  (`web-shots`) remains an explicit visual-review tool, not a correctness assertion.
+- `make review-task` reports JSON lines with issue/task identity, slot (`null` for legacy
+  worktrees), runtime metadata, and modified, staged and untracked filenames. It checks
+  both staged and unstaged whitespace, primary master cleanliness, slot reservations,
+  forbidden paths, force-added artifacts matching Git ignore rules, and suspicious
+  local secret filenames (including ignored files). It reads no secret contents and
+  never stages, commits, pushes or cleans files.
+  Unsafe state returns nonzero and stays available for inspection. Existing read-only
+  design references may remain tracked, but changes to them are refused.
+
+All three require a linked task checkout with matching branch/runtime identity. Slot
+checkouts require a matching `active.json`; legacy task worktrees remain supported.
+No command contacts GitHub or changes secrets. Validated attempts emit one fail-open
+telemetry event with result, duration and task/session/slot identity; invalid contexts
+fail before telemetry because they cannot safely establish an identity. Child runtime
+commands retain their own existing telemetry. No filenames, diffs or output enter events.
+These commands reuse existing checks; pre-commit's change-sensitive test selection and
+pre-push's outgoing-commit secret checks remain the normal commit/push gates.
+
 Run `make hooks` once from either checkout. Shared stable dispatchers resolve the invoking
 worktree and execute its `scripts/pre-commit.sh` / `scripts/pre-push.sh`, preserving stdin
 and exit status. Installation recognizes the old repository symlinks, is idempotent,

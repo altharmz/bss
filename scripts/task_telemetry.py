@@ -30,6 +30,9 @@ OPERATIONS = frozenset(
         "rm",
         "config",
         "start-task",
+        "format",
+        "check",
+        "review-task",
     }
 )
 
