@@ -20,6 +20,8 @@ from pathlib import Path
 
 from task_runtime import RESERVED_PORTS, InvalidRuntime, unique_fields, validate_metadata
 from task_telemetry import record
+from worker_slots import SlotError, release, reserve, undo
+from worker_slots import claim as claim_slot
 
 PROJECT = "PVT_kwHOEpM-b84BpHA0"
 STATUS_FIELD = "PVTSSF_lAHOEpM-b84BpHA0zhnkE7M"
@@ -115,8 +117,8 @@ def runtime(branch, ports):
 def worktrees(root):
     records = git("worktree", "list", "--porcelain", "-z", cwd=root).split("\0\0")
     result = []
-    for record in records:
-        fields = record.split("\0")
+    for tree_record in records:
+        fields = tree_record.split("\0")
         path = next((s[9:] for s in fields if s.startswith("worktree ")), None)
         branch = next((s[18:] for s in fields if s.startswith("branch refs/heads/")), "")
         if path:
@@ -242,13 +244,18 @@ def select_issue(items, represented):
 
 
 def agent_label():
-    agent = os.environ.get("BSS_TASK_AGENT")
+    # Board ownership is a policy identity, independent of the client using a slot.
+    agent = os.environ.get("BSS_TASK_OWNER", os.environ.get("BSS_TASK_AGENT"))
     if agent is None:
-        agent = "codex" if os.environ.get("CODEX_THREAD_ID") else (
-            "claude" if os.environ.get("CLAUDECODE") else None
+        agent = (
+            "codex"
+            if os.environ.get("CODEX_THREAD_ID")
+            else ("claude" if os.environ.get("CLAUDECODE") else None)
         )
     if agent not in {"codex", "claude"}:
-        raise StartupError("set BSS_TASK_AGENT to codex or claude (cannot identify agent)")
+        raise StartupError(
+            "set BSS_TASK_OWNER to codex or claude (existing board ownership policy)"
+        )
     return f"agent:{agent}"
 
 
@@ -279,7 +286,10 @@ def set_status(issue, option):
             projectV2Item { id }
           }
         }""",
-        project=PROJECT, item=issue["item_id"], field=STATUS_FIELD, option=option,
+        project=PROJECT,
+        item=issue["item_id"],
+        field=STATUS_FIELD,
+        option=option,
     )
 
 
@@ -297,8 +307,16 @@ class Claim:
         if candidate != self.issue:
             raise StartupError("Ready selection changed before claim; retry")
         self.before = ownership(next(i for i in items if i["id"] == self.issue["item_id"]))
-        run("gh", "issue", "edit", str(self.issue["number"]), "--repo", REPOSITORY,
-            "--add-label", self.agent)
+        run(
+            "gh",
+            "issue",
+            "edit",
+            str(self.issue["number"]),
+            "--repo",
+            REPOSITORY,
+            "--add-label",
+            self.agent,
+        )
         self.claimed = True
         self.verify("Ready")
         set_status(self.issue, DOING)
@@ -309,27 +327,43 @@ class Claim:
         items = snapshot()
         check_wip(items, self.agent, self.issue["item_id"])
         matches = [i for i in items if i["id"] == self.issue["item_id"]]
-        if len(matches) != 1 or status(matches[0]) != expected or (
-            ownership(matches[0]) != self.before | {self.agent}
-        ) or matches[0]["content"]["state"] != "OPEN":
+        if (
+            len(matches) != 1
+            or status(matches[0]) != expected
+            or (ownership(matches[0]) != self.before | {self.agent})
+            or matches[0]["content"]["state"] != "OPEN"
+        ):
             raise StartupError("remote claim changed concurrently; review issue ownership/status")
 
     def rollback(self):
         if not self.claimed:
-            print("start-task: claim not acknowledged; review remote state before retrying",
-                  file=sys.stderr)
+            print(
+                "start-task: claim not acknowledged; review remote state before retrying",
+                file=sys.stderr,
+            )
             return
         try:
             self.verify("Doing" if self.active else "Ready")
             if self.active:
                 set_status(self.issue, READY)
                 self.verify("Ready")
-            run("gh", "issue", "edit", str(self.issue["number"]), "--repo", REPOSITORY,
-                "--remove-label", self.agent)
+            run(
+                "gh",
+                "issue",
+                "edit",
+                str(self.issue["number"]),
+                "--repo",
+                REPOSITORY,
+                "--remove-label",
+                self.agent,
+            )
             print("start-task: rolled back claim and status", file=sys.stderr)
         except (StartupError, OSError, ValueError, KeyError, TypeError):
-            print("start-task: preserved uncertain remote state; review issue "
-                  f"#{self.issue['number']} ownership/status", file=sys.stderr)
+            print(
+                "start-task: preserved uncertain remote state; review issue "
+                f"#{self.issue['number']} ownership/status",
+                file=sys.stderr,
+            )
 
 
 def provision_secret(path):
@@ -427,12 +461,15 @@ def rollback(root, branch, destination, base, metadata_created, expected_metadat
     unchanged = git("rev-parse", f"refs/heads/{branch}", cwd=root) == base
     attached = dict(worktrees(root)).get(destination) == branch
     if unchanged and attached:
-        ignored = git("ls-files", "--others", "--ignored", "--exclude-standard", "-z",
-                      cwd=destination).split("\0")
+        ignored = git(
+            "ls-files", "--others", "--ignored", "--exclude-standard", "-z", cwd=destination
+        ).split("\0")
         allowed = {"", ".task/runtime.json"} if metadata_created else {""}
         if any(name not in allowed for name in ignored):
-            print(f"start-task: preserved changed task (ignored files): {destination}",
-                  file=sys.stderr)
+            print(
+                f"start-task: preserved changed task (ignored files): {destination}",
+                file=sys.stderr,
+            )
             return
         if metadata_created:
             metadata = destination / ".task/runtime.json"
@@ -443,7 +480,9 @@ def rollback(root, branch, destination, base, metadata_created, expected_metadat
                 if json.loads(metadata.read_text()) != expected_metadata:
                     raise ValueError
             except (OSError, ValueError):
-                print(f"start-task: preserved changed runtime metadata: {metadata}", file=sys.stderr)
+                print(
+                    f"start-task: preserved changed runtime metadata: {metadata}", file=sys.stderr
+                )
                 return
             metadata.unlink()
         removed = run("git", "worktree", "remove", "--", str(destination), cwd=root, check=False)
@@ -524,7 +563,7 @@ def create(root, branch, destination, base, ports, report_ready=None):
 def start(on_ready=None):
     root, common = primary()
     agent = agent_label()
-    with (common / "start-task.lock").open("a") as lock:
+    with (common / "start-task.lock").open("a") as lock, contextlib.ExitStack() as stack:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -542,6 +581,10 @@ def start(on_ready=None):
         git("merge", "--ff-only", "origin/master", cwd=root)
         clean(root)
         trees = worktrees(root)
+        slot_name = os.environ.get("BSS_SLOT")
+        slot = (
+            stack.enter_context(reserve(root, slot_name, trees)) if slot_name is not None else None
+        )
         used, represented = reservations(trees)
         refs = git("for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes", cwd=root)
         for ref in refs.splitlines():
@@ -553,7 +596,9 @@ def start(on_ready=None):
         check_wip(items, agent)
         issue = select_issue(items, represented)
         branch = branch_name(issue["number"], issue["title"])
-        destination = (root.parent / f"{root.name}-worktrees" / branch).resolve()
+        destination = (
+            slot / "repo" if slot else (root.parent / f"{root.name}-worktrees" / branch).resolve()
+        )
         if destination.exists() or destination.is_symlink() or destination in dict(trees):
             raise StartupError(f"worktree path collision: {destination}")
         if (
@@ -572,6 +617,7 @@ def start(on_ready=None):
         secret = secret_file(branch, trees, destination)
         with allocate(used) as ports:
             result = dict(
+                slot=slot_name,
                 issue=issue["number"],
                 title=issue["title"],
                 branch=branch,
@@ -585,13 +631,19 @@ def start(on_ready=None):
                 status="Doing",
             )
             claim = Claim(issue, agent)
+            owned_slot = claim_slot(slot, branch) if slot else None
             try:
                 claim.acquire()
 
                 def ready():
                     result["secret_created"] = provision_secret(secret)
-                    run(sys.executable, "-B", str(destination / "scripts/task_runtime.py"),
-                        "--check", cwd=destination)
+                    run(
+                        sys.executable,
+                        "-B",
+                        str(destination / "scripts/task_runtime.py"),
+                        "--check",
+                        cwd=destination,
+                    )
                     claim.verify()
                     if on_ready is not None:
                         on_ready(result)
@@ -599,8 +651,12 @@ def start(on_ready=None):
                 create(root, branch, destination, base, ports, report_ready=ready)
             except BaseException:
                 claim.rollback()
+                if slot and not undo(slot, owned_slot):
+                    print(f"start-task: preserved slot reservation: {slot}", file=sys.stderr)
                 if secret.exists():
-                    print(f"start-task: preserved development credential: {secret}", file=sys.stderr)
+                    print(
+                        f"start-task: preserved development credential: {secret}", file=sys.stderr
+                    )
                 raise
         return result
 
@@ -610,11 +666,12 @@ def interrupted(_signum, _frame):
 
 
 def print_result(result, json_output):
-    record(result["branch"], "start-task", 0, None)
+    record(result["branch"], "start-task", 0, None, slot=result.get("slot"))
     if json_output:
         print(json.dumps(result), flush=True)
     else:
         print(
+            f"Slot: {result.get('slot') or 'legacy task directory'}\n"
             f"Issue: #{result['issue']} — {result['title']}\nBranch: {result['branch']}"
             f"\nWorktree: {result['worktree']}\nApp port: {result['app_port']}"
             f"\nMCP port: {result['mcp_port']}\nWeb port: {result['web_port']}"
@@ -630,12 +687,19 @@ def print_result(result, json_output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--release-slot", action="store_true")
     args = parser.parse_args()
     signal.signal(signal.SIGTERM, interrupted)
     try:
-        start(lambda result: print_result(result, args.json))
+        if args.release_slot:
+            root, _common = primary()
+            release(root, os.environ.get("BSS_SLOT"), worktrees(root))
+            print("worker slot released; persistent state preserved")
+        else:
+            start(lambda result: print_result(result, args.json))
     except (
         StartupError,
+        SlotError,
         InvalidRuntime,
         OSError,
         ValueError,

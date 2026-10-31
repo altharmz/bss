@@ -77,6 +77,13 @@ class TelemetryTests(unittest.TestCase):
         self.assertNotIn("shell", kwargs)
         self.assertNotIn("POSTGRES_PASSWORD", kwargs["env"])
 
+    def test_slot_is_operational_metadata_separate_from_session(self):
+        statement = telemetry.event_sql("issue-85-example", "start-task", 0, None, {}, "worker1")
+        self.assertIn('{"slot":"worker1"}', statement)
+        self.assertNotIn("INSERT INTO agent_sessions", statement)
+        with self.assertRaises(ValueError):
+            telemetry.event_sql("issue-85-example", "start-task", 0, None, {}, "../worker1")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

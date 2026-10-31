@@ -1,18 +1,61 @@
 # Local task worktrees
 
-Use **1 task = 1 branch = 1 git worktree = 1 agent context**. The primary checkout
-is administration-only and stays clean on `master`. Run `make start-task` there
-(`make start-task JSON=1` for one JSON result on stdout). It fetches/prunes `origin`,
-fast-forwards `master`, and prepares an `issue-<number>-<lowercase-kebab-slug>` branch
-from that fetched `origin/master` in the sibling `<checkout-name>-worktrees/<branch>`
-directory. Start the agent in the returned directory.
+This is the shared local lifecycle for every coding client. Use **1 active task =
+1 issue = 1 branch = 1 linked Git worktree = 1 worker slot**. A task can have many
+sessions and be intentionally handed between clients/providers; a slot does not
+identify a provider, client, model or session. The primary checkout is administration-only
+and stays clean on `master`. Run `make start-task SLOT=worker1` there
+(`JSON=1` for one JSON result on stdout). It fetches/prunes `origin`, fast-forwards
+`master`, and prepares an `issue-<number>-<lowercase-kebab-slug>` branch from that
+fetched `origin/master` at `<checkout-parent>/<checkout-name>-agents/worker1/repo`.
+Start the agent in the returned directory. Existing task-specific worktrees remain
+supported; omitting SLOT retains the legacy `<checkout-name>-worktrees/<branch>` path.
 Do not switch branches in that worktree or mutate sibling worktrees.
+
+## Persistent worker slots
+
+`SLOT=worker1` and `BSS_SLOT=worker1` select the same slot; the Make argument takes
+precedence. Names are 1–32 lowercase ASCII letters, digits or hyphens, beginning with
+a letter (`worker1`, `qa1`, `frontend2`). Paths, dots, whitespace and shell syntax fail.
+`BSS_WORKER_ROOT` can select an absolute root instead of the default sibling
+`<checkout-name>-agents`; symlink components and overlap with registered worktrees fail.
+Values enter Python through the environment, never as shell command fragments.
+
+The slot directory persists. `repo/` is the disposable task worktree, `state/` may hold
+operator-managed persistent state, `slot.lock` is the persistent advisory-lock inode,
+and `active.json` is the authoritative local task reservation, not telemetry. Startup
+requires both repo and reservation to be absent and no registered worktree to overlap.
+It never resets, switches or adopts an occupied checkout. The common Git startup lock
+and per-slot lock serialize startup; different tasks retain distinct branches, ports,
+Compose projects, images, data volumes and external credentials. The slot name never
+enters runtime identity. Slot information is included in human/JSON startup output and
+the startup telemetry event's bounded metadata. Telemetry is historical, fail-open,
+and does not declare occupancy; local reservations remain authoritative when it is down.
+
+On failed startup, the existing safe Git rollback runs first. Only this invocation's
+unchanged reservation is removed, and only when repo is absent. Changed worktrees or
+reservations are preserved and reported. Slot directories, locks and state are retained.
+A crash can leave a reservation requiring manual review; do not delete it to bypass
+an occupied or uncertain checkout.
+
+After completing a task, stop its runtime with `make down` in its repo. Worktree removal
+remains manual: review and safely remove the task Git worktree without force. From clean
+primary master, run `make release-slot SLOT=worker1` to acknowledge that removal. It
+refuses an existing path (including dangling symlinks) or registered worktree, locks the
+slot, validates the reservation and removes only `active.json`. It preserves all state,
+credentials, runtime volumes and telemetry. The next startup recreates repo on a fresh
+task branch. There is no automatic task completion or runtime/volume cleanup target.
 
 ## Task preparation
 
 Git, GitHub CLI with repository/project write access, and host Python 3 are required.
 Agent identity is detected from `CODEX_THREAD_ID` or `CLAUDECODE`; otherwise set
-`BSS_TASK_AGENT=codex` or `BSS_TASK_AGENT=claude`. Unknown identities fail closed.
+`BSS_TASK_OWNER=codex` or `BSS_TASK_OWNER=claude` to select an existing board ownership
+identity. This explicit policy identity takes precedence over detection and the legacy
+`BSS_TASK_AGENT` alias. Another client can use the same lifecycle under an explicitly
+chosen existing owner; this does not claim it is Codex/Claude in telemetry. There are
+no per-slot labels and the existing per-owner WIP limit still applies. Unknown owners
+fail closed; this change does not introduce additional board ownership labels.
 Only the primary checkout on clean `master` is accepted; staged, tracked and non-ignored
 untracked changes fail. Local commits ahead of or diverging from `origin/master` fail;
 there is no stash, reset, rebase or history merge. Tracked secret paths in either the
