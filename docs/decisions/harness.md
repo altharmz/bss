@@ -9,6 +9,33 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 
 ## Development cycle and gates
 
+### Verification process optimization (2026-10-31, #95)
+
+Keep all commit-hook checks running: the human declined tree-hash reuse. No check
+stamps or hook bypasses are introduced. Batch fixes and keep the tree unchanged while
+checking; use focused checks during iteration, one final `make check`, and only rerun
+affected stages after subsequent edits. The hook is the final gate.
+
+`make check` now runs migration/schema preflight first (migrating the local task
+database before schema tests, so a fresh task can run browser fixtures) and collects stage failures
+instead of stopping at the first failure. UI and browser stages are omitted for changes
+confined to harness scripts, documentation and agent instructions; unknown paths or
+missing base information retain all stages. Change selection includes the task branch
+and uncommitted files. Local UI tests run their second timezone only for `frontend/src/`
+changes or an unknown base; CI retains both. The default package test command also
+retains both. Public stage targets support focused reruns.
+
+Preflight and backend test targets prepare `.testmon/` before starting `oneoff`, so
+Docker cannot create its cache directory with unsuitable ownership on a fresh task.
+An empty unwritable directory can be recreated; existing cache data is never removed.
+
+`make commit DRY_RUN=1` performs normal context, hook-installation and selection
+validation without index/HEAD mutation or hook execution. Telemetry distinguishes
+`commit-dry-run` attempts/results from actual commits. Normal commit and push gates
+are unchanged. Runtime helper tests run under an outer Make with `GIT_PAGER=cat` to
+exercise the nested-Make environment that caused late failures in #89.
+See [command details](../worktrees.md#hooks-and-checks).
+
 ### Task pull requests and readiness (2026-10-31, #90)
 
 `make create-pr` validates task context, publishes through the existing safe push helper,

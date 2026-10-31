@@ -190,15 +190,31 @@ From the task worktree, use these repository-owned quality commands:
   frontend `web-fmt` sequentially. It stops on formatter failure; frontend dependencies
   must already be installed with `make web-install`. Whitespace errors are allowed here
   so formatting can repair them. Formatters may update files but never stage them.
-- `make check` validates task safety and runs the existing comprehensive local check:
+- `make check` validates task safety, then runs migration/schema preflight first
+  (applying existing migrations to the local task database before schema tests),
   lint, full backend tests (including runtime-helper and migration tests), generated
-  docs checks, frontend lint/type checks, unit tests, and browser smoke checks, using
-  the CI Hypothesis profile, plus the existing guard regression cases. It stops on
-  failure. The browser check builds and seeds this task's runtime, prepares a fresh
+  docs checks, and guard regression cases using the CI Hypothesis profile. It runs
+  frontend lint/type checks, unit tests and browser smoke checks unless all changes
+  are confined to `scripts/`, `docs/`, `.claude/`, `CLAUDE.md` or `AGENTS.md`.
+  Selection includes commits since the merge base with local `origin/master`, staged,
+  unstaged and untracked files. Unknown bases, empty changes and unknown paths keep
+  all stages. Stage failures are collected and reported together, with a nonzero exit
+  status if any failed. Safety validation still fails immediately.
+  The browser check builds and seeds this task's runtime, prepares a fresh
   catalog fixture priced at business midnight, and runs a temporary task-local billing
   worker so purchases and transfers complete. It removes the worker and fixture files
   after the browser run. Docs checks can regenerate documentation. Screenshot capture
   (`web-shots`) remains an explicit visual-review tool, not a correctness assertion.
+  Freeze the tree during checks and batch fixes before starting a new run. Run focused
+  tests and browser tests during iteration when needed; run `make check` once on the
+  final tree, then rerun only affected stages after later edits. The commit hook remains
+  the last gate and always runs its checks; there are no reusable tree-hash stamps.
+  A second standalone `make check` immediately before commit adds no coverage when the
+  tree has not changed since a green run.
+- `make web-test` runs one local timezone by default and adds `America/New_York` when
+  the branch or working tree changes `frontend/src/`, when the base is unknown, or
+  when `CI` is set. `make web-test-timezone` explicitly runs the second timezone.
+  The package's default test command continues to run both timezones.
 - `make review-task` reports JSON lines with issue/task identity, slot (`null` for legacy
   worktrees), runtime metadata, and modified, staged and untracked filenames. It checks
   both staged and unstaged whitespace, primary master cleanliness, slot reservations,
@@ -225,6 +241,13 @@ From the task checkout, explicitly select filenames, including deletions:
 make commit MESSAGE="Describe the finished slice" FILES='["scripts/example.py", "docs/example.md"]'
 make push
 ```
+
+Use `make commit DRY_RUN=1 MESSAGE="Describe the finished slice" FILES='["scripts/example.py"]'`
+to validate task context, hook installation, arguments, environment and file selection
+without staging, creating a commit or executing hooks. This does not certify that the
+checks pass. `DRY_RUN` accepts only `0` (the default) or `1`; normal commits still run
+the installed hooks. `make runtime-check` runs the helper suites through an outer Make
+invocation with `GIT_PAGER=cat`, preserving that presentation-only override in fixtures.
 
 `FILES` is a JSON array of exact repository-relative filenames, never a directory,
 glob or pathspec. Both commands validate task/slot identity, primary cleanliness,

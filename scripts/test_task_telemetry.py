@@ -11,6 +11,16 @@ import task_telemetry as telemetry
 
 
 class TelemetryTests(unittest.TestCase):
+    def test_dry_run_events_do_not_claim_a_commit(self):
+        for operation in ("commit-dry-run-attempt", "commit-dry-run"):
+            statement = telemetry.event_sql("issue-95-example", operation, 0, 1, {}, "worker1")
+            self.assertIn("'" + operation + "'", statement)
+            self.assertNotIn("commit_hash", statement)
+            with self.assertRaises(ValueError):
+                telemetry.event_sql(
+                    "issue-95-example", operation, 0, 1, {}, commit_hash="a" * 40
+                )
+
     def test_commit_and_push_metadata_is_bounded(self):
         for operation in ("commit", "push"):
             statement = telemetry.event_sql(

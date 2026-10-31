@@ -24,7 +24,7 @@ class RuntimeTests(unittest.TestCase):
         self.env = {
             key: value
             for key, value in os.environ.items()
-            if not key.startswith(("COMPOSE_", "GIT_"))
+            if (not key.startswith(("COMPOSE_", "GIT_")) or key == "GIT_PAGER")
             and key
             not in {
                 "IMAGE_NAME",

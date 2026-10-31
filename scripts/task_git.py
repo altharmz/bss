@@ -33,6 +33,7 @@ def run(root, *args):
         "MAKELEVEL",
         "MESSAGE",
         "FILES",
+        "DRY_RUN",
     }
     environ = {key: value for key, value in os.environ.items() if key not in controls}
     subprocess.run(  # noqa: S603, S607
@@ -59,6 +60,8 @@ def hooks(root):
 
 
 def commit(root):
+    dry_run = os.environ.get("DRY_RUN", "0")
+    require(dry_run in {"0", "1"}, "DRY_RUN must be 0 or 1")
     message = os.environ.get("MESSAGE", "")
     require(message.strip(), "MESSAGE is required")
     selected = json.loads(os.environ.get("FILES", "[]"))
@@ -87,6 +90,9 @@ def commit(root):
         "partially staged files; inspect the index before committing",
     )
     unstaged = [name for name in selected if name not in staged]
+    if dry_run == "1":
+        print("task commit: dry run validated; index, HEAD and hooks unchanged")
+        return None
     if unstaged:
         run(root, "--literal-pathspecs", "add", "--", *unstaged)
     run(root, "commit", "-m", message)
@@ -158,6 +164,11 @@ def push(root, task):
 
 def main():
     operation = sys.argv[1]
+    event_operation = (
+        "commit-dry-run"
+        if operation == "commit" and os.environ.get("DRY_RUN") == "1"
+        else operation
+    )
     task = slot = identity = None
     result = 1
     started = time.monotonic()
@@ -167,12 +178,13 @@ def main():
             "unset inherited GIT_* overrides (GIT_PAGER is presentation-only)",
         )
         root, primary, task, slot, data = context()
-        record(task, operation + "-attempt", 0, 0, slot=slot)
+        record(task, event_operation + "-attempt", 0, 0, slot=slot)
         review(root, primary, task, slot, data)
         hooks(root)
         identity = commit(root) if operation == "commit" else push(root, task)
         result = 0
-        print(f"task {operation}: {identity}")
+        if identity:
+            print(f"task {operation}: {identity}")
     except InvalidRuntime as error:
         print(f"task {operation}: {error}", file=sys.stderr)
     except (OSError, ValueError, subprocess.CalledProcessError):
@@ -185,7 +197,7 @@ def main():
         if task:
             record(
                 task,
-                operation,
+                event_operation,
                 result,
                 int((time.monotonic() - started) * 1000),
                 slot=slot,

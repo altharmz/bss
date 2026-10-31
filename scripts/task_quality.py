@@ -25,6 +25,55 @@ def paths(root, *args):
     return [os.fsdecode(p) for p in query(root, *args).split(b"\0") if p]
 
 
+def changed_paths(root):
+    """Include committed, staged, unstaged and new files; unknown base means all checks."""
+    try:
+        base = query(root, "merge-base", "HEAD", "origin/master").decode().strip()
+        return (
+            set(paths(root, "diff", "--no-renames", "--name-only", "-z", base))
+            | set(paths(root, "diff", "--cached", "--no-renames", "--name-only", "-z", base))
+            | set(paths(root, "ls-files", "--others", "--exclude-standard", "-z"))
+        )
+    except subprocess.CalledProcessError:
+        return None
+
+
+def needs_ui(names):
+    # Unknown paths and empty/unknown change sets retain the comprehensive check.
+    return not names or any(
+        not name.startswith(("scripts/", "docs/", ".claude/"))
+        and name not in {"CLAUDE.md", "AGENTS.md"}
+        for name in names
+    )
+
+
+def check_stages(names):
+    stages = ["check-preflight", "lint", "test", "docs-check"]
+    if needs_ui(names):
+        stages.extend(("web-lint", "web-test", "web-e2e"))
+    return [*stages, "guard-check"]
+
+
+def run_stages(root, stages):
+    failures = []
+    for stage in stages:
+        print(f"task quality: running {stage}", flush=True)
+        if subprocess.run(["make", stage], cwd=root).returncode:  # noqa: S603, S607
+            failures.append(stage)
+    print(
+        "task quality: " + ("failed: " + ", ".join(failures) if failures else "all stages passed")
+    )
+    return int(bool(failures))
+
+
+def web_test(root):
+    names = changed_paths(root)
+    stages = ["web-test-once"]
+    if os.environ.get("CI") or names is None or any(n.startswith("frontend/src/") for n in names):
+        stages.append("web-test-timezone")
+    return run_stages(root, stages)
+
+
 def context():
     if {
         "GIT_DIR",
@@ -57,7 +106,10 @@ def context():
         if active.is_symlink() or root.parent.is_symlink():
             raise InvalidRuntime("symlinked slot reservation")
         reservation = json.loads(active.read_text(), object_pairs_hook=unique_fields)
-        if reservation != {"version": 1, "task_id": task} or type(reservation["version"]) is not int:
+        if (
+            reservation != {"version": 1, "task_id": task}
+            or type(reservation["version"]) is not int
+        ):
             raise InvalidRuntime("slot reservation does not match task")
         slot = root.parent.name
         if not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", slot):
@@ -154,6 +206,8 @@ def review(root, primary, task, slot, data, check_whitespace=True):
 
 def main():
     operation = sys.argv[1]
+    if operation == "web-test":
+        return web_test(Path.cwd())
     started = time.monotonic()
     task = slot = None
     result = 1
@@ -163,11 +217,14 @@ def main():
         if operation == "review-task":
             result = 0
         else:
-            targets = {"format": ("fmt", "web-fmt"), "check": ("check-local",)}[operation]
-            for target in targets:
-                result = subprocess.run(["make", target], cwd=root).returncode  # noqa: S603, S607
-                if result:
-                    break
+            if operation == "check":
+                os.environ["HYPOTHESIS_PROFILE"] = "ci"
+                result = run_stages(root, check_stages(changed_paths(root)))
+            else:
+                for target in ("fmt", "web-fmt"):
+                    result = subprocess.run(["make", target], cwd=root).returncode  # noqa: S603, S607
+                    if result:
+                        break
     except (InvalidRuntime, OSError, ValueError, subprocess.CalledProcessError) as error:
         result = 1
         # Errors contain only repository-controlled diagnostics, never file contents.
