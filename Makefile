@@ -83,21 +83,25 @@ mcp-token-revoke: ## Revoke a local MCP static token (ID=<id>) or OAuth grant (G
 test: runtime-check ## The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the scripts' own cases: nightly in CI, by hand before a PR
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
-	@mkdir -p .testmon
 	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto
 
 test-smoke: runtime-check ## The smoke subset (pytest -m smoke) and the scripts' own cases: what CI runs on pull requests and master
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
-	@mkdir -p .testmon
 	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto -m smoke
 
 # pytest-testmon runs the tests whose code changed since their last recorded run, plus new and
 # previously failed ones (selection is off under -m or -k, so this never filters). The first
 # run on a fresh checkout is the whole suite; it records into .testmon/.testmondata.
 test-changed: ## Only the tests affected by the change since their last run (pytest-testmon); the pre-commit hook runs it after test-smoke
-	@mkdir -p .testmon
 	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto --testmon
+
+.PHONY: testmon-dir
+test test-smoke test-changed check-preflight: | testmon-dir
+testmon-dir:
+	@# Recover only an empty directory auto-created by Docker; preserve existing data.
+	@if [ -d .testmon ] && [ ! -w .testmon ]; then rmdir .testmon; fi
+	@mkdir -p .testmon
 
 seed: ## LOCAL demo data through the public TMF API (tests/seed.py); refuses APP_ENV=prod; a second run is a no-op
 	./scripts/task-compose run --rm app python -m tests.seed
@@ -139,8 +143,15 @@ web-build: ## Build the UI to frontend/dist (WEB_BUILD=<tag> sets its bss-build 
 web-lint: ## UI type check, eslint and prettier --check
 	$(WEB) sh -c '$(WEB_DEPS) && npm run lint'
 
-web-test: ## UI unit and component tests (vitest)
-	$(WEB) sh -c '$(WEB_DEPS) && npm test'
+web-test: ## UI tests; second timezone in CI or when frontend/src changed
+	python3 -B scripts/task_quality.py web-test
+
+.PHONY: web-test-once web-test-timezone
+web-test-once:
+	$(WEB) sh -c '$(WEB_DEPS) && npm run test:local'
+
+web-test-timezone:
+	$(WEB) sh -c '$(WEB_DEPS) && npm run test:timezone'
 
 web-types: ## Regenerate the UI's TypeScript types from spec/
 	$(WEB) sh -c '$(WEB_DEPS) && npm run types'
@@ -194,10 +205,14 @@ format: ## Format backend and frontend in a validated task
 review-task: ## Non-destructive review of task identity and local Git safety
 	python3 -B scripts/task_quality.py review-task
 
-check-local: HYPOTHESIS_PROFILE = ci
-check-local: lint test docs-check web-lint web-test web-e2e
+check-local: check
+
+.PHONY: check-preflight guard-check
+check-preflight: migrate
+	./scripts/task-compose run --rm oneoff pytest -q tests/test_migrations.py::test_alembic_upgrade_head_on_clean_database tests/test_migrations.py::test_cloned_test_databases_are_at_the_current_head tests/test_constraints.py tests/test_worker_schema.py
+
+guard-check:
 	.claude/hooks/test-guard.sh
-	@echo "checked: lint, test, docs-check, web-lint, web-test, web-e2e and guard cases passed"
 
 # The commit was tested by the pre-commit hook: deploying does not test again.
 deployed: ## Show the last deploy recorded by scripts/deploy.sh and the commits not deployed yet
@@ -249,12 +264,12 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 	@echo "docs-check: docs/api and docs/db match the code"
 
 runtime-check: ## Validate task runtime helpers without Docker or secrets
-	python3 -B scripts/test_task_pr.py
-	python3 -B scripts/test_task_git.py
-	python3 -B scripts/test_task_quality.py
-	python3 -B scripts/test_task_runtime.py
-	python3 -B scripts/test_start_task.py
-	python3 -B scripts/test_task_telemetry.py
+	GIT_PAGER=cat python3 -B scripts/test_task_pr.py
+	GIT_PAGER=cat python3 -B scripts/test_task_git.py
+	GIT_PAGER=cat python3 -B scripts/test_task_quality.py
+	GIT_PAGER=cat python3 -B scripts/test_task_runtime.py
+	GIT_PAGER=cat python3 -B scripts/test_start_task.py
+	GIT_PAGER=cat python3 -B scripts/test_task_telemetry.py
 
 .PHONY: telemetry-up telemetry-down telemetry-migrate telemetry-health telemetry-test
 telemetry-test: ## Test the running telemetry schema (all test data rolled back)
@@ -299,6 +314,7 @@ up down restart logs ps shell psql mcp-smoke mcp-token-create mcp-tokens mcp-tok
 .PHONY: commit push
 commit: export MESSAGE := $(MESSAGE)
 commit: export FILES := $(FILES)
+commit: export DRY_RUN := $(or $(DRY_RUN),0)
 commit: ## Commit explicit task files (FILES JSON array; MESSAGE required)
 	@python3 -B scripts/task_git.py commit
 

@@ -54,6 +54,29 @@ class GitTests(unittest.TestCase):
         for files in ([], ["missing"], ["."], [":(glob)*"]):
             self.assertNotEqual(self.command(files=files).returncode, 0)
 
+    def test_dry_run_validates_without_staging_committing_or_running_hook(self):
+        self.change()
+        (self.work / "scripts/pre-commit.sh").write_text("exit 7\n")
+        self.env["DRY_RUN"] = "1"
+        head = self.call(["git", "rev-parse", "HEAD"]).stdout
+        result = self.command()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("dry run validated", result.stdout)
+        self.assertEqual(self.call(["git", "rev-parse", "HEAD"]).stdout, head)
+        self.assertEqual(self.call(["git", "diff", "--cached", "--name-only"]).stdout, "")
+        self.assertNotEqual(self.command(files=["missing"]).returncode, 0)
+        self.env["GIT_NAMESPACE"] = "unexpected"
+        self.assertNotEqual(self.command().returncode, 0)
+
+    def test_dry_run_rejects_invalid_mode_and_partial_staging(self):
+        self.change()
+        self.env["DRY_RUN"] = "yes"
+        self.assertNotEqual(self.command().returncode, 0)
+        self.env["DRY_RUN"] = "1"
+        self.call(["git", "add", "chosen.txt"])
+        (self.work / "chosen.txt").write_text("later\n")
+        self.assertNotEqual(self.command().returncode, 0)
+
     def test_unselected_index_and_partial_staging_preserved(self):
         self.change()
         self.call(["git", "add", "chosen.txt"])
@@ -98,7 +121,7 @@ class GitTests(unittest.TestCase):
         self.change()
         (self.work / "scripts/pre-commit.sh").write_text(
             "python3 -c 'import os; "
-            'assert not {"MAKEFLAGS", "MAKEOVERRIDES", "MESSAGE", "FILES"} & os.environ.keys()'
+            'assert not {"MAKEFLAGS", "MAKEOVERRIDES", "MESSAGE", "FILES", "DRY_RUN"} & os.environ.keys()'
             + "'\n"
         )
         result = self.call(
