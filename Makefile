@@ -183,9 +183,20 @@ deploy: ## Build locally and ship to the VPS
 
 # On demand only, when a change needs stronger testing; the pre-commit hook is the
 # regular gate. Target-specific: also applies to the `test` prerequisite.
-check: HYPOTHESIS_PROFILE = ci
-check: lint test docs-check web-lint web-test web-e2e ## Every local check (ci profile, docs, UI, browser), on demand
-	@echo "checked: lint, test, docs-check, web-lint, web-test and web-e2e passed"
+check: ## Technical readiness in a validated task (full existing local checks)
+	python3 -B scripts/task_quality.py check
+
+.PHONY: format review-task check-local
+format: ## Format backend and frontend in a validated task
+	python3 -B scripts/task_quality.py format
+
+review-task: ## Non-destructive review of task identity and local Git safety
+	python3 -B scripts/task_quality.py review-task
+
+check-local: HYPOTHESIS_PROFILE = ci
+check-local: lint test docs-check web-lint web-test web-e2e
+	.claude/hooks/test-guard.sh
+	@echo "checked: lint, test, docs-check, web-lint, web-test, web-e2e and guard cases passed"
 
 # The commit was tested by the pre-commit hook: deploying does not test again.
 deployed: ## Show the last deploy recorded by scripts/deploy.sh and the commits not deployed yet
@@ -237,6 +248,7 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 	@echo "docs-check: docs/api and docs/db match the code"
 
 runtime-check: ## Validate task runtime helpers without Docker or secrets
+	python3 -B scripts/test_task_quality.py
 	python3 -B scripts/test_task_runtime.py
 	python3 -B scripts/test_start_task.py
 	python3 -B scripts/test_task_telemetry.py
