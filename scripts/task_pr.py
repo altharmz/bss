@@ -74,7 +74,7 @@ def issue_state(root, task):
     return data
 
 
-def find_pr(root, task):
+def find_pr(root, task, allow_merged=False):
     found = gh(
         root,
         "pr",
@@ -103,7 +103,10 @@ def find_pr(root, task):
         and data["isCrossRepository"] is False,
         "conflicting PR branch or repository",
     )
-    require(data["state"] == "OPEN", "task PR is closed or merged")
+    require(
+        data["state"] == "OPEN" or (allow_merged and data["state"] == "MERGED"),
+        "task PR is closed or merged",
+    )
     issue = task.split("-")[1]
     require(
         re.search(

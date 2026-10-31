@@ -38,9 +38,10 @@ reservations are preserved and reported. Slot directories, locks and state are r
 A crash can leave a reservation requiring manual review; do not delete it to bypass
 an occupied or uncertain checkout.
 
-After completing a task, stop its runtime with `make down` in its repo. Worktree removal
-remains manual: review and safely remove the task Git worktree without force. From clean
-primary master, run `make release-slot SLOT=worker1` to acknowledge that removal. It
+After completing a task, use `make finish-task SLOT=worker1` from clean primary master
+as described below. For legacy/manual removal, stop the runtime with `make down` and
+safely remove the task Git worktree without force. From clean primary master,
+`make release-slot SLOT=worker1` acknowledges that manual removal. It
 refuses an existing path (including dangling symlinks) or registered worktree, locks the
 slot, validates the reservation and removes only `active.json`. It preserves all state,
 credentials, runtime volumes and telemetry. The next startup recreates repo on a fresh
@@ -323,3 +324,52 @@ implemented: rerun `make check-pr` to poll.
 Validated creation/readiness attempts and outcomes emit fail-open telemetry with bounded
 PR number, readiness status, CI state, duration and slot metadata. No body, review text,
 file list or API payload enters telemetry. These targets neither merge nor finish tasks.
+
+## Merge and finish
+
+In the clean task checkout, `make merge-task` reuses PR readiness gates, checks that the
+repository still allows only the configured squash strategy, and invokes GitHub's normal
+merge command with the expected head SHA. GitHub enforces branch protections and reviews;
+there is no admin or auto-merge option. Protected paths, `needs-human`, missing reviews,
+failed/pending checks, conflicts and stale bases prevent a merge. Human gates return a
+structured blocked result and require the human's normal review/merge handling. A queued
+or unconfirmed merge is reported as a failure to confirm, preserving everything for
+inspection. A confirmed already-merged matching head succeeds without another merge.
+Remote branch deletion remains GitHub's repository setting.
+
+After the PR is merged and the issue is closed with its BSS project item Done, run
+`make finish-task SLOT=worker1` **from primary master**. Only persistent slot tasks are
+supported. Startup's common lock and the slot lock serialize completion with slot reuse.
+The command validates the task reservation, clean worktree, PR head, issue and project
+state; fetches/prunes origin and fast-forwards clean primary master; and verifies the
+merge commit is in master before any resource removal.
+
+Completion/end timestamps and cleanup attempts/results use fail-open telemetry. Cleanup
+never starts telemetry storage; an unavailable database gives a bounded warning and
+does not prevent cleanup. Historical telemetry and its shared database/volume survive.
+The first confirmed task completion time is preserved on retries and closes task sessions.
+
+Cleanup inspects task Compose container labels (project, service, working directory and
+configuration paths) and network membership before running the task wrapper's profile-all
+`down`. An ownership mismatch stops cleanup. Named volumes, images and build caches are
+preserved under the existing no-volume-removal policy. No global prune is used. Unknown
+ignored files and modified/staged/untracked work prevent worktree removal; known generated
+caches and runtime metadata are disposable. Git removes the worktree without force.
+
+Only the external task-specific `.env` is disposable: cleanup checks its regular-file
+ownership, links, symlink-free path and unchanged inode/size/mtime before unlinking it.
+Primary secrets and sibling task credentials are never selected. An empty credential
+directory is removed; unexpected sibling files remain. Local task branches are removed
+with normal safe `branch -d` only; an unmerged squash head is retained and reported.
+
+Before worktree removal, a task-specific `finish-<task-id>.json` checkpoint is written in
+the persistent slot directory. It contains bounded identity, credential file metadata
+and runtime-stop confirmation, never secret values. Partial failures leave the reservation
+occupied and checkpoint available: inspect the error and rerun the same finish command
+from primary. Changed credentials/heads and unknown paths stop a retry. A successful
+finish rechecks issue/project completion and synchronized clean master, removes only the
+slot reservation, and retains the slot directory, lock, checkpoint and operator state.
+Calling finish after a successful release is refused because there is no active task.
+When primary predates this target, bootstrap it from primary using
+`make -f /absolute/task/worktree/Makefile finish-task SLOT=worker1`; cleanup still validates
+primary context and synchronizes master before removing the source worktree.

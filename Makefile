@@ -264,6 +264,7 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 	@echo "docs-check: docs/api and docs/db match the code"
 
 runtime-check: ## Validate task runtime helpers without Docker or secrets
+	GIT_PAGER=cat python3 -B scripts/test_task_finish.py
 	GIT_PAGER=cat python3 -B scripts/test_task_pr.py
 	GIT_PAGER=cat python3 -B scripts/test_task_git.py
 	GIT_PAGER=cat python3 -B scripts/test_task_quality.py
@@ -329,3 +330,10 @@ create-pr: ## Publish the task branch and create or confirm its PR
 
 check-pr: ## Report task PR readiness, including human review gates (never merges)
 	@python3 -B scripts/task_pr.py check-pr
+
+.PHONY: merge-task finish-task
+merge-task: ## Merge this task PR only when all repository and human gates permit
+	@python3 -B scripts/task_finish.py merge-task
+
+finish-task: ## Safely finish a completed slot task, from primary master (SLOT=worker1)
+	@python3 -B "$(dir $(abspath $(firstword $(MAKEFILE_LIST))))scripts/task_finish.py" finish-task

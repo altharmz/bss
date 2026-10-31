@@ -1,0 +1,354 @@
+"""Lifecycle regressions with disposable Git repositories and fake GitHub/Docker."""
+
+import contextlib
+import io
+import json
+import os
+import subprocess
+import sys
+import unittest
+from unittest.mock import patch
+
+import task_finish as lifecycle
+import task_pr
+import task_telemetry
+import test_task_pr as fixtures
+from task_runtime import InvalidRuntime
+
+
+class LifecycleFixture(unittest.TestCase):
+    call = fixtures.PrTests.call
+    write_metadata = fixtures.PrTests.write_metadata
+    runtime_setup = fixtures.PrTests.runtime_setup
+    quality_setup = fixtures.PrTests.quality_setup
+    git_setup = fixtures.PrTests.git_setup
+
+    def setUp(self):
+        fixtures.PrTests.setUp(self)
+        ignore = self.work / ".gitignore"
+        ignore.write_text(ignore.read_text() + "__pycache__/\n")
+        self.call(["git", "add", ".gitignore"])
+        self.call(["git", "commit", "-m", "ignore generated cache"])
+        self.call(["git", "push", "origin", "HEAD:refs/heads/master"])
+        self.head = self.call(["git", "rev-parse", "HEAD"]).stdout.strip()
+        self.pr["headRefOid"] = self.head
+        fake = self.bin / "gh"
+        fake.write_text(
+            fake.read_text().replace(
+                "if a[:2]==['issue','view']:",
+                "if a[:2]==['pr','merge']:\n"
+                " assert '--admin' not in a and '--auto' not in a and '--delete-branch' not in a\n"
+                " assert a[a.index('--match-head-commit')+1]==d['pr']['headRefOid']\n"
+                " if d.get('fail_merge'):\n"
+                "  print('private merge error',file=sys.stderr); sys.exit(1)\n"
+                " d['merges']=d.get('merges',0)+1; d['pr']['state']='MERGED'\n"
+                " p.write_text(json.dumps(d)); sys.exit(0)\n"
+                "elif a==['api','repos/altharmz/bss']: out=d['policy']\n"
+                "elif a[:2]==['issue','view']:",
+            )
+        )
+        self.state["policy"] = {
+            "allow_squash_merge": True,
+            "allow_merge_commit": False,
+            "allow_rebase_merge": False,
+            "archived": False,
+        }
+
+    def merge(self):
+        self.fixture.write_text(json.dumps(self.state))
+        with patch.dict(os.environ, self.env, clear=True):
+            result = lifecycle.merge(self.work, self.task)
+        self.state = json.loads(self.fixture.read_text())
+        self.pr = self.state["pr"]
+        return result
+
+
+class MergeTests(LifecycleFixture):
+    def test_entrypoint_blocks_human_gate_and_records_result(self):
+        self.pr["labels"] = [{"name": "needs-human"}]
+        self.fixture.write_text(json.dumps(self.state))
+        before = os.getcwd()
+        try:
+            os.chdir(self.work)
+            with (
+                patch.dict(os.environ, self.env, clear=True),
+                patch.object(sys, "argv", ["task_finish.py", "merge-task"]),
+                patch.object(task_pr, "repository"),
+                patch.object(lifecycle, "record") as events,
+                contextlib.redirect_stdout(io.StringIO()) as output,
+            ):
+                self.assertEqual(lifecycle.main(), 3)
+                data = json.loads(output.getvalue().splitlines()[-1])
+                self.assertEqual(data["status"], "blocked")
+                self.assertEqual(events.call_args.kwargs["pr_status"], "blocked")
+        finally:
+            os.chdir(before)
+        self.assertNotIn("merges", json.loads(self.fixture.read_text()))
+
+    def test_merge_then_idempotent(self):
+        self.assertEqual(self.merge()[0]["status"], "merged")
+        self.assertEqual(self.merge()[1], 0)
+        self.assertEqual(self.state["merges"], 1)
+
+    def test_failed_ci_conflict_review_human_and_repository_policy(self):
+        for field, value in (
+            ("mergeable", "CONFLICTING"),
+            ("reviewDecision", "REVIEW_REQUIRED"),
+            ("labels", [{"name": "needs-human"}]),
+            ("statusCheckRollup", [{"__typename": "StatusContext", "state": "FAILURE"}]),
+        ):
+            old = self.pr[field]
+            self.pr[field] = value
+            self.assertNotEqual(self.merge()[1], 0)
+            self.assertNotIn("merges", self.state)
+            self.pr[field] = old
+        self.state["policy"]["allow_merge_commit"] = True
+        self.assertEqual(self.merge()[0]["status"], "blocked")
+        self.assertNotIn("merges", self.state)
+
+    def test_protected_files_block_even_with_github_approval(self):
+        self.pr["reviewDecision"] = "APPROVED"
+        self.state["files"] = [[{"filename": "CLAUDE.md"}]]
+        self.assertEqual(self.merge()[1], 3)
+        self.assertNotIn("merges", self.state)
+
+    def test_merge_failure_preserves_inspectable_state(self):
+        self.state["fail_merge"] = True
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.merge()
+        self.assertTrue(self.work.exists())
+        self.assertEqual(json.loads(self.fixture.read_text())["pr"]["state"], "OPEN")
+
+
+class FinishTests(LifecycleFixture):
+    # Reuse fixtures, without inheriting the merge tests into the finish suite.
+    def setUp(self):
+        super().setUp()
+        self.slot = self.base / "primary-agents/worker1"
+        self.slot.mkdir(parents=True)
+        previous = self.work
+        self.work = self.slot / "repo"
+        self.call(["git", "worktree", "move", str(previous), str(self.work)], cwd=self.primary)
+        (self.slot / "slot.lock").touch()
+        (self.slot / "state").mkdir()
+        (self.slot / "state/keep").write_text("persistent state")
+        self.active = self.slot / "active.json"
+        self.active.write_text(json.dumps({"version": 1, "task_id": self.task}))
+        self.state["pr"].update(state="MERGED", mergeCommit={"oid": self.head})
+        self.state["issue"].update(
+            state="CLOSED", projectItems=[{"title": "BSS", "status": {"name": "Done"}}]
+        )
+        self.docker_state = self.base / "docker.json"
+        self.env["BSS_TEST_DOCKER_STATE"] = str(self.docker_state)
+        self.env["BSS_SLOT"] = "worker1"
+        self.inventory = {"running": True, "mismatch": False, "fail_down": False}
+        docker = self.bin / "docker"
+        docker.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json,os,sys\nfrom pathlib import Path\n"
+            "p=Path(os.environ['BSS_TEST_DOCKER_STATE'])\n"
+            "d=json.loads(p.read_text()); a=sys.argv[3:]\n"
+            "if a[0]=='compose':\n"
+            " if a[-1]=='down':\n"
+            "  if d['fail_down']: sys.exit(1)\n"
+            "  d['running']=False; p.write_text(json.dumps(d))\n"
+            " if 'bss-telemetry' in a: sys.exit(1)\n"
+            " sys.exit(0)\n"
+            "if a[0]=='ps': print('abc' if d['running'] else ''); sys.exit(0)\n"
+            "if a[:2]==['network','ls']: sys.exit(0)\n"
+            "if a[0]=='inspect':\n"
+            " root=d['root']; task=d['task']\n"
+            " print(json.dumps({'com.docker.compose.project':'bss-'+task,"
+            "'com.docker.compose.service':'unknown' if d['mismatch'] else 'app',"
+            "'com.docker.compose.project.working_dir':root,"
+            "'com.docker.compose.project.config_files':root+'/compose.yaml,'+root+'/compose.override.yaml'}))\n"
+            "else: sys.exit(2)\n"
+        )
+        self.inventory.update(root=str(self.work), task=self.task)
+        self.docker_state.write_text(json.dumps(self.inventory))
+
+    def finish(self):
+        self.fixture.write_text(json.dumps(self.state))
+        before = os.getcwd()
+        try:
+            os.chdir(self.primary)
+            with (
+                patch.dict(os.environ, self.env, clear=True),
+                patch.object(task_pr, "repository"),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                return lifecycle.finish(self.primary, self.primary / ".git", self.slot)
+        finally:
+            os.chdir(before)
+
+    def test_success_preserves_slot_state_and_volumes_removes_credentials(self):
+        self.assertEqual(self.finish()["status"], "finished")
+        self.assertFalse(self.active.exists())
+        self.assertFalse(self.work.exists())
+        self.assertFalse(self.secret.exists())
+        self.assertTrue((self.slot / "state/keep").exists())
+        self.assertTrue((self.slot / "slot.lock").exists())
+        self.assertEqual(self.call(["git", "status", "--porcelain"], cwd=self.primary).stdout, "")
+        self.assertEqual(
+            self.call(["git", "rev-parse", "HEAD"], cwd=self.primary).stdout.strip(), self.head
+        )
+
+    def test_primary_entrypoint_with_real_locks(self):
+        self.fixture.write_text(json.dumps(self.state))
+        before = os.getcwd()
+        try:
+            os.chdir(self.primary)
+            with (
+                patch.dict(os.environ, self.env, clear=True),
+                patch.object(sys, "argv", ["task_finish.py", "finish-task"]),
+                patch.object(task_pr, "repository"),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                self.assertEqual(lifecycle.main(), 0)
+        finally:
+            os.chdir(before)
+        self.assertFalse(self.active.exists())
+        self.assertTrue(self.slot.exists())
+
+    def test_symlinked_credentials_preserved(self):
+        other = self.base / "other-credential"
+        other.write_text("preserve me")
+        self.secret.unlink()
+        self.secret.symlink_to(other)
+        with self.assertRaises(lifecycle.start_task.StartupError):
+            self.finish()
+        self.assertEqual(other.read_text(), "preserve me")
+        self.assertTrue(self.work.exists())
+
+    def test_unknown_network_member_preserved(self):
+        project = "bss-" + self.task
+        with (
+            patch.object(
+                lifecycle,
+                "docker",
+                side_effect=[
+                    "",
+                    "network-id",
+                    json.dumps(
+                        {"com.docker.compose.project": project, "com.docker.compose.network": "lab"}
+                    ),
+                    json.dumps({"unknown": {}}),
+                ],
+            ),
+            self.assertRaises(InvalidRuntime),
+        ):
+            lifecycle.runtime_inventory(self.work, self.task)
+
+    def test_dirty_attempt_records_failure_before_any_cleanup(self):
+        (self.work / "Makefile").write_text("changed\n")
+        with patch.object(lifecycle, "record") as events:
+            with self.assertRaises(InvalidRuntime):
+                self.finish()
+        self.assertEqual(events.call_args_list[0].args[1], "finish-task-attempt")
+        self.assertEqual(events.call_args.args[1:3], ("finish-task", 1))
+
+    def test_modified_worktree_preserved(self):
+        (self.work / "Makefile").write_text("changed\n")
+        with self.assertRaises(InvalidRuntime):
+            self.finish()
+        self.assertTrue(self.secret.exists())
+        self.assertTrue(self.active.exists())
+        self.assertTrue(json.loads(self.docker_state.read_text())["running"])
+
+    def test_unknown_ignored_files_preserved(self):
+        (self.work / ".task/keep").touch()
+        with self.assertRaises(InvalidRuntime):
+            self.finish()
+        self.assertTrue(self.work.exists())
+
+    def test_ownership_mismatch_does_not_stop_runtime(self):
+        self.inventory["mismatch"] = True
+        self.docker_state.write_text(json.dumps(self.inventory))
+        with self.assertRaises(InvalidRuntime):
+            self.finish()
+        self.assertTrue(json.loads(self.docker_state.read_text())["running"])
+        self.assertTrue(self.secret.exists())
+
+    def test_partial_cleanup_failure_can_retry(self):
+        self.inventory["fail_down"] = True
+        self.docker_state.write_text(json.dumps(self.inventory))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.finish()
+        self.assertTrue(self.active.exists())
+        self.assertTrue(self.work.exists())
+        self.inventory["fail_down"] = False
+        self.docker_state.write_text(json.dumps(self.inventory))
+        self.assertEqual(self.finish()["status"], "finished")
+
+    def test_retry_after_worktree_removal(self):
+        original = lifecycle.synchronize
+        calls = 0
+
+        def fail_last(primary):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise InvalidRuntime("interrupted final fetch")
+            original(primary)
+
+        with patch.object(lifecycle, "synchronize", side_effect=fail_last):
+            with self.assertRaises(InvalidRuntime):
+                self.finish()
+        self.assertFalse(self.work.exists())
+        self.assertTrue(self.active.exists())
+        self.assertEqual(self.finish()["status"], "finished")
+
+    def test_credentials_replaced_during_cleanup_are_preserved(self):
+        original = lifecycle.runtime_inventory
+
+        def replace_secret(*args):
+            self.secret.unlink()
+            self.secret.write_text("POSTGRES_PASSWORD=changed-credential\n")
+            return original(*args)
+
+        with patch.object(lifecycle, "runtime_inventory", side_effect=replace_secret):
+            with self.assertRaises(InvalidRuntime):
+                self.finish()
+        self.assertTrue(self.secret.exists())
+        self.assertTrue(self.active.exists())
+
+    def test_primary_fast_forward_failure_preserves_worktree(self):
+        self.call(["git", "merge", "--ff-only", self.task], cwd=self.primary)
+        self.call(
+            [
+                "git",
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "--allow-empty",
+                "-m",
+                "diverge",
+            ],
+            cwd=self.primary,
+        )
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.finish()
+        self.assertTrue(self.work.exists())
+        self.assertTrue(self.secret.exists())
+
+    def test_unconfirmed_issue_or_board_preserves_resources(self):
+        self.state["issue"]["projectItems"][0]["status"]["name"] = "Doing"
+        with self.assertRaises(InvalidRuntime):
+            self.finish()
+        self.assertTrue(self.work.exists())
+        self.assertTrue(self.secret.exists())
+
+    def test_completion_telemetry_closes_task_and_sessions_idempotently(self):
+        statement = task_telemetry.event_sql(self.task, "task-completed", 0, 0, {})
+        self.assertIn("outcome = 'completed'", statement)
+        self.assertIn("COALESCE(ended_at, now())", statement)
+        self.assertIn("UPDATE agent_sessions", statement)
+        self.assertTrue(statement.endswith("COMMIT;"))
+
+
+if __name__ == "__main__":
+    unittest.main()
