@@ -249,6 +249,7 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 	@echo "docs-check: docs/api and docs/db match the code"
 
 runtime-check: ## Validate task runtime helpers without Docker or secrets
+	python3 -B scripts/test_task_pr.py
 	python3 -B scripts/test_task_git.py
 	python3 -B scripts/test_task_quality.py
 	python3 -B scripts/test_task_runtime.py
@@ -303,3 +304,12 @@ commit: ## Commit explicit task files (FILES JSON array; MESSAGE required)
 
 push: ## Publish only the current validated task branch to origin
 	@python3 -B scripts/task_git.py push
+
+.PHONY: create-pr check-pr
+create-pr: export PR_TITLE := $(PR_TITLE)
+create-pr: export PR_BODY_FILE := $(PR_BODY_FILE)
+create-pr: ## Publish the task branch and create or confirm its PR
+	@python3 -B scripts/task_pr.py create-pr
+
+check-pr: ## Report task PR readiness, including human review gates (never merges)
+	@python3 -B scripts/task_pr.py check-pr
