@@ -9,6 +9,27 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 
 ## Development cycle and gates
 
+### Task merge and completion (2026-10-31, #91)
+
+`make merge-task` composes existing readiness with the repository's squash-only policy
+and GitHub's normal merge command, pinned to the expected head. Human gates cannot be
+overridden by command arguments. Confirmed merged heads are idempotent; queued/unconfirmed
+merges retain state for inspection. No protection bypass or remote branch deletion is used.
+
+`make finish-task SLOT=...` runs from clean primary master for persistent slots, under the
+startup and slot locks. A task-specific persistent checkpoint supports retries after repo
+removal. Confirmed merged PR/head, closed issue/Done board state and synchronized master
+precede destructive steps. Compose ownership fields and network membership must match
+before task-only down. Worktrees are removed without force; normal safe local branch
+deletion may retain squash heads. Task credentials are explicitly disposable and removed
+only with unchanged file identity. Slot state, volumes, images and shared telemetry survive.
+See [full contracts and recovery](../worktrees.md#merge-and-finish).
+
+Completion telemetry sets the first task end/outcome and session end times before removing
+disposable resources; merge and cleanup attempts/results record bounded status/duration.
+Telemetry remains fail-open with no local queue or schema change. Cleanup failure does
+not undo confirmed PR completion, and keeps the slot occupied until final checks succeed.
+
 ### Verification process optimization (2026-10-31, #95)
 
 Keep all commit-hook checks running: the human declined tree-hash reuse. No check
@@ -96,8 +117,8 @@ PostgreSQL over its container-local socket through Docker exec. The fixed bootst
 password is not a credential boundary: Docker access already grants database access.
 No task dotenv file or inherited Docker/Compose selectors enter the telemetry commands.
 Task `down`, `clean`, worktree removal and branch deletion cannot select this project or
-volume. `telemetry-down` preserves the volume. Future `finish-task` must preserve it too
-(there is currently no finish target). There is deliberately no volume deletion target.
+volume. `telemetry-down` and `finish-task` preserve the volume.
+There is deliberately no volume deletion target.
 This is local harness infrastructure, never application or production infrastructure.
 
 The schema lives in numbered SQL migrations under `scripts/telemetry/`, independently
@@ -127,8 +148,8 @@ Other runtimes may provide an explicit UUID in `BSS_TELEMETRY_SESSION_ID`; witho
 reliable identity events have no session. A session key includes task and provider, so
 one thread cannot accidentally associate events with a different task. Unknown model,
 usage, pricing and cost stay NULL; there is no inference from logs or fabricated zero
-usage. End timestamps/outcome remain NULL until a future explicit completion lifecycle
-can establish them; `down` only stops runtime and does not imply task completion.
+usage. End timestamps/outcome remain NULL until `finish-task` confirms task completion;
+`down` only stops runtime and does not imply task completion.
 Startup duration is NULL because startup currently does not measure it. Historical
 rows are retained indefinitely; no task cleanup cascades or automatic deletion exist.
 

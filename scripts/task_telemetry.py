@@ -44,6 +44,13 @@ OPERATIONS = frozenset(
         "create-pr",
         "check-pr-attempt",
         "check-pr",
+        "merge-task-attempt",
+        "merge-task",
+        "finish-task-attempt",
+        "finish-task",
+        "cleanup-task-attempt",
+        "cleanup-task",
+        "task-completed",
     }
 )
 
@@ -145,7 +152,7 @@ def event_sql(
             raise ValueError("invalid commit identity")
         metadata = literal(json.dumps({"slot": slot, "commit_hash": commit_hash}))
     if any(value is not None for value in (pr_number, pr_status, ci_state)):
-        if operation not in {"create-pr", "check-pr"}:
+        if operation not in {"create-pr", "check-pr", "merge-task"}:
             raise ValueError("invalid PR metadata operation")
         if pr_number is not None and (type(pr_number) is not int or pr_number <= 0):
             raise ValueError("invalid PR number")
@@ -158,6 +165,7 @@ def event_sql(
             "failed",
             "pending",
             "blocked",
+            "merged",
         }:
             raise ValueError("invalid PR status")
         if ci_state not in {None, "unknown", "passed", "failed", "pending"}:
@@ -168,6 +176,12 @@ def event_sql(
             )
         )
     task_value = literal(task)
+    if operation == "task-completed":
+        duration = (
+            "(SELECT GREATEST(0, floor(extract(epoch FROM "
+            "(COALESCE(ended_at, now()) - started_at)) * 1000)::bigint) "
+            f"FROM tasks WHERE task_id = {task_value})"
+        )
     statements = [
         "BEGIN;",
         f"INSERT INTO tasks(task_id, issue_number, branch) VALUES "
@@ -197,6 +211,15 @@ def event_sql(
             "COMMIT;",
         ]
     )
+    if operation == "task-completed":
+        # PR completion is independent of a later cleanup failure. Preserve the first
+        # end time on retries and close all sessions associated with the finished task.
+        statements[-1:-1] = [
+            f"UPDATE tasks SET ended_at = COALESCE(ended_at, now()), outcome = 'completed' "
+            f"WHERE task_id = {task_value};",
+            f"UPDATE agent_sessions SET ended_at = COALESCE(ended_at, now()) "
+            f"WHERE task_id = {task_value};",
+        ]
     return "\n".join(statements)
 
 
