@@ -185,6 +185,75 @@ class RuntimeTests(unittest.TestCase):
     def test_primary_rejected(self):
         self.rejected(self.wrapper("ps", cwd=self.primary), "administration-only")
 
+    def test_deploy_web_build_from_primary(self):
+        result = self.wrapper("--deploy-web-build", "c8e7dec", cwd=self.primary)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)
+        self.assertEqual(output["cwd"], str(self.primary))
+        self.assertEqual(
+            output["values"],
+            {
+                "COMPOSE_PROJECT_NAME": "bss",
+                "IMAGE_NAME": "bss-app",
+                "WEB_IMAGE_NAME": "bss-web",
+                "TAG": "dev",
+                "APP_PORT": "18080",
+                "MCP_PORT": "18081",
+                "WEB_PORT": "15173",
+                "MCP_PUBLIC_URL": "http://localhost:18081",
+            },
+        )
+        self.assertEqual(
+            output["args"],
+            [
+                "--context",
+                "default",
+                "compose",
+                "--project-directory",
+                str(self.primary),
+                "--env-file",
+                "/dev/null",
+                "--project-name",
+                "bss",
+                "-f",
+                str(self.primary / "compose.yaml"),
+                "-f",
+                str(self.primary / "compose.override.yaml"),
+                "run",
+                "--rm",
+                "--no-deps",
+                "-e",
+                "VITE_BSS_BUILD=c8e7dec",
+                "web-offline",
+                "sh",
+                "-c",
+                "sh scripts/check-deps.sh && npm run build",
+            ],
+        )
+
+    def test_deploy_web_build_requires_one_tag(self):
+        for args in [(), ("",), ("one", "two")]:
+            with self.subTest(args=args):
+                self.rejected(
+                    self.wrapper("--deploy-web-build", *args, cwd=self.primary),
+                    "exactly one nonempty build tag",
+                )
+
+    def test_deploy_web_build_rejects_linked_worktree(self):
+        self.rejected(
+            self.wrapper("--deploy-web-build", "c8e7dec"),
+            "only from the primary checkout",
+        )
+
+    def test_deploy_web_build_rejects_inherited_overrides(self):
+        for key in ("COMPOSE_FILE", "DOCKER_HOST", "POSTGRES_PASSWORD"):
+            with self.subTest(key=key):
+                self.env[key] = "fixture-secret-never-output"
+                self.rejected(
+                    self.wrapper("--deploy-web-build", "c8e7dec", cwd=self.primary), key
+                )
+                del self.env[key]
+
     def test_missing_external_secret(self):
         self.secret.unlink()
         self.rejected(self.wrapper("ps"), "development secret file is missing")
