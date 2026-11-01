@@ -22,7 +22,7 @@ export BSS_SLOT := $(SLOT)
 endif
 
 .PHONY: start-task release-slot
-start-task: ## Prepare the next eligible Ready issue in a linked worktree (JSON=1 for agents)
+start-task: ## Prepare the next Ready issue in an automatically selected worker slot (JSON=1 for agents)
 	@python3 -B scripts/start_task.py $(if $(filter 1,$(JSON)),--json,)
 
 release-slot: ## Release a slot after its task worktree was safely removed (SLOT=worker1)

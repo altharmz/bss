@@ -152,10 +152,10 @@ def synchronize(primary):
         not query(primary, "status", "--porcelain=v1", "--untracked-files=all"),
         "primary checkout is dirty",
     )
-    run(primary, "fetch", "--prune", "--no-tags", "origin")
+    command(primary, "git", "fetch", "--prune", "--no-tags", "origin")
     start_task.no_tracked_secrets(primary, "origin/master")
-    run(primary, "merge-base", "--is-ancestor", "HEAD", "origin/master")
-    run(primary, "merge", "--ff-only", "origin/master")
+    command(primary, "git", "merge-base", "--is-ancestor", "HEAD", "origin/master")
+    command(primary, "git", "merge", "--ff-only", "origin/master")
     require(
         query(primary, "rev-parse", "HEAD") == query(primary, "rev-parse", "origin/master"),
         "primary master is not synchronized",

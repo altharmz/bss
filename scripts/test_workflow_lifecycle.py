@@ -121,7 +121,7 @@ class WorkflowLifecycleTests(unittest.TestCase):
         self.assertEqual(result["slot"], slot)
         return result
 
-    def complete(self, result):
+    def complete(self, result, cleanup=True):
         f = self.f
         work = Path(result["worktree"])
         slot = work.parent
@@ -138,6 +138,8 @@ class WorkflowLifecycleTests(unittest.TestCase):
         self.assertIn('"status": "merged"', self.make("merge-task", work))
         (slot / "state").mkdir(exist_ok=True)
         (slot / "state/keep").write_text("persistent operator state")
+        if not cleanup:
+            return
         self.assertIn('"status": "finished"', self.make("finish-task", f.primary))
         self.assertTrue((slot / "state/keep").exists())
         self.assertTrue((slot / "slot.lock").exists())
@@ -146,6 +148,20 @@ class WorkflowLifecycleTests(unittest.TestCase):
         self.assertFalse(Path(result["secret_file"]).exists())
         # Squash heads are retained safely when Git cannot delete without force.
         self.assertEqual(f.git("status", "--porcelain"), "")
+
+    def test_bare_startup_recovers_confirmed_completed_slot(self):
+        first = self.start(81, "worker1", "codex")
+        self.complete(first, cleanup=False)
+        self.f.env.pop("BSS_SLOT", None)
+        self.f.board([issue(82)])
+        second = self.f.result()
+        self.assertEqual(second["slot"], "worker1")
+        self.assertEqual(first["worktree"], second["worktree"])
+        self.assertFalse(Path(first["secret_file"]).exists())
+        slot = Path(second["worktree"]).parent
+        self.assertEqual((slot / "state/keep").read_text(), "persistent operator state")
+        self.assertTrue((slot / ("finish-" + first["branch"] + ".json")).exists())
+        self.complete(second)
 
     def test_slots_clients_reuse_and_telemetry_through_public_make(self):
         first = self.start(81, "worker1", "codex")

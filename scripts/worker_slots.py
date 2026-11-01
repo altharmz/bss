@@ -13,14 +13,35 @@ class SlotError(Exception):
     pass
 
 
-def slot_path(primary, name):
-    if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", name):
-        raise SlotError(
-            "slot must be 1–32 lowercase letters, digits or hyphens, starting with a letter"
-        )
+DEFAULT_SLOTS = ("worker1", "worker2", "worker3")
+SLOT_NAME = re.compile(r"[a-z][a-z0-9-]{0,31}")
+
+
+def candidates(primary):
+    """Default pool plus operator-created slot directories, in stable name order."""
+    root = worker_root(primary)
+    names = set(DEFAULT_SLOTS)
+    if root.exists():
+        names.update(p.name for p in root.iterdir() if SLOT_NAME.fullmatch(p.name))
+    return sorted(names)
+
+
+def worker_root(primary):
     root = Path(os.environ.get("BSS_WORKER_ROOT", primary.parent / f"{primary.name}-agents"))
     if not root.is_absolute():
         raise SlotError("BSS_WORKER_ROOT must be absolute")
+    for part in (root, *root.parents):
+        if part.is_symlink():
+            raise SlotError("symlinked worker paths are forbidden")
+    return root.resolve()
+
+
+def slot_path(primary, name):
+    if not isinstance(name, str) or not SLOT_NAME.fullmatch(name):
+        raise SlotError(
+            "slot must be 1–32 lowercase letters, digits or hyphens, starting with a letter"
+        )
+    root = worker_root(primary)
     slot = root / name
     for part in (slot, *slot.parents):
         if part.is_symlink():
@@ -31,23 +52,48 @@ def slot_path(primary, name):
 
 
 @contextlib.contextmanager
-def reserve(primary, name, trees):
+def reserve(primary, name, trees, recover=None, refresh=None):
     """Keep the lock inode persistent; unknown or changed reservations fail closed."""
     slot = slot_path(primary, name)
-    if any(slot.is_relative_to(path) or path.is_relative_to(slot) for path, _ in trees):
+    # An enclosing registered checkout must never be used even to create a lock.
+    if any(
+        slot.is_relative_to(path)
+        or (path.is_relative_to(slot) and path != slot / "repo")
+        for path, _ in trees
+    ):
         raise SlotError("worker slot overlaps a registered worktree")
     slot.mkdir(parents=True, exist_ok=True)
+    if slot.stat().st_uid != os.getuid():
+        raise SlotError("worker slot belongs to another user")
     lock_path = slot / "slot.lock"
     descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, "a") as lock:
         info = os.fstat(lock.fileno())
-        if info.st_nlink != 1 or not stat.S_ISREG(info.st_mode):
+        if info.st_nlink != 1 or not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
             raise SlotError("slot lock has unexpected links")
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise SlotError("worker slot is locked by another invocation") from None
+        for child in slot.iterdir():
+            if child.name in {"repo", "active.json", "slot.lock"}:
+                continue
+            if child.name == "state" and child.is_dir() and not child.is_symlink():
+                continue
+            if (
+                re.fullmatch(r"finish-issue-[1-9][0-9]*-[a-z0-9-]+\.json", child.name)
+                and not child.is_symlink()
+                and child.is_file()
+                and child.stat().st_nlink == 1
+            ):
+                continue
+            raise SlotError(f"unknown slot state: {child.name}; preserved for inspection")
         repo, active = slot / "repo", slot / "active.json"
+        if recover is not None and active.exists() and not active.is_symlink():
+            recover(slot)
+            trees = refresh()
+        if any(slot.is_relative_to(path) or path.is_relative_to(slot) for path, _ in trees):
+            raise SlotError("worker slot overlaps a registered worktree")
         if any(p.exists() or p.is_symlink() for p in (repo, active)):
             raise SlotError("worker slot is occupied; preserve it and review before release")
         yield slot

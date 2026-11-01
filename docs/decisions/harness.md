@@ -50,6 +50,19 @@ live cross-provider completion or final cleanup is claimed before that gate pass
 The PR readiness gate also protects the workflow guard's helper and Python cases by
 exact path, so moving enforcement code outside `.claude/` does not remove human review.
 
+### Automatic task-slot selection (2026-11-01, #109)
+
+`make start-task` is the normal entry point. Startup discovers the default persistent
+worker pool and additional named slot directories, selects in stable name order, and
+skips unavailable candidates while preserving unknown state. The common lifecycle lock
+serializes concurrent callers before both issue and slot selection; per-slot locks
+remain held through reservation/worktree creation. Exhaustion reports every candidate.
+Recognizable reservations use the existing completion checks and checkpointed cleanup
+under those same locks before reuse. The optional `SLOT` override remains administrative;
+legacy issue-specific worktrees remain supported but are no longer created by default.
+Client markers provide automatic identity; `BSS_TASK_OWNER` is an optional override or
+fallback and never follows slot identity. See [worktrees.md](../worktrees.md).
+
 ### Approved board priority administration (2026-11-01, #107)
 
 Priority-label edits and BSS manual board ordering are board administration rather than
@@ -151,13 +164,13 @@ are never exempted. Regression cases cover both read-only source and actual bypa
 ### Persistent worker slots (2026-10-30, #85)
 
 The canonical cross-client local workflow is [worktrees.md](../worktrees.md).
-`make start-task SLOT=worker1` prepares the existing issue-specific branch at a stable
+The original explicit `make start-task SLOT=worker1` interface prepares the issue branch at a stable
 `<checkout-name>-agents/worker1/repo` path, with optional absolute `BSS_WORKER_ROOT`.
 Keep runtime identity issue-specific; path reuse must not reuse Compose state or credentials.
 Slot occupancy is a locked local reservation, separate from observational telemetry;
 unknown state fails closed. Explicit `release-slot` only acknowledges safe prior worktree
-removal and preserves the persistent directory/state. Omitting SLOT supports existing
-task-specific startup paths during migration. Existing board ownership labels and WIP
+removal and preserves the persistent directory/state. Automatic selection (#109 above)
+supersedes the original omitted-SLOT legacy startup path. Existing board ownership labels and WIP
 policy remain intact; explicit BSS_TASK_OWNER separates policy ownership from client
 detection. Slots have no provider labels and task/session cardinality remains many-to-one.
 Successful startup adds the validated slot to workflow event metadata using the existing
