@@ -68,11 +68,11 @@ def merge(root, task):
         task_pr.REPOSITORY,
         "--squash",
         "--match-head-commit",
-        data["headRefOid"],
+        outcome["head_sha"],
     )
     confirmed = merged_pr(root, task)
     require(
-        confirmed["state"] == "MERGED" and confirmed["headRefOid"] == data["headRefOid"],
+        confirmed["state"] == "MERGED" and confirmed["headRefOid"] == outcome["head_sha"],
         "merge not confirmed; inspect GitHub before retrying (queue may still be pending)",
     )
     return {**outcome, "status": "merged", "reasons": []}, 0

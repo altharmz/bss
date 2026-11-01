@@ -105,17 +105,24 @@ acceptance criteria and the board did not already close it.
    suite) locally.
 3. Observe `make check-pr`; repeat while pending (`gh pr checks --watch` is also read-only).
 4. Every check green and policy ready: `make merge-task`. A human-review gate stays
-   blocked for human handling; never bypass it with a raw merge command.
+   blocked until explicit conversation approval is supplied through
+   `make merge-task HUMAN_APPROVAL=<PR-number>:<full-head-SHA>`; never bypass it with a raw
+   merge command. See [approval input](worktrees.md#task-pull-requests-and-readiness).
 5. CI red: fix it on the same branch and push. If you cannot, move the item to Waiting with
    a comment (`Waiting on: <what> — unblocks when: <condition>`) and leave the PR open.
 
-**Never self-merge** (these wait for the human's review and explicit approval in the
+**Never self-merge without explicit approval** (these wait for the human's review and explicit approval in the
 conversation; an earlier approval of the work or the allow list does not count):
 
 - an item, or a PR, labelled `needs-human`;
 - a PR that touches `CLAUDE.md`, `AGENTS.md`, `docs/board.md`, `.claude/` (settings, hooks,
   commands), the guard and its cases (including `scripts/workflow_guard.py` and
   `scripts/test_workflow_guard.py`), `scripts/pre-commit.sh` or `.github/workflows/`.
+
+Approval must name the concrete PR at its exact current head in the current conversation.
+Only then may the agent pass `HUMAN_APPROVAL=<PR-number>:<full-head-SHA>` to
+`make merge-task`. New commits require renewed approval. All other readiness gates and
+GitHub protections remain enforced; see the canonical approval input documentation above.
 
 **Never**, for any PR: `gh pr merge --admin`, merging with failing or pending checks, a
 direct push to `master`, a force-push. The allow list cannot check labels or paths, so the

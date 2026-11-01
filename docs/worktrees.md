@@ -520,8 +520,22 @@ changes, GitHub policy blocks and human-review gates report blocked. The complet
 paginated PR file list is checked against GitHub's file count; incomplete lists fail.
 Issue/PR `needs-human` labels and the protected instruction/hook/workflow paths in board
 policy always require the human. A GitHub approval cannot establish explicit approval
-in the conversation; those gates remain blocked for human handling. No wait mode is
+in the conversation; those gates require the explicit approval input below. No wait mode is
 implemented: rerun `make check-pr` to poll.
+
+Only after the human explicitly approves the concrete PR at its exact current head in the
+current conversation, run `make merge-task HUMAN_APPROVAL=<PR-number>:<full-head-SHA>`.
+Use the positive PR number and all 40 lowercase hex characters of the approved head;
+`make check-pr` reports `pr_number` and `head_sha`. The same optional input on
+`make check-pr` previews readiness without merging. Never infer approval from task
+authorization, a GitHub review, a previous session or approval of an earlier head.
+New commits require renewed human approval. Do not persist the input in configuration.
+The helper validates PR/head binding; the agent must establish conversation consent.
+Missing approval keeps human-gated PRs blocked; malformed, mismatched and stale supplied
+approval blocks even ordinary PRs. Output retains `human_approval_required` and reports
+`human_approval` as `missing`, `malformed`, `mismatched` or `accepted` alongside all other
+blockers. Approval satisfies only the local human gate, never CI, checkout/base/head
+checks, conflicts, requested changes, required GitHub reviews or branch protections.
 
 Validated creation/readiness attempts and outcomes emit fail-open telemetry with bounded
 PR number, readiness status, CI state, duration and slot metadata. No body, review text,
@@ -534,7 +548,7 @@ repository still allows only the configured squash strategy, and invokes GitHub'
 merge command with the expected head SHA. GitHub enforces branch protections and reviews;
 there is no admin or auto-merge option. Protected paths, `needs-human`, missing reviews,
 failed/pending checks, conflicts and stale bases prevent a merge. Human gates return a
-structured blocked result and require the human's normal review/merge handling. A queued
+structured blocked result until explicit conversation approval is supplied as above. A queued
 or unconfirmed merge is reported as a failure to confirm, preserving everything for
 inspection. A confirmed already-merged matching head succeeds without another merge.
 Remote branch deletion remains GitHub's repository setting.

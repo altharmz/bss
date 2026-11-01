@@ -16,6 +16,9 @@ Use Make targets wherever they cover the operation, including `make review-task`
 routine task-state checks and `make check-pr` for PR readiness. Direct commands remain
 available for source investigation and operations without a matching target.
 Commit and publish when ready; do not ask for approval. Human merge gates still apply.
+After explicit human approval of the concrete PR and exact current head in this
+conversation, use `make merge-task HUMAN_APPROVAL=<PR-number>:<full-head-SHA>` as documented
+in `docs/worktrees.md`. New commits require renewed approval; all other gates still apply.
 
 Repository file edits are authorized by the human; do not ask again for permission to
 edit files in this repository. Follow the existing secret/design-reference restrictions
