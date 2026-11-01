@@ -77,11 +77,12 @@ acceptance criteria and the board did not already close it.
 
 **Flow**
 
-1. Open the PR with `Fixes #N` in the description.
+1. Use `make create-pr` from the task checkout; it adds `Fixes #N` and publishes safely.
 2. Before a PR that touches billing, migrations or the API, run `make test` (the full
    suite) locally.
-3. Wait for CI: `gh pr checks --watch`.
-4. Every check green: `gh pr merge --squash --delete-branch`.
+3. Observe `make check-pr`; repeat while pending (`gh pr checks --watch` is also read-only).
+4. Every check green and policy ready: `make merge-task`. A human-review gate stays
+   blocked for human handling; never bypass it with a raw merge command.
 5. CI red: fix it on the same branch and push. If you cannot, move the item to Waiting with
    a comment (`Waiting on: <what> — unblocks when: <condition>`) and leave the PR open.
 

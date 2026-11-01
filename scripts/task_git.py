@@ -84,12 +84,15 @@ def commit(root):
         "FILES cannot include directories or submodules",
     )
     staged = set(paths(root, "diff", "--cached", "--no-renames", "--name-only", "-z"))
+    unmerged = set(paths(root, "diff", "--name-only", "--diff-filter=U", "-z"))
     require(staged <= set(selected), "unselected files already staged; inspect the index")
     require(
-        not staged.intersection(paths(root, "diff", "--no-renames", "--name-only", "-z")),
+        not (staged - unmerged).intersection(paths(root, "diff", "--no-renames", "--name-only", "-z")),
         "partially staged files; inspect the index before committing",
     )
-    unstaged = [name for name in selected if name not in staged]
+    # An unmerged index has stages 1/2/3, not a partially staged source version.
+    # Explicit FILES authorizes staging the user's edited conflict resolution.
+    unstaged = [name for name in selected if name not in staged or name in unmerged]
     if dry_run == "1":
         print("task commit: dry run validated; index, HEAD and hooks unchanged")
         return None
@@ -99,7 +102,7 @@ def commit(root):
     return query(root, "rev-parse", "HEAD").decode().strip()
 
 
-def push(root, task):
+def remote_configuration(root, task):
     urls = query(root, "remote", "get-url", "--all", "origin").splitlines()
     pushurls = query(root, "remote", "get-url", "--push", "--all", "origin").splitlines()
     require(len(urls) == 1 and urls == pushurls, "origin must have one matching fetch/push URL")
@@ -119,13 +122,47 @@ def push(root, task):
     require(
         mirror.returncode == 1 or mirror.stdout.strip() == b"false", "mirror remote is forbidden"
     )
+
+
+def sync(root, task):
+    require(
+        not query(root, "status", "--porcelain=v1", "--untracked-files=all"),
+        "commit intended changes before make sync-task",
+    )
+    remote_configuration(root, task)
+    run(root, "fetch", "--no-tags", "--refmap=", "origin", "refs/heads/master")
+    base = query(root, "rev-parse", "FETCH_HEAD").decode().strip()
+    require(
+        not any(
+            forbidden(name) and not name.startswith("design-ref/")
+            for name in paths(root, "ls-tree", "-r", "--name-only", "-z", base)
+        ),
+        "origin/master contains a protected or forbidden path",
+    )
+    ancestors = query(root, "rev-list", f"HEAD..{base}").splitlines()
+    if not ancestors:
+        return
+    # Never rewrite published history. A conflict or hook failure preserves the
+    # merge state for inspection and explicit file resolution through make commit.
+    run(root, "merge", "--no-ff", "--no-commit", base)
+    run(root, "commit", "-m", "Merge origin/master into task branch")
+
+
+def push(root, task):
+    remote_configuration(root, task)
     refs = query(root, "ls-remote", "--heads", "origin", "refs/heads/master", f"refs/heads/{task}")
     remote = dict(line.decode().split()[::-1] for line in refs.splitlines())
     require("refs/heads/master" in remote, "origin master is missing")
     run(root, "fetch", "--no-tags", "--refmap=", "origin", "refs/heads/master")
     base = query(root, "rev-parse", "FETCH_HEAD").decode().strip()
     require(base == remote["refs/heads/master"], "origin changed during inspection; retry")
-    run(root, "merge-base", "--is-ancestor", base, "HEAD")
+    require(
+        subprocess.run(  # noqa: S603, S607
+            ["git", "-C", str(root), "merge-base", "--is-ancestor", base, "HEAD"],
+            capture_output=True,
+        ).returncode == 0,
+        "task is behind origin/master; run make sync-task, then retry",
+    )
     ref = f"refs/heads/{task}"
     if ref in remote:
         run(root, "fetch", "--no-tags", "--refmap=", "origin", ref)
@@ -173,6 +210,7 @@ def main():
     result = 1
     started = time.monotonic()
     try:
+        require(operation in {"commit", "push", "sync-task"}, "unknown operation")
         require(
             not any(key.startswith("GIT_") and key != "GIT_PAGER" for key in os.environ),
             "unset inherited GIT_* overrides (GIT_PAGER is presentation-only)",
@@ -181,7 +219,10 @@ def main():
         record(task, event_operation + "-attempt", 0, 0, slot=slot)
         review(root, primary, task, slot, data)
         hooks(root)
-        identity = commit(root) if operation == "commit" else push(root, task)
+        if operation == "sync-task":
+            sync(root, task)
+        else:
+            identity = commit(root) if operation == "commit" else push(root, task)
         result = 0
         if identity:
             print(f"task {operation}: {identity}")

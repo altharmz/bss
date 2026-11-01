@@ -40,6 +40,8 @@ OPERATIONS = frozenset(
         "commit-dry-run",
         "push-attempt",
         "push",
+        "sync-task-attempt",
+        "sync-task",
         "create-pr-attempt",
         "create-pr",
         "check-pr-attempt",

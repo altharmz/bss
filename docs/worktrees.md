@@ -12,6 +12,48 @@ Start the agent in the returned directory. Existing task-specific worktrees rema
 supported; omitting SLOT retains the legacy `<checkout-name>-worktrees/<branch>` path.
 Do not switch branches in that worktree or mutate sibling worktrees.
 
+## Normal agent workflow
+
+Normal workflow mutation is Make-owned. Use the documented Make targets. Do not bypass
+a failed workflow target with equivalent raw Git, GitHub, Docker, or secret-management
+commands. Source editing and read-only diagnosis remain available. This document is the
+canonical lifecycle contract for all clients; provider adapters link here.
+
+1. From clean primary master: `make start-task SLOT=worker1`. Use exactly the returned
+   issue, branch and worktree; startup claims `agent:<client>` and moves it to Doing.
+2. In that task worktree: implement, with focused tests when useful. If another task
+   merged meanwhile, use `make sync-task` from a clean checkout before continuing.
+3. Run `make format`, then `make review-task`. Commit the explicit intended files with
+   `make commit MESSAGE="Describe the slice" FILES='["path/to/file"]'`.
+4. Run `make create-pr` (which publishes through `make push`'s helper). Use `make check-pr`
+   to observe readiness, and repeat while checks are pending. There is no `WAIT=1` mode.
+5. Use `make merge-task` when ready. Human-review gates remain blocked for the human;
+   do not replace a blocked target with a raw merge command.
+6. After confirmed merge, issue closure and board Done, run
+   `make finish-task SLOT=worker1` from clean primary master.
+
+`make commit` runs the authoritative pre-commit verification hook. `make check` is
+optional/on-demand; it is not a mandatory step immediately before committing. The
+existing requirement to run `make test` before a PR touching billing, migrations or
+the API still applies. Freeze the tree during validation and rerun only affected
+checks after fixes. Never skip hooks.
+
+On failure, inspect the preserved state with `git status`, `git diff`, `git log`,
+`git worktree list`, `gh pr checks`, `make logs` and other read-only tools. Fix source
+or the reported prerequisite, then retry the Make target. Startup failures are reported
+and stopped as CLAUDE.md requires. Do not change client identity to evade WIP limits.
+Board triage and the explicit manual recovery procedures in this document, board.md
+and cloud.md remain separate from the normal lifecycle. Report a guard rejection of
+an authorized recovery operation; do not disguise it or disable the guard. Setting
+cloud mode on a workstation is not a recovery procedure.
+
+The shared shell hook recognizes direct Git lifecycle mutations, GitHub lifecycle
+mutations, direct runtime mutations and direct lifecycle-helper invocation. It reports
+the Make-owned path, including for chained fallbacks after a failed Make command.
+Read-only diagnostics and source edits are allowed; Make recipes execute the actual
+mutations through existing validated helpers. The hook is a slip guard, not a security
+boundary: it cannot interpret arbitrary programs, aliases or variable indirection.
+
 ## Persistent worker slots
 
 `SLOT=worker1` and `BSS_SLOT=worker1` select the same slot; the Make argument takes
@@ -45,7 +87,8 @@ safely remove the task Git worktree without force. From clean primary master,
 refuses an existing path (including dangling symlinks) or registered worktree, locks the
 slot, validates the reservation and removes only `active.json`. It preserves all state,
 credentials, runtime volumes and telemetry. The next startup recreates repo on a fresh
-task branch. There is no automatic task completion or runtime/volume cleanup target.
+task branch. Normal completion uses `make finish-task`; volume deletion is never part
+of task cleanup.
 
 ## Task preparation
 
@@ -173,7 +216,8 @@ selects the worktree's local Compose files and external secret file. It derives:
 Only `config --quiet` is supported: resolved configuration contains secrets. Unset
 inherited Compose settings, credentials and conflicting runtime overrides rather than
 using a shell export to select a task. Missing identity or secret files fail closed.
-The wrapper uses Docker's `default` context and rejects inherited `DOCKER_HOST` and
+Prefer Make targets for mutations; direct wrapper `--check`, `--url`, `ps`, `logs`
+and `port` remain diagnostic tools. The wrapper uses Docker's `default` context and rejects inherited `DOCKER_HOST` and
 `DOCKER_CONTEXT` selectors. Development dotenv inputs use single-line assignments;
 only the keys listed above are accepted, with no duplicate settings.
 
@@ -241,6 +285,16 @@ These commands reuse existing checks; pre-commit's change-sensitive test selecti
 pre-push's outgoing-commit secret checks remain the normal commit/push gates.
 
 ## Commit and publish a task
+
+`make sync-task` updates a clean task from current `origin/master` when another task
+has merged. It reuses task/slot safety, remote/upstream validation and installed-hook
+checks, fetches only master, refuses forbidden incoming paths, and merges without
+rewriting history. A merge commit runs the normal commit hook. Already synchronized
+tasks are unchanged. Dirty state is refused; conflicts or hook failures preserve the
+index and merge state. Resolve conflicted files as source edits, then use `make commit`
+with explicit filenames. No automatic reset, stash, rebase or conflict resolution occurs.
+Sync attempts/results use bounded fail-open telemetry. A stale-base push names this
+target instead of leaving the agent without a supported next action.
 
 From the task checkout, explicitly select filenames, including deletions:
 

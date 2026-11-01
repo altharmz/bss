@@ -107,4 +107,11 @@ PY
 node_on_host &&
   block "npm/npx/node run only inside the web container. Use the make web-* targets."
 
+# Cloud recovery retains its separately documented branch-only workflow.
+if ! $cloud; then
+  guard_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+  python3 -B "$guard_root/scripts/workflow_guard.py" "$cmd" ||
+    block "normal workflow mutation is Make-owned; use the make target named above. Do not bypass a failed target."
+fi
+
 exit 0

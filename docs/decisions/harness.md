@@ -9,6 +9,45 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 
 ## Development cycle and gates
 
+### Make-owned lifecycle dogfood and enforcement (2026-11-01, #93)
+
+[worktrees.md](../worktrees.md#normal-agent-workflow) is the canonical cross-client
+workflow. The commit hook is the normal verification gate; `make check` remains
+optional/on-demand. Provider instructions link to the same lifecycle rather than
+maintaining separate mutation sequences. The existing full-test requirement for
+billing, migrations and API PRs is unchanged.
+
+`scripts/test_workflow_lifecycle.py` runs the public Make targets from startup through
+finish against real disposable Git repositories, worktrees, locks and hooks. GitHub,
+Docker, language formatters and the telemetry database are simulated. The fixture
+uses Codex/worker1 and Claude/worker2 simultaneously, then reuses worker1 for Kimi.
+These are client-identity simulations, not claims of live Claude or Kimi participation.
+It verifies per-task credentials/ports, sibling preservation, safe squash-head retention,
+persistent slot state and SQL event continuity through cleanup. It does not measure
+provider performance or fabricate usage/model/session identity.
+
+Dogfood exposed two gaps: finish's Makefile path calculation failed for checkout paths
+with spaces, and a task behind a newly merged master had no supported synchronization
+command. Finish now passes the source Makefile path through the environment intact,
+including the existing bootstrap invocation. `make sync-task` reuses existing safety
+checks and remote validation, merging current master through the normal commit hook
+without rewriting history. Dirty state, forbidden incoming paths, conflicts and hook
+failures are refused or preserved for inspection. Push names sync-task on a stale base.
+
+After lifecycle coverage, the shared local shell guard invokes `workflow_guard.py` to
+recognize direct workflow mutations and name the Make target to use. Read-only commands,
+source editing, documented board/manual recovery and the existing cloud procedure retain
+their policy; a blocked authorized recovery is reported, never disguised. No flag or
+environment token marks arbitrary caller commands trusted. Make's validated helpers run
+as children, outside shell tool-hook invocation. The guard handles ordinary command
+chains, global Git options and shell wrappers, but remains a slip guard rather than an
+arbitrary-shell security boundary. Guard and end-to-end regressions are in runtime-check;
+existing cloud/hard-constraint cases still run through guard-check.
+
+Live evidence for this slice is Codex startup in worker1 and its resulting PR. Its
+instruction/guard edits require human approval before merge under board policy; no
+live cross-provider completion or final cleanup is claimed before that gate passes.
+
 ### Client-general task ownership (2026-10-31, #100)
 
 `BSS_TASK_OWNER` accepts a validated lowercase client slug rather than only Codex or Claude.
@@ -44,7 +83,7 @@ not undo confirmed PR completion, and keeps the slot occupied until final checks
 
 Keep all commit-hook checks running: the human declined tree-hash reuse. No check
 stamps or hook bypasses are introduced. Batch fixes and keep the tree unchanged while
-checking; use focused checks during iteration, one final `make check`, and only rerun
+checking; use focused checks during iteration, optional `make check` when useful, and only rerun
 affected stages after subsequent edits. The hook is the final gate.
 
 `make check` now runs migration/schema preflight first (migrating the local task
@@ -173,8 +212,7 @@ rows are retained indefinitely; no task cleanup cascades or automatic deletion e
 
 - **One local test run per cycle**: develop -> commit (the pre-commit hook runs lint, the
   smoke tests and the tests the change affects) -> push. Deploying is the human's, outside the cycle.
-  `make check` (ci Hypothesis profile, docs-check, UI and browser tests) runs only when
-  asked for a specific change.
+  `make check` (ci Hypothesis profile, docs-check, UI and browser tests) is optional/on-demand.
 - **Pre-commit hook** (`scripts/pre-commit.sh`, invoked by the shared worktree dispatcher):
   `make lint`, then `make test-smoke` + `make test-changed` (below; 2026-10-28), plus `web-lint`/`web-test` when `frontend/` or `spec/` is
   staged, `make docs-check` (~7 s) when `app/`, `alembic/`, `spec/`, `scripts/docs/` or
