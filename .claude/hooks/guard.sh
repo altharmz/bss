@@ -22,10 +22,10 @@ has '(softether|vpnserver|vpncmd)' &&
   block "the VPS runs a production SoftEther VPN server. Do not interact with it."
 # A VPN port in a network context (ssh/VPS, docker publish, firewall or socket tool,
 # host:port). Filesystem paths are masked first: a number inside a path is not a port.
-vpn_port='(^|[^0-9])(443|992|1194|500|4500|5555|8444)(:|/|[^0-9]|$)'
+vpn_port='(^|[^[:alnum:]_-])(443|992|1194|500|4500|5555|8444)([^[:alnum:]_-]|$)'
 unpathed="$(sed -E "s#(^|[[:space:]'\"=(,{])(~|\.{1,2})?/[^[:space:]'\"\`;|&:,)]*#\1_path_#g" <<<"$cmd")"
 if grep -Eq "$vpn_port" <<<"$unpathed"; then
-  grep -Eq '(^|[^[:alnum:]_.-])(ssh|vps-test|docker|-p|ufw|iptables|ip6tables|nft|firewall-cmd|ss|netstat|lsof|fuser|nc|ncat|netcat|socat|nmap|telnet|tcpdump|port|ports|dport|sport|listen)([^[:alnum:]_.-]|$)|[[:alnum:]_.-]:(443|992|1194|500|4500|5555|8444)([^0-9]|$)' <<<"$unpathed" &&
+  grep -Eq '(^|[^[:alnum:]_.-])(ssh|vps-test|docker|-p|ufw|iptables|ip6tables|nft|firewall-cmd|ss|netstat|lsof|fuser|nc|ncat|netcat|socat|nmap|telnet|tcpdump|port|ports|dport|sport|listen)([^[:alnum:]_.-]|$)|[[:alnum:]_.-]:(443|992|1194|500|4500|5555|8444)([^[:alnum:]_-]|$)' <<<"$unpathed" &&
     block "ports 443/992/1194/500/4500/5555/8444 belong to the VPN server on the VPS."
 fi
 
