@@ -138,19 +138,26 @@ export function BillingRunsScreen() {
   const [upTo, setUpTo] = useState(due);
   const [queued, setQueued] = useState<Pending | null>(null); // the last request queued here
   const [timedOut, setTimedOut] = useState<Pending | null>(null); // gave up waiting on it
+  const [offset, setOffset] = useState(0);
   const [open, setOpen] = useState<BillingRun | null>(null);
+  const [latest, setLatest] = useState<BillingRun | null>(null);
   const cols = columns(context.currency);
 
   const waitingOn = (data: Page<BillingRun>) =>
     queued !== null && !carriedOut(queued, data) && timedOut !== queued ? queued : null;
   const runs = usePolled(
-    'runs',
-    loadRuns,
+    `runs:${offset}`,
+    (signal) =>
+      loadRuns(signal, RUN_HISTORY, offset).then((data) => {
+        const current = data.items.find((run) => run.isLatest);
+        if (current) setLatest(current);
+        if (open !== null && !data.items.some((run) => run.id === open.id)) setOpen(null);
+        return data;
+      }),
     (data) => waitingOn(data) !== null || data.items.some(isRunning),
     POLL_MS,
   );
   const page = runs.status === 'ok' ? runs.data : null;
-  const latest = page?.items.find((r) => r.isLatest) ?? null;
   const anyRunning = page?.items.some(isRunning) ?? false;
   const pending = page === null ? queued : waitingOn(page);
   const stale =
@@ -168,11 +175,11 @@ export function BillingRunsScreen() {
   const key = latest === null ? '' : `${latest.id}:${latest.status}:${latest.attempt}`;
   const seenKey = useRef('');
   useEffect(() => {
-    if (key === seenKey.current) return;
+    if (offset !== 0 || key === seenKey.current) return;
     const first = seenKey.current === '';
     seenKey.current = key;
     if (!first) refreshNav();
-  }, [key, refreshNav]);
+  }, [key, offset, refreshNav]);
 
   const [busy, setBusy] = useState(false);
   const perform = async (what: string, call: () => Promise<Queued | null>) => {
@@ -181,7 +188,11 @@ export function BillingRunsScreen() {
       const result = await call();
       if (result !== null) {
         setQueued({ what, queuedAt: Date.parse(result.requestedAt) });
-        runs.refresh();
+        if (offset === 0) {
+          runs.refresh();
+        } else {
+          setOffset(0);
+        }
       }
     } catch (error) {
       toast(explain(error));
@@ -270,7 +281,7 @@ export function BillingRunsScreen() {
         </div>
       )}
 
-      {runs.status === 'loading' && <LatestSkeleton />}
+      {latest === null && runs.status === 'loading' && <LatestSkeleton />}
       {latest !== null && latest.status === 'failed' && (
         <div className="bss-run-banner" role="alert">
           <span className="icon" aria-hidden="true">
@@ -295,7 +306,7 @@ export function BillingRunsScreen() {
 
       <Panel
         title="Run history"
-        subtitle={`last ${RUN_HISTORY} runs`}
+        subtitle={`${RUN_HISTORY} per page · Times in ${utcLabel(context.utcOffset)}`}
         {...(runs.refreshError !== null
           ? {
               right: (
@@ -335,8 +346,27 @@ export function BillingRunsScreen() {
                 />
               ))}
               <TableFooter
-                left={`Showing ${formatInt(rows.length)} of ${formatInt(data.total)}`}
-                right={`Times in ${utcLabel(context.utcOffset)}`}
+                left={`Showing ${formatInt(offset + 1)}–${formatInt(offset + rows.length)} of ${formatInt(data.total)}`}
+                right={
+                  <span className="bss-toolbar">
+                    <Button
+                      small
+                      data-ui="ui.billingRuns.previous"
+                      disabled={offset === 0}
+                      onClick={() => setOffset(Math.max(0, offset - RUN_HISTORY))}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      small
+                      data-ui="ui.billingRuns.next"
+                      disabled={offset + RUN_HISTORY >= data.total}
+                      onClick={() => setOffset(offset + RUN_HISTORY)}
+                    >
+                      Next
+                    </Button>
+                  </span>
+                }
               />
             </>
           )}

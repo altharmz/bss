@@ -476,6 +476,8 @@ items:
   - {id: ui.parties.edit, area: ui, stage: 5, title: "Edit a party or customer alone"}
   - {id: ui.parties.delete, area: ui, stage: 5, title: "Delete a party or customer without dependencies"}
   - {id: ui.billingRuns.list, area: ui, stage: 4, title: "Billing runs: latest run, history, failed badge in the nav"}
+  - {id: ui.billingRuns.previous, area: ui, stage: 4, title: "Previous billing-run history page"}
+  - {id: ui.billingRuns.next, area: ui, stage: 4, title: "Next billing-run history page"}
   - {id: ui.billingRuns.catchUp, area: ui, stage: 4, title: "Catch up to a date"}
   - {id: ui.billingRuns.retry, area: ui, stage: 4, title: "Retry a failed run"}
   - {id: ui.prepaidCommands, area: ui, stage: 5, title: "Prepaid commands screen: list, state filter, paging, nav badge"}
