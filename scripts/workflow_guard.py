@@ -10,6 +10,24 @@ import sys
 from pathlib import PurePath
 
 
+def board_position_update(args):
+    """Recognize one inline BSS reorder, never a general GraphQL mutation.
+
+    Conversation approval is an agent obligation in docs/board.md; the shell hook
+    cannot verify it. Do not introduce a caller-controlled approval/bypass flag.
+    """
+    if len(args) != 4 or args[:3] != ["api", "graphql", "-f"]:
+        return False
+    return re.fullmatch(
+        r'query=mutation\s*\{\s*updateProjectV2ItemPosition\s*\(\s*input\s*:\s*\{\s*'
+        r'projectId\s*:\s*"PVT_kwHOEpM-b84BpHA0"\s*,\s*'
+        r'itemId\s*:\s*"PVTI_[A-Za-z0-9_-]+"\s*'
+        r'(?:,\s*afterId\s*:\s*(?:"PVTI_[A-Za-z0-9_-]+"|null)\s*)?'
+        r'\}\s*\)\s*\{\s*clientMutationId\s*\}\s*\}\s*',
+        args[3],
+    ) is not None
+
+
 def violation(command):
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()<>\n")
@@ -129,7 +147,7 @@ def violation(command):
                     writing = mutation or opaque
                 elif method is None:
                     writing = fields
-                if writing:
+                if writing and not board_position_update(args):
                     return "use the documented make lifecycle target for GitHub mutations"
         if tool == "docker" and any(a in {"compose", "run", "start", "stop", "restart", "rm", "kill", "build", "exec"} for a in args):
             if "compose" in args and any(a in {"ps", "logs", "images", "version"} for a in args):

@@ -86,3 +86,6 @@ block	gh pr create --title x
 block	gh project item-edit --id x --single-select-option-id 47fc9ee4
 block	./scripts/task-compose up -d
 block	python3 -B scripts/task_git.py commit
+# BSS board order is administered directly only with conversation approval.
+allow	gh api graphql -f query='mutation { updateProjectV2ItemPosition(input: {projectId: "PVT_kwHOEpM-b84BpHA0", itemId: "PVTI_example"}) { clientMutationId } }'
+block	gh api graphql -f query='mutation { deleteProjectV2Item(input: {id: "PVTI_example"}) { clientMutationId } }'

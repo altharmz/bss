@@ -12,6 +12,9 @@ comes back to you anyway; read it from the tool result, not from a log file.
 Follow the [canonical Make lifecycle](docs/worktrees.md#normal-agent-workflow) and
 [shared AI guidance](docs/worktrees.md#ai-workflow-guidance), including client identity,
 tool choice, engineering review, recovery, checks, human gates and completion reporting.
+Use Make targets wherever they cover the operation, including `make review-task` for
+routine task-state checks and `make check-pr` for PR readiness. Direct commands remain
+available for source investigation and operations without a matching target.
 Commit and publish when ready; do not ask for approval. Human merge gates still apply.
 
 **Deployment is the human's, outside development** (the human, 2026-10-28): your work ends

@@ -50,6 +50,16 @@ live cross-provider completion or final cleanup is claimed before that gate pass
 The PR readiness gate also protects the workflow guard's helper and Python cases by
 exact path, so moving enforcement code outside `.claude/` does not remove human review.
 
+### Approved board priority administration (2026-11-01, #107)
+
+Priority-label edits and BSS manual board ordering are board administration rather than
+Make-owned task transitions. They require explicit human approval for the intended
+change; see [board.md](../board.md#changing-priority-with-human-approval). The workflow
+guard recognizes only the documented inline `updateProjectV2ItemPosition` mutation for
+the BSS project, with one item and optional predecessor. Extra request arguments,
+other projects, opaque bodies and combined mutations retain the existing rejection.
+Conversation approval is an agent obligation, not a caller-controlled trust token.
+
 ### Client-general task ownership (2026-10-31, #100)
 
 `BSS_TASK_OWNER` accepts a validated lowercase client slug rather than only Codex or Claude.

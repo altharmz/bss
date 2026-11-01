@@ -14,7 +14,8 @@ Do not switch branches in that worktree or mutate sibling worktrees.
 
 ## Normal agent workflow
 
-Normal workflow mutation is Make-owned. Use the documented Make targets. Do not bypass
+Use the documented Make targets for every workflow operation they cover, including
+read-only task review and PR readiness. Normal workflow mutation is Make-owned. Do not bypass
 a failed workflow target with equivalent raw Git, GitHub, Docker, or secret-management
 commands. Source editing and read-only diagnosis remain available. This document is the
 canonical lifecycle contract for all clients; provider adapters link here.
@@ -49,9 +50,12 @@ format, review, commit, push, PR and merge targets run from that task worktree.
 
 ### Tool choice and engineering review
 
-Prefer the repository target when it represents the operation. Try the relevant target
-first; do not manually reproduce its board, ownership, worktree, port, runtime or CI
-checks before running it. Investigate those details when an error calls for them.
+Use the repository target whenever it represents the operation, whether it reads state
+or changes it. In a task checkout, use `make review-task` for routine task-state and
+whitespace checks, and `make check-pr` for PR/CI readiness. Do not preflight these targets
+with equivalent Git or GitHub command sequences. Start new work with `make start-task`
+from primary; its startup checks do not need a manual worktree/branch/stash inventory.
+Investigate details when an error or a concrete engineering question calls for them.
 
 | Operation | Preferred command |
 |---|---|
@@ -68,7 +72,12 @@ checks before running it. Investigate those details when an error calls for them
 | Finish and release the slot | `make finish-task SLOT=worker1` (primary) |
 | Discover runtime operations | `make help`, then the documented Make target |
 
-Normal read-only investigation is welcome: `rg`, `grep`, `find`, `ls`, `cat`,
+Use ordinary commands for source investigation or details a Make target does not
+provide, such as reading a patch with `git diff`, tracing history with `git log` or
+`git show`, or diagnosing a reported failure. Direct commands remain available; this
+is tool-choice guidance, not a command block. A target being task-only does not make
+it suitable for inspecting primary or discovering an existing task. For those uncovered
+operations, use the necessary read-only commands. Examples include: `rg`, `grep`, `find`, `ls`, `cat`,
 `sed -n`, `git status`, `git diff`, `git log`, `git show`,
 `git branch --show-current` and `git branch -vv`. These examples describe read-only
 forms; editing commands such as `sed -i` are source mutations. Edit source using the
