@@ -33,8 +33,9 @@ uses `make start-task`.
    issue, branch, slot and worktree; startup claims `agent:<client>` and moves it to Doing.
 2. In that task worktree: implement, with focused tests when useful. If another task
    merged meanwhile, use `make sync-task` from a clean checkout before continuing.
-3. Run `make format`, then `make review-task`. Commit the explicit intended files with
-   `make commit MESSAGE="Describe the slice" FILES='["path/to/file"]'`.
+3. In a newly created task worktree, run `make web-install` once before the first
+   `make format`. Then run `make format` and `make review-task`. Commit the explicit
+   intended files with `make commit MESSAGE="Describe the slice" FILES='["path/to/file"]'`.
 4. Run `make create-pr` (which publishes through `make push`'s helper). Use `make check-pr`
    to observe readiness, and repeat while checks are pending. There is no `WAIT=1` mode.
 5. Use `make merge-task` when ready. Human-review gates remain blocked for the human;
@@ -55,9 +56,11 @@ Use the lifecycle above for Codex, Claude, Kimi and future clients.
 client slug); never infer it from a worker slot. Run `make start-task` from primary
 master; Codex and Claude identities are detected from their client markers.
 `BSS_TASK_OWNER=<client>` is an optional override/fallback when detection is absent or
-ambiguous. The returned
-worktree path is authoritative. Start and finish run from primary; implementation,
-format, review, commit, push, PR and merge targets run from that task worktree.
+ambiguous. Kimi starts work with `make start-task BSS_TASK_OWNER=kimi` and supplies the
+same identity to `make new-priority-task`. Do not supply `SLOT`; startup selects a free
+slot. Add `JSON=1` only when structured output is needed. The returned worktree path is
+authoritative. Start and finish run from primary; implementation, format, review, commit,
+push, PR and merge targets run from that task worktree.
 
 ### Tool choice and engineering review
 
@@ -67,6 +70,11 @@ whitespace checks, and `make check-pr` for PR/CI readiness. Do not preflight the
 with equivalent Git or GitHub command sequences. Start new work with `make start-task`
 from primary; its startup checks do not need a manual worktree/branch/stash inventory.
 Investigate details when an error or a concrete engineering question calls for them.
+
+Except for documented failure recovery, invoke each Make target as a standalone shell
+command: no pipes, redirects, command chaining or additional commands in the same call.
+Required Make variable assignments are part of the target invocation; never drop them to
+make the command look shorter. Use automatic defaults unless a value is required.
 
 | Operation | Preferred command |
 |---|---|
@@ -441,6 +449,10 @@ protected/secret paths and the installed shared hook dispatchers. Inherited `GIT
 overrides are refused except presentation-only `GIT_PAGER`. Commit stages only the
 selected changes, refuses unrelated staged files and partially staged files, and invokes
 normal `git commit` with hooks.
+If a lifecycle target refuses inherited `GIT_*` overrides, inspect only their variable
+names, then rerun the same Make target with the minimal `env -u NAME` prefix for each
+rejected variable. Do not print their values or replace the operation with raw Git or
+GitHub commands.
 Git and its hooks receive no outer Make control variables or commit arguments in the
 environment: command-line file selections cannot pollute nested fixture commands,
 and inherited Make dry-run flags cannot bypass the hook's validation.
