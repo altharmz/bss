@@ -97,10 +97,40 @@ def violation(command):
                     return "use make " + target
             if args[:2] == ["issue", "edit"] and any("agent:" in a for a in args):
                 return "use make start-task for task ownership"
-            if args[:2] == ["project", "item-edit"] and "47fc9ee4" in args:
+            if args[:2] == ["project", "item-edit"] and any(
+                a == "47fc9ee4" or a.endswith("=47fc9ee4") for a in args
+            ):
                 return "use make start-task for the Doing transition"
-            if "api" in args and (any(a in {"POST", "PATCH", "PUT", "DELETE"} for a in args) or any("mutation" in a for a in args)):
-                return "use the documented make lifecycle target for GitHub mutations"
+            if args and args[0] == "api":
+                method = None
+                for index, arg in enumerate(args):
+                    if arg in {"-X", "--method"} and index + 1 < len(args):
+                        method = args[index + 1].upper()
+                    elif arg.startswith("--method="):
+                        method = arg.split("=", 1)[1].upper()
+                    elif arg.startswith("-X") and len(arg) > 2:
+                        method = arg[2:].upper()
+                fields = any(
+                    a in {"-f", "-F", "--field", "--raw-field", "--input"}
+                    or a.startswith(("--field=", "--raw-field=", "--input="))
+                    or (a.startswith(("-f", "-F")) and len(a) > 2)
+                    for a in args
+                )
+                graphql = "graphql" in args
+                mutation = any(re.search(r"\bmutation\b", a) for a in args)
+                # gh switches REST calls to POST when request fields are supplied.
+                # Inline GraphQL queries remain read-only despite transport POST;
+                # file-backed GraphQL bodies cannot be inspected without reading files.
+                opaque = graphql and any(
+                    a.startswith(("query=@", "--input")) or a == "--input" for a in args
+                )
+                writing = method not in {None, "GET", "HEAD", "OPTIONS"}
+                if graphql:
+                    writing = mutation or opaque
+                elif method is None:
+                    writing = fields
+                if writing:
+                    return "use the documented make lifecycle target for GitHub mutations"
         if tool == "docker" and any(a in {"compose", "run", "start", "stop", "restart", "rm", "kill", "build", "exec"} for a in args):
             if "compose" in args and any(a in {"ps", "logs", "images", "version"} for a in args):
                 continue

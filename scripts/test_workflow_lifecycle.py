@@ -69,7 +69,7 @@ class WorkflowLifecycleTests(unittest.TestCase):
             " os.execv(sys.executable,[sys.executable,str(Path(__file__).with_name('startup-gh')),*a])\n"
             f"p=Path({str(f.base / 'lifecycle.json')!r})\n"
             "d=json.loads(p.read_text()) if p.exists() else {}\n"
-            "def git(*v): return subprocess.check_output(['git',*v],text=True).strip()\n"
+            "def git(*v): return subprocess.check_output(['git','-c','user.name=Lifecycle fixture','-c','user.email=lifecycle@example.test',*v],text=True).strip()\n"
             "def save(): p.write_text(json.dumps(d))\n"
             "if a[:2]==['pr','list']:\n"
             " branch=a[a.index('--head')+1]; out=[{'number':v['number']} for v in d.values() if v['headRefName']==branch]\n"
