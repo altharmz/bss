@@ -91,7 +91,8 @@ conversation; an earlier approval of the work or the allow list does not count):
 
 - an item, or a PR, labelled `needs-human`;
 - a PR that touches `CLAUDE.md`, `AGENTS.md`, `docs/board.md`, `.claude/` (settings, hooks,
-  commands), the guard and its cases, `scripts/pre-commit.sh` or `.github/workflows/`.
+  commands), the guard and its cases (including `scripts/workflow_guard.py` and
+  `scripts/test_workflow_guard.py`), `scripts/pre-commit.sh` or `.github/workflows/`.
 
 **Never**, for any PR: `gh pr merge --admin`, merging with failing or pending checks, a
 direct push to `master`, a force-push. The allow list cannot check labels or paths, so the

@@ -47,6 +47,8 @@ existing cloud/hard-constraint cases still run through guard-check.
 Live evidence for this slice is Codex startup in worker1 and its resulting PR. Its
 instruction/guard edits require human approval before merge under board policy; no
 live cross-provider completion or final cleanup is claimed before that gate passes.
+The PR readiness gate also protects the workflow guard's helper and Python cases by
+exact path, so moving enforcement code outside `.claude/` does not remove human review.
 
 ### Client-general task ownership (2026-10-31, #100)
 

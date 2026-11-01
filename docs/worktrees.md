@@ -257,8 +257,9 @@ From the task worktree, use these repository-owned quality commands:
   after the browser run. Docs checks can regenerate documentation. Screenshot capture
   (`web-shots`) remains an explicit visual-review tool, not a correctness assertion.
   Freeze the tree during checks and batch fixes before starting a new run. Run focused
-  tests and browser tests during iteration when needed; run `make check` once on the
-  final tree, then rerun only affected stages after later edits. The commit hook remains
+  tests and browser tests during iteration when needed. When broader validation is
+  useful, run `make check` once on the final tree, then rerun only affected stages
+  after later edits. The commit hook remains
   the last gate and always runs its checks; there are no reusable tree-hash stamps.
   A second standalone `make check` immediately before commit adds no coverage when the
   tree has not changed since a green run.
