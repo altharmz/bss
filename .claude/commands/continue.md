@@ -1,17 +1,17 @@
 ---
-description: Session start - build the picture from git, the board and open PRs, then take the highest-priority Ready item
+description: Resume known work or use make start-task to select and claim the next issue
 ---
 
 Follow this when the human says "continue" or starts a session without a concrete task. Read
-[docs/board.md](../../docs/board.md) first for the statuses, ids and `gh` commands used below.
+[docs/board.md](../../docs/board.md) first for board policy.
 A concrete request takes precedence: check its local state and only the board or PR state it
 needs. Do not run the full startup sequence or take unrelated Ready work.
 
 For the full protocol, build the picture before touching code. **First, check `master`**:
 `gh run list --branch master --limit 5`. If the latest push run or the nightly full run failed,
 revert the offending PR (a branch and a PR), open an issue for it, then carry on - see board.md
-"Red master". Use the compact board snapshot in board.md "Mechanics"; fetch the full body only
-for the issue being considered.
+"Red master". Do not enumerate board items, count statuses or inspect candidate issue
+bodies as a startup prerequisite. Issue selection and claim belong to `make start-task`.
 
 Then, in this order:
 
@@ -19,18 +19,19 @@ Then, in this order:
    checkout, use `make review-task` for routine local-state checks. Use direct Git commands
    for primary/task discovery or details it does not expose (such as unpushed commits or
    stashes), when relevant; do not run a blanket Git inventory before every Make target.
-2. **Doing**: resume an item you own (matching branch/PR). More than one, or an item with
-   no branch and no recent activity: report it and ask.
-3. Discover open PRs with `gh pr list`; for an identified task PR, use `make check-pr`
-   from its task checkout. Failing checks or requested changes come before new work.
-4. **Waiting**: check each "unblocks when". Met: move it to Ready and say so. List the
-   still-blocked ones in one line each.
-5. **Ready**: use `make start-task` from the primary checkout, following CLAUDE.md.
+2. Resume a known task you own in its existing worktree. Use `make check-pr` for that
+   task's PR; failing checks or requested changes come before new work. Do not perform a
+   manual board or open-PR inventory to find new work.
+3. For new work, strongly prefer `make start-task BSS_TASK_OWNER=codex` for Codex, or
+   `make start-task BSS_TASK_OWNER=claude` for Claude, from clean primary master.
    Use the returned issue and worktree. The helper claims the agent label and Doing
    status as part of startup; do not repeat the claim with raw GitHub commands. Continue
    through the [canonical Make lifecycle](../../docs/worktrees.md#normal-agent-workflow).
-6. Nothing in Ready: report the Inbox items that need triage and the next slice in
-   epic #43's task list, propose what to do, and do not pick work on your own.
+4. If startup fails or finds no eligible work, stop and report its result. Do not bypass
+   it with manual board selection, claims, branch creation or worktree creation. Inspect
+   a specific issue only when needed to explain the reported condition or when the human
+   explicitly requests board triage or administration.
 
-Open with a short summary (Doing / Waiting / Ready / Inbox counts, and what you are
-taking), then work.
+Report the returned issue, slot and worktree, then work. Repository file edits are
+authorized; do not ask again for edit permission. Secret/design-reference restrictions
+and human merge gates still apply.

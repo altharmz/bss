@@ -583,6 +583,171 @@
   gap: 8px;
 }
 
+/* Ledger billing runs: page tables, selected history and the latest-run band. */
+.billing-runs .bss-page-header {
+  margin-bottom: 0;
+}
+.billing-runs .bss-run-latest {
+  padding: 14px 24px 16px;
+  background: var(--color-bg-subtle);
+}
+.billing-runs .bss-run-latest.failed {
+  background: var(--color-negative-tint);
+  border-color: var(--color-negative);
+}
+.billing-runs .bss-run-latest header {
+  padding: 0 0 12px;
+  border: 0;
+  flex-wrap: wrap;
+}
+.billing-runs .bss-run-latest header .label,
+.billing-runs .bss-run-kpi .label {
+  font: var(--type-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-micro);
+  color: var(--color-ink-3);
+}
+.billing-runs .bss-run-latest header .date {
+  font: var(--type-figure);
+  letter-spacing: var(--tracking-figure);
+}
+.billing-runs .bss-run-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+.billing-runs .bss-run-kpi {
+  padding: 0 20px;
+  gap: 2px;
+  border-left: 1px solid var(--color-border);
+}
+.billing-runs .bss-run-kpi:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.billing-runs .bss-run-kpi .value {
+  font: var(--type-num);
+  font-variant-numeric: tabular-nums;
+}
+.run-kpi-caption {
+  font: var(--type-label);
+  color: var(--color-ink-3);
+}
+.billing-runs .bss-run-kpi .value.strong {
+  font-weight: 500;
+}
+.billing-runs .bss-run-progress {
+  padding: 12px 0 0;
+  font: var(--type-code);
+}
+.billing-runs .bss-run-latest > .bss-note {
+  margin-top: 12px;
+}
+.billing-runs .bss-run-latest > .bss-note > div > span {
+  display: block;
+}
+.run-next {
+  padding-top: 12px;
+  color: var(--color-ink-3);
+  font: var(--type-label);
+  text-align: right;
+}
+.run-tables {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row-reverse;
+  gap: 32px;
+  align-items: flex-start;
+}
+.run-outcomes {
+  flex: 999 1 640px;
+  min-width: 0;
+}
+.run-history {
+  flex: 1 1 606px;
+  min-width: 0;
+}
+.run-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 10px;
+  min-height: 28px;
+}
+.run-section-header h2 {
+  margin: 0;
+  font: var(--type-section);
+}
+.run-section-header .bss-btn {
+  margin-left: auto;
+}
+.run-tables .bss-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.run-tables .bss-panel-header {
+  padding: 0 0 10px;
+  height: auto;
+  min-height: 38px;
+  border: 0;
+}
+.run-tables .bss-row.head {
+  border-top: 1px solid var(--color-border-strong);
+}
+.run-tables .bss-row .cell:first-child {
+  padding-left: 12px;
+}
+.run-tables .bss-row .cell:last-child {
+  padding-right: 12px;
+}
+.run-tables .bss-row .cell {
+  padding-right: 8px;
+  padding-left: 8px;
+}
+.billing-runs .run-history-row.is-failed {
+  background: var(--color-bg);
+}
+.billing-runs .run-history-row.selected {
+  background: var(--color-bg-selected);
+}
+.billing-runs .bss-run-tag {
+  font: var(--type-label);
+  border-color: var(--color-border);
+  color: var(--color-ink-3);
+}
+.billing-runs .bss-run-note-cell {
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.billing-runs .bss-run-error-text {
+  font: var(--type-code);
+  color: var(--color-negative);
+}
+.run-details {
+  color: var(--color-ink-2);
+  font: var(--type-label);
+}
+.run-details summary {
+  cursor: pointer;
+  padding-bottom: 8px;
+}
+.run-outcomes-body > .bss-toolbar {
+  margin: 0 0 10px;
+}
+.run-outcomes-body .cell:first-child > span {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.run-outcomes-body .cell:first-child .bss-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-outcomes > section > .bss-note {
+  margin-top: 10px;
+}
+
 /* --- bills: the bill dialog and Record payment --- */
 .bss-line {
   display: flex;

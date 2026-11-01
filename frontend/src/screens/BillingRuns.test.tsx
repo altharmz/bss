@@ -4,7 +4,7 @@ import { App } from '../app/App';
 import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, stubFetch, tmfError, type Handler } from '../test/fetch';
 import { RUN } from '../test/fixtures';
-import { PENDING_MAX_MS, POLL_MS } from './BillingRuns';
+import { nextRunText, PENDING_MAX_MS, POLL_MS } from './BillingRuns';
 
 const RUNS = '/internal/v1/billingRun';
 const LIST = `GET ${RUNS}?limit=14`;
@@ -85,7 +85,7 @@ async function open() {
 
 const latestPanel = () => screen.getByRole('region', { name: 'Latest run' });
 const historyRows = () =>
-  screen.getAllByRole('row').filter((row) => within(row).queryAllByRole('cell').length === 8);
+  screen.getAllByRole('row').filter((row) => within(row).queryAllByRole('cell').length === 7);
 const rowOf = (date: string) => historyRows().find((row) => row.textContent?.startsWith(date));
 const count = (calls: string[], key: string) => calls.filter((c) => c === key).length;
 
@@ -123,10 +123,36 @@ async function openWithFakeTimers() {
 }
 
 describe('billing runs: latest run and history', () => {
+  it('selects the latest run without eagerly loading outcomes and has no primary on success', async () => {
+    const { calls } = backend(() => page([LATEST]));
+    await open();
+    await screen.findByRole('region', { name: 'Latest run' });
+    expectUi('ui.billingRuns.latest');
+    expectUi('ui.billingRuns.outcomes');
+    expect(rowOf('2026-10-01')?.getAttribute('aria-selected')).toBe('true');
+    expect(rowOf('2026-10-01')?.classList.contains('density-compact')).toBe(true);
+    expect(calls.filter((call) => call.startsWith(`GET ${RUNS}/${RUN.id}`))).toEqual([]);
+    expect(document.querySelector('.billing-runs .bss-btn.primary')).toBeNull();
+    expect(screen.getByText('Next run 2026-10-02 00:30 · in 12h 30m')).toBeTruthy();
+  });
+
+  it('calculates the next run using the configured business zone across DST', () => {
+    expect(
+      nextRunText(
+        { ...RUN, runDate: '2026-10-31' },
+        {
+          ...CONTEXT,
+          timeZone: 'America/New_York',
+          billingRunAt: '03:30',
+          now: '2026-11-01T04:00:00Z',
+        },
+      ),
+    ).toBe('Next run 2026-11-01 03:30 · in 4h 30m');
+  });
   it('shows the latest run with its KPIs and the last 14 runs', async () => {
     const { calls } = backend(() => page([LATEST, SEP30, SEP29_FAILED], 9));
     await open();
-    expect(screen.getByText('Scheduled daily at 00:30 UTC+3')).toBeTruthy();
+    expect(screen.getByText('Nightly at 00:30 UTC+3')).toBeTruthy();
     expect(screen.getAllByLabelText('Loading').length).toBeGreaterThan(0); // skeletons first
     await screen.findByRole('region', { name: 'Latest run' });
     expectUi('ui.billingRuns.list');
@@ -141,7 +167,7 @@ describe('billing runs: latest run and history', () => {
     expect(within(panel).getByText('1 min 05 s')).toBeTruthy();
     expect(within(panel).getByText('4')).toBeTruthy();
     expect(within(panel).getByText('2,241.40')).toBeTruthy();
-    expect(within(panel).getByText('Amount, USD')).toBeTruthy();
+    expect(within(panel).getByText('Charged, USD')).toBeTruthy();
     expect(screen.queryByRole('alert')).toBeNull(); // no failure banner
 
     expect(historyRows().map((r) => r.textContent?.slice(0, 10))).toEqual([
@@ -152,7 +178,7 @@ describe('billing runs: latest run and history', () => {
     expect(within(rowOf('2026-10-01') as HTMLElement).getByText('latest')).toBeTruthy();
     const failed = rowOf('2026-09-29') as HTMLElement;
     expect(within(failed).getByText('Failed')).toBeTruthy();
-    expect(within(failed).getByText('1 of 3 accounts not billed (1 failed)')).toBeTruthy();
+    expect(within(failed).getByTitle('1 of 3 accounts not billed (1 failed)')).toBeTruthy();
     expect(within(failed).getByRole('button', { name: 'Retry' })).toBeTruthy();
     expect(within(rowOf('2026-09-30') as HTMLElement).queryByRole('button')).toBeNull();
     expect(screen.getByText('Showing 3 of 9')).toBeTruthy();
@@ -258,7 +284,7 @@ describe('billing runs: a failed run and retry (Q3: any failed run)', () => {
     expect(
       within(latestPanel()).getByText('2 of 3 accounts not billed (1 failed, 1 blocked)'),
     ).toBeTruthy();
-    const retry = within(banner).getByRole('button', { name: 'Retry run for 2026-10-01' });
+    const retry = screen.getByRole('button', { name: 'Retry 1 failed' });
     expect(retry).toBe(expectUi('ui.billingRuns.retry'));
     fireEvent.click(retry);
 
@@ -271,7 +297,7 @@ describe('billing runs: a failed run and retry (Q3: any failed run)', () => {
     ).toBeTruthy();
     // queued: actions wait for it
     expect(
-      (within(screen.getByRole('alert')).getByRole('button') as HTMLButtonElement).disabled,
+      (screen.getByRole('button', { name: 'Retry 1 failed' }) as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(count(calls, LIST)).toBe(2); // reloaded at once
   });
@@ -286,6 +312,10 @@ describe('billing runs: a failed run and retry (Q3: any failed run)', () => {
       within(banner).getByText('The run itself failed; no later date is billed until it succeeds.'),
     ).toBeTruthy();
     expect(within(latestPanel()).getByText('OperationalError: gone')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Retry run' }).classList.contains('primary')).toBe(
+      true,
+    );
+    expect(screen.queryByRole('button', { name: 'Retry 1 failed' })).toBeNull();
   });
 
   it('retries an older failed run from its row without opening it', async () => {
@@ -333,11 +363,7 @@ describe('billing runs: a failed run and retry (Q3: any failed run)', () => {
         ),
     });
     await open();
-    fireEvent.click(
-      within(await screen.findByRole('alert')).getByRole('button', {
-        name: 'Retry run for 2026-10-01',
-      }),
-    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry 1 failed' }));
     expect(
       await screen.findByText('a retry of the run of 2026-10-01 is already queued'),
     ).toBeTruthy();
@@ -537,11 +563,7 @@ describe('billing runs: polling', () => {
       },
     );
     await openWithFakeTimers();
-    fireEvent.click(
-      within(await until(() => screen.getByRole('alert'))).getByRole('button', {
-        name: 'Retry run for 2026-10-01',
-      }),
-    );
+    fireEvent.click(await until(() => screen.getByRole('button', { name: 'Retry 1 failed' })));
     await until(() => screen.getByText(/Queued: retry of 2026-10-01/));
     await until(() => expect(count(calls, LIST)).toBe(2));
 
@@ -578,11 +600,7 @@ describe('billing runs: polling', () => {
         ),
     });
     await openWithFakeTimers();
-    fireEvent.click(
-      within(await until(() => screen.getByRole('alert'))).getByRole('button', {
-        name: 'Retry run for 2026-10-01',
-      }),
-    );
+    fireEvent.click(await until(() => screen.getByRole('button', { name: 'Retry 1 failed' })));
     await until(() => screen.getByText(/Queued: retry of 2026-10-01/));
     // a poll answers within the interval, so polls go out once per POLL_MS
     for (let t = 0; t < PENDING_MAX_MS; t += POLL_MS) {
@@ -647,6 +665,55 @@ describe('billing runs: one run and its accounts', () => {
     finishedAt: '2026-09-30T21:30:41Z',
   };
 
+  it('selects an older run with its own lazy queries, waiting default and secondary Retry', async () => {
+    const older = { ...SEP29_FAILED, accounts: { total: 3, ok: 2, failed: 0, blocked: 1 } };
+    const { calls, fetchMock } = backend(() => page([LATEST, older]), {
+      [`GET ${RUNS}/${older.id}`]: () => json(older),
+      [`GET ${RUNS}/${older.id}/accounts?status=blocked&limit=100`]: () => page([BLOCKED_ACCOUNT]),
+      [`POST ${RUNS}/${older.id}/retry`]: () =>
+        json(
+          {
+            request: {
+              id: 'older-retry',
+              kind: 'retry',
+              upTo: null,
+              run: { id: older.id, runDate: older.runDate },
+              requestedAt: '2026-10-01T09:00:00Z',
+              requestedBy: null,
+              pickedAt: null,
+              doneAt: null,
+            },
+          },
+          { status: 202 },
+        ),
+    });
+    await open();
+    await screen.findByRole('region', { name: 'Latest run' });
+    expect(calls).not.toContain(`GET ${RUNS}/${older.id}`);
+    fireEvent.click(rowOf(older.runDate) as HTMLElement);
+    const outcomes = await screen.findByRole('region', { name: `Run for ${older.runDate}` });
+    expect(await within(outcomes).findByText('Ivan Petrov main')).toBeTruthy();
+    expect(calls).toContain(`GET ${RUNS}/${older.id}`);
+    expect(calls).toContain(`GET ${RUNS}/${older.id}/accounts?status=blocked&limit=100`);
+    expect(
+      within(outcomes)
+        .getByRole('button', { name: /Waiting/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+    expect(rowOf(older.runDate)?.getAttribute('aria-selected')).toBe('true');
+    expect(rowOf(LATEST.runDate)?.getAttribute('aria-selected')).toBeNull();
+    expect(within(outcomes).getByText('00:30:41')).toBeTruthy();
+    const retry = within(outcomes).getByRole('button', { name: 'Retry' });
+    expect(retry.classList.contains('secondary')).toBe(true);
+    fireEvent.click(retry);
+    expect(await screen.findByText('Retry of the run of 2026-09-29 queued')).toBeTruthy();
+    expect(
+      fetchMock.mock.calls
+        .filter(([, init]) => init?.method === 'POST')
+        .map(([url, init]) => [url, init?.body]),
+    ).toEqual([[`${RUNS}/${older.id}/retry`, undefined]]);
+  });
+
   it('opens a run from its row with the failed accounts first, and filters', async () => {
     const { calls } = backend(() => page([FAILED_LATEST, SEP30]), {
       [`GET ${RUNS}/${RUN.id}`]: () => json(FAILED_LATEST),
@@ -657,17 +724,27 @@ describe('billing runs: one run and its accounts', () => {
     await open();
     await screen.findByRole('region', { name: 'Latest run' });
     fireEvent.click(rowOf('2026-10-01') as HTMLElement);
-    const dialog = await screen.findByRole('dialog', { name: 'Run for 2026-10-01' });
+    const dialog = await screen.findByRole('region', { name: 'Run for 2026-10-01' });
     expect(await within(dialog).findByText('Olga Kuznetsova main')).toBeTruthy();
+    expect(
+      within(dialog)
+        .getByRole('button', { name: /Failed/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+    expect(rowOf('2026-10-01')?.getAttribute('aria-selected')).toBe('true');
     expect(
       within(dialog).getByText('MissingPrice: no recurring price in USD on 2026-10-01'),
     ).toBeTruthy();
-    expect(within(dialog).getByText('BA-AAAA0001').getAttribute('href')).toBe(`/subscribers/${A1}`);
+    expect(
+      within(dialog).getByRole('link', { name: 'Olga Kuznetsova main' }).getAttribute('href'),
+    ).toBe(`/subscribers/${A1}`);
+    expect(within(dialog).getByRole('button', { name: `Copy ${A1}` })).toBeTruthy();
     expect(within(dialog).getByText('3 · ok 1 · failed 1 · blocked 1')).toBeTruthy();
+    fireEvent.click(within(dialog).getByText('Run details'));
     expect(within(dialog).getByText('2026-10-01 00:30:00')).toBeTruthy(); // started, BILLING_TZ
 
-    fireEvent.click(within(dialog).getByRole('button', { name: /Blocked/ }));
-    expect(await within(dialog).findByText('waits for the run of 2026-09-29')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: /Waiting/ }));
+    expect(await within(dialog).findByText('Waits for the run of 2026-09-29')).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: /All/ }));
     expect(await within(dialog).findByText('Showing 2 of 3')).toBeTruthy();
     expect(calls).toContain(`GET ${RUNS}/${RUN.id}`);
@@ -697,11 +774,12 @@ describe('billing runs: one run and its accounts', () => {
     await open();
     await screen.findByRole('region', { name: 'Latest run' });
     fireEvent.click(within(latestPanel()).getByRole('button', { name: 'Accounts' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Run for 2026-10-01' });
+    const dialog = await screen.findByRole('region', { name: 'Run for 2026-10-01' });
     await within(dialog).findByText('Olga Kuznetsova main');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Retry run for 2026-10-01' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry 1 failed' }));
     expect(await screen.findByText('Retry of the run of 2026-10-01 queued')).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Run for 2026-10-01' })).toBeNull();
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(post?.[0]).toBe(`${RUNS}/${RUN.id}/retry`);
   });
@@ -714,7 +792,7 @@ describe('billing runs: one run and its accounts', () => {
     await open();
     await screen.findByRole('region', { name: 'Latest run' });
     fireEvent.click(rowOf('2026-10-01') as HTMLElement);
-    const dialog = await screen.findByRole('dialog', { name: 'Run for 2026-10-01' });
+    const dialog = await screen.findByRole('region', { name: 'Run for 2026-10-01' });
     expect(await within(dialog).findByText('Ivan Petrov main')).toBeTruthy();
     expect(within(dialog).queryByRole('button', { name: /Retry/ })).toBeNull();
   });

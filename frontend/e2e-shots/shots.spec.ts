@@ -58,6 +58,21 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       await page.screenshot({ path: `/web/.shots/${name}-${width}.png`, fullPage: true });
+      if (name === 'billing-runs') {
+        const latest = page.getByRole('region', { name: 'Latest run', exact: true });
+        if (await latest.count()) {
+          await latest.getByRole('button', { name: 'Accounts', exact: true }).click();
+          const outcomes = page.getByRole('region', { name: /^Run for / });
+          await expect(outcomes).toBeVisible();
+          await expect(outcomes.getByLabel('Loading', { exact: true })).toHaveCount(0);
+          await page.waitForLoadState('networkidle');
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+          await page.screenshot({
+            path: `/web/.shots/billing-runs-outcomes-${width}.png`,
+            fullPage: true,
+          });
+        }
+      }
       if (name === 'subscribers') {
         await page.getByRole('button', { name: 'New subscriber', exact: true }).click();
         await page.screenshot({ path: `/web/.shots/dialog-new-subscriber-${width}.png` });

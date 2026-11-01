@@ -17,6 +17,15 @@ routine task-state checks and `make check-pr` for PR readiness. Direct commands 
 available for source investigation and operations without a matching target.
 Commit and publish when ready; do not ask for approval. Human merge gates still apply.
 
+Repository file edits are authorized by the human; do not ask again for permission to
+edit files in this repository. Follow the existing secret/design-reference restrictions
+and human merge gates. Tool sandbox approval, when required, is separate from edit consent.
+
+For new work, strongly prefer `make start-task BSS_TASK_OWNER=codex` from clean primary
+master. It selects the issue and worker slot and claims the board item. Do not manually
+inspect the board, count statuses, select a Ready issue or claim an item before startup.
+Use the returned issue, branch and worktree; stop and report a startup failure.
+
 **Deployment is the human's, outside development** (the human, 2026-10-28): your work ends
 at the merge to master. Never run `make deploy`/`verify`/`remote`, never track or suggest a
 deploy.

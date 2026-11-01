@@ -15,6 +15,10 @@ the primary checkout. Do not manually select a backlog issue or create its task 
 issue, branch, selected slot and worktree. Do not guess which slot is free.
 If it fails, stop and report the failure instead of bypassing
 it. A concrete human request still takes precedence over unrelated Ready work.
+Strongly prefer an explicit client identity: `make start-task BSS_TASK_OWNER=codex`
+for Codex, or `make start-task BSS_TASK_OWNER=claude` for Claude. Do not manually inspect
+the board or enumerate statuses and open PRs before startup; the helper selects and
+claims eligible work. Inspect the returned issue for implementation context afterward.
 
 The primary checkout stays clean on `master` for administration only; implementation,
 commits, runtime and generated artifacts belong in linked task worktrees. Never switch
@@ -83,6 +87,10 @@ slips against these rules; it is a pattern matcher, not a security boundary
 
 ## Working style
 
+The human authorizes repository file edits without further confirmation. Do not ask
+again for edit permission; existing secret/design-reference restrictions and human
+merge gates still apply. Sandbox approval requirements remain separate.
+
 Follow the [canonical lifecycle](docs/worktrees.md#normal-agent-workflow) and
 [shared AI guidance](docs/worktrees.md#ai-workflow-guidance) for tool choice, engineering
 review, recovery, long-running checks, human gates and completion reporting. Use
@@ -143,8 +151,8 @@ stay in the slice trackers in `docs/` and an issue only links to them. Rules in 
 
 - Read [docs/board.md](docs/board.md) before any board operation (statuses, ids, `gh`
   commands, merge/close rules).
-- Statuses: Inbox, Ready, Doing, Waiting, Done. Take from Ready by priority label (P0-P3), then board order among equals.
-- WIP limit: 1 item per agent. Claim an item with your `agent:<client>` label (for example
+- Statuses: Inbox, Ready, Doing, Waiting, Done. `make start-task` selects from Ready by priority label (P0-P3), then board order among equals; do not select manually.
+- WIP limit: 1 item per agent. Startup claims an item with your `agent:<client>` label (for example
   `agent:claude`, `agent:codex` or `agent:kimi`) and move it to Doing in one step; never
   touch another agent's items.
 - Merging: use `make create-pr` (adds `Fixes #N`), observe `make check-pr`, and merge with

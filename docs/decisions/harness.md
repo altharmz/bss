@@ -60,8 +60,12 @@ remain held through reservation/worktree creation. Exhaustion reports every cand
 Recognizable reservations use the existing completion checks and checkpointed cleanup
 under those same locks before reuse. The optional `SLOT` override remains administrative;
 legacy issue-specific worktrees remain supported but are no longer created by default.
-Client markers provide automatic identity; `BSS_TASK_OWNER` is an optional override or
-fallback and never follows slot identity. See [worktrees.md](../worktrees.md).
+Client markers provide automatic identity; explicit `BSS_TASK_OWNER` takes precedence
+and never follows slot identity. Strongly prefer `make start-task BSS_TASK_OWNER=codex`
+for Codex. Startup owns board inspection, selection and claim; agents do not enumerate
+board statuses or candidate PRs beforehand. Repository edits are authorized without
+repeated edit confirmation; secret/design-reference restrictions and human merge gates
+remain. See [worktrees.md](../worktrees.md).
 
 ### Explicit prioritized task creation (2026-11-01, #112)
 
