@@ -209,7 +209,7 @@ def ci_state(checks):
     return "passed"
 
 
-def readiness(root, task, issue):
+def readiness(root, task, issue, approval=None):
     data = find_pr(root, task)
     if data is None:
         return {"status": "missing", "ci": "unknown", "reasons": ["missing-pr"]}, 1
@@ -235,13 +235,25 @@ def readiness(root, task, issue):
     )
     head = data["headRefOid"]
     require(isinstance(head, str) and re.fullmatch(r"[a-f0-9]{40}", head), "invalid PR head")
+    approval = os.environ.get("HUMAN_APPROVAL", "") if approval is None else approval
+    approval_state = "missing"
+    if approval:
+        if not re.fullmatch(r"[1-9][0-9]*:[a-f0-9]{40}", approval):
+            approval_state = "malformed"
+        elif approval != f"{number}:{head}":
+            approval_state = "mismatched"
+        else:
+            approval_state = "accepted"
+    human_blocked = human and approval_state != "accepted"
     comparison = gh(root, "api", f"repos/{REPOSITORY}/compare/{BASE}...{head}")
     behind = comparison["behind_by"]
     require(type(behind) is int and behind >= 0, "invalid base comparison")
     ci = ci_state(data["statusCheckRollup"])
     reasons = []
-    if human:
+    if human_blocked:
         reasons.append("human-approval-required")
+    if approval_state in {"malformed", "mismatched"}:
+        reasons.append("human-approval-" + approval_state)
     if data["reviewDecision"] in {"REVIEW_REQUIRED", "CHANGES_REQUESTED"}:
         reasons.append("review-" + data["reviewDecision"].lower().replace("_", "-"))
     elif data["reviewDecision"] not in {"", "APPROVED"}:
@@ -264,7 +276,12 @@ def readiness(root, task, issue):
     if merge_state != "CLEAN":
         reasons.append("merge-state-" + merge_state.lower())
     failed = ci == "failed" or "merge-conflict" in reasons
-    policy = human or any(r.startswith("review-") for r in reasons) or merge_state == "BLOCKED"
+    policy = (
+        human_blocked
+        or approval_state in {"malformed", "mismatched"}
+        or any(r.startswith("review-") for r in reasons)
+        or merge_state == "BLOCKED"
+    )
     status = "failed" if failed else "blocked" if policy else "pending" if reasons else "ready"
     return {
         "status": status,
@@ -275,6 +292,8 @@ def readiness(root, task, issue):
         "merge_state": merge_state,
         "review_decision": data["reviewDecision"],
         "human_approval_required": human,
+        "human_approval": approval_state,
+        "head_sha": head,
         "base_behind": behind,
         "reasons": reasons,
     }, {"ready": 0, "failed": 1, "pending": 2, "blocked": 3}[status]

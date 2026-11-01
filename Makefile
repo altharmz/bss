@@ -350,10 +350,12 @@ create-pr: export PR_BODY_FILE := $(PR_BODY_FILE)
 create-pr: ## Publish the task branch and create or confirm its PR
 	@python3 -B scripts/task_pr.py create-pr
 
+check-pr: export HUMAN_APPROVAL := $(HUMAN_APPROVAL)
 check-pr: ## Report task PR readiness, including human review gates (never merges)
 	@python3 -B scripts/task_pr.py check-pr
 
 .PHONY: merge-task finish-task
+merge-task: export HUMAN_APPROVAL := $(HUMAN_APPROVAL)
 merge-task: ## Merge this task PR only when all repository and human gates permit
 	@python3 -B scripts/task_finish.py merge-task
 

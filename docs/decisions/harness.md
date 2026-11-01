@@ -100,8 +100,10 @@ compatible.
 ### Task merge and completion (2026-10-31, #91)
 
 `make merge-task` composes existing readiness with the repository's squash-only policy
-and GitHub's normal merge command, pinned to the expected head. Human gates cannot be
-overridden by command arguments. Confirmed merged heads are idempotent; queued/unconfirmed
+and GitHub's normal merge command, pinned to the expected head. Human gates require explicit
+conversation approval, represented by `HUMAN_APPROVAL=<PR-number>:<full-head-SHA>` (#118).
+This input satisfies only the local human gate; all other checks and GitHub protections
+remain enforced. New heads require renewed approval. Confirmed merged heads are idempotent; queued/unconfirmed
 merges retain state for inspection. No protection bypass or remote branch deletion is used.
 
 `make finish-task SLOT=...` runs from clean primary master for persistent slots, under the
@@ -151,7 +153,8 @@ See [command details](../worktrees.md#hooks-and-checks).
 and creates or confirms the task's PR against master with `Fixes #N`. `make check-pr`
 reports structured readiness across checks, mergeability, review policy, human gates and
 base synchronization. Both use explicit repository selectors and refuse conflicting or
-incomplete state. Protected paths and `needs-human` labels remain policy blocked; neither
+incomplete state. Protected paths and `needs-human` labels remain policy blocked without
+explicit conversation approval bound to the PR/head (#118); neither
 command merges. The optional wait mode is not implemented. See the
 [command contracts](../worktrees.md#task-pull-requests-and-readiness).
 
