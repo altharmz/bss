@@ -96,6 +96,21 @@ class StartupTests(unittest.TestCase):
             "board_path = os.environ['BSS_TEST_BOARD']\n"
             "with open(board_path) as source: board = json.load(source)\n"
             "rows = [r for p in board for r in p['node']['items']['nodes']]\n"
+            "if args[:2] == ['issue', 'create']:\n"
+            " number = max(r['content']['number'] for r in rows) + 1\n"
+            " labels = [{'name': args[i + 1]} for i, a in enumerate(args) if a == '--label']\n"
+            " row = {'id': f'item-{number}', 'fieldValueByName': {'name': 'Inbox'}, 'content': {\n"
+            "  'id': f'issue-{number}', 'number': number, 'title': args[args.index('--title') + 1],\n"
+            "  'state': 'OPEN', 'repository': {'nameWithOwner': 'altharmz/bss'},\n"
+            "  'labels': {'totalCount': len(labels), 'nodes': labels},\n"
+            "  'blockedBy': {'totalCount': 0, 'nodes': []},\n"
+            "  'linkedBranches': {'totalCount': 0, 'nodes': []},\n"
+            "  'closedByPullRequestsReferences': {'totalCount': 0, 'nodes': []}}}\n"
+            " board[0]['node']['items']['nodes'].append(row)\n"
+            " for page in board: page['node']['items']['totalCount'] += 1\n"
+            " with open(board_path, 'w') as output: json.dump(board, output)\n"
+            " print(f'https://github.com/altharmz/bss/issues/{number}')\n"
+            " sys.exit(0)\n"
             "if args[:2] == ['issue', 'edit']:\n"
             " if os.environ.get('BSS_TEST_FAIL') == 'claim' and '--add-label' in args:\n"
             "  sys.exit(1)\n"
@@ -107,6 +122,17 @@ class StartupTests(unittest.TestCase):
             " with open(board_path, 'w') as output: json.dump(board, output)\n"
             " sys.exit(0)\n"
             "document = next(a for a in args if a.startswith('query='))\n"
+            "if 'updateProjectV2ItemPosition' in document:\n"
+            " if os.environ.get('BSS_TEST_FAIL') == 'position': sys.exit(1)\n"
+            " item = next(a[5:] for a in args if a.startswith('item='))\n"
+            " row = next(r for r in rows if r['id'] == item)\n"
+            " for page in board:\n"
+            "  nodes = page['node']['items']['nodes']\n"
+            "  if row in nodes: nodes.remove(row)\n"
+            " board[0]['node']['items']['nodes'].insert(0, row)\n"
+            " with open(board_path, 'w') as output: json.dump(board, output)\n"
+            " print(json.dumps({'data': {'updateProjectV2ItemPosition': {'clientMutationId': None}}}))\n"
+            " sys.exit(0)\n"
             "if 'mutation' in document:\n"
             " if os.environ.get('BSS_TEST_FAIL') == 'status': sys.exit(1)\n"
             " item = next(a[5:] for a in args if a.startswith('item='))\n"
@@ -597,6 +623,61 @@ class StartupTests(unittest.TestCase):
         return json.loads(Path(self.env["BSS_TEST_BOARD"]).read_text())[0]["node"]["items"][
             "nodes"
         ][0]
+
+    def test_new_priority_task_creates_first_p0_and_starts_it(self):
+        body = "Goal: keep a;b and `literal` intact\n\n- [ ] Done"
+        result = self.call(
+            [
+                "make", "--no-print-directory", "new-priority-task",
+                "TITLE=Explicit request", f"BODY={body}", "LABELS=harness,docs", "JSON=1",
+            ],
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual((data["issue"], data["title"]), (82, "Explicit request"))
+        item = self.remote_item()
+        self.assertEqual(item["content"]["number"], 82)
+        self.assertEqual(task.status(item), "Doing")
+        self.assertEqual(task.ownership(item), {"P0", "harness", "docs", "agent:codex"})
+        calls = [json.loads(line) for line in Path(self.env["BSS_TEST_CALLS"]).read_text().splitlines()]
+        create = next(call for call in calls if call[:2] == ["issue", "create"])
+        self.assertEqual(create[create.index("--body") + 1], body)
+
+    def test_new_priority_task_rejects_missing_input_and_reserved_labels(self):
+        cases = [
+            ["BODY=valid"],
+            ["TITLE=valid"],
+            ["TITLE=valid", "BODY=valid", "LABELS=P1"],
+            ["TITLE=valid", "BODY=valid", "LABELS=agent:claude"],
+            ["TITLE=valid", "BODY=valid", "LABELS=needs-human"],
+        ]
+        for args in cases:
+            with self.subTest(args=args):
+                result = self.call(
+                    ["make", "--no-print-directory", "new-priority-task", *args], check=False
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(self.destination().exists())
+                self.assertEqual(self.remote_item()["content"]["number"], 81)
+
+    def test_new_priority_task_startup_failure_leaves_retryable_issue(self):
+        self.env["BSS_TEST_FAIL"] = "claim"
+        result = self.call(
+            [
+                "make", "--no-print-directory", "new-priority-task",
+                "TITLE=Explicit request", "BODY=Goal and acceptance criteria", "JSON=1",
+            ],
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.destination().exists())
+        item = self.remote_item()
+        self.assertEqual(item["content"]["number"], 82)
+        self.assertEqual(task.status(item), "Ready")
+        self.assertEqual(task.ownership(item), {"P0"})
+        self.env.pop("BSS_TEST_FAIL")
+        self.assertEqual(self.result()["issue"], 82)
 
     def test_claim_doing_and_disposable_credential(self):
         result = self.result()

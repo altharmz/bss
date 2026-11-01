@@ -21,9 +21,15 @@ ifneq ($(origin SLOT), undefined)
 export BSS_SLOT := $(SLOT)
 endif
 
-.PHONY: start-task release-slot
+.PHONY: start-task new-priority-task release-slot
 start-task: ## Prepare the next Ready issue in an automatically selected worker slot (JSON=1 for agents)
 	@python3 -B scripts/start_task.py $(if $(filter 1,$(JSON)),--json,)
+
+new-priority-task: export BSS_NEW_TASK_TITLE := $(TITLE)
+new-priority-task: export BSS_NEW_TASK_BODY := $(BODY)
+new-priority-task: export BSS_NEW_TASK_LABELS := $(LABELS)
+new-priority-task: ## Create and start an approved P0 issue first in Ready (TITLE= BODY= [LABELS=a,b])
+	@python3 -B scripts/start_task.py --new-priority-task $(if $(filter 1,$(JSON)),--json,)
 
 release-slot: ## Release a slot after its task worktree was safely removed (SLOT=worker1)
 	@python3 -B scripts/start_task.py --release-slot

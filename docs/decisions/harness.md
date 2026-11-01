@@ -63,6 +63,16 @@ legacy issue-specific worktrees remain supported but are no longer created by de
 Client markers provide automatic identity; `BSS_TASK_OWNER` is an optional override or
 fallback and never follows slot identity. See [worktrees.md](../worktrees.md).
 
+### Explicit prioritized task creation (2026-11-01, #112)
+
+`make new-priority-task TITLE=... BODY=... [LABELS=...]` handles a concrete new request
+only after explicit human approval for P0 and first board position. Under the existing
+startup lock and local safety checks, it creates one issue, adds P0, moves it to Ready and
+first position, verifies the result, and reuses normal selection, claiming and slot setup.
+Reserved priority, ownership and gate labels are rejected. A created issue is preserved for
+inspection after partial failure; callers must not retry by creating a duplicate. Ordinary
+backlog selection remains `make start-task`. See [worktrees.md](../worktrees.md).
+
 ### Approved board priority administration (2026-11-01, #107)
 
 Priority-label edits and BSS manual board ordering are board administration rather than
