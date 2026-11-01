@@ -82,13 +82,12 @@ slips against these rules; it is a pattern matcher, not a security boundary
 
 ## Working style
 
-Normal workflow mutation is Make-owned. Use the documented Make targets. Do not bypass
-a failed workflow target with equivalent raw Git, GitHub, Docker, or secret-management commands.
-The canonical cross-client sequence and failure handling are in
-[worktrees.md](docs/worktrees.md#normal-agent-workflow): start → implement → format →
-review → commit → create/check PR → merge → finish. `make check` is optional/on-demand;
-the commit hook is the normal verification gate. Use `make sync-task` when master
-advances during a task, preserving published history.
+Follow the [canonical lifecycle](docs/worktrees.md#normal-agent-workflow) and
+[shared AI guidance](docs/worktrees.md#ai-workflow-guidance) for tool choice, engineering
+review, recovery, long-running checks, human gates and completion reporting. Prefer
+repository Make targets for workflow mutations; normal read-only investigation and
+source editing remain ordinary engineering work. The shared guidance defines the
+recovery order when a helper cannot represent a required safe correction.
 
 - **One development cycle: develop -> commit -> push, with one local test run.**
   The pre-commit hook runs `make lint`, the smoke tests and the tests the change affects
