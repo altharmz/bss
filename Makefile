@@ -271,6 +271,16 @@ runtime-check: ## Validate task runtime helpers without Docker or secrets
 	GIT_PAGER=cat python3 -B scripts/test_task_runtime.py
 	GIT_PAGER=cat python3 -B scripts/test_start_task.py
 	GIT_PAGER=cat python3 -B scripts/test_task_telemetry.py
+	GIT_PAGER=cat python3 -B scripts/test_task_usage.py
+
+.PHONY: telemetry-ingest telemetry-report
+telemetry-ingest: export BSS_TELEMETRY_USAGE_FILE = $(USAGE_FILE)
+telemetry-ingest: export BSS_TELEMETRY_PRICING_FILE = $(PRICING_FILE)
+telemetry-ingest: ## Import a machine usage delta (USAGE_FILE=, optional PRICING_FILE=)
+	python3 -B scripts/task_usage.py ingest
+
+telemetry-report: ## Report task usage, priced subtotals and observed lifecycle metrics as JSON
+	python3 -B scripts/task_usage.py report
 
 .PHONY: telemetry-up telemetry-down telemetry-migrate telemetry-health telemetry-test
 telemetry-test: ## Test the running telemetry schema (all test data rolled back)

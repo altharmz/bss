@@ -100,6 +100,8 @@ def sql(statement):
             "psql",
             "-X",
             "-q",
+            "-A",
+            "-t",
             "-v",
             "ON_ERROR_STOP=1",
             "-U",
@@ -116,6 +118,7 @@ def sql(statement):
     )
     if result.returncode:
         raise RuntimeError("telemetry database unavailable or schema not initialized")
+    return result.stdout
 
 
 def literal(value):
@@ -151,7 +154,10 @@ def event_sql(
         raise ValueError("invalid telemetry client")
     fields = {"slot": slot, "client": client}
     metadata = literal(
-        json.dumps({key: value for key, value in fields.items() if value is not None}, separators=(",", ":"))
+        json.dumps(
+            {key: value for key, value in fields.items() if value is not None},
+            separators=(",", ":"),
+        )
     )
     if commit_hash is not None:
         if operation not in {"commit", "push"} or not re.fullmatch(
@@ -279,7 +285,7 @@ def main():
             for migration in sorted((ROOT / "scripts/telemetry").glob("*.sql")):
                 sql(migration.read_text())
         if args.action == "health":
-            sql("SELECT 1 / count(*) FROM schema_versions WHERE version = 1;")
+            sql("SELECT 1 / count(*) FROM schema_versions WHERE version = 2;")
     except (OSError, RuntimeError, subprocess.SubprocessError):
         print(
             "telemetry: management failed; check local Docker and telemetry schema", file=sys.stderr

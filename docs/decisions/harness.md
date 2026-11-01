@@ -114,6 +114,13 @@ schema, with no telemetry migration or inferred model/usage/provider values.
 
 ### Persistent task telemetry (2026-10-30, #82)
 
+Usage ingestion and reports were added in #92; see the
+[export contract, pricing provenance and report limitations](../telemetry-usage.md).
+Migration 002 adds nullable provenance and a unique import identity without changing
+existing rows. `telemetry-ingest` accepts only explicit, nonoverlapping machine usage
+deltas; `telemetry-report` reports known data and leaves unavailable metrics null.
+No conversation scanning, price scraping or model/token estimation is performed.
+
 Telemetry is observational and **fail-open**: a failed write produces a bounded warning
 on stderr without changing the workflow's exit status. Writes have a three-second timeout;
 they never start infrastructure, retry, queue JSON files, or persist data in a worktree.

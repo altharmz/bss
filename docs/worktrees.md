@@ -150,6 +150,10 @@ Harness metrics use a separate persistent PostgreSQL service: `make telemetry-up
 starts/migrates it, `make telemetry-health` checks it, `make telemetry-test` tests its
 schema and `make telemetry-down` stops it without removing data. Normal lifecycle
 operations record metrics automatically and warn without failing when storage is down.
+`make telemetry-ingest USAGE_FILE=/absolute/path/usage.json` imports explicit machine
+usage exports, with optional `PRICING_FILE=` for versioned rates. `make telemetry-report`
+returns JSON task usage, cost subtotals, timing and participation groups. Unknown usage
+stays null; see [usage provenance and reporting limitations](telemetry-usage.md).
 The shared `bss-telemetry-data` volume is independent of all task runtimes and worktrees;
 task cleanup must never remove it. See [telemetry policy and schema](decisions/harness.md#persistent-task-telemetry-2026-10-30-82).
 
