@@ -20,7 +20,7 @@ from pathlib import Path
 
 from task_runtime import RESERVED_PORTS, InvalidRuntime, unique_fields, validate_metadata
 from task_telemetry import record
-from worker_slots import SlotError, release, reserve, undo
+from worker_slots import SlotError, candidates, release, reserve, undo
 from worker_slots import claim as claim_slot
 
 PROJECT = "PVT_kwHOEpM-b84BpHA0"
@@ -246,11 +246,13 @@ def select_issue(items, represented):
 def task_owner():
     owner = os.environ.get("BSS_TASK_OWNER", os.environ.get("BSS_TASK_AGENT"))
     if owner is None:
-        owner = (
-            "codex"
-            if os.environ.get("CODEX_THREAD_ID")
-            else ("claude" if os.environ.get("CLAUDECODE") else None)
-        )
+        detected = {
+            client for client, marker in (("codex", "CODEX_THREAD_ID"), ("claude", "CLAUDECODE"))
+            if os.environ.get(marker)
+        }
+        if len(detected) > 1:
+            raise StartupError("ambiguous client identity; set BSS_TASK_OWNER explicitly")
+        owner = next(iter(detected), None)
     if owner is None or not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", owner):
         raise StartupError(
             "BSS_TASK_OWNER must be 1–32 lowercase letters, digits or hyphens, "
@@ -565,14 +567,54 @@ def create(root, branch, destination, base, ports, report_ready=None):
         raise
 
 
+def recover_slot(root, common, slot):
+    # Import lazily: finish imports startup helpers as well. Reuse all completion,
+    # ownership, clean-tree, runtime and checkpoint checks, never infer completion
+    # merely from a missing repo or an old timestamp. Both locks are already held.
+    import task_finish
+
+    if any(k.startswith("GIT_") and k != "GIT_PAGER" for k in os.environ):
+        raise SlotError("occupied; unset inherited GIT_* overrides before completion recovery")
+    if os.environ.get("GH_HOST", "github.com") != "github.com":
+        raise SlotError("occupied; unexpected GitHub host for completion recovery")
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            task_finish.finish(root, common, slot)
+    except (StartupError, task_finish.start_task.StartupError,
+            SlotError, InvalidRuntime, OSError, ValueError, KeyError,
+            TypeError, AttributeError, subprocess.SubprocessError) as error:
+        raise SlotError("occupied; completion recovery not confirmed; "
+                        "preserved for inspection (make finish-task SLOT=" + slot.name + ")") from error
+
+
+def select_slot(root, common, stack):
+    explicit = os.environ.get("BSS_SLOT")
+    names = [explicit] if explicit is not None else candidates(root)
+    failures = []
+    for name in names:
+        try:
+            location = stack.enter_context(reserve(
+                root, name, worktrees(root),
+                recover=(lambda slot: recover_slot(root, common, slot)) if explicit is None else None,
+                refresh=lambda: worktrees(root),
+            ))
+            return name, location
+        except (SlotError, OSError, ValueError) as error:
+            failures.append(f"{name}: {error}")
+    raise SlotError("no usable worker slot available:\n  " + "\n  ".join(failures))
+
+
 def start(on_ready=None):
     root, common = primary()
     agent = agent_label()
-    with (common / "start-task.lock").open("a") as lock, contextlib.ExitStack() as stack:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise StartupError("another start-task invocation is running; retry later") from None
+    descriptor = os.open(common / "start-task.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "a") as lock, contextlib.ExitStack() as stack:
+        info = os.fstat(lock.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid():
+            raise StartupError("unexpected startup lock")
+        # Serialize selection as well as claiming, so a second caller can inspect
+        # the next slot/issue after the first publishes its local reservation.
+        fcntl.flock(lock, fcntl.LOCK_EX)
         clean(root)
         git("fetch", "--prune", "origin", cwd=root)
         base = git("rev-parse", "--verify", "origin/master", cwd=root)
@@ -585,11 +627,10 @@ def start(on_ready=None):
             )
         git("merge", "--ff-only", "origin/master", cwd=root)
         clean(root)
+        slot_name, slot = select_slot(root, common, stack)
+        # Completion recovery can synchronize primary to a newer master.
+        base = git("rev-parse", "HEAD", cwd=root)
         trees = worktrees(root)
-        slot_name = os.environ.get("BSS_SLOT")
-        slot = (
-            stack.enter_context(reserve(root, slot_name, trees)) if slot_name is not None else None
-        )
         used, represented = reservations(trees)
         refs = git("for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes", cwd=root)
         for ref in refs.splitlines():
@@ -601,9 +642,7 @@ def start(on_ready=None):
         check_wip(items, agent)
         issue = select_issue(items, represented)
         branch = branch_name(issue["number"], issue["title"])
-        destination = (
-            slot / "repo" if slot else (root.parent / f"{root.name}-worktrees" / branch).resolve()
-        )
+        destination = slot / "repo"
         if destination.exists() or destination.is_symlink() or destination in dict(trees):
             raise StartupError(f"worktree path collision: {destination}")
         if (

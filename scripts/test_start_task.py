@@ -11,6 +11,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -57,7 +58,7 @@ class StartupTests(unittest.TestCase):
         # Spaces also exercise argv/path handling, including the printed cd command.
         self.primary = self.base / "primary checkout"
         self.remote = self.base / "origin.git"
-        self.env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        self.env = {k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "BSS_SLOT", "BSS_WORKER_", "BSS_TASK_OWNER"))}
         self.env.update(
             GIT_CONFIG_GLOBAL="/dev/null",
             GIT_CONFIG_NOSYSTEM="1",
@@ -73,7 +74,7 @@ class StartupTests(unittest.TestCase):
         self.git("config", "user.name", "Startup test")
         self.git("config", "user.email", "startup@example.test")
         (self.primary / "scripts").mkdir()
-        for name in ("start_task.py", "task_runtime.py", "task_telemetry.py", "worker_slots.py"):
+        for name in ("start_task.py", "task_runtime.py", "task_telemetry.py", "worker_slots.py", "task_finish.py", "task_pr.py", "task_git.py", "task_quality.py", "install-hooks.py"):
             shutil.copy2(SCRIPTS / name, self.primary / "scripts" / name)
         shutil.copy2(SCRIPTS.parent / "Makefile", self.primary / "Makefile")
         (self.primary / ".gitignore").write_text(".task/\n.env\n__pycache__/\n")
@@ -195,8 +196,7 @@ class StartupTests(unittest.TestCase):
         return result
 
     def destination(self, number=81, title="Subscriber search"):
-        branch = task.branch_name(number, title)
-        return self.primary.parent / f"{self.primary.name}-worktrees" / branch
+        return self.primary.parent / f"{self.primary.name}-agents/worker1/repo"
 
     def add_worktree(self, branch="issue-70-another-task", destination=None):
         path = destination or self.base / branch
@@ -390,16 +390,18 @@ class StartupTests(unittest.TestCase):
         self.rejected("no eligible Ready issue")
 
     def test_existing_path_collision_preserves_contents(self):
+        self.env["BSS_SLOT"] = "worker1"
         destination = self.destination()
         destination.mkdir(parents=True)
         (destination / "keep").write_text("untouched")
-        self.rejected("worktree path collision")
+        self.rejected("occupied")
         self.assertEqual((destination / "keep").read_text(), "untouched")
 
     def test_registered_worktree_collision_is_preserved(self):
+        self.env["BSS_SLOT"] = "worker1"
         destination = self.destination()
         self.add_worktree(destination=destination)
-        self.rejected("worktree path collision")
+        self.rejected("overlaps a registered worktree")
         self.assertEqual(
             self.git("branch", "--show-current", cwd=destination), "issue-70-another-task"
         )
@@ -572,6 +574,7 @@ class StartupTests(unittest.TestCase):
         result = self.cli()
         self.assertEqual(result.returncode, 0, result.stderr)
         for fragment in [
+            "Slot: worker1",
             "Issue: #81",
             "Subscriber search",
             "Branch: issue-81-subscriber-search",
@@ -706,7 +709,22 @@ class StartupTests(unittest.TestCase):
         common = Path(self.git("rev-parse", "--path-format=absolute", "--git-common-dir"))
         with (common / "start-task.lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            self.rejected("another start-task invocation")
+            process = subprocess.Popen(
+                ["make", "--no-print-directory", "start-task", "JSON=1"],
+                cwd=self.primary, env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                time.sleep(0.15)
+                self.assertIsNone(process.poll(), "startup must wait for the shared lock")
+                fcntl.flock(lock, fcntl.LOCK_UN)
+                output, errors = process.communicate(timeout=30)
+                self.assertEqual(process.returncode, 0, errors)
+                self.assertEqual(json.loads(output)["slot"], "worker1")
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.communicate()
 
     def test_owner_identities_and_validation(self):
         for owner in ("codex", "claude", "kimi", "future-client"):
@@ -726,6 +744,109 @@ class StartupTests(unittest.TestCase):
                 self.assertRaisesRegex(task.StartupError, "BSS_TASK_OWNER must be"),
             ):
                 task.agent_label()
+
+    def test_bare_make_detects_client_and_selects_persistent_slot(self):
+        self.env.pop("BSS_TASK_AGENT", None)
+        self.env.pop("CLAUDECODE", None)
+        self.env["CODEX_THREAD_ID"] = "fixture-thread"
+        data = self.result()
+        self.assertEqual((data["slot"], data["agent"]), ("worker1", "agent:codex"))
+        self.assertEqual(Path(data["worktree"]), self.destination())
+        self.assertTrue((self.destination().parent / "active.json").is_file())
+
+    def test_detection_and_override_are_independent_of_slots(self):
+        for client, marker in (("codex", "CODEX_THREAD_ID"), ("claude", "CLAUDECODE")):
+            with patch.dict(os.environ, {marker: "fixture"}, clear=True):
+                self.assertEqual(task.task_owner(), client)
+        with patch.dict(os.environ, {"CODEX_THREAD_ID": "x", "CLAUDECODE": "1"}, clear=True):
+            with self.assertRaisesRegex(task.StartupError, "ambiguous client"):
+                task.task_owner()
+            with patch.dict(os.environ, {"BSS_TASK_OWNER": "kimi"}):
+                self.assertEqual(task.task_owner(), "kimi")
+
+    def test_auto_skips_unknown_occupied_registered_symlink_and_locked_slots(self):
+        pool = self.destination().parent.parent
+        pool.mkdir()
+        (pool / "worker1").mkdir()
+        (pool / "worker1/repo").mkdir()
+        (pool / "worker1/repo/keep").write_text(MARKER)
+        (pool / "worker2").mkdir()
+        (pool / "worker2/unknown").write_text(MARKER)
+        registered = self.add_worktree(destination=pool / "worker3/repo")
+        shutil.rmtree(registered)
+        (pool / "worker4").symlink_to(self.primary, target_is_directory=True)
+        (pool / "worker5").mkdir()
+        (pool / "worker6/state").mkdir(parents=True)
+        (pool / "worker6/state/keep").write_text(MARKER)
+        with (pool / "worker5/slot.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            data = self.result()
+        self.assertEqual(data["slot"], "worker6")
+        self.assertEqual((pool / "worker1/repo/keep").read_text(), MARKER)
+        self.assertEqual((pool / "worker2/unknown").read_text(), MARKER)
+        self.assertEqual((pool / "worker6/state/keep").read_text(), MARKER)
+        self.assertTrue((pool / "worker4").is_symlink())
+        self.assertIn(registered, dict(task.worktrees(self.primary)))
+
+    def test_auto_exhaustion_reports_every_candidate_without_claiming(self):
+        pool = self.destination().parent.parent
+        for name in ("worker1", "worker2", "worker3", "qa"):
+            (pool / name).mkdir(parents=True)
+            (pool / name / "active.json").write_text(MARKER)
+        result = self.rejected("no usable worker slot")
+        for name in ("worker1", "worker2", "worker3", "qa"):
+            self.assertIn(name + ":", result.stderr)
+            self.assertEqual((pool / name / "active.json").read_text(), MARKER)
+        self.assertEqual(task.status(self.remote_item()), "Ready")
+        self.assertNotIn("agent:codex", task.ownership(self.remote_item()))
+
+    def test_auto_skips_symlinked_first_slot_and_unconfirmed_stale_reservation(self):
+        pool = self.destination().parent.parent
+        pool.mkdir()
+        (pool / "worker1").symlink_to(self.primary, target_is_directory=True)
+        (pool / "worker2").mkdir()
+        stale = pool / "worker2/active.json"
+        payload = json.dumps({"version": 1, "task_id": "issue-70-abandoned"})
+        stale.write_text(payload)
+        data = self.result()
+        self.assertEqual(data["slot"], "worker3")
+        self.assertTrue((pool / "worker1").is_symlink())
+        self.assertEqual(stale.read_text(), payload)
+
+    def test_auto_skips_active_task_and_claims_next_issue_and_slot(self):
+        first = self.result()
+        rows = json.loads(Path(self.env["BSS_TEST_BOARD"]).read_text())[0]["node"]["items"]["nodes"]
+        self.board(rows + [issue(82)])
+        self.env["BSS_TASK_OWNER"] = "claude"
+        second = self.result()
+        self.assertEqual((second["slot"], second["issue"]), ("worker2", 82))
+        self.assertTrue(Path(first["worktree"]).is_dir())
+        self.assertNotEqual(first["app_port"], second["app_port"])
+
+    def test_simultaneous_startups_serialize_issue_and_slot_claims(self):
+        self.board([issue(81), issue(82)])
+        processes = []
+        try:
+            for owner in ("codex", "claude"):
+                environ = {**self.env, "BSS_TASK_OWNER": owner}
+                processes.append(subprocess.Popen(
+                    ["make", "--no-print-directory", "start-task", "JSON=1"],
+                    cwd=self.primary, env=environ, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, text=True,
+                ))
+            results = []
+            for process in processes:
+                output, errors = process.communicate(timeout=30)
+                self.assertEqual(process.returncode, 0, errors)
+                results.append(json.loads(output))
+            for key in ("slot", "issue", "branch", "worktree", "app_port", "secret_file"):
+                self.assertEqual(len({data[key] for data in results}), 2, key)
+            self.assertEqual({data["slot"] for data in results}, {"worker1", "worker2"})
+        finally:
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+                    process.communicate()
 
     def test_slot_startup_through_make(self):
         result = self.cli("SLOT=worker1", "JSON=1")

@@ -4,12 +4,13 @@ This is the shared local lifecycle for every coding client. Use **1 active task 
 1 issue = 1 branch = 1 linked Git worktree = 1 worker slot**. A task can have many
 sessions and be intentionally handed between clients/providers; a slot does not
 identify a provider, client, model or session. The primary checkout is administration-only
-and stays clean on `master`. Run `make start-task SLOT=worker1` there
+and stays clean on `master`. Run `make start-task` there
 (`JSON=1` for one JSON result on stdout). It fetches/prunes `origin`, fast-forwards
 `master`, and prepares an `issue-<number>-<lowercase-kebab-slug>` branch from that
-fetched `origin/master` at `<checkout-parent>/<checkout-name>-agents/worker1/repo`.
-Start the agent in the returned directory. Existing task-specific worktrees remain
-supported; omitting SLOT retains the legacy `<checkout-name>-worktrees/<branch>` path.
+fetched `origin/master` at `<checkout-parent>/<checkout-name>-agents/<selected-slot>/repo`.
+Start the agent in the returned directory. Startup selects the issue and a safe free
+persistent slot itself. Existing legacy task-specific worktrees remain supported by
+the task helpers, but new startup always uses a persistent slot.
 Do not switch branches in that worktree or mutate sibling worktrees.
 
 ## Normal agent workflow
@@ -20,8 +21,8 @@ a failed workflow target with equivalent raw Git, GitHub, Docker, or secret-mana
 commands. Source editing and read-only diagnosis remain available. This document is the
 canonical lifecycle contract for all clients; provider adapters link here.
 
-1. From clean primary master: `make start-task SLOT=worker1`. Use exactly the returned
-   issue, branch and worktree; startup claims `agent:<client>` and moves it to Doing.
+1. From clean primary master: `make start-task`. Use exactly the returned
+   issue, branch, slot and worktree; startup claims `agent:<client>` and moves it to Doing.
 2. In that task worktree: implement, with focused tests when useful. If another task
    merged meanwhile, use `make sync-task` from a clean checkout before continuing.
 3. Run `make format`, then `make review-task`. Commit the explicit intended files with
@@ -31,7 +32,7 @@ canonical lifecycle contract for all clients; provider adapters link here.
 5. Use `make merge-task` when ready. Human-review gates remain blocked for the human;
    do not replace a blocked target with a raw merge command.
 6. After confirmed merge, issue closure and board Done, run
-   `make finish-task SLOT=worker1` from clean primary master.
+   `make finish-task SLOT=<returned-slot>` from clean primary master.
 
 `make commit` runs the authoritative pre-commit verification hook. `make check` is
 optional/on-demand; it is not a mandatory step immediately before committing. The
@@ -43,8 +44,10 @@ checks after fixes. Never skip hooks.
 
 Use the lifecycle above for Codex, Claude, Kimi and future clients.
 `BSS_TASK_OWNER` is the client identity (`codex`, `claude`, `kimi`, or another validated
-client slug); never infer it from a worker slot. For example, run
-`make start-task BSS_TASK_OWNER=codex SLOT=worker1` from primary master. The returned
+client slug); never infer it from a worker slot. Run `make start-task` from primary
+master; Codex and Claude identities are detected from their client markers.
+`BSS_TASK_OWNER=<client>` is an optional override/fallback when detection is absent or
+ambiguous. The returned
 worktree path is authoritative. Start and finish run from primary; implementation,
 format, review, commit, push, PR and merge targets run from that task worktree.
 
@@ -59,7 +62,7 @@ Investigate details when an error or a concrete engineering question calls for t
 
 | Operation | Preferred command |
 |---|---|
-| Start and claim a task | `make start-task SLOT=worker1` (primary) |
+| Start and claim a task | `make start-task` (primary) |
 | Format | `make format` |
 | Broader technical validation, when useful | `make check` |
 | Review repository/task state | `make review-task` |
@@ -69,7 +72,7 @@ Investigate details when an error or a concrete engineering question calls for t
 | Check PR and CI readiness | `make check-pr` (repeat while pending; no `WAIT=1`) |
 | Synchronize a clean task with master | `make sync-task` |
 | Merge when policy permits | `make merge-task` |
-| Finish and release the slot | `make finish-task SLOT=worker1` (primary) |
+| Finish and release the slot | `make finish-task SLOT=<returned-slot>` (primary) |
 | Discover runtime operations | `make help`, then the documented Make target |
 
 Use ordinary commands for source investigation or details a Make target does not
@@ -133,12 +136,38 @@ this development workflow.
 
 ## Persistent worker slots
 
-`SLOT=worker1` and `BSS_SLOT=worker1` select the same slot; the Make argument takes
-precedence. Names are 1–32 lowercase ASCII letters, digits or hyphens, beginning with
-a letter (`worker1`, `qa1`, `frontend2`). Paths, dots, whitespace and shell syntax fail.
+Normal startup is **`make start-task`**. The repository chooses both the next eligible
+issue and an available persistent worker slot; callers do not guess a free slot.
+The default pool is `worker1`, `worker2`, `worker3`. Additional direct children of the
+worker root with valid slot names are discovered as operator-configured candidates.
+Candidates are inspected in ascending ASCII name order. Create an empty named slot
+directory (or its `state/` directory) to configure an additional slot; no command-line
+slot list is needed. A fresh pool is initialized lazily as slots are selected.
+
+`SLOT=<name>` / `BSS_SLOT=<name>` remain optional administrative/debug overrides,
+restricting selection to that slot; the Make argument takes precedence. Explicit
+selection preserves occupied state and does not trigger automatic completion recovery.
+Names are 1–32 lowercase ASCII letters, digits or hyphens, beginning with a letter.
 `BSS_WORKER_ROOT` can select an absolute root instead of the default sibling
 `<checkout-name>-agents`; symlink components and overlap with registered worktrees fail.
 Values enter Python through the environment, never as shell command fragments.
+
+Startup holds the common Git lifecycle lock while choosing and claiming the issue and
+slot. Concurrent startup callers wait, then inspect the updated state; each selected
+slot also stays locked until startup finishes. Locked, registered, occupied, symlinked
+and unknown slot state is preserved and skipped while remaining candidates are tried.
+Slot exhaustion reports a reason for every candidate. Startup never invents another
+slot beyond the configured pool to evade exhaustion.
+
+Only `repo/`, `active.json`, the regular `slot.lock`, operator `state/` and regular
+`finish-issue-*.json` checkpoint files are recognized slot entries. Unknown entries
+prevent reuse. With a reservation and no unknown entries, automatic selection may
+invoke the existing completion implementation under the same lifecycle/slot locks.
+It must confirm the matching merged PR/head, closed issue/Done board item, clean task,
+runtime ownership and credential/checkpoint identity before cleanup and reuse. Partial
+cleanup resumes through that same checkpointed logic. Failed or uncertain completion
+is preserved and the next candidate is inspected; it is never treated as a free slot
+merely because its repo is missing or its reservation is old.
 
 The slot directory persists. `repo/` is the disposable task worktree, `state/` may hold
 operator-managed persistent state, `slot.lock` is the persistent advisory-lock inode,
@@ -170,7 +199,8 @@ of task cleanup.
 ## Task preparation
 
 Git, GitHub CLI with repository/project write access, and host Python 3 are required.
-Agent identity is detected from `CODEX_THREAD_ID` or `CLAUDECODE`; otherwise set
+Agent identity is detected from `CODEX_THREAD_ID` or `CLAUDECODE`; conflicting markers
+require an explicit override. If no marker is present, set
 `BSS_TASK_OWNER` to the client identity, for example `codex`, `claude` or `kimi`.
 Owner names are 1–32 lowercase ASCII letters, digits or hyphens, beginning with a letter.
 The corresponding `agent:<owner>` board label must already exist; startup creates no label
