@@ -585,7 +585,7 @@ will not use) shows in the dialog. The System panel (`ui.system`, `ui.system.hea
 reads `/healthz` and `/billing-status` (a 503 body is shown) and links the BssBillingAccount schema
 in a new tab. Design: [next-slices-design.md](next-slices-design.md) section 23.
 
-### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`) - `screens/BillingRuns.tsx`
+### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`, `ui.billingRuns.previous|next`) - `screens/BillingRuns.tsx`
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
@@ -606,10 +606,13 @@ bills; this screen reads runs and queues requests** for it.
 - **Latest run** panel: date, status, trigger (catch-up / retry) and attempt tags, short
   run id, Start / End / Duration (times in BILLING_TZ) / Charges / Amount in the UI
   currency; a progress bar ("N of M accounts") while running; the error when failed;
-  **Accounts** opens the run.
-- **Run history** (`GET /billingRun?limit=14`, newest first): date, status, trigger,
+  **Accounts** opens the run. The panel remains while older history pages are viewed.
+- **Run history** (`GET /billingRun?offset=0&limit=20`, newest first): date, status, trigger,
   duration, failed count, charged amount and quiet **Retry** on every failed row (Q3).
-  Raw error stays in the trigger tooltip; footer "Showing 14 of N". A row selects outcomes.
+  Raw error stays in the trigger tooltip. The footer shows the current range and 20-row
+  Previous / Next pages. A row selects outcomes; the selection clears after a page change
+  unless its run is on the new page. Queueing a retry or catch-up returns to the first page
+  so polling can observe the resulting run.
 - **One run** (inline section): started / finished / last progress, account counts, charges per
   currency and the error in Run details; per-account outcomes filtered by Failed / Waiting / Billed /
   All (the first non-empty of failed, blocked), each account linking to its card, with
@@ -622,7 +625,7 @@ bills; this screen reads runs and queues requests** for it.
   waiting, Catch up and Retry are disabled; a refusal (409 a retry already queued, 422 a
   date not due yet) shows the server's message.
 
-API: `GET /internal/v1/billingRun?limit=14`, `GET .../billingRun/{id}`,
+API: `GET /internal/v1/billingRun?offset=0&limit=20`, `GET .../billingRun/{id}`,
 `GET .../billingRun/{id}/accounts?status=&limit=100`, `POST .../billingRun/catchUp`
 (`{"upTo": "YYYY-MM-DD"}`), `POST .../billingRun/{id}/retry` (no body).
 

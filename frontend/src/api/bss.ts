@@ -1716,12 +1716,17 @@ export type BillingRun = Internal['schemas']['BillingRun'];
 export type RunAccount = Internal['schemas']['RunAccount'];
 export type RunOutcome = RunAccount['status'];
 
-/** How many runs the screen shows: the latest and its history (stage4-design section 7). */
-export const RUN_HISTORY = 14;
+/** How many runs each history page shows. */
+export const RUN_HISTORY = 20;
 
 /** The newest runs first; `total` is every run there is. */
-export function loadRuns(signal: AbortSignal, limit = RUN_HISTORY): Promise<Page<BillingRun>> {
-  return getPage<BillingRun>(`${PATHS.runs}?limit=${limit}`, signal);
+export function loadRuns(
+  signal: AbortSignal,
+  limit = RUN_HISTORY,
+  offset?: number,
+): Promise<Page<BillingRun>> {
+  const query = offset === undefined ? `limit=${limit}` : `offset=${offset}&limit=${limit}`;
+  return getPage<BillingRun>(`${PATHS.runs}?${query}`, signal);
 }
 
 export function loadRun(id: string, signal: AbortSignal): Promise<BillingRun> {

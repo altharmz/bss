@@ -7,8 +7,9 @@ import { RUN } from '../test/fixtures';
 import { nextRunText, PENDING_MAX_MS, POLL_MS } from './BillingRuns';
 
 const RUNS = '/internal/v1/billingRun';
-const LIST = `GET ${RUNS}?limit=14`;
-const id = (n: number) => `b000000${n}-0000-4000-8000-00000000000${n}`;
+const LIST = `GET ${RUNS}?offset=0&limit=20`;
+const id = (n: number) =>
+  `b${n.toString(16).padStart(7, '0')}-0000-4000-8000-${n.toString(16).padStart(12, '0')}`;
 
 type Run = typeof RUN | Record<string, unknown>;
 
@@ -149,7 +150,7 @@ describe('billing runs: latest run and history', () => {
       ),
     ).toBe('Next run 2026-11-01 03:30 · in 4h 30m');
   });
-  it('shows the latest run with its KPIs and the last 14 runs', async () => {
+  it('shows the latest run with its KPIs and the first history page', async () => {
     const { calls } = backend(() => page([LATEST, SEP30, SEP29_FAILED], 9));
     await open();
     expect(screen.getByText('Nightly at 00:30 UTC+3')).toBeTruthy();
@@ -181,10 +182,41 @@ describe('billing runs: latest run and history', () => {
     expect(within(failed).getByTitle('1 of 3 accounts not billed (1 failed)')).toBeTruthy();
     expect(within(failed).getByRole('button', { name: 'Retry' })).toBeTruthy();
     expect(within(rowOf('2026-09-30') as HTMLElement).queryByRole('button')).toBeNull();
-    expect(screen.getByText('Showing 3 of 9')).toBeTruthy();
-    expect(screen.getByText('last 14 runs')).toBeTruthy();
+    expect(screen.getByText('Showing 1–3 of 9')).toBeTruthy();
+    expect(screen.getByText('20 per page · Times in UTC+3')).toBeTruthy();
     // nothing running, nothing queued: no polling
     expect(count(calls, LIST)).toBe(1);
+  });
+
+  it('pages through all 23 runs with the existing offset/limit query', async () => {
+    const runs = Array.from({ length: 23 }, (_, index) => ({
+      ...RUN,
+      id: id(index + 1),
+      runDate: new Date(Date.UTC(2026, 9, 1 - index)).toISOString().slice(0, 10),
+      isLatest: index === 0,
+    }));
+    const secondPage = `GET ${RUNS}?offset=20&limit=20`;
+    const { calls } = backend(() => page(runs.slice(0, 20), 23), {
+      [secondPage]: () => page(runs.slice(20), 23),
+    });
+    await open();
+    await screen.findByText('Showing 1–20 of 23');
+    expect(historyRows()).toHaveLength(20);
+    expect((expectUi('ui.billingRuns.previous') as HTMLButtonElement).disabled).toBe(true);
+    expect((expectUi('ui.billingRuns.next') as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('Showing 21–23 of 23')).toBeTruthy();
+    expect(rowOf('2026-09-11')).toBeDefined();
+    expect(historyRows()).toHaveLength(3);
+    expect(within(latestPanel()).getByText('2026-10-01')).toBeTruthy();
+    expect(calls).toContain(secondPage);
+    expect((expectUi('ui.billingRuns.previous') as HTMLButtonElement).disabled).toBe(false);
+    expect((expectUi('ui.billingRuns.next') as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    expect(await screen.findByText('Showing 1–20 of 23')).toBeTruthy();
+    expect(rowOf('2026-10-01')).toBeDefined();
   });
 
   it('marks catch-up and retry runs and their attempt', async () => {
@@ -212,7 +244,9 @@ describe('billing runs: latest run and history', () => {
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByText('Failed to load run history')).toBeTruthy();
     expect(
-      within(alert).getByText('GET /internal/v1/billingRun?limit=14 → 503 Service Unavailable'),
+      within(alert).getByText(
+        'GET /internal/v1/billingRun?offset=0&limit=20 → 503 Service Unavailable',
+      ),
     ).toBeTruthy();
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('region', { name: 'Latest run' })).toBeTruthy();
@@ -630,7 +664,7 @@ describe('billing runs: polling', () => {
     await advance(POLL_MS);
     await until(() =>
       screen.getByText(
-        /Refresh failed: GET \/internal\/v1\/billingRun\?limit=14 → 502 Bad Gateway/,
+        /Refresh failed: GET \/internal\/v1\/billingRun\?offset=0&limit=20 → 502 Bad Gateway/,
       ),
     );
     expect(within(latestPanel()).getByText('Running')).toBeTruthy(); // the last data stays
