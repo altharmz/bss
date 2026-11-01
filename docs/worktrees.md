@@ -92,6 +92,14 @@ security, migration compatibility and documentation yourself. Keep the existing
 full-test requirement for billing, migration and API PRs. The commit hook remains the
 normal verification gate; `make check` is optional/on-demand.
 
+### Issue progress notes
+
+Add a short comment to the current GitHub issue when something meaningful happens that
+would help a human understand the task later: an important implementation decision, a
+significant check result, a blocker, PR creation, or waiting for human action. There is
+no fixed format. Do not log every command or duplicate detailed telemetry; GitHub already
+timestamps comments. These notes are for human traceability, not a machine event log.
+
 ### Recovery: Make first
 
 When a target fails:
