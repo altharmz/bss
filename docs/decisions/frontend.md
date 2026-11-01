@@ -2,6 +2,8 @@
 
 ## GUI review fixes
 
+- G6 (B7, retry checks): billing-run history pages 20 runs at a time through the existing offset/limit endpoint, with Previous/Next controls and a range footer. The latest-run panel survives older-page views, selection closes when its run leaves the page, and queued work returns to page one for polling. Component tests walk 23 runs and pin the already-present failed-run and failedTechnical-command Retry POSTs without bodies; no write or backend request changed.
+
 - #89 browser prerequisites: numbered transfer waits for the authenticated catalog
   before reading currency and uses the canonical customer API. The local fixture
   prepares a fresh, unordered offering at business midnight through the TMF API;

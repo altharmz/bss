@@ -36,7 +36,7 @@ function backend(
     'GET /internal/v1/context': context,
     [NAV_RUNS]: latestRun,
     // the billing runs screen: no runs (the screen has its own tests)
-    'GET /internal/v1/billingRun?limit=14': empty,
+    'GET /internal/v1/billingRun?offset=0&limit=20': empty,
     [`GET ${ACCOUNTS}`]: () => json([{ id: ID }], { total: 1284 }),
     [`GET ${OFFERINGS}`]: () => json([], { total: 12 }),
     // the subscribers list: no accounts
