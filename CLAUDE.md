@@ -84,6 +84,11 @@ slips against these rules; it is a pattern matcher, not a security boundary
 
 Normal workflow mutation is Make-owned. Use the documented Make targets. Do not bypass
 a failed workflow target with equivalent raw Git, GitHub, Docker, or secret-management commands.
+The canonical cross-client sequence and failure handling are in
+[worktrees.md](docs/worktrees.md#normal-agent-workflow): start → implement → format →
+review → commit → create/check PR → merge → finish. `make check` is optional/on-demand;
+the commit hook is the normal verification gate. Use `make sync-task` when master
+advances during a task, preserving published history.
 
 - **One development cycle: develop -> commit -> push, with one local test run.**
   The pre-commit hook runs `make lint`, the smoke tests and the tests the change affects
@@ -141,8 +146,8 @@ stay in the slice trackers in `docs/` and an issue only links to them. Rules in 
 - WIP limit: 1 item per agent. Claim an item with your `agent:<client>` label (for example
   `agent:claude`, `agent:codex` or `agent:kimi`) and move it to Doing in one step; never
   touch another agent's items.
-- Merging: open a PR with `Fixes #N`, wait with `gh pr checks --watch`, and if every check
-  is green merge with `gh pr merge --squash --delete-branch`. Never self-merge a
+- Merging: use `make create-pr` (adds `Fixes #N`), observe `make check-pr`, and merge with
+  `make merge-task` only when ready. Never self-merge a
   `needs-human` item or a PR touching CLAUDE.md, AGENTS.md, docs/board.md, `.claude/`,
   `scripts/pre-commit.sh` or `.github/workflows/`; never use `--admin`, merge on failing
   or pending checks, or push to `master`. Details: board.md.

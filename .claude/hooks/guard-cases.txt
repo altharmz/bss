@@ -10,14 +10,14 @@ block	git config --local core.hooksPath /dev/null
 block	git config --unset core.hooksPath
 block	git config --get core.hooksPath; git -c core.hooksPath=/dev/null commit -m x
 block	python3 -c 'import subprocess; subprocess.run(["git", "config", "core.hooksPath", "/dev/null"])'
-allow	git commit -F /tmp/x/msg
-allow	git push
-allow	git push origin master
-allow	git push -u origin feature/x
+block	git commit -F /tmp/x/msg
+block	git push
+block	git push origin master
+block	git push -u origin feature/x
 allow	grep -rn foo .env.example
 allow	ls /opt/pw-browsers/chromium-1194/
 allow	docker compose config --quiet
-allow	docker compose run --rm --no-deps web-offline sh -c "npm test"
+block	docker compose run --rm --no-deps web-offline sh -c "npm test"
 allow	make deploy
 allow	make verify
 allow	make deployed
@@ -29,7 +29,7 @@ block	sed -i s/running/passed/ .deployed
 block	rm .deployed
 block	cp /tmp/x .deployed
 allow	sed -n 1,80p .claude/hooks/guard.sh > /tmp/x
-allow	git commit --amend --no-edit -F m
+block	git commit --amend --no-edit -F m
 allow	echo hi > scripts/x.sh
 block	git commit --no-verify -m x
 block	git commit -n -m x
@@ -42,7 +42,7 @@ block	git push --force-with-lease origin master
 block	gh pr merge 12 --squash --admin
 block	gh pr merge --admin --squash --delete-branch
 block	gh api -X PUT repos/o/r/pulls/12/merge
-allow	gh pr merge 12 --squash --delete-branch
+block	gh pr merge 12 --squash --delete-branch
 allow	gh pr checks 12 --watch
 block	git push --no-verify
 block	git push origin :old
@@ -67,3 +67,22 @@ cloud-allow	git commit --no-verify -F m
 cloud-block	curl https://vps-test
 cloud-allow	npm test
 cloud-block	git push -u origin cloud/x 2>&1 && git push origin master
+# Normal local lifecycle mutations are Make-owned, including fallback attempts.
+allow	make commit MESSAGE="Finish slice" FILES='["notes.md"]'
+allow	make create-pr
+allow	make check-pr
+allow	make merge-task
+allow	make finish-task SLOT=worker1
+allow	git status --short
+allow	git diff --cached
+allow	git worktree list
+allow	git stash list
+allow	gh api repos/altharmz/bss
+block	git -C /tmp/task push
+block	make push || git push
+block	bash -c 'git commit -m fallback'
+block	git worktree remove /tmp/task
+block	gh pr create --title x
+block	gh project item-edit --id x --single-select-option-id 47fc9ee4
+block	./scripts/task-compose up -d
+block	python3 -B scripts/task_git.py commit

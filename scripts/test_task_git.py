@@ -244,6 +244,70 @@ class GitTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("event not recorded", result.stderr)
 
+    def advance_master(self, filename="upstream.txt", content="upstream\n"):
+        other = self.base / "upstream"
+        self.call(["git", "clone", "-q", str(self.remote), str(other)])
+        (other / filename).write_text(content)
+        self.call(["git", "add", filename], cwd=other)
+        self.call(
+            ["git", "-c", "user.name=test", "-c", "user.email=t@t", "commit", "-qm", "upstream"],
+            cwd=other,
+        )
+        self.call(["git", "push", "origin", "master"], cwd=other)
+        return self.call(["git", "rev-parse", "HEAD"], cwd=other).stdout.strip()
+
+    def test_sync_preserves_published_history_and_runs_commit_hook(self):
+        self.change()
+        self.assertEqual(self.command().returncode, 0)
+        self.assertEqual(self.command("push").returncode, 0)
+        previous = self.call(["git", "rev-parse", "HEAD"]).stdout.strip()
+        upstream = self.advance_master()
+        refused = self.command("push")
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn("make sync-task", refused.stderr)
+        result = self.command("sync-task")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.call(["git", "merge-base", "--is-ancestor", previous, "HEAD"])
+        self.call(["git", "merge-base", "--is-ancestor", upstream, "HEAD"])
+        self.assertEqual(self.command("push").returncode, 0)
+        head = self.call(["git", "rev-parse", "HEAD"]).stdout
+        self.assertEqual(self.command("sync-task").returncode, 0)
+        self.assertEqual(self.call(["git", "rev-parse", "HEAD"]).stdout, head)
+
+    def test_sync_hook_failure_preserves_merge_and_index(self):
+        flag = self.base / "fail-hook"
+        (self.work / "scripts/pre-commit.sh").write_text(f"test ! -f '{flag}'\n")
+        self.assertEqual(self.command(files=["scripts/pre-commit.sh"]).returncode, 0)
+        self.advance_master()
+        flag.touch()
+        head = self.call(["git", "rev-parse", "HEAD"]).stdout
+        self.assertNotEqual(self.command("sync-task").returncode, 0)
+        self.assertEqual(self.call(["git", "rev-parse", "HEAD"]).stdout, head)
+        self.call(["git", "rev-parse", "--verify", "MERGE_HEAD"])
+        self.assertIn("upstream.txt", self.call(["git", "diff", "--cached", "--name-only"]).stdout)
+
+    def test_sync_conflict_preserves_both_histories(self):
+        self.change()
+        self.assertEqual(self.command().returncode, 0)
+        self.advance_master("chosen.txt", "different upstream\n")
+        head = self.call(["git", "rev-parse", "HEAD"]).stdout
+        self.assertNotEqual(self.command("sync-task").returncode, 0)
+        self.assertEqual(self.call(["git", "rev-parse", "HEAD"]).stdout, head)
+        self.assertIn("chosen.txt", self.call(["git", "diff", "--name-only", "--diff-filter=U"]).stdout)
+        (self.work / "chosen.txt").write_text("explicit source resolution\n")
+        result = self.command(files=["chosen.txt"])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.call(["git", "diff", "--name-only", "--diff-filter=U"]).stdout, "")
+
+    def test_sync_dirty_and_remote_mismatch_refused(self):
+        self.change()
+        result = self.command("sync-task")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("commit intended changes", result.stderr)
+        self.assertEqual(self.command().returncode, 0)
+        self.call(["git", "config", "remote.origin.pushurl", str(self.base / "unexpected.git")])
+        self.assertNotEqual(self.command("sync-task").returncode, 0)
+
 
 del QualityTests
 

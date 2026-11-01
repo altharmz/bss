@@ -22,8 +22,9 @@ Then, in this order:
 4. **Waiting**: check each "unblocks when". Met: move it to Ready and say so. List the
    still-blocked ones in one line each.
 5. **Ready**: use `make start-task` from the primary checkout, following CLAUDE.md.
-   Claim only the returned issue with your agent label and Doing status, and start in
-   its returned worktree. The helper prepares local resources; it does not claim the board.
+   Use the returned issue and worktree. The helper claims the agent label and Doing
+   status as part of startup; do not repeat the claim with raw GitHub commands. Continue
+   through the [canonical Make lifecycle](../../docs/worktrees.md#normal-agent-workflow).
 6. Nothing in Ready: report the Inbox items that need triage and the next slice in
    epic #43's task list, propose what to do, and do not pick work on your own.
 

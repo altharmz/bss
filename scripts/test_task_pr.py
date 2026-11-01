@@ -180,6 +180,13 @@ class PrTests(unittest.TestCase):
         self.pr["changedFiles"] = 3
         self.assertEqual(self.command()[0], 1)
 
+    def test_workflow_guard_helper_and_cases_require_human(self):
+        self.pr["reviewDecision"] = "APPROVED"
+        for filename in ("scripts/workflow_guard.py", "scripts/test_workflow_guard.py"):
+            with self.subTest(filename=filename):
+                self.state["files"] = [[{"filename": filename}]]
+                self.assertTrue(self.outcome("blocked", 3)["human_approval_required"])
+
     def test_rename_from_protected_path_requires_human(self):
         self.state["files"] = [
             [{"filename": "archived-instructions.md", "previous_filename": "CLAUDE.md"}]

@@ -9,9 +9,10 @@ redirect, pipe, `&&`, `;` or other command in the same call. `~/.codex/rules` al
 `make` only when the call is exactly that, otherwise Codex asks for approval. The output
 comes back to you anyway; read it from the tool result, not from a log file.
 
-Commit with `git commit -m "..."` (or `-F <file>`), not a heredoc, and push with a plain
-`git push`, so the allow rules for `git commit`/`git push` match. Commit and push when
-you judge the change ready; do not ask for approval.
+Follow the [canonical Make lifecycle](docs/worktrees.md#normal-agent-workflow), including
+`make commit MESSAGE="..." FILES='["path/to/file"]'`, `make create-pr` and `make merge-task`.
+Commit and publish when ready; do not ask for approval. Human merge gates still apply.
+`make check` is optional/on-demand; normal commits always run the shared verification hook.
 
 **Deployment is the human's, outside development** (the human, 2026-10-28): your work ends
 at the merge to master. Never run `make deploy`/`verify`/`remote`, never track or suggest a

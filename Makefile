@@ -264,6 +264,8 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 	@echo "docs-check: docs/api and docs/db match the code"
 
 runtime-check: ## Validate task runtime helpers without Docker or secrets
+	GIT_PAGER=cat python3 -B scripts/test_workflow_lifecycle.py
+	GIT_PAGER=cat python3 -B scripts/test_workflow_guard.py
 	GIT_PAGER=cat python3 -B scripts/test_task_finish.py
 	GIT_PAGER=cat python3 -B scripts/test_task_pr.py
 	GIT_PAGER=cat python3 -B scripts/test_task_git.py
@@ -332,6 +334,10 @@ commit: ## Commit explicit task files (FILES JSON array; MESSAGE required)
 push: ## Publish only the current validated task branch to origin
 	@python3 -B scripts/task_git.py push
 
+.PHONY: sync-task
+sync-task: ## Merge current origin/master into a clean task, preserving history and hooks
+	@python3 -B scripts/task_git.py sync-task
+
 .PHONY: create-pr check-pr
 create-pr: export PR_TITLE := $(PR_TITLE)
 create-pr: export PR_BODY_FILE := $(PR_BODY_FILE)
@@ -345,5 +351,6 @@ check-pr: ## Report task PR readiness, including human review gates (never merge
 merge-task: ## Merge this task PR only when all repository and human gates permit
 	@python3 -B scripts/task_finish.py merge-task
 
+finish-task: export BSS_FINISH_MAKEFILE := $(MAKEFILE_LIST)
 finish-task: ## Safely finish a completed slot task, from primary master (SLOT=worker1)
-	@python3 -B "$(dir $(abspath $(firstword $(MAKEFILE_LIST))))scripts/task_finish.py" finish-task
+	@python3 -B -c 'import os, pathlib, runpy, sys; script = pathlib.Path(os.environ["BSS_FINISH_MAKEFILE"]).resolve().parent / "scripts/task_finish.py"; sys.path.insert(0, str(script.parent)); sys.argv = [str(script), "finish-task"]; runpy.run_path(str(script), run_name="__main__")'
