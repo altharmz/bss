@@ -1,6 +1,15 @@
-import { submitDialogPrimary } from '../ui/kit';
+// Ledger v2: BillingRuns.dc.html; docs/ui-redesign-design.md slice 8.
 import { Note } from '../ui/Note';
-import { useEffect, useRef, useState, type MouseEvent, type CSSProperties } from 'react';
+import { Amount } from '../ui/Amount';
+import { Id } from '../ui/Id';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import {
   catchUp,
   loadRun,
@@ -17,19 +26,10 @@ import { usePolled } from '../api/usePolled';
 import { useResource } from '../api/useResource';
 import { useRefreshNav, useSetCrumbs, useSystemContext, type SystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
-import { addDays, businessDate, clockTime, utcLabel } from '../format/dates';
-import { accountLabel, shortId } from '../format/ids';
+import { addDays, businessDate, clockTime, utcLabel, zonedDateTime } from '../format/dates';
+import { shortId } from '../format/ids';
 import { formatCents, formatInt, toCents } from '../format/money';
-import {
-  Button,
-  Modal,
-  PageTitle,
-  Panel,
-  StatusPill,
-  Segmented,
-  TextInput,
-  useToast,
-} from '../ui/kit';
+import { Button, PageHeader, Panel, StatusPill, Segmented, TextInput, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -65,14 +65,13 @@ function carriedOut(request: Pending, data: Page<BillingRun>): boolean {
 
 export function columns(currency: string): Column[] {
   return [
-    { key: 'date', label: 'Run date', width: '112px', mono: true },
-    { key: 'start', label: 'Start', width: '86px', mono: true },
-    { key: 'end', label: 'End', width: '100px', mono: true },
-    { key: 'duration', label: 'Duration', width: '104px', mono: true },
-    { key: 'status', label: 'Status', width: '112px' },
-    { key: 'note', label: 'Note', width: 'minmax(0, 1fr)' },
-    { key: 'charges', label: 'Charges', width: '100px', align: 'right', mono: true },
-    { key: 'amount', label: `Amount, ${currency}`, width: '140px', align: 'right', mono: true },
+    { key: 'date', label: 'Date', width: '100px', mono: true },
+    { key: 'status', label: 'Status', width: '100px' },
+    { key: 'trigger', label: 'Trigger', width: 'minmax(60px, 1fr)' },
+    { key: 'duration', label: 'Took', width: '90px', mono: true },
+    { key: 'failed', label: 'Failed', width: '52px', align: 'right', mono: true },
+    { key: 'amount', label: `Charged, ${currency}`, width: '112px', align: 'right' },
+    { key: 'actions', label: '', width: '52px', kind: 'actions' },
   ];
 }
 
@@ -230,34 +229,52 @@ export function BillingRunsScreen() {
       : null;
 
   return (
-    <div className="bss-screen" data-ui="ui.billingRuns.list">
-      <div className="bss-title-row">
-        <PageTitle title="Billing runs" />
-        <span className="bss-caption">
-          Scheduled daily at {context.billingRunAt} {utcLabel(context.utcOffset)}
-        </span>
-        <div className="bss-title-actions">
-          <label className="bss-caption" htmlFor="catch-up-to">
-            Catch up to
-          </label>
-          <TextInput
-            id="catch-up-to"
-            type="date"
-            mono
-            value={upTo}
-            max={due}
-            onChange={(event) => setUpTo(event.target.value)}
-          />
-          <Button
-            variant="primary"
-            data-ui="ui.billingRuns.catchUp"
-            disabled={disabled || !validUpTo || runs.status !== 'ok'}
-            onClick={onCatchUp}
-          >
-            Catch up
-          </Button>
-        </div>
-      </div>
+    <div className="bss-screen billing-runs" data-ui="ui.billingRuns.list">
+      <PageHeader
+        title="Billing runs"
+        meta={
+          <>
+            Nightly at {context.billingRunAt} {utcLabel(context.utcOffset)}
+          </>
+        }
+        actions={
+          <>
+            <label className="bss-caption" htmlFor="catch-up-to">
+              Catch up to
+            </label>
+            <TextInput
+              id="catch-up-to"
+              type="date"
+              mono
+              value={upTo}
+              max={due}
+              onChange={(event) => setUpTo(event.target.value)}
+            />
+            <Button
+              data-ui="ui.billingRuns.catchUp"
+              disabled={disabled || !validUpTo || runs.status !== 'ok'}
+              onClick={onCatchUp}
+            >
+              Catch up
+            </Button>
+            {latest?.status === 'failed' && (
+              <Button
+                variant="primary"
+                data-ui="ui.billingRuns.retry"
+                disabled={disabled}
+                onClick={() => {
+                  setOpen(null);
+                  retry(latest);
+                }}
+              >
+                {latest.failureKind === 'run'
+                  ? 'Retry run'
+                  : `Retry ${formatInt(latest.accounts.failed)} failed`}
+              </Button>
+            )}
+          </>
+        }
+      />
 
       {pending !== null && (
         <div className="bss-run-note" role="status">
@@ -282,108 +299,112 @@ export function BillingRunsScreen() {
       )}
 
       {latest === null && runs.status === 'loading' && <LatestSkeleton />}
-      {latest !== null && latest.status === 'failed' && (
-        <div className="bss-run-banner" role="alert">
-          <span className="icon" aria-hidden="true">
-            !
-          </span>
-          <span className="strong">Latest run for {latest.runDate} failed.</span>
-          <span className="text">{failureText(latest)}</span>
-          <button
-            type="button"
-            className="bss-run-banner-btn"
-            data-ui="ui.billingRuns.retry"
-            disabled={disabled}
-            onClick={() => retry(latest)}
-          >
-            Retry run for {latest.runDate}
-          </button>
-        </div>
-      )}
       {latest !== null && (
         <LatestRun run={latest} context={context} onOpen={() => setOpen(latest)} />
       )}
 
-      <Panel
-        title="Run history"
-        subtitle={`${RUN_HISTORY} per page · Times in ${utcLabel(context.utcOffset)}`}
-        {...(runs.refreshError !== null
-          ? {
-              right: (
-                <Note tone="negative">
-                  Refresh failed: {runs.refreshError.message}{' '}
-                  <Button small onClick={runs.refresh}>
-                    Retry
-                  </Button>
-                </Note>
-              ),
-            }
-          : {})}
-      >
-        <TableHead columns={cols} />
-        <ListState
-          resource={runs}
-          columns={cols}
-          errorTitle="Failed to load run history"
-          empty={{
-            title: 'No runs yet',
-            text: `The worker bills the first date at ${context.billingRunAt} ${utcLabel(context.utcOffset)}. You can also catch up to a date.`,
-          }}
-          total={(data: Page<BillingRun>) => data.items.length}
-          rows={(data: Page<BillingRun>) => data.items}
-          onResetFilters={() => {}}
-        >
-          {(rows, data) => (
+      <div className="run-tables">
+        <section className="run-outcomes" aria-label="Outcomes" data-ui="ui.billingRuns.outcomes">
+          {open === null ? (
             <>
-              {rows.map((run) => (
-                <HistoryRow
-                  key={run.id}
-                  run={run}
-                  context={context}
-                  busy={disabled}
-                  onOpen={() => setOpen(run)}
-                  onRetry={() => retry(run)}
-                />
-              ))}
-              <TableFooter
-                left={`Showing ${formatInt(offset + 1)}–${formatInt(offset + rows.length)} of ${formatInt(data.total)}`}
-                right={
-                  <span className="bss-toolbar">
-                    <Button
-                      small
-                      data-ui="ui.billingRuns.previous"
-                      disabled={offset === 0}
-                      onClick={() => setOffset(Math.max(0, offset - RUN_HISTORY))}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      small
-                      data-ui="ui.billingRuns.next"
-                      disabled={offset + RUN_HISTORY >= data.total}
-                      onClick={() => setOffset(offset + RUN_HISTORY)}
-                    >
-                      Next
-                    </Button>
-                  </span>
-                }
-              />
+              <header className="run-section-header">
+                <h2>Outcomes</h2>
+                {latest !== null && <span className="bss-secondary">run {latest.runDate}</span>}
+              </header>
+              <Note tone="info">
+                {latest === null ? (
+                  'Select a run to view its outcomes.'
+                ) : (
+                  <>
+                    Use Accounts above or select a history row to view the selected run’s accounts.
+                  </>
+                )}
+              </Note>
             </>
+          ) : (
+            <RunOutcomes
+              key={open.id}
+              run={open}
+              busy={disabled}
+              onRetry={(run) => {
+                setOpen(null);
+                retry(run);
+              }}
+            />
           )}
-        </ListState>
-      </Panel>
-
-      {open !== null && (
-        <RunModal
-          run={open}
-          busy={disabled}
-          onRetry={(run) => {
-            setOpen(null);
-            retry(run);
-          }}
-          onClose={() => setOpen(null)}
-        />
-      )}
+        </section>
+        <section className="run-history" aria-label="Run history">
+          <Panel
+            title="History"
+            subtitle={`${RUN_HISTORY} per page · Times in ${utcLabel(context.utcOffset)}`}
+            {...(runs.refreshError !== null
+              ? {
+                  right: (
+                    <Note tone="negative">
+                      Refresh failed: {runs.refreshError.message}{' '}
+                      <Button small onClick={runs.refresh}>
+                        Retry
+                      </Button>
+                    </Note>
+                  ),
+                }
+              : {})}
+          >
+            <TableHead columns={cols} density="compact" />
+            <ListState
+              resource={runs}
+              columns={cols}
+              errorTitle="Failed to load run history"
+              empty={{
+                title: 'No runs yet',
+                text: `The worker bills the first date at ${context.billingRunAt} ${utcLabel(context.utcOffset)}. You can also catch up to a date.`,
+              }}
+              total={(data: Page<BillingRun>) => data.items.length}
+              rows={(data: Page<BillingRun>) => data.items}
+              onResetFilters={() => {}}
+            >
+              {(rows, data) => (
+                <>
+                  {rows.map((run) => (
+                    <HistoryRow
+                      key={run.id}
+                      run={run}
+                      context={context}
+                      busy={disabled}
+                      selected={run.id === (open ?? latest)?.id}
+                      onOpen={() => setOpen(run)}
+                      onRetry={() => retry(run)}
+                    />
+                  ))}
+                  <TableFooter
+                    left={`Showing ${formatInt(offset + 1)}–${formatInt(offset + rows.length)} of ${formatInt(data.total)}`}
+                    right={
+                      <span className="bss-toolbar">
+                        <Button
+                          small
+                          data-ui="ui.billingRuns.previous"
+                          disabled={offset === 0}
+                          onClick={() => setOffset(Math.max(0, offset - RUN_HISTORY))}
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          small
+                          data-ui="ui.billingRuns.next"
+                          disabled={offset + RUN_HISTORY >= data.total}
+                          onClick={() => setOffset(offset + RUN_HISTORY)}
+                        >
+                          Next
+                        </Button>
+                      </span>
+                    }
+                  />
+                </>
+              )}
+            </ListState>
+          </Panel>
+        </section>
+      </div>
     </div>
   );
 }
@@ -416,7 +437,11 @@ function LatestRun({
   const done = run.accounts.ok + run.accounts.failed + run.accounts.blocked;
   const pct = run.accounts.total === 0 ? 0 : Math.round((done / run.accounts.total) * 100);
   return (
-    <section className={`bss-run-latest${failed ? ' failed' : ''}`} aria-label="Latest run">
+    <section
+      className={`bss-run-latest${failed ? ' failed' : ''}`}
+      aria-label="Latest run"
+      data-ui="ui.billingRuns.latest"
+    >
       <header>
         <span className="label">Latest run</span>
         <span className="date">{run.runDate}</span>
@@ -430,16 +455,30 @@ function LatestRun({
         </Button>
       </header>
       <div className="bss-run-kpis">
-        <Kpi label="Start" value={clockTime(run.startedAt, context.timeZone)} />
+        <Kpi label="Accounts" value={formatInt(run.accounts.total)} />
+        <Kpi label="Billed" value={formatInt(run.accounts.ok)} />
+        <Kpi label="Failed" value={formatInt(run.accounts.failed)} />
+        <Kpi label="Waiting" value={formatInt(run.accounts.blocked)} />
         <Kpi
-          label="End"
-          value={run.finishedAt === null ? '—' : clockTime(run.finishedAt, context.timeZone)}
+          label="Took"
+          value={duration(run) ?? 'running…'}
+          caption={
+            <>
+              <span>{clockTime(run.startedAt, context.timeZone)}</span> →{' '}
+              <span>
+                {run.finishedAt === null ? '—' : clockTime(run.finishedAt, context.timeZone)}
+              </span>
+            </>
+          }
         />
-        <Kpi label="Duration" value={duration(run) ?? 'running…'} />
-        <Kpi label="Charges" value={formatInt(run.charges.count)} />
         <Kpi
-          label={`Amount, ${context.currency}`}
-          value={formatCents(amountIn(run, context.currency))}
+          label={`Charged, ${context.currency}`}
+          value={<Amount cents={amountIn(run, context.currency)} />}
+          caption={
+            <>
+              <span>{formatInt(run.charges.count)}</span> charges
+            </>
+          }
           strong
         />
       </div>
@@ -462,16 +501,49 @@ function LatestRun({
           </span>
         </div>
       )}
-      {failed && run.error !== null && <div className="bss-run-error">{run.error}</div>}
+      {failed && (
+        <Note tone="negative" lead={`Latest run for ${run.runDate} failed.`}>
+          <span>{failureText(run)}</span>
+          <span>
+            {formatInt(run.accounts.failed)} failed · {formatInt(run.accounts.blocked)} waiting
+          </span>
+          {run.error !== null && <span className="bss-run-error-text">{run.error}</span>}
+        </Note>
+      )}
+      <div className="run-next">{nextRunText(run, context)}</div>
     </section>
   );
 }
 
-function Kpi({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+export function nextRunText(run: Pick<BillingRun, 'runDate'>, context: SystemContext): string {
+  const date = addDays(run.runDate, 1);
+  const minutes = Math.max(
+    0,
+    Math.floor(
+      (Date.parse(zonedDateTime(date, context.billingRunAt, context.timeZone)) -
+        Date.parse(context.now)) /
+        60_000,
+    ),
+  );
+  return `Next run ${date} ${context.billingRunAt} · in ${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+function Kpi({
+  label,
+  value,
+  caption,
+  strong = false,
+}: {
+  label: string;
+  value: ReactNode;
+  caption?: ReactNode;
+  strong?: boolean;
+}) {
   return (
     <div className="bss-run-kpi">
       <span className="label">{label}</span>
       <span className={`value${strong ? ' strong' : ''}`}>{value}</span>
+      {caption !== undefined && <span className="run-kpi-caption">{caption}</span>}
     </div>
   );
 }
@@ -480,61 +552,54 @@ function HistoryRow({
   run,
   context,
   busy,
+  selected,
   onOpen,
   onRetry,
 }: {
   run: BillingRun;
   context: SystemContext;
   busy: boolean;
+  selected: boolean;
   onOpen: () => void;
   onRetry: () => void;
 }) {
   const failed = run.status === 'failed';
-  const retry = (event: MouseEvent) => {
-    event.stopPropagation(); // not the row's click (the detail)
-    onRetry();
-  };
   return (
     <TableRow
       columns={columns(context.currency)}
       onClick={onOpen}
+      density="compact"
+      selected={selected}
       className={`run-history-row${run.isLatest ? ' is-latest' : ''}${failed ? ' is-failed' : ''}`}
       cells={{
         date: run.runDate,
-        start: <span className="bss-text-2">{clockTime(run.startedAt, context.timeZone)}</span>,
-        end: (
-          <span className="bss-text-2">
-            {run.finishedAt === null ? '—' : clockTime(run.finishedAt, context.timeZone)}
-          </span>
-        ),
         duration: <span className="bss-text-2">{duration(run) ?? 'running…'}</span>,
         status: <StatusPill kind="run" status={run.status} />,
-        note: (
-          <span className="bss-run-note-cell">
+        trigger: (
+          <span className="bss-run-note-cell" title={run.error ?? undefined}>
+            {run.trigger === 'scheduled' && <span className="bss-run-tag">scheduled</span>}
             <Tags run={run} latest={run.isLatest} />
-            {failed && run.error !== null && (
-              <span className="error ellipsis" title={run.error}>
-                {run.error}
-              </span>
-            )}
-            {failed && (
-              <button
-                type="button"
-                className="bss-link"
-                data-ui="ui.billingRuns.retry"
-                disabled={busy}
-                onClick={retry}
-              >
-                Retry
-              </button>
-            )}
           </span>
         ),
-        charges: formatInt(run.charges.count),
-        amount: (
-          <span className={failed ? 'bss-faint' : undefined}>
-            {formatCents(amountIn(run, context.currency))}
+        failed: (
+          <span className={failed ? 'bss-run-error-text' : 'bss-secondary'}>
+            {formatInt(run.accounts.failed)}
           </span>
+        ),
+        amount: <Amount cents={amountIn(run, context.currency)} />,
+        actions: failed && (
+          <Button
+            small
+            variant="quiet"
+            data-ui="ui.billingRuns.retry"
+            disabled={busy}
+            onClick={(event: MouseEvent) => {
+              event.stopPropagation();
+              onRetry();
+            }}
+          >
+            Retry
+          </Button>
         ),
       }}
     />
@@ -546,16 +611,17 @@ function HistoryRow({
 type OutcomeFilter = RunOutcome | 'all';
 const FILTER_LABELS: Record<OutcomeFilter, string> = {
   failed: 'Failed',
-  blocked: 'Blocked',
-  ok: 'OK',
+  blocked: 'Waiting',
+  ok: 'Billed',
   all: 'All',
 };
 
 const ACCOUNT_COLUMNS: Column[] = [
-  { key: 'account', label: 'Billing account', width: '1fr' },
-  { key: 'status', label: 'Status', width: '100px' },
-  { key: 'note', label: 'Note', width: '1.2fr' },
-  { key: 'attempts', label: 'Attempts', width: '90px', align: 'right', mono: true },
+  { key: 'account', label: 'Account', width: 'minmax(190px, 1fr)' },
+  { key: 'status', label: 'Outcome', width: '100px' },
+  { key: 'note', label: 'Reason', width: 'minmax(180px, 1.2fr)' },
+  { key: 'attempts', label: 'Tries', width: '64px', align: 'right', mono: true },
+  { key: 'finished', label: 'Finished', width: '100px', mono: true },
 ];
 
 function firstFilter(run: BillingRun): OutcomeFilter {
@@ -564,16 +630,14 @@ function firstFilter(run: BillingRun): OutcomeFilter {
   return 'all';
 }
 
-function RunModal({
+function RunOutcomes({
   run: initial,
   busy,
   onRetry,
-  onClose,
 }: {
   run: BillingRun;
   busy: boolean;
   onRetry: (run: BillingRun) => void;
-  onClose: () => void;
 }) {
   const context = useSystemContext();
   const fresh = useResource(`run:${initial.id}`, (signal) => loadRun(initial.id, signal));
@@ -594,65 +658,48 @@ function RunModal({
       : `${businessDate(instant, context.timeZone)} ${clockTime(instant, context.timeZone)}`;
 
   return (
-    <Modal
-      onSubmit={submitDialogPrimary}
-      title={`Run for ${run.runDate}`}
-      subtitle={
-        <span className="bss-run-subtitle">
-          <StatusPill kind="run" status={run.status} />
-          <Tags run={run} latest={run.isLatest} />
-          <span className="bss-mono" title={run.id}>
-            {shortId(run.id)}
-          </span>
-        </span>
-      }
-      width={760}
-      onClose={onClose}
-      footer={
-        <>
-          {run.status === 'failed' && (
-            <Button
-              variant="primary"
-              data-ui="ui.billingRuns.retry"
-              disabled={busy}
-              onClick={() => onRetry(run)}
-            >
-              Retry run for {run.runDate}
-            </Button>
-          )}
-          <Button onClick={onClose}>Close</Button>
-        </>
-      }
-    >
-      <div className="bss-modal-body">
-        <dl className="bss-details">
-          <dt>Started</dt>
-          <dd className="bss-mono">{when(run.startedAt)}</dd>
-          <dt>Finished</dt>
-          <dd className="bss-mono">{when(run.finishedAt)}</dd>
-          <dt>Last progress</dt>
-          <dd className="bss-mono">{when(run.heartbeatAt)}</dd>
-          <dt>Accounts</dt>
-          <dd className="bss-mono">
-            {formatInt(run.accounts.total)} · ok {formatInt(run.accounts.ok)} · failed{' '}
-            {formatInt(run.accounts.failed)} · blocked {formatInt(run.accounts.blocked)}
-          </dd>
-          <dt>Charges</dt>
-          <dd className="bss-mono">
-            {formatInt(run.charges.count)} ·{' '}
-            {run.charges.amounts.length === 0
-              ? `0.00 ${context.currency}`
-              : run.charges.amounts
-                  .map((m) => `${formatCents(toCents(m.value))} ${m.unit}`)
-                  .join(' · ')}
-          </dd>
-          {run.error !== null && (
-            <>
-              <dt>Error</dt>
-              <dd className="bss-run-error inline">{run.error}</dd>
-            </>
-          )}
-        </dl>
+    <section aria-label={`Run for ${run.runDate}`}>
+      <header className="run-section-header">
+        <h2>Outcomes</h2>
+        <span className="bss-secondary">run {run.runDate}</span>
+        {run.status === 'failed' && !run.isLatest && (
+          <Button data-ui="ui.billingRuns.retry" disabled={busy} onClick={() => onRetry(run)}>
+            Retry
+          </Button>
+        )}
+      </header>
+      <div className="run-outcomes-body">
+        <details className="run-details">
+          <summary>Run details</summary>
+          <dl className="bss-details">
+            <dt>Started</dt>
+            <dd className="bss-mono">{when(run.startedAt)}</dd>
+            <dt>Finished</dt>
+            <dd className="bss-mono">{when(run.finishedAt)}</dd>
+            <dt>Last progress</dt>
+            <dd className="bss-mono">{when(run.heartbeatAt)}</dd>
+            <dt>Accounts</dt>
+            <dd className="bss-mono">
+              {formatInt(run.accounts.total)} · ok {formatInt(run.accounts.ok)} · failed{' '}
+              {formatInt(run.accounts.failed)} · blocked {formatInt(run.accounts.blocked)}
+            </dd>
+            <dt>Charges</dt>
+            <dd className="bss-mono">
+              {formatInt(run.charges.count)} ·{' '}
+              {run.charges.amounts.length === 0
+                ? `0.00 ${context.currency}`
+                : run.charges.amounts
+                    .map((m) => `${formatCents(toCents(m.value))} ${m.unit}`)
+                    .join(' · ')}
+            </dd>
+            {run.error !== null && (
+              <>
+                <dt>Error</dt>
+                <dd className="bss-run-error inline">{run.error}</dd>
+              </>
+            )}
+          </dl>
+        </details>
         <div className="bss-toolbar">
           <Segmented
             label="Account outcome"
@@ -666,7 +713,7 @@ function RunModal({
           />
         </div>
         <Panel>
-          <TableHead columns={ACCOUNT_COLUMNS} />
+          <TableHead columns={ACCOUNT_COLUMNS} density="compact" />
           <ListState
             resource={accounts}
             columns={ACCOUNT_COLUMNS}
@@ -688,6 +735,7 @@ function RunModal({
                   <TableRow
                     key={outcome.billingAccount.id}
                     columns={ACCOUNT_COLUMNS}
+                    density="compact"
                     cells={{
                       account: (
                         <span className="ellipsis">
@@ -698,9 +746,10 @@ function RunModal({
                               accountId: outcome.billingAccount.id,
                             })}
                           >
-                            {accountLabel(outcome.billingAccount.id)}
+                            {outcome.billingAccount.name ||
+                              `Account ${shortId(outcome.billingAccount.id)}`}
                           </Link>{' '}
-                          {outcome.billingAccount.name}
+                          <Id id={outcome.billingAccount.id} prefix="BA-" />
                         </span>
                       ),
                       status: <StatusPill kind="runOutcome" status={outcome.status} />,
@@ -711,12 +760,16 @@ function RunModal({
                           </span>
                         ) : outcome.waitsFor !== null ? (
                           <span className="bss-secondary">
-                            waits for the run of {outcome.waitsFor.runDate}
+                            Waits for the run of {outcome.waitsFor.runDate}
                           </span>
                         ) : (
-                          ''
+                          '—'
                         ),
                       attempts: formatInt(outcome.attempts),
+                      finished:
+                        outcome.finishedAt === null
+                          ? '—'
+                          : clockTime(outcome.finishedAt, context.timeZone),
                     }}
                   />
                 ))}
@@ -728,6 +781,10 @@ function RunModal({
           </ListState>
         </Panel>
       </div>
-    </Modal>
+      <Note tone="info">
+        Retry re-bills only the failed accounts for {run.runDate}. Billed accounts are not charged
+        twice.
+      </Note>
+    </section>
   );
 }

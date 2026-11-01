@@ -29,7 +29,9 @@ Ready and continues through the same startup/claim path below. If setup fails, i
 preserved issue before retrying; do not create a duplicate. Ordinary Ready selection still
 uses `make start-task`.
 
-1. From clean primary master: `make start-task`. Use exactly the returned
+1. From clean primary master: `make start-task` (for Codex, strongly prefer
+   `make start-task BSS_TASK_OWNER=codex`). Do not manually inspect the board or select
+   and claim an issue first. Use exactly the returned
    issue, branch, slot and worktree; startup claims `agent:<client>` and moves it to Doing.
 2. In that task worktree: implement, with focused tests when useful. If another task
    merged meanwhile, use `make sync-task` from a clean checkout before continuing.
@@ -55,8 +57,11 @@ Use the lifecycle above for Codex, Claude, Kimi and future clients.
 `BSS_TASK_OWNER` is the client identity (`codex`, `claude`, `kimi`, or another validated
 client slug); never infer it from a worker slot. Run `make start-task` from primary
 master; Codex and Claude identities are detected from their client markers.
-`BSS_TASK_OWNER=<client>` is an optional override/fallback when detection is absent or
-ambiguous. Kimi starts work with `make start-task BSS_TASK_OWNER=kimi` and supplies the
+`BSS_TASK_OWNER=<client>` explicitly identifies the client and takes precedence over
+detection. Strongly prefer `make start-task BSS_TASK_OWNER=codex` for Codex and
+`make start-task BSS_TASK_OWNER=claude` for Claude; automatic detection remains supported.
+Do not manually inspect the board, count statuses or list candidate PRs before startup.
+Kimi starts work with `make start-task BSS_TASK_OWNER=kimi` and supplies the
 same identity to `make new-priority-task`. Do not supply `SLOT`; startup selects a free
 slot. Add `JSON=1` only when structured output is needed. The returned worktree path is
 authoritative. Start and finish run from primary; implementation, format, review, commit,
@@ -78,7 +83,7 @@ make the command look shorter. Use automatic defaults unless a value is required
 
 | Operation | Preferred command |
 |---|---|
-| Start and claim a task | `make start-task` (primary) |
+| Start and claim a task | `make start-task BSS_TASK_OWNER=codex` for Codex (primary) |
 | Create and start an explicitly approved P0 request | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (primary) |
 | Format | `make format` |
 | Broader technical validation, when useful | `make check` |

@@ -480,6 +480,8 @@ items:
   - {id: ui.billingRuns.next, area: ui, stage: 4, title: "Next billing-run history page"}
   - {id: ui.billingRuns.catchUp, area: ui, stage: 4, title: "Catch up to a date"}
   - {id: ui.billingRuns.retry, area: ui, stage: 4, title: "Retry a failed run"}
+  - {id: ui.billingRuns.latest, area: ui, stage: 5, title: "Latest billing run band and next run"}
+  - {id: ui.billingRuns.outcomes, area: ui, stage: 5, title: "Selected billing run inline outcomes"}
   - {id: ui.prepaidCommands, area: ui, stage: 5, title: "Prepaid commands screen: list, state filter, paging, nav badge"}
   - {id: ui.prepaidCommands.accountChip, area: ui, stage: 5, title: "Prepaid commands account filter chip"}
   - {id: ui.prepaidCommands.detail, area: ui, stage: 5, title: "Prepaid command detail dialog"}
