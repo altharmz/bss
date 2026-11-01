@@ -54,8 +54,13 @@ block	docker system prune -a
 block	docker volume rm x
 block	ssh vps-test sudo ls
 block	ssh vps-test docker build .
+block	ssh vps-test -p 443
 block	ssh vps-test ss -tlnp | grep 443
 block	docker run -p 8444:80 nginx
+block	ufw allow 500/udp
+block	curl https://example.com:443/healthz
+allow	printf '%s\n' port=123e4567-e89b-1194-a456-426614174000
+allow	printf '%s\n' port=dead1194beef
 block	vpncmd /server
 block	npm install
 block	git reset --hard

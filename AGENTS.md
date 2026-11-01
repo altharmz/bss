@@ -37,5 +37,9 @@ commands, merge and close rules; your label is `agent:codex`). On "continue", or
 start without a concrete request, follow the protocol in
 [.claude/commands/continue.md](.claude/commands/continue.md); a concrete request takes
 precedence and does not trigger unrelated Ready work. Codex does not run Claude commands, so
-open and follow that file. The short rules are in the [Task board](CLAUDE.md#task-board) section
-of CLAUDE.md.
+open and follow that file. After owned Doing work and open PRs have been resumed or ruled out,
+run `make start-task` immediately from clean primary master. Do not manually list, compare,
+rank, or select Ready issues; the helper is the only Ready-selection mechanism. Use exactly the
+returned issue, branch, slot and worktree, and fetch only the selected issue's body. Kimi uses
+`make start-task BSS_TASK_OWNER=kimi JSON=1`. The short rules are in the
+[Task board](CLAUDE.md#task-board) section of CLAUDE.md.
