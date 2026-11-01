@@ -15,6 +15,7 @@ import socket
 import stat
 import subprocess
 import sys
+import time
 import unicodedata
 from pathlib import Path
 
@@ -266,6 +267,25 @@ def agent_label():
     return f"agent:{task_owner()}"
 
 
+def new_task_request():
+    title = os.environ.get("BSS_NEW_TASK_TITLE", "").strip()
+    body = os.environ.get("BSS_NEW_TASK_BODY", "")
+    if not title or not body.strip():
+        raise StartupError("new-priority-task requires non-empty TITLE and BODY")
+    labels = list(dict.fromkeys(
+        label.strip() for label in os.environ.get("BSS_NEW_TASK_LABELS", "").split(",")
+        if label.strip()
+    ))
+    if any(
+        re.fullmatch(r"P[0-3]", label)
+        or label.startswith("agent:")
+        or label in {"blocked", "needs-human"}
+        for label in labels
+    ):
+        raise StartupError("new-priority-task LABELS cannot set priority, ownership or gates")
+    return title, body, labels
+
+
 def snapshot():
     return pages(BOARD_QUERY, board_page, project=PROJECT)
 
@@ -298,6 +318,59 @@ def set_status(issue, option):
         field=STATUS_FIELD,
         option=option,
     )
+
+
+def create_priority_task(request):
+    title, body, labels = request
+    args = [
+        "gh", "issue", "create", "--repo", REPOSITORY,
+        "--title", title, "--body", body, "--label", "P0",
+    ]
+    for label in labels:
+        args.extend(["--label", label])
+    result = run(*args)
+    match = re.fullmatch(
+        r"https://github\.com/altharmz/bss/issues/([1-9][0-9]*)", result.stdout.strip()
+    )
+    if not match:
+        raise StartupError("issue creation returned an unexpected URL; review GitHub before retrying")
+    number = int(match[1])
+    try:
+        created = None
+        for attempt in range(5):
+            matches = [
+                item for item in snapshot()
+                if (item.get("content") or {}).get("number") == number
+            ]
+            if len(matches) > 1:
+                raise StartupError("new issue has ambiguous project items")
+            if matches:
+                created = matches[0]
+                break
+            if attempt < 4:
+                time.sleep(1)
+        if created is None:
+            raise StartupError("new issue did not appear on the BSS board")
+        set_status(dict(created, item_id=created["id"]), READY)
+        query(
+            """mutation($project: ID!, $item: ID!) {
+              updateProjectV2ItemPosition(input: {projectId: $project, itemId: $item}) {
+                clientMutationId
+              }
+            }""",
+            project=PROJECT,
+            item=created["id"],
+        )
+        items = snapshot()
+        if (
+            not items or items[0]["id"] != created["id"]
+            or status(items[0]) != "Ready"
+            or items[0]["content"]["number"] != number
+        ):
+            raise StartupError("new issue is not first in Ready after prioritization")
+        return created["id"]
+    except (StartupError, OSError, ValueError, KeyError, TypeError) as error:
+        raise StartupError(f"new issue #{number} is preserved after setup failure: {error}") from None
 
 
 class Claim:
@@ -604,7 +677,7 @@ def select_slot(root, common, stack):
     raise SlotError("no usable worker slot available:\n  " + "\n  ".join(failures))
 
 
-def start(on_ready=None):
+def start(on_ready=None, new_task=None):
     root, common = primary()
     agent = agent_label()
     descriptor = os.open(common / "start-task.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -640,7 +713,12 @@ def start(on_ready=None):
         represented.update(issue_of(pr["headRefName"]) for pr in prs)
         items = snapshot()
         check_wip(items, agent)
+        created_item = create_priority_task(new_task) if new_task is not None else None
+        if created_item is not None:
+            items = snapshot()
         issue = select_issue(items, represented)
+        if created_item is not None and issue["item_id"] != created_item:
+            raise StartupError("prioritized issue selection changed; review the board before retrying")
         branch = branch_name(issue["number"], issue["title"])
         destination = slot / "repo"
         if destination.exists() or destination.is_symlink() or destination in dict(trees):
@@ -738,7 +816,9 @@ def print_result(result, json_output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
-    parser.add_argument("--release-slot", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--release-slot", action="store_true")
+    mode.add_argument("--new-priority-task", action="store_true")
     args = parser.parse_args()
     signal.signal(signal.SIGTERM, interrupted)
     try:
@@ -747,7 +827,8 @@ def main():
             release(root, os.environ.get("BSS_SLOT"), worktrees(root))
             print("worker slot released; persistent state preserved")
         else:
-            start(lambda result: print_result(result, args.json))
+            new_task = new_task_request() if args.new_priority_task else None
+            start(lambda result: print_result(result, args.json), new_task=new_task)
     except (
         StartupError,
         SlotError,

@@ -21,6 +21,14 @@ a failed workflow target with equivalent raw Git, GitHub, Docker, or secret-mana
 commands. Source editing and read-only diagnosis remain available. This document is the
 canonical lifecycle contract for all clients; provider adapters link here.
 
+For a concrete new request only when the human explicitly approves P0 priority and first
+board position, use `make new-priority-task TITLE="Task title" BODY="Goal and acceptance
+criteria" LABELS="harness,docs"` from clean primary master. `LABELS` is optional; priority,
+ownership and gate labels are reserved. The command creates the P0 issue, moves it first in
+Ready and continues through the same startup/claim path below. If setup fails, inspect the
+preserved issue before retrying; do not create a duplicate. Ordinary Ready selection still
+uses `make start-task`.
+
 1. From clean primary master: `make start-task`. Use exactly the returned
    issue, branch, slot and worktree; startup claims `agent:<client>` and moves it to Doing.
 2. In that task worktree: implement, with focused tests when useful. If another task
@@ -63,6 +71,7 @@ Investigate details when an error or a concrete engineering question calls for t
 | Operation | Preferred command |
 |---|---|
 | Start and claim a task | `make start-task` (primary) |
+| Create and start an explicitly approved P0 request | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (primary) |
 | Format | `make format` |
 | Broader technical validation, when useful | `make check` |
 | Review repository/task state | `make review-task` |
