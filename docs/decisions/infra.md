@@ -287,8 +287,10 @@ the order of deploys (backup, vps-infra, then `make verify`).
 **First web deploy: done** - `9424b9b`, 2026-10-02, `make verify` end to end (migration
 0003 ran, web smoke 8/8 through Caddy).
 
-- **`deploy.sh`** builds the UI locally before any network step (`make web-build
-  WEB_BUILD=<tag>` stamps `index.html`'s `bss-build` marker) and refuses to start without
+- **`deploy.sh`** builds the UI locally before any network step (the primary-only
+  `./scripts/task-compose --deploy-web-build <tag>` uses the offline container with fixed,
+  nonsecret settings and stamps `index.html`'s `bss-build` marker; normal development builds
+  remain task-only) and refuses to start without
   the web smoke's credential in **`.env.smoke`** - a local-only file, gitignored and never
   shipped. `.env.prod` is copied to the VPS as `~/bss/.env` (compose reads it only to fill
   `${...}`; the container gets just the variables listed under `environment:`, there is
