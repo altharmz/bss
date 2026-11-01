@@ -589,32 +589,31 @@ in a new tab. Design: [next-slices-design.md](next-slices-design.md) section 23.
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
-Ledger v2: run/runOutcome StatusPill; progress width uses a runtime CSS variable.
+Ledger v2 R8: PageHeader shows the nightly schedule and a secondary catch-up date input/action. A failed latest run has the only page primary, Retry N failed (Retry run for whole-run failure). The latest band (`ui.billingRuns.latest`) shows counts, charged amount, duration, running progress, failure Note and the next business-zone run/countdown. Compact history selects inline Outcomes (`ui.billingRuns.outcomes`), with Failed / Waiting / Billed / All, account card links, copyable IDs, reasons, tries and finished times. Initial selection is latest; use Accounts or a history row to load outcomes, preserving the existing lazy requests. Run details is a disclosure. Tables wrap at 1280 and sit side by side when space allows. Requests, catch-up/refusal behavior and polling remain unchanged.
 
 Stage 4, slice g, from [archive/stage4-design.md](archive/stage4-design.md) section 7. **The worker alone
 bills; this screen reads runs and queues requests** for it.
 
-- **Title row**: "Scheduled daily at `BILLING_RUN_AT` UTC+3" (from the context), and
+- **Title row**: "Nightly at `BILLING_RUN_AT` UTC+3" (from the context), and
   **Catch up to** a date (default and maximum: the due date - today from
   `BILLING_RUN_AT` on, else yesterday, Q5) with the **Catch up** button. The toast names
   the dates the worker will run, in order ("Catch-up queued: 3 dates, 2026-09-28 –
   2026-09-30"), or says nothing was due.
 - **Gap warning** (Q4): when the latest run is older than the day before the due date, a
   note says the worker will not bill the gap on its own and which dates a catch-up bills.
-- **Failure banner** (latest run failed): why - N of M accounts not billed, or the run
-  itself failed (no later date until it succeeds) - and **Retry run for DATE**.
+- **Failure Note** in the latest band: why - N of M accounts not billed, or the run
+  itself failed (no later date until it succeeds). The header owns the primary retry.
 - **Latest run** panel: date, status, trigger (catch-up / retry) and attempt tags, short
   run id, Start / End / Duration (times in BILLING_TZ) / Charges / Amount in the UI
   currency; a progress bar ("N of M accounts") while running; the error when failed;
   **Accounts** opens the run.
-- **Run history** (`GET /billingRun?limit=14`, newest first): run date, start, end,
-  duration, status, note (latest / trigger / attempt tags, the error, a **Retry** link on
-  **every** failed row - any failed run can be retried, Q3), charges, amount; footer
-  "Showing 14 of N". A row opens the run.
-- **One run** (dialog): started / finished / last progress, account counts, charges per
-  currency, the error, and its per-account outcomes filtered by Failed / Blocked / OK /
+- **Run history** (`GET /billingRun?limit=14`, newest first): date, status, trigger,
+  duration, failed count, charged amount and quiet **Retry** on every failed row (Q3).
+  Raw error stays in the trigger tooltip; footer "Showing 14 of N". A row selects outcomes.
+- **One run** (inline section): started / finished / last progress, account counts, charges per
+  currency and the error in Run details; per-account outcomes filtered by Failed / Waiting / Billed /
   All (the first non-empty of failed, blocked), each account linking to its card, with
-  the error or the earlier run a blocked account waits for; Retry when failed.
+  the error or the earlier run a blocked account waits for; secondary Retry for an older failed selection.
 - **Polling**: every 5 s while a run is running, or while a request queued from this
   screen has not been carried out - i.e. until a run started at or after the request's
   `requestedAt` (server clock) has finished. After 3 minutes it stops waiting and says the

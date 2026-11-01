@@ -312,3 +312,7 @@ Terminal settlement still dismisses the watch and toasts the result immediately.
 ### Subscriber unfinished orders (GUI review G5)
 
 SubscriberOrders reuses loadOrderPage for each of draft, acknowledged and inProgress, paging by account and state. Open reuses OrderModal, with refresh and watch ownership retained by the card. DraftPrice selects the attached recurring catalog price valid at the requested start’s business-zone midnight; reads and failures remain distinct. Immediate prepaid Add product and expired Resume disable submission while the server preview is unavailable or reports a shortfall, and reuse Preview’s Top up handoff.
+
+### Ledger billing runs (R8)
+
+The latest-run band and selected compact history share the existing loaded run list. Outcomes replaces the dialog but keeps its lazy detail/account loaders, firstFilter and exact filter queries: activate Accounts or select a history row. Key the outcomes owner by run id so selection resets its filter. Run details stays in a disclosure; account names link to cards beside copyable Id controls. The next-run countdown uses zonedDateTime for latest date + 1 at billingRunAt, including the target date's DST offset, and context.now only. Outcomes/history wrap below the band when their compact tables cannot fit side by side.

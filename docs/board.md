@@ -87,9 +87,10 @@ human confirms it is done, close it (see Merging and closing).
 
 ### Parallel agents
 
-Claude Code and Codex may run at the same time. Before taking a Ready item check it has no
-agent label; claim it by adding yours and moving it to Doing in one step. Never work on an
-item owned by the other agent.
+Claude Code and Codex may run at the same time. Use `make start-task` to select and claim
+work; it checks eligibility, ownership and WIP before moving the item to Doing. Strongly
+prefer `make start-task BSS_TASK_OWNER=codex` for Codex. Do not manually inspect or claim
+Ready items before startup. Never work on an item owned by the other agent.
 
 ### Merging and closing
 
@@ -131,10 +132,15 @@ it, then carry on in the normal order. The revert PR follows the same flow.
 
 ### Mechanics
 
-Start with a compact snapshot of all open items (the default page size is 30), excluding Done;
-do not pull every issue body into the session. Fetch the full body only for an issue being
-considered, using explicit JSON fields (the human-readable view can query deprecated Projects
-classic fields and fail):
+Normal task startup uses `make start-task`, strongly preferably
+`make start-task BSS_TASK_OWNER=codex` for Codex. Do not run a manual board snapshot,
+status count, candidate selection or claim before it. Fetch the returned issue's body
+for implementation context afterward.
+
+The commands below are for explicitly requested board triage/administration or diagnosis
+of a specific reported condition, not normal startup. Keep those inspections compact;
+fetch only relevant issue bodies using explicit JSON fields (the human-readable view
+can query deprecated Projects classic fields and fail):
 
 ```
 gh project item-list 1 --owner altharmz --limit 100 --format json | jq -r '
