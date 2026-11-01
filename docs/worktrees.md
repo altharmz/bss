@@ -38,21 +38,89 @@ existing requirement to run `make test` before a PR touching billing, migrations
 the API still applies. Freeze the tree during validation and rerun only affected
 checks after fixes. Never skip hooks.
 
-On failure, inspect the preserved state with `git status`, `git diff`, `git log`,
-`git worktree list`, `gh pr checks`, `make logs` and other read-only tools. Fix source
-or the reported prerequisite, then retry the Make target. Startup failures are reported
-and stopped as CLAUDE.md requires. Do not change client identity to evade WIP limits.
-Board triage and the explicit manual recovery procedures in this document, board.md
-and cloud.md remain separate from the normal lifecycle. Report a guard rejection of
-an authorized recovery operation; do not disguise it or disable the guard. Setting
-cloud mode on a workstation is not a recovery procedure.
+## AI workflow guidance
 
-The shared shell hook recognizes direct Git lifecycle mutations, GitHub lifecycle
-mutations, direct runtime mutations and direct lifecycle-helper invocation. It reports
-the Make-owned path, including for chained fallbacks after a failed Make command.
-Read-only diagnostics and source edits are allowed; Make recipes execute the actual
-mutations through existing validated helpers. The hook is a slip guard, not a security
-boundary: it cannot interpret arbitrary programs, aliases or variable indirection.
+Use the lifecycle above for Codex, Claude, Kimi and future clients.
+`BSS_TASK_OWNER` is the client identity (`codex`, `claude`, `kimi`, or another validated
+client slug); never infer it from a worker slot. For example, run
+`make start-task BSS_TASK_OWNER=codex SLOT=worker1` from primary master. The returned
+worktree path is authoritative. Start and finish run from primary; implementation,
+format, review, commit, push, PR and merge targets run from that task worktree.
+
+### Tool choice and engineering review
+
+Prefer the repository target when it represents the operation. Try the relevant target
+first; do not manually reproduce its board, ownership, worktree, port, runtime or CI
+checks before running it. Investigate those details when an error calls for them.
+
+| Operation | Preferred command |
+|---|---|
+| Start and claim a task | `make start-task SLOT=worker1` (primary) |
+| Format | `make format` |
+| Broader technical validation, when useful | `make check` |
+| Review repository/task state | `make review-task` |
+| Commit selected files | `make commit MESSAGE="Describe the slice" FILES='["path/to/file"]'` |
+| Publish the task branch | `make push` |
+| Create or reuse the PR (also publishes) | `make create-pr` |
+| Check PR and CI readiness | `make check-pr` (repeat while pending; no `WAIT=1`) |
+| Synchronize a clean task with master | `make sync-task` |
+| Merge when policy permits | `make merge-task` |
+| Finish and release the slot | `make finish-task SLOT=worker1` (primary) |
+| Discover runtime operations | `make help`, then the documented Make target |
+
+Normal read-only investigation is welcome: `rg`, `grep`, `find`, `ls`, `cat`,
+`sed -n`, `git status`, `git diff`, `git log`, `git show`,
+`git branch --show-current` and `git branch -vv`. These examples describe read-only
+forms; editing commands such as `sed -i` are source mutations. Edit source using the
+client's editing facilities as ordinary task work.
+
+`make review-task` checks repository state; it does not replace engineering review.
+Review architecture, correctness, edge cases, regressions, coverage, maintainability,
+security, migration compatibility and documentation yourself. Keep the existing
+full-test requirement for billing, migration and API PRs. The commit hook remains the
+normal verification gate; `make check` is optional/on-demand.
+
+### Recovery: Make first
+
+When a target fails:
+
+1. Read the error and understand the failed condition.
+2. Fix the underlying task/repository state when the correction is clear and safe.
+3. Prefer another documented repository helper if one represents the recovery.
+4. Only when the workflow cannot represent the required recovery, take the smallest
+   non-destructive corrective action allowed by repository policy. Explain why the
+   helper could not represent it and report the action in the final summary.
+
+Do not immediately replace a failed Make operation with equivalent raw Git, GitHub,
+Docker, board or secret-management commands. Startup failures still require stopping
+and reporting, as CLAUDE.md specifies. Explicit board/manual recovery procedures and
+[cloud instructions](cloud.md) retain their scope; cloud mode on a workstation is not
+recovery. Never bypass human approval, hooks or checks, rewrite published history,
+force-push, discard work with a hard reset, force-remove modified worktrees, globally
+prune Docker, delete resources of uncertain ownership or modify protected credentials.
+Report a guard rejection of an authorized recovery; do not disguise or disable it.
+The shell guard is a slip guard, not an arbitrary-shell security boundary.
+
+### Checks, human gates and completion
+
+Keep the tree unchanged during validation and batch fixes before another run. Do not
+interrupt `make check`, commit hooks or active validation merely because they take time.
+If a command appears genuinely hung or exceeds the client's ability to keep it running,
+report the condition instead of killing and repeatedly restarting it. Rerun affected
+stages after fixes; avoid repeating checks on an unchanged tree without a reason.
+
+At a human gate, report the task/branch, PR number or URL, CI/readiness status, the
+policy requiring human action and the exact next command or action. Stop at that gate.
+After explicit human approval, try the repository workflow again first. If it still
+cannot represent the approved transition, follow the recovery order above; approval
+never authorizes bypassing GitHub protection or failing checks. See
+[board merge policy](board.md#merging-and-closing) and the command contracts below.
+
+At completion or a blocker, report what changed, important decisions, tests and docs
+added/updated, validation results (including whether `make check` ran), commit/branch
+state when relevant, PR URL, CI/readiness and any remaining human gate. After merge
+and cleanup, report whether the worker slot was released. Deployment stays outside
+this development workflow.
 
 ## Persistent worker slots
 
