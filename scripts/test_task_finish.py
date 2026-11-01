@@ -64,6 +64,98 @@ class LifecycleFixture(unittest.TestCase):
 
 
 class MergeTests(LifecycleFixture):
+    def approve(self):
+        self.env["HUMAN_APPROVAL"] = f"123:{self.head}"
+
+    def test_explicit_approval_for_protected_files_and_both_labels(self):
+        for source in ("files", "issue", "pr"):
+            with self.subTest(source=source):
+                if source == "files":
+                    self.state["files"] = [[{"filename": "CLAUDE.md"}]]
+                else:
+                    self.state[source]["labels"] = [{"name": "needs-human"}]
+                self.approve()
+                outcome, code = self.merge()
+                self.assertEqual(code, 0)
+                self.assertTrue(outcome["human_approval_required"])
+                self.assertEqual(outcome["human_approval"], "accepted")
+                self.assertEqual(self.state["merges"], 1)
+                self.pr["state"] = "OPEN"
+                self.state.pop("merges")
+                self.state["files"] = [[{"filename": "scripts/task_pr.py"}]]
+                self.state["issue"]["labels"] = []
+                self.pr["labels"] = []
+
+    def test_invalid_or_stale_approval_never_merges(self):
+        self.state["files"] = [[{"filename": "CLAUDE.md"}]]
+        for approval, status in (
+            ("", "missing"),
+            ("yes", "malformed"),
+            (f"0123:{self.head}", "malformed"),
+            (f"124:{self.head}", "mismatched"),
+            ("123:" + "a" * 40, "mismatched"),
+        ):
+            with self.subTest(approval=approval):
+                self.env["HUMAN_APPROVAL"] = approval
+                outcome, code = self.merge()
+                self.assertEqual(code, 3)
+                self.assertEqual(outcome["human_approval"], status)
+                self.assertNotIn("merges", self.state)
+        self.approve()
+        self.pr["headRefOid"] = "b" * 40
+        self.assertEqual(self.merge()[0]["human_approval"], "mismatched")
+        self.assertNotIn("merges", self.state)
+
+    def test_approval_preserves_all_other_readiness_gates(self):
+        self.pr["labels"] = [{"name": "needs-human"}]
+        self.approve()
+        for field, value in (
+            ("mergeable", "CONFLICTING"),
+            ("mergeable", "UNKNOWN"),
+            ("reviewDecision", "REVIEW_REQUIRED"),
+            ("reviewDecision", "CHANGES_REQUESTED"),
+            ("reviewDecision", "UNKNOWN"),
+            ("mergeStateStatus", "BLOCKED"),
+            ("mergeStateStatus", "BEHIND"),
+            ("isDraft", True),
+            ("statusCheckRollup", []),
+            ("statusCheckRollup", [{"__typename": "StatusContext", "state": "PENDING"}]),
+            ("statusCheckRollup", [{"__typename": "StatusContext", "state": "FAILURE"}]),
+        ):
+            with self.subTest(field=field, value=value):
+                old = self.pr[field]
+                self.pr[field] = value
+                outcome, code = self.merge()
+                self.assertNotEqual(code, 0)
+                self.assertEqual(outcome["human_approval"], "accepted")
+                self.assertNotIn("merges", self.state)
+                self.pr[field] = old
+        self.state["behind"] = 1
+        self.assertIn("base-behind", self.merge()[0]["reasons"])
+        self.state["behind"] = 0
+        (self.work / "Makefile").write_text("dirty\n")
+        self.assertIn("uncommitted-changes", self.merge()[0]["reasons"])
+        self.assertNotIn("merges", self.state)
+
+    def test_approved_remote_head_still_requires_matching_local_head(self):
+        self.pr["labels"] = [{"name": "needs-human"}]
+        self.pr["headRefOid"] = "b" * 40
+        self.env["HUMAN_APPROVAL"] = "123:" + "b" * 40
+        self.assertIn("head-mismatch", self.merge()[0]["reasons"])
+        self.assertNotIn("merges", self.state)
+
+    def test_approval_does_not_override_repository_policy_or_github_rejection(self):
+        self.pr["labels"] = [{"name": "needs-human"}]
+        self.approve()
+        self.state["policy"]["allow_merge_commit"] = True
+        self.assertEqual(self.merge()[1], 3)
+        self.assertNotIn("merges", self.state)
+        self.state["policy"]["allow_merge_commit"] = False
+        self.state["fail_merge"] = True
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.merge()
+        self.assertNotIn("merges", json.loads(self.fixture.read_text()))
+
     def test_entrypoint_blocks_human_gate_and_records_result(self):
         self.pr["labels"] = [{"name": "needs-human"}]
         self.fixture.write_text(json.dumps(self.state))
@@ -88,6 +180,15 @@ class MergeTests(LifecycleFixture):
     def test_merge_then_idempotent(self):
         self.assertEqual(self.merge()[0]["status"], "merged")
         self.assertEqual(self.merge()[1], 0)
+        self.assertEqual(self.state["merges"], 1)
+
+    def test_merge_pins_head_validated_by_readiness(self):
+        self.pr["labels"] = [{"name": "needs-human"}]
+        self.approve()
+        initial = {**self.pr, "headRefOid": "a" * 40}
+        confirmed = {**self.pr, "state": "MERGED"}
+        with patch.object(lifecycle, "merged_pr", side_effect=[initial, confirmed]):
+            self.assertEqual(self.merge()[1], 0)
         self.assertEqual(self.state["merges"], 1)
 
     def test_failed_ci_conflict_review_human_and_repository_policy(self):

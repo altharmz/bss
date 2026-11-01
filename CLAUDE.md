@@ -156,7 +156,10 @@ stay in the slice trackers in `docs/` and an issue only links to them. Rules in 
   `agent:claude`, `agent:codex` or `agent:kimi`) and move it to Doing in one step; never
   touch another agent's items.
 - Merging: use `make create-pr` (adds `Fixes #N`), observe `make check-pr`, and merge with
-  `make merge-task` only when ready. Never self-merge a
+  `make merge-task` only when ready. After explicit human approval of the concrete PR and
+  exact current head in this conversation, pass
+  `HUMAN_APPROVAL=<PR-number>:<full-head-SHA>` to `make merge-task`; new commits require
+  renewed approval and all other gates still apply. Without that approval never self-merge a
   `needs-human` item or a PR touching CLAUDE.md, AGENTS.md, docs/board.md, `.claude/`,
   `scripts/pre-commit.sh` or `.github/workflows/`; never use `--admin`, merge on failing
   or pending checks, or push to `master`. Details: board.md.
