@@ -84,9 +84,10 @@ slips against these rules; it is a pattern matcher, not a security boundary
 
 Follow the [canonical lifecycle](docs/worktrees.md#normal-agent-workflow) and
 [shared AI guidance](docs/worktrees.md#ai-workflow-guidance) for tool choice, engineering
-review, recovery, long-running checks, human gates and completion reporting. Prefer
-repository Make targets for workflow mutations; normal read-only investigation and
-source editing remain ordinary engineering work. The shared guidance defines the
+review, recovery, long-running checks, human gates and completion reporting. Use
+repository Make targets wherever they cover the operation, including read-only task
+review and PR readiness. Use ordinary commands for source investigation, source editing
+and details the targets do not expose; see the shared tool-choice guidance. The shared guidance defines the
 recovery order when a helper cannot represent a required safe correction.
 
 - **One development cycle: develop -> commit -> push, with one local test run.**

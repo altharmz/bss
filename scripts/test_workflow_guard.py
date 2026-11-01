@@ -51,6 +51,29 @@ class WorkflowGuardTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIn("make", violation(command))
 
+    def test_board_order_exception_is_narrow(self):
+        query = ('mutation { updateProjectV2ItemPosition(input: {'
+                 'projectId: "PVT_kwHOEpM-b84BpHA0", itemId: "PVTI_example"'
+                 '}) { clientMutationId } }')
+        def command(body):
+            return "gh api graphql -f query='" + body + "'"
+        for body in (query, query.replace('})', ', afterId: null})'),
+                     query.replace('})', ', afterId: "PVTI_previous"})')):
+            with self.subTest(body=body):
+                self.assertIsNone(violation(command(body)))
+        for body in (
+            query.replace('PVT_kwHOEpM-b84BpHA0', 'PVT_other'),
+            query.replace('updateProjectV2ItemPosition', 'deleteProjectV2Item'),
+            query.replace('itemId: "PVTI_example"', 'itemId: "PVTI_example", extra: true'),
+            query.replace('clientMutationId } }', 'clientMutationId } deleteProjectV2 { clientMutationId } }'),
+            query.replace('mutation {', 'mutation { alias:'),
+        ):
+            with self.subTest(body=body):
+                self.assertIn('make', violation(command(body)))
+        for suffix in (' -f extra=value', ' --input body.json', ' --hostname other.example'):
+            self.assertIn('make', violation(command(query) + suffix))
+        self.assertIn('make', violation(command(query) + '; git push'))
+
     def test_failed_make_never_authorizes_fallback(self):
         self.assertIsNone(violation("make push"))
         self.assertIn("make push", violation("git push"))

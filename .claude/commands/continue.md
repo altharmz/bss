@@ -15,10 +15,14 @@ for the issue being considered.
 
 Then, in this order:
 
-1. Local state: `git status`, current branch, unpushed commits, stashes.
+1. Locate existing work with only the read-only inspection needed. In an identified task
+   checkout, use `make review-task` for routine local-state checks. Use direct Git commands
+   for primary/task discovery or details it does not expose (such as unpushed commits or
+   stashes), when relevant; do not run a blanket Git inventory before every Make target.
 2. **Doing**: resume an item you own (matching branch/PR). More than one, or an item with
    no branch and no recent activity: report it and ask.
-3. Open PRs (`gh pr list`): failing checks or requested changes come before new work.
+3. Discover open PRs with `gh pr list`; for an identified task PR, use `make check-pr`
+   from its task checkout. Failing checks or requested changes come before new work.
 4. **Waiting**: check each "unblocks when". Met: move it to Ready and say so. List the
    still-blocked ones in one line each.
 5. **Ready**: use `make start-task` from the primary checkout, following CLAUDE.md.
