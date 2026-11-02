@@ -18,12 +18,13 @@ import { ApiError, explain, newIdempotencyKey } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { Link } from '../app/router';
-import { addDays, isIsoDate, lastDay } from '../format/dates';
+import { addDays, clockTime, isIsoDate, lastDay } from '../format/dates';
 import { accountLabel } from '../format/ids';
 import { formatAmount, formatCents, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, Modal, TextInput, useToast } from '../ui/kit';
+import { Button, DateField, Dialog, Field, TextInput, useToast } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
+import { KeyValue } from '../ui/summaries';
 import type { PendingOrder } from '../api/commands';
 
 // Modal 5. The first-charge preview is the backend's dry run (the stage 3 core on the
@@ -86,18 +87,23 @@ export function AddProductModal({
   const [code, setCode] = useState<string | undefined>();
   const [numberId, setNumberId] = useState(draft?.numberId ?? '');
   const [uncertain, setUncertain] = useState(false);
+  const [previewAnswer, setPreviewAnswer] = useState<{ key: string; at: string } | null>(null);
 
   const offerings = useResource('offerings', (signal) =>
     loadSellableOfferings(account.currency, signal),
   );
   const startValid = isIsoDate(start) && start >= today;
   const previewKey = offeringId !== null && startValid ? `${offeringId}|${start}` : 'none';
-  const preview = useResource<FirstCharge | null>(previewKey, (signal) =>
-    offeringId !== null && startValid
-      ? loadFirstCharge(account.id, offeringId, start, signal)
-      : Promise.resolve(null),
-  );
+  const preview = useResource<FirstCharge | null>(previewKey, async (signal) => {
+    if (offeringId === null || !startValid) return null;
+    const data = await loadFirstCharge(account.id, offeringId, start, signal);
+    if (!signal.aborted) {
+      setPreviewAnswer({ key: previewKey, at: new Date().toISOString() });
+    }
+    return data;
+  });
   const first = preview.status === 'ok' ? preview.data : null;
+  const answeredAt = previewAnswer?.key === previewKey ? previewAnswer.at : null;
 
   const q = filter.trim().toLowerCase();
   const visible =
@@ -224,14 +230,18 @@ export function AddProductModal({
     }
   }
 
+  const shortfallCents =
+    shortNow && first?.shortfall !== undefined ? toCents(first.shortfall.value) : 0;
+  const addLabel = chosen === undefined ? 'Add product' : `Add ${chosen.name}`;
+
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={draft === undefined ? 'Add product' : 'Edit draft'}
-      width={720}
+      size="L"
       onClose={onClose}
       ui="ui.subscriber.addProduct"
-      subtitle={`${account.customerName} · ${accountLabel(account.id)}${account.ratingType === 'prepaid' ? '' : ` · billing day ${account.cycleDay}`}`}
+      context={`${account.customerName} · ${accountLabel(account.id)} · ${account.ratingType}`}
       footer={
         <Footer
           write={{
@@ -241,9 +251,16 @@ export function AddProductModal({
             code,
           }}
           onRefresh={onClose}
+          left={
+            answeredAt === null ? undefined : (
+              <span className="bss-add-product-preview-time">
+                Preview from the server ·{' '}
+                <time dateTime={answeredAt}>{clockTime(answeredAt, context.timeZone)}</time>
+              </span>
+            )
+          }
         >
-          <Button onClick={onClose}>Cancel</Button>
-          {draft === undefined && (
+          {draft === undefined ? (
             <Button
               data-ui="ui.addProduct.saveDraft"
               disabled={!draftReady || busy || uncertain}
@@ -251,18 +268,9 @@ export function AddProductModal({
             >
               Save as draft
             </Button>
-          )}
-          {draft === undefined ? (
-            <Button
-              variant="primary"
-              disabled={!ready || busy || uncertain}
-              onClick={() => void confirm()}
-            >
-              {start === today ? 'Activate' : `Activate from ${start}`}
-            </Button>
           ) : (
             <Button
-              variant="primary"
+              data-dialog-primary
               data-ui="ui.addProduct.saveDraftChanges"
               disabled={!draftReady || busy}
               onClick={() => void saveDraft()}
@@ -270,121 +278,298 @@ export function AddProductModal({
               Save draft
             </Button>
           )}
+          <Button onClick={onClose}>Cancel</Button>
+          {draft === undefined && (
+            <Button
+              variant={shortNow ? 'secondary' : 'primary'}
+              busyLabel="Adding…"
+              disabled={!ready || busy || uncertain}
+              onClick={() => void confirm()}
+            >
+              {addLabel}
+            </Button>
+          )}
+          {shortNow && first?.shortfall !== undefined && onTopUp !== undefined && (
+            <Button
+              variant="primary"
+              data-ui="ui.addProduct.topUpShortfall"
+              onClick={() => onTopUp(formatCents(shortfallCents).replace(/,/g, ''))}
+            >
+              Top up {formatCents(shortfallCents)} {first.shortfall.unit}…
+            </Button>
+          )}
         </Footer>
       }
     >
-      <fieldset disabled={busy} className="bss-write-fields bss-modal-body">
-        <section>
-          <div className="bss-step-head">
-            1. Offering <span className="caption">Active offerings only</span>
-            <TextInput
-              className="filter"
-              width={230}
-              placeholder="Filter offerings"
-              aria-label="Filter offerings"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-            />
-          </div>
-          <div className="bss-offer-list" role="radiogroup" aria-label="Offering">
-            {offerings.status === 'loading' && <SkeletonRows columns={OFFER_COLUMNS} rows={4} />}
-            {offerings.status === 'error' && (
-              <ErrorBlock
-                title="Failed to load offerings"
-                error={offerings.error}
-                onRetry={offerings.retry}
+      <fieldset disabled={busy} className="bss-write-fields bss-add-product">
+        <div className="bss-add-product-fields">
+          <section>
+            <div className="bss-add-product-offering-head">
+              <span className="field-label">Offering</span>
+              <span className="caption">Active offerings only</span>
+              <TextInput
+                className="filter"
+                width={180}
+                placeholder="Filter offerings"
+                aria-label="Filter offerings"
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
               />
-            )}
-            {offerings.status === 'ok' && visible.length === 0 && (
-              <div className="bss-state">
-                <div className="text">No active offerings match.</div>
-              </div>
-            )}
-            {visible.map((offer) => {
-              const price = shownPrice(
-                offer.prices,
-                midnightOf(startValid ? start : today, context.timeZone),
-                account.currency,
-              );
-              return (
-                <div
-                  key={offer.id}
-                  className="bss-offer"
-                  role="radio"
-                  aria-checked={offer.id === offeringId}
-                  tabIndex={0}
-                  onClick={() => setOfferingId(offer.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === ' ' || event.key === 'Enter') setOfferingId(offer.id);
-                  }}
-                >
-                  <span className="bss-radio" />
-                  <span>
-                    <span className="bss-name">{offer.name}</span>
-                    {activeOfferingIds.has(offer.id) && (
-                      <span className="bss-tag">already active</span>
-                    )}
-                    {offer.code !== null && <div className="bss-code">{offer.code}</div>}
-                  </span>
-                  <span>{offer.specification}</span>
-                  <span className="num num-right">
-                    {price === null
-                      ? '—'
-                      : `${formatCents(price.cents)} / ${price.interval ?? 'mo'}`}
-                  </span>
+            </div>
+            <div className="bss-add-product-offerings" role="radiogroup" aria-label="Offering">
+              {offerings.status === 'loading' && <SkeletonRows columns={OFFER_COLUMNS} rows={4} />}
+              {offerings.status === 'error' && (
+                <ErrorBlock
+                  title="Failed to load offerings"
+                  error={offerings.error}
+                  onRetry={offerings.retry}
+                />
+              )}
+              {offerings.status === 'ok' && visible.length === 0 && (
+                <div className="bss-state">
+                  <div className="text">No active offerings match.</div>
                 </div>
-              );
-            })}
-          </div>
-        </section>
+              )}
+              {visible.map((offer) => {
+                const price = shownPrice(
+                  offer.prices,
+                  midnightOf(startValid ? start : today, context.timeZone),
+                  account.currency,
+                );
+                return (
+                  <div
+                    key={offer.id}
+                    className="bss-add-product-offering"
+                    role="radio"
+                    aria-checked={offer.id === offeringId}
+                    tabIndex={0}
+                    onClick={() => setOfferingId(offer.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === ' ' || event.key === 'Enter') setOfferingId(offer.id);
+                    }}
+                  >
+                    <span className="bss-radio" aria-hidden="true" />
+                    <span className="bss-add-product-offering-copy">
+                      <span className="bss-name">{offer.name}</span>
+                      {offer.code !== null && <span className="bss-code">{offer.code}</span>}
+                      <span className="bss-add-product-offering-note">{offer.specification}</span>
+                      {activeOfferingIds.has(offer.id) && (
+                        <span className="bss-tag">already active</span>
+                      )}
+                    </span>
+                    <span className="bss-add-product-offering-price">
+                      {price === null
+                        ? '—'
+                        : `${formatCents(price.cents)} / ${price.interval ?? 'mo'}`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
 
-        <section>
-          <div className="bss-step-head">2. Start date</div>
-          {requirement.status === 'error' && (
-            <ErrorBlock
-              title="Failed to load number requirement"
-              error={requirement.error}
-              onRetry={requirement.retry}
-            />
-          )}
-          {needsNumber && <NumberPicker value={numberId} onChange={setNumberId} />}
-          <TextInput
-            mono
-            type="date"
-            aria-label="Start date"
-            min={today}
-            value={start}
-            onChange={(event) => setStart(event.target.value)}
-          />
-          <Note tone="info">
-            {!startValid
-              ? `the start date cannot be before ${today}`
-              : account.ratingType === 'prepaid'
-                ? `Paid from the balance on ${start}`
-                : start === today
-                  ? `today · the charge is written by the billing run of ${runOf(start, today)}`
-                  : `the charge is written by the billing run of ${start}`}
-          </Note>
-        </section>
-
-        <section>
-          <div className="bss-step-head">3. First charge preview</div>
-          <div className="bss-preview">
-            {offeringId === null ? (
-              <Note tone="info">Select an offering to see the calculation</Note>
-            ) : (
-              <Preview
-                preview={preview}
-                account={account}
-                start={start}
-                today={today}
-                onTopUp={onTopUp}
+          <section>
+            {requirement.status === 'error' && (
+              <ErrorBlock
+                title="Failed to load number requirement"
+                error={requirement.error}
+                onRetry={requirement.retry}
               />
             )}
-          </div>
-        </section>
+            <div className="bss-add-product-schedule">
+              {needsNumber && <NumberPicker value={numberId} onChange={setNumberId} />}
+              <Field
+                label="Start date"
+                help={start === today ? 'Today (business date)' : undefined}
+              >
+                <DateField
+                  type="date"
+                  aria-label="Start date"
+                  min={today}
+                  value={start}
+                  onChange={(event) => setStart(event.target.value)}
+                />
+              </Field>
+            </div>
+            <Note tone="info">
+              {!startValid
+                ? `the start date cannot be before ${today}`
+                : account.ratingType === 'prepaid'
+                  ? `Paid from the balance on ${start}`
+                  : start === today
+                    ? `today · the charge is written by the billing run of ${runOf(start, today)}`
+                    : `the charge is written by the billing run of ${start}`}
+            </Note>
+          </section>
+
+          {shortNow && first?.shortfall !== undefined && (
+            <Note
+              tone="warning"
+              lead={`Shortfall ${formatCents(shortfallCents)} ${first.shortfall.unit}.`}
+            >
+              The first charge needs {formatAmount((first.required ?? first.amount).value)} and{' '}
+              {first.available === undefined ? '—' : formatAmount(first.available.value)} is
+              available. Top up first; the product can be added once the balance covers it.
+            </Note>
+          )}
+        </div>
+        <aside className="bss-add-product-preview" aria-label="First charge preview">
+          {offeringId === null ? (
+            <Note tone="info">Select an offering to see the calculation</Note>
+          ) : (
+            <AddProductPreview preview={preview} account={account} start={start} today={today} />
+          )}
+        </aside>
       </fieldset>
-    </Modal>
+    </Dialog>
+  );
+}
+
+function AddProductPreview({
+  preview,
+  account,
+  start,
+  today,
+}: {
+  preview: ReturnType<typeof useResource<FirstCharge | null>>;
+  account: Account;
+  start: string;
+  today: string;
+}) {
+  if (preview.status === 'loading') return <Note tone="info">Calculating…</Note>;
+  if (preview.status === 'error') return <Note tone="negative">{explain(preview.error)}</Note>;
+  const p = preview.data;
+  if (p === null) return <Note tone="info">Select an offering to see the calculation</Note>;
+
+  const now = start === today;
+  const prepaid = account.ratingType === 'prepaid' && p.required !== undefined;
+  const required = p.required ?? p.amount;
+  const shortfallCents = p.shortfall === undefined ? 0 : toCents(p.shortfall.value);
+  const short = shortfallCents > 0;
+  const price = `${formatAmount(p.price.value)} ${p.price.unit} / ${p.recurringChargePeriod ?? 'mo'}`;
+  const details: Parameters<typeof KeyValue>[0]['items'] = [
+    ['Price', price],
+    [
+      'Period',
+      <>
+        {p.period.start} – {lastDay(p.period.end)}
+      </>,
+    ],
+  ];
+  if (prepaid) {
+    details.push(['Charging', 'paid in full in advance, no proration']);
+  } else {
+    details.push(
+      [
+        'Billable days',
+        <>
+          {p.billableDays} of {p.periodDays}
+          {p.prorated ? ' (prorated)' : ''}
+        </>,
+      ],
+      [
+        'Prorated',
+        p.prorated
+          ? `${formatAmount(p.price.value)} × ${p.billableDays} / ${p.periodDays}`
+          : 'full period',
+      ],
+    );
+  }
+
+  return (
+    <div
+      className="bss-add-product-charge-preview"
+      data-ui={prepaid ? 'ui.addProduct.prepaidPreview' : undefined}
+    >
+      <div className="bss-add-product-charge">
+        <span className="bss-add-product-charge-label">First charge</span>
+        <span
+          className="bss-add-product-charge-amount"
+          data-testid={prepaid ? 'prepaid-required' : 'first-charge'}
+        >
+          {formatAmount((prepaid ? required : p.amount).value)}{' '}
+          {(prepaid ? required : p.amount).unit}
+        </span>
+      </div>
+      <KeyValue items={details} />
+      {prepaid ? (
+        <KeyValue
+          items={[
+            [
+              now ? 'Required now' : `Required on ${start}`,
+              `${formatAmount(required.value)} ${required.unit}`,
+            ],
+            [
+              'Available',
+              p.available === undefined
+                ? '—'
+                : `${formatAmount(p.available.value)} ${p.available.unit}`,
+            ],
+            ...(short && p.shortfall !== undefined
+              ? ([
+                  [
+                    'Shortfall',
+                    <span className="bss-add-product-shortfall">
+                      {formatCents(shortfallCents)} {p.shortfall.unit}
+                    </span>,
+                  ],
+                ] as Parameters<typeof KeyValue>[0]['items'])
+              : []),
+            ...(now
+              ? ([
+                  [
+                    'Ledger after',
+                    <Amount cents={toCents(p.balanceAfter.value)} currency={p.balanceAfter.unit} />,
+                  ],
+                ] as Parameters<typeof KeyValue>[0]['items'])
+              : []),
+          ]}
+        />
+      ) : (
+        <>
+          <KeyValue
+            items={[
+              [
+                p.next === null ? 'Then' : `Then from ${p.next.start}`,
+                p.next === null
+                  ? 'no price after this period'
+                  : `${formatAmount(p.next.amount.value)} ${p.next.amount.unit}`,
+              ],
+              [
+                'Balance after this charge',
+                <Amount cents={toCents(p.balanceAfter.value)} currency={p.balanceAfter.unit} />,
+              ],
+            ]}
+          />
+          <p className="bss-add-product-preview-copy">
+            in the run of {p.chargeRunDate} · on the bill of {p.billDate}
+          </p>
+          {p.exceedsCreditLimit && p.creditLimit !== null && (
+            <Note tone="warning">
+              Balance will exceed the credit limit of {formatAmount(p.creditLimit.value)}{' '}
+              {p.creditLimit.unit}. Activation is allowed; services may be suspended.
+            </Note>
+          )}
+        </>
+      )}
+      {prepaid && p.next !== null && (
+        <p className="bss-add-product-preview-copy">
+          Then {formatAmount(p.next.amount.value)} {p.next.amount.unit} from {p.next.start}.
+        </p>
+      )}
+      {short && !now && (
+        <Note tone="info">
+          Funds are checked on {start}; nothing is held now. Top up before then.
+        </Note>
+      )}
+      <p className="bss-add-product-preview-copy">
+        {prepaid
+          ? now
+            ? 'Submitting holds the full interval with its taxes; the billing worker charges it and renews at the paid-through date while funds last.'
+            : `On ${start} the billing worker takes the interval from the funds available then.`
+          : `Prorated by days until the account’s next billing day (day ${account.cycleDay}). Full price is charged every cycle after that. An order completed today is charged by tomorrow’s billing run at the earliest.`}
+      </p>
+    </div>
   );
 }
 

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { App } from '../app/App';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 import { expectUi } from '../test/expectUi';
@@ -697,13 +697,13 @@ describe('add product', () => {
     fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
     await within(dialog).findByTestId('first-charge');
     await within(dialog).findByRole('option', { name: '12025550123' });
-    expect(within(dialog).getByRole('button', { name: 'Activate' }).hasAttribute('disabled')).toBe(
-      true,
-    );
+    expect(
+      within(dialog).getByRole('button', { name: 'Add Fiber 100' }).hasAttribute('disabled'),
+    ).toBe(true);
     fireEvent.change(within(dialog).getByLabelText('Subscriber number'), {
       target: { value: numberId },
     });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Activate' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Fiber 100' }));
     expect(await within(dialog).findByText('Number no longer available')).toBeTruthy();
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(JSON.parse(String(post?.[1]?.body)).productOrderItem[0].product).toEqual({
@@ -773,20 +773,23 @@ describe('add product', () => {
     );
   });
 
-  it('lists sellable offerings, marks those already active, and previews from the backend', async () => {
+  it('lists radio offerings, marks those already active, and previews from the backend', async () => {
     backend({ ...catalog, [preview('2026-10-01')]: () => json(FIRST_CHARGE) });
     const dialog = await openModal();
-    expect(within(dialog).getByText('Olga Kuznetsova · BA-AAAA1111 · billing day 28')).toBeTruthy();
+    expect(within(dialog).getByText('Olga Kuznetsova · BA-AAAA1111 · postpaid')).toBeTruthy();
     expect(within(dialog).getByText('Select an offering to see the calculation')).toBeTruthy();
     const options = await within(dialog).findAllByRole('radio');
     expect(options).toHaveLength(2);
     expect(within(options[0] as HTMLElement).getByText('already active')).toBeTruthy();
     expect(within(options[1] as HTMLElement).getByText('650.00 / month')).toBeTruthy();
     expect(
-      (within(dialog).getByRole('button', { name: 'Activate' }) as HTMLButtonElement).disabled,
+      (within(dialog).getByRole('button', { name: 'Add product' }) as HTMLButtonElement).disabled,
     ).toBe(true);
 
     fireEvent.click(options[1] as HTMLElement);
+    expect(options[0]?.getAttribute('aria-checked')).toBe('false');
+    expect(options[1]?.getAttribute('aria-checked')).toBe('true');
+    expect(within(dialog).getByRole('button', { name: 'Add Fiber 100' })).toBeTruthy();
     expect(await within(dialog).findByTestId('first-charge')).toHaveProperty(
       'textContent',
       '585.00 USD',
@@ -875,7 +878,7 @@ describe('add product', () => {
       target: { value: '2026-10-06' },
     });
     const activate = await within(dialog).findByRole('button', {
-      name: 'Activate from 2026-10-06',
+      name: 'Add Fiber 100',
     });
     await waitFor(() => expect((activate as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(activate);
@@ -921,14 +924,14 @@ describe('add product', () => {
     const dialog = await openModal();
     fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
     await within(dialog).findByTestId('first-charge');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Activate' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Fiber 100' }));
     expect(
       await within(dialog).findByText('This offering is no longer available for sale.'),
     ).toBeTruthy();
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
-  it.each(['Activate', 'Save as draft'])(
+  it.each(['Add Fiber 100', 'Save as draft'])(
     'keeps a refused %s submission and offering selection',
     async (action) => {
       backend({
@@ -984,7 +987,7 @@ describe('add product', () => {
       ),
     ).toBeTruthy();
     expect(
-      (within(dialog).getByRole('button', { name: 'Activate' }) as HTMLButtonElement).disabled,
+      (within(dialog).getByRole('button', { name: 'Add Fiber 100' }) as HTMLButtonElement).disabled,
     ).toBe(true);
   });
 });
@@ -2264,9 +2267,9 @@ describe('prepaid orders and commands', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add product' }));
     const dialog = screen.getByRole('dialog', { name: 'Add product' });
     fireEvent.click((await within(dialog).findAllByRole('radio'))[0] as HTMLElement);
-    const activate = await within(dialog).findByRole('button', { name: /^Activate/ });
-    await waitFor(() => expect((activate as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(activate);
+    const add = await within(dialog).findByRole('button', { name: 'Add Fiber 100' });
+    await waitFor(() => expect((add as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(add);
     expect(await screen.findByText('Order for Fiber 100 completed')).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByText(/The order was/)).toBeNull();
@@ -2350,14 +2353,16 @@ describe('prepaid first-charge preview in Add product', () => {
     return dialog;
   }
 
-  it('shows to pay, available, shortfall and ledger after for a start today, with one preview request', async () => {
+  it('shows the server preview and makes Top up primary for an immediate shortfall', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-01T12:34:56Z'));
     const { fetchMock } = stubbed({ [urlOf('2026-10-01')]: () => json(firstCharge()) });
     const dialog = await chooseOffering();
     await within(dialog).findByTestId('prepaid-required');
     const box = expectUi('ui.addProduct.prepaidPreview');
     expect(within(box).getByTestId('prepaid-required').textContent).toBe('780.00 USD');
     const text = box.textContent ?? '';
-    expect(text).toContain('To pay now');
+    expect(text).toContain('Required now');
     expect(within(dialog).getByText('Paid from the balance on 2026-10-01')).toBeTruthy();
     expect(within(dialog).queryByText(/billing run of/)).toBeNull();
     expect(within(dialog).queryByText(/billing day/)).toBeNull();
@@ -2369,14 +2374,24 @@ describe('prepaid first-charge preview in Add product', () => {
     expect(text).toContain('Ledger after');
     expect(text).toContain('Submitting holds the full interval with its taxes');
     expect(within(dialog).queryByTestId('first-charge')).toBeNull();
-    expect(within(dialog).getByText(/Insufficient funds: top up at least 660.00 USD/)).toBeTruthy();
+    expect(within(dialog).getByText('Shortfall 660.00 USD.')).toBeTruthy();
+    expect(
+      within(dialog).getByText(
+        /The first charge needs 780.00 and 120.00 is available\. Top up first/,
+      ),
+    ).toBeTruthy();
     expect(
       (within(dialog).getByRole('button', { name: 'Save as draft' }) as HTMLButtonElement).disabled,
     ).toBe(false);
-    // An immediate prepaid charge waits for sufficient server-preview funds.
-    expect(
-      (within(dialog).getByRole('button', { name: 'Activate' }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+    const add = within(dialog).getByRole('button', { name: 'Add Fiber 100' });
+    expect((add as HTMLButtonElement).disabled).toBe(true);
+    expect(add.className).toContain('secondary');
+    const topUp = expectUi('ui.addProduct.topUpShortfall');
+    expect(topUp.textContent).toBe('Top up 660.00 USD…');
+    expect(topUp.className).toContain('primary');
+    expect(within(dialog).getByText('15:34:56').parentElement?.textContent).toBe(
+      'Preview from the server · 15:34:56',
+    );
     expect(
       fetchMock.mock.calls.filter(([url]) => String(url).includes('/firstCharge')),
     ).toHaveLength(1);
@@ -2391,7 +2406,7 @@ describe('prepaid first-charge preview in Add product', () => {
     const dialog = await chooseOffering();
     await within(dialog).findByTestId('prepaid-required');
     const button = expectUi('ui.addProduct.topUpShortfall');
-    expect(button.textContent).toBe('Top up 1,250.50');
+    expect(button.textContent).toBe('Top up 1,250.50 USD…');
     fireEvent.click(button);
     expect(screen.queryByRole('dialog', { name: 'Add product' })).toBeNull();
     const form = await screen.findByRole('dialog', { name: 'Top up' });
@@ -2418,12 +2433,12 @@ describe('prepaid first-charge preview in Add product', () => {
     fireEvent.change(within(dialog).getByLabelText('Start date'), {
       target: { value: '2026-10-20' },
     });
-    await within(dialog).findByText('To pay on 2026-10-20');
+    await within(dialog).findByText('Required on 2026-10-20');
     expect(within(dialog).getByText('Paid from the balance on 2026-10-20')).toBeTruthy();
     expect(
       (
         within(dialog).getByRole('button', {
-          name: 'Activate from 2026-10-20',
+          name: 'Add Fiber 100',
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(false);

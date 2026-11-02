@@ -25,19 +25,20 @@ stores data under `.kimi-code`, not the Python CLI's `.kimi` directory. Its wire
 differs from the Python CLI's `StatusUpdate` format: unsupported formats are explicitly
 unavailable. Do not infer usage from `token_counting.measured`, context size or rate limits.
 
-Where the runtime does not expose its session ID, pass its actual machine session identity
-on startup or handoff. This requires session metadata, not a prepared token export:
+Kimi agents must always pass the actual machine session identity explicitly on startup and
+on every explicit collection, including resume and handoff. Other clients pass their actual
+identity where the runtime does not expose it. This requires session metadata, not a prepared
+token export:
 
 ```sh
 make start-task BSS_TASK_OWNER=kimi BSS_TELEMETRY_SESSION_ID=<actual-session-uuid>
 make telemetry-collect CLIENT=kimi SESSION_ID=<actual-session-uuid>
-make telemetry-collect
 ```
 
-The first command runs from primary, the others from the selected task worktree. On every
-resume/new session/client handoff run `telemetry-collect` before implementing. A bound
-session is remembered in PostgreSQL, so subsequent Make operations capture it without
-repeating the identity. Missing identity creates an explicit `session_identity_missing`
+The first command runs from primary and the second from the selected task worktree. On every
+resume/new session/client handoff run `telemetry-collect` before implementing; Kimi agents
+must not use the identity-free form. A bound session is remembered in PostgreSQL, so
+subsequent automatic Make operations capture it without repeating the identity. Missing identity creates an explicit `session_identity_missing`
 collection row rather than guessing a nearby session. Its gap remains visible even after
 another session is bound; investigate the missing session instead of deleting its evidence.
 

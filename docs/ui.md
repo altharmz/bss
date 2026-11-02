@@ -267,22 +267,11 @@ list filter). Both lists read all pages. Markers: `ui.subscriber.recordRefund`,
 
 ### Add product (`ui.subscriber.addProduct`, `ui.addProduct.saveDraft`, `ui.addProduct.saveDraftChanges`) - `screens/AddProduct.tsx`
 
-Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
+Ledger v2 R10: an L Dialog identifies the subscriber, BA id and account mode. Its left column contains a filterable radio list of Active, sellable offerings (name, code, specification and the price valid at the selected start date's business-zone midnight), the optional number picker, start date (min = business date) and funding/credit notes. The dedicated right rail contains the **first-charge preview computed by the backend**. The footer records the business-zone response time as “Preview from the server · HH:MM:SS”; the primary is **Add {offering name}** (**Add product** before selection), with **Adding…** while busy.
 
-Modal: 1. pick an Active, sellable offering (filterable list with code, specification and
-the price valid at the selected start date's business-zone midnight); 2. start date (min =
-business date); 3. **first-charge preview computed by
-the backend** - period, billable days of period days, price, amount, when it is charged
-and billed, the following full period, balance after, and a credit-limit warning that
-never blocks. Confirm places a TMF622 add order; a rejection shows its reasons. The copy
-for postpaid follows the end-of-day rule: an order completed
-today is charged by the run of max(start, tomorrow).
-On a **prepaid** account (`ui.addProduct.prepaidPreview`) the preview shows period, price,
-"paid in full in advance", **To pay now** (or **To pay on {date}**), Available, Shortfall
-(only when > 0) and Ledger after (start today only). A shortfall with a start today adds a
-warning and **Top up {n}** (`ui.addProduct.topUpShortfall`), which closes this dialog and
-opens the card's Top-up form with the amount typed in; a future start only shows a hint.
-Immediate activation is disabled while the preview reports a shortfall; Save as draft stays available. Future activation remains available because funds are checked on its start date. Prepaid copy says Paid from the balance on <date> and omits the cycle day.
+The postpaid preview shows amount, period, billable days of period days, price, proration, the following full period, balance after, when it is charged and billed, and a credit-limit warning that never blocks. Confirm places a TMF622 add order; a rejection shows its reasons. The copy follows the end-of-day rule: an order completed today is charged by the run of max(start, tomorrow).
+
+On a **prepaid** account (`ui.addProduct.prepaidPreview`) the preview shows period, price, “paid in full in advance”, **Required now** (or **Required on {date}**), Available, Shortfall (only when > 0) and Ledger after (start today only). A shortfall with a start today adds the warning, disables the secondary Add action and makes **Top up {amount} {currency}…** (`ui.addProduct.topUpShortfall`) the primary; it closes this dialog and opens the card's Top-up form with the amount typed in. A future start only shows an information hint and leaves Add enabled because funds are checked on its start date. Save as draft stays available. Prepaid copy says Paid from the balance on <date> and omits the cycle day.
 API: `GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true`,
 `GET .../productOfferingPrice?priceType=recurring`,
 `GET /internal/v1/billingAccount/{id}/firstCharge?productOffering.id=&startDate=`,

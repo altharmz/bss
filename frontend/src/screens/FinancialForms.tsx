@@ -82,6 +82,7 @@ export function useWrite(onDone: (message: string) => void) {
 export function Footer({
   write,
   onRefresh,
+  left,
   children,
 }: {
   write: Pick<ReturnType<typeof useWrite>, 'busy' | 'problem' | 'unsure'> & {
@@ -89,6 +90,7 @@ export function Footer({
     failedCall?: string | undefined;
   };
   onRefresh: () => void;
+  left?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -110,6 +112,7 @@ export function Footer({
         )
       )}
       <div className="bss-write-actions">
+        {left !== undefined && <div className="bss-write-left">{left}</div>}
         {Children.map(children, (child) => {
           if (!isValidElement<React.ComponentProps<typeof Button>>(child) || child.type !== Button)
             return child;
