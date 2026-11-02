@@ -18,7 +18,10 @@ import { clockTime, businessDate, lastDay } from '../format/dates';
 import { accountLabel } from '../format/ids';
 import { formatCents, parseAmount, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, Modal, Panel, StatusPill, TextInput } from '../ui/kit';
+import { Button, Dialog, Field, MoneyField, Modal, Panel, StatusPill, TextInput } from '../ui/kit';
+import { Id } from '../ui/Id';
+import { Footer } from './FinancialForms';
+import { uncertain } from './submissionKey';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { BillLinks } from './BillLinks';
@@ -334,6 +337,7 @@ export function RecordPaymentModal({
   const [items, setItems] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [unsure, setUnsure] = useState(false);
 
   const open = bills.filter(
     (b) => b.remainingCents > 0 && (b.state === 'sent' || b.state === 'partiallyPaid'),
@@ -370,7 +374,7 @@ export function RecordPaymentModal({
   }
 
   async function submit() {
-    if (!valid || amount === null) return;
+    if (!valid || amount === null || busy || unsure) return;
     setBusy(true);
     setProblem(null);
     try {
@@ -386,73 +390,95 @@ export function RecordPaymentModal({
       );
     } catch (error) {
       setProblem(explain(error));
+      setUnsure(uncertain(error));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Record payment"
-      width={620}
-      onClose={onClose}
+      size="M"
+      onClose={() => {
+        if (!busy) onClose();
+      }}
       ui="ui.subscriber.recordPayment"
-      subtitle={`${account.customerName} · ${accountLabel(account.id)}`}
-      footer={
+      context={
         <>
-          {problem !== null && (
-            <Note tone="negative" className="footer-push">
-              {problem}
-            </Note>
-          )}
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>
-            Record payment
-          </Button>
+          {account.customerName} · <Id id={account.id} prefix="BA-" />
         </>
       }
+      footer={
+        <Footer
+          write={{ busy, problem, unsure, failedCall: problem ?? undefined }}
+          onRefresh={() => onRecorded('Refreshed')}
+        >
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            busyLabel="Recording…"
+            disabled={!valid || busy}
+            onClick={() => void submit()}
+          >
+            {amount !== null && centsOf(amount) > 0
+              ? `Record ${formatCents(centsOf(amount))} ${account.currency}`
+              : 'Record payment'}
+          </Button>
+        </Footer>
+      }
     >
-      <div className="bss-modal-body">
+      <fieldset className="bss-form bss-write-fields" disabled={busy}>
+        <div className="money-balance-line" data-ui="ui.subscriber.recordPayment.balances">
+          Balance <Amount cents={account.balanceCents} currency={account.currency} /> · Balance
+          after{' '}
+          <Amount
+            cents={account.balanceCents + (amount === null ? 0 : centsOf(amount))}
+            currency={account.currency}
+          />
+        </div>
         <section>
-          <div className="bss-step-head">Amount</div>
-          <TextInput
-            mono
-            width={180}
-            aria-label="Amount"
-            placeholder="0.00"
-            value={amountText}
-            onChange={(event) => {
-              setAmountText(event.target.value);
-              if (lettering) prefill(parseAmount(event.target.value));
-            }}
-          />{' '}
-          <span className="bss-secondary">{account.currency}</span>
+          <Field label="Amount received">
+            <MoneyField
+              currency={account.currency}
+              aria-label="Amount received"
+              placeholder="0.00"
+              value={amountText}
+              onChange={(event) => {
+                setAmountText(event.target.value);
+                if (lettering) prefill(parseAmount(event.target.value));
+              }}
+            />
+          </Field>
           {amountText.trim() !== '' && amount === null && (
             <Note tone="negative">Enter an amount with at most 2 decimals.</Note>
           )}
         </section>
         <section>
-          <div className="bss-step-head">Method</div>
-          <div className="bss-seg" role="group" aria-label="Payment method">
-            {[...METHODS, 'other'].map((m) => (
-              <button
-                key={m}
-                type="button"
-                aria-pressed={m === method}
-                onClick={() => setMethod(m)}
-              >
-                {m === 'other' ? 'Other' : m}
-              </button>
-            ))}
-          </div>
+          <Field label="Method">
+            <div className="bss-seg" role="group" aria-label="Payment method">
+              {[...METHODS, 'other'].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  aria-pressed={m === method}
+                  onClick={() => setMethod(m)}
+                >
+                  {m === 'other' ? 'Other' : m}
+                </button>
+              ))}
+            </div>
+          </Field>
           {method === 'other' && (
-            <TextInput
-              width={220}
-              aria-label="Payment method name"
-              value={other}
-              onChange={(event) => setOther(event.target.value)}
-            />
+            <Field label="Payment method name">
+              <TextInput
+                width={220}
+                aria-label="Payment method name"
+                value={other}
+                onChange={(event) => setOther(event.target.value)}
+              />
+            </Field>
           )}
         </section>
         <section>
@@ -484,13 +510,14 @@ export function RecordPaymentModal({
                     {b.billDate} · remaining {formatCents(b.remainingCents)}
                   </span>
                 </span>
-                <TextInput
-                  mono
-                  width={140}
-                  aria-label={`Amount for ${b.billNo}`}
-                  value={items[b.id] ?? ''}
-                  onChange={(event) => setItems({ ...items, [b.id]: event.target.value })}
-                />
+                <Field label={`Amount for ${b.billNo}`}>
+                  <MoneyField
+                    currency={account.currency}
+                    aria-label={`Amount for ${b.billNo}`}
+                    value={items[b.id] ?? ''}
+                    onChange={(event) => setItems({ ...items, [b.id]: event.target.value })}
+                  />
+                </Field>
               </div>
             ))}
           {itemError && (
@@ -500,7 +527,7 @@ export function RecordPaymentModal({
           )}
           {tooMuch && <Note tone="negative">The bills add up to more than the payment.</Note>}
         </section>
-      </div>
-    </Modal>
+      </fieldset>
+    </Dialog>
   );
 }

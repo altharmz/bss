@@ -399,6 +399,12 @@ items:
   - {id: ui.subscriber.prepaid.transfer, area: ui, stage: 5, title: "Prepaid transfer by number with a finality confirmation"}
   - {id: ui.subscriber.prepaid.transferWatch, area: ui, stage: 5, title: "Accepted transfer followed until the worker completes it"}
   - {id: ui.subscriber.prepaid.transfer.confirm, area: ui, stage: 5, title: "Transfer finality confirmation step"}
+  - {id: ui.subscriber.prepaid.transfer.recipient, area: ui, stage: 5, title: "Transfer resolved recipient"}
+  - {id: ui.subscriber.prepaid.transfer.summary, area: ui, stage: 5, title: "Transfer confirmation summary"}
+  - {id: ui.subscriber.prepaid.balanceAfter, area: ui, stage: 5, title: "Prepaid money action balance after"}
+  - {id: ui.subscriber.recordPayment.balances, area: ui, stage: 5, title: "Record payment balance before and after"}
+  - {id: ui.subscriber.prepaid.transfer.acknowledgement, area: ui, stage: 5, title: "Transfer acknowledgement checkbox"}
+  - {id: ui.subscriber.prepaid.transfer.balances, area: ui, stage: 5, title: "Transfer available and ledger before and after"}
   - {id: ui.subscriber.prepaid.orderWatch, area: ui, stage: 5, title: "Accepted prepaid order followed through its command: waiting, scheduled, needs top-up, technical failure"}
   - {id: ui.subscriber.prepaid.failedCommands, area: ui, stage: 5, title: "Needs-attention panel of technically failed prepaid commands with Retry"}
   - {id: ui.subscriber.prepaid.history, area: ui, stage: 5, title: "Balance actions panel: TMF654 balanceActionHistory of the account and transfers it received"}

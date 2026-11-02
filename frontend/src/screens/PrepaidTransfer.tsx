@@ -13,12 +13,25 @@ import {
 } from '../api/transfer';
 import { usePolled } from '../api/usePolled';
 import { useResource } from '../api/useResource';
-import { accountLabel } from '../format/ids';
 import { formatCents, parseAmount, toCents } from '../format/money';
-import { Button, Modal, Segmented, TextInput } from '../ui/kit';
+import { Amount } from '../ui/Amount';
+import { Id } from '../ui/Id';
+import {
+  Button,
+  Checkbox,
+  Dialog,
+  Field,
+  KeyValue,
+  MoneyField,
+  Segmented,
+  StatusPill,
+  Tag,
+  TextInput,
+} from '../ui/kit';
 import { uncertain, useSubmissionKey } from './submissionKey';
 import { POLL_MS, watch, type Watched } from './watched';
 import { WatchProgress } from './WatchProgress';
+import { MoneySubmitButton } from './PrepaidMoney';
 
 // Transfer of prepaid funds to another subscriber, by number (docs/decisions/frontend.md
 // P6c1). Accepting a transfer moves nothing: the sender's funds are held and the billing
@@ -46,7 +59,9 @@ export function PrepaidTransferModal({
   >({ state: 'idle' });
   const [amountText, setAmountText] = useState('');
   const [reason, setReason] = useState('');
-  const [confirming, setConfirming] = useState(false);
+  const [step, setStep] = useState(1);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const confirming = step === 3;
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [retry, setRetry] = useState(false);
@@ -138,21 +153,28 @@ export function PrepaidTransferModal({
   }
 
   return (
-    <Modal
+    <Dialog
       onSubmit={confirming ? undefined : submitDialogPrimary}
       title="Transfer funds"
-      width={560}
+      size="M"
+      step={{ n: step, of: 3 }}
       onClose={() => {
         if (!saving.current) onClose();
       }}
       ui="ui.subscriber.prepaid.transfer"
-      subtitle={`${account.customerName} · ${accountLabel(account.id)}`}
+      context={
+        <>
+          {account.customerName} · <Id id={account.id} prefix="BA-" />
+        </>
+      }
       footer={
         <>
           {problem !== null && (
-            <Note tone="negative" className="footer-push">
-              {problem}
-            </Note>
+            <div className="footer-push" role={retry ? 'alert' : undefined}>
+              <Note tone={retry ? 'warning' : 'negative'} lead={retry ? '' : 'Refused.'}>
+                {problem}
+              </Note>
+            </div>
           )}
           <Button disabled={busy} onClick={onClose}>
             Cancel
@@ -162,20 +184,49 @@ export function PrepaidTransferModal({
               <Button
                 disabled={busy || retry}
                 onClick={() => {
-                  setConfirming(false);
+                  setStep(2);
+                  setAcknowledged(false);
                   setProblem(null);
                 }}
               >
                 Back
               </Button>
-              <Button variant="primary" disabled={busy} onClick={() => void submit()}>
-                {retry ? 'Retry' : 'Confirm transfer'}
-              </Button>
+              <MoneySubmitButton
+                variant="primary"
+                busy={busy}
+                busyLabel="Transferring…"
+                disabled={busy || !acknowledged}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.preventDefault();
+                }}
+                onClick={() => void submit()}
+              >
+                {retry ? 'Retry' : `Transfer ${formatCents(cents)} ${account.currency}`}
+              </MoneySubmitButton>
             </>
           ) : (
-            <Button variant="primary" disabled={!ready} onClick={() => setConfirming(true)}>
-              Review transfer
-            </Button>
+            <>
+              <Button disabled={step === 1} onClick={() => setStep(1)}>
+                Back
+              </Button>
+              <Button
+                variant="primary"
+                disabled={
+                  step === 1
+                    ? sender === undefined ||
+                      receiver === null ||
+                      receiverProblem !== null ||
+                      receiver.balance === null
+                    : !ready
+                }
+                onClick={() => {
+                  setStep(step + 1);
+                  setAcknowledged(false);
+                }}
+              >
+                {step === 1 ? 'Next' : 'Review transfer'}
+              </Button>
+            </>
           )}
         </>
       }
@@ -187,110 +238,185 @@ export function PrepaidTransferModal({
         </p>
         {confirming && sender !== undefined && receiver !== null ? (
           <section data-ui="ui.subscriber.prepaid.transfer.confirm">
-            <p>
-              Transfer{' '}
-              <strong>
-                {formatCents(cents)} {account.currency}
-              </strong>{' '}
-              from {sender.value} to {receiver.digits} ({receiver.account.customerName}
-              {', '}
-              {accountLabel(receiver.account.id)})?
-            </p>
-            <p className="bss-secondary">
-              A transfer is final. It cannot be cancelled or edited once confirmed; only a new
-              transfer in the opposite direction reverses it. The amount is held on this account now
-              and moves when the billing worker processes it, usually within a minute.
-            </p>
+            <div
+              className="money-transfer-summary"
+              data-ui="ui.subscriber.prepaid.transfer.summary"
+            >
+              <span className="bss-secondary">You are transferring</span>
+              <div className="money-transfer-figure">
+                <Amount cents={cents} currency={account.currency} />
+              </div>
+              <p>
+                From {account.customerName} · <Id id={account.id} prefix="BA-" /> · {sender.value}
+              </p>
+              <p>
+                To {receiver.account.customerName} · <Id id={receiver.account.id} prefix="BA-" /> ·{' '}
+                {receiver.digits}
+              </p>
+            </div>
+            <Note tone="warning">
+              This is final. A transfer can't be undone here. Correcting it needs a new transfer
+              from the recipient, with their consent.
+            </Note>
+            <label
+              className="money-acknowledgement"
+              data-ui="ui.subscriber.prepaid.transfer.acknowledgement"
+            >
+              <Checkbox
+                checked={acknowledged}
+                disabled={busy}
+                onChange={(event) => setAcknowledged(event.target.checked)}
+              />
+              I confirmed the amount and the recipient's number with the subscriber
+            </label>
           </section>
         ) : (
-          <>
-            <section>
-              <div className="bss-step-head">From number</div>
-              {own.status === 'loading' && <span className="bss-secondary">Loading numbers…</span>}
-              {own.status === 'error' && (
-                <Note tone="negative">Failed to load numbers ({explain(own.error)})</Note>
-              )}
-              {own.status === 'ok' && numbers.length === 0 && (
-                <Note tone="negative">
-                  This account has no active product with a subscriber number, so it cannot send a
-                  transfer. Only products whose specification requires a number carry one.
-                </Note>
-              )}
-              {numbers.length > 0 && (
-                <Segmented
-                  label="From number"
-                  value={sender?.id ?? ''}
-                  onChange={setSenderId}
-                  options={numbers.map((n) => ({ key: n.id, label: n.value }))}
-                />
-              )}
-            </section>
-            <section>
-              <div className="bss-step-head">To number</div>
-              <TextInput
-                mono
-                width={220}
-                aria-label="Receiver number"
-                placeholder="79991234001"
-                value={digits}
-                onChange={(event) => {
-                  setDigits(event.target.value);
-                  setLookup({ state: 'idle' });
-                }}
-              />{' '}
-              <Button
-                disabled={
-                  !/^\d{8,15}$/.test(digits.trim()) ||
-                  ('state' in lookup && lookup.state === 'busy')
-                }
-                onClick={() => void find()}
-              >
-                Find
-              </Button>
-              {'state' in lookup && lookup.state === 'busy' && (
-                <span className="bss-secondary"> Looking up…</span>
-              )}
-              {'state' in lookup && lookup.state === 'error' && (
-                <Note tone="negative">Lookup failed ({lookup.message})</Note>
-              )}
-              {'found' in lookup && !lookup.found && <Note tone="negative">{lookup.why}</Note>}
-              {receiver !== null && (
-                <div className="bss-secondary">
-                  {receiver.account.customerName} · {accountLabel(receiver.account.id)}
+          <fieldset className="bss-form bss-write-fields" disabled={busy}>
+            {step === 1 && (
+              <>
+                <section>
+                  <div className="bss-step-head">From number</div>
+                  {own.status === 'loading' && (
+                    <span className="bss-secondary">Loading numbers…</span>
+                  )}
+                  {own.status === 'error' && (
+                    <Note tone="negative">Failed to load numbers ({explain(own.error)})</Note>
+                  )}
+                  {own.status === 'ok' && numbers.length === 0 && (
+                    <Note tone="negative">
+                      This account has no active product with a subscriber number, so it cannot send
+                      a transfer. Only products whose specification requires a number carry one.
+                    </Note>
+                  )}
+                  {numbers.length > 0 && (
+                    <Segmented
+                      label="From number"
+                      value={sender?.id ?? ''}
+                      onChange={setSenderId}
+                      options={numbers.map((n) => ({ key: n.id, label: n.value }))}
+                    />
+                  )}
+                </section>
+                <section>
+                  <div className="bss-step-head">To number</div>
+                  <TextInput
+                    mono
+                    width={220}
+                    aria-label="Receiver number"
+                    placeholder="79991234001"
+                    value={digits}
+                    onChange={(event) => {
+                      setDigits(event.target.value);
+                      setLookup({ state: 'idle' });
+                    }}
+                  />{' '}
+                  <Button
+                    disabled={
+                      !/^\d{8,15}$/.test(digits.trim()) ||
+                      ('state' in lookup && lookup.state === 'busy')
+                    }
+                    onClick={() => void find()}
+                  >
+                    Find
+                  </Button>
+                  {'state' in lookup && lookup.state === 'busy' && (
+                    <span className="bss-secondary"> Looking up…</span>
+                  )}
+                  {'state' in lookup && lookup.state === 'error' && (
+                    <Note tone="negative">Lookup failed ({lookup.message})</Note>
+                  )}
+                  {'found' in lookup && !lookup.found && <Note tone="negative">{lookup.why}</Note>}
+                  {receiver !== null && (
+                    <div
+                      className="money-recipient"
+                      data-ui="ui.subscriber.prepaid.transfer.recipient"
+                    >
+                      {receiver.account.customerName}{' '}
+                      <StatusPill kind="account" status={receiver.account.state} />{' '}
+                      <Id id={receiver.account.id} prefix="BA-" /> <span>{receiver.digits}</span>{' '}
+                      <Tag>{receiver.account.ratingType}</Tag>
+                    </div>
+                  )}
+                  {receiverProblem !== null && <Note tone="warning">{receiverProblem}</Note>}
+                </section>
+                <p className="bss-secondary">
+                  Only active prepaid accounts can receive a transfer.
+                </p>
+              </>
+            )}
+            {step === 2 && (
+              <>
+                <section>
+                  <Field
+                    label="Amount"
+                    help={`Up to ${formatCents(spendable)} ${account.currency}, the available balance. Reserved money can't be moved.`}
+                  >
+                    <MoneyField
+                      currency={account.currency}
+                      aria-label="Amount"
+                      placeholder="0.00"
+                      value={amountText}
+                      onChange={(event) => setAmountText(event.target.value)}
+                    />
+                  </Field>
+                  {amountText.trim() !== '' && amount === null && (
+                    <Note tone="negative">Enter an amount with at most 2 decimals.</Note>
+                  )}
+                  {amount !== null && cents > spendable && (
+                    <Note tone="negative">
+                      Enter at most the available {formatCents(spendable)}.
+                    </Note>
+                  )}
+                </section>
+                <section>
+                  <Field label="Reason">
+                    <TextInput
+                      aria-label="Reason"
+                      value={reason}
+                      onChange={(event) => setReason(event.target.value)}
+                    />
+                  </Field>
+                </section>
+                <div data-ui="ui.subscriber.prepaid.transfer.balances">
+                  <KeyValue
+                    items={[
+                      [
+                        `${account.customerName} · available`,
+                        <>
+                          <Amount cents={balance.availableCents} currency={account.currency} /> →{' '}
+                          <Amount
+                            cents={balance.availableCents - cents}
+                            currency={account.currency}
+                          />
+                        </>,
+                      ],
+                      ...(receiver?.balance
+                        ? [
+                            [
+                              `${receiver.account.customerName} · ledger`,
+                              <>
+                                <Amount
+                                  cents={receiver.balance.ledgerCents}
+                                  currency={account.currency}
+                                />{' '}
+                                →{' '}
+                                <Amount
+                                  cents={receiver.balance.ledgerCents + cents}
+                                  currency={account.currency}
+                                />
+                              </>,
+                            ] as [string, React.ReactNode],
+                          ]
+                        : []),
+                    ]}
+                  />
                 </div>
-              )}
-              {receiverProblem !== null && <Note tone="negative">{receiverProblem}</Note>}
-            </section>
-            <section>
-              <div className="bss-step-head">Amount</div>
-              <TextInput
-                mono
-                width={180}
-                aria-label="Amount"
-                placeholder="0.00"
-                value={amountText}
-                onChange={(event) => setAmountText(event.target.value)}
-              />{' '}
-              <span className="bss-secondary">{account.currency}</span>
-              {amountText.trim() !== '' && amount === null && (
-                <Note tone="negative">Enter an amount with at most 2 decimals.</Note>
-              )}
-              {amount !== null && cents > spendable && (
-                <Note tone="negative">Enter at most the available {formatCents(spendable)}.</Note>
-              )}
-            </section>
-            <section>
-              <div className="bss-step-head">Reason</div>
-              <TextInput
-                aria-label="Reason"
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-              />
-            </section>
-          </>
+              </>
+            )}
+          </fieldset>
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 

@@ -134,6 +134,7 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
   await transfer.getByLabel('Receiver number').fill(digits[1] ?? '');
   await transfer.getByRole('button', { name: 'Find', exact: true }).click();
   await expect(transfer.getByText(`${name} 1`, { exact: false })).toBeVisible();
+  await transfer.getByRole('button', { name: 'Next', exact: true }).click();
   await transfer.getByLabel('Amount', { exact: true }).fill('5.00');
   await transfer.getByLabel('Reason').fill('Numbered transfer acceptance');
   await transfer.getByRole('button', { name: 'Review transfer' }).click();
@@ -141,12 +142,12 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
   const acknowledgement = transfer.getByRole('checkbox', {
     name: /I confirmed the amount and the recipient.s number with the subscriber/,
   });
-  if (await acknowledgement.count()) await acknowledgement.check();
+  await acknowledgement.check();
   const accepted = page.waitForResponse(
     (response) =>
       response.url().endsWith('/transferBalance') && response.request().method() === 'POST',
   );
-  await transfer.getByRole('button', { name: 'Confirm transfer' }).click();
+  await transfer.getByRole('button', { name: /^Transfer 5.00 / }).click();
   const action = (await (await accepted).json()) as { id: string; status: string };
   expect(action.status).toBe('created');
   await expect

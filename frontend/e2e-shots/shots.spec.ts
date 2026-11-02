@@ -179,6 +179,19 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         await page.screenshot({ path: `/web/.shots/dialog-product-number-${name}-${width}.png` });
         await number.getByRole('button', { name: 'Close', exact: true }).last().click();
         if (name === 'card-prepaid') {
+          for (const [action, title] of [
+            ['Top up', 'Top up'],
+            ['Adjust', 'Adjust balance'],
+            ['Hold', 'Hold funds'],
+          ] as const) {
+            await page.getByRole('button', { name: action, exact: true }).click();
+            const money = page.getByRole('dialog', { name: title, exact: true });
+            await money.getByLabel('Amount', { exact: true }).fill('5.00');
+            await page.screenshot({
+              path: `/web/.shots/dialog-money-${action.toLowerCase().replace(' ', '-')}-${width}.png`,
+            });
+            await money.getByRole('button', { name: 'Cancel' }).click();
+          }
           await page.getByRole('button', { name: 'Transfer', exact: true }).click();
           const transfer = page.getByRole('dialog', { name: 'Transfer funds' });
           await expect(
@@ -186,9 +199,93 @@ test('capture the admin pages at both design widths', async ({ page }) => {
           ).toBeVisible();
           await page.screenshot({ path: `/web/.shots/dialog-transfer-${width}.png` });
           await transfer.getByRole('button', { name: 'Cancel' }).click();
+
+          // Read-only fixture for all three transfer steps; never send a money write.
+          const senderId = new URL(page.url()).pathname.split('/').pop();
+          const source = await (
+            await page.request.get(`/tmf-api/accountManagement/v5/billingAccount/${senderId}`)
+          ).json();
+          const receiverId = 'f0000002-0000-4000-8000-000000000002';
+          const fixture = async (route: import('@playwright/test').Route) => {
+            const url = new URL(route.request().url());
+            let body;
+            if (url.pathname.endsWith('/product') && url.searchParams.has('billingAccount.id'))
+              body = [{ id: 'fixture-product', realizingResource: [{ id: 'fixture-sender' }] }];
+            else if (url.pathname.endsWith('/resource/fixture-sender'))
+              body = { id: 'fixture-sender', value: '79991234000' };
+            else if (
+              url.pathname.endsWith('/resource') &&
+              url.searchParams.get('value') === '79991234001'
+            )
+              body = [{ id: 'fixture-receiver', value: '79991234001' }];
+            else if (
+              url.pathname.endsWith('/product') &&
+              url.searchParams.has('realizingResource.id')
+            )
+              body = [
+                { id: 'fixture-product-rx', status: 'active', billingAccount: { id: receiverId } },
+              ];
+            else if (url.pathname.endsWith(`/billingAccount/${receiverId}`))
+              body = {
+                ...source,
+                id: receiverId,
+                name: 'Anna Kask',
+                relatedParty: [
+                  {
+                    role: 'customer',
+                    partyOrPartyRole: {
+                      id: 'fixture-customer',
+                      name: 'Anna Kask',
+                      '@type': 'PartyRoleRef',
+                    },
+                    '@type': 'RelatedPartyRefOrPartyRoleRef',
+                  },
+                ],
+              };
+            else if (
+              url.pathname.endsWith('/bucket') &&
+              url.searchParams.get('partyAccount.id') === receiverId
+            )
+              body = [
+                {
+                  id: 'fixture-bucket',
+                  remainingValue: { amount: 3.2, units: source.currency },
+                  reservedValue: { amount: 0, units: source.currency },
+                },
+              ];
+            else return route.continue();
+            await route.fulfill({
+              json: body,
+              headers: Array.isArray(body) ? { 'X-Total-Count': String(body.length) } : {},
+            });
+          };
+          await page.route('**/tmf-api/**', fixture);
+          await page.getByRole('button', { name: 'Transfer', exact: true }).click();
+          await expect(transfer.getByRole('button', { name: '79991234000' })).toBeVisible();
+          await transfer.getByLabel('Receiver number').fill('79991234001');
+          await transfer.getByRole('button', { name: 'Find', exact: true }).click();
+          await expect(transfer.locator('.money-recipient')).toContainText('Anna Kask');
+          await page.screenshot({ path: `/web/.shots/dialog-transfer-recipient-${width}.png` });
+          await transfer.getByRole('button', { name: 'Next', exact: true }).click();
+          await transfer.getByLabel('Amount', { exact: true }).fill('5.00');
+          await transfer
+            .getByLabel('Reason', { exact: true })
+            .fill('Subscriber requested transfer');
+          await page.screenshot({ path: `/web/.shots/dialog-transfer-amount-${width}.png` });
+          await transfer.getByRole('button', { name: 'Review transfer' }).click();
+          await transfer.getByRole('checkbox').check();
+          await page.screenshot({ path: `/web/.shots/dialog-transfer-confirm-${width}.png` });
+          await transfer.getByRole('button', { name: 'Cancel' }).click();
+          await page.unroute('**/tmf-api/**', fixture);
         }
 
         if (name === 'card-postpaid') {
+          await page.getByRole('button', { name: 'More actions', exact: true }).click();
+          await page.getByRole('menuitem', { name: 'Record payment', exact: true }).click();
+          const payment = page.getByRole('dialog', { name: 'Record payment' });
+          await payment.getByLabel('Amount received').fill('42.10');
+          await page.screenshot({ path: `/web/.shots/dialog-record-payment-${width}.png` });
+          await payment.getByRole('button', { name: 'Cancel' }).click();
           await page.route(
             '**/tmf-api/productOrderingManagement/v5/productOrder',
             async (route) => {

@@ -1631,7 +1631,7 @@ describe('prepaid money forms', () => {
     type(form, 'Amount', '1,250.5');
     type(form, 'Reason', ' Cash at the desk ');
     press(form, 'cash');
-    press(form, 'Top up');
+    fireEvent.click(within(form).getByRole('button', { name: /^Top up [\d,]+\.\d{2} USD$/ }));
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
       'Top up: 1,250.50 USD recorded',
@@ -1658,13 +1658,13 @@ describe('prepaid money forms', () => {
     let form = await dialog('Adjust balance');
     expectUi('ui.subscriber.prepaid.adjust');
     type(form, 'Amount', '12.5');
-    press(form, 'Adjust balance');
+    press(form, 'Apply adjustment');
     await screen.findByRole('status');
     await openForm('Adjust');
     form = await dialog('Adjust balance');
     press(form, 'Debit');
     type(form, 'Amount', '12.50');
-    press(form, 'Adjust balance');
+    press(form, 'Apply adjustment');
     await waitFor(() => expect(posts(fetchMock)).toHaveLength(2));
     const [credit, debit] = posts(fetchMock);
     const head = (value: string) =>
@@ -1683,10 +1683,11 @@ describe('prepaid money forms', () => {
     type(form, 'Hold expires on', '2026-09-30');
     expect(within(form).getByText('Enter today or a later business date.')).toBeTruthy();
     expect(
-      (within(form).getByRole('button', { name: 'Hold funds' }) as HTMLButtonElement).disabled,
+      (within(form).getByRole('button', { name: /^Hold [\d,]+\.\d{2} USD$/ }) as HTMLButtonElement)
+        .disabled,
     ).toBe(true);
     type(form, 'Hold expires on', '2026-10-05');
-    press(form, 'Hold funds');
+    fireEvent.click(within(form).getByRole('button', { name: /^Hold [\d,]+\.\d{2} USD$/ }));
     await screen.findByRole('status');
     expect(posts(fetchMock)[0]?.body).toBe(
       `{"@type":"ReserveBalance",${quantity('20.00')},"usageType":"monetary",` +
@@ -1702,11 +1703,13 @@ describe('prepaid money forms', () => {
     type(form, 'Amount', '100.51');
     expect(within(form).getByText('Enter at most the available 100.50.')).toBeTruthy();
     expect(
-      (within(form).getByRole('button', { name: 'Hold funds' }) as HTMLButtonElement).disabled,
+      (within(form).getByRole('button', { name: /^Hold [\d,]+\.\d{2} USD$/ }) as HTMLButtonElement)
+        .disabled,
     ).toBe(true);
     type(form, 'Amount', '100.50');
     expect(
-      (within(form).getByRole('button', { name: 'Hold funds' }) as HTMLButtonElement).disabled,
+      (within(form).getByRole('button', { name: /^Hold [\d,]+\.\d{2} USD$/ }) as HTMLButtonElement)
+        .disabled,
     ).toBe(false);
     expect(posts(fetchMock)).toEqual([]);
   });
@@ -1720,7 +1723,7 @@ describe('prepaid money forms', () => {
     press(document.body, 'Top up');
     const form = await dialog('Top up');
     type(form, 'Amount', '10');
-    press(form, 'Top up');
+    fireEvent.click(within(form).getByRole('button', { name: /^Top up [\d,]+\.\d{2} USD$/ }));
     const alert = await within(form).findByRole('alert');
     expect(alert.textContent).toContain('Unsure whether it was recorded');
     press(form, 'Retry'); // unchanged: the same submission again
@@ -1747,7 +1750,7 @@ describe('prepaid money forms', () => {
     press(document.body, 'Top up');
     const form = await dialog('Top up');
     type(form, 'Amount', '10');
-    press(form, 'Top up');
+    fireEvent.click(within(form).getByRole('button', { name: /^Top up [\d,]+\.\d{2} USD$/ }));
     await within(form).findByRole('alert');
     press(form, 'Retry');
     await screen.findByRole('status');
@@ -1765,12 +1768,12 @@ describe('prepaid money forms', () => {
     const form = await dialog('Adjust balance');
     press(form, 'Debit');
     type(form, 'Amount', '50');
-    press(form, 'Adjust balance');
+    press(form, 'Apply adjustment');
     expect((await within(form).findByRole('alert')).textContent).toBe(
-      'insufficient spendable funds',
+      'Refused. insufficient spendable funds',
     );
     expect(screen.queryByRole('status')).toBeNull(); // nothing was recorded
-    press(form, 'Adjust balance');
+    press(form, 'Apply adjustment');
     await screen.findByRole('status');
     const [first, second] = posts(fetchMock);
     expect(second?.key).not.toBe(first?.key);
@@ -1781,7 +1784,7 @@ describe('prepaid money forms', () => {
     press(document.body, 'Top up');
     const form = await dialog('Top up');
     type(form, 'Amount', '10');
-    press(form, 'Top up');
+    fireEvent.click(within(form).getByRole('button', { name: /^Top up [\d,]+\.\d{2} USD$/ }));
     expect((await within(form).findByRole('alert')).textContent).toContain('bad amount');
     expect(within(form).queryByRole('button', { name: 'Retry' })).toBeNull();
   });
@@ -1872,6 +1875,10 @@ describe('prepaid transfer', () => {
     type(form, 'Receiver number', digits);
     press(form, 'Find');
     await within(form).findByText(/Ivan Sidorov/);
+    expectUi('ui.subscriber.prepaid.transfer.recipient');
+    const next = within(form).getByRole('button', { name: 'Next' }) as HTMLButtonElement;
+    if (next.disabled) return;
+    press(form, 'Next');
     type(form, 'Amount', amount);
     type(form, 'Reason', ' Customer asked ');
   }
@@ -1891,12 +1898,21 @@ describe('prepaid transfer', () => {
         json({ id: TRANSFER, status: 'completed' }),
     });
     await fill(form);
+    expectUi('ui.subscriber.prepaid.transfer.balances');
     press(form, 'Review transfer');
-    expect(within(form).getByText(/A transfer is final/).textContent).toContain(
-      'cannot be cancelled',
-    );
+    expectUi('ui.subscriber.prepaid.transfer.acknowledgement');
+    expectUi('ui.subscriber.prepaid.transfer.summary');
+    expect(within(form).getByText(/This is final/).textContent).toContain("can't be undone here");
     expect(posts(fetchMock)).toEqual([]); // nothing is sent before the confirmation
-    press(form, 'Confirm transfer');
+    const primary = within(form).getByRole('button', { name: 'Transfer 30.00 USD' });
+    expect(primary).toHaveProperty('disabled', true);
+    fireEvent.keyDown(primary, { key: 'Enter' });
+    expect(posts(fetchMock)).toEqual([]);
+    fireEvent.click(within(form).getByRole('checkbox'));
+    expect(primary).toHaveProperty('disabled', false);
+    fireEvent.keyDown(primary, { key: 'Enter' });
+    expect(posts(fetchMock)).toEqual([]);
+    press(form, 'Transfer 30.00 USD');
     await screen.findByText('Transfer of 30.00 USD to 79991234001 completed');
     const [sent, ...rest] = posts(fetchMock);
     expect(rest).toEqual([]);
@@ -1921,11 +1937,32 @@ describe('prepaid transfer', () => {
     });
     await fill(form);
     press(form, 'Review transfer');
-    press(form, 'Confirm transfer');
+    fireEvent.click(within(form).getByRole('checkbox'));
+    press(form, 'Transfer 30.00 USD');
     expect((await within(form).findByRole('alert')).textContent).toBe(
-      'the receiver account is closed',
+      'Refused. the receiver account is closed',
     );
     expect(screen.queryByText(/accepted, waiting/)).toBeNull();
+  });
+
+  it('clears transfer acknowledgement after returning to Amount', async () => {
+    const { form, fetchMock } = await transferForm();
+    await fill(form);
+    press(form, 'Review transfer');
+    fireEvent.click(within(form).getByRole('checkbox'));
+    expect(within(form).getByRole('button', { name: 'Transfer 30.00 USD' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    press(form, 'Back');
+    type(form, 'Amount', '20');
+    press(form, 'Review transfer');
+    expect(within(form).getByRole('checkbox')).toHaveProperty('checked', false);
+    expect(within(form).getByRole('button', { name: 'Transfer 20.00 USD' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(posts(fetchMock)).toEqual([]);
   });
 
   it('retries an uncertain outcome with the same key', async () => {
@@ -1938,7 +1975,8 @@ describe('prepaid transfer', () => {
     });
     await fill(form);
     press(form, 'Review transfer');
-    press(form, 'Confirm transfer');
+    fireEvent.click(within(form).getByRole('checkbox'));
+    press(form, 'Transfer 30.00 USD');
     expect((await within(form).findByRole('alert')).textContent).toContain(
       'Unsure whether it was recorded',
     );
@@ -1956,9 +1994,7 @@ describe('prepaid transfer', () => {
     type(form, 'Receiver number', '79990000000');
     press(form, 'Find');
     await within(form).findByText(/79990000000 is not in the number inventory/);
-    type(form, 'Amount', '10');
-    type(form, 'Reason', 'x');
-    expect(review(form).disabled).toBe(true);
+    expect(within(form).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', true);
     expect(posts(fetchMock)).toEqual([]);
   });
 
@@ -1970,7 +2006,7 @@ describe('prepaid transfer', () => {
     });
     await fill(form);
     await within(form).findByText(/not prepaid/);
-    expect(review(form).disabled).toBe(true);
+    expect(within(form).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', true);
   });
 
   it('refuses an amount above the available funds and needs a reason', async () => {
@@ -1994,13 +2030,13 @@ describe('prepaid transfer', () => {
     });
     await fill(form);
     await within(form).findByText(/currency is EUR, not USD/);
-    expect(review(form).disabled).toBe(true);
+    expect(within(form).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', true);
     // the sender's own number resolves to the sender's account
     const own = '79991234000';
     type(form, 'Receiver number', own);
     press(form, 'Find');
     await within(form).findByText(/belongs to this account/);
-    expect(review(form).disabled).toBe(true);
+    expect(within(form).getByRole('button', { name: 'Next' })).toHaveProperty('disabled', true);
   });
 });
 
@@ -2397,7 +2433,7 @@ describe('prepaid first-charge preview in Add product', () => {
     const form = await screen.findByRole('dialog', { name: 'Top up' });
     expect((within(form).getByLabelText('Amount') as HTMLInputElement).value).toBe('1250.50');
     fireEvent.click(within(form).getByRole('button', { name: 'cash' }));
-    fireEvent.click(within(form).getByRole('button', { name: 'Top up' }));
+    fireEvent.click(within(form).getByRole('button', { name: /^Top up [\d,]+\.\d{2} USD$/ }));
     await screen.findByRole('status');
     const sent = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(String(sent?.[0])).toBe(`${PREPAY}/topupBalance`);
@@ -2700,7 +2736,7 @@ describe('prepaid balance actions', () => {
     const form = await screen.findByRole('dialog', { name: 'Top up' });
     fireEvent.change(within(form).getByLabelText('Amount'), { target: { value: '5' } });
     fireEvent.click(within(form).getByRole('button', { name: 'cash' }));
-    fireEvent.click(within(form).getByRole('button', { name: 'Top up' }));
+    fireEvent.click(within(form).getByRole('button', { name: /^Top up [\d,]+\.\d{2} USD$/ }));
     await waitFor(() =>
       expect(
         fetchMock.mock.calls.filter(([url]) => String(url).startsWith(`${HISTORY}?partyAccount`)),
@@ -2846,7 +2882,7 @@ describe('prepaid balance actions', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Top up' }));
         const form = await screen.findByRole('dialog', { name: 'Top up' });
         fireEvent.change(within(form).getByLabelText('Amount'), { target: { value: '1' } });
-        fireEvent.click(within(form).getByRole('button', { name: 'Top up' }));
+        fireEvent.click(within(form).getByRole('button', { name: /^Top up [\d,]+\.\d{2} USD$/ }));
         await waitFor(() => expect(calls.filter((call) => call === OWN).length).toBeGreaterThan(1));
         if (failed) {
           await screen.findByText('Failed to refresh the billing account');

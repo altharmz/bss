@@ -131,6 +131,10 @@ normal verification gate; `make check` is optional/on-demand.
 
 ### Issue progress notes
 
+Standing human authorization: agents may always add relevant comments to issues without
+asking for permission or confirmation. This authorization persists across sessions;
+required tool sandbox approvals remain separate.
+
 Add a short comment to the current GitHub issue when something meaningful happens that
 would help a human understand the task later: an important implementation decision, a
 significant check result, a blocker, PR creation, or waiting for human action. There is
