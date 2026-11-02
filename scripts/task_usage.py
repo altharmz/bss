@@ -164,7 +164,7 @@ def price(sample, pricing):
     return format(cost, "f"), pricing["currency"], metadata
 
 
-def usage_sql(raw, pricing=None):
+def usage_sql(raw, pricing=None, preserve_pricing=False):
     sample = validate(raw)
     cost, currency, metadata = price(sample, pricing)
     # Namespace externally reported sessions separately from workflow thread identities.
@@ -199,12 +199,20 @@ def usage_sql(raw, pricing=None):
         return quoted
 
     equal = " AND ".join(
-        f"{key} IS NOT DISTINCT FROM {value(key, item)}" for key, item in values.items()
+        f"{key} IS NOT DISTINCT FROM {value(key, item)}"
+        for key, item in values.items()
+        if not preserve_pricing or key not in {"estimated_cost", "currency", "pricing_metadata"}
     )
     # A changed payload/pricing with an existing identity is an error, never an overwrite.
     # Serialize imports so concurrent retries cannot silently win a conflict.
     return (
         "BEGIN; SELECT pg_advisory_xact_lock(82002);\n"
+        "DO $$ BEGIN IF EXISTS (SELECT 1 FROM usage_samples u JOIN agent_sessions a "
+        "USING(session_id) WHERE "
+        f"a.task_id={literal(sample['task_id'])} AND u.client={literal(sample['client'])} "
+        f"AND u.external_session_id={literal(sample['session_id'])} "
+        f"AND u.source<>{literal(sample['source'])}) THEN "
+        "RAISE EXCEPTION 'conflicting usage source'; END IF; END $$;\n"
         f"INSERT INTO agent_sessions(session_id, task_id, provider, model, external_session_id) "
         f"VALUES ({literal(sid)}, {literal(sample['task_id'])}, {literal(sample['provider'])}, "
         f"{value('model', sample['model'])}, {literal(sample['session_id'])}) "
@@ -221,14 +229,19 @@ SELECT json_build_object(
  'tasks', COALESCE((SELECT json_agg(t) FROM
    (SELECT task_id, started_at, ended_at, outcome FROM tasks) t), '[]'),
  'events', COALESCE((SELECT json_agg(e) FROM
-   (SELECT task_id, event_type, occurred_at, result,
-    metadata->>'slot' AS slot, metadata->>'ci_state' AS ci_state
-    FROM workflow_events) e), '[]'),
+   (SELECT w.task_id, w.event_type, w.occurred_at, w.result,
+    w.metadata->>'slot' AS slot, w.metadata->>'ci_state' AS ci_state,
+    w.metadata->>'client' AS client, a.external_session_id
+    FROM workflow_events w LEFT JOIN agent_sessions a ON a.session_id=w.session_id) e), '[]'),
+ 'collections', COALESCE((SELECT json_agg(c) FROM
+   (SELECT task_id,client,external_session_id,source,bound_at,closed_at,
+    checked_at,status,reason,baseline_tokens,latest_tokens FROM usage_collections) c), '[]'),
  'usage', COALESCE((SELECT json_agg(u) FROM
    (SELECT a.task_id, s.provider, s.client, s.model, s.input_tokens,
     s.cached_input_tokens, s.output_tokens, s.total_tokens,
     CASE WHEN s.sample_key IS NOT NULL AND s.pricing_metadata IS NOT NULL
-         THEN s.estimated_cost::text END AS estimated_cost, s.currency FROM usage_samples s
+         THEN s.estimated_cost::text END AS estimated_cost, s.currency,
+    s.pricing_metadata FROM usage_samples s
     JOIN agent_sessions a USING(session_id)) u), '[]'));
 """
 
@@ -240,6 +253,40 @@ def report(data):
         tid = task["task_id"]
         events = [e for e in data["events"] if e["task_id"] == tid]
         samples = [u for u in data["usage"] if u["task_id"] == tid]
+        collections = [c for c in data.get("collections", []) if c["task_id"] == tid]
+        startup_observed = any(e["event_type"] == "start-task" for e in events)
+        expected = {e["client"] for e in events if e.get("client")}
+        observed = {c["client"] for c in collections}
+        missing = sorted(expected - observed)
+        missing_sessions = []
+        for event in events:
+            if event["event_type"] != "start-task" or not event.get("external_session_id"):
+                continue
+            matches = [
+                c
+                for c in collections
+                if c["client"] == event.get("client")
+                and c["external_session_id"] == event["external_session_id"]
+            ]
+            reason = (
+                "session_unregistered"
+                if not matches
+                else (
+                    "binding_started_after_startup"
+                    if all(
+                        timestamp(c["bound_at"]) > timestamp(event["occurred_at"]) for c in matches
+                    )
+                    else None
+                )
+            )
+            if reason:
+                missing_sessions.append(
+                    dict(
+                        client=event.get("client"),
+                        session_id=event["external_session_id"],
+                        reason=reason,
+                    )
+                )
         merged = task["outcome"] == "completed" or any(
             e["event_type"] == "merge-task" and e["result"] == 0 for e in events
         )
@@ -271,8 +318,27 @@ def report(data):
                     dict(zip(("provider", "client", "model"), d, strict=True)) for d in dimensions
                 ],
                 "sample_count": len(samples),
+                "collection_complete": bool(collections)
+                and startup_observed
+                and not missing
+                and not missing_sessions
+                and all(c["status"] == "complete" for c in collections),
+                "missing_clients": missing,
+                "missing_startup": not startup_observed,
+                "missing_sessions": missing_sessions,
+                "collection_status": collections,
                 "tokens": totals,
                 "known_cost_by_currency": {c: str(v) for c, v in sorted(costs.items())},
+                "pricing_provenance": [
+                    json.loads(p)
+                    for p in sorted(
+                        {
+                            json.dumps(u["pricing_metadata"], sort_keys=True)
+                            for u in samples
+                            if u.get("pricing_metadata")
+                        }
+                    )
+                ],
                 "cost_complete": bool(samples)
                 and all(
                     u["estimated_cost"] is not None and u["currency"] is not None for u in samples

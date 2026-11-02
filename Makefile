@@ -28,7 +28,7 @@ start-task: ## Prepare the next Ready issue in an automatically selected worker 
 new-priority-task: export BSS_NEW_TASK_TITLE := $(TITLE)
 new-priority-task: export BSS_NEW_TASK_BODY := $(BODY)
 new-priority-task: export BSS_NEW_TASK_LABELS := $(LABELS)
-new-priority-task: ## Create and start an approved P0 issue first in Ready (TITLE= BODY= [LABELS=a,b])
+new-priority-task: ## Create an approved P0 issue first in Ready; start separately (TITLE= BODY= [LABELS=a,b])
 	@python3 -B scripts/start_task.py --new-priority-task $(if $(filter 1,$(JSON)),--json,)
 
 release-slot: ## Release a slot after its task worktree was safely removed (SLOT=worker1)
@@ -124,6 +124,17 @@ lint: ## Lint and format check
 
 fmt: ## Auto-format the code (writable `tools` service; `app` mounts sources read-only)
 	./scripts/task-compose run --rm tools sh -c 'ruff format . && ruff check --fix .'
+
+.PHONY: scripts-lint scripts-fmt
+# Selection is JSON data, including when supplied on Make's command line. Do not
+# evaluate Make expressions in it, or automatically export the original variable.
+unexport SCRIPT_FILES
+scripts-lint scripts-fmt: export BSS_SCRIPT_FILES := $(value SCRIPT_FILES)
+scripts-lint: ## Lint/check formatting of changed Python harness scripts (optional SCRIPT_FILES=JSON-list)
+	python3 -B scripts/script_quality.py lint
+
+scripts-fmt: ## Format changed Python harness scripts (optional SCRIPT_FILES=JSON-list)
+	python3 -B scripts/script_quality.py format
 
 # --- admin UI (frontend/): Node runs only in the `web` container, never on the host ---
 # Only web-install downloads (npm ci, `web` service). Every other target runs in the
@@ -280,6 +291,31 @@ runtime-check: ## Validate task runtime helpers without Docker or secrets
 	GIT_PAGER=cat python3 -B scripts/test_start_task.py
 	GIT_PAGER=cat python3 -B scripts/test_task_telemetry.py
 	GIT_PAGER=cat python3 -B scripts/test_task_usage.py
+	GIT_PAGER=cat python3 -B scripts/test_task_collect.py
+	GIT_PAGER=cat python3 -B scripts/test_task_stats.py
+	GIT_PAGER=cat python3 -B scripts/test_script_quality.py
+
+.PHONY: telemetry-collect telemetry-comment telemetry-probe telemetry-watch
+telemetry-watch: export BSS_COLLECT_TASK = $(TASK)
+telemetry-watch: ## Retry final usage after an ended session (optional TASK=; bounded to two minutes)
+	python3 -B scripts/task_collect.py --watch
+
+telemetry-probe: export BSS_COLLECT_CLIENT = $(CLIENT)
+telemetry-probe: export BSS_COLLECT_SESSION = $(SESSION_ID)
+telemetry-probe: ## Verify a real client source without attributing historical usage to an issue
+	python3 -B scripts/task_collect.py --probe
+
+telemetry-comment: export BSS_COLLECT_TASK = $(TASK)
+telemetry-comment: ## Save issue statistics at start or PR creation (PHASE=start|pr, optional TASK=)
+	python3 -B scripts/task_stats.py $(PHASE)
+
+telemetry-collect: export BSS_COLLECT_TASK = $(TASK)
+telemetry-collect: export BSS_COLLECT_CLIENT = $(CLIENT)
+telemetry-collect: export BSS_COLLECT_SESSION = $(SESSION_ID)
+telemetry-collect: export BSS_COLLECT_CLOSE = $(CLOSE)
+telemetry-collect: export BSS_TELEMETRY_PRICING_FILE = $(PRICING_FILE)
+telemetry-collect: ## Collect bound machine usage (optional TASK= CLIENT= SESSION_ID= CLOSE=1 PRICING_FILE=)
+	python3 -B scripts/task_collect.py
 
 .PHONY: telemetry-ingest telemetry-report
 telemetry-ingest: export BSS_TELEMETRY_USAGE_FILE = $(USAGE_FILE)

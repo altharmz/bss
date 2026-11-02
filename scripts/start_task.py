@@ -248,7 +248,8 @@ def task_owner():
     owner = os.environ.get("BSS_TASK_OWNER", os.environ.get("BSS_TASK_AGENT"))
     if owner is None:
         detected = {
-            client for client, marker in (("codex", "CODEX_THREAD_ID"), ("claude", "CLAUDECODE"))
+            client
+            for client, marker in (("codex", "CODEX_THREAD_ID"), ("claude", "CLAUDECODE"))
             if os.environ.get(marker)
         }
         if len(detected) > 1:
@@ -272,10 +273,13 @@ def new_task_request():
     body = os.environ.get("BSS_NEW_TASK_BODY", "")
     if not title or not body.strip():
         raise StartupError("new-priority-task requires non-empty TITLE and BODY")
-    labels = list(dict.fromkeys(
-        label.strip() for label in os.environ.get("BSS_NEW_TASK_LABELS", "").split(",")
-        if label.strip()
-    ))
+    labels = list(
+        dict.fromkeys(
+            label.strip()
+            for label in os.environ.get("BSS_NEW_TASK_LABELS", "").split(",")
+            if label.strip()
+        )
+    )
     if any(
         re.fullmatch(r"P[0-3]", label)
         or label.startswith("agent:")
@@ -323,8 +327,17 @@ def set_status(issue, option):
 def create_priority_task(request):
     title, body, labels = request
     args = [
-        "gh", "issue", "create", "--repo", REPOSITORY,
-        "--title", title, "--body", body, "--label", "P0",
+        "gh",
+        "issue",
+        "create",
+        "--repo",
+        REPOSITORY,
+        "--title",
+        title,
+        "--body",
+        body,
+        "--label",
+        "P0",
     ]
     for label in labels:
         args.extend(["--label", label])
@@ -333,14 +346,15 @@ def create_priority_task(request):
         r"https://github\.com/altharmz/bss/issues/([1-9][0-9]*)", result.stdout.strip()
     )
     if not match:
-        raise StartupError("issue creation returned an unexpected URL; review GitHub before retrying")
+        raise StartupError(
+            "issue creation returned an unexpected URL; review GitHub before retrying"
+        )
     number = int(match[1])
     try:
         created = None
         for attempt in range(5):
             matches = [
-                item for item in snapshot()
-                if (item.get("content") or {}).get("number") == number
+                item for item in snapshot() if (item.get("content") or {}).get("number") == number
             ]
             if len(matches) > 1:
                 raise StartupError("new issue has ambiguous project items")
@@ -363,14 +377,23 @@ def create_priority_task(request):
         )
         items = snapshot()
         if (
-            not items or items[0]["id"] != created["id"]
+            not items
+            or items[0]["id"] != created["id"]
             or status(items[0]) != "Ready"
             or items[0]["content"]["number"] != number
         ):
             raise StartupError("new issue is not first in Ready after prioritization")
-        return created["id"]
+        return {
+            "issue": number,
+            "url": result.stdout.strip(),
+            "title": title,
+            "status": "Ready",
+            "next_command": "make start-task BSS_TASK_OWNER=<client>",
+        }
     except (StartupError, OSError, ValueError, KeyError, TypeError) as error:
-        raise StartupError(f"new issue #{number} is preserved after setup failure: {error}") from None
+        raise StartupError(
+            f"new issue #{number} is preserved after setup failure: {error}"
+        ) from None
 
 
 class Claim:
@@ -653,11 +676,22 @@ def recover_slot(root, common, slot):
     try:
         with contextlib.redirect_stdout(sys.stderr):
             task_finish.finish(root, common, slot)
-    except (StartupError, task_finish.start_task.StartupError,
-            SlotError, InvalidRuntime, OSError, ValueError, KeyError,
-            TypeError, AttributeError, subprocess.SubprocessError) as error:
-        raise SlotError("occupied; completion recovery not confirmed; "
-                        "preserved for inspection (make finish-task SLOT=" + slot.name + ")") from error
+    except (
+        StartupError,
+        task_finish.start_task.StartupError,
+        SlotError,
+        InvalidRuntime,
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        subprocess.SubprocessError,
+    ) as error:
+        raise SlotError(
+            "occupied; completion recovery not confirmed; "
+            "preserved for inspection (make finish-task SLOT=" + slot.name + ")"
+        ) from error
 
 
 def select_slot(root, common, stack):
@@ -666,18 +700,24 @@ def select_slot(root, common, stack):
     failures = []
     for name in names:
         try:
-            location = stack.enter_context(reserve(
-                root, name, worktrees(root),
-                recover=(lambda slot: recover_slot(root, common, slot)) if explicit is None else None,
-                refresh=lambda: worktrees(root),
-            ))
+            location = stack.enter_context(
+                reserve(
+                    root,
+                    name,
+                    worktrees(root),
+                    recover=(lambda slot: recover_slot(root, common, slot))
+                    if explicit is None
+                    else None,
+                    refresh=lambda: worktrees(root),
+                )
+            )
             return name, location
         except (SlotError, OSError, ValueError) as error:
             failures.append(f"{name}: {error}")
     raise SlotError("no usable worker slot available:\n  " + "\n  ".join(failures))
 
 
-def start(on_ready=None, new_task=None):
+def start(on_ready=None):
     root, common = primary()
     agent = agent_label()
     descriptor = os.open(common / "start-task.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -713,12 +753,7 @@ def start(on_ready=None, new_task=None):
         represented.update(issue_of(pr["headRefName"]) for pr in prs)
         items = snapshot()
         check_wip(items, agent)
-        created_item = create_priority_task(new_task) if new_task is not None else None
-        if created_item is not None:
-            items = snapshot()
         issue = select_issue(items, represented)
-        if created_item is not None and issue["item_id"] != created_item:
-            raise StartupError("prioritized issue selection changed; review the board before retrying")
         branch = branch_name(issue["number"], issue["title"])
         destination = slot / "repo"
         if destination.exists() or destination.is_symlink() or destination in dict(trees):
@@ -826,9 +861,20 @@ def main():
             root, _common = primary()
             release(root, os.environ.get("BSS_SLOT"), worktrees(root))
             print("worker slot released; persistent state preserved")
+        elif args.new_priority_task:
+            request = new_task_request()
+            primary()  # Repository validation only: no fetch, slots, WIP or task setup.
+            result = create_priority_task(request)
+            if args.json:
+                print(json.dumps(result), flush=True)
+            else:
+                print(
+                    f"Created #{result['issue']}: {result['url']} (Ready)\n"
+                    f"Next: {result['next_command']}",
+                    flush=True,
+                )
         else:
-            new_task = new_task_request() if args.new_priority_task else None
-            start(lambda result: print_result(result, args.json), new_task=new_task)
+            start(lambda result: print_result(result, args.json))
     except (
         StartupError,
         SlotError,
