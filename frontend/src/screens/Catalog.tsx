@@ -2,10 +2,12 @@ import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { Fragment, useState } from 'react';
 import {
+  addPrice,
   changePrice,
   createOffering,
   deleteOffering,
   lastValidDate,
+  loadCategories,
   loadOfferingDetail,
   hasOpenPrice,
   loadCatalog,
@@ -15,6 +17,7 @@ import {
   type Catalog,
   type CatalogOffering,
   type Lifecycle,
+  type OfferingDetail,
   type Specification,
 } from '../api/bss';
 import { explain } from '../api/client';
@@ -32,6 +35,7 @@ import {
   Tabs,
   TabPanel,
   StatusPill,
+  Tag,
   Segmented,
   TextInput,
   useToast,
@@ -269,6 +273,11 @@ export function CatalogScreen() {
                                       {offering.name}
                                     </span>
                                     <span className="catalog-code">{offering.code ?? '—'}</span>
+                                    {!offering.isSellable && (
+                                      <span data-ui="ui.catalog.notSellable">
+                                        <Tag>Not sellable</Tag>
+                                      </span>
+                                    )}
                                     <span className="sr-only">{offering.specification}</span>
                                     <span className="sr-only">
                                       {validity(offering, context.timeZone)}
@@ -388,6 +397,7 @@ export function OfferingModal({
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [price, setPrice] = useState<string | null>(null);
+  const [addingPrice, setAddingPrice] = useState(false);
   const detail = useResource(`offering:${offering.id}`, (signal) =>
     loadOfferingDetail(offering.id, signal),
   );
@@ -463,7 +473,7 @@ export function OfferingModal({
             ]}
           />
         }
-        onClose={price !== null || editing ? () => undefined : onClose}
+        onClose={price !== null || editing || addingPrice ? () => undefined : onClose}
         ui="ui.catalog.offeringDetail"
         footer={
           <>
@@ -651,6 +661,11 @@ export function OfferingModal({
               )}
             </dd>
           </dl>
+          {detail.status === 'ok' && (
+            <Button small onClick={() => setAddingPrice(true)}>
+              Add price…
+            </Button>
+          )}
           {hasOpenPrice(offering, context.currency) && (
             <PriceChangeSection offering={offering} label={label} onChanged={onChanged} />
           )}
@@ -664,10 +679,122 @@ export function OfferingModal({
           onSaved={onChanged}
         />
       )}
+      {addingPrice && detail.status === 'ok' && (
+        <AddPriceModal
+          detail={detail.data}
+          onClose={() => setAddingPrice(false)}
+          onChanged={onChanged}
+        />
+      )}
       {price !== null && (
         <PriceModal priceId={price} onClose={() => setPrice(null)} onChanged={onChanged} />
       )}
     </>
+  );
+}
+
+function AddPriceModal({
+  detail,
+  onClose,
+  onChanged,
+}: {
+  detail: OfferingDetail;
+  onClose: () => void;
+  onChanged: (message: string) => void;
+}) {
+  const context = useSystemContext();
+  const today = context.businessDate;
+  const [priceType, setPriceType] = useState<'oneTime' | 'recurring'>('oneTime');
+  const [amount, setAmount] = useState('');
+  const [validFrom, setValidFrom] = useState(today);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const parsed = amount.trim() ? parseAmount(amount) : null;
+  const canonical = parsed !== null && parsed !== '0.00' ? parsed : null;
+  let error: string | null = null;
+  if (amount.trim() && canonical === null) error = 'Price must be a positive number';
+  else if (validFrom && validFrom < today) error = `Valid from cannot be earlier than ${today}`;
+  const ready = error === null && canonical !== null && validFrom !== '';
+
+  async function submit() {
+    if (!ready || canonical === null) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await addPrice(
+        {
+          offeringId: detail.id,
+          offeringName: detail.name,
+          priceType,
+          amount: canonical,
+          currency: context.currency,
+          validFrom,
+          existingPriceIds: detail.priceRefs.map((price) => price.id),
+        },
+        context.timeZone,
+      );
+      onChanged(`Price added to ${detail.name}`);
+    } catch (failure) {
+      setProblem(explain(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const message = problem ?? error;
+  return (
+    <Modal
+      onSubmit={submitDialogPrimary}
+      title={`Add price · ${detail.name}`}
+      width={520}
+      onClose={busy ? () => undefined : onClose}
+      ui="ui.catalog.addPrice"
+      footer={
+        <>
+          {message !== null && (
+            <Note tone="negative" className="footer-push">
+              {message}
+            </Note>
+          )}
+          <Button onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={!ready || busy} onClick={() => void submit()}>
+            Add price
+          </Button>
+        </>
+      }
+    >
+      <div className="bss-modal-body bss-form">
+        <label htmlFor="add-price-type">Charge type</label>
+        <select
+          id="add-price-type"
+          className="bss-input"
+          value={priceType}
+          onChange={(event) => setPriceType(event.target.value as 'oneTime' | 'recurring')}
+        >
+          <option value="oneTime">One time</option>
+          <option value="recurring">Monthly recurring</option>
+        </select>
+        <label htmlFor="add-price-amount">Amount, {context.currency}</label>
+        <TextInput
+          id="add-price-amount"
+          mono
+          inputMode="decimal"
+          value={amount}
+          onChange={(event) => setAmount(event.target.value)}
+        />
+        <label htmlFor="add-price-from">Valid from</label>
+        <TextInput
+          id="add-price-from"
+          mono
+          type="date"
+          min={today}
+          value={validFrom}
+          onChange={(event) => setValidFrom(event.target.value)}
+        />
+      </div>
+    </Modal>
   );
 }
 
@@ -780,9 +907,13 @@ export function NewOfferingModal({
 }) {
   const context = useSystemContext();
   const tomorrow = addDays(context.businessDate, 1);
+  const categories = useResource('categories', loadCategories);
   const [form, setForm] = useState<OfferingForm>({
     code: '',
     name: '',
+    description: '',
+    isSellable: true,
+    categoryIds: [],
     specificationId: catalog.specifications[0]?.id ?? '',
     price: '',
     recurringPeriodType: 'monthly',
@@ -797,11 +928,12 @@ export function NewOfferingModal({
   const specifications = [...catalog.specifications, ...extra];
   const taken = new Set(catalog.offerings.flatMap((o) => (o.code ? [o.code] : [])));
   const checked = checkOffering(form, taken, context.businessDate);
-  const set = (field: keyof OfferingForm) => (value: string) =>
-    setForm((f) => ({ ...f, [field]: value }));
+  function set<K extends keyof OfferingForm>(field: K) {
+    return (value: OfferingForm[K]) => setForm((f) => ({ ...f, [field]: value }));
+  }
 
   async function create() {
-    if (!checked.ready || checked.amount === null) return;
+    if (!checked.ready || checked.amount === null || categories.status !== 'ok') return;
     setBusy(true);
     setProblem(null);
     try {
@@ -809,6 +941,9 @@ export function NewOfferingModal({
         {
           code: checked.code,
           name: form.name.trim(),
+          description: form.description,
+          isSellable: form.isSellable,
+          categoryIds: form.categoryIds,
           specificationId: form.specificationId,
           amount: checked.amount,
           recurringPeriodType: form.recurringPeriodType ?? 'monthly',
@@ -846,7 +981,7 @@ export function NewOfferingModal({
             <Button onClick={onClose}>Cancel</Button>
             <Button
               variant="primary"
-              disabled={!checked.ready || busy}
+              disabled={!checked.ready || categories.status !== 'ok' || busy}
               onClick={() => void create()}
             >
               Create in In Design
@@ -855,51 +990,88 @@ export function NewOfferingModal({
         }
       >
         <div className="bss-modal-body bss-form">
-          <label>
-            Code
-            <TextInput
-              className="uppercase"
-              mono
-              value={form.code}
-              onChange={(e) => set('code')(e.target.value)}
-            />
-          </label>
-          <label>
-            Name
-            <TextInput value={form.name} onChange={(e) => set('name')(e.target.value)} />
-          </label>
-          <label>
-            Specification
-            <select
-              className="bss-input"
-              value={form.specificationId}
-              onChange={(e) => set('specificationId')(e.target.value)}
-            >
-              {specifications.map((spec) => (
-                <option key={spec.id} value={spec.id}>
-                  {spec.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <label htmlFor="new-offering-code">Code</label>
+          <TextInput
+            id="new-offering-code"
+            className="uppercase"
+            mono
+            value={form.code}
+            onChange={(e) => set('code')(e.target.value)}
+          />
+          <label htmlFor="new-offering-name">Name</label>
+          <TextInput
+            id="new-offering-name"
+            value={form.name}
+            onChange={(e) => set('name')(e.target.value)}
+          />
+          <label htmlFor="new-offering-description">Description</label>
+          <TextInput
+            id="new-offering-description"
+            value={form.description}
+            onChange={(e) => set('description')(e.target.value)}
+          />
+          <div>
+            <input
+              id="new-offering-sellable"
+              type="checkbox"
+              checked={form.isSellable}
+              onChange={(e) => set('isSellable')(e.target.checked)}
+            />{' '}
+            <label htmlFor="new-offering-sellable">Sellable</label>
+          </div>
+          <label htmlFor="new-offering-specification">Specification</label>
+          <select
+            id="new-offering-specification"
+            className="bss-input"
+            value={form.specificationId}
+            onChange={(e) => set('specificationId')(e.target.value)}
+          >
+            {specifications.map((spec) => (
+              <option key={spec.id} value={spec.id}>
+                {spec.name}
+              </option>
+            ))}
+          </select>
           <div>
             <Button small onClick={() => setCreatingSpec(true)}>
               New specification…
             </Button>
           </div>
+          <label htmlFor="new-offering-categories">Categories</label>
+          <select
+            id="new-offering-categories"
+            className="bss-input"
+            multiple
+            disabled={categories.status !== 'ok'}
+            value={form.categoryIds}
+            onChange={(e) =>
+              set('categoryIds')(Array.from(e.target.selectedOptions, (option) => option.value))
+            }
+          >
+            {categories.status === 'ok' &&
+              categories.data.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+          </select>
+          {categories.status === 'loading' && <Note tone="info">Loading categories…</Note>}
+          {categories.status === 'error' && <Note tone="negative">{categories.error.message}</Note>}
           <div className="bss-form-pair">
-            <label>
-              Price, {context.currency}
+            <div>
+              <label htmlFor="new-offering-price">Price, {context.currency}</label>
               <TextInput
+                id="new-offering-price"
                 mono
                 inputMode="decimal"
                 value={form.price}
                 onChange={(e) => set('price')(e.target.value)}
               />
-            </label>
-            <label>
-              Recurrence
+            </div>
+            <div>
+              <label htmlFor="new-offering-recurrence">Recurrence</label>
               <select
+                id="new-offering-recurrence"
                 className="bss-input"
                 value={form.recurringPeriodType}
                 onChange={(e) => set('recurringPeriodType')(e.target.value)}
@@ -909,42 +1081,39 @@ export function NewOfferingModal({
                 <option value="monthly">month</option>
                 <option value="yearly">year</option>
               </select>
-            </label>
+            </div>
           </div>
-          <label>
-            Charge every
-            <TextInput
-              type="number"
-              min="1"
-              max="1000"
-              step="1"
-              value={form.recurringPeriodLength ?? '1'}
-              onChange={(e) => set('recurringPeriodLength')(e.target.value)}
-            />
-            <span className="bss-secondary">
-              Selected periods per charge; price covers the entire interval.
-            </span>
-          </label>
-          <label>
-            Valid from
-            <TextInput
-              mono
-              type="date"
-              min={tomorrow}
-              value={form.validFrom}
-              onChange={(e) => set('validFrom')(e.target.value)}
-            />
-          </label>
-          <label>
-            Valid to (empty = open-ended)
-            <TextInput
-              mono
-              type="date"
-              min={form.validFrom || tomorrow}
-              value={form.validTo}
-              onChange={(e) => set('validTo')(e.target.value)}
-            />
-          </label>
+          <label htmlFor="new-offering-charge-every">Charge every</label>
+          <TextInput
+            id="new-offering-charge-every"
+            type="number"
+            min="1"
+            max="1000"
+            step="1"
+            value={form.recurringPeriodLength ?? '1'}
+            onChange={(e) => set('recurringPeriodLength')(e.target.value)}
+          />
+          <span className="bss-secondary">
+            Selected periods per charge; price covers the entire interval.
+          </span>
+          <label htmlFor="new-offering-valid-from">Valid from</label>
+          <TextInput
+            id="new-offering-valid-from"
+            mono
+            type="date"
+            min={tomorrow}
+            value={form.validFrom}
+            onChange={(e) => set('validFrom')(e.target.value)}
+          />
+          <label htmlFor="new-offering-valid-to">Valid to (empty = open-ended)</label>
+          <TextInput
+            id="new-offering-valid-to"
+            mono
+            type="date"
+            min={form.validFrom || tomorrow}
+            value={form.validTo}
+            onChange={(e) => set('validTo')(e.target.value)}
+          />
         </div>
       </Modal>
       {creatingSpec && (

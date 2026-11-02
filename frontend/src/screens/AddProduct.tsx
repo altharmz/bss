@@ -7,8 +7,10 @@ import { NumberPicker } from './Numbers';
 import {
   loadFirstCharge,
   loadSellableOfferings,
+  midnightOf,
   orderAdd,
   replaceDraft,
+  shownPrice,
   type Account,
   type FirstCharge,
 } from '../api/bss';
@@ -86,7 +88,7 @@ export function AddProductModal({
   const [uncertain, setUncertain] = useState(false);
 
   const offerings = useResource('offerings', (signal) =>
-    loadSellableOfferings(context.now, account.currency, signal),
+    loadSellableOfferings(account.currency, signal),
   );
   const startValid = isIsoDate(start) && start >= today;
   const previewKey = offeringId !== null && startValid ? `${offeringId}|${start}` : 'none';
@@ -298,34 +300,41 @@ export function AddProductModal({
                 <div className="text">No active offerings match.</div>
               </div>
             )}
-            {visible.map((offer) => (
-              <div
-                key={offer.id}
-                className="bss-offer"
-                role="radio"
-                aria-checked={offer.id === offeringId}
-                tabIndex={0}
-                onClick={() => setOfferingId(offer.id)}
-                onKeyDown={(event) => {
-                  if (event.key === ' ' || event.key === 'Enter') setOfferingId(offer.id);
-                }}
-              >
-                <span className="bss-radio" />
-                <span>
-                  <span className="bss-name">{offer.name}</span>
-                  {activeOfferingIds.has(offer.id) && (
-                    <span className="bss-tag">already active</span>
-                  )}
-                  {offer.code !== null && <div className="bss-code">{offer.code}</div>}
-                </span>
-                <span>{offer.specification}</span>
-                <span className="num num-right">
-                  {offer.priceCents === null
-                    ? '—'
-                    : `${formatCents(offer.priceCents)} / ${offer.interval ?? 'mo'}`}
-                </span>
-              </div>
-            ))}
+            {visible.map((offer) => {
+              const price = shownPrice(
+                offer.prices,
+                midnightOf(startValid ? start : today, context.timeZone),
+                account.currency,
+              );
+              return (
+                <div
+                  key={offer.id}
+                  className="bss-offer"
+                  role="radio"
+                  aria-checked={offer.id === offeringId}
+                  tabIndex={0}
+                  onClick={() => setOfferingId(offer.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === ' ' || event.key === 'Enter') setOfferingId(offer.id);
+                  }}
+                >
+                  <span className="bss-radio" />
+                  <span>
+                    <span className="bss-name">{offer.name}</span>
+                    {activeOfferingIds.has(offer.id) && (
+                      <span className="bss-tag">already active</span>
+                    )}
+                    {offer.code !== null && <div className="bss-code">{offer.code}</div>}
+                  </span>
+                  <span>{offer.specification}</span>
+                  <span className="num num-right">
+                    {price === null
+                      ? '—'
+                      : `${formatCents(price.cents)} / ${price.interval ?? 'mo'}`}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </section>
 

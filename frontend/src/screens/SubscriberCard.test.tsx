@@ -808,6 +808,57 @@ describe('add product', () => {
     ).toBeTruthy();
   });
 
+  it('shows the price at the selected start midnight without reloading the catalog', async () => {
+    const scheduled = {
+      ...catalog,
+      'GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true&offset=0&limit=100':
+        () =>
+          json(
+            OFFERINGS.map((offering) =>
+              offering.id === O2
+                ? { ...offering, productOfferingPrice: [{ id: 'pr2' }, { id: 'pr2-next' }] }
+                : offering,
+            ),
+            { total: 2 },
+          ),
+      'GET /tmf-api/productCatalogManagement/v5/productOfferingPrice?priceType=recurring&offset=0&limit=100':
+        () =>
+          json(
+            [
+              ...PRICES.map((price) =>
+                price.id === 'pr2'
+                  ? {
+                      ...price,
+                      validFor: {
+                        ...price.validFor,
+                        endDateTime: '2026-10-05T21:00:00Z',
+                      },
+                    }
+                  : price,
+              ),
+              {
+                id: 'pr2-next',
+                price: usd(700),
+                validFor: { startDateTime: '2026-10-05T21:00:00Z' },
+              },
+            ],
+            { total: 3 },
+          ),
+    };
+    const { calls } = backend(scheduled);
+    const dialog = await openModal();
+    const fiber = await within(dialog).findByRole('radio', { name: /Fiber 100/ });
+    expect(within(fiber).getByText('650.00 / month')).toBeTruthy();
+    const catalogCalls = () =>
+      calls.filter((call) => call.startsWith('GET /tmf-api/productCatalogManagement/')).length;
+    const loaded = catalogCalls();
+    fireEvent.change(within(dialog).getByLabelText('Start date'), {
+      target: { value: '2026-10-06' },
+    });
+    expect(within(fiber).getByText('700.00 / month')).toBeTruthy();
+    expect(catalogCalls()).toBe(loaded);
+  });
+
   it('orders the offering with the start date and closes', async () => {
     const { fetchMock } = backend({
       ...catalog,
@@ -3722,6 +3773,51 @@ describe('change offering', () => {
         },
       ],
     });
+  });
+
+  it('shows the price at the change date midnight without reloading offerings', async () => {
+    const { calls } = backend({
+      ...catalog,
+      [CATALOG]: () =>
+        json(
+          [
+            offering(O1, 'Mobile L', 'pr1'),
+            {
+              ...offering(O2, 'Fiber 100', 'pr2'),
+              productOfferingPrice: [{ id: 'pr2' }, { id: 'pr2-next' }],
+            },
+          ],
+          { total: 2 },
+        ),
+      [PRICES]: () =>
+        json(
+          [
+            { id: 'pr1', price: usd(1290), validFor: { startDateTime: '2026-06-01T21:00:00Z' } },
+            {
+              id: 'pr2',
+              price: usd(650),
+              validFor: {
+                startDateTime: '2026-06-01T21:00:00Z',
+                endDateTime: '2026-10-31T21:00:00Z',
+              },
+            },
+            {
+              id: 'pr2-next',
+              price: usd(700),
+              validFor: { startDateTime: '2026-10-31T21:00:00Z' },
+            },
+          ],
+          { total: 3 },
+        ),
+    });
+    const { dialog } = await openDialog();
+    const fiber = await within(dialog).findByRole('radio', { name: /Fiber 100/ });
+    expect(within(fiber).getByText('650.00 / month')).toBeTruthy();
+    const catalogCalls = () => calls.filter((call) => call === CATALOG || call === PRICES).length;
+    const loaded = catalogCalls();
+    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-11-01' } });
+    expect(within(fiber).getByText('700.00 / month')).toBeTruthy();
+    expect(catalogCalls()).toBe(loaded);
   });
 
   it('accepts another date from today and sends it', async () => {

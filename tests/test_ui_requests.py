@@ -196,7 +196,9 @@ def spec(api) -> dict:
     ).json()
 
 
-def create_offering(api, code: str = "MOB-XL", unit: str = "monthly", length: int = 1) -> dict:
+def create_offering(
+    api, code: str = "MOB-XL", unit: str = "monthly", length: int = 1, attributes: bool = False
+) -> dict:
     """createOffering(): the price (amount as a raw number token), then the offering."""
     valid_for = (
         '{"startDateTime":"2026-10-02T00:00:00+03:00","endDateTime":"2027-01-01T00:00:00+03:00"}'
@@ -211,11 +213,23 @@ def create_offering(api, code: str = "MOB-XL", unit: str = "monthly", length: in
         f'"price":{{"unit":"USD","value":1990.50}},"validFor":{valid_for}}}',
     )
     assert price.status_code == 201, price.text
+    optional = {}
+    if attributes:
+        categories = [
+            api.post(f"{CATALOG}/category", {"@type": "Category", "name": name}).json()
+            for name in ("Mobile", "Promo")
+        ]
+        optional = {
+            "description": "Unlimited data",
+            "isSellable": False,
+            "category": [{"id": category["id"], "@type": "CategoryRef"} for category in categories],
+        }
     offering = api.post(
         f"{CATALOG}/productOffering",
         {
             "@type": "ProductOffering",
             "name": "Mobile XL",
+            **optional,
             "lifecycleStatus": "In Design",
             "validFor": {
                 "startDateTime": "2026-10-02T00:00:00+03:00",
@@ -242,8 +256,12 @@ def create_offering(api, code: str = "MOB-XL", unit: str = "monthly", length: in
     "unit,length", [("monthly", 1), ("daily", 3), ("weekly", 2), ("monthly", 3), ("yearly", 1)]
 )
 def test_new_offering_is_stored_as_the_ui_means_it(api, unit, length):
-    offering = create_offering(api, unit=unit, length=length)
+    offering = create_offering(api, unit=unit, length=length, attributes=True)
     assert offering["lifecycleStatus"] == "In Design"
+    assert offering["description"] == "Unlimited data"
+    assert offering["isSellable"] is False
+    assert len(offering["category"]) == 2
+    assert all(ref["@type"] == "CategoryRef" for ref in offering["category"])
     assert offering["externalIdentifier"][0]["id"] == "MOB-XL"
     # "valid to 2026-12-31" (inclusive) is stored as the exclusive midnight of Jan 1
     assert offering["validFor"] == {
@@ -256,6 +274,44 @@ def test_new_offering_is_stored_as_the_ui_means_it(api, unit, length):
         unit,
         length,
     )
+
+
+def test_add_price_preserves_the_complete_price_reference_list(api):
+    """addPrice(): exact POST bodies and old-plus-new offering references from Catalog.test.tsx."""
+    offering = create_offering(api)
+    original = offering["productOfferingPrice"][0]
+    assert api.delete(original["href"]).status_code == 204
+
+    one_time = api.post_raw(
+        f"{CATALOG}/productOfferingPrice",
+        '{"@type":"ProductOfferingPrice","name":"Mobile XL oneTime","lifecycleStatus":"Active",'
+        '"priceType":"oneTime","price":{"unit":"USD","value":125.50},'
+        '"validFor":{"startDateTime":"2026-10-02T00:00:00+03:00"}}',
+    )
+    assert one_time.status_code == 201, one_time.text
+    one_time_ref = {"id": one_time.json()["id"], "@type": "ProductOfferingPriceRef"}
+    attached = api.patch(offering["href"], {"productOfferingPrice": [one_time_ref]})
+    assert attached.status_code == 200, attached.text
+
+    recurring = api.post_raw(
+        f"{CATALOG}/productOfferingPrice",
+        '{"@type":"ProductOfferingPrice","name":"Mobile XL monthly","lifecycleStatus":"Active",'
+        '"priceType":"recurring","recurringChargePeriodType":"monthly",'
+        '"price":{"unit":"USD","value":130.00},'
+        '"validFor":{"startDateTime":"2026-10-02T00:00:00+03:00"}}',
+    )
+    assert recurring.status_code == 201, recurring.text
+    recurring_ref = {"id": recurring.json()["id"], "@type": "ProductOfferingPriceRef"}
+    attached = api.patch(offering["href"], {"productOfferingPrice": [one_time_ref, recurring_ref]})
+    assert attached.status_code == 200, attached.text
+    assert [ref["id"] for ref in attached.json()["productOfferingPrice"]] == [
+        one_time_ref["id"],
+        recurring_ref["id"],
+    ]
+    assert "recurringChargePeriodType" not in decimals(api.get(one_time.json()["href"]))
+    monthly = decimals(api.get(recurring.json()["href"]))
+    assert monthly["price"] == {"unit": "USD", "value": Decimal("130.00")}
+    assert monthly["recurringChargePeriodType"] == "monthly"
 
 
 def test_specification_writes_as_the_ui_sends_them(api):

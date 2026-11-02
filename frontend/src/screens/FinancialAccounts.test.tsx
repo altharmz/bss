@@ -128,7 +128,7 @@ describe('financial accounts', () => {
     window.history.replaceState(null, '', '/nowhere'); // a screen that loads nothing
     render(<App />);
     const nav = await screen.findByRole('navigation', { name: 'Main' });
-    fireEvent.click(within(nav).getByRole('link', { name: /^Accounts/ }));
+    fireEvent.click(within(nav).getByRole('link', { name: /^Financial accounts/ }));
     expect(await screen.findByText('No financial accounts yet')).toBeTruthy();
     expect(window.location.pathname).toBe('/financial-accounts');
   });

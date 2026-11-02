@@ -137,7 +137,7 @@ export function Sidebar({ context }: { context: SystemContext }) {
           active: (r) => r.name === 'prepaidCommands',
         },
         {
-          label: 'Accounts',
+          label: 'Financial accounts',
           href: '/financial-accounts',
           count: '',
           active: (r) => r.name === 'financialAccounts',

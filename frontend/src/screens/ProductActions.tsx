@@ -6,9 +6,11 @@ import {
   loadFirstCharge,
   loadOfferingDetail,
   loadSellableOfferings,
+  midnightOf,
   orderOfferingChange,
   orderProductChange,
   orderDelete,
+  shownPrice,
   type Account,
   type AccountProduct,
   type FirstCharge,
@@ -320,7 +322,7 @@ export function ChangeOfferingDialog({
   const valid = isIsoDate(day) && (prepaid || day >= today);
 
   const offerings = useResource('offerings', (signal) =>
-    loadSellableOfferings(context.now, account.currency, signal),
+    loadSellableOfferings(account.currency, signal),
   );
   const currentOffering = useResource(`offering:${product.productOffering.id}`, (signal) =>
     loadOfferingDetail(product.productOffering.id, signal),
@@ -332,6 +334,7 @@ export function ChangeOfferingDialog({
       : Promise.resolve(null),
   );
   const q = filter.trim().toLowerCase();
+  const priceAt = midnightOf(valid ? day : today, context.timeZone);
   const visible =
     offerings.status === 'ok'
       ? offerings.data.filter(
@@ -339,7 +342,7 @@ export function ChangeOfferingDialog({
             o.id !== product.productOffering.id &&
             currentOffering.status === 'ok' &&
             o.specificationId === currentOffering.data.specification?.id &&
-            o.priceCents !== null &&
+            shownPrice(o.prices, priceAt, account.currency) !== null &&
             (!q || o.name.toLowerCase().includes(q) || (o.code ?? '').toLowerCase().includes(q)),
         )
       : [];
@@ -452,29 +455,32 @@ export function ChangeOfferingDialog({
                   <div className="text">No other offering uses this product's specification.</div>
                 </div>
               )}
-            {visible.map((offer) => (
-              <div
-                key={offer.id}
-                className="bss-offer"
-                role="radio"
-                aria-checked={offer.id === offeringId}
-                tabIndex={0}
-                onClick={() => setOfferingId(offer.id)}
-                onKeyDown={(event) => {
-                  if (event.key === ' ' || event.key === 'Enter') setOfferingId(offer.id);
-                }}
-              >
-                <span className="bss-radio" />
-                <span>
-                  <span className="bss-name">{offer.name}</span>
-                  {offer.code !== null && <div className="bss-code">{offer.code}</div>}
-                </span>
-                <span>{offer.specification}</span>
-                <span className="num num-right">
-                  {formatCents(offer.priceCents ?? 0)} / {offer.interval ?? 'mo'}
-                </span>
-              </div>
-            ))}
+            {visible.map((offer) => {
+              const price = shownPrice(offer.prices, priceAt, account.currency);
+              return (
+                <div
+                  key={offer.id}
+                  className="bss-offer"
+                  role="radio"
+                  aria-checked={offer.id === offeringId}
+                  tabIndex={0}
+                  onClick={() => setOfferingId(offer.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === ' ' || event.key === 'Enter') setOfferingId(offer.id);
+                  }}
+                >
+                  <span className="bss-radio" />
+                  <span>
+                    <span className="bss-name">{offer.name}</span>
+                    {offer.code !== null && <div className="bss-code">{offer.code}</div>}
+                  </span>
+                  <span>{offer.specification}</span>
+                  <span className="num num-right">
+                    {formatCents(price?.cents ?? 0)} / {price?.interval ?? 'mo'}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </section>
         <section>

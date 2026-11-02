@@ -2,6 +2,8 @@
 
 ## GUI review fixes
 
+- G7 (P7, P8, P9, P10, I3, B21, B27): New offering sends description, isSellable (default true) and selected category references with explicitly labelled controls; non-sellable catalog rows show a Tag in every lifecycle group. Offering detail Add price supports oneTime and monthly recurring only, allows today or later, posts the price and then patches the complete old-plus-new reference list. Existing offering and price Delete flows remain unchanged. Add product and Change offering choose shownPrice at the selected start/change date's business-zone midnight from the already loaded catalog, without a catalog refetch. The sidebar link is Financial accounts, and a gallery regression requires every form control to have a label. Component tests and tests/test_ui_requests.py pin every new or changed TMF620 write, including exact decimal tokens and preserved price references.
+
 - G6 (B7, retry checks): billing-run history pages 20 runs at a time through the existing offset/limit endpoint, with Previous/Next controls and a range footer. The latest-run panel survives older-page views, selection closes when its run leaves the page, and queued work returns to page one for polling. Component tests walk 23 runs and pin the already-present failed-run and failedTechnical-command Retry POSTs without bodies; no write or backend request changed.
 
 - #89 browser prerequisites: numbered transfer waits for the authenticated catalog

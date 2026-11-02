@@ -97,5 +97,14 @@ describe('Ledger controls', () => {
     ).toBe('ui.kit');
     expectUi('ui.kit');
     expect(screen.getByRole('radiogroup', { name: 'Choose mode' })).toBeTruthy();
+    const unlabeled = Array.from(
+      document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+        'input, select, textarea',
+      ),
+    ).filter(
+      (control) =>
+        control.labels?.length === 0 && (control.getAttribute('aria-labelledby') ?? '') === '',
+    );
+    expect(unlabeled).toEqual([]);
   });
 });

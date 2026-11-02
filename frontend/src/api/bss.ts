@@ -705,8 +705,7 @@ export interface Offering {
   name: string;
   code: string | null;
   specification: string;
-  priceCents: number | null; // display only; the charge itself comes from the preview
-  interval?: string;
+  prices: CatalogPrice[]; // display only; the charge itself comes from the preview
 }
 
 export function chargeInterval(type = 'monthly', length = 1): string {
@@ -720,36 +719,15 @@ export function chargeInterval(type = 'monthly', length = 1): string {
   return length === 1 ? name : `${length} ${name}s`;
 }
 
-/** The recurring price valid at `now` in `currency`, for display in lists. What is
- * charged is never computed here: the first-charge preview asks the backend. */
-function displayPrice(
-  offering: OfferingBody,
-  prices: Map<string, PriceBody>,
-  now: string,
-  currency: string,
-) {
-  for (const ref of offering.productOfferingPrice ?? []) {
-    const price = ref.id === undefined ? undefined : prices.get(ref.id);
-    const value = price?.price?.value;
-    const from = price?.validFor?.startDateTime;
-    const to = price?.validFor?.endDateTime;
-    if (
-      value !== undefined &&
-      price?.price?.unit === currency &&
-      from !== undefined &&
-      Date.parse(from) <= Date.parse(now) &&
-      (to === undefined || Date.parse(now) < Date.parse(to))
-    ) {
-      return {
-        cents: toCents(value),
-        interval: chargeInterval(
-          price.recurringChargePeriodType,
-          price.recurringChargePeriodLength,
-        ),
-      };
-    }
-  }
-  return null;
+function toCatalogPrice(price: PriceBody): CatalogPrice {
+  return {
+    id: need(price.id, 'price id'),
+    cents: toCents(need(price.price?.value, 'price value')),
+    currency: need(price.price?.unit, 'price unit'),
+    interval: chargeInterval(price.recurringChargePeriodType, price.recurringChargePeriodLength),
+    from: need(price.validFor?.startDateTime, 'price validFor.startDateTime'),
+    to: price.validFor?.endDateTime ?? null,
+  };
 }
 
 /** The offering code: the externalIdentifier entry of type offeringCode. */
@@ -761,7 +739,6 @@ export function offeringCode(offering: Pick<OfferingBody, 'externalIdentifier'>)
 }
 
 export async function loadSellableOfferings(
-  now: string,
   currency: string,
   signal: AbortSignal,
 ): Promise<Offering[]> {
@@ -776,8 +753,10 @@ export async function loadSellableOfferings(
     code: offeringCode(offering),
     specification: offering.productSpecification?.name ?? '',
     specificationId: offering.productSpecification?.id,
-    priceCents: displayPrice(offering, byId, now, currency)?.cents ?? null,
-    interval: displayPrice(offering, byId, now, currency)?.interval ?? 'month',
+    prices: (offering.productOfferingPrice ?? []).flatMap((ref) => {
+      const price = ref.id === undefined ? undefined : byId.get(ref.id);
+      return price === undefined || price.price?.unit !== currency ? [] : [toCatalogPrice(price)];
+    }),
   }));
 }
 
@@ -800,6 +779,7 @@ export interface CatalogOffering {
   name: string;
   code: string | null;
   status: Lifecycle;
+  isSellable: boolean;
   specification: string;
   specificationId?: string | undefined;
   validFrom: string | null; // instant; null = no validFor (valid at any time)
@@ -854,26 +834,14 @@ export async function loadCatalog(signal: AbortSignal): Promise<Catalog> {
       name: need(offering.name, 'offering name'),
       code: offeringCode(offering),
       status: need(offering.lifecycleStatus, 'lifecycleStatus') as Lifecycle,
+      isSellable: offering.isSellable ?? true,
       specification: offering.productSpecification?.name ?? '',
       specificationId: offering.productSpecification?.id,
       validFrom: offering.validFor?.startDateTime ?? null,
       validTo: offering.validFor?.endDateTime ?? null,
       prices: (offering.productOfferingPrice ?? []).flatMap((ref) => {
         const price = ref.id === undefined ? undefined : priceById.get(ref.id);
-        if (price === undefined) return []; // not recurring (or not visible): not listed
-        return [
-          {
-            id: need(price.id, 'price id'),
-            cents: toCents(need(price.price?.value, 'price value')),
-            currency: need(price.price?.unit, 'price unit'),
-            interval: chargeInterval(
-              price.recurringChargePeriodType,
-              price.recurringChargePeriodLength,
-            ),
-            from: need(price.validFor?.startDateTime, 'price validFor.startDateTime'),
-            to: price.validFor?.endDateTime ?? null,
-          },
-        ];
+        return price === undefined ? [] : [toCatalogPrice(price)];
       }),
     })),
   };
@@ -901,6 +869,9 @@ export function shownPrice(
 export interface NewOffering {
   code: string; // upper case, validated
   name: string;
+  description: string;
+  isSellable: boolean;
+  categoryIds: string[];
   specificationId: string;
   amount: string; // canonical decimal string, e.g. "1290.50"
   currency: string;
@@ -951,6 +922,9 @@ export async function createOffering(form: NewOffering, timeZone: string): Promi
   const offering = await postJson<OfferingBody>(PATHS.offerings, {
     '@type': 'ProductOffering',
     name: form.name,
+    ...(form.description.trim() === '' ? {} : { description: form.description.trim() }),
+    isSellable: form.isSellable,
+    category: form.categoryIds.map((id) => ({ id, '@type': 'CategoryRef' })),
     lifecycleStatus: 'In Design', // every new offering starts in In Design
     validFor,
     productSpecification: { id: form.specificationId, '@type': 'ProductSpecificationRef' },
@@ -960,6 +934,40 @@ export async function createOffering(form: NewOffering, timeZone: string): Promi
     ],
   });
   return need(offering.id, 'offering id');
+}
+
+export interface NewPrice {
+  offeringId: string;
+  offeringName: string;
+  priceType: 'oneTime' | 'recurring';
+  amount: string;
+  currency: string;
+  validFrom: string;
+  existingPriceIds: string[];
+}
+
+export async function addPrice(form: NewPrice, timeZone: string): Promise<void> {
+  const price = await postJson<PriceBody>(
+    PATHS.prices,
+    jsonWithAmount(
+      {
+        '@type': 'ProductOfferingPrice',
+        name: `${form.offeringName} ${form.priceType === 'recurring' ? 'monthly' : 'oneTime'}`,
+        lifecycleStatus: 'Active',
+        priceType: form.priceType,
+        ...(form.priceType === 'recurring' ? { recurringChargePeriodType: 'monthly' } : {}),
+        price: { unit: form.currency, value: AMOUNT },
+        validFor: { startDateTime: midnightOf(form.validFrom, timeZone) },
+      },
+      form.amount,
+    ),
+  );
+  await patchJson(`${PATHS.offerings}/${form.offeringId}`, {
+    productOfferingPrice: [...form.existingPriceIds, need(price.id, 'price id')].map((id) => ({
+      id,
+      '@type': 'ProductOfferingPriceRef',
+    })),
+  });
 }
 
 /**

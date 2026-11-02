@@ -87,6 +87,7 @@ function backend(routes: Record<string, Handler> = {}, offerings: unknown[] = OF
       json(offerings, { total: offerings.length }),
     [`GET ${CAT}/productSpecification?offset=0&limit=100`]: () =>
       json(SPECS, { total: SPECS.length }),
+    [`GET ${CAT}/category?offset=0&limit=100`]: () => json([], { total: 0 }),
     [`GET ${CAT}/productOfferingPrice?priceType=recurring&offset=0&limit=100`]: () =>
       json(PRICES, { total: PRICES.length }),
     // the detail dialog loads the offering itself
@@ -269,7 +270,13 @@ describe('new offering', () => {
     await open();
     await waitFor(() => row('Mobile L'));
     fireEvent.click(screen.getByRole('button', { name: '+ New offering' }));
-    return screen.getByRole('dialog', { name: 'New product offering' });
+    const dialog = screen.getByRole('dialog', { name: 'New product offering' });
+    await waitFor(() =>
+      expect((within(dialog).getByLabelText('Categories') as HTMLSelectElement).disabled).toBe(
+        false,
+      ),
+    );
+    return dialog;
   }
   const field = (dialog: HTMLElement, label: RegExp) => within(dialog).getByLabelText(label);
   const create = (dialog: HTMLElement) =>
@@ -309,6 +316,14 @@ describe('new offering', () => {
   ] as const)('creates an offering priced every %s × %s', async (unit, length) => {
     let created = false;
     const { fetchMock } = backend({
+      [`GET ${CAT}/category?offset=0&limit=100`]: () =>
+        json(
+          [
+            { id: 'c1', name: 'Mobile' },
+            { id: 'c2', name: 'Promo' },
+          ],
+          { total: 2 },
+        ),
       [`POST ${CAT}/productOfferingPrice`]: () => json({ id: 'new-price' }, { status: 201 }),
       [`POST ${CAT}/productOffering`]: () => {
         created = true;
@@ -319,6 +334,16 @@ describe('new offering', () => {
     expect(dialog).toBe(expectUi('ui.catalog.newOffering'));
     fireEvent.change(field(dialog, /Code/), { target: { value: 'mob-xl' } });
     fireEvent.change(field(dialog, /^Name/), { target: { value: 'Mobile XL' } });
+    fireEvent.change(field(dialog, /Description/), { target: { value: 'Unlimited data' } });
+    const sellable = within(dialog).getByRole('checkbox', { name: 'Sellable' }) as HTMLInputElement;
+    expect(sellable.checked).toBe(true);
+    fireEvent.click(sellable);
+    const categoryField = field(dialog, /Categories/) as HTMLSelectElement;
+    const mobile = await within(categoryField).findByRole('option', { name: 'Mobile' });
+    const promo = within(categoryField).getByRole('option', { name: 'Promo' });
+    (mobile as HTMLOptionElement).selected = true;
+    (promo as HTMLOptionElement).selected = true;
+    fireEvent.change(categoryField);
     fireEvent.change(field(dialog, /Specification/), { target: { value: 's1' } });
     fireEvent.change(field(dialog, /Price, USD/), { target: { value: '1,990.5' } });
     fireEvent.change(field(dialog, /Valid to/), { target: { value: '2026-12-31' } });
@@ -352,6 +377,12 @@ describe('new offering', () => {
     expect(JSON.parse(String(offeringCall?.[1]?.body))).toEqual({
       '@type': 'ProductOffering',
       name: 'Mobile XL',
+      description: 'Unlimited data',
+      isSellable: false,
+      category: [
+        { id: 'c1', '@type': 'CategoryRef' },
+        { id: 'c2', '@type': 'CategoryRef' },
+      ],
       lifecycleStatus: 'In Design',
       validFor,
       productSpecification: { id: 's1', '@type': 'ProductSpecificationRef' },
@@ -386,6 +417,76 @@ describe('new offering', () => {
     expect(await within(dialog).findByText('offering code MOB-XL is already in use')).toBeTruthy();
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
+});
+
+describe('catalog sellability', () => {
+  it('marks non-sellable offerings in every lifecycle group', async () => {
+    backend(
+      {},
+      OFFERINGS.filter((offering) =>
+        ['TV Basic', 'Mobile L', 'Old Mobile'].includes(offering.name),
+      ).map((offering) => ({ ...offering, isSellable: false })),
+    );
+    await open();
+    for (const name of ['TV Basic', 'Mobile L', 'Old Mobile']) {
+      await waitFor(() => row(name));
+      const marker = within(row(name)).getByText('Not sellable').parentElement;
+      expect(marker).toHaveProperty('dataset.ui', 'ui.catalog.notSellable');
+    }
+  });
+});
+
+describe('add price', () => {
+  it.each([
+    ['oneTime', 'One time', 'oneTime', {}],
+    ['recurring', 'Monthly recurring', 'monthly', { recurringChargePeriodType: 'monthly' }],
+  ] as const)(
+    'adds a %s price and preserves every attached price',
+    async (type, label, suffix, extra) => {
+      const { fetchMock } = backend({
+        [`POST ${CAT}/productOfferingPrice`]: () => json({ id: 'new-price' }, { status: 201 }),
+        [`PATCH ${CAT}/productOffering/${ids(1)}`]: () => json({ id: ids(1) }),
+      });
+      await open();
+      await waitFor(() => row('Mobile L'));
+      fireEvent.click(row('Mobile L'));
+      const detail = screen.getByRole('dialog', { name: 'Mobile L' });
+      fireEvent.click(await within(detail).findByRole('button', { name: 'Add price…' }));
+      const dialog = screen.getByRole('dialog', { name: 'Add price · Mobile L' });
+      expect(dialog).toBe(expectUi('ui.catalog.addPrice'));
+      const from = within(dialog).getByLabelText('Valid from') as HTMLInputElement;
+      expect(from.value).toBe('2026-10-01');
+      expect(from.min).toBe('2026-10-01');
+      fireEvent.change(within(dialog).getByLabelText('Charge type'), { target: { value: type } });
+      expect(within(dialog).getByRole('option', { name: label })).toBeTruthy();
+      fireEvent.change(within(dialog).getByLabelText('Amount, USD'), {
+        target: { value: '125.5' },
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Add price' }));
+      expect(await screen.findByRole('status')).toHaveProperty(
+        'textContent',
+        'Price added to Mobile L',
+      );
+      const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+      expect(String(post?.[1]?.body)).toContain('"price":{"unit":"USD","value":125.50}');
+      expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+        '@type': 'ProductOfferingPrice',
+        name: `Mobile L ${suffix}`,
+        lifecycleStatus: 'Active',
+        priceType: type,
+        ...extra,
+        price: { unit: 'USD', value: 125.5 },
+        validFor: { startDateTime: '2026-10-01T00:00:00+03:00' },
+      });
+      const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+      expect(JSON.parse(String(patch?.[1]?.body))).toEqual({
+        productOfferingPrice: [
+          { id: 'pr1', '@type': 'ProductOfferingPriceRef' },
+          { id: 'new-price', '@type': 'ProductOfferingPriceRef' },
+        ],
+      });
+    },
+  );
 });
 
 describe('lifecycle', () => {
@@ -594,6 +695,7 @@ describe('offering attributes TMF620 makes optional', () => {
       name: 'Any time',
       code: null,
       status: 'Active' as const,
+      isSellable: true,
       specification: '',
       validFrom: null,
       validTo: null,
