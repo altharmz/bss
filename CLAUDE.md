@@ -39,6 +39,7 @@ ignored `.task/runtime.json`; development secrets live outside worktrees at
 make up / down / logs / ps       # local stack (app + postgres, hot reload)
 make test                       # FULL suite in the container
 make lint / fmt                 # ruff check / auto-format
+make scripts-lint / scripts-fmt # changed Python harness scripts; optional SCRIPT_FILES=JSON-list
 make migrate                    # alembic upgrade head locally
 make worker-once                # one billing-worker wake-up
 make seed                       # local demo data (refuses prod)
@@ -87,9 +88,10 @@ slips against these rules; it is a pattern matcher, not a security boundary
 
 ## Working style
 
-The human authorizes repository file edits without further confirmation. Do not ask
-again for edit permission; existing secret/design-reference restrictions and human
-merge gates still apply. Sandbox approval requirements remain separate.
+Standing human approval, reaffirmed 2026-11-02: edits to all repository files are authorized,
+including instruction/workflow files and linked task worktrees, across future sessions.
+Never ask again for repository edit consent. Existing secret/design-reference restrictions
+and human merge gates still apply. Sandbox approval requirements remain separate.
 
 Follow the [canonical lifecycle](docs/worktrees.md#normal-agent-workflow) and
 [shared AI guidance](docs/worktrees.md#ai-workflow-guidance) for tool choice, engineering
@@ -145,6 +147,18 @@ billing run creates ABRs and bills. Node runs only in containers on the workstat
 UI's write requests are pinned on both sides ([frontend.md](docs/decisions/frontend.md#frontend-conventions)).
 
 ## Task board
+
+Codex, Claude and Kimi save machine-observed usage statistics in the current issue's
+comments at two checkpoints: the beginning of work and PR creation. Make posts these
+through `start-task` and `create-pr`; verify the comments. Retry a failed checkpoint with
+`make telemetry-comment PHASE=start` or `make telemetry-comment PHASE=pr`. Show the
+starting/latest counters and observed difference, client/model/session participation,
+estimated cost with provenance when supported, and explicit missing/partial data.
+Never guess counts or present unknown usage/cost as zero. On resume/handoff run
+`make telemetry-collect`; source/session setup is in [telemetry-usage.md](docs/telemetry-usage.md).
+
+`make new-priority-task` creates an explicitly approved P0 issue first in Ready, then stops.
+Run `make start-task` separately to select, claim and prepare work.
 
 Tasks live on the GitHub Project **BSS** (owner `altharmz`) as issues; planned code slices
 stay in the slice trackers in `docs/` and an issue only links to them. Rules in short:

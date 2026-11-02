@@ -20,9 +20,23 @@ After explicit human approval of the concrete PR and exact current head in this
 conversation, use `make merge-task HUMAN_APPROVAL=<PR-number>:<full-head-SHA>` as documented
 in `docs/worktrees.md`. New commits require renewed approval; all other gates still apply.
 
-Repository file edits are authorized by the human; do not ask again for permission to
-edit files in this repository. Follow the existing secret/design-reference restrictions
-and human merge gates. Tool sandbox approval, when required, is separate from edit consent.
+Standing human approval, reaffirmed 2026-11-02: edits to all repository files are authorized,
+including instruction/workflow files and files in linked task worktrees. This approval
+persists across sessions; never ask again for repository edit consent. Follow the existing
+secret/design-reference restrictions and human merge gates. Tool sandbox approval, when
+required, is separate from edit consent.
+
+Save machine-observed usage statistics in the current issue's comments at the beginning
+of work and when the PR is created. The Make lifecycle posts both checkpoints; verify
+them and recover failures with `make telemetry-comment PHASE=start` or
+`make telemetry-comment PHASE=pr`. Show the starting/latest counters and their observed
+difference, participating clients/models/sessions, pricing provenance and explicit gaps.
+Never guess counts or report unknown usage/cost as zero. On resume/handoff run
+`make telemetry-collect`; bind the actual client session as described in
+[telemetry-usage.md](docs/telemetry-usage.md). These shared rules also apply to Kimi.
+
+`make new-priority-task` only creates an explicitly approved P0 issue first in Ready.
+It does not start work; selection and claim remain in the separate `make start-task`.
 
 For new work, strongly prefer `make start-task BSS_TASK_OWNER=codex` from clean primary
 master. It selects the issue and worker slot and claims the board item. Do not manually

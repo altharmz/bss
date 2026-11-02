@@ -268,6 +268,16 @@ def record(
                 client,
             )
         )
+        # Lazy import avoids a module cycle with the strict interchange importer.
+        try:
+            from task_collect import automatic
+
+            automatic(task, operation, client, result=result, pr_number=pr_number)
+        except ImportError:
+            print(
+                "telemetry: collection helper unavailable; synchronize client instructions",
+                file=sys.stderr,
+            )
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
         print(
             "telemetry: event not recorded; run make telemetry-up to check storage", file=sys.stderr
@@ -287,7 +297,7 @@ def main():
             for migration in sorted((ROOT / "scripts/telemetry").glob("*.sql")):
                 sql(migration.read_text())
         if args.action == "health":
-            sql("SELECT 1 / count(*) FROM schema_versions WHERE version = 2;")
+            sql("SELECT 1 / count(*) FROM schema_versions WHERE version = 3;")
     except (OSError, RuntimeError, subprocess.SubprocessError):
         print(
             "telemetry: management failed; check local Docker and telemetry schema", file=sys.stderr

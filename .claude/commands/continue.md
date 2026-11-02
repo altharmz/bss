@@ -22,6 +22,11 @@ Then, in this order:
 2. Resume a known task you own in its existing worktree. Use `make check-pr` for that
    task's PR; failing checks or requested changes come before new work. Do not perform a
    manual board or open-PR inventory to find new work.
+   Run `make telemetry-collect` to bind the actual resumed client session and capture
+   registered sessions; follow `docs/telemetry-usage.md` when session identity is unavailable.
+   Verify the issue's starting statistics comment and, after PR creation, its second
+   statistics comment showing the observed difference. Retry posting with
+   `make telemetry-comment PHASE=start` or `PHASE=pr`; never guess missing counts.
 3. For new work, strongly prefer `make start-task BSS_TASK_OWNER=codex` for Codex, or
    `make start-task BSS_TASK_OWNER=claude` for Claude, from clean primary master.
    Use the returned issue and worktree. The helper claims the agent label and Doing

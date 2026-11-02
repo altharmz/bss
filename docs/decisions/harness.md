@@ -9,6 +9,23 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 
 ## Development cycle and gates
 
+### Python harness lint and formatting (2026-11-02, #124)
+
+Use `make scripts-lint` and `make scripts-fmt` for Python sources below `scripts/`.
+The default selection includes changed committed, staged, unstaged and new Python
+harness files; deleted paths and unrelated application files are excluded. If the base
+cannot be determined, selection conservatively includes all Python harness sources.
+`SCRIPT_FILES='["scripts/example.py"]'` selects explicit files. Paths are validated before
+container invocation; traversal, redirected sources and shell fragments are refused.
+
+The pinned development image runs Ruff in a dedicated service with no network, Git,
+credentials or whole-checkout mount. Lint uses a read-only scripts mount; formatting
+selects its writable twin, which can write only scripts. Both read the repository's Ruff
+configuration. Nonzero lint/format statuses propagate through Make. The targets supply
+the previously missing Make-owned operation; the workflow guard remains enabled and
+direct task-compose lifecycle invocations remain blocked. These checks are explicit for
+harness changes, separate from the existing application `make lint` / `make format`.
+
 ### Make-owned lifecycle dogfood and enforcement (2026-11-01, #93)
 
 [worktrees.md](../worktrees.md#normal-agent-workflow) is the canonical cross-client
@@ -71,8 +88,10 @@ remain. See [worktrees.md](../worktrees.md).
 
 `make new-priority-task TITLE=... BODY=... [LABELS=...]` handles a concrete new request
 only after explicit human approval for P0 and first board position. Under the existing
-startup lock and local safety checks, it creates one issue, adds P0, moves it to Ready and
-first position, verifies the result, and reuses normal selection, claiming and slot setup.
+repository/GitHub validation, it creates one issue, adds P0, moves it to Ready and
+first position, verifies the result and stops (#124). It does not check WIP or slot
+availability or allocate task resources; selection, claim and setup are exclusively
+the independent `make start-task` operation.
 Reserved priority, ownership and gate labels are rejected. A created issue is preserved for
 inspection after partial failure; callers must not retry by creating a duplicate. Ordinary
 backlog selection remains `make start-task`. See [worktrees.md](../worktrees.md).
@@ -200,11 +219,18 @@ Usage ingestion and reports were added in #92; see the
 Migration 002 adds nullable provenance and a unique import identity without changing
 existing rows. `telemetry-ingest` accepts only explicit, nonoverlapping machine usage
 deltas; `telemetry-report` reports known data and leaves unavailable metrics null.
-No conversation scanning, price scraping or model/token estimation is performed.
+The #124 collector projects only allowlisted machine usage metadata from explicitly bound
+client sources; conversation content is never retained or reported. No price scraping
+or model/token estimation is performed.
 
 Telemetry is observational and **fail-open**: a failed write produces a bounded warning
 on stderr without changing the workflow's exit status. Writes have a three-second timeout;
-they never start infrastructure, retry, queue JSON files, or persist data in a worktree.
+they never start infrastructure, queue raw JSON files, or persist usage in a worktree.
+Collection retries replay immutable machine events; final-tail capture uses a bounded
+two-minute host process from surviving primary sources after task completion. Coverage
+stays partial when its final counter does not arrive. Bindings, counter snapshots and
+the two issue-comment checkpoints live in PostgreSQL migration 003, separately from
+sample/pricing completeness. See [telemetry-usage.md](../telemetry-usage.md).
 Use `make telemetry-up` once to start the shared local database and migrate it;
 `telemetry-health`, `telemetry-migrate`, `telemetry-down` and `telemetry-test` manage/check it.
 Management failures fail the management target. Normal task targets remain usable offline.

@@ -58,7 +58,11 @@ class StartupTests(unittest.TestCase):
         # Spaces also exercise argv/path handling, including the printed cd command.
         self.primary = self.base / "primary checkout"
         self.remote = self.base / "origin.git"
-        self.env = {k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "BSS_SLOT", "BSS_WORKER_", "BSS_TASK_OWNER"))}
+        self.env = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith(("GIT_", "BSS_SLOT", "BSS_WORKER_", "BSS_TASK_OWNER"))
+        }
         self.env.update(
             GIT_CONFIG_GLOBAL="/dev/null",
             GIT_CONFIG_NOSYSTEM="1",
@@ -74,7 +78,17 @@ class StartupTests(unittest.TestCase):
         self.git("config", "user.name", "Startup test")
         self.git("config", "user.email", "startup@example.test")
         (self.primary / "scripts").mkdir()
-        for name in ("start_task.py", "task_runtime.py", "task_telemetry.py", "worker_slots.py", "task_finish.py", "task_pr.py", "task_git.py", "task_quality.py", "install-hooks.py"):
+        for name in (
+            "start_task.py",
+            "task_runtime.py",
+            "task_telemetry.py",
+            "worker_slots.py",
+            "task_finish.py",
+            "task_pr.py",
+            "task_git.py",
+            "task_quality.py",
+            "install-hooks.py",
+        ):
             shutil.copy2(SCRIPTS / name, self.primary / "scripts" / name)
         shutil.copy2(SCRIPTS.parent / "Makefile", self.primary / "Makefile")
         (self.primary / ".gitignore").write_text(".task/\n.env\n__pycache__/\n")
@@ -100,7 +114,8 @@ class StartupTests(unittest.TestCase):
             " number = max(r['content']['number'] for r in rows) + 1\n"
             " labels = [{'name': args[i + 1]} for i, a in enumerate(args) if a == '--label']\n"
             " row = {'id': f'item-{number}', 'fieldValueByName': {'name': 'Inbox'}, 'content': {\n"
-            "  'id': f'issue-{number}', 'number': number, 'title': args[args.index('--title') + 1],\n"
+            "  'id': f'issue-{number}', 'number': number,\n"
+            "  'title': args[args.index('--title') + 1],\n"
             "  'state': 'OPEN', 'repository': {'nameWithOwner': 'altharmz/bss'},\n"
             "  'labels': {'totalCount': len(labels), 'nodes': labels},\n"
             "  'blockedBy': {'totalCount': 0, 'nodes': []},\n"
@@ -131,7 +146,8 @@ class StartupTests(unittest.TestCase):
             "  if row in nodes: nodes.remove(row)\n"
             " board[0]['node']['items']['nodes'].insert(0, row)\n"
             " with open(board_path, 'w') as output: json.dump(board, output)\n"
-            " print(json.dumps({'data': {'updateProjectV2ItemPosition': {'clientMutationId': None}}}))\n"
+            " out = {'updateProjectV2ItemPosition': {'clientMutationId': None}}\n"
+            " print(json.dumps({'data': out}))\n"
             " sys.exit(0)\n"
             "if 'mutation' in document:\n"
             " if os.environ.get('BSS_TEST_FAIL') == 'status': sys.exit(1)\n"
@@ -624,12 +640,17 @@ class StartupTests(unittest.TestCase):
             "nodes"
         ][0]
 
-    def test_new_priority_task_creates_first_p0_and_starts_it(self):
+    def test_new_priority_task_creates_ready_then_starts_independently(self):
         body = "Goal: keep a;b and `literal` intact\n\n- [ ] Done"
         result = self.call(
             [
-                "make", "--no-print-directory", "new-priority-task",
-                "TITLE=Explicit request", f"BODY={body}", "LABELS=harness,docs", "JSON=1",
+                "make",
+                "--no-print-directory",
+                "new-priority-task",
+                "TITLE=Explicit request",
+                f"BODY={body}",
+                "LABELS=harness,docs",
+                "JSON=1",
             ],
             check=False,
         )
@@ -638,11 +659,39 @@ class StartupTests(unittest.TestCase):
         self.assertEqual((data["issue"], data["title"]), (82, "Explicit request"))
         item = self.remote_item()
         self.assertEqual(item["content"]["number"], 82)
-        self.assertEqual(task.status(item), "Doing")
-        self.assertEqual(task.ownership(item), {"P0", "harness", "docs", "agent:codex"})
-        calls = [json.loads(line) for line in Path(self.env["BSS_TEST_CALLS"]).read_text().splitlines()]
+        self.assertEqual(data["status"], "Ready")
+        self.assertEqual(data["url"], "https://github.com/altharmz/bss/issues/82")
+        self.assertEqual(task.status(item), "Ready")
+        self.assertEqual(task.ownership(item), {"P0", "harness", "docs"})
+        self.assertFalse(self.destination().exists())
+        self.assertEqual(self.git("branch", "--format=%(refname:short)"), "master")
+        self.assertFalse((self.base / "config/bss/tasks").exists())
+        self.assertFalse((self.primary.parent / (self.primary.name + "-agents")).exists())
+        calls = [
+            json.loads(line) for line in Path(self.env["BSS_TEST_CALLS"]).read_text().splitlines()
+        ]
         create = next(call for call in calls if call[:2] == ["issue", "create"])
         self.assertEqual(create[create.index("--body") + 1], body)
+        self.assertEqual(self.result()["issue"], 82)
+
+    def test_new_priority_creation_ignores_wip_and_unavailable_slots(self):
+        active = issue(90, labels=connection([{"name": "agent:codex"}]))
+        active["fieldValueByName"]["name"] = "Doing"
+        self.board([issue(), active])
+        # Invalid explicit slot would prevent startup, but not issue creation.
+        self.env["BSS_SLOT"] = "../unavailable"
+        result = self.call(
+            [
+                "make",
+                "--no-print-directory",
+                "new-priority-task",
+                "TITLE=Independent creation",
+                "BODY=Acceptance",
+                "JSON=1",
+            ]
+        )
+        self.assertEqual(json.loads(result.stdout)["status"], "Ready")
+        self.assertFalse(self.destination().exists())
 
     def test_new_priority_task_rejects_missing_input_and_reserved_labels(self):
         cases = [
@@ -661,18 +710,28 @@ class StartupTests(unittest.TestCase):
                 self.assertFalse(self.destination().exists())
                 self.assertEqual(self.remote_item()["content"]["number"], 81)
 
-    def test_new_priority_task_startup_failure_leaves_retryable_issue(self):
-        self.env["BSS_TEST_FAIL"] = "claim"
+    def test_new_priority_task_position_failure_identifies_preserved_issue(self):
+        self.env["BSS_TEST_FAIL"] = "position"
         result = self.call(
             [
-                "make", "--no-print-directory", "new-priority-task",
-                "TITLE=Explicit request", "BODY=Goal and acceptance criteria", "JSON=1",
+                "make",
+                "--no-print-directory",
+                "new-priority-task",
+                "TITLE=Explicit request",
+                "BODY=Goal and acceptance criteria",
+                "JSON=1",
             ],
             check=False,
         )
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("new issue #82 is preserved", result.stderr)
         self.assertFalse(self.destination().exists())
-        item = self.remote_item()
+        item = next(
+            r
+            for p in json.loads(Path(self.env["BSS_TEST_BOARD"]).read_text())
+            for r in p["node"]["items"]["nodes"]
+            if r["content"]["number"] == 82
+        )
         self.assertEqual(item["content"]["number"], 82)
         self.assertEqual(task.status(item), "Ready")
         self.assertEqual(task.ownership(item), {"P0"})
@@ -791,8 +850,11 @@ class StartupTests(unittest.TestCase):
         with (common / "start-task.lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             process = subprocess.Popen(
-                ["make", "--no-print-directory", "start-task", "JSON=1"],
-                cwd=self.primary, env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                ["make", "--no-print-directory", "start-task", "JSON=1"],  # noqa: S607
+                cwd=self.primary,
+                env=self.env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
             )
             try:
@@ -910,11 +972,16 @@ class StartupTests(unittest.TestCase):
         try:
             for owner in ("codex", "claude"):
                 environ = {**self.env, "BSS_TASK_OWNER": owner}
-                processes.append(subprocess.Popen(
-                    ["make", "--no-print-directory", "start-task", "JSON=1"],
-                    cwd=self.primary, env=environ, stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE, text=True,
-                ))
+                processes.append(
+                    subprocess.Popen(
+                        ["make", "--no-print-directory", "start-task", "JSON=1"],  # noqa: S607
+                        cwd=self.primary,
+                        env=environ,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                    )
+                )
             results = []
             for process in processes:
                 output, errors = process.communicate(timeout=30)
@@ -950,9 +1017,7 @@ class StartupTests(unittest.TestCase):
         data = json.loads(result.stdout)
         self.assertEqual(data["agent"], "agent:kimi")
         self.assertEqual(data["slot"], "worker2")
-        self.assertEqual(
-            Path(data["worktree"]), self.base / "primary checkout-agents/worker2/repo"
-        )
+        self.assertEqual(Path(data["worktree"]), self.base / "primary checkout-agents/worker2/repo")
         self.assertIn("agent:kimi", task.ownership(self.remote_item()))
 
     def test_slot_lock_rejects_another_invocation(self):

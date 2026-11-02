@@ -79,6 +79,13 @@ only this BSS reorder mutation, not arbitrary GraphQL writes or combined mutatio
 The shell hook cannot verify conversation approval; agents must enforce that requirement,
 as they do the existing human-review rules. There is no approval flag or general bypass.
 
+`make new-priority-task TITLE=... BODY=... [LABELS=...]` creates an explicitly approved
+P0 issue first in Ready and stops. It does not claim ownership, check WIP/slots, create a
+worktree or credentials, or start runtime. Start it later through the independent
+`make start-task BSS_TASK_OWNER=<client>` selection/claim workflow. A creation failure
+after GitHub created the issue identifies its number; inspect it before retrying to
+avoid duplicates.
+
 ### needs-human items
 
 Never move a `needs-human` item to Doing for yourself. You may prepare it (exact commands,
@@ -138,6 +145,14 @@ it, then carry on in the normal order. The revert PR follows the same flow.
 --enable-rebase-merge=false --delete-branch-on-merge`); this is the human's setting, not an agent's.
 
 ### Mechanics
+
+Each agent saves machine usage statistics in comments on its current issue at the
+beginning of work and when the PR is created. `make start-task` and `make create-pr`
+post the two checkpoints; retry failures with `make telemetry-comment PHASE=start|pr`.
+The PR comment shows starting/latest counters and their observed difference, client/
+model/session participation, supported estimated costs with provenance, and explicit
+coverage/pricing gaps. Never fill unknown counters or costs with zeroes or estimates
+from conversation text. See [source setup and recovery](telemetry-usage.md).
 
 Normal task startup uses `make start-task`, strongly preferably
 `make start-task BSS_TASK_OWNER=codex` for Codex. Do not run a manual board snapshot,

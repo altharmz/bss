@@ -71,6 +71,26 @@ services:
     network_mode: none
     command: ["ruff", "--version"]
 
+  # Harness-only tooling: no application, Git, credential or whole-checkout mounts.
+  # scripts-fmt selects the writable twin below.
+  scripts-tools:
+    build:
+      context: .
+      target: dev
+    image: ${IMAGE_NAME:?use scripts/task-compose}:${TAG:-dev}
+    profiles: [tools]
+    volumes:
+      - ./scripts:/app/scripts:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
+    network_mode: none
+    command: ["ruff", "--version"]
+
+  scripts-tools-fmt:
+    extends:
+      service: scripts-tools
+    volumes:
+      - ./scripts:/app/scripts
+
   # `app` without the image's HEALTHCHECK, for long one-off runs (make test): the probe
   # targets /healthz, which nothing serves while pytest runs here, so the container would
   # sit in `health: starting` and could turn `unhealthy` in docker ps. `app` itself keeps

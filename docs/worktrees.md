@@ -25,21 +25,33 @@ For a concrete new request only when the human explicitly approves P0 priority a
 board position, use `make new-priority-task TITLE="Task title" BODY="Goal and acceptance
 criteria" LABELS="harness,docs"` from clean primary master. `LABELS` is optional; priority,
 ownership and gate labels are reserved. The command creates the P0 issue, moves it first in
-Ready and continues through the same startup/claim path below. If setup fails, inspect the
-preserved issue before retrying; do not create a duplicate. Ordinary Ready selection still
+Ready, returns its number/URL/status and stops. Creation does not check agent WIP or slot
+availability, claim ownership, create a branch/worktree, provision credentials or start
+runtime. Use `make start-task BSS_TASK_OWNER=<client>` separately when ready to work.
+If board setup fails, the error identifies the preserved issue; inspect that issue before
+retrying and do not create a duplicate. Ordinary Ready selection still
 uses `make start-task`.
 
 1. From clean primary master: `make start-task` (for Codex, strongly prefer
    `make start-task BSS_TASK_OWNER=codex`). Do not manually inspect the board or select
    and claim an issue first. Use exactly the returned
    issue, branch, slot and worktree; startup claims `agent:<client>` and moves it to Doing.
+   It binds machine usage and posts the starting statistics comment on the selected issue.
+   Set up the actual client session identity per [telemetry-usage.md](telemetry-usage.md);
+   unknown identities/counters are explicitly unavailable.
 2. In that task worktree: implement, with focused tests when useful. If another task
    merged meanwhile, use `make sync-task` from a clean checkout before continuing.
+   On resume or client/session handoff run `make telemetry-collect`; this preserves earlier
+   bindings, captures all registered sessions and discovers supported delegated agents.
 3. In a newly created task worktree, run `make web-install` once before the first
    `make format`. Then run `make format` and `make review-task`. Commit the explicit
    intended files with `make commit MESSAGE="Describe the slice" FILES='["path/to/file"]'`.
 4. Run `make create-pr` (which publishes through `make push`'s helper). Use `make check-pr`
    to observe readiness, and repeat while checks are pending. There is no `WAIT=1` mode.
+   Verify the PR checkpoint statistics comment, including baseline/latest counters and
+   their difference. Retry failed posting with `make telemetry-comment PHASE=pr` (or
+   `PHASE=start` for the immutable starting checkpoint). These are issue comments, not PR
+   descriptions. Missing counters, pricing or final response usage remain visible.
 5. Use `make merge-task` when ready. Human-review gates remain blocked for the human;
    do not replace a blocked target with a raw merge command.
 6. After confirmed merge, issue closure and board Done, run
@@ -84,8 +96,11 @@ make the command look shorter. Use automatic defaults unless a value is required
 | Operation | Preferred command |
 |---|---|
 | Start and claim a task | `make start-task BSS_TASK_OWNER=codex` for Codex (primary) |
-| Create and start an explicitly approved P0 request | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (primary) |
+| Create an explicitly approved P0 issue in Ready | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (primary) |
+| Collect actual client usage / resume a session | `make telemetry-collect` (task; source/session setup in telemetry-usage.md) |
+| Retry an issue statistics checkpoint | `make telemetry-comment PHASE=start` or `PHASE=pr` |
 | Format | `make format` |
+| Lint / format Python harness changes | `make scripts-lint` / `make scripts-fmt` (optional `SCRIPT_FILES='["scripts/example.py"]'`) |
 | Broader technical validation, when useful | `make check` |
 | Review repository/task state | `make review-task` |
 | Commit selected files | `make commit MESSAGE="Describe the slice" FILES='["path/to/file"]'` |
