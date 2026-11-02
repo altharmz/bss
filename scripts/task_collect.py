@@ -53,7 +53,7 @@ def add(*values):
     return sum(values) if all(v is not None for v in values) else None
 
 
-def project(client, path, session, with_state=False):
+def project(client, path, session, with_state=False, unsupported_pricing=None):
     """Return request metadata, final turn times, and parser coverage limitations.
 
     Codex cumulative totals become adjacent deltas, never last_usage + total_usage.
@@ -83,6 +83,7 @@ def project(client, path, session, with_state=False):
                 provider = payload.get("model_provider")
             if kind == "turn_context":
                 model = payload.get("model")
+                active = True
             if kind != "event_msg":
                 continue
             if payload.get("type") in {"task_complete", "turn_complete"}:
@@ -117,6 +118,8 @@ def project(client, path, session, with_state=False):
             if any(v is not None and v < 0 for v in delta.values()):
                 reason = "counter_reset"
                 continue
+            if unsupported_pricing is not None and raw.get("cache_write_input_tokens", 0):
+                unsupported_pricing.add(f"counter-{index}")
             output.append(
                 dict(
                     sample_id=f"counter-{index}",
@@ -196,6 +199,8 @@ def project(client, path, session, with_state=False):
                 raw.get("inputOther"), raw.get("inputCacheRead"), raw.get("inputCacheCreation")
             )
             out = count(raw.get("output"))
+            if unsupported_pricing is not None and raw.get("inputCacheCreation") != 0:
+                unsupported_pricing.add(f"request-{index}")
             output.append(
                 dict(
                     sample_id=f"request-{index}",
@@ -384,7 +389,10 @@ def collect_one(row, pricing=None, home=None):
         if session == "unavailable":
             raise CollectionError("session_identity_missing")
         path = locate(client, session, home)
-        items, ended, limitation, active = project(client, path, session, with_state=True)
+        unsupported_pricing = set()
+        items, ended, limitation, active = project(
+            client, path, session, with_state=True, unsupported_pricing=unsupported_pricing
+        )
         start = timestamp(row["bound_at"])
         close = timestamp(row["closed_at"]) if row.get("closed_at") else None
         # A make command runs before its enclosing model request finishes. Wait for
@@ -445,6 +453,7 @@ def collect_one(row, pricing=None, home=None):
                 pricing
                 if client != "claude"
                 and pricing
+                and item["sample_id"] not in unsupported_pricing
                 and all(pricing.get(k) == sample[k] for k in ("provider", "model"))
                 else None
             )
@@ -458,7 +467,12 @@ def collect_one(row, pricing=None, home=None):
             samples.append((sample, applicable))
         if samples:
             status = "partial"
-            reason = limitation or ("final_counter_pending" if close else "session_open")
+            missing_counts = any(any(s[k] is None for k in TOKENS) for s, _ in samples)
+            reason = limitation or (
+                "counters_missing"
+                if missing_counts
+                else ("final_counter_pending" if close else "session_open")
+            )
             if (
                 end
                 and not limitation
@@ -606,7 +620,15 @@ def automatic(task, operation, client=None, result=0, pr_number=None):
                     "PHASE=start|pr",
                     file=sys.stderr,
                 )
-    except (OSError, ValueError, RuntimeError, TypeError, KeyError, subprocess.SubprocessError):
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        TypeError,
+        KeyError,
+        AttributeError,
+        subprocess.SubprocessError,
+    ):
         print(
             "telemetry: collection failed; retry make telemetry-collect after make telemetry-up",
             file=sys.stderr,
@@ -673,7 +695,15 @@ def main():
         )
         print(json.dumps({"collections": result}, sort_keys=True))
         return int(not result or any(r["status"] == "unavailable" for r in result))
-    except (OSError, ValueError, RuntimeError, TypeError, KeyError, subprocess.SubprocessError):
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        TypeError,
+        KeyError,
+        AttributeError,
+        subprocess.SubprocessError,
+    ):
         print(
             "telemetry: collection failed; check session binding, source and storage",
             file=sys.stderr,

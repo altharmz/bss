@@ -254,6 +254,7 @@ def main():
         RuntimeError,
         TypeError,
         KeyError,
+        AttributeError,
         StopIteration,
         subprocess.SubprocessError,
     ):

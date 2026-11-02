@@ -350,6 +350,33 @@ class CollectionTests(unittest.TestCase):
         self.assertEqual(result["status"], "complete")
         self.assertNotIn("fixture-v1", sql.call_args.args[0])
 
+    def test_kimi_cache_write_tokens_are_counted_but_not_priced_by_three_rate_card(self):
+        from test_task_usage import pricing
+
+        rows = fixture("kimi")
+        rows[2]["usage"]["inputCacheCreation"] = 20
+        self.source("kimi", rows)
+        card = pricing(
+            provider="openai",
+            model="kimi/model-1",
+            effective_from=when(0),
+            effective_until=when(59),
+        )
+        with patch.object(collect, "sql") as sql:
+            result = collect.collect_one(self.row("kimi"), pricing=card, home=self.home)
+        self.assertEqual(result["status"], "complete")
+        self.assertNotIn("fixture-v1", sql.call_args.args[0])
+        samples, _, _ = collect.project("kimi", collect.locate("kimi", SID, self.home), SID)
+        self.assertEqual(samples[0]["input_tokens"], 70)
+
+    def test_final_source_with_missing_cache_counts_reports_counter_gap(self):
+        rows = fixture("kimi")
+        del rows[2]["usage"]["inputCacheRead"]
+        self.source("kimi", rows)
+        with patch.object(collect, "sql"):
+            result = collect.collect_one(self.row("kimi"), home=self.home)
+        self.assertEqual((result["status"], result["reason"]), ("partial", "counters_missing"))
+
     def test_coverage_is_independent_of_pricing_and_lists_missing_clients(self):
         data = dict(
             tasks=[dict(task_id=TASK, started_at=when(1), ended_at=None, outcome=None)],

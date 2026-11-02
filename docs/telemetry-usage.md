@@ -102,8 +102,11 @@ already imported client/session are refused to prevent cross-source double count
 There is no bundled live rate card. Set `BSS_TELEMETRY_PRICING_FILE` before automatic
 collection, or pass `PRICING_FILE=` to explicit collection, to price new matching samples
 with an auditable versioned card. Existing prices are immutable, including unknown prices;
-automatic retries preserve them. Claude's cache-creation pricing requires an additional
-rate absent from the legacy three-rate formula, so automatic Claude costs stay unknown.
+automatic retries preserve them. Cache-creation pricing requires an additional rate absent
+from the legacy three-rate formula: automatic Claude costs and Codex/Kimi records with
+observed cache writes stay unknown. Provider labels are those in the machine source;
+an `openai` label in a compatible client can identify its API transport rather than the
+company issuing its invoice. Do not infer a billing vendor from a model name or client.
 Unknown providers/models, unsupported costs and subscription charges remain unknown.
 
 `make telemetry-probe CLIENT=<client> SESSION_ID=<actual-id>` validates a real source
