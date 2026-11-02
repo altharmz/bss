@@ -146,7 +146,12 @@ export function UiKitScreen() {
           meta="Billing accounts"
           actions={<Button variant="primary">New subscriber</Button>}
           filters={
-            <TextInput aria-label="Search subscribers" placeholder="Name, BA id or number" />
+            <>
+              <label className="sr-only" htmlFor="ui-kit-search">
+                Search subscribers
+              </label>
+              <TextInput id="ui-kit-search" placeholder="Name, BA id or number" />
+            </>
           }
         />
         <MoneyStrip

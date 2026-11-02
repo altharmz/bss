@@ -12,6 +12,9 @@ import { parseAmount } from '../format/money';
 export interface OfferingForm {
   code: string;
   name: string;
+  description: string;
+  isSellable: boolean;
+  categoryIds: string[];
   specificationId: string;
   price: string;
   recurringPeriodType?: string;

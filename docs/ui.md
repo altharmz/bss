@@ -56,7 +56,7 @@ API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the coun
 
 The sidebar is one `<nav aria-label="Main">` with four labelled sections
 (`ui.shell.section.customers|products|billing|system`): Customers (Subscribers, Parties), Products (Product
-catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Accounts,
+catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Financial accounts,
 Bills, Payments, Balances, Billing settings, without a count or count request) and System (Integrations, and Users for an admin). The Orders count is `productOrder?limit=1&fields=id`
 (`X-Total-Count`). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
 
@@ -207,6 +207,7 @@ API: `POST .../productOrder`, `POST .../cancelProductOrder`,
 **Change offering…** (`ui.subscriber.changeOffering`, active or suspended, no end, no pending
 offering change; prepaid needs `paidThrough`) opens `ui.subscriber.offeringChange`: pick an
 active offering using the current offering's product specification (not the current one),
+with its price at the selected change date's business-zone midnight and no catalog reload;
 see the first-charge preview for the date, submit one
 `modify` item with the new `productOffering` (no status). Postpaid: date from today, default the
 next charge date; the old offering is billed until D-1 and the new one from D. Prepaid: the date
@@ -269,7 +270,8 @@ list filter). Both lists read all pages. Markers: `ui.subscriber.recordRefund`,
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Modal: 1. pick an Active, sellable offering (filterable list with code, specification and
-today's price); 2. start date (min = business date); 3. **first-charge preview computed by
+the price valid at the selected start date's business-zone midnight); 2. start date (min =
+business date); 3. **first-charge preview computed by
 the backend** - period, billable days of period days, price, amount, when it is charged
 and billed, the following full period, balance after, and a credit-limit warning that
 never blocks. Confirm places a TMF622 add order; a rejection shows its reasons. The copy
@@ -292,7 +294,7 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 
 Ledger v2: lifecycle StatusPill and quiet negative destructive actions.
 
-Ledger R9: counted PageHeader, keyboard Tabs and lifecycle groups in In design → Active → Retired order with filtered counts and sellability hints. Columns show offering/name/code, lifecycle, recurrence, price in the UI currency and Updated (unavailable → “—”). Search by code or name and counted lifecycle segments reuse loaded rows. Specification and validity remain accessible on each row. A Note explains the one-way lifecycle.
+Ledger R9: counted PageHeader, keyboard Tabs and lifecycle groups in In design → Active → Retired order with filtered counts and sellability hints. Columns show offering/name/code, lifecycle, recurrence, price in the UI currency and Updated (unavailable → “—”). Every `isSellable=false` row also has a **Not sellable** Tag (`ui.catalog.notSellable`), regardless of lifecycle. Search by code or name and counted lifecycle segments reuse loaded rows. Specification and validity remain accessible on each row. A Note explains the one-way lifecycle.
 The L offering detail shows lifecycle progress, price figure, KeyValue attributes and a compact Prices table; existing edit/delete move into the header Offering actions Menu. Activate…/Retire… and Change price… retain their confirmations and requests. No transition dates are invented. Specifications, Categories, Catalogs and Import/export use page tables and existing list states; job statuses use catalogJob pills.
 API: `GET .../productOffering`, `GET .../productSpecification`,
 `GET .../productOfferingPrice?priceType=recurring` (all pages).
@@ -378,21 +380,26 @@ specification and categories. **Edit offering** (`ui.catalog.editOffering`) patc
 changed fields among name, description, sellable, validity, code (the `offeringCode` entry;
 other identifiers are sent as loaded), specification and categories (checkbox list). **Delete**
 (`ui.catalog.deleteOffering`, inline confirm) is offered for an In Design offering with no
-attached price; the server's 409 shows. A price line opens the price dialog
-(`ui.catalog.priceDetail`): edit name, description and amount (`ui.catalog.editPrice`; a 409
-points to Change price), **End price** (`ui.catalog.endPrice`, from tomorrow) and **Delete**
-(`ui.catalog.deletePrice`). API: `GET|PATCH|DELETE .../productOfferingPrice/{id}`,
-`DELETE .../productOffering/{id}`, `GET .../category`.
+attached price; the server's 409 shows. **Add price…** (`ui.catalog.addPrice`) takes a one-time
+or monthly recurring charge, a positive amount in the UI currency and a valid-from date of today
+or later; it POSTs the price, then PATCHes the offering with every existing price reference plus
+the new one. A price line opens the price dialog (`ui.catalog.priceDetail`): edit name,
+description and amount (`ui.catalog.editPrice`; a 409 points to Change price), **End price**
+(`ui.catalog.endPrice`, from tomorrow) and **Delete** (`ui.catalog.deletePrice`). API:
+`GET|PATCH|DELETE .../productOfferingPrice/{id}`, `POST .../productOfferingPrice`,
+`PATCH|DELETE .../productOffering/{id}`, `GET .../category`.
 
 ### New offering (`ui.catalog.newOffering`)
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
-Modal: code (upper-cased), name, specification, monthly price, valid from, valid to
-(inclusive in the UI, sent as the next midnight). Creating is **two TMF620 calls**, as the
-spec models it: the price first, then the In Design offering referencing it; if the second
-fails the unattached price stays (it can never price anything) and the error is shown.
-API: `POST .../productOfferingPrice`, `POST .../productOffering`.
+Modal: explicitly labelled code (upper-cased), name, description, Sellable (default on),
+specification, Categories multi-select loaded from TMF620, price and recurrence, valid from,
+valid to (inclusive in the UI, sent as the next midnight). Creating is **two TMF620 calls**, as
+the spec models it: the price first, then the In Design offering referencing it and carrying the
+new attributes; if the second fails the unattached price stays (it can never price anything) and
+the error is shown. API: `GET .../category`, `POST .../productOfferingPrice`,
+`POST .../productOffering`.
 
 **The write requests are pinned on both sides**: component tests assert the exact bodies
 (`frontend/src/screens/*.test.tsx`), and `tests/test_ui_requests.py` replays the same

@@ -5,6 +5,9 @@ const TODAY = '2026-10-01';
 const OK: OfferingForm = {
   code: 'mob-xl',
   name: 'Mobile XL',
+  description: '',
+  isSellable: true,
+  categoryIds: [],
   specificationId: 's1',
   price: '1,990.5',
   validFrom: '2026-10-02',

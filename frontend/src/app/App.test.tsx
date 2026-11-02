@@ -217,8 +217,8 @@ describe('shell', () => {
     const orders = within(nav).getByRole('link', { name: /Orders/ });
     expect(await within(orders).findByText('77')).toBeTruthy();
     // Financial accounts is a read-only aggregate: no count, and no request for one
-    const financial = within(nav).getByRole('link', { name: /^Accounts/ });
-    expect(financial.textContent).toBe('Accounts');
+    const financial = within(nav).getByRole('link', { name: /^Financial accounts/ });
+    expect(financial.textContent).toBe('Financial accounts');
     expect(calls.some((c) => c.includes('financialAccount'))).toBe(false);
     const runs = within(nav).getByRole('link', { name: /Billing runs/ });
     expect(await within(runs).findByText('9')).toBeTruthy(); // X-Total-Count of the runs
