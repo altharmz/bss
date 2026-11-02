@@ -69,6 +69,7 @@ def snapshot(task, phase):
             "cost_complete",
             "collection_complete",
             "missing_clients",
+            "missing_startup",
             "missing_sessions",
             "collection_status",
             "pricing_provenance",
@@ -168,6 +169,8 @@ def render(stats, phase, pr_number=None):
                 for r in stats["missing_sessions"]
             ),
         ]
+    if stats.get("missing_startup"):
+        lines += ["", "Startup history is unavailable; the original work interval is unverified."]
     if stats.get("pricing_provenance"):
         lines += [
             "",

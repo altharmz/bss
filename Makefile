@@ -126,7 +126,10 @@ fmt: ## Auto-format the code (writable `tools` service; `app` mounts sources rea
 	./scripts/task-compose run --rm tools sh -c 'ruff format . && ruff check --fix .'
 
 .PHONY: scripts-lint scripts-fmt
-scripts-lint scripts-fmt: export BSS_SCRIPT_FILES = $(SCRIPT_FILES)
+# Selection is JSON data, including when supplied on Make's command line. Do not
+# evaluate Make expressions in it, or automatically export the original variable.
+unexport SCRIPT_FILES
+scripts-lint scripts-fmt: export BSS_SCRIPT_FILES := $(value SCRIPT_FILES)
 scripts-lint: ## Lint/check formatting of changed Python harness scripts (optional SCRIPT_FILES=JSON-list)
 	python3 -B scripts/script_quality.py lint
 

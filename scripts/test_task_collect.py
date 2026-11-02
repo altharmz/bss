@@ -232,6 +232,7 @@ class CollectionTests(unittest.TestCase):
         self.assertIn("task_id<>", statement)
         self.assertIn("ON CONFLICT DO NOTHING", statement)
         self.assertNotIn("DELETE", statement)
+        self.assertIn("INSERT INTO tasks", statement)
         for client, key in (
             ("codex", "CODEX_THREAD_ID"),
             ("claude", "CLAUDE_SESSION_ID"),
@@ -405,6 +406,10 @@ class CollectionTests(unittest.TestCase):
         task = report(data)["tasks"][0]
         self.assertFalse(task["collection_complete"])
         self.assertEqual(task["missing_sessions"][0]["reason"], "binding_started_after_startup")
+        data["events"] = []
+        task = report(data)["tasks"][0]
+        self.assertFalse(task["collection_complete"])
+        self.assertTrue(task["missing_startup"])
 
 
 if __name__ == "__main__":

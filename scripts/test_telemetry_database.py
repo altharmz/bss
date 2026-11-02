@@ -83,6 +83,17 @@ def main():
         .removeprefix("BEGIN;")
         .removesuffix("COMMIT;")
     )
+    recovered_task = f"issue-124-recovered-{uuid.uuid4().hex}"
+    with patch.object(task_collect, "sql") as capture:
+        task_collect.bind(recovered_task, "codex", SID)
+    statements.append(capture.call_args.args[0].removeprefix("BEGIN;").removesuffix("COMMIT;"))
+    statements.append(f"""DO $$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM tasks WHERE task_id='{recovered_task}') OR
+           NOT EXISTS (SELECT 1 FROM usage_collections
+                       WHERE task_id='{recovered_task}' AND status='unavailable') THEN
+            RAISE EXCEPTION 'offline task registration recovery regression';
+        END IF;
+        END $$;""")
     statements.append(f"""DO $$ BEGIN
         IF (SELECT count(*) FROM usage_collections
             WHERE task_id='{collected_task}' AND status='complete') <> 3 OR

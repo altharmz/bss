@@ -81,7 +81,10 @@ The ordinary Make lifecycle remains fail-open with bounded warnings on storage, 
 GitHub failures. Explicit collection/posting commands return a failure for unavailable
 collection or publication. Restore storage with `make telemetry-up`, then retry. When
 storage was unavailable at initial binding, supply the original session explicitly; its
-unobserved earlier work cannot be declared complete automatically.
+unobserved earlier work cannot be declared complete automatically. Explicit registration
+can recreate a task never seen by storage, recording when recovery first observes it.
+`missing_startup` keeps that task's original interval unverified instead of inventing
+a startup time or treating later samples as complete historical coverage.
 
 The starting comment is immutable across retries. If reconstructed later, it uses the
 machine counter at the binding boundary, not the current counter relabelled as a baseline.

@@ -254,6 +254,7 @@ def report(data):
         events = [e for e in data["events"] if e["task_id"] == tid]
         samples = [u for u in data["usage"] if u["task_id"] == tid]
         collections = [c for c in data.get("collections", []) if c["task_id"] == tid]
+        startup_observed = any(e["event_type"] == "start-task" for e in events)
         expected = {e["client"] for e in events if e.get("client")}
         observed = {c["client"] for c in collections}
         missing = sorted(expected - observed)
@@ -318,10 +319,12 @@ def report(data):
                 ],
                 "sample_count": len(samples),
                 "collection_complete": bool(collections)
+                and startup_observed
                 and not missing
                 and not missing_sessions
                 and all(c["status"] == "complete" for c in collections),
                 "missing_clients": missing,
+                "missing_startup": not startup_observed,
                 "missing_sessions": missing_sessions,
                 "collection_status": collections,
                 "tokens": totals,

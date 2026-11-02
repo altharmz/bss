@@ -17,6 +17,8 @@ harness files; deleted paths and unrelated application files are excluded. If th
 cannot be determined, selection conservatively includes all Python harness sources.
 `SCRIPT_FILES='["scripts/example.py"]'` selects explicit files. Paths are validated before
 container invocation; traversal, redirected sources and shell fragments are refused.
+The selection is literal JSON data: Make expressions in `SCRIPT_FILES` are not evaluated
+while constructing the child environment.
 
 The pinned development image runs Ruff in a dedicated service with no network, Git,
 credentials or whole-checkout mount. Lint uses a read-only scripts mount; formatting

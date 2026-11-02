@@ -95,6 +95,21 @@ class ScriptQualityTests(unittest.TestCase):
             self.assertEqual(observed, [["-B", "scripts/script_quality.py", action], selection])
             self.assertFalse(marker.exists())
 
+        # Make expressions must reach validation as literal data too, rather than
+        # executing while Make constructs the child's environment.
+        selection = json.dumps([f"scripts/$(shell touch {marker}).py"])
+        for target in ("scripts-lint", "scripts-fmt"):
+            result = subprocess.run(  # noqa: S603 - fixed Make target and test-owned executable
+                ["make", "--no-print-directory", target, "SCRIPT_FILES=" + selection],  # noqa: S607
+                cwd=Path(__file__).resolve().parent.parent,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(json.loads(result.stdout.splitlines()[-1])[1], selection)
+            self.assertFalse(marker.exists())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

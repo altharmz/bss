@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -303,6 +304,9 @@ def claude_session():
 def bind(task, client, session, bound_at=None):
     """The first binding wins. Rebinding a session closes its previous issue window."""
     identifier(task)
+    task_match = re.fullmatch(r"issue-([1-9][0-9]*)-[a-z0-9-]+", task)
+    if not task_match or len(task) > 80:
+        raise ValueError("invalid task identity")
     identifier(session)
     if client not in CLIENTS:
         raise ValueError("invalid client")
@@ -324,6 +328,8 @@ def bind(task, client, session, bound_at=None):
     if bound_at:
         timestamp(bound_at)
     sql(f"""BEGIN; SELECT pg_advisory_xact_lock(82003);
+        INSERT INTO tasks(task_id,issue_number,branch)
+         VALUES({t},{int(task_match[1])},{t}) ON CONFLICT DO NOTHING;
         UPDATE usage_collections SET closed_at = COALESCE(closed_at, now())
          WHERE client={c} AND external_session_id={s} AND task_id<>{t};
         INSERT INTO usage_collections(task_id,client,external_session_id,source,bound_at)
