@@ -26,6 +26,11 @@ persists across sessions; never ask again for repository edit consent. Follow th
 secret/design-reference restrictions and human merge gates. Tool sandbox approval, when
 required, is separate from edit consent.
 
+Standing authorization: adding relevant task and PR progress, validation, blocker and
+telemetry comments is authorized. Never ask for permission or confirmation to add these
+comments. Prefer Make helpers where available. Required tool sandbox approvals remain
+separate.
+
 Save machine-observed usage statistics in the current issue's comments at the beginning
 of work and when the PR is created. The Make lifecycle posts both checkpoints; verify
 them and recover failures with `make telemetry-comment PHASE=start` or
@@ -42,6 +47,15 @@ For new work, strongly prefer `make start-task BSS_TASK_OWNER=codex` from clean 
 master. It selects the issue and worker slot and claims the board item. Do not manually
 inspect the board, count statuses, select a Ready issue or claim an item before startup.
 Use the returned issue, branch and worktree; stop and report a startup failure.
+
+For requests such as "deliver the next task", "take the next task" or "start the next
+task", run `make start-task BSS_TASK_OWNER=codex` directly from primary master after
+reading the required instructions. Do not run preliminary GitHub CI, board, PR or Git
+inventory commands and do not ask for confirmation. The startup helper owns preflight,
+selection and claim; this explicit next-task path takes precedence over the general
+continue protocol's preliminary master-CI check. If the user asks only to trigger
+startup, report the result and stop; otherwise continue delivery in the returned worktree.
+Required tool sandbox approvals and human merge gates still apply.
 
 **Deployment is the human's, outside development** (the human, 2026-10-28): your work ends
 at the merge to master. Never run `make deploy`/`verify`/`remote`, never track or suggest a

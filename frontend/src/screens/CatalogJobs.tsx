@@ -19,7 +19,7 @@ import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { businessDate, clockTime } from '../format/dates';
 import { formatInt } from '../format/money';
-import { Button, Modal, Panel, useToast } from '../ui/kit';
+import { Button, Modal, StatusPill, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -74,7 +74,7 @@ export function JobsTab() {
           Import...
         </Button>
       </div>
-      <Panel>
+      <div className="catalog-table">
         <TableHead columns={COLUMNS} />
         <ListState
           resource={resource}
@@ -94,7 +94,7 @@ export function JobsTab() {
                   onClick={() => setDialog({ kind: 'job', job })}
                   cells={{
                     kind: job.kind === 'ImportJob' ? 'Import' : 'Export',
-                    status: job.status,
+                    status: <StatusPill kind="catalogJob" status={job.status} />,
                     created: stamp(job.created, timeZone),
                     completed: stamp(job.completed, timeZone),
                     error:
@@ -113,7 +113,7 @@ export function JobsTab() {
             </>
           )}
         </ListState>
-      </Panel>
+      </div>
       {dialog?.kind === 'export' && (
         <ExportModal
           onCreated={() => setDirty(true)}

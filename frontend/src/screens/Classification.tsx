@@ -25,7 +25,7 @@ import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { formatInt } from '../format/money';
-import { Button, Modal, Panel, StatusPill, TextInput, useToast } from '../ui/kit';
+import { Button, Modal, StatusPill, TextInput, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -68,7 +68,7 @@ export function CategoriesTab({ offerings, query }: { offerings: Catalog | null;
           + New category
         </Button>
       </div>
-      <Panel>
+      <div className="catalog-table">
         <TableHead columns={CATEGORY_COLUMNS} />
         <ListState
           resource={resource}
@@ -110,7 +110,7 @@ export function CategoriesTab({ offerings, query }: { offerings: Catalog | null;
             </>
           )}
         </ListState>
-      </Panel>
+      </div>
       {open !== null && resource.status === 'ok' && (
         <ClassificationModal
           kind="category"
@@ -147,7 +147,7 @@ export function CatalogsTab({ query }: { query: string }) {
           + New catalog
         </Button>
       </div>
-      <Panel>
+      <div className="catalog-table">
         <TableHead columns={CATALOG_COLUMNS} />
         <ListState
           resource={resource}
@@ -189,7 +189,7 @@ export function CatalogsTab({ query }: { query: string }) {
             </>
           )}
         </ListState>
-      </Panel>
+      </div>
       {open !== null && resource.status === 'ok' && (
         <ClassificationModal
           kind="catalog"

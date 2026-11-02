@@ -107,7 +107,7 @@ async function open() {
 }
 
 const dataRows = () =>
-  screen.getAllByRole('row').filter((row) => within(row).queryAllByRole('cell').length === 7);
+  screen.getAllByRole('row').filter((row) => within(row).queryAllByRole('cell').length === 5);
 
 function row(name: string): HTMLElement {
   const found = dataRows().find((r) => within(r).queryByText(name));
@@ -121,6 +121,55 @@ const cellsOf = (name: string) =>
     .map((c) => c.textContent);
 
 describe('catalog', () => {
+  it('groups in lifecycle order with filtered counts, hides empty groups, and explains the lifecycle', async () => {
+    backend();
+    await open();
+    await waitFor(() => row('Mobile L'));
+    const headers = () =>
+      screen.getAllByRole('rowheader').map((element) => element.parentElement?.textContent);
+    expect(headers()).toEqual([
+      'In design1Not sellable yet',
+      'Active2Sellable',
+      'Retired1Billing only',
+    ]);
+    expect(
+      dataRows().map(
+        (element) =>
+          within(element).getByText(/^(TV Basic|Mobile L|Fiber 100|Old Mobile)$/).textContent,
+      ),
+    ).toEqual(['TV Basic', 'Mobile L', 'Fiber 100', 'Old Mobile']);
+    expectUi('ui.catalog.lifecycleNote');
+    expect(
+      screen.getByText(
+        'Lifecycle runs one way: In design → Active → Retired. Retired offerings stay billable for products already on them and are hidden from Add product.',
+      ),
+    ).toBeTruthy();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search offerings' }), {
+      target: { value: 'MOB-L' },
+    });
+    expect(headers()).toEqual(['Active1Sellable']);
+    expect(dataRows()).toHaveLength(1);
+  });
+
+  it.each([
+    ['TV Basic', ['current', 'later', 'later']],
+    ['Mobile L', ['done', 'current', 'later']],
+    ['Old Mobile', ['done', 'done', 'current']],
+  ])('shows lifecycle progress for %s', async (name, states) => {
+    backend();
+    await open();
+    await waitFor(() => row(name as string));
+    fireEvent.click(row(name as string));
+    const stepper = within(screen.getByRole('dialog')).getByRole('list', { name: 'Lifecycle' });
+    expect(stepper).toBe(expectUi('ui.catalog.lifecycleStepper'));
+    expect(
+      within(stepper)
+        .getAllByRole('listitem')
+        .map((item) => item.className),
+    ).toEqual(states);
+    expect(stepper.querySelector('[aria-current="step"]')).toBeTruthy();
+    expectUi('ui.catalog.priceFigure');
+  });
   it('shows a non-monthly price interval in the list and offering details', async () => {
     backend({
       [`GET ${CAT}/productOfferingPrice?priceType=recurring&offset=0&limit=100`]: () =>
@@ -134,10 +183,12 @@ describe('catalog', () => {
         ),
     });
     await open();
-    await waitFor(() => expect(cellsOf('Mobile L')[4]).toBe('2 weeks'));
+    await waitFor(() => expect(cellsOf('Mobile L')[2]).toBe('Every 2 weeks'));
     fireEvent.click(row('Mobile L'));
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText(/USD \/ 2 weeks/)).toBeTruthy();
+    expect(
+      within(within(dialog).getByRole('table', { name: 'Prices' })).getByText(/USD \/ 2 weeks ·/),
+    ).toBeTruthy();
   });
 
   it('lists offerings with code, specification, price, period, status and validity', async () => {
@@ -145,21 +196,19 @@ describe('catalog', () => {
     await open();
     await waitFor(() => row('Mobile L'));
     expectUi('ui.catalog.list');
-    expect(screen.getByRole('columnheader', { name: 'Price, USD' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Price USD' })).toBeTruthy();
     expect(cellsOf('Mobile L')).toEqual([
-      'MOB-L',
-      'Mobile L',
-      'Mobile Voice & Data',
-      '1,290.00',
-      'month',
+      'Mobile LMOB-LMobile Voice & Data2026-06-02 – open-ended',
       'Active',
-      '2026-06-02 – open-ended',
+      'Monthly',
+      '1,290.00',
+      '—',
     ]);
     // the end is exclusive (midnight of Jan 1 in Moscow): the last valid day is shown
-    expect(cellsOf('Fiber 100')[6]).toBe('2026-06-02 – 2026-12-31');
+    expect(within(row('Fiber 100')).getByText('2026-06-02 – 2026-12-31')).toBeTruthy();
     expect(cellsOf('Fiber 100')[3]).toBe('650.00'); // valid now, not tomorrow's 700.00
     expect(cellsOf('TV Basic')[3]).toBe('399.00from 2026-10-05'); // only a future price
-    expect(cellsOf('Old Mobile')[0]).toBe('—');
+    expect(within(row('Old Mobile')).getByText('—', { selector: '.catalog-code' })).toBeTruthy();
     expect(cellsOf('Old Mobile')[3]).toBe('—');
     expect(within(row('Old Mobile')).getByText('Old Mobile').className).toContain('bss-retired');
     expect(screen.getByText('Showing 4 of 4')).toBeTruthy();
@@ -169,7 +218,7 @@ describe('catalog', () => {
       within(group)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['All4', 'In Design1', 'Active2', 'Retired1']);
+    ).toEqual(['All4', 'In design1', 'Active2', 'Retired1']);
   });
 
   it('searches code or name, filters by status, and resets', async () => {
@@ -182,9 +231,8 @@ describe('catalog', () => {
     fireEvent.change(search, { target: { value: 'mobile' } });
     expect(dataRows()).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: /^Retired/ }));
-    expect(dataRows().map((r) => within(r).getAllByRole('cell')[1]?.textContent)).toEqual([
-      'Old Mobile',
-    ]);
+    expect(dataRows()).toHaveLength(1);
+    expect(within(row('Old Mobile')).getByText('Old Mobile')).toBeTruthy();
     fireEvent.change(search, { target: { value: 'fiber' } });
     expect(screen.getByText('No matches')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
@@ -358,10 +406,10 @@ describe('lifecycle', () => {
     });
     const dialog = await details('TV Basic');
     expect(within(dialog).getByText('399.00 USD / month · 2026-10-05 – open-ended')).toBeTruthy();
-    expect(within(dialog).getByRole('button', { name: 'Activate' })).toBe(
+    expect(within(dialog).getByRole('button', { name: 'Activate…' })).toBe(
       expectUi('ui.catalog.lifecycle'),
     );
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Activate' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Activate…' }));
     expect(within(dialog).getByText('Activate? It becomes available to order.')).toBeTruthy();
     expect(patched).toBe(0);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
@@ -382,13 +430,13 @@ describe('lifecycle', () => {
         json({ id: ids(1), lifecycleStatus: 'Retired' }),
     });
     const dialog = await details('Mobile L');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Retire' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Retire…' }));
     expect(
       within(dialog).getByText('Retire? New orders are refused; existing products keep billing.'),
     ).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: 'No' }));
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Retire' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Retire…' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
@@ -423,7 +471,7 @@ describe('lifecycle', () => {
         ),
     });
     const dialog = await details('TV Basic');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Activate' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Activate…' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
     expect(await within(dialog).findByText('lifecycleStatus: invalid')).toBeTruthy();
     expect(screen.queryByRole('status')).toBeNull();
@@ -439,7 +487,7 @@ describe('change price', () => {
     fireEvent.click(row('Mobile L'));
     const dialog = screen.getByRole('dialog', { name: 'Mobile L' });
     expect(dialog).toBe(expectUi('ui.catalog.offeringDetail'));
-    const change = within(dialog).getByRole('button', { name: 'Change price' });
+    const change = within(dialog).getByRole('button', { name: 'Change price…' });
     expect(change).toBe(expectUi('ui.catalog.changePrice'));
     fireEvent.click(change);
     return within(dialog).getByRole('region', { name: 'Change price' });
@@ -592,7 +640,7 @@ describe('specifications', () => {
 
   async function openTab() {
     await open();
-    fireEvent.click(screen.getByRole('button', { name: 'Specifications' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Specifications' }));
     await screen.findByText('Mobile Voice & Data');
   }
   const specRow = (name: string) =>
@@ -1003,7 +1051,8 @@ describe('offering detail, edit and delete', () => {
       [`PATCH ${CAT}/productOffering/${ids(3)}`]: () => json({ id: ids(3) }),
     });
     const dialog = await details('TV Basic');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit offering' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Offering actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit offering' }));
     const edit = screen.getByRole('dialog', { name: 'Edit TV Basic' });
     expectUi('ui.catalog.editOffering');
     expect(within(edit).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
@@ -1043,7 +1092,8 @@ describe('offering detail, edit and delete', () => {
       [`PATCH ${CAT}/productOffering/${ids(3)}`]: () => json({ id: ids(3) }),
     });
     const dialog = await details('TV Basic');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit offering' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Offering actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit offering' }));
     const edit = screen.getByRole('dialog', { name: 'Edit TV Basic' });
     fireEvent.change(within(edit).getByLabelText(/^Specification/), { target: { value: 's1' } });
     fireEvent.change(within(edit).getByLabelText(/^Description/), { target: { value: '' } });
@@ -1063,7 +1113,8 @@ describe('offering detail, edit and delete', () => {
         tmfError(409, 'productSpecification cannot change: the offering was ordered'),
     });
     const dialog = await details('TV Basic');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit offering' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Offering actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit offering' }));
     const edit = screen.getByRole('dialog', { name: 'Edit TV Basic' });
     fireEvent.change(within(edit).getByLabelText(/^Specification/), { target: { value: 's1' } });
     fireEvent.click(within(edit).getByRole('button', { name: 'Save' }));
@@ -1077,8 +1128,9 @@ describe('offering detail, edit and delete', () => {
         tmfError(409, 'productOffering is referenced: retire it instead'),
     });
     const dialog = await details('TV Basic');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Offering actions' }));
     expectUi('ui.catalog.deleteOffering');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
     expect(fetchMock.mock.calls.some(([, i]) => i?.method === 'DELETE')).toBe(false);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
     expect((await within(dialog).findByRole('alert')).textContent).toMatch(/retire it instead/);
@@ -1089,7 +1141,9 @@ describe('offering detail, edit and delete', () => {
       [`DELETE ${CAT}/productOffering/${ids(3)}`]: () => new Response(null, { status: 204 }),
     });
     const dialog = await details('TV Basic');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Offering actions' }));
+    expectUi('ui.catalog.deleteOffering');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
@@ -1105,8 +1159,9 @@ describe('offering detail, edit and delete', () => {
     await waitFor(() => row('Mobile L'));
     fireEvent.click(row('Mobile L')); // Active
     const dialog = screen.getByRole('dialog', { name: 'Mobile L' });
-    await within(dialog).findByRole('button', { name: 'Edit offering' });
-    expect(within(dialog).queryByRole('button', { name: 'Delete' })).toBeNull();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Offering actions' }));
+    await screen.findByRole('menuitem', { name: 'Edit offering' });
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull();
   });
 
   describe('prices', () => {
@@ -1261,12 +1316,12 @@ describe('categories and catalogs', () => {
   async function openCategories() {
     await open();
     await waitFor(() => row('Mobile L'));
-    fireEvent.click(screen.getByRole('button', { name: 'Categories' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Categories' }));
     await screen.findByText('Promo');
   }
   async function openCatalogs() {
     await open();
-    fireEvent.click(screen.getByRole('button', { name: 'Catalogs' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Catalogs' }));
     await screen.findByText('Retail');
   }
 
@@ -1556,7 +1611,7 @@ describe('import and export jobs', () => {
   };
   async function openJobs() {
     await open();
-    fireEvent.click(screen.getByRole('button', { name: 'Import / export' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Import / export' }));
     await screen.findByText('3 jobs');
   }
 

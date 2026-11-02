@@ -7,6 +7,15 @@ Follow this when the human says "continue" or starts a session without a concret
 A concrete request takes precedence: check its local state and only the board or PR state it
 needs. Do not run the full startup sequence or take unrelated Ready work.
 
+An explicit request to "deliver the next task", "take the next task" or "start the
+next task" uses the direct startup path: after reading required instructions, run
+`make start-task BSS_TASK_OWNER=<client>` from primary master without preliminary
+GitHub CI, board, PR or Git inventory commands or confirmation questions. The helper
+owns startup preflight, selection and claim. This path takes precedence over the
+preliminary master-CI check below. If asked only to trigger startup, report its result
+and stop; otherwise continue delivery in the returned worktree. Required tool sandbox
+approvals and human merge gates still apply.
+
 For the full protocol, build the picture before touching code. **First, check `master`**:
 `gh run list --branch master --limit 5`. If the latest push run or the nightly full run failed,
 revert the offending PR (a branch and a PR), open an issue for it, then carry on - see board.md

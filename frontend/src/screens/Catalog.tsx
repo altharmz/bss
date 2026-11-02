@@ -1,6 +1,6 @@
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import {
   changePrice,
   createOffering,
@@ -25,8 +25,12 @@ import { formatCents, formatInt, parseAmount } from '../format/money';
 import {
   Button,
   Modal,
-  PageTitle,
-  Panel,
+  PageHeader,
+  Dialog,
+  KeyValue,
+  Menu,
+  Tabs,
+  TabPanel,
   StatusPill,
   Segmented,
   TextInput,
@@ -49,16 +53,28 @@ import './screens.css';
 type Tab = 'offerings' | 'specifications' | 'categories' | 'catalogs' | 'jobs';
 type Filter = 'All' | Lifecycle;
 const FILTERS: Filter[] = ['All', 'In Design', 'Active', 'Retired'];
+const GROUP_HINTS = {
+  'In Design': 'Not sellable yet',
+  Active: 'Sellable',
+  Retired: 'Billing only',
+};
+function recurrence(interval: string): string {
+  const singular: Record<string, string> = {
+    day: 'Daily',
+    week: 'Weekly',
+    month: 'Monthly',
+    year: 'Yearly',
+  };
+  return singular[interval] ?? `Every ${interval}`;
+}
 
 function columns(currency: string): Column[] {
   return [
-    { key: 'code', label: 'Code', width: '150px', mono: true },
-    { key: 'name', label: 'Name', width: '1fr' },
-    { key: 'spec', label: 'Specification', width: '190px' },
-    { key: 'price', label: `Price, ${currency}`, width: '140px', align: 'right', mono: true },
-    { key: 'period', label: 'Period', width: '110px' },
-    { key: 'status', label: 'Status', width: '120px' },
-    { key: 'validity', label: 'Validity', width: '200px', mono: true },
+    { key: 'name', label: 'Offering', width: 'minmax(240px, 1fr)' },
+    { key: 'status', label: 'Lifecycle', width: '140px' },
+    { key: 'period', label: 'Recurrence', width: '150px' },
+    { key: 'price', label: `Price ${currency}`, width: '170px', align: 'right', mono: true },
+    { key: 'updated', label: 'Updated', width: '130px', mono: true, align: 'right' },
   ];
 }
 
@@ -104,30 +120,31 @@ export function CatalogScreen() {
 
   return (
     <div className="bss-screen" data-ui="ui.catalog.list">
-      <div className="bss-title-row">
-        <PageTitle
-          title="Product catalog"
-          count={
-            catalog.status === 'ok' && (offeringsTab || specs)
-              ? formatInt(specs ? catalog.data.specifications.length : offerings.length)
-              : undefined
-          }
-        />
-        {specs ? (
-          <Button
-            variant="primary"
-            data-ui="ui.catalog.newSpecification"
-            onClick={() => setCreatingSpec(true)}
-            disabled={catalog.status !== 'ok'}
-          >
-            + New specification
-          </Button>
-        ) : (
-          offeringsTab && newButton
-        )}
-      </div>
+      <PageHeader
+        title="Product catalog"
+        count={
+          catalog.status === 'ok' && (offeringsTab || specs)
+            ? `${formatInt(specs ? catalog.data.specifications.length : offerings.length)} ${specs ? 'specifications' : 'offerings'}`
+            : undefined
+        }
+        actions={
+          specs ? (
+            <Button
+              variant="primary"
+              data-ui="ui.catalog.newSpecification"
+              onClick={() => setCreatingSpec(true)}
+              disabled={catalog.status !== 'ok'}
+            >
+              + New specification
+            </Button>
+          ) : (
+            offeringsTab && newButton
+          )
+        }
+      />
       <div className="bss-toolbar">
-        <Segmented
+        <Tabs
+          id="catalog"
           label="Catalog sections"
           value={tab}
           onChange={setTab}
@@ -140,127 +157,163 @@ export function CatalogScreen() {
           ]}
         />
       </div>
-      {tab !== 'jobs' && (
-        <div className="bss-toolbar">
-          <TextInput
-            width={300}
-            placeholder={
-              specs
-                ? 'Search by name or brand'
-                : offeringsTab
-                  ? 'Search by code or name'
-                  : 'Search by name'
-            }
-            aria-label={
-              specs ? 'Search specifications' : offeringsTab ? 'Search offerings' : `Search ${tab}`
-            }
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {offeringsTab && (
-            <Segmented
-              label="Lifecycle status"
-              value={filter}
-              onChange={setFilter}
-              options={FILTERS.map((key) => ({
-                key,
-                label: key,
-                ...(catalog.status === 'ok' ? { count: countOf(key) } : {}),
-              }))}
+      <TabPanel id="catalog" value={tab}>
+        {tab !== 'jobs' && (
+          <div className="bss-toolbar">
+            <TextInput
+              width={300}
+              placeholder={
+                specs
+                  ? 'Search by name or brand'
+                  : offeringsTab
+                    ? 'Search by code or name'
+                    : 'Search by name'
+              }
+              aria-label={
+                specs
+                  ? 'Search specifications'
+                  : offeringsTab
+                    ? 'Search offerings'
+                    : `Search ${tab}`
+              }
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
             />
-          )}
-        </div>
-      )}
-      {specs && (
-        <div data-ui="ui.catalog.specifications">
-          <SpecificationsTab
-            resource={catalog}
-            query={query}
-            onChanged={(message) => {
-              toast(message);
-              setVersion((v) => v + 1);
-            }}
-          />
-        </div>
-      )}
-      {tab === 'categories' && (
-        <CategoriesTab offerings={catalog.status === 'ok' ? catalog.data : null} query={query} />
-      )}
-      {tab === 'catalogs' && <CatalogsTab query={query} />}
-      {tab === 'jobs' && <JobsTab />}
-      {offeringsTab && (
-        <Panel>
-          <TableHead columns={cols} />
-          <ListState
-            resource={catalog}
-            columns={cols}
-            errorTitle="Failed to load the catalog"
-            empty={{
-              title: 'Catalog is empty',
-              text: 'Create the first product offering. It starts in In Design.',
-              action: newButton,
-            }}
-            total={(data) => data.offerings.length}
-            rows={(data) =>
-              data.offerings.filter(
-                (o) =>
-                  (filter === 'All' || o.status === filter) &&
-                  (!q ||
-                    o.name.toLowerCase().includes(q) ||
-                    (o.code ?? '').toLowerCase().includes(q)),
-              )
-            }
-            onResetFilters={reset}
-          >
-            {(rows, data) => (
-              <>
-                {rows.map((offering) => {
-                  const price = shownPrice(offering.prices, context.now, context.currency);
-                  return (
-                    <TableRow
-                      key={offering.id}
-                      columns={cols}
-                      onClick={() => setOpen(offering)}
-                      {...(offering.id === fresh ? { style: { background: 'var(--sel-3)' } } : {})}
-                      cells={{
-                        code: offering.code ?? <span className="bss-dash">—</span>,
-                        name: (
-                          <span
-                            className={`bss-name ellipsis${offering.status === 'Retired' ? ' bss-retired' : ''}`}
-                          >
-                            {offering.name}
-                          </span>
-                        ),
-                        spec: <span className="ellipsis">{offering.specification}</span>,
-                        price:
-                          price === null ? (
-                            <span className="bss-dash">—</span>
-                          ) : (
-                            <div>
-                              {formatCents(price.cents)}
-                              {price.from !== null && (
-                                <div className="bss-secondary">
-                                  from {businessDate(price.from, context.timeZone)}
-                                </div>
-                              )}
-                            </div>
-                          ),
-                        period: price?.interval ?? 'month',
-                        status: <StatusPill kind="lifecycle" status={offering.status} />,
-                        validity: validity(offering, context.timeZone),
-                      }}
-                    />
-                  );
-                })}
-                <TableFooter
-                  left={`Showing ${formatInt(rows.length)} of ${formatInt(data.offerings.length)}`}
-                  right="Prices exclude taxes · taxes are not applied"
-                />
-              </>
+            {offeringsTab && (
+              <Segmented
+                label="Lifecycle status"
+                value={filter}
+                onChange={setFilter}
+                options={FILTERS.map((key) => ({
+                  key,
+                  label: key === 'In Design' ? 'In design' : key,
+                  ...(catalog.status === 'ok' ? { count: countOf(key) } : {}),
+                }))}
+              />
             )}
-          </ListState>
-        </Panel>
-      )}
+          </div>
+        )}
+        {specs && (
+          <div data-ui="ui.catalog.specifications">
+            <SpecificationsTab
+              resource={catalog}
+              query={query}
+              onChanged={(message) => {
+                toast(message);
+                setVersion((v) => v + 1);
+              }}
+            />
+          </div>
+        )}
+        {tab === 'categories' && (
+          <CategoriesTab offerings={catalog.status === 'ok' ? catalog.data : null} query={query} />
+        )}
+        {tab === 'catalogs' && <CatalogsTab query={query} />}
+        {tab === 'jobs' && <JobsTab />}
+        {offeringsTab && (
+          <div className="catalog-offerings" role="table" aria-label="Offerings">
+            <TableHead columns={cols} />
+            <ListState
+              resource={catalog}
+              columns={cols}
+              errorTitle="Failed to load the catalog"
+              empty={{
+                title: 'Catalog is empty',
+                text: 'Create the first product offering. It starts in In Design.',
+                action: newButton,
+              }}
+              total={(data) => data.offerings.length}
+              rows={(data) =>
+                data.offerings.filter(
+                  (o) =>
+                    (filter === 'All' || o.status === filter) &&
+                    (!q ||
+                      o.name.toLowerCase().includes(q) ||
+                      (o.code ?? '').toLowerCase().includes(q)),
+                )
+              }
+              onResetFilters={reset}
+            >
+              {(rows, data) => (
+                <>
+                  {(['In Design', 'Active', 'Retired'] as const).map((status) => {
+                    const group = rows.filter((offering) => offering.status === status);
+                    if (group.length === 0) return null;
+                    return (
+                      <Fragment key={status}>
+                        <div
+                          role="row"
+                          className="catalog-group"
+                          data-ui="ui.catalog.lifecycleGroup"
+                        >
+                          <span role="rowheader">
+                            {status === 'In Design' ? 'In design' : status}
+                          </span>
+                          <span className="mono">{formatInt(group.length)}</span>
+                          <span>{GROUP_HINTS[status]}</span>
+                        </div>
+                        {group.map((offering) => {
+                          const price = shownPrice(offering.prices, context.now, context.currency);
+                          return (
+                            <TableRow
+                              key={offering.id}
+                              columns={cols}
+                              onClick={() => setOpen(offering)}
+                              className={offering.id === fresh ? 'catalog-fresh' : ''}
+                              cells={{
+                                name: (
+                                  <div className="catalog-offering-name">
+                                    <span
+                                      className={`bss-name ellipsis${offering.status === 'Retired' ? ' bss-retired' : ''}`}
+                                    >
+                                      {offering.name}
+                                    </span>
+                                    <span className="catalog-code">{offering.code ?? '—'}</span>
+                                    <span className="sr-only">{offering.specification}</span>
+                                    <span className="sr-only">
+                                      {validity(offering, context.timeZone)}
+                                    </span>
+                                  </div>
+                                ),
+                                price:
+                                  price === null ? (
+                                    <span className="bss-dash">—</span>
+                                  ) : (
+                                    <div>
+                                      {formatCents(price.cents)}
+                                      {price.from !== null && (
+                                        <div className="bss-secondary">
+                                          from {businessDate(price.from, context.timeZone)}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ),
+                                period: recurrence(price?.interval ?? 'month'),
+                                status: <StatusPill kind="lifecycle" status={offering.status} />,
+                                updated: <span className="bss-dash">—</span>,
+                              }}
+                            />
+                          );
+                        })}
+                      </Fragment>
+                    );
+                  })}
+                  <TableFooter
+                    left={`Showing ${formatInt(rows.length)} of ${formatInt(data.offerings.length)}`}
+                    right="Prices exclude taxes · taxes are not applied"
+                  />
+                </>
+              )}
+            </ListState>
+          </div>
+        )}
+        {offeringsTab && (
+          <Note tone="info" className="catalog-lifecycle-note" data-ui="ui.catalog.lifecycleNote">
+            Lifecycle runs one way: In design → Active → Retired. Retired offerings stay billable
+            for products already on them and are hidden from Add product.
+          </Note>
+        )}
+      </TabPanel>
 
       {creatingSpec && (
         <SpecificationModal
@@ -302,11 +355,16 @@ export function CatalogScreen() {
 }
 
 // --- offering details and the lifecycle step ---
+const PRICE_COLUMNS: Column[] = [
+  { key: 'from', label: 'From', width: '1fr', mono: true },
+  { key: 'to', label: 'To', width: '1fr', mono: true },
+  { key: 'amount', label: 'Amount', width: '2fr', mono: true, align: 'right' },
+];
 
 const CONFIRM: Record<Lifecycle, { button: string; ask: string }> = {
-  Active: { button: 'Activate', ask: 'Activate? It becomes available to order.' },
+  Active: { button: 'Activate…', ask: 'Activate? It becomes available to order.' },
   Retired: {
-    button: 'Retire',
+    button: 'Retire…',
     ask: 'Retire? New orders are refused; existing products keep billing.',
   },
   'In Design': { button: '', ask: '' },
@@ -374,11 +432,37 @@ export function OfferingModal({
 
   return (
     <>
-      <Modal
+      <Dialog
         onSubmit={submitDialogPrimary}
         title={offering.name}
-        subtitle={[offering.code, offering.specification].filter(Boolean).join(' · ')}
-        width={600}
+        context={[offering.code, offering.specification].filter(Boolean).join(' · ')}
+        size="L"
+        headerActions={
+          <Menu
+            label="Offering actions"
+            items={[
+              ...(detail.status === 'ok'
+                ? [
+                    {
+                      label: 'Edit offering',
+                      ui: 'ui.catalog.editOffering',
+                      onClick: () => setEditing(true),
+                    },
+                  ]
+                : []),
+              ...(deletable
+                ? [
+                    {
+                      label: 'Delete',
+                      tone: 'negative' as const,
+                      ui: 'ui.catalog.deleteOffering',
+                      onClick: () => setDeleting(true),
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        }
         onClose={price !== null || editing ? () => undefined : onClose}
         ui="ui.catalog.offeringDetail"
         footer={
@@ -388,32 +472,17 @@ export function OfferingModal({
                 {problem}
               </Note>
             )}
-            {detail.status === 'ok' && (
-              <Button data-ui="ui.catalog.editOffering" onClick={() => setEditing(true)}>
-                Edit offering
-              </Button>
-            )}
-            {deletable &&
-              (deleting ? (
-                <span className="bss-confirm">
-                  <span className="ask">Delete this offering?</span>
-                  <Button variant="danger" small disabled={busy} onClick={() => void remove()}>
-                    Yes
-                  </Button>
-                  <Button small disabled={busy} onClick={() => setDeleting(false)}>
-                    No
-                  </Button>
-                </span>
-              ) : (
-                <Button
-                  variant="quiet"
-                  tone="negative"
-                  data-ui="ui.catalog.deleteOffering"
-                  onClick={() => setDeleting(true)}
-                >
-                  Delete
+            {deletable && deleting && (
+              <span className="bss-confirm">
+                <span className="ask">Delete this offering?</span>
+                <Button variant="danger" small disabled={busy} onClick={() => void remove()}>
+                  Yes
                 </Button>
-              ))}
+                <Button small disabled={busy} onClick={() => setDeleting(false)}>
+                  No
+                </Button>
+              </span>
+            )}
             {next === null ? (
               <Note tone="info" className="footer-push">
                 Retired is final: the offering cannot be ordered again.
@@ -447,7 +516,67 @@ export function OfferingModal({
           </>
         }
       >
-        <div className="bss-modal-body">
+        <div className="catalog-detail">
+          <ol
+            className="catalog-stepper"
+            aria-label="Lifecycle"
+            data-ui="ui.catalog.lifecycleStepper"
+          >
+            {(['In Design', 'Active', 'Retired'] as const).map((status, index) => {
+              const current = ['In Design', 'Active', 'Retired'].indexOf(offering.status);
+              return (
+                <li
+                  key={status}
+                  className={index < current ? 'done' : index === current ? 'current' : 'later'}
+                  aria-current={index === current ? 'step' : undefined}
+                >
+                  <span className="catalog-step-track" aria-hidden="true">
+                    <span />
+                  </span>
+                  <strong>{status === 'In Design' ? 'In design' : status}</strong>
+                  <span className="catalog-step-caption">{GROUP_HINTS[status]}</span>
+                </li>
+              );
+            })}
+          </ol>
+          <div className="catalog-price-figure" data-ui="ui.catalog.priceFigure">
+            {(() => {
+              const p = shownPrice(offering.prices, context.now, context.currency);
+              return p ? (
+                <>
+                  {formatCents(p.cents)}
+                  <span>
+                    {context.currency} / {p.interval ?? 'month'}
+                  </span>
+                </>
+              ) : (
+                '—'
+              );
+            })()}
+          </div>
+          <KeyValue
+            items={[
+              [
+                'Recurrence',
+                recurrence(
+                  shownPrice(offering.prices, context.now, context.currency)?.interval ?? 'month',
+                ),
+              ],
+              ['Code', detail.status === 'ok' ? (detail.data.code ?? '—') : (offering.code ?? '—')],
+              [
+                'Specification',
+                detail.status === 'ok'
+                  ? (detail.data.specification?.name ?? '—')
+                  : offering.specification,
+              ],
+              [
+                'Valid from',
+                offering.validFrom === null
+                  ? 'any time'
+                  : businessDate(offering.validFrom, context.timeZone),
+              ],
+            ]}
+          />
           <dl className="bss-details">
             <dt>Status</dt>
             <dd>
@@ -461,10 +590,6 @@ export function OfferingModal({
                 <dd>{detail.data.description ?? <span className="bss-dash">—</span>}</dd>
                 <dt>Sellable</dt>
                 <dd>{detail.data.isSellable ? 'yes' : 'no'}</dd>
-                <dt>Code</dt>
-                <dd className="num">{detail.data.code ?? <span className="bss-dash">—</span>}</dd>
-                <dt>Specification</dt>
-                <dd>{detail.data.specification?.name ?? <span className="bss-dash">—</span>}</dd>
                 <dt>Categories</dt>
                 <dd>
                   {detail.data.categories.length === 0 ? (
@@ -488,20 +613,41 @@ export function OfferingModal({
               {offering.prices.length === 0 ? (
                 <span className="bss-dash">no recurring price</span>
               ) : (
-                offering.prices.map((p) => (
-                  <div key={p.id} className="num">
-                    <button
-                      type="button"
-                      className="bss-link"
-                      aria-label={`Open price ${formatCents(p.cents)}`}
-                      onClick={() => setPrice(p.id)}
-                    >
-                      {formatCents(p.cents)} {p.currency} / {p.interval ?? 'month'} ·{' '}
-                      {businessDate(p.from, context.timeZone)} –{' '}
-                      {p.to === null ? 'open-ended' : lastValidDay(p.to, context.timeZone)}
-                    </button>
-                  </div>
-                ))
+                <div role="table" aria-label="Prices">
+                  <TableHead density="compact" columns={PRICE_COLUMNS} />
+                  {offering.prices.map((p) => (
+                    <TableRow
+                      key={p.id}
+                      density="compact"
+                      columns={PRICE_COLUMNS}
+                      cells={{
+                        from: businessDate(p.from, context.timeZone),
+                        to: p.to === null ? 'open-ended' : lastValidDay(p.to, context.timeZone),
+                        amount: (
+                          <>
+                            <button
+                              type="button"
+                              className="bss-link"
+                              aria-label={`Open price ${formatCents(p.cents)}`}
+                              onClick={() => setPrice(p.id)}
+                            >
+                              <span aria-hidden="true">
+                                {formatCents(p.cents)} {p.currency} / {p.interval ?? 'month'}
+                              </span>
+                              <span className="sr-only">
+                                {formatCents(p.cents)} {p.currency} / {p.interval ?? 'month'} ·{' '}
+                                {businessDate(p.from, context.timeZone)} –{' '}
+                                {p.to === null
+                                  ? 'open-ended'
+                                  : lastValidDay(p.to, context.timeZone)}
+                              </span>
+                            </button>
+                          </>
+                        ),
+                      }}
+                    />
+                  ))}
+                </div>
               )}
             </dd>
           </dl>
@@ -509,7 +655,7 @@ export function OfferingModal({
             <PriceChangeSection offering={offering} label={label} onChanged={onChanged} />
           )}
         </div>
-      </Modal>
+      </Dialog>
       {editing && detail.status === 'ok' && (
         <OfferingEditModal
           detail={detail.data}
@@ -573,7 +719,7 @@ function PriceChangeSection({
     return (
       <div className="bss-price-change">
         <Button data-ui="ui.catalog.changePrice" onClick={() => setOpen(true)}>
-          Change price
+          Change price…
         </Button>
       </div>
     );

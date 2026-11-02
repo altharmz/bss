@@ -20,7 +20,7 @@ import { ApiError, explain } from '../api/client';
 import { useSystemContext } from '../app/context';
 import { businessDate } from '../format/dates';
 import { formatInt } from '../format/money';
-import { Button, Modal, Panel, StatusPill, TextInput } from '../ui/kit';
+import { Button, Modal, StatusPill, TextInput } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import type { ResourceWithRetry } from '../api/useResource';
@@ -58,7 +58,7 @@ export function SpecificationsTab({
   const q = query.trim().toLowerCase();
   return (
     <>
-      <Panel>
+      <div className="catalog-table">
         <TableHead columns={COLUMNS} />
         <ListState
           resource={resource}
@@ -111,7 +111,7 @@ export function SpecificationsTab({
             </>
           )}
         </ListState>
-      </Panel>
+      </div>
       {open !== null && resource.status === 'ok' && (
         <SpecificationModal
           spec={open}

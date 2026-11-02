@@ -93,6 +93,11 @@ including instruction/workflow files and linked task worktrees, across future se
 Never ask again for repository edit consent. Existing secret/design-reference restrictions
 and human merge gates still apply. Sandbox approval requirements remain separate.
 
+Standing authorization: adding relevant task and PR progress, validation, blocker and
+telemetry comments is authorized. Never ask for permission or confirmation to add these
+comments. Prefer Make helpers where available. Required tool sandbox approvals remain
+separate.
+
 Follow the [canonical lifecycle](docs/worktrees.md#normal-agent-workflow) and
 [shared AI guidance](docs/worktrees.md#ai-workflow-guidance) for tool choice, engineering
 review, recovery, long-running checks, human gates and completion reporting. Use

@@ -216,6 +216,7 @@ export function submitDialogPrimary(primary: HTMLButtonElement) {
 
 export function Dialog({
   title,
+  headerActions,
   context,
   step,
   size,
@@ -227,6 +228,7 @@ export function Dialog({
   onSubmit,
 }: {
   title: string;
+  headerActions?: ReactNode;
   onSubmit?: ((primary: HTMLButtonElement) => void) | undefined;
   context?: ReactNode;
   step?: { n: number; of: number };
@@ -307,6 +309,7 @@ export function Dialog({
             </div>
             {context !== undefined && <div className="subtitle">{context}</div>}
           </div>
+          {headerActions}
           <button type="button" className="close" aria-label="Close" onClick={onClose}>
             ×
           </button>
