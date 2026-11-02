@@ -36,7 +36,7 @@ for (const viewport of [
     const offering = page.getByRole('dialog', { name: 'New product offering' });
     await check(offering, offering.locator('.bss-modal-footer .bss-btn.primary'));
     await offering.getByRole('button', { name: 'Cancel' }).click();
-    await page.getByRole('button', { name: 'Categories', exact: true }).click();
+    await page.getByRole('tab', { name: 'Categories', exact: true }).click();
     await page.getByRole('button', { name: '+ New category' }).click();
     const category = page.getByRole('dialog', { name: 'New category' });
     await check(category, category.getByRole('button', { name: 'Create', exact: true }));

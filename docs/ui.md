@@ -292,9 +292,8 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 
 Ledger v2: lifecycle StatusPill and quiet negative destructive actions.
 
-Table of offerings: code, name, specification, the price valid now in the UI currency
-(or the next one with its start), status, validity. Search by code or name; filter by
-lifecycle status. **+ New offering**. A row opens the offering detail.
+Ledger R9: counted PageHeader, keyboard Tabs and lifecycle groups in In design → Active → Retired order with filtered counts and sellability hints. Columns show offering/name/code, lifecycle, recurrence, price in the UI currency and Updated (unavailable → “—”). Search by code or name and counted lifecycle segments reuse loaded rows. Specification and validity remain accessible on each row. A Note explains the one-way lifecycle.
+The L offering detail shows lifecycle progress, price figure, KeyValue attributes and a compact Prices table; existing edit/delete move into the header Offering actions Menu. Activate…/Retire… and Change price… retain their confirmations and requests. No transition dates are invented. Specifications, Categories, Catalogs and Import/export use page tables and existing list states; job statuses use catalogJob pills.
 API: `GET .../productOffering`, `GET .../productSpecification`,
 `GET .../productOfferingPrice?priceType=recurring` (all pages).
 

@@ -110,6 +110,8 @@ A read-only slice replays the query strings its component test asserts.
 
 ## Ledger v2 styles and visual references
 
+R9 catalog: use Tabs/TabPanel for sections, page tables grouped by lifecycle with filtered group counts, and an L offering Dialog with lifecycle stepper, price figure, KeyValue and compact price history. Dialog accepts optional `headerActions` for an existing Menu; action markers belong on its menuitems. Missing dates render “—” or omit transition captions rather than synthesizing history.
+
 `ui/base.css` imports `tokens.css`, temporary `legacy-tokens.css`, then the five font
 faces. New CSS uses the Ledger role and type tokens; legacy aliases bridge screens until
 the cleanup slice. `ui/styleGuard.test.ts` checks CSS literals, font weights and alias

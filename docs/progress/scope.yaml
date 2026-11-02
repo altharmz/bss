@@ -433,6 +433,10 @@ items:
   - {id: ui.subscriber.billNow, area: ui, stage: 5, title: "Request an on-demand bill"}
   - {id: ui.subscriber.billRequests, area: ui, stage: 5, title: "On-demand bill status and resulting bill"}
   - {id: ui.catalog.list, area: ui, stage: 5, title: "Product catalog"}
+  - {id: ui.catalog.lifecycleGroup, area: ui, stage: 5, title: "Offering lifecycle group"}
+  - {id: ui.catalog.lifecycleNote, area: ui, stage: 5, title: "One-way offering lifecycle explanation"}
+  - {id: ui.catalog.lifecycleStepper, area: ui, stage: 5, title: "Offering lifecycle progress"}
+  - {id: ui.catalog.priceFigure, area: ui, stage: 5, title: "Offering price figure"}
   - {id: ui.catalog.offeringDetail, area: ui, stage: 5, title: "Offering detail dialog"}
   - {id: ui.catalog.lifecycle, area: ui, stage: 5, title: "Offering lifecycle step (Activate / Retire)"}
   - {id: ui.catalog.changePrice, area: ui, stage: 5, title: "Change price of a live offering"}

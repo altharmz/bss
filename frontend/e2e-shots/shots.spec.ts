@@ -108,12 +108,32 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         await add.getByRole('button', { name: 'Cancel' }).click();
       }
       if (name === 'catalog') {
+        await page.locator('.catalog-offerings .clickable').first().click();
+        const detail = page.getByRole('dialog');
+        await expect(detail.getByRole('list', { name: 'Lifecycle' })).toBeVisible();
+        await page.waitForLoadState('networkidle');
+        await page.screenshot({ path: `/web/.shots/catalog-detail-${width}.png` });
+        await detail.getByRole('button', { name: 'Offering actions' }).click();
+        await expect(page.getByRole('menuitem', { name: 'Edit offering' })).toBeVisible();
+        await page.screenshot({ path: `/web/.shots/catalog-detail-menu-${width}.png` });
+        await detail.getByRole('button', { name: 'Offering actions' }).press('Escape');
+        await detail.getByRole('button', { name: 'Close', exact: true }).last().click();
+        for (const tab of ['Specifications', 'Categories', 'Catalogs', 'Import / export']) {
+          await page.getByRole('tab', { name: tab, exact: true }).click();
+          await page.waitForLoadState('networkidle');
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+          await page.screenshot({
+            path: `/web/.shots/catalog-${tab.toLowerCase().replaceAll(' ', '').replace('/', '-')}-${width}.png`,
+            fullPage: true,
+          });
+        }
+        await page.getByRole('tab', { name: 'Offerings', exact: true }).click();
         await page.getByRole('button', { name: '+ New offering' }).click();
         const offering = page.getByRole('dialog', { name: 'New product offering' });
         await expect(offering.locator('.bss-modal-footer .primary')).toBeInViewport({ ratio: 1 });
         await page.screenshot({ path: `/web/.shots/dialog-offering-${width}.png` });
         await offering.getByRole('button', { name: 'Cancel' }).click();
-        await page.getByRole('button', { name: 'Categories', exact: true }).click();
+        await page.getByRole('tab', { name: 'Categories', exact: true }).click();
         await page.getByRole('button', { name: '+ New category' }).click();
         const category = page.getByRole('dialog', { name: 'New category' });
         await expect(category.getByRole('button', { name: 'Create', exact: true })).toBeInViewport({
@@ -121,7 +141,7 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         });
         await page.screenshot({ path: `/web/.shots/dialog-category-${width}.png` });
         await category.getByRole('button', { name: 'Cancel' }).click();
-        await page.getByRole('button', { name: 'Specifications', exact: true }).click();
+        await page.getByRole('tab', { name: 'Specifications', exact: true }).click();
         await page.getByRole('button', { name: '+ New specification' }).click();
         const specification = page.getByRole('dialog', { name: 'New product specification' });
         await specification.getByLabel('Name', { exact: true }).fill('Numbered mobile');
