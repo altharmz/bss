@@ -17,7 +17,7 @@ final issue total: review, merge and the current unfinished response can add usa
 |---|---|---|
 | Codex | `CODEX_HOME/sessions/**/*.jsonl`, default `~/.codex/sessions`; `token_count.info.total_token_usage` | `CODEX_THREAD_ID` (or explicit session ID) |
 | Claude | `CLAUDE_CONFIG_DIR/projects/*/<session>.jsonl`, default `~/.claude`; finalized `message.usage` | `CLAUDE_SESSION_ID`, explicit ID, or matching ancestor in Claude's process registry |
-| Kimi Code 2.4.x | `KIMI_CODE_HOME/sessions/*/session_<id>/agents/main/wire.jsonl`, default `~/.kimi-code`; protocol 1.5 `usage.record` | `KIMI_SESSION_ID` or explicit ID; no selection by newest file |
+| Kimi Code 2.4.x | `KIMI_CODE_HOME/sessions/*/session_<id>/agents/main/wire.jsonl`, default `~/.kimi-code`; protocol 1.5 `usage.record` | `KIMI_SESSION_ID`, explicit ID, or matching ancestor in Kimi's session-lock registry; no selection by newest file |
 
 Client identity comes from `BSS_TASK_OWNER`, independently of session, provider/model and
 worker slot. Codex/Claude runtime detection is also supported. Kimi's installed Rust client
@@ -25,10 +25,12 @@ stores data under `.kimi-code`, not the Python CLI's `.kimi` directory. Its wire
 differs from the Python CLI's `StatusUpdate` format: unsupported formats are explicitly
 unavailable. Do not infer usage from `token_counting.measured`, context size or rate limits.
 
-Kimi agents must always pass the actual machine session identity explicitly on startup and
-on every explicit collection, including resume and handoff. Other clients pass their actual
-identity where the runtime does not expose it. This requires session metadata, not a prepared
-token export:
+At startup Kimi matches the session lock's version, PID/token and hostname to its process
+ancestry, then verifies the corresponding main wire source. Ambiguous or invalid locks fail
+closed. If that automatic binding is unavailable, pass the actual machine session identity
+explicitly. On every explicit collection, including resume and handoff, Kimi agents must
+always pass it explicitly. Other clients pass their actual identity where the runtime does
+not expose it. This requires session metadata, not a prepared token export:
 
 ```sh
 make start-task BSS_TASK_OWNER=kimi BSS_TELEMETRY_SESSION_ID=<actual-session-uuid>

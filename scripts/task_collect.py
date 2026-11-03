@@ -274,9 +274,53 @@ def current(environ):
     )
     if not session and client == "claude":
         session = claude_session()
+    if not session and client == "kimi":
+        session = kimi_session()
     if session:
         identifier(session)
     return client, session or "unavailable"
+
+
+def kimi_session(proc="/proc"):
+    """Match Kimi's process-owned session lock to our ancestry, never 'latest session'."""
+    home = Path(os.environ.get("KIMI_CODE_HOME", Path.home() / ".kimi-code"))
+    root = home / "locks/sessions"
+    hostname = os.uname().nodename
+    proc = Path(proc)
+    pid = os.getpid()
+    for _ in range(64):
+        try:
+            fields = (proc / f"{pid}/stat").read_text().rsplit(")", 1)[1].split()
+            sessions = set()
+            for registry in root.glob("session_*.lock"):
+                try:
+                    if registry.is_symlink() or registry.stat().st_size > 65536:
+                        continue
+                    row = json.loads(registry.read_text())
+                    token = row.get("token")
+                    if (
+                        row.get("version") != 1
+                        or row.get("pid") != pid
+                        or row.get("hostname") != hostname
+                        or not isinstance(token, str)
+                        or not token.startswith(f"{pid}:")
+                    ):
+                        continue
+                    identifier(token)
+                    session = registry.name.removeprefix("session_").removesuffix(".lock")
+                    identifier(session)
+                    locate("kimi", session)
+                    sessions.add(session)
+                except (OSError, ValueError, TypeError, AttributeError):
+                    continue
+            if sessions:
+                return sessions.pop() if len(sessions) == 1 else None
+            pid = int(fields[1])
+            if pid <= 1:
+                break
+        except (OSError, ValueError, TypeError, IndexError, AttributeError):
+            break
+    return None
 
 
 def claude_session():
