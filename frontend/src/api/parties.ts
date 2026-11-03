@@ -161,11 +161,6 @@ export function partyBlock(data: Parties, party: Party): string | null {
   return null;
 }
 
-export function customerBlock(data: Parties, customer: PartyCustomer): string | null {
-  const accounts = accountsOf(data, [customer.id]).length;
-  return accounts > 0 ? `It has ${accounts} billing account${accounts === 1 ? '' : 's'}` : null;
-}
-
 // --- one record (GET) and its writes ---
 
 export const PARTY_STATUSES: Record<PartyKind, string[]> = {

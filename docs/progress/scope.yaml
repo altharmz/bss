@@ -501,6 +501,12 @@ items:
   - {id: ui.parties.externalReference, area: ui, stage: 5, title: "Party external reference"}
   - {id: ui.parties.edit, area: ui, stage: 5, title: "Edit a party or customer alone"}
   - {id: ui.parties.delete, area: ui, stage: 5, title: "Delete a party or customer without dependencies"}
+  - {id: ui.parties.addAccount, area: ui, stage: 5, title: "Add a billing account from the customer dialog"}
+  - {id: ui.parties.customerAccounts, area: ui, stage: 5, title: "The customer's billing accounts, each with an inline Delete"}
+  - {id: ui.parties.deleteAccount, area: ui, stage: 5, title: "Delete a billing account from the customer dialog"}
+  - {id: ui.parties.removeAccountsFirst, area: ui, stage: 5, title: "Customer Delete replaced by a link to its accounts while any remain"}
+  - {id: ui.account.new, area: ui, stage: 5, title: "Add billing account dialog: the account step of New subscriber"}
+  - {id: ui.subscriber.addAccount, area: ui, stage: 5, title: "Add billing account in the subscriber card's More actions"}
   - {id: ui.billingRuns.list, area: ui, stage: 4, title: "Billing runs: latest run, history, failed badge in the nav"}
   - {id: ui.billingRuns.previous, area: ui, stage: 4, title: "Previous billing-run history page"}
   - {id: ui.billingRuns.next, area: ui, stage: 4, title: "Next billing-run history page"}

@@ -1,13 +1,13 @@
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { CustomerStatus } from '../api/bss';
+import { deleteBillingAccount } from '../api/financial';
 import { explain } from '../api/client';
 import {
   accountsOf,
   createCustomer,
   createParty,
-  customerBlock,
   customerChanges,
   customersOf,
   deleteCustomer,
@@ -47,7 +47,7 @@ import {
 } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
-import { CUSTOMER_STATUSES, Field } from './SubscriberForms';
+import { AddBillingAccountModal, CUSTOMER_STATUSES, Field } from './SubscriberForms';
 import { uncertain } from './submissionKey';
 import './screens.css';
 
@@ -927,6 +927,78 @@ function PartyModal({
   );
 }
 
+/** The customer's billing accounts, each deletable in place; a server 409 shows on its row. */
+function CustomerAccounts({
+  links,
+  onDone,
+}: {
+  links: { id: string; name: string }[];
+  onDone: (message: string) => void;
+}) {
+  if (links.length === 0) return dash;
+  return (
+    <ul className="bss-list" data-ui="ui.parties.customerAccounts">
+      {links.map((account) => (
+        <CustomerAccountRow key={account.id} account={account} onDone={onDone} />
+      ))}
+    </ul>
+  );
+}
+
+function CustomerAccountRow({
+  account,
+  onDone,
+}: {
+  account: { id: string; name: string };
+  onDone: (message: string) => void;
+}) {
+  const write = useWrite(onDone);
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <li>
+      <Link className="bss-link" href={hrefOf({ name: 'subscriber', accountId: account.id })}>
+        {account.name}
+      </Link>{' '}
+      {confirming ? (
+        <span className="bss-confirm">
+          <span className="ask">Delete this billing account?</span>
+          <Button
+            variant="danger"
+            small
+            disabled={write.busy}
+            onClick={() =>
+              void write.run(
+                async () => {
+                  await deleteBillingAccount(account.id);
+                  return `${account.name} deleted`;
+                },
+                () => setConfirming(false),
+              )
+            }
+          >
+            Yes
+          </Button>
+          <Button small disabled={write.busy} onClick={() => setConfirming(false)}>
+            No
+          </Button>
+        </span>
+      ) : (
+        <Button
+          variant="quiet"
+          tone="negative"
+          small
+          data-ui="ui.parties.deleteAccount"
+          onClick={() => setConfirming(true)}
+        >
+          Delete
+        </Button>
+      )}
+      {write.problem !== null && <Note tone="negative">{write.problem}</Note>}
+      {write.unsure && <Button onClick={() => onDone('Refreshed')}>Refresh</Button>}
+    </li>
+  );
+}
+
 function CustomerModal({
   customer,
   data,
@@ -944,6 +1016,8 @@ function CustomerModal({
   const write = useWrite(onDone);
   const [editing, setEditing] = useState<CustomerDetail | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [addingAccount, setAddingAccount] = useState(false);
+  const accountsRef = useRef<HTMLDivElement>(null);
   const accounts = accountsOf(data, [customer.id]);
   const before = detail.status === 'ok' ? detail.data : null;
   const changes = before && editing ? customerChanges(before, editing) : null;
@@ -969,78 +1043,110 @@ function CustomerModal({
           ['Name', before.name],
           ['Status', <StatusPill kind="customer" key="s" status={before.status} />],
           ['Engaged party', `${before.partyName || shortId(before.partyId)} · ${before.partyKind}`],
-          ['Billing accounts', <AccountLinks key="a" links={accounts} />],
+          [
+            'Billing accounts',
+            <div key="a" ref={accountsRef}>
+              <CustomerAccounts links={accounts} onDone={onDone} />
+            </div>,
+          ],
         ]}
       />
     );
 
   return (
-    <Frame
-      title={customer.name}
-      ui="ui.parties.customer"
-      subtitle={`customer · ${shortId(customer.id)}`}
-      state={detail.status}
-      {...(detail.status === 'error' ? { error: detail.error } : {})}
-      retry={detail.retry}
-      body={body}
-      write={write}
-      onClose={onClose}
-      onRefresh={onDone.bind(null, 'Refreshed')}
-      actions={
-        editing === null ? (
-          <>
-            <DeleteControl
-              noun="customer"
-              block={customerBlock(data, customer)}
-              confirming={confirming}
-              setConfirming={setConfirming}
-              busy={write.busy}
-              onDelete={() =>
-                void write.run(
-                  async () => {
-                    await deleteCustomer(customer.id);
-                    return `${customer.name} deleted`;
-                  },
-                  () => setConfirming(false),
-                )
-              }
-            />
-            <Button onClick={onClose}>Close</Button>
-            <Button
-              variant="primary"
-              data-ui="ui.parties.edit"
-              disabled={before === null}
-              onClick={() => before && setEditing(before)}
-            >
-              Edit
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              onClick={() => {
-                setEditing(null);
-                write.clear();
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              disabled={editing.name.trim() === '' || changes === null || write.busy}
-              onClick={() =>
-                changes &&
-                void write.run(async () => {
-                  await patchCustomer(customer.id, changes);
-                  return `${customer.name} saved`;
-                })
-              }
-            >
-              Save
-            </Button>
-          </>
-        )
-      }
-    />
+    <>
+      {addingAccount && (
+        <AddBillingAccountModal
+          customer={customer}
+          onClose={() => setAddingAccount(false)}
+          onCreated={() => onDone('Billing account created')}
+        />
+      )}
+      <Frame
+        title={customer.name}
+        ui="ui.parties.customer"
+        subtitle={`customer · ${shortId(customer.id)}`}
+        state={detail.status}
+        {...(detail.status === 'error' ? { error: detail.error } : {})}
+        retry={detail.retry}
+        body={body}
+        write={write}
+        onClose={onClose}
+        onRefresh={onDone.bind(null, 'Refreshed')}
+        actions={
+          editing === null ? (
+            <>
+              {accounts.length > 0 ? (
+                <Button
+                  variant="quiet"
+                  className="footer-push"
+                  data-ui="ui.parties.removeAccountsFirst"
+                  onClick={() => accountsRef.current?.scrollIntoView?.({ block: 'center' })}
+                >
+                  Remove billing accounts first
+                </Button>
+              ) : (
+                <DeleteControl
+                  noun="customer"
+                  block={null}
+                  confirming={confirming}
+                  setConfirming={setConfirming}
+                  busy={write.busy}
+                  onDelete={() =>
+                    void write.run(
+                      async () => {
+                        await deleteCustomer(customer.id);
+                        return `${customer.name} deleted`;
+                      },
+                      () => setConfirming(false),
+                    )
+                  }
+                />
+              )}
+              <Button
+                data-ui="ui.parties.addAccount"
+                disabled={before === null}
+                onClick={() => setAddingAccount(true)}
+              >
+                Add billing account
+              </Button>
+              <Button onClick={onClose}>Close</Button>
+              <Button
+                variant="primary"
+                data-ui="ui.parties.edit"
+                disabled={before === null}
+                onClick={() => before && setEditing(before)}
+              >
+                Edit
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                onClick={() => {
+                  setEditing(null);
+                  write.clear();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                disabled={editing.name.trim() === '' || changes === null || write.busy}
+                onClick={() =>
+                  changes &&
+                  void write.run(async () => {
+                    await patchCustomer(customer.id, changes);
+                    return `${customer.name} saved`;
+                  })
+                }
+              >
+                Save
+              </Button>
+            </>
+          )
+        }
+      />
+    </>
   );
 }

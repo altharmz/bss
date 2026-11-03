@@ -972,6 +972,46 @@ def test_new_subscriber_as_the_ui_creates_it(api):
     assert org.status_code == 201, org.text
 
 
+def test_add_billing_account_as_the_ui_sends_it(api):
+    """createBillingAccount() (Add billing account on the customer dialog and in the subscriber
+    card's More actions, pinned in Parties.test.tsx and SubscriberCard.test.tsx): the account
+    step of New subscriber against an existing customer, postpaid with a limit and prepaid."""
+    made = create_subscriber_as_the_ui_does(api)
+    customer = made["customer"]["id"]
+    party = (
+        '"relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef","role":"customer",'
+        f'"partyOrPartyRole":{{"id":"{customer}","name":"Olga Kuznetsova",'
+        '"@type":"PartyRoleRef","@referredType":"Customer"}}]'
+    )
+    postpaid = api.post_raw(
+        ACCOUNTS,
+        '{"@type":"BssBillingAccount","name":"Olga Kuznetsova main","billCycleDay":15,'
+        f'"currency":"USD",{party},"creditLimit":{{"unit":"USD","value":1500.50}}}}',
+    )
+    assert postpaid.status_code == 201, postpaid.text
+    prepaid = api.post_raw(
+        ACCOUNTS,
+        '{"@type":"BssBillingAccount","name":"Wallet","billCycleDay":1,"currency":"USD",'
+        f'"ratingType":"prepaid",{party}}}',
+    )
+    assert prepaid.status_code == 201, prepaid.text
+    assert prepaid.json()["ratingType"] == "prepaid"
+    assert postpaid.json()["relatedParty"][0]["partyOrPartyRole"]["id"] == customer
+
+
+def test_new_subscriber_compensation_deletes_as_the_ui_does(api):
+    """createSubscriber() undoing itself (Subscribers.test.tsx): DELETE the customer, then the
+    party, with no body. The customer cannot go while it has an account (409) and the party
+    cannot go while it has the customer, which is why a failed compensation stops at the first."""
+    made = create_subscriber_as_the_ui_does(api)
+    party, customer = made["party"]["id"], made["customer"]["id"]
+    assert api.request("DELETE", f"{PARTY}/individual/{party}").status_code == 409
+    assert api.request("DELETE", f"{CUSTOMERS}/{customer}").status_code == 409
+    assert api.request("DELETE", made["account"]["href"]).status_code == 204
+    assert api.request("DELETE", f"{CUSTOMERS}/{customer}").status_code == 204
+    assert api.request("DELETE", f"{PARTY}/individual/{party}").status_code == 204
+
+
 def test_new_prepaid_subscriber_as_the_ui_creates_it(api):
     """createSubscriber() with the prepaid mode: ratingType in the body, no credit limit; the
     card then reads the account's bucket by partyAccount.id (TMF654)."""
