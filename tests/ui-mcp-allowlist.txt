@@ -12,7 +12,6 @@ delete_product: orders alone end products
 get_bill: the Bills screens read the list rows and a bill's rates; no separate bill detail read
 get_hub_customer: the internal eventSubscription list covers every hub
 get_hub_resource: the internal eventSubscription list covers every hub
-get_order: the Orders screens read the order list rows, which carry the whole order
 get_cancellation: cancellations are read as a list per order (productOrder.id filter)
 get_refund: refunds are shown from the refund list rows
 get_financial_account: the account list rows carry every attribute shown

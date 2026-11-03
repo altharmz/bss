@@ -11,11 +11,13 @@ import {
   submitDraft,
   type OrderDetails,
 } from '../api/bss';
-import { explain } from '../api/client';
+import { explain, getJson } from '../api/client';
+import { PATHS } from '../api/bss';
 import {
   findOrderCommand,
   loadCancellations,
-  loadOrderPage,
+  loadNewestOrderPage,
+  loadOrder,
   ORDER_PAGE,
   ORDER_STATES,
   type Order,
@@ -74,16 +76,38 @@ function day(instant: string | undefined, timeZone: string): string {
   return instant === undefined ? '—' : businessDate(instant, timeZone);
 }
 
-/** "add Basic 10", "delete product 1F3A9C2B". */
-function itemText(item: OrderItem): string {
-  const target =
-    item.productOffering?.name ??
-    (item.product?.id !== undefined ? `product ${shortId(item.product.id)}` : '');
-  return `${item.action} ${target}`.trim();
+/** Prefer the order's snapshot over the current inventory name. */
+export function itemText(item: OrderItem, names: Record<string, string> = {}): string {
+  const product =
+    item.product?.name ??
+    names[item.product?.id ?? ''] ??
+    (item.product?.id ? `product ${shortId(item.product.id)}` : 'product');
+  const offering = item.productOffering?.name ?? 'offering';
+  if (item.action === 'add') return `Add ${offering}`;
+  if (item.action === 'delete') return `End ${product}`;
+  if (item.action === 'modify') {
+    if (targetStatus(item) === 'suspended') return `Suspend ${product}`;
+    if (targetStatus(item) === 'active') return `Resume ${product}`;
+    if (item.productOffering) return `Change ${product} to ${offering}`;
+    if (
+      item.product &&
+      'realizingResource' in item.product &&
+      item.product.realizingResource?.length
+    )
+      return `Change number of ${product}`;
+  }
+  return `Change ${product}`;
+}
+
+function targetStatus(item: OrderItem) {
+  if (item.product && 'status' in item.product && item.product.status) return item.product.status;
+  if (item.action === 'delete') return 'terminated';
+  if (item.action === 'add') return 'active';
+  return null;
 }
 
 function itemSummary(order: Order): string {
-  return (order.productOrderItem ?? []).map(itemText).join(', ');
+  return (order.productOrderItem ?? []).map((item) => itemText(item)).join(', ');
 }
 
 export function OrdersScreen() {
@@ -96,8 +120,20 @@ export function OrdersScreen() {
   const [watched, setWatched] = useState<Watched | null>(null);
   const toast = useToast();
   const refreshNav = useRefreshNav();
-  const list = useResource(`orders:${state}:${account ?? ''}:${offset}`, (signal) =>
-    loadOrderPage({ state: state === 'all' ? null : state, account }, offset, signal),
+  const [changed, setChanged] = useState<Record<string, Order | null>>({});
+  const [rowError, setRowError] = useState<{ id: string; error: Error } | null>(null);
+  const list = useResource(
+    `orders:${state}:${account ?? ''}:${offset}`,
+    async (signal) => {
+      const page = await loadNewestOrderPage(
+        { state: state === 'all' ? null : state, account },
+        offset,
+        signal,
+      );
+      if (!signal.aborted) setChanged({});
+      return { ...page, offset, state };
+    },
+    true,
   );
 
   const dropAccount = () => {
@@ -105,17 +141,46 @@ export function OrdersScreen() {
     setAccount(null);
     setOffset(0);
   };
+  const refreshRow = async (id: string) => {
+    try {
+      const row = await loadOrder(id);
+      setChanged((old) => ({ ...old, [id]: row }));
+      setRowError(null);
+    } catch (error) {
+      setRowError({ id, error: error instanceof Error ? error : new Error(String(error)) });
+    }
+  };
   const name =
     list.status === 'ok'
       ? (list.data.items.find((o) => o.billingAccount?.id === account)?.billingAccount?.name ??
         null)
       : null;
 
+  const visibleRows =
+    list.status === 'ok'
+      ? list.data.items.flatMap((row) => {
+          const current = changed[row.id ?? ''] === undefined ? row : changed[row.id ?? ''];
+          return current && (list.data.state === 'all' || current.state === list.data.state)
+            ? [current]
+            : [];
+        })
+      : [];
+  const visibleList =
+    list.status === 'ok'
+      ? {
+          ...list,
+          data: {
+            ...list.data,
+            items: visibleRows,
+            total: list.data.total - (list.data.items.length - visibleRows.length),
+          },
+        }
+      : list;
   return (
     <div className="bss-screen" data-ui="ui.orders">
       <div className="bss-title-row">
         <PageTitle title="Orders" />
-        <span className="bss-caption">Every product order, oldest first</span>
+        <span className="bss-caption">Every product order, newest first</span>
       </div>
       <div className="bss-toolbar">
         <Segmented
@@ -151,15 +216,29 @@ export function OrdersScreen() {
           onSettled={(message) => {
             setWatched(null);
             toast(message);
-            list.retry();
+            void refreshRow(watched.id);
             refreshNav();
           }}
         />
       )}
       <Panel>
+        {rowError && (
+          <ErrorBlock
+            title="Failed to refresh order"
+            error={rowError.error}
+            onRetry={() => void refreshRow(rowError.id)}
+          />
+        )}
+        {list.refreshError && (
+          <ErrorBlock
+            title="Failed to refresh orders"
+            error={list.refreshError}
+            onRetry={list.retry}
+          />
+        )}
         <TableHead columns={COLUMNS} />
         <ListState
-          resource={list}
+          resource={visibleList}
           columns={COLUMNS}
           errorTitle="Failed to load orders"
           empty={{
@@ -218,7 +297,7 @@ export function OrdersScreen() {
                 />
               ))}
               <TableFooter
-                left={`Showing ${formatInt(offset + 1)}–${formatInt(offset + rows.length)} of ${formatInt(data.total)}`}
+                left={`Showing ${formatInt(data.offset + 1)}–${formatInt(data.offset + rows.length)} of ${formatInt(data.total)}`}
                 right={
                   <span className="bss-toolbar">
                     <Button
@@ -243,13 +322,24 @@ export function OrdersScreen() {
             </>
           )}
         </ListState>
+        {visibleList.status === 'ok' && visibleRows.length === 0 && offset > 0 && (
+          <Button
+            small
+            data-ui="ui.orders.previous"
+            onClick={() => setOffset(Math.max(0, offset - ORDER_PAGE))}
+          >
+            Previous
+          </Button>
+        )}
       </Panel>
       {open !== null && (
         <OrderModal
           order={open}
           onClose={() => setOpen(null)}
-          onChanged={() => {
-            list.retry();
+          onChanged={(updated) => {
+            const id = open.id ?? '';
+            if (updated === undefined) void refreshRow(id);
+            else setChanged((old) => ({ ...old, [id]: updated }));
             refreshNav();
           }}
           onWatch={(id, label) => setWatched(watch('order', id, label))}
@@ -354,8 +444,8 @@ export function OrderModal({
 }: {
   order: Order;
   onClose: () => void;
-  /** An order changed: the list and the sidebar count reload. */
-  onChanged: () => void;
+  /** Update the changed row and the sidebar counts. Null removes a deleted row. */
+  onChanged: (updated?: Order | null) => void;
   onWatch: (orderId: string, label: string) => void;
 }) {
   const context = useSystemContext();
@@ -367,6 +457,7 @@ export function OrderModal({
   const [problem, setProblem] = useState<string | null>(null);
   const [code, setCode] = useState<string | undefined>();
   const [unsure, setUnsure] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [reason, setReason] = useState('');
   const [description, setDescription] = useState(order.description ?? '');
   const [category, setCategory] = useState(order.category ?? '');
@@ -377,6 +468,23 @@ export function OrderModal({
   const cancellations = useResource(`order-cancellations:${orderId}`, (signal) =>
     loadCancellations(orderId, signal),
   );
+  const names = useResource(`order-products:${orderId}`, async (signal) => {
+    const ids = [
+      ...new Set(
+        (order.productOrderItem ?? []).flatMap((item) =>
+          item.action !== 'add' && !item.product?.name && item.product?.id ? [item.product.id] : [],
+        ),
+      ),
+    ];
+    return Object.fromEntries(
+      await Promise.all(
+        ids.map(async (id) => {
+          const product = await getJson<{ name?: string }>(`${PATHS.products}/${id}`, signal);
+          return [id, product.name ?? `product ${shortId(id)}`];
+        }),
+      ),
+    );
+  });
   // a prepaid order the worker has not finished: link to its command
   const command = useResource(`order-command:${orderId}`, (signal) =>
     order.state === 'inProgress' && accountId !== undefined
@@ -403,6 +511,7 @@ export function OrderModal({
 
   /** Run a write: the server's refusal stays in the dialog with the entered values. */
   async function run(action: () => Promise<void>) {
+    setSaved(false);
     setBusy(true);
     setProblem(null);
     setCode(undefined);
@@ -416,9 +525,9 @@ export function OrderModal({
       setBusy(false);
     }
   }
-  const done = (message: string) => {
+  const done = async (message: string) => {
+    await onChanged(message === 'Order deleted' ? null : await loadOrder(orderId));
     toast(message);
-    onChanged();
     onClose();
   };
   const open = (next: Panel) => {
@@ -433,9 +542,9 @@ export function OrderModal({
       const result = await submitDraft(orderId);
       if (result.state === 'inProgress') {
         onWatch(result.id, `Order ${shortId(orderId)}`);
-        done('Draft submitted: accepted, the billing worker completes it shortly');
+        await done('Draft submitted: accepted, the billing worker completes it shortly');
       } else if (result.state === 'completed') {
-        done('Draft submitted: the order is completed');
+        await done('Draft submitted: the order is completed');
       } else {
         // rejected: keep the dialog, with the reasons the server gave
         setOrder({
@@ -449,7 +558,7 @@ export function OrderModal({
         setProblem(result.refusal.problem);
         setCode(result.refusal.code);
         setPanel(null);
-        onChanged();
+        await onChanged();
       }
     });
 
@@ -477,6 +586,13 @@ export function OrderModal({
       footer={
         <Footer
           write={{ busy, problem, unsure, code }}
+          left={
+            saved && Object.keys(changes).length === 0 ? (
+              <span role="status" data-ui="ui.orders.detailsSaved">
+                Details saved
+              </span>
+            ) : undefined
+          }
           onRefresh={() => {
             onChanged();
             onClose();
@@ -507,7 +623,13 @@ export function OrderModal({
               onClick={() =>
                 void run(async () => {
                   await patchOrderDetails(orderId, changes);
-                  done('Order details saved');
+                  const updated = await loadOrder(orderId);
+                  setOrder(updated);
+                  setDescription(updated.description ?? '');
+                  setCategory(updated.category ?? '');
+                  setPriority(updated.priority ?? '');
+                  await onChanged(updated);
+                  setSaved(true);
                 })
               }
             >
@@ -582,7 +704,7 @@ export function OrderModal({
                 onClick={() =>
                   void run(async () => {
                     await cancelOrder(orderId, reason.trim() || undefined);
-                    done('Order cancelled');
+                    await done('Order cancelled');
                   })
                 }
               >
@@ -636,7 +758,7 @@ export function OrderModal({
               onClick={() =>
                 void run(async () => {
                   await removeOrder(orderId);
-                  done('Order deleted');
+                  await done('Order deleted');
                 })
               }
             >
@@ -659,6 +781,13 @@ export function OrderModal({
             ))}
           </div>
         )}
+        {names.status === 'error' && (
+          <ErrorBlock
+            title="Failed to load product names"
+            error={names.error}
+            onRetry={names.retry}
+          />
+        )}
         <h3 className="bss-subhead">Items</h3>
         <table className="bss-mini" data-ui="ui.orders.items">
           <thead>
@@ -667,18 +796,26 @@ export function OrderModal({
               <th>Offering</th>
               <th>Product</th>
               <th>State</th>
+              <th>Target status</th>
               <th>Price</th>
             </tr>
           </thead>
           <tbody>
             {(order.productOrderItem ?? []).map((item, i) => (
               <tr key={item.id ?? i}>
-                <td>{item.action}</td>
+                <td>{itemText(item, names.status === 'ok' ? names.data : {})}</td>
                 <td>{item.productOffering?.name ?? '—'}</td>
                 <td className="bss-mono" title={item.product?.id}>
                   {item.product?.id !== undefined ? shortId(item.product.id) : '—'}
                 </td>
                 <td>{item.state ?? '—'}</td>
+                <td>
+                  {targetStatus(item) ? (
+                    <StatusPill kind="product" status={targetStatus(item) ?? ''} />
+                  ) : (
+                    '—'
+                  )}
+                </td>
                 <td className="bss-mono">{priceText(item)}</td>
               </tr>
             ))}

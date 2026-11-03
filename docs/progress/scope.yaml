@@ -514,7 +514,8 @@ items:
   - {id: ui.shell.section.customers, area: ui, stage: 5, title: "Sidebar section: Customers"}
   - {id: ui.shell.section.products, area: ui, stage: 5, title: "Sidebar section: Products"}
   - {id: ui.shell.section.billing, area: ui, stage: 5, title: "Sidebar section: Billing"}
-  - {id: ui.orders, area: ui, stage: 5, title: "Orders screen: global list, state filter, paging"}
+  - {id: ui.orders, area: ui, stage: 5, title: "Orders screen: newest-first tail paging, state filter and one-row write refresh"}
+  - {id: ui.orders.detailsSaved, area: ui, stage: 5, title: "Order details saved in the open dialog footer"}
   - {id: ui.orders.accountChip, area: ui, stage: 5, title: "Orders account filter chip"}
   - {id: ui.orders.detail, area: ui, stage: 5, title: "Order dialog"}
   - {id: ui.orders.items, area: ui, stage: 5, title: "Order dialog items table"}

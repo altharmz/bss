@@ -58,6 +58,28 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       await page.screenshot({ path: `/web/.shots/${name}-${width}.png`, fullPage: true });
+      if (name === 'orders') {
+        const first = page.locator('[data-ui="ui.orders"] [role="row"].clickable').first();
+        if (await first.count()) {
+          await first.click();
+          const dialog = page.getByRole('dialog');
+          await expect(dialog.locator('[data-ui="ui.orders.items"]')).toBeVisible();
+          await page.waitForLoadState('networkidle');
+          await expect(dialog.getByText('Target status', { exact: true })).toBeVisible();
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+          expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+          await page.screenshot({ path: `/web/.shots/dialog-order-${width}.png` });
+          await dialog.getByRole('button', { name: 'Edit details', exact: true }).click();
+          await expect(
+            dialog.getByRole('button', { name: 'Save details', exact: true }),
+          ).toBeInViewport({ ratio: 1 });
+          await page.screenshot({ path: `/web/.shots/dialog-order-details-${width}.png` });
+          await dialog
+            .locator('footer')
+            .getByRole('button', { name: 'Close', exact: true })
+            .click();
+        }
+      }
       if (name === 'billing-runs') {
         const latest = page.getByRole('region', { name: 'Latest run', exact: true });
         if (await latest.count()) {
