@@ -54,43 +54,32 @@ def pricing(**changes):
 
 
 class UsageTests(unittest.TestCase):
-    def test_public_make_targets_preserve_paths_without_shell_evaluation(self):
+    def test_report_make_target_runs_the_report_action(self):
         with tempfile.TemporaryDirectory() as directory:
             executable = Path(directory) / "python3"
             executable.write_text(
-                f"#!{sys.executable}\nimport json, os, sys\n"
-                "print(json.dumps([sys.argv[1:], os.environ.get('BSS_TELEMETRY_USAGE_FILE'), "
-                "os.environ.get('BSS_TELEMETRY_PRICING_FILE')]))\n"
+                f"#!{sys.executable}\nimport json, sys\nprint(json.dumps(sys.argv[1:]))\n"
             )
             executable.chmod(0o700)
-            marker = Path(directory) / "must-not-exist"
-            path = f"/export path/`touch {marker}`.json"
             env = {
                 k: v
                 for k, v in os.environ.items()
-                if k
-                not in {
-                    "MAKEFLAGS",
-                    "MFLAGS",
-                    "MAKELEVEL",
-                    "MAKEOVERRIDES",
-                    "BSS_TELEMETRY_USAGE_FILE",
-                    "BSS_TELEMETRY_PRICING_FILE",
-                }
+                if k not in {"MAKEFLAGS", "MFLAGS", "MAKELEVEL", "MAKEOVERRIDES"}
             }
             env["PATH"] = directory + os.pathsep + env["PATH"]
             root = Path(__file__).resolve().parent.parent
-            for action in ("ingest", "report"):
-                args = ["make", "--no-print-directory", "telemetry-" + action]
-                if action == "ingest":
-                    args.extend(["USAGE_FILE=" + path, "PRICING_FILE=/pricing path/rates.json"])
-                result = subprocess.run(  # noqa: S603 - fixed Make target in a disposable fixture
-                    args, cwd=root, env=env, capture_output=True, text=True, check=True
-                )
-                observed = json.loads(result.stdout.splitlines()[-1])
-                self.assertEqual(observed[0], ["-B", "scripts/task_usage.py", action])
-                self.assertEqual(observed[1], path if action == "ingest" else None)
-                self.assertFalse(marker.exists())
+            result = subprocess.run(  # noqa: S603 - fixed Make target in a disposable fixture
+                ["make", "--no-print-directory", "telemetry-report"],  # noqa: S607
+                cwd=root,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(
+                json.loads(result.stdout.splitlines()[-1]),
+                ["-B", "scripts/task_usage.py", "report"],
+            )
 
     def test_cost_rounding_is_independent_of_callers_decimal_context(self):
         # Exact cost 0.00000000005 must round half-even to zero, even under ROUND_UP.
@@ -181,53 +170,23 @@ class UsageTests(unittest.TestCase):
                 ),
             )
 
-    def test_duplicate_json_keys_are_rejected(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "usage.json"
-            path.write_text('{"version":1,"version":2}')
-            with self.assertRaises(ValueError):
-                usage.load_json(path)
-            path.write_text(" " * 65537)
-            with self.assertRaises(ValueError):
-                usage.load_json(path)
-
-    def test_database_and_validation_failures_do_not_leak_content(self):
+    def test_database_failures_do_not_leak_content(self):
         for error in (
             RuntimeError("sensitive database output"),
             OSError("private path"),
             subprocess.TimeoutExpired("secret", 3),
         ):
             with (
-                patch("sys.argv", ["task_usage.py", "ingest", "--file", "export.json"]),
-                patch.object(usage, "load_json", return_value=sample()),
+                patch("sys.argv", ["task_usage.py", "report"]),
                 patch.object(usage, "sql", side_effect=error),
                 contextlib.redirect_stderr(io.StringIO()) as stderr,
             ):
                 self.assertEqual(usage.main(), 1)
                 self.assertEqual(
-                    stderr.getvalue(),
-                    "telemetry: usage/report failed; check export schema and storage\n",
+                    stderr.getvalue(), "telemetry: usage report failed; check storage\n"
                 )
-        with (
-            patch("sys.argv", ["task_usage.py", "ingest", "--file", "export.json"]),
-            patch.object(usage, "load_json", return_value=sample(prompt="sensitive")),
-            patch.object(usage, "sql") as sql,
-            contextlib.redirect_stderr(io.StringIO()) as stderr,
-        ):
-            self.assertEqual(usage.main(), 1)
-            sql.assert_not_called()
-            self.assertNotIn("sensitive", stderr.getvalue())
 
-    def test_successful_ingestion_and_report_cli(self):
-        with (
-            patch("sys.argv", ["task_usage.py", "ingest", "--file", "export.json"]),
-            patch.object(usage, "load_json", return_value=sample()),
-            patch.object(usage, "sql") as sql,
-            contextlib.redirect_stdout(io.StringIO()) as output,
-        ):
-            self.assertEqual(usage.main(), 0)
-            self.assertEqual(json.loads(output.getvalue()), {"status": "ingested"})
-            self.assertIn("INSERT INTO usage_samples", sql.call_args.args[0])
+    def test_report_cli(self):
         with (
             patch("sys.argv", ["task_usage.py", "report"]),
             patch.object(usage, "sql", return_value='{"tasks":[],"events":[],"usage":[]}'),

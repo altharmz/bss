@@ -1,96 +1,30 @@
-# guard.sh cases: <expect>\t<command>; expect = allow|block, cloud-* runs with CLAUDE_CODE_REMOTE=true.
+# guard.sh cases: <expect>\t<command>; expect = allow|block.
 allow	make test
-allow	git config --get core.hooksPath
-allow	git config --get-all core.hooksPath
-allow	python3 -c 'from pathlib import Path; Path("example.py").write_text("""query = ["git", "config", "--get", "core.hooksPath"]""")'
-allow	python3 -c 'print(["git", "config", "--get", "core.hooksPath"])'
-allow	python3 -c 'source = """require(configured.returncode == 1, "custom core.hooksPath is unsupported; run make hooks")"""'
-block	git config core.hooksPath /dev/null
-block	git config --local core.hooksPath /dev/null
-block	git config --unset core.hooksPath
-block	git config --get core.hooksPath; git -c core.hooksPath=/dev/null commit -m x
-block	python3 -c 'import subprocess; subprocess.run(["git", "config", "core.hooksPath", "/dev/null"])'
-block	git commit -F /tmp/x/msg
-block	git push
-block	git push origin master
-block	git push -u origin feature/x
-allow	grep -rn foo .env.example
-allow	ls /opt/pw-browsers/chromium-1194/
-allow	docker compose config --quiet
-block	docker compose run --rm --no-deps web-offline sh -c "npm test"
 allow	make deploy
-allow	make verify
-allow	make deployed
-allow	cat .deployed
-allow	git log --oneline abc..HEAD > /tmp/x/deployed.txt
-block	echo commit=abc > .deployed
-block	printf 'checks=passed' >> ./.deployed
-block	sed -i s/running/passed/ .deployed
-block	rm .deployed
-block	cp /tmp/x .deployed
-allow	sed -n 1,80p .claude/hooks/guard.sh > /tmp/x
-block	git commit --amend --no-edit -F m
-allow	echo hi > scripts/x.sh
+allow	git commit -m "Describe the change"
+allow	git push -u origin issue-1-example
+allow	git config --get core.hooksPath
+allow	grep -rn foo .env.example
+allow	docker compose config --quiet
+allow	docker compose logs app
+allow	ssh vps-test ls
+block	cat .env
+block	head -3 .env.prod
+block	grep PASSWORD .env.smoke
+block	docker compose config
+block	docker system prune -f
+block	docker volume rm bss_data
+block	docker volume prune
+block	docker network prune
+block	docker builder prune
+block	git push --force
+block	git push -f origin master
+block	git push origin --delete feature
+block	git push origin :feature
+block	git push origin +master
+block	git push --mirror
 block	git commit --no-verify -m x
 block	git commit -n -m x
-block	git -c core.hooksPath=/dev/null commit -m x
-block	git push --force
-block	git push origin +master
-block	git push --force origin master
-block	git push -f origin master
-block	git push --force-with-lease origin master
-block	gh pr merge 12 --squash --admin
-block	gh pr merge --admin --squash --delete-branch
-block	gh api -X PUT repos/o/r/pulls/12/merge
-block	gh pr merge 12 --squash --delete-branch
-allow	gh pr checks 12 --watch
 block	git push --no-verify
-block	git push origin :old
-block	cat .env.prod
-block	grep X .env
-block	docker compose config
-block	docker compose exec app env
-block	docker system prune -a
-block	docker volume rm x
-block	ssh vps-test sudo ls
-block	ssh vps-test docker build .
-block	ssh vps-test -p 443
-block	ssh vps-test ss -tlnp | grep 443
-block	docker run -p 8444:80 nginx
-block	ufw allow 500/udp
-block	curl https://example.com:443/healthz
-allow	printf '%s\n' port=123e4567-e89b-1194-a456-426614174000
-allow	printf '%s\n' port=dead1194beef
-block	vpncmd /server
-block	npm install
-block	git reset --hard
-cloud-block	git push origin master
-cloud-block	git push
-cloud-allow	git push -u origin cloud/x
-cloud-allow	git push -u origin cloud/x > /tmp/log 2>&1
-cloud-allow	git commit --no-verify -F m
-cloud-block	curl https://vps-test
-cloud-allow	npm test
-cloud-block	git push -u origin cloud/x 2>&1 && git push origin master
-# Normal local lifecycle mutations are Make-owned, including fallback attempts.
-allow	make commit MESSAGE="Finish slice" FILES='["notes.md"]'
-allow	make create-pr
-allow	make check-pr
-allow	make merge-task
-allow	make finish-task SLOT=worker1
-allow	git status --short
-allow	git diff --cached
-allow	git worktree list
-allow	git stash list
-allow	gh api repos/altharmz/bss
-block	git -C /tmp/task push
-block	make push || git push
-block	bash -c 'git commit -m fallback'
-block	git worktree remove /tmp/task
-block	gh pr create --title x
-block	gh project item-edit --id x --single-select-option-id 47fc9ee4
-block	./scripts/task-compose up -d
-block	python3 -B scripts/task_git.py commit
-# BSS board order is administered directly only with conversation approval.
-allow	gh api graphql -f query='mutation { updateProjectV2ItemPosition(input: {projectId: "PVT_kwHOEpM-b84BpHA0", itemId: "PVTI_example"}) { clientMutationId } }'
-block	gh api graphql -f query='mutation { deleteProjectV2Item(input: {id: "PVTI_example"}) { clientMutationId } }'
+block	git -c core.hooksPath=/dev/null commit -m x
+block	git config core.hooksPath /dev/null

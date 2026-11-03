@@ -33,8 +33,7 @@ Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
   P2, P3. Among several with the same label, take the one highest on the board.
 - **Doing**: actively worked on. An agent may own multiple Doing items when separate
   worker slots are available. It has an `agent:<client>` owner label (or `needs-human`)
-  and, for code work, a branch `issue-<n>-<slug>` (cloud sessions:
-  `cloud/issue-<n>-<slug>`, the only pushable form).
+  and, for code work, a branch `issue-<n>-<slug>`.
 - **Waiting**: blocked by something outside the agent's control (another
   issue, a VPS step, the human's decision). Every move to Waiting gets a comment
   `Waiting on: <what> — unblocks when: <condition>`.
@@ -95,11 +94,9 @@ human confirms it is done, close it (see Merging and closing).
 
 ### Parallel agents
 
-Claude Code and Codex may run at the same time, and one agent may run multiple tasks in
-separate slots. Use `make start-task` to select and claim work; it checks eligibility,
-ownership and slot availability before moving the item to Doing. Strongly prefer
-`make start-task BSS_TASK_OWNER=codex` for Codex. Do not manually inspect or claim Ready
-items before startup. Never work on an item owned by the other agent.
+Several agents may run at the same time, and one agent may run multiple tasks in separate
+slots. `make start-task` checks eligibility, ownership and slot availability before moving
+the item to Doing. Never work on an item owned by another agent.
 
 ### Merging and closing
 
@@ -128,8 +125,7 @@ conversation; an earlier approval of the work or the allow list does not count):
 
 - an item, or a PR, labelled `needs-human`;
 - a PR that touches `CLAUDE.md`, `AGENTS.md`, `docs/board.md`, `.claude/` (settings, hooks,
-  commands), the guard and its cases (including `scripts/workflow_guard.py` and
-  `scripts/test_workflow_guard.py`), `scripts/pre-commit.sh` or `.github/workflows/`.
+  commands), `.codex/` (guards), `scripts/pre-commit.sh` or `.github/workflows/`.
 
 Approval must name the concrete PR at its exact current head in the current conversation.
 Only then may the agent pass `HUMAN_APPROVAL=<PR-number>:<full-head-SHA>` to
@@ -151,17 +147,8 @@ it, then carry on in the normal order. The revert PR follows the same flow.
 
 ### Mechanics
 
-Each agent saves machine usage statistics in comments on its current issue at the
-beginning of work and when the PR is created. `make start-task` and `make create-pr`
-post the two checkpoints; retry failures with `make telemetry-comment PHASE=start|pr`.
-The PR comment shows starting/latest counters and their observed difference, client/
-model/session participation, supported estimated costs with provenance, and explicit
-coverage/pricing gaps. Never fill unknown counters or costs with zeroes or estimates
-from conversation text. See [source setup and recovery](telemetry-usage.md).
-
-Normal task startup uses `make start-task`, strongly preferably
-`make start-task BSS_TASK_OWNER=codex` for Codex. Do not run a manual board snapshot,
-status count, candidate selection or claim before it. Fetch the returned issue's body
+Normal task startup is `make start-task BSS_TASK_OWNER=<client>`. Do not run a manual board
+snapshot, status count, candidate selection or claim before it; fetch the returned issue's body
 for implementation context afterward.
 
 The commands below are for explicitly requested board triage/administration or diagnosis

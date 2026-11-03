@@ -2,18 +2,6 @@
 
 Index: [README.md](README.md).
 
-## Template origin (`make init`)
-
-This project was generated from a shared template (`vps-lab-template`). `make init
-NAME=... APP_PORT=... HTTPS_PORT=... DOMAIN=...` filled in the project name, the local/VPS
-app port, the HTTPS port, and the public domain everywhere they appear (compose files,
-Makefile, scripts, this file, README.md), created `.env` and `.env.prod` from
-`.env.example` with a generated database password, and then removed itself from the
-Makefile so it can't run twice. If an `init:` target still exists in the Makefile, or a
-double-underscore token still shows up in a `grep -r` over the repo, `make init` was never
-run — do that before anything else, not a manual find-and-replace, since it also creates
-the `.env` files and only it knows to remove itself afterward.
-
 ## Environments
 
 The runtime image is about 74 MB compressed (content size) and 317 MB on disk on the VPS,
@@ -59,7 +47,6 @@ compose.yaml              base definition: only what both modes share (the app i
 compose.override.yaml     local dev only (own postgres on `lab`, bind mount, --reload, ports;
                           `tools` service: writable mount for make fmt + format hook)
 compose.prod.yaml         VPS only (shared network + alias, DATABASE_URL, limits, log rotation)
-scripts/init.sh           one-time: fills in placeholders, creates .env/.env.prod
 scripts/deploy.sh         build -> save -> ssh load -> migrate -> up -> healthcheck -> smoke
 scripts/smoke.sh          HTTP smoke test against a base URL
 scripts/pre-commit.sh     make lint + smoke + affected tests (harness.md); installed via `make hooks`
@@ -247,8 +234,8 @@ their config, data, TLS and backups. This repo only ships the app container.
   `bss`; `postgres` is the service name in vps-infra, and the database + role are
   created there with `make add-db NAME=bss`. The password is `POSTGRES_PASSWORD`
   from `.env.prod`, which must equal the role password `make add-db` used (`DB_PASSWORD_<NAME>` in
-  vps-infra's `.env.prod`) — the value `make init`
-  generated is temporary, and a mismatch makes migrations hang until the 120s timeout
+  vps-infra's `.env.prod`) — the value from the first
+  setup is temporary, and a mismatch makes migrations hang until the 120s timeout
   instead of failing clearly. Migrations still run from this repo (`deploy.sh`, before the app
   starts).
 - **Reverse proxy**: this app's site block (TLS + basic auth on `8445`,

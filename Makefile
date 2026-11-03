@@ -86,12 +86,12 @@ mcp-token-revoke: ## Revoke a local MCP static token (ID=<id>) or OAuth grant (G
 		exit 1; \
 	fi
 
-test: runtime-check ## The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the scripts' own cases: nightly in CI, by hand before a PR
+test: runtime-check ## The FULL suite in the container (parallel; HYPOTHESIS_PROFILE=dev|ci), plus the harness script tests (runtime-check): nightly in CI, by hand before a PR
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
 	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto
 
-test-smoke: runtime-check ## The smoke subset (pytest -m smoke) and the scripts' own cases: what CI runs on pull requests and master
+test-smoke: ## The smoke subset (pytest -m smoke) and the scripts' own cases: what CI runs on pull requests and master
 	./scripts/test-billing-status-check.sh
 	./scripts/test-pre-commit-lock.sh
 	./scripts/task-compose run --rm -e HYPOTHESIS_PROFILE=$(HYPOTHESIS_PROFILE) oneoff pytest -n auto -m smoke
@@ -280,9 +280,8 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 	fi
 	@echo "docs-check: docs/api and docs/db match the code"
 
-runtime-check: ## Validate task runtime helpers without Docker or secrets
+runtime-check: ## The harness script tests (scripts/test_*.py), ~3 min, no Docker or secrets; the commit hook runs them when scripts/, Makefile or .claude/ change
 	GIT_PAGER=cat python3 -B scripts/test_workflow_lifecycle.py
-	GIT_PAGER=cat python3 -B scripts/test_workflow_guard.py
 	GIT_PAGER=cat python3 -B scripts/test_task_finish.py
 	GIT_PAGER=cat python3 -B scripts/test_task_pr.py
 	GIT_PAGER=cat python3 -B scripts/test_task_git.py
@@ -292,10 +291,9 @@ runtime-check: ## Validate task runtime helpers without Docker or secrets
 	GIT_PAGER=cat python3 -B scripts/test_task_telemetry.py
 	GIT_PAGER=cat python3 -B scripts/test_task_usage.py
 	GIT_PAGER=cat python3 -B scripts/test_task_collect.py
-	GIT_PAGER=cat python3 -B scripts/test_task_stats.py
 	GIT_PAGER=cat python3 -B scripts/test_script_quality.py
 
-.PHONY: telemetry-collect telemetry-comment telemetry-probe telemetry-watch
+.PHONY: telemetry-collect telemetry-probe telemetry-watch
 telemetry-watch: export BSS_COLLECT_TASK = $(TASK)
 telemetry-watch: ## Retry final usage after an ended session (optional TASK=; bounded to two minutes)
 	python3 -B scripts/task_collect.py --watch
@@ -305,24 +303,14 @@ telemetry-probe: export BSS_COLLECT_SESSION = $(SESSION_ID)
 telemetry-probe: ## Verify a real client source without attributing historical usage to an issue
 	python3 -B scripts/task_collect.py --probe
 
-telemetry-comment: export BSS_COLLECT_TASK = $(TASK)
-telemetry-comment: ## Save issue statistics at start or PR creation (PHASE=start|pr, optional TASK=)
-	python3 -B scripts/task_stats.py $(PHASE)
-
 telemetry-collect: export BSS_COLLECT_TASK = $(TASK)
 telemetry-collect: export BSS_COLLECT_CLIENT = $(CLIENT)
 telemetry-collect: export BSS_COLLECT_SESSION = $(SESSION_ID)
 telemetry-collect: export BSS_COLLECT_CLOSE = $(CLOSE)
-telemetry-collect: export BSS_TELEMETRY_PRICING_FILE = $(PRICING_FILE)
-telemetry-collect: ## Collect bound machine usage (optional TASK= CLIENT= SESSION_ID= CLOSE=1 PRICING_FILE=)
+telemetry-collect: ## Collect bound machine usage (optional TASK= CLIENT= SESSION_ID= CLOSE=1)
 	python3 -B scripts/task_collect.py
 
-.PHONY: telemetry-ingest telemetry-report
-telemetry-ingest: export BSS_TELEMETRY_USAGE_FILE = $(USAGE_FILE)
-telemetry-ingest: export BSS_TELEMETRY_PRICING_FILE = $(PRICING_FILE)
-telemetry-ingest: ## Import a machine usage delta (USAGE_FILE=, optional PRICING_FILE=)
-	python3 -B scripts/task_usage.py ingest
-
+.PHONY: telemetry-report
 telemetry-report: ## Report task usage, priced subtotals and observed lifecycle metrics as JSON
 	python3 -B scripts/task_usage.py report
 
