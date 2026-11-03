@@ -156,7 +156,11 @@ so cost shapes what runs). Pull requests to `master` and pushes to `master`: `ma
 `make docs-check` and the whole `make test` (including `make runtime-check`). A PR run is
 cancelled by a newer push; runs on `master` never are. The workflow uses a disposable
 database password, reads no repository secret (`contents: read`), never touches the VPS, and
-pins actions to commit SHAs. The dev image is built with the Actions layer cache. The web
+pins actions to commit SHAs. The dev image is built with the Actions layer cache. A second job, `harness` (no
+Docker, 15 minutes at most), runs `make docs-links` on every pull request and push and
+`make runtime-check` (about 100 s) on pull requests that change `scripts/`, `.claude/`,
+`.codex/` or the `Makefile` (a changed-files step); it is the backstop for the local commit
+hook, and the nightly full run covers the harness tests through `make test`. The web
 checks (`web-lint`, `web-test`, `web-e2e`) are not in CI. Branch protection is the human's.
 
 ## Codex
