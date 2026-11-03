@@ -18,7 +18,7 @@ agent - stay in [CLAUDE.md](../CLAUDE.md), the decisions and their rationale by 
    ownership and takeover, per-account outcomes, failures and backoff, catch-up, retry,
    status flips, the request queue, `/billing-status`, liveness, signals.
 4. [ui.md](ui.md) - the admin console's screens and actions and the API operations each
-   one calls; the planned Billing runs screen.
+   one calls; the Billing runs screen.
 5. [operations.md](operations.md) - local development, tests,
    deploy and its checks, backups, monitoring, the agent harness.
 6. Reference, generated from the code:
@@ -26,8 +26,6 @@ agent - stay in [CLAUDE.md](../CLAUDE.md), the decisions and their rationale by 
      response schemas, the `BssBillingAccount` extension, deviations, errors;
    - [db/](db/README.md) - the schema at migration head: ER diagrams by area, one page per
      table (columns, constraints, indexes, foreign keys), enums.
-7. [archive/doc-findings.md](archive/doc-findings.md) - where code and documentation disagree, untested
-   behaviour, open points.
 
 ## Other documents in this directory
 
@@ -37,7 +35,6 @@ agent - stay in [CLAUDE.md](../CLAUDE.md), the decisions and their rationale by 
 | [archive/stage4-design.md](archive/stage4-design.md) | the billing worker's design and decisions (Q1-Q14, D-W*) |
 | [vps-infra-change-request.md](vps-infra-change-request.md) | the Caddy site block, smoke user and deploy order requested from vps-infra |
 | [worktrees.md](worktrees.md), [decisions/harness.md](decisions/harness.md) | the agent workflow (Make targets, worktrees, slots) and the hooks |
-| [ui-mcp-gap-plan.md](ui-mcp-gap-plan.md) | **planned:** the API operations MCP reaches and the UI does not, and the slices to close the useful ones |
 
 ## Generated vs hand-written
 

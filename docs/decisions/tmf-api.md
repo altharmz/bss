@@ -852,7 +852,7 @@ implemented; order processing lives in `app/ordering/`.
   may choose the `id`, `@baseType`/`@schemaLocation` are stored, and server-set
   attributes (`lastUpdate` on PATCH among them) may be repeated, never set (422).
 - **`@referredType` in a reference is checked, never rewritten** (`cloud/quality-1`,
-  doc-findings #17). The vendored specs define it as "the actual type of the target
+  earlier finding #17). The vendored specs define it as "the actual type of the target
   instance when needed for disambiguation": optional, but when sent it must be the type
   the response states for that reference, else 422 and nothing is stored. Fixed types
   (`app/api/common.py`, `BillingAccountRef`, `CustomerRef`, `CustomerBillRef`,

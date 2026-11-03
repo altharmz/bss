@@ -189,7 +189,7 @@ billing run writes ABRs and bills (`billing_run_id` is NOT NULL on both).
 
 Calendar-aligned to the account's `bill_cycle_day` D (1..28, so it exists in every
 month): `[D of month M, D of month M+1)`, 28-31 days (`cycle_period`). The cycle day is
-fixed after creation (PATCH is a 409; changing it is an open question).
+fixed after creation (PATCH is a 409; changing it is issue #68).
 
 ### When a period is charged
 
@@ -292,8 +292,8 @@ by one (`tests/billing_sim.py`): idempotence, net per period = one rounding, lif
 without drift, refund shape, no overlap, precision and currency, every ABR on exactly
 one bill, replay identical, daily vs catch-up equal net per period.
 
-## Open questions (not built)
+## Open questions
 
-From [decisions/billing-core.md](decisions/billing-core.md#open-questions), "Open questions": changing `billCycleDay` (PATCH is a 409 today), and
-suspension semantics (a `Suspended`/`Closed` account and a `suspended` product are billed
-like any other).
+Changing `billCycleDay` is issue #68; suspension semantics are decided
+([billing-core.md](decisions/billing-core.md#open-questions)): a `Suspended`/`Closed` account
+and a `suspended` product are billed like any other.

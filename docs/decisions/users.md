@@ -103,8 +103,8 @@ or a user could do over `/tmf-api` what the UI denies.
 - **Q5** Session lifetime: proposed 8 hours idle, 7 days absolute.
 - **Q6** The smoke test: a service credential limited to GET/HEAD (proposed), or an app
   user?
-- **Q7** Should the MCP login (`MCP_USERS`) later use the app's users? Proposed: a later
-  slice, not this one.
+- **Q7** Should the MCP login (`MCP_USERS`) later use the app's users? Not this slice;
+  issue #146.
 
 ### Slices
 
