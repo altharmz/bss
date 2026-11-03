@@ -92,6 +92,10 @@ Never move a `needs-human` item to Doing for yourself. You may prepare it (exact
 checklist, expected results) as a comment, then leave it in Ready for the human. When the
 human confirms it is done, close it (see Merging and closing).
 
+Board automation (auto-add, item closed, pull request merged) is best-effort; the Make
+helpers add an item or set Done themselves when it is late. See
+[harness.md](decisions/harness.md#github-board-automation).
+
 ### Parallel agents
 
 Several agents may run at the same time, and one agent may run multiple tasks in separate

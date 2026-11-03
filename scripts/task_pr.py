@@ -12,7 +12,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from task_git import hooks, push, require
+from task_git import hooks, push, require, require_no_git_overrides
 from task_quality import context, query, review
 from task_runtime import InvalidRuntime
 from task_telemetry import record
@@ -34,9 +34,17 @@ HUMAN_PATHS = {
 
 
 def gh(root, *args):
-    result = subprocess.run(  # noqa: S603, S607 - fixed executable, argv, no shell
-        ["gh", *args], cwd=root, capture_output=True, text=True, check=True, timeout=60
-    )
+    # Read calls only (creation runs separately): one retry rides out a transient GitHub error.
+    for attempt in (1, 2):
+        try:
+            result = subprocess.run(  # noqa: S603, S607 - fixed executable, argv, no shell
+                ["gh", *args], cwd=root, capture_output=True, text=True, check=True, timeout=60
+            )
+            break
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            if attempt == 2:
+                raise
+            time.sleep(float(os.environ.get("BSS_GH_RETRY_PAUSE", "2")))
     if "--paginate" not in args:
         return json.loads(result.stdout)
     # Older installed gh versions emit consecutive JSON documents, without --slurp.
@@ -305,10 +313,7 @@ def main():
     started = time.monotonic()
     try:
         require(operation in {"create-pr", "check-pr"}, "unknown operation")
-        require(
-            not any(k.startswith("GIT_") and k != "GIT_PAGER" for k in os.environ),
-            "unset inherited GIT_* overrides",
-        )
+        require_no_git_overrides()
         require(
             os.environ.get("GH_HOST", "github.com") == "github.com",
             "unexpected GitHub host; unset GH_HOST",

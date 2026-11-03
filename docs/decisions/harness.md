@@ -29,8 +29,14 @@ in the invoking worktree):
   compose files), `app/worker/` or `alembic/`;
 - `make docs-check` (about 7 s) when `app/`, `alembic/`, `spec/`, `scripts/docs/` or
   `tests/docs_collect*` change: a stale `docs/api` or `docs/db` is refused;
-- `make runtime-check` (the harness script tests, about 3 minutes) and the guard cases, only
-  when `scripts/`, `Makefile` or `.claude/` change (the guard cases only for `.claude/`);
+- `make docs-links` when any Markdown file is staged: every relative link and `#anchor`
+  must resolve, and the `make` targets and `scripts/` files named in code in the
+  agent-facing docs must exist (`scripts/docs_links.py`; it runs before the Markdown-only
+  exit, so documentation-only commits are checked too);
+- `make runtime-check` (the harness script tests: 11 suites run in parallel by
+  `scripts/run_suites.py`, about 70-100 s; they took 3 min 2 s when run one after another)
+  and the guard cases, only when `scripts/`, `Makefile` or `.claude/` change (the guard
+  cases only for `.claude/`);
 - `make web-lint` and `make web-test` when `frontend/` or `spec/` change;
 - the full output of each run is in `.git/pre-commit-logs/` (last 10).
 
@@ -51,9 +57,13 @@ only slips that cannot be undone: reading `.env*` files, `docker compose config`
 mirror and prune pushes, and skipping the git hooks (`--no-verify`, `commit -n`, overriding
 `core.hooksPath`). Cases: `.claude/hooks/guard-cases.txt`, run by `.claude/hooks/test-guard.sh`.
 
-It is a pattern matcher over the raw command text, not a security boundary. A command that
-merely *mentions* a blocked pattern (in a commit message or issue body) is blocked too: put
-such text in a file (`git commit -F <file>`, the Write tool). The workflow itself is
+It is a pattern matcher, not a security boundary. It matches the executable part of the
+command: quoted prose (quoted text containing whitespace), data heredocs and the like are
+ignored, so an issue body, a commit message or a heredoc that merely *mentions* a blocked
+pattern passes; the script given to `sh -c` / `bash -c`, a heredoc fed to a shell and quoted
+single words (`".env"`, `"--force"`) are still matched. Long text can also come from a
+file: `BODY_FILE=` for `make new-priority-task`, `MESSAGE_FILE=` and `FILES_FILE=` for
+`make commit`, `PR_BODY_FILE=` for `make create-pr`. The workflow itself is
 guidance, not enforcement: the Make-owned workflow guard and the VPS/VPN, host-Node and
 deploy-record checks were removed in #137.
 
@@ -62,6 +72,20 @@ editing `.env*` and editing `design-ref/` (the read-only design handoff). The Po
 hook `format.sh` runs ruff (Python) or prettier (frontend) on every edited file inside the
 task's containers; it strips imports that are not used yet. `.codex/patch-guard.sh` applies
 the same file denies to Codex's `apply_patch`.
+
+## GitHub board automation
+
+The BSS project's own workflows (auto-add, item closed, pull request merged, ...) add
+items and set Done, normally within seconds. They are best-effort: during a GitHub
+incident on 2026-11-03 they did not run (a new issue stayed off the board; a closed
+issue stayed in Doing), see [#138](https://github.com/altharmz/bss/issues/138). The
+helpers therefore do not depend on them: `make new-priority-task` waits up to 20 s
+(`BSS_BOARD_ADD_WAIT`) for the issue to appear, then adds it itself and sets Ready and
+first position; `ISSUE=<n>` finishes a preserved issue without creating another. After a
+confirmed merge and closed issue, `make finish-task` waits up to 60 s
+(`BSS_BOARD_DONE_WAIT`) for Done, then sets Done itself. GraphQL calls are retried once
+(`BSS_GH_RETRY_PAUSE`, 2 s) and a failure prints a bounded one-line error and a pointer to
+githubstatus.com. Manual `gh project` commands are recovery only.
 
 ## Tests in the hook: smoke plus affected
 

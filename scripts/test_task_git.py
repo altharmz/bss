@@ -1,9 +1,13 @@
 """Real Git integration coverage in disposable task worktrees and bare remotes."""
 
 import json
+import os
 import shutil
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
+from task_runtime import InvalidRuntime
 from test_task_quality import QualityTests
 
 
@@ -111,6 +115,66 @@ class GitTests(unittest.TestCase):
         self.change()
         self.assertNotEqual(self.command().returncode, 0)
 
+    def test_editor_variables_are_presentation_only_and_refusals_name_the_variable(self):
+        self.change()
+        self.env.update(GIT_EDITOR="true", GIT_SEQUENCE_EDITOR="true")
+        self.assertEqual(self.command().returncode, 0)
+        self.change()
+        (self.work / "chosen.txt").write_text("second\n")
+        self.env["GIT_NAMESPACE"] = "unexpected"
+        result = self.command()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("GIT_NAMESPACE", result.stderr)
+        self.assertNotIn("unexpected", result.stderr)
+
+    def test_every_lifecycle_entry_point_shares_the_git_override_check(self):
+        import task_git
+
+        # The commit hook itself runs with GIT_DIR and friends: start from a clean environment.
+        clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        with patch.dict(
+            os.environ, {**clean, "GIT_EDITOR": "true", "GIT_PAGER": "cat"}, clear=True
+        ):
+            task_git.require_no_git_overrides()
+        with patch.dict(os.environ, {**clean, "GIT_DIR": "x"}, clear=True):
+            with self.assertRaisesRegex(InvalidRuntime, "GIT_DIR"):
+                task_git.require_no_git_overrides()
+        scripts = Path(task_git.__file__).parent
+        for name in ("task_pr.py", "task_finish.py", "task_git.py"):
+            self.assertIn("require_no_git_overrides()", (scripts / name).read_text(), name)
+
+    def test_message_and_files_may_come_from_files(self):
+        self.change()
+        message = self.base / "message.txt"
+        message.write_text("from a file\n\nmentions a blocked word like --no-verify\n")
+        files = self.base / "files.json"
+        files.write_text(json.dumps(["chosen.txt"]))
+        for key in ("MESSAGE", "FILES"):
+            self.env.pop(key, None)
+        self.env.update(MESSAGE_FILE=str(message), FILES_FILE=str(files))
+        result = self.call([shutil.which("make"), "commit"], check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("pre-commit-logs", result.stdout)
+        self.assertEqual(
+            self.call(["git", "log", "-1", "--format=%B"]).stdout.strip(),
+            "from a file\n\nmentions a blocked word like --no-verify",
+        )
+        for key, value in (
+            ("MESSAGE_FILE", "relative.txt"),
+            ("MESSAGE_FILE", str(self.base)),
+            ("FILES_FILE", "relative.json"),
+        ):
+            with self.subTest(key=key):
+                (self.work / "chosen.txt").write_text(f"{key}\n")
+                previous = self.env.get(key)
+                self.env[key] = value
+                result = self.call([shutil.which("make"), "commit"], check=False)
+                self.env[key] = previous
+                self.assertNotEqual(result.returncode, 0)
+        self.env["MESSAGE"] = "inline"
+        result = self.call([shutil.which("make"), "commit"], check=False)
+        self.assertIn("not both", result.stderr)
+
     def test_inherited_pager_does_not_change_commit_policy(self):
         self.env["GIT_PAGER"] = "cat"
         self.change()
@@ -121,8 +185,8 @@ class GitTests(unittest.TestCase):
         self.change()
         (self.work / "scripts/pre-commit.sh").write_text(
             "python3 -c 'import os; "
-            'assert not {"MAKEFLAGS", "MAKEOVERRIDES", "MESSAGE", "FILES", "DRY_RUN"} & os.environ.keys()'
-            + "'\n"
+            'assert not {"MAKEFLAGS", "MAKEOVERRIDES", "MESSAGE", "FILES", "DRY_RUN"} '
+            "& os.environ.keys()" + "'\n"
         )
         result = self.call(
             [shutil.which("make"), "commit", "MESSAGE=outer commit", 'FILES=["chosen.txt"]'],
@@ -293,7 +357,9 @@ class GitTests(unittest.TestCase):
         head = self.call(["git", "rev-parse", "HEAD"]).stdout
         self.assertNotEqual(self.command("sync-task").returncode, 0)
         self.assertEqual(self.call(["git", "rev-parse", "HEAD"]).stdout, head)
-        self.assertIn("chosen.txt", self.call(["git", "diff", "--name-only", "--diff-filter=U"]).stdout)
+        self.assertIn(
+            "chosen.txt", self.call(["git", "diff", "--name-only", "--diff-filter=U"]).stdout
+        )
         (self.work / "chosen.txt").write_text("explicit source resolution\n")
         result = self.command(files=["chosen.txt"])
         self.assertEqual(result.returncode, 0, result.stderr)

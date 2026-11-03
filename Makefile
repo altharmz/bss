@@ -27,8 +27,10 @@ start-task: ## Prepare the next Ready issue in an automatically selected worker 
 
 new-priority-task: export BSS_NEW_TASK_TITLE := $(TITLE)
 new-priority-task: export BSS_NEW_TASK_BODY := $(BODY)
+new-priority-task: export BSS_NEW_TASK_BODY_FILE := $(BODY_FILE)
+new-priority-task: export BSS_NEW_TASK_ISSUE := $(ISSUE)
 new-priority-task: export BSS_NEW_TASK_LABELS := $(LABELS)
-new-priority-task: ## Create an approved P0 issue first in Ready; start separately (TITLE= BODY= [LABELS=a,b])
+new-priority-task: ## Create an approved P0 issue first in Ready; start separately (TITLE= BODY=|BODY_FILE=/abs/path [LABELS=a,b]); ISSUE=<n> finishes a preserved one
 	@python3 -B scripts/start_task.py --new-priority-task $(if $(filter 1,$(JSON)),--json,)
 
 release-slot: ## Release a slot after its task worktree was safely removed (SLOT=worker1)
@@ -125,7 +127,7 @@ lint: ## Lint and format check
 fmt: ## Auto-format the code (writable `tools` service; `app` mounts sources read-only)
 	./scripts/task-compose run --rm tools sh -c 'ruff format . && ruff check --fix .'
 
-.PHONY: scripts-lint scripts-fmt
+.PHONY: scripts-lint scripts-fmt docs-links
 # Selection is JSON data, including when supplied on Make's command line. Do not
 # evaluate Make expressions in it, or automatically export the original variable.
 unexport SCRIPT_FILES
@@ -280,18 +282,23 @@ docs-check: docs ## Fail if the committed docs/api/ or docs/db/ differ from a fr
 	fi
 	@echo "docs-check: docs/api and docs/db match the code"
 
-runtime-check: ## The harness script tests (scripts/test_*.py), ~3 min, no Docker or secrets; the commit hook runs them when scripts/, Makefile or .claude/ change
-	GIT_PAGER=cat python3 -B scripts/test_workflow_lifecycle.py
-	GIT_PAGER=cat python3 -B scripts/test_task_finish.py
-	GIT_PAGER=cat python3 -B scripts/test_task_pr.py
-	GIT_PAGER=cat python3 -B scripts/test_task_git.py
-	GIT_PAGER=cat python3 -B scripts/test_task_quality.py
-	GIT_PAGER=cat python3 -B scripts/test_task_runtime.py
-	GIT_PAGER=cat python3 -B scripts/test_start_task.py
-	GIT_PAGER=cat python3 -B scripts/test_task_telemetry.py
-	GIT_PAGER=cat python3 -B scripts/test_task_usage.py
-	GIT_PAGER=cat python3 -B scripts/test_task_collect.py
-	GIT_PAGER=cat python3 -B scripts/test_script_quality.py
+docs-links: ## Check Markdown links, anchors and the make targets and scripts the agent docs name (no Docker)
+	python3 -B scripts/docs_links.py
+
+runtime-check: ## The harness script tests (scripts/test_*.py, run in parallel, ~1.5 min), no Docker or secrets; the commit hook runs them when scripts/, Makefile or .claude/ change
+	python3 -B scripts/run_suites.py \
+		scripts/test_workflow_lifecycle.py \
+		scripts/test_task_finish.py \
+		scripts/test_task_pr.py \
+		scripts/test_task_git.py \
+		scripts/test_task_quality.py \
+		scripts/test_task_runtime.py \
+		scripts/test_start_task.py \
+		scripts/test_task_telemetry.py \
+		scripts/test_task_usage.py \
+		scripts/test_task_collect.py \
+		scripts/test_script_quality.py \
+		scripts/test_docs_links.py
 
 .PHONY: telemetry-collect telemetry-probe telemetry-watch
 telemetry-watch: export BSS_COLLECT_TASK = $(TASK)
@@ -356,9 +363,11 @@ up down restart logs ps shell psql mcp-smoke mcp-token-create mcp-tokens mcp-tok
 
 .PHONY: commit push
 commit: export MESSAGE := $(MESSAGE)
+commit: export MESSAGE_FILE := $(MESSAGE_FILE)
 commit: export FILES := $(FILES)
+commit: export FILES_FILE := $(FILES_FILE)
 commit: export DRY_RUN := $(or $(DRY_RUN),0)
-commit: ## Commit explicit task files (FILES JSON array; MESSAGE required)
+commit: ## Commit explicit task files (FILES JSON array or FILES_FILE=/abs/path; MESSAGE or MESSAGE_FILE=/abs/path)
 	@python3 -B scripts/task_git.py commit
 
 push: ## Publish only the current validated task branch to origin

@@ -65,7 +65,7 @@ Production is one small VPS whose main job is a VPN server. bss runs next to it 
 strict limits, and PostgreSQL, Caddy and backups belong to the separate **vps-infra**
 project. Images are built locally and shipped (`make deploy`, `scripts/deploy.sh`);
 **never build on the VPS**. Details: [docs/operations.md](docs/operations.md);
-constraints: [CLAUDE.md](CLAUDE.md#hard-constraints).
+rules: [CLAUDE.md](CLAUDE.md#rules).
 
 ## Repository layout
 
