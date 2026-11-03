@@ -6,7 +6,7 @@ import { identity, signIn } from './auth';
 // local fixture identities, disabled and stripped of sessions after the run.
 //
 // Exception: the prepaid test below changes data (a 10.00 cash top-up and one order for
-// Pavel Orlov). That is accepted because this suite runs against a disposable seeded stack
+// Robert Taylor). That is accepted because this suite runs against a disposable seeded stack
 // (make web-e2e seeds it first; make clean && make up && make seed gives a fresh one).
 
 /** Everything that would mean the page is broken although it rendered. */
@@ -63,10 +63,10 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
     .click();
   await expect(page.getByRole('banner').getByText(context.businessDate)).toBeVisible();
 
-  const olga = page.getByRole('row').filter({ hasText: 'Olga Kuznetsova' });
-  await expect(olga).toContainText('−'); // a negative balance, with the real minus
-  await olga.click();
-  await expect(page.getByRole('heading', { name: /Olga Kuznetsova/ })).toBeVisible();
+  const sarah = page.getByRole('row').filter({ hasText: 'Sarah Johnson' });
+  await expect(sarah).toContainText('−'); // a negative balance, with the real minus
+  await sarah.click();
+  await expect(page.getByRole('heading', { name: /Sarah Johnson/ })).toBeVisible();
   await expect(page.getByText('In arrears')).toBeVisible();
   await expect(
     page.locator('[data-ui="ui.subscriber.moneyStrip"]').getByText('Due on bills'),
@@ -80,7 +80,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await expect(demandDialog.getByText(/from tomorrow onward/)).toBeVisible();
   await demandDialog.getByText('Close', { exact: true }).click();
 
-  // the seed puts Olga's oldest open bill on hold: its dialog offers the release only.
+  // the seed puts Sarah's oldest open bill on hold: its dialog offers the release only.
   // Read-only: nothing is clicked in it.
   const held = page.getByRole('row').filter({ hasText: 'On hold' }).first();
   await held.click();
@@ -152,7 +152,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   expect(problems).toEqual([]);
 });
 
-test('prepaid: Pavel Orlov tops up and orders, Vera Lebedeva waits for funds, commands list', async ({
+test('prepaid: Robert Taylor tops up and orders, Linda Harris waits for funds, commands list', async ({
   page,
 }) => {
   await page.goto('/subscribers');
@@ -161,8 +161,8 @@ test('prepaid: Pavel Orlov tops up and orders, Vera Lebedeva waits for funds, co
   const problems = watch(page);
 
   // 1. the card: KPIs and balance action rows, one detail
-  await page.getByRole('row').filter({ hasText: 'Pavel Orlov' }).click();
-  await expect(page.getByRole('heading', { name: /Pavel Orlov/ })).toBeVisible();
+  await page.getByRole('row').filter({ hasText: 'Robert Taylor' }).click();
+  await expect(page.getByRole('heading', { name: /Robert Taylor/ })).toBeVisible();
   const kpi = (label: string) =>
     page.locator('.money-figure').filter({ has: page.getByText(label, { exact: true }) });
   await expect(kpi('Ledger')).toBeVisible();
@@ -221,10 +221,10 @@ test('prepaid: Pavel Orlov tops up and orders, Vera Lebedeva waits for funds, co
     page.getByText(/ordered: accepted, the billing worker completes it shortly/),
   ).toBeVisible();
 
-  // 4. Vera Lebedeva: funding-suspended product with its Top up menu action
+  // 4. Linda Harris: funding-suspended product with its Top up menu action
   await page.goto('/subscribers');
-  await page.getByRole('row').filter({ hasText: 'Vera Lebedeva' }).click();
-  await expect(page.getByRole('heading', { name: /Vera Lebedeva/ })).toBeVisible();
+  await page.getByRole('row').filter({ hasText: 'Linda Harris' }).click();
+  await expect(page.getByRole('heading', { name: /Linda Harris/ })).toBeVisible();
   await expect(page.getByText(/Waiting for funds: short/)).toBeVisible();
   await expect(page.locator('[data-ui="ui.subscriber.prepaid.shortfall"]')).toContainText(
     /renewal needs/,

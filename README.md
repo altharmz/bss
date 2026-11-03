@@ -75,6 +75,7 @@ rules: [CLAUDE.md](CLAUDE.md#rules).
 | `alembic/versions/` | migrations; those on `master` are immutable |
 | `bss_mcp/` | MCP connector service |
 | `frontend/` | admin UI |
+| `ops/staging-data/` | dry-run-first data-quality scripts for the deployed stand, run by the human |
 | `tests/` | pytest suite, contract client, seed, doc and progress collectors |
 | `spec/` | vendored TMF specs (pinned) and our internal API spec |
 | `scripts/` | deploy, smoke tests, hooks, doc and progress generators |

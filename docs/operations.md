@@ -15,7 +15,7 @@ targets; do not invent commands** (CLAUDE.md, "Commands").
 |---|---|
 | `make up` / `make down` / `make logs` / `make ps` | start (and wait for healthy), stop, last 5 min of app logs, status |
 | `make migrate` | `alembic upgrade head` against the local stack |
-| `make seed` | demo data **through the public TMF API** with a FixedClock that walks 120 days forward, billing each day; refuses `APP_ENV=prod` and any database but the local one; a second run is a no-op (`tests/seed.py`, `tests/test_seed.py`) |
+| `make seed` | demo data (US names, USD amounts, numbered mobile, categories and catalogs) **through the public TMF API** with a FixedClock that walks 120 days forward, billing each day; refuses `APP_ENV=prod` and any database but the local one; a second run is a no-op (`tests/seed.py`, `tests/test_seed.py`) |
 | `make worker-once` | one wake-up of the billing worker, then exit (there is no long-running local worker) |
 | `make psql` | interactive psql in the local db (the db port is not published) |
 | `make test` | `pytest -n auto` in the app container |

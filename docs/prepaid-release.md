@@ -12,8 +12,8 @@ postpaid ones, all through the public API and the worker's prepaid passes
 
 | Account | Story |
 |---|---|
-| Pavel Orlov (prepaid) | top-up, immediate purchase, funded renewals, one lapse for lack of funds, a top-up that resumes, a final top-up; active and funded today |
-| Vera Lebedeva (prepaid) | top-up, purchase, runs out at the first renewal; product suspended, renewal pending with a needs-top-up reason |
+| Robert Taylor (prepaid) | top-up, immediate purchase, funded renewals, one lapse for lack of funds, a top-up that resumes, a final top-up; active and funded today |
+| Linda Harris (prepaid) | top-up, purchase, runs out at the first renewal; product suspended, renewal pending with a needs-top-up reason |
 
 `tests/test_seed.py` pins both stories and the unchanged postpaid data. An existing local
 database seeded before P7 holds 7 of 9 accounts and is reported as a partial seed:
@@ -37,10 +37,10 @@ rollback after prepaid use is not supported; recover forward.
 
 2026-10-25: `make web-e2e` on the seeded stack passed all six Chromium smoke tests,
 including the new prepaid test ([slice 7](next-slices-design.md#7-prepaid-browser-check-and-release-evidence)):
-Pavel Orlov's card (Ledger, Available and Paid-through KPIs, three or more Balance action
+Robert Taylor's card (Ledger, Available and Paid-through KPIs, three or more Balance action
 rows, one detail), a 10.00 cash top-up (toast, Ledger changes), Add product starting today
 with the prepaid preview and the accepted order (the worker does not run inside the test,
-so only the accepted text is asserted), Vera Lebedeva's funding-suspended product with the
+so only the accepted text is asserted), Linda Harris's funding-suspended product with the
 needs-top-up text and the Top up button, and the Prepaid commands list. The test leaves
 the data changed; the suite runs against a disposable seeded stack.
 
