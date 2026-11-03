@@ -1,6 +1,6 @@
 import type { components as T622 } from './generated/tmf622';
 import type { PrepaidCommand } from './commands';
-import { getAll, getPage } from './client';
+import { getAll, getPage, getJson } from './client';
 import { PATHS } from './bss';
 
 // The global Orders screen (docs/decisions/frontend.md, docs/next-slices-design.md section 9):
@@ -36,6 +36,34 @@ export function loadOrderPage(
     `limit=${ORDER_PAGE}`,
   ];
   return getPage<Order>(`${PATHS.orders}?${query.join('&')}`, signal);
+}
+
+/** Offset counts displayed newest rows, while the API serves oldest first. */
+export async function loadNewestOrderPage(
+  filter: { state: OrderState | null; account: string | null },
+  offset: number,
+  signal: AbortSignal,
+) {
+  const query = [
+    ...(filter.account !== null ? [`billingAccount.id=${filter.account}`] : []),
+    ...(filter.state !== null ? [`state=${filter.state}`] : []),
+  ];
+  const prefix = query.length ? `${query.join('&')}&` : '';
+  const { total } = await getPage<Order>(
+    `${PATHS.orders}?${prefix}offset=0&limit=1&fields=id`,
+    signal,
+  );
+  const limit = Math.min(ORDER_PAGE, Math.max(0, total - offset));
+  if (limit === 0) return { items: [], total };
+  const page = await getPage<Order>(
+    `${PATHS.orders}?${prefix}offset=${Math.max(0, total - offset - ORDER_PAGE)}&limit=${limit}`,
+    signal,
+  );
+  return { items: [...page.items].reverse(), total: page.total };
+}
+
+export function loadOrder(id: string) {
+  return getJson<Order>(`${PATHS.orders}/${id}`);
 }
 
 /** The order's cancellations (TMF622 cancelProductOrder), for its dialog. */

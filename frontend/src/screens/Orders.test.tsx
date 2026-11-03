@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { App } from '../app/App';
+import { itemText } from './Orders';
 import { expectUi } from '../test/expectUi';
 import { accountBody } from '../test/fixtures';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
@@ -41,6 +42,16 @@ const PENDING = {
 };
 
 function backend(routes: Record<string, Handler>) {
+  // Small fixture lists use the same response for the count probe and tail read.
+  const pages: Record<string, Handler> = {};
+  for (const [path, handler] of Object.entries(routes)) {
+    if (path.startsWith(`GET ${ORDERS}?`) && path.endsWith('offset=0&limit=50')) {
+      pages[path.replace('limit=50', 'limit=1&fields=id')] = handler;
+      for (let limit = 1; limit <= 50; limit++) {
+        pages[path.replace('limit=50', `limit=${limit}`)] = handler;
+      }
+    }
+  }
   return stubFetch({
     'GET /internal/v1/context': () => json(CONTEXT),
     'GET /internal/v1/session': () =>
@@ -50,6 +61,9 @@ function backend(routes: Record<string, Handler>) {
       json([], { total: 7 }),
     'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
       json([], { total: 4 }),
+    [`GET /tmf-api/productInventory/v5/product/${P1}`]: () =>
+      json({ id: P1, name: 'Home internet' }),
+    ...pages,
     ...routes,
   });
 }
@@ -60,6 +74,159 @@ function open(path = '/orders') {
 }
 
 describe('orders list', () => {
+  it('names all six item actions using item snapshots', () => {
+    const product = { '@type': 'Product' as const, id: P1, name: 'Home internet' };
+    expect(
+      itemText({
+        '@type': 'ProductOrderItem',
+        action: 'modify',
+        product: { ...product, status: 'suspended' },
+      }),
+    ).toBe('Suspend Home internet');
+    expect(
+      itemText({
+        '@type': 'ProductOrderItem',
+        action: 'modify',
+        product: { ...product, status: 'active' },
+      }),
+    ).toBe('Resume Home internet');
+    expect(
+      itemText({
+        '@type': 'ProductOrderItem',
+        action: 'modify',
+        product,
+        productOffering: { '@type': 'ProductOfferingRef', id: 'offering', name: 'Fiber' },
+      }),
+    ).toBe('Change Home internet to Fiber');
+    expect(
+      itemText({
+        '@type': 'ProductOrderItem',
+        action: 'modify',
+        product: { ...product, realizingResource: [{ '@type': 'ResourceRef', id: 'number' }] },
+      }),
+    ).toBe('Change number of Home internet');
+    expect(
+      itemText({
+        '@type': 'ProductOrderItem',
+        action: 'add',
+        productOffering: { '@type': 'ProductOfferingRef', id: 'offering', name: 'Fiber' },
+      }),
+    ).toBe('Add Fiber');
+    expect(itemText({ '@type': 'ProductOrderItem', action: 'delete', product })).toBe(
+      'End Home internet',
+    );
+  });
+
+  it('reads the last page first and walks backwards without replacing rows with skeletons', async () => {
+    let finish: (() => void) | undefined;
+    const { calls } = backend({
+      [`GET ${ORDERS}?offset=0&limit=1&fields=id`]: () => json([{ id: O1 }], { total: 52 }),
+      [`GET ${ORDERS}?offset=2&limit=50`]: () =>
+        json(
+          [
+            ...Array.from({ length: 48 }, (_, i) => ({
+              ...ADD,
+              id: `${(i + 100).toString(16).padStart(8, '0')}-0000-4000-8000-000000000001`,
+            })),
+            ADD,
+            PENDING,
+          ],
+          { total: 52 },
+        ),
+      [`GET ${ORDERS}?offset=0&limit=2`]: () =>
+        new Promise((resolve) => {
+          finish = () =>
+            resolve(
+              json(
+                [
+                  { ...ADD, id: O1.replace('c0000001', 'c0000003') },
+                  { ...ADD, id: O1.replace('c0000001', 'c0000004') },
+                ],
+                { total: 52 },
+              ),
+            );
+        }),
+    });
+    open();
+    await screen.findByText('Showing 1–50 of 52');
+    const rows = screen.getAllByRole('row');
+    // The newest fixture is presented before the older one.
+    expect(
+      screen.getByText('C0000002').compareDocumentPosition(screen.getByText('C0000001')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(calls.filter((call) => call.includes('productOrder?offset'))).toEqual([
+      `GET ${ORDERS}?offset=0&limit=1&fields=id`,
+      `GET ${ORDERS}?offset=2&limit=50`,
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(finish).toBeTypeOf('function'));
+    expect(screen.queryByLabelText('Loading')).toBeNull();
+    expect(screen.getByText('C0000002')).toBeTruthy();
+    expect(screen.getAllByRole('row').length).toBe(rows.length);
+    if (!finish) throw new Error('Older page was not requested');
+    finish();
+    await screen.findByText('Showing 51–52 of 52');
+    expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+    await screen.findByText('Showing 1–50 of 52');
+  });
+
+  it('looks up each unnamed product only once in the dialog and shows its target status', async () => {
+    const { calls } = backend({
+      [`GET ${ORDERS}?offset=0&limit=50`]: () =>
+        json(
+          [
+            {
+              ...ADD,
+              productOrderItem: [
+                { id: '1', action: 'modify', product: { id: P1, status: 'suspended' } },
+                { id: '2', action: 'delete', product: { id: P1 } },
+                {
+                  id: '4',
+                  action: 'modify',
+                  product: { id: P1 },
+                  productOffering: { id: 'fiber', name: 'Fiber' },
+                },
+                {
+                  id: '5',
+                  action: 'modify',
+                  product: { id: P1, realizingResource: [{ id: 'number' }] },
+                },
+                { id: '6', action: 'add', productOffering: { id: 'fiber', name: 'Fiber' } },
+                {
+                  id: '3',
+                  action: 'modify',
+                  product: {
+                    id: P1.replace('d0000001', 'd0000002'),
+                    name: 'Snapshot',
+                    status: 'active',
+                  },
+                },
+              ],
+            },
+          ],
+          { total: 1 },
+        ),
+      [`GET ${CANCELS}?productOrder.id=${O1}&offset=0&limit=100`]: () => json([], { total: 0 }),
+    });
+    open();
+    await screen.findByText('C0000001');
+    expect(calls.filter((call) => call.includes('/productInventory/'))).toEqual([]);
+    const dialog = await openOrder('C0000001');
+    expect(await within(dialog).findByText('Suspend Home internet')).toBeTruthy();
+    expect(within(dialog).getByText('End Home internet')).toBeTruthy();
+    expect(within(dialog).getByText('Resume Snapshot')).toBeTruthy();
+    expect(within(dialog).getByText('Change Home internet to Fiber')).toBeTruthy();
+    expect(within(dialog).getByText('Change number of Home internet')).toBeTruthy();
+    expect(within(dialog).getByText('Add Fiber')).toBeTruthy();
+    expect(within(dialog).getByText('Target status')).toBeTruthy();
+    expect(within(dialog).getByText('Suspended')).toBeTruthy();
+    expect(calls.filter((call) => call.includes('/productInventory/'))).toEqual([
+      `GET /tmf-api/productInventory/v5/product/${P1}`,
+    ]);
+  });
+
   it('lists every order with its subscriber, state and items, one page request', async () => {
     const { calls } = backend({
       [`GET ${ORDERS}?offset=0&limit=50`]: () => json([ADD, PENDING], { total: 2 }),
@@ -74,11 +241,14 @@ describe('orders list', () => {
       `/subscribers/${A1}`,
     );
     expect(within(row).getByText('completed')).toBeTruthy();
-    expect(within(row).getByText('add Basic 10')).toBeTruthy();
+    expect(within(row).getByText('Add Basic 10')).toBeTruthy();
     expect(within(row).getByText('2026-10-05')).toBeTruthy();
-    expect(screen.getByText('delete product D0000001')).toBeTruthy();
+    expect(screen.getByText('End product D0000001')).toBeTruthy();
     expect(screen.getByText('Showing 1–2 of 2')).toBeTruthy();
-    expect(calls.filter((c) => c.includes('productOrder?offset'))).toHaveLength(1);
+    expect(calls.filter((c) => c.includes('productOrder?offset'))).toEqual([
+      `GET ${ORDERS}?offset=0&limit=1&fields=id`,
+      `GET ${ORDERS}?offset=0&limit=2`,
+    ]);
   });
 
   it('filters by state and by the account in the URL, with a removable chip', async () => {
@@ -103,7 +273,7 @@ describe('orders list', () => {
     await screen.findByText('C0000002'); // still filtered by state, no longer by account
     expect(window.location.search).toBe('');
     expect(calls).toContain(
-      `GET ${ORDERS}?billingAccount.id=${A1}&state=inProgress&offset=0&limit=50`,
+      `GET ${ORDERS}?billingAccount.id=${A1}&state=inProgress&offset=0&limit=1`,
     );
   });
 
@@ -195,6 +365,7 @@ function writes(order: object, extra: Record<string, Handler> = {}) {
   const id = (order as { id: string }).id;
   return backend({
     [`GET ${ORDERS}?offset=0&limit=50`]: () => json([order], { total: 1 }),
+    [`GET ${ORDERS}/${id}`]: () => json(order),
     [`GET ${CANCELS}?productOrder.id=${id}&offset=0&limit=100`]: () => json([], { total: 0 }),
     [`GET /internal/v1/prepaid/command?billingAccount.id=${A1}&offset=0&limit=100`]: () =>
       json([], { total: 0 }),
@@ -229,6 +400,42 @@ const press = (dialog: HTMLElement, name: string) =>
   fireEvent.click(within(dialog).getByRole('button', { name }));
 
 describe('order writes', () => {
+  it('reloads only the changed order, keeps the dialog and resets saved fields', async () => {
+    let release: (() => void) | undefined;
+    const updated = { ...DRAFT, description: 'Saved description' };
+    const { calls } = writes(DRAFT, {
+      [`PATCH ${ORDERS}/${O1}`]: () => json(updated),
+      [`GET ${ORDERS}/${O1}`]: () =>
+        new Promise((resolve) => {
+          release = () => resolve(json(updated));
+        }),
+    });
+    open();
+    const dialog = await openOrder('C0000001');
+    press(dialog, 'Edit details');
+    fireEvent.change(within(dialog).getByLabelText('Order description'), {
+      target: { value: 'Saved description' },
+    });
+    const before = calls.filter((call) => call.startsWith(`GET ${ORDERS}?offset`));
+    press(dialog, 'Save details');
+    await waitFor(() => expect(release).toBeTypeOf('function'));
+    expect(screen.queryByLabelText('Loading')).toBeNull();
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    if (!release) throw new Error('Changed order was not requested');
+    release();
+    const saved = await within(dialog).findByText('Details saved');
+    expectUi('ui.orders.detailsSaved');
+    expect(saved.closest('footer')).toBeTruthy();
+    expect(calls.filter((call) => call === `GET ${ORDERS}/${O1}`)).toHaveLength(1);
+    expect(calls.filter((call) => call.startsWith(`GET ${ORDERS}?offset`))).toEqual(before);
+    expect((within(dialog).getByLabelText('Order description') as HTMLInputElement).value).toBe(
+      'Saved description',
+    );
+    expect(
+      (within(dialog).getByRole('button', { name: 'Save details' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
   it('submits only the metadata form from Enter and keeps its primary in the fixed footer', async () => {
     const { fetchMock } = writes(DRAFT, { [`PATCH ${ORDERS}/${O1}`]: () => json({ id: O1 }) });
     open();
@@ -243,7 +450,8 @@ describe('order writes', () => {
       target: { value: 'New text' },
     });
     fireEvent.keyDown(within(dialog).getByLabelText('Order description'), { key: 'Enter' });
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await within(dialog).findByText('Details saved')).toBeTruthy();
+    expect(screen.getByRole('dialog')).toBe(dialog);
     expect(sent(fetchMock).map(({ call, body }) => ({ call, body }))).toEqual([
       { call: `PATCH ${ORDERS}/${O1}`, body: JSON.stringify({ description: 'New text' }) },
     ]);
@@ -352,7 +560,8 @@ describe('order writes', () => {
     fireEvent.change(within(dialog).getByLabelText('Order category'), { target: { value: '' } });
     fireEvent.change(within(dialog).getByLabelText('Order priority'), { target: { value: '0' } });
     press(dialog, 'Save details');
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await within(dialog).findByText('Details saved')).toBeTruthy();
+    expect(screen.getByRole('dialog')).toBe(dialog);
     expect(sent(fetchMock)[0]?.call).toBe(`PATCH ${ORDERS}/${O1}`);
     expect(JSON.parse(sent(fetchMock)[0]?.body ?? '')).toEqual({
       description: 'New text',
@@ -429,6 +638,7 @@ describe('order writes', () => {
       expectUi('ui.orders.deleteDraft');
       press(dialog, 'Delete order');
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(await screen.findByText('No orders')).toBeTruthy();
       expect(sent(fetchMock)[0]).toEqual({
         call: `DELETE ${ORDERS}/${O1}`,
         body: undefined,

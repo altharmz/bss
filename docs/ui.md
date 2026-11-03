@@ -429,13 +429,15 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 
 Ledger v2: explicit order StatusPill.
 
-Route `/orders`. The list is read-only, the dialog writes (slice 10, below). TMF622 `productOrder` pages of 50 as served (oldest first), state
+Route `/orders`. The list is read-only, the dialog writes (slice 10, below). TMF622 `productOrder` pages of 50, newest first: read `X-Total-Count`, fetch the last 50 matching rows, reverse them, and walk backwards through earlier pages. The final page uses only the remaining rows. Existing rows stay mounted during paging; only the first load shows a skeleton. After a write only the changed order is read again (deleted rows are removed), alongside the existing navigation count refresh. State
 filter, `?account=<id>` chip (the card's "Orders" link `ui.subscriber.orders`). Columns: order id,
 subscriber (links to the card), state, item actions, requested start, created, completed or
 cancelled. A row opens the dialog: header fields, items (action, offering, product, state,
 tax-included price), `productOrderErrorMessage`, the order's `cancelProductOrder` rows, and for an
 `inProgress` order with a prepaid command a link to `/prepaid-commands?account=`. Design:
 [next-slices-design.md](next-slices-design.md) section 9.
+
+Items read Suspend/Resume <product>, Change <product> to <offering>, Change number of <product>, Add <offering>, or End <product>. Snapshot names take precedence; only the open dialog resolves missing product names through one TMF637 GET per distinct product. Target status appears beside item state. Save details reloads the order, keeps the dialog and edit panel open, resets the saved fields and shows “Details saved” in the footer state slot (`ui.orders.detailsSaved`). Write bodies are unchanged.
 
 Dialog writes (`ui.orders.cancel`, `ui.orders.editDetails`, `ui.orders.submitDraft`,
 `ui.orders.editDraft`, `ui.orders.deleteDraft`, `ui.orders.draftViaApi`; design section 10): **Cancel
