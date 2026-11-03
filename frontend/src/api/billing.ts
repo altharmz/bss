@@ -52,6 +52,7 @@ export async function loadSettings(kind: SettingKind, signal: AbortSignal): Prom
 export function usedBy(kind: SettingKind, id: string, accounts: Account[]): number {
   return accounts.filter((account) => {
     const b = account.billing;
+    if (kind === 'cycles' && id === BUILT_IN_CYCLE) return !b?.cycleId;
     if (!b) return false;
     if (kind === 'cycles') return b.cycleId === id;
     if (kind === 'formats') return b.formatId === id;

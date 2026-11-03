@@ -3,6 +3,7 @@ import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useRef, useState, type ReactNode } from 'react';
 import type { PrepaidBalance } from '../api/bss';
+import { loadAccountTotals } from '../api/balances';
 import { explain } from '../api/client';
 import { uncertain } from './submissionKey';
 import {
@@ -19,7 +20,7 @@ import { businessDate, clockTime, lastDay } from '../format/dates';
 import { shortId } from '../format/ids';
 import { formatCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, Modal, Panel, StatusPill, TextInput, useToast } from '../ui/kit';
+import { Button, Modal, Panel, StatusPill, TextInput, useToast, KeyValue } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -86,28 +87,65 @@ export function BalanceActions({
   /** The card owns the selected action dialog across list reloads. */
   onOpen: (id: string) => void;
 }) {
+  const totals = useResource(`prepaid-account-total:${accountId}:${version}`, (signal) =>
+    loadAccountTotals(accountId, signal),
+  );
+  const summary = (
+    <Panel title="Account total">
+      <div className="prepaid-account-total" data-ui="ui.subscriber.prepaid.accountTotal">
+        {totals.status === 'loading' && <SkeletonRows columns={COLUMNS} rows={1} />}
+        {totals.status === 'error' && (
+          <ErrorBlock
+            title="Failed to load the account total"
+            error={totals.error}
+            onRetry={totals.retry}
+          />
+        )}
+        {totals.status === 'ok' && (
+          <KeyValue
+            items={[
+              [
+                'Accumulated balance',
+                totals.data[0] ? (
+                  <Amount cents={totals.data[0].cents} currency={totals.data[0].currency} />
+                ) : (
+                  '—'
+                ),
+              ],
+            ]}
+          />
+        )}
+      </div>
+    </Panel>
+  );
   if (balance.status === 'ok' && balance.data !== null) {
     return (
-      <ActionsPanel
-        accountId={accountId}
-        bucketId={balance.data.bucketId}
-        version={version}
-        onOpen={onOpen}
-      />
+      <>
+        {summary}
+        <ActionsPanel
+          accountId={accountId}
+          bucketId={balance.data.bucketId}
+          version={version}
+          onOpen={onOpen}
+        />
+      </>
     );
   }
   return (
-    <Panel title="Balance actions" subtitle="TMF654 balanceActionHistory">
-      {balance.status === 'error' ? (
-        <ErrorBlock
-          title="Failed to load the balance actions"
-          error={balance.error}
-          onRetry={balance.retry}
-        />
-      ) : (
-        <SkeletonRows columns={COLUMNS} />
-      )}
-    </Panel>
+    <>
+      {summary}
+      <Panel title="Balance actions" subtitle="TMF654 balanceActionHistory">
+        {balance.status === 'error' ? (
+          <ErrorBlock
+            title="Failed to load the balance actions"
+            error={balance.error}
+            onRetry={balance.retry}
+          />
+        ) : (
+          <SkeletonRows columns={COLUMNS} />
+        )}
+      </Panel>
+    </>
   );
 }
 

@@ -215,6 +215,7 @@ describe('subscribers list', () => {
   it('focuses the search with slash except while editing a field', async () => {
     backend();
     await open();
+    await screen.findByText('Ivan Petrov'); // the list has loaded: the search input is final
     const search = screen.getByPlaceholderText('Name, BA id or subscriber no.');
     fireEvent.keyDown(document.body, { key: '/' });
     expect(document.activeElement).toBe(search);

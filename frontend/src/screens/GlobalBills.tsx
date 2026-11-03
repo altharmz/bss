@@ -29,7 +29,7 @@ const BILL_COLUMNS: Column[] = [
   { key: 'account', label: 'Subscriber', width: 'minmax(0, 1fr)' },
   { key: 'date', label: 'Billing date', width: '110px', mono: true },
   { key: 'state', label: 'State', width: '130px' },
-  { key: 'amount', label: 'Amount due', width: '120px', align: 'right', mono: true },
+  { key: 'amount', label: 'Total', width: '120px', align: 'right', mono: true },
   { key: 'kind', label: 'Kind', width: '90px' },
 ];
 

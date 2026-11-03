@@ -92,6 +92,24 @@ const usage = async (name: string, count: string) =>
   waitFor(() => expect(within(rowOf(name)).getByText(count)).toBeTruthy());
 
 describe('billing settings', () => {
+  it('counts accounts without a cycle reference under built-in Monthly', async () => {
+    backend({
+      [`GET ${ACC}/billingAccount?${PAGE}`]: () =>
+        json(
+          [
+            USER,
+            PLAIN,
+            accountBody('a3', { id: 'c3', name: 'Default' }, { billStructure: {} }),
+            accountBody('a4', { id: 'c4', name: 'No structure' }),
+          ],
+          { total: 4 },
+        ),
+    });
+    await open();
+    await screen.findByText('Monthly billing');
+    await usage('Monthly billing', '3');
+    await usage('Corporate monthly', '1');
+  });
   it('lists the cycle specifications; the built-in one is read-only', async () => {
     backend();
     await open();

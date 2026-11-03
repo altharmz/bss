@@ -92,6 +92,8 @@ describe('bills screen', () => {
     open('/bills');
     await screen.findByText('Ivan Ivanov');
     expectUi('ui.bills');
+    expect(screen.getByRole('columnheader', { name: 'Total' })).toBeTruthy();
+    expect(screen.queryByRole('columnheader', { name: 'Amount due' })).toBeNull();
     const rows = screen.getAllByRole('row');
     expect(rows.findIndex((r) => within(r).queryByText('Olga Kuznetsova'))).toBeLessThan(
       rows.findIndex((r) => within(r).queryByText('Ivan Ivanov')),

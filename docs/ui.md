@@ -170,6 +170,10 @@ the PATCH). Design: [next-slices-design.md](next-slices-design.md) section 16.
 
 ### Balance actions (`ui.subscriber.prepaid.history`, `ui.subscriber.prepaid.historyDetail`) - `screens/PrepaidHistory.tsx`
 
+The prepaid tab also shows Account total (`ui.subscriber.prepaid.accountTotal`): a KeyValue
+for the account's TMF654 accumulated balance, independently loaded by `partyAccount.id`,
+with its currency and separate loading/error/retry handling.
+
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: balanceAction StatusPill keeps custom labels; signed Amounts stay neutral for credits.
@@ -526,6 +530,8 @@ is the financial-account form plus a **Financial account** select of the owner's
 
 ### Billing settings (`ui.billingSettings.cycles|formats|media`) - `screens/BillingSettings.tsx`
 
+Built-in Monthly's Used by count includes loaded accounts without a cycle specification reference.
+
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: built-in settings use an attribute Tag; destructive actions use quiet negative buttons.
@@ -546,12 +552,15 @@ billPresentationMedia`, `PATCH .../billingAccount/{id}`. Design:
 
 ### Bills (`ui.bills`) - `screens/GlobalBills.tsx`, `screens/BillLinks.tsx`
 
+Both bill lists and the shared detail label the original bill amount **Total**, including
+settled bills; **Remaining** continues to identify the unpaid amount in details.
+
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: bill StatusPill; hold actions use quiet negative buttons.
 
 Reads plus the existing bill dialog. Route `/bills`, sidebar Billing > Bills (no count): tabs **Bills** |
-**Bill cycles**. Bills: bill no., subscriber (link), billing date, state, amount due, kind (`runType`:
+**Bill cycles**. Bills: bill no., subscriber (link), billing date, state, total, kind (`runType`:
 onCycle/offCycle); filters: state (server), account chip (`?account=<id>`, sent as `billingAccount.id`,
 `ui.bills.accountChip`) and a billing date applied client side. A row opens the bill dialog (hold/release as
 on the card), whose **Related** section (`ui.bills.links`) has **Bill cycle** (`GET billCycle/{id}`,
@@ -584,7 +593,10 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 Ledger v2: bucket and balanceAction StatusPill retain the action-specific note labels.
 
 Reads only, TMF654. Route `/balances`, sidebar Billing > Balances (no count). Tabs **Buckets** |
-**Top-ups** | **Adjustments** | **Holds** | **Transfers**, each with a status filter
+**Account totals** | **Top-ups** | **Adjustments** | **Holds** | **Transfers**. Account totals
+lists `accumulatedBalance` records independently of buckets and opens `GET accumulatedBalance/{id}`
+in a KeyValue detail; both show the returned currency. The account filter applies to totals;
+they have no status filter. The other tabs each have a status filter
 (`ui.balances.status`; buckets: active, suspended, expired; actions: created, completed,
 cancelled, failed) and an account chip (`?account=<id>`, `ui.balances.accountChip`, sent as
 `partyAccount.id`). Buckets: `GET bucket` joined with `GET accumulatedBalance` by account
