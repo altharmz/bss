@@ -1,9 +1,13 @@
 """Real Git integration coverage in disposable task worktrees and bare remotes."""
 
 import json
+import os
 import shutil
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
+from task_runtime import InvalidRuntime
 from test_task_quality import QualityTests
 
 
@@ -122,6 +126,22 @@ class GitTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("GIT_NAMESPACE", result.stderr)
         self.assertNotIn("unexpected", result.stderr)
+
+    def test_every_lifecycle_entry_point_shares_the_git_override_check(self):
+        import task_git
+
+        # The commit hook itself runs with GIT_DIR and friends: start from a clean environment.
+        clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        with patch.dict(
+            os.environ, {**clean, "GIT_EDITOR": "true", "GIT_PAGER": "cat"}, clear=True
+        ):
+            task_git.require_no_git_overrides()
+        with patch.dict(os.environ, {**clean, "GIT_DIR": "x"}, clear=True):
+            with self.assertRaisesRegex(InvalidRuntime, "GIT_DIR"):
+                task_git.require_no_git_overrides()
+        scripts = Path(task_git.__file__).parent
+        for name in ("task_pr.py", "task_finish.py", "task_git.py"):
+            self.assertIn("require_no_git_overrides()", (scripts / name).read_text(), name)
 
     def test_message_and_files_may_come_from_files(self):
         self.change()

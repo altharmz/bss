@@ -17,7 +17,7 @@ from pathlib import Path
 import start_task
 import task_pr
 import task_telemetry
-from task_git import require, run
+from task_git import require, require_no_git_overrides, run
 from task_quality import context, paths, query, review
 from task_runtime import InvalidRuntime, unique_fields
 from task_telemetry import record
@@ -452,10 +452,7 @@ def main():
     started = time.monotonic()
     try:
         require(operation in {"merge-task", "finish-task"}, "unknown operation")
-        require(
-            not any(k.startswith("GIT_") and k != "GIT_PAGER" for k in os.environ),
-            "unset inherited GIT_* overrides",
-        )
+        require_no_git_overrides()
         require(os.environ.get("GH_HOST", "github.com") == "github.com", "unexpected GitHub host")
         if operation == "merge-task":
             root, primary, task, slot, metadata = context()

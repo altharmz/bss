@@ -12,7 +12,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from task_git import hooks, push, require
+from task_git import hooks, push, require, require_no_git_overrides
 from task_quality import context, query, review
 from task_runtime import InvalidRuntime
 from task_telemetry import record
@@ -313,10 +313,7 @@ def main():
     started = time.monotonic()
     try:
         require(operation in {"create-pr", "check-pr"}, "unknown operation")
-        require(
-            not any(k.startswith("GIT_") and k != "GIT_PAGER" for k in os.environ),
-            "unset inherited GIT_* overrides",
-        )
+        require_no_git_overrides()
         require(
             os.environ.get("GH_HOST", "github.com") == "github.com",
             "unexpected GitHub host; unset GH_HOST",

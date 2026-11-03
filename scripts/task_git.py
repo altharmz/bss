@@ -25,6 +25,17 @@ def require(condition, message):
 PRESENTATION = {"GIT_PAGER", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR"}
 
 
+def require_no_git_overrides():
+    refused = sorted(
+        key for key in os.environ if key.startswith("GIT_") and key not in PRESENTATION
+    )
+    require(
+        not refused,
+        f"unset inherited GIT_* overrides: {', '.join(refused)} "
+        f"({', '.join(sorted(PRESENTATION))} are presentation-only)",
+    )
+
+
 def run(root, *args):
     # Hooks start their own normal Make invocation. Outer command-line assignments
     # must not override its tests, and inherited dry-run flags must not skip them.
@@ -240,14 +251,7 @@ def main():
     started = time.monotonic()
     try:
         require(operation in {"commit", "push", "sync-task"}, "unknown operation")
-        refused = sorted(
-            key for key in os.environ if key.startswith("GIT_") and key not in PRESENTATION
-        )
-        require(
-            not refused,
-            f"unset inherited GIT_* overrides: {', '.join(refused)} "
-            f"({', '.join(sorted(PRESENTATION))} are presentation-only)",
-        )
+        require_no_git_overrides()
         root, primary, task, slot, data = context()
         record(task, event_operation + "-attempt", 0, 0, slot=slot)
         review(root, primary, task, slot, data)
