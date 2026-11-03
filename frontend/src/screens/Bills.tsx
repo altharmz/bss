@@ -16,7 +16,7 @@ import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { clockTime, businessDate, lastDay } from '../format/dates';
 import { accountLabel } from '../format/ids';
-import { formatCents, parseAmount, toCents } from '../format/money';
+import { formatCents, parseAmount, positiveAmountError, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Button, Dialog, Field, MoneyField, Modal, Panel, StatusPill, TextInput } from '../ui/kit';
 import { Id } from '../ui/Id';
@@ -334,6 +334,8 @@ export function RecordPaymentModal({
   const [method, setMethod] = useState(METHODS[0] ?? 'cash');
   const [other, setOther] = useState('');
   const [lettering, setLettering] = useState(false);
+  const [correlatorId, setCorrelatorId] = useState('');
+  const [description, setDescription] = useState('');
   const [items, setItems] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -382,6 +384,8 @@ export function RecordPaymentModal({
         amount,
         currency: account.currency,
         method: methodName,
+        correlatorId,
+        description,
         items: chosen.map((x) => ({ billId: x.bill.id, amount: x.amount ?? '0.00' })),
       });
       onRecorded(
@@ -451,8 +455,8 @@ export function RecordPaymentModal({
               }}
             />
           </Field>
-          {amountText.trim() !== '' && amount === null && (
-            <Note tone="negative">Enter an amount with at most 2 decimals.</Note>
+          {positiveAmountError(amountText) && (
+            <Note tone="negative">{positiveAmountError(amountText)}</Note>
           )}
         </section>
         <section>
@@ -481,7 +485,23 @@ export function RecordPaymentModal({
             </Field>
           )}
         </section>
-        <section>
+        <section className="money-fields">
+          <div className="money-fields" data-ui="ui.subscriber.recordPayment.details">
+            <Field label="External reference (optional)">
+              <TextInput
+                aria-label="External reference"
+                value={correlatorId}
+                onChange={(event) => setCorrelatorId(event.target.value)}
+              />
+            </Field>
+            <Field label="Description (optional)">
+              <TextInput
+                aria-label="Payment description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+            </Field>
+          </div>
           <label className="bss-check">
             <input
               type="checkbox"

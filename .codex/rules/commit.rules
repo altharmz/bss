@@ -1,0 +1,16 @@
+# Standing owner authorization: commits use the checked Make lifecycle in task worktrees.
+# Loaded by Codex at startup when this project's .codex layer is trusted.
+prefix_rule(
+    pattern = ["make", "commit"],
+    decision = "allow",
+    justification = "Task commits are permanently authorized; Make validates explicit files and runs normal hooks.",
+    match = [
+        "make commit MESSAGE='Finish the slice' FILES='[\"docs/ui.md\"]'",
+        "make commit DRY_RUN=1 MESSAGE='Check selection' FILES='[\"docs/ui.md\"]'",
+    ],
+    not_match = [
+        "git commit -m bypass",
+        "make push",
+        "sh -c 'make commit'",
+    ],
+)

@@ -557,6 +557,13 @@ items:
 
   - {id: ui.subscriber.undoStatusChange, area: ui, stage: 5, title: "Undo today’s suspension or resumption"}
 
+  - {id: ui.subscriber.prepaid.topup.number, area: ui, stage: 5, title: "Optional active number for top-up"}
+  - {id: ui.subscriber.prepaid.reason, area: ui, stage: 5, title: "Balance action reason, required for adjustments"}
+  - {id: ui.subscriber.recordPayment.details, area: ui, stage: 5, title: "Payment external reference and description"}
+  - {id: ui.subscriber.refund.description, area: ui, stage: 5, title: "Required refund description"}
+  - {id: ui.subscriber.payments.recordRefund, area: ui, stage: 5, title: "Record refund from subscriber Payments header"}
+  - {id: ui.payments.detail.recordRefund, area: ui, stage: 5, title: "Record account-level refund from payment detail"}
+
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}
   - {id: ui.notFound, area: ui, reason: "not-found page, not a product feature"}

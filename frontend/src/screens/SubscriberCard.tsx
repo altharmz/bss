@@ -658,7 +658,21 @@ function Card({
       {pane(
         'payments',
         <>
-          <PaymentsPanel accountId={account.id} version={version} onCount={setPaymentCount} />
+          <PaymentsPanel
+            accountId={account.id}
+            version={version}
+            onCount={setPaymentCount}
+            onChanged={reload}
+            refundAction={
+              <RefundAction
+                account={account}
+                settlement={settlement.status === 'ok' ? settlement.data : null}
+                onChanged={reload}
+                label="Record refund"
+                ui="ui.subscriber.payments.recordRefund"
+              />
+            }
+          />
           <RefundsPanel accountId={account.id} version={version} onCount={setRefundCount} />
         </>,
       )}

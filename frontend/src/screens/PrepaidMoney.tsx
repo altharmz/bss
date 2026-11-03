@@ -9,13 +9,16 @@ import {
   type PrepaidBalance,
 } from '../api/bss';
 import { explain } from '../api/client';
+import { useResource } from '../api/useResource';
+import { loadOwnNumbers } from '../api/transfer';
 import { useSystemContext } from '../app/context';
 import { isIsoDate } from '../format/dates';
-import { formatCents, parseAmount, toCents } from '../format/money';
+import { formatCents, parseAmount, positiveAmountError, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
 import { Button, Dialog, Field, MoneyField, Segmented, TextInput } from '../ui/kit';
 import { uncertain, useSubmissionKey } from './submissionKey';
+import { ErrorBlock } from '../ui/states';
 
 // The money forms of a prepaid account: top-up, adjustment (credit or debit) and operator
 // hold (docs/decisions/prepaid.md P4d-P4f, frontend.md P6b). Each submission carries one
@@ -74,6 +77,7 @@ export function PrepaidMoneyModal({
   const [method, setMethod] = useState(METHODS[0] ?? 'cash');
   const [other, setOther] = useState('');
   const [reason, setReason] = useState('');
+  const [numberId, setNumberId] = useState('');
   const [expiresOn, setExpiresOn] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -95,6 +99,7 @@ export function PrepaidMoneyModal({
     cents > 0 &&
     (!limited || cents <= spendable) &&
     (form !== 'topup' || methodName !== '') &&
+    (form !== 'adjust' || reason.trim() !== '') &&
     (form !== 'hold' || (expiryShape && !expiryPast));
 
   async function submit() {
@@ -111,6 +116,7 @@ export function PrepaidMoneyModal({
         amount,
         method: methodName,
         reason,
+        numberId,
         expiresOn: form === 'hold' && expiry !== '' ? expiry : null,
       },
       context.timeZone,
@@ -217,15 +223,16 @@ export function PrepaidMoneyModal({
               onChange={(event) => setAmountText(event.target.value)}
             />
           </Field>
-          {amountText.trim() !== '' && amount === null && (
-            <Note tone="negative">Enter an amount with at most 2 decimals.</Note>
+          {positiveAmountError(amountText) && (
+            <Note tone="negative">{positiveAmountError(amountText)}</Note>
           )}
           {limited && amount !== null && cents > spendable && (
             <Note tone="negative">Enter at most the available {formatCents(spendable)}.</Note>
           )}
         </section>
         {form === 'topup' && (
-          <section>
+          <section className="money-fields">
+            <TopupNumber accountId={account.id} value={numberId} onChange={setNumberId} />
             <Field label="Payment method">
               <Segmented
                 label="Payment method"
@@ -264,8 +271,11 @@ export function PrepaidMoneyModal({
             {expiryPast && <Note tone="negative">Enter today or a later business date.</Note>}
           </section>
         )}
-        <section>
-          <Field label="Reason (optional)">
+        <section data-ui="ui.subscriber.prepaid.reason">
+          <Field
+            label={form === 'adjust' ? 'Reason' : 'Reason (optional)'}
+            error={form === 'adjust' && reason.trim() === '' ? 'Enter a reason.' : undefined}
+          >
             <TextInput
               aria-label="Reason"
               value={reason}
@@ -285,5 +295,45 @@ export function PrepaidMoneyModal({
         </div>
       </fieldset>
     </Dialog>
+  );
+}
+
+function TopupNumber({
+  accountId,
+  value,
+  onChange,
+}: {
+  accountId: string;
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const numbers = useResource(`topup-numbers:${accountId}`, (signal) =>
+    loadOwnNumbers(accountId, signal),
+  );
+  return (
+    <div data-ui="ui.subscriber.prepaid.topup.number">
+      <Field label="Number (optional)">
+        <select
+          className="bss-input"
+          aria-label="Number"
+          value={value}
+          disabled={numbers.status !== 'ok'}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="">
+            {numbers.status === 'loading' ? 'Loading numbers…' : 'No number'}
+          </option>
+          {numbers.status === 'ok' &&
+            numbers.data.map((number) => (
+              <option key={number.id} value={number.id}>
+                {number.value}
+              </option>
+            ))}
+        </select>
+      </Field>
+      {numbers.status === 'error' && (
+        <ErrorBlock title="Failed to load numbers" error={numbers.error} onRetry={numbers.retry} />
+      )}
+    </div>
   );
 }

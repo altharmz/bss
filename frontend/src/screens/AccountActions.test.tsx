@@ -53,6 +53,23 @@ async function until(check: () => boolean) {
 }
 
 describe('refunds', () => {
+  it('requires a nonblank description for a refund', () => {
+    const { calls } = stubFetch({});
+    render(
+      <RefundModal account={account} initialLimit={10025} onClose={vi.fn()} onRecorded={vi.fn()} />,
+    );
+    expectUi('ui.subscriber.refund.description');
+    expect(screen.getByText('Enter a refund description.')).toBeTruthy();
+    const save = screen.getByRole('button', { name: 'Record refund' });
+    expect(save).toHaveProperty('disabled', true);
+    fireEvent.change(screen.getByLabelText('Refund description'), { target: { value: '   ' } });
+    fireEvent.click(save);
+    expect(calls).toEqual([]);
+    fireEvent.change(screen.getByLabelText('Refund description'), {
+      target: { value: 'Returned deposit' },
+    });
+    expect(save).toHaveProperty('disabled', false);
+  });
   it('offers the lesser credit on closed accounts and pins the exact refund request', async () => {
     const { fetchMock } = stubFetch({ [`POST ${REFUNDS}`]: () => json({ id: 'r1' }) });
     const changed = vi.fn();
@@ -93,6 +110,9 @@ describe('refunds', () => {
     const save = screen.getByRole('button', { name: 'Record refund' });
     expect((save as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('Refund method name'), { target: { value: 'Cheque' } });
+    fireEvent.change(screen.getByLabelText('Refund description'), {
+      target: { value: 'Returned deposit' },
+    });
     fireEvent.click(save);
     fireEvent.click(save);
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -116,6 +136,9 @@ describe('refunds', () => {
     render(
       <RefundModal account={account} initialLimit={10025} onClose={vi.fn()} onRecorded={vi.fn()} />,
     );
+    fireEvent.change(screen.getByLabelText('Refund description'), {
+      target: { value: 'Returned deposit' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Record refund' }));
     await screen.findByText('Refundable credit 10.00 USD');
     expect((screen.getByLabelText('Refund amount') as HTMLInputElement).value).toBe('100.25');
@@ -133,6 +156,9 @@ describe('refunds', () => {
     render(
       <RefundModal account={account} initialLimit={10025} onClose={vi.fn()} onRecorded={vi.fn()} />,
     );
+    fireEvent.change(screen.getByLabelText('Refund description'), {
+      target: { value: 'Returned deposit' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Record refund' }));
     await screen.findByText(/check Recorded refunds/);
     expect(

@@ -235,6 +235,10 @@ test('capture the admin pages at both design widths', async ({ page }) => {
             await page.getByRole('button', { name: action, exact: true }).click();
             const money = page.getByRole('dialog', { name: title, exact: true });
             await money.getByLabel('Amount', { exact: true }).fill('5.00');
+            if (action === 'Top up')
+              await expect(money.getByLabel('Number', { exact: true })).toBeEnabled();
+            if (action === 'Adjust')
+              await money.getByLabel('Reason', { exact: true }).fill('Correction');
             await page.screenshot({
               path: `/web/.shots/dialog-money-${action.toLowerCase().replace(' ', '-')}-${width}.png`,
             });
@@ -332,6 +336,8 @@ test('capture the admin pages at both design widths', async ({ page }) => {
           await page.getByRole('menuitem', { name: 'Record payment', exact: true }).click();
           const payment = page.getByRole('dialog', { name: 'Record payment' });
           await payment.getByLabel('Amount received').fill('42.10');
+          await payment.getByLabel('External reference').fill('BANK-77');
+          await payment.getByLabel('Payment description').fill('Cash at the desk');
           await page.screenshot({ path: `/web/.shots/dialog-record-payment-${width}.png` });
           await payment.getByRole('button', { name: 'Cancel' }).click();
           await page.route(
@@ -379,6 +385,18 @@ test('capture the admin pages at both design widths', async ({ page }) => {
             path: `/web/.shots/${name}-${tab.toLowerCase().replace(' ', '-')}-${width}.png`,
             fullPage: true,
           });
+          if (name === 'card-postpaid' && tab === 'Payments') {
+            await page.locator('[data-ui="ui.subscriber.payments.recordRefund"]').click();
+            const refund = page.getByRole('dialog', { name: 'Record refund' });
+            await refund.getByLabel('Refund description').fill('Returned deposit');
+            await page.screenshot({ path: `/web/.shots/dialog-record-refund-${width}.png` });
+            await refund.getByRole('button', { name: 'Close', exact: true }).last().click();
+            await page.locator('[data-ui="ui.subscriber.payments"] .clickable').first().click();
+            const detail = page.getByRole('dialog');
+            await expect(detail.getByRole('button', { name: 'Record refund' })).toBeVisible();
+            await page.screenshot({ path: `/web/.shots/dialog-payment-detail-${width}.png` });
+            await detail.getByRole('button', { name: 'Close', exact: true }).last().click();
+          }
         }
       }
     }

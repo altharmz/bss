@@ -15,7 +15,7 @@ import {
 import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
-import { businessDate, clockTime } from '../format/dates';
+import { businessDate, clockTime, lastDay } from '../format/dates';
 import { shortId } from '../format/ids';
 import { formatCents } from '../format/money';
 import { Amount } from '../ui/Amount';
@@ -205,7 +205,12 @@ export function ActionDialog({
     if (a.reason) rows.push(['Reason', a.reason]);
     if (a.description) rows.push(['Description', a.description]);
     if (a.paymentMethod) rows.push(['Payment method', a.paymentMethod]);
-    if (a.expiry) rows.push(['Expires', when(a.expiry, timeZone)]);
+    if (a.expiry)
+      rows.push(
+        a.kind === 'reservation'
+          ? ['Holds through', lastDay(businessDate(a.expiry, timeZone))]
+          : ['Expires', when(a.expiry, timeZone)],
+      );
     if (a.kind === 'transfer') {
       rows.push(['From', cards(a.sender)]);
       if (a.receiver) rows.push(['To', cards(a.receiver)]);

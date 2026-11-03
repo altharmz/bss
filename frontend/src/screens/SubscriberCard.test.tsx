@@ -150,6 +150,8 @@ function backend(routes: Record<string, Handler> = {}, account: object = ACCOUNT
     'GET /internal/v1/session': () =>
       json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
     [NAV_RUNS]: noRuns,
+    [`GET /tmf-api/productInventory/v5/product?billingAccount.id=${A}&status=active&offset=0&limit=100`]:
+      () => json([], { total: 0 }),
     'GET /tmf-api/accountManagement/v5/billingAccount?limit=1&fields=id': () =>
       json([], { total: 7 }),
     'GET /tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id': () =>
@@ -1661,17 +1663,19 @@ describe('prepaid money forms', () => {
     let form = await dialog('Adjust balance');
     expectUi('ui.subscriber.prepaid.adjust');
     type(form, 'Amount', '12.5');
+    type(form, 'Reason', ' Correction ');
     press(form, 'Apply adjustment');
     await screen.findByRole('status');
     await openForm('Adjust');
     form = await dialog('Adjust balance');
     press(form, 'Debit');
     type(form, 'Amount', '12.50');
+    type(form, 'Reason', ' Correction ');
     press(form, 'Apply adjustment');
     await waitFor(() => expect(posts(fetchMock)).toHaveLength(2));
     const [credit, debit] = posts(fetchMock);
     const head = (value: string) =>
-      `{"@type":"AdjustBalance",${quantity(value)},"usageType":"monetary","bucket":{"id":"${BUCKET}"}}`;
+      `{"@type":"AdjustBalance",${quantity(value)},"usageType":"monetary","bucket":{"id":"${BUCKET}"},"reason":"Correction"}`;
     expect(credit?.body).toBe(head('12.50'));
     expect(debit?.body).toBe(head('-12.50'));
     expect(credit?.key).not.toBe(debit?.key); // two submissions, two keys
@@ -1771,6 +1775,7 @@ describe('prepaid money forms', () => {
     const form = await dialog('Adjust balance');
     press(form, 'Debit');
     type(form, 'Amount', '50');
+    type(form, 'Reason', 'Correction');
     press(form, 'Apply adjustment');
     expect((await within(form).findByRole('alert')).textContent).toBe(
       'Refused. insufficient spendable funds',
@@ -2559,7 +2564,7 @@ describe('prepaid balance actions', () => {
   const hold = action(T4, 'ReserveBalance', 'created', '2026-10-01T07:00:00Z', {
     amount: money(10),
     reason: 'Pre-authorisation',
-    validFor: { endDateTime: '2026-10-02T07:00:00Z' },
+    validFor: { endDateTime: '2026-10-01T21:00:00Z' },
   });
   const sent = action(T5, 'TransferBalance', 'completed', '2026-10-01T08:00:00Z', {
     amount: money(30),
@@ -2710,7 +2715,8 @@ describe('prepaid balance actions', () => {
     fireEvent.click(within(first).getByRole('button', { name: 'Close' }));
     fireEvent.click(within(panel('Balance actions')).getByText('Hold'));
     const second = await screen.findByRole('dialog', { name: 'Balance action' });
-    expect(await within(second).findByText('2026-10-02 10:00')).toBeTruthy();
+    expect(await within(second).findByText('Holds through')).toBeTruthy();
+    expect(within(second).getByText('2026-10-01')).toBeTruthy();
   });
 
   it('says so when there are no balance actions, and when loading fails', async () => {

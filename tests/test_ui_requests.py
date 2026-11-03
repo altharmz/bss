@@ -1038,7 +1038,8 @@ def test_prepaid_money_forms_as_the_ui_sends_them(api):
     assert remaining() == Decimal("1250.50")
 
     adjust = (
-        '{"@type":"AdjustBalance","amount":{"amount":%s,"units":"USD"},"usageType":"monetary",%s}'
+        '{"@type":"AdjustBalance","amount":{"amount":%s,"units":"USD"},'
+        '"usageType":"monetary",%s,"reason":"Correction"}'
     )
     credit = post("adjustBalance", adjust % ("12.50", where), "ui-adjust-1")
     debit = post("adjustBalance", adjust % ("-12.50", where), "ui-adjust-2")
@@ -1061,6 +1062,48 @@ def test_prepaid_money_forms_as_the_ui_sends_them(api):
     assert refused.status_code == 201, refused.text
     assert refused.json()["status"] == "failed" and refused.json()["reason"]
     assert remaining() == Decimal("1230.50")
+
+
+def test_money_dialog_optional_fields_as_the_ui_sends_them(api, db_conn):
+    """G9: number selection and payment metadata use the existing TMF contracts."""
+    tx, _ = pair(api, db_conn)
+    prepay = "/tmf-api/prepayBalanceManagement/v4"
+    own = api.get(f"{apidata.PRODUCT}?billingAccount.id={tx.id}&status=active&offset=0&limit=100")
+    assert own.status_code == 200
+    assert str(tx.number) in {
+        ref["id"] for product in own.json() for ref in product.get("realizingResource", [])
+    }
+    number = api.get(f"/tmf-api/resourceInventory/v5/resource/{tx.number}")
+    assert number.status_code == 200
+    topup = api.request(
+        "POST",
+        f"{prepay}/topupBalance",
+        content=(
+            '{"@type":"TopupBalance","amount":{"amount":1250.50,"units":"USD"},'
+            f'"usageType":"monetary","bucket":{{"id":"{tx.bucket}"}},'
+            f'"partyAccount":{{"id":"{tx.id}","@referredType":"BillingAccount"}},'
+            '"paymentMethod":{"id":"cash","name":"cash"},'
+            f'"logicalResource":[{{"id":"{tx.number}"}}]}}'
+        ),
+        headers={"Content-Type": "application/json", "Idempotency-Key": "ui-number-topup"},
+    )
+    assert topup.status_code == 201, topup.text
+    assert topup.json()["status"] == "completed"
+    assert topup.json()["logicalResource"][0]["id"] == str(tx.number)
+    assert decimals(topup)["amount"]["amount"] == Decimal("1250.50")
+
+    account = apidata.account(api)
+    payment = api.post_raw(
+        PAYMENT,
+        f'{{"@type":"Payment","account":{{"id":"{account["id"]}","@referredType":"BillingAccount"}},'
+        '"totalAmount":{"unit":"USD","value":1250.50},"paymentMethod":{"name":"bankTransfer"},'
+        '"correlatorId":"BANK-77","description":"Cash at the desk"}',
+    )
+    assert payment.status_code == 201, payment.text
+    stored = api.get(payment.json()["href"]).json()
+    assert stored["correlatorId"] == "BANK-77"
+    assert stored["description"] == "Cash at the desk"
+    assert datetime.fromisoformat(stored["paymentDate"]) == api.clock.now()
 
 
 def test_balance_action_writes_as_the_ui_sends_them(api):

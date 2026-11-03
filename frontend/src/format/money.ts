@@ -62,3 +62,13 @@ export function parseAmount(text: string): string | null {
   if (integer.length > 10) return null;
   return `${integer}.${(match[2] ?? '').padEnd(2, '0')}`;
 }
+
+/** Money writes require a positive amount; explain the sign before precision. */
+export function positiveAmountError(text: string): string | undefined {
+  const compact = text.replace(/\s/g, '');
+  if (compact === '') return undefined;
+  if (/^[−-]/.test(compact) || /^(?:0{1,3}(?:,0{3})+|0+)(?:\.0+)?$/.test(compact)) {
+    return 'Amount must be greater than 0';
+  }
+  return parseAmount(text) === null ? 'Enter an amount with at most 2 decimals.' : undefined;
+}

@@ -20,6 +20,7 @@ import { Modal, PageTitle, Panel, StatusPill, Segmented, TextInput, Button } fro
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
+import { PaymentRefundModal } from './AccountActions';
 
 // Payments and refunds history (docs/next-slices-design.md section 19): TMF676 reads only.
 // The card panel lists one account's payments with a detail dialog; the global screen has
@@ -85,10 +86,14 @@ export function PaymentsPanel({
   accountId,
   version,
   onCount,
+  refundAction,
+  onChanged,
 }: {
   accountId: string;
   version: number;
   onCount?: (count: number | undefined) => void;
+  refundAction?: ReactNode;
+  onChanged?: (() => void) | undefined;
 }) {
   const { timeZone } = useSystemContext();
   const [open, setOpen] = useState<string | null>(null);
@@ -105,9 +110,12 @@ export function PaymentsPanel({
         title="Payments"
         subtitle="Payment"
         right={
-          payments.status === 'ok' ? (
-            <span className="bss-panel-count">{payments.data.length}</span>
-          ) : undefined
+          <span className="money-panel-actions">
+            {refundAction}
+            {payments.status === 'ok' ? (
+              <span className="bss-panel-count">{payments.data.length}</span>
+            ) : undefined}
+          </span>
         }
       >
         <TableHead columns={PAYMENT_COLUMNS} />
@@ -132,7 +140,9 @@ export function PaymentsPanel({
           }
         </ListState>
       </Panel>
-      {open !== null && <PaymentDialog paymentId={open} onClose={() => setOpen(null)} />}
+      {open !== null && (
+        <PaymentDialog paymentId={open} onClose={() => setOpen(null)} onChanged={onChanged} />
+      )}
     </div>
   );
 }
@@ -147,10 +157,29 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** One payment from GET /payment/{id}: amounts, method, references and what it paid. */
-export function PaymentDialog({ paymentId, onClose }: { paymentId: string; onClose: () => void }) {
+export function PaymentDialog({
+  paymentId,
+  onClose,
+  onChanged,
+}: {
+  paymentId: string;
+  onClose: () => void;
+  onChanged?: (() => void) | undefined;
+}) {
   const { timeZone } = useSystemContext();
   const detail = useResource(`payment:${paymentId}`, (signal) => loadPayment(paymentId, signal));
   const payment = detail.status === 'ok' ? detail.data : null;
+  const [refunding, setRefunding] = useState(false);
+  if (refunding && payment !== null)
+    return (
+      <PaymentRefundModal
+        accountId={payment.account.id}
+        onClose={() => {
+          setRefunding(false);
+          onChanged?.();
+        }}
+      />
+    );
   return (
     <Modal
       onSubmit={submitDialogPrimary}
@@ -159,7 +188,16 @@ export function PaymentDialog({ paymentId, onClose }: { paymentId: string; onClo
       onClose={onClose}
       ui="ui.payments.detail"
       subtitle={payment === null ? undefined : stamp(payment.paymentDate, timeZone)}
-      footer={<Button onClick={onClose}>Close</Button>}
+      footer={
+        <>
+          {payment !== null && (
+            <Button data-ui="ui.payments.detail.recordRefund" onClick={() => setRefunding(true)}>
+              Record refund
+            </Button>
+          )}
+          <Button onClick={onClose}>Close</Button>
+        </>
+      }
     >
       <div className="bss-modal-body">
         {detail.status === 'loading' && <SkeletonRows columns={PAYMENT_COLUMNS} rows={3} />}
@@ -393,7 +431,9 @@ export function PaymentsScreen() {
           </>
         )}
       </Panel>
-      {open !== null && <PaymentDialog paymentId={open} onClose={() => setOpen(null)} />}
+      {open !== null && (
+        <PaymentDialog paymentId={open} onClose={() => setOpen(null)} onChanged={refunds.retry} />
+      )}
     </div>
   );
 }
