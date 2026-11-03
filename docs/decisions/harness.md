@@ -89,6 +89,17 @@ githubstatus.com. Manual `gh project` commands are recovery only. After the 2026
 incident the automation was observed back to about 2 seconds (#138 set to Done 2 s after
 closing) and the fallbacks were not needed afterwards; they stay for incidents.
 
+## Lifecycle output and waiting
+
+Lifecycle targets print one result (a line or the JSON) with `next_command`/`Next:` as the
+last step; the task, modified, staged and untracked context lines need `VERBOSE=1`
+(`make review-task` always prints them). Generic failures print a bounded cause from
+`task_runtime.diagnostic` (exception class, first two command arguments, exit status, the
+sanitized first `gh` error line), never other stderr text. `make check-pr WAIT=<s>` is the
+only waiting mode: it polls read-only, so it cannot merge or change state. A failed
+pre-commit hook unstages what `make commit` staged, so an edit afterwards cannot trip the
+partial-staging refusal.
+
 ## Tests in the hook: smoke plus affected
 
 The full suite is too long for every commit (about 7 minutes locally, 30 on a CI runner), so

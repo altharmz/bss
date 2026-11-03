@@ -26,7 +26,7 @@ standalone command, with its required variables.
 | Update from master | `make sync-task` | task |
 | Publish the branch | `make push` | task |
 | Create or reuse the PR | `make create-pr` | task |
-| Check PR and CI readiness | `make check-pr` (repeat while pending) | task |
+| Check PR and CI readiness | `make check-pr` (`WAIT=600` waits while pending) | task |
 | Merge when policy permits | `make merge-task` | task |
 | Finish and release the slot | `make finish-task SLOT=<slot>` | primary |
 | Optional broader validation | `make check` | task |
@@ -44,12 +44,24 @@ standalone command, with its required variables.
    pre-commit hook, which is the one local verification run (see Hooks and checks). Run
    `make test` (the full suite) before a PR touching billing, migrations or the API.
 4. **PR.** `make create-pr` publishes the branch and opens (or reuses) the PR with
-   `Fixes #N`. `make check-pr` reports readiness; repeat it while checks are pending.
+   `Fixes #N`. `make check-pr WAIT=600` reports readiness and waits for pending checks.
 5. **Merge.** `make merge-task` when ready. A human-gated PR stays blocked until the human
    approves that PR at its exact head in the conversation; then pass
    `HUMAN_APPROVAL=<PR-number>:<40-char-head-SHA>`. New commits need renewed approval.
 6. **Finish.** After the merge, issue closure and board Done, immediately run
    `make finish-task SLOT=<slot>` from clean primary `master`. No human gate.
+
+Every lifecycle target ends with its next step: a `Next: <command>` line, or a `next_command`
+field in the JSON result (commit -> `make create-pr`, create-pr -> `make check-pr WAIT=600`,
+check-pr ready -> `make merge-task`, merge-task -> `make finish-task SLOT=<slot>`, finish-task
+-> `make start-task`). When a human gate is the only blocker, `check-pr` gives the
+ready-to-copy form: `Human approval needed for PR <n> at <sha>; after approval: make
+merge-task HUMAN_APPROVAL=<n>:<sha>`.
+
+A commit that touches the harness runs the hook for 1.5 to 3 minutes, longer than a typical
+tool call limit. Run `make commit` in the background and read its exit status from the task
+itself, never through a pipe (a pipe hides the status, which hid a failed commit once);
+`make commit` prints its final status line even when the hook output is long.
 
 Commands for issue comments (`gh issue comment`) are always allowed: add a short note when
 something meaningful happens (a decision, a blocker, waiting on the human). Do not log every
@@ -170,11 +182,13 @@ worktree's `scripts/pre-commit.sh` and `scripts/pre-push.sh`. Details of the gat
 `make commit MESSAGE=... FILES=...` takes a JSON array of exact repository-relative file
 names (deletions included; never a directory or glob). It validates task identity, protected
 and secret paths and the installed hooks, stages only those files, refuses unrelated or
-partially staged files and runs a normal `git commit` with hooks. `DRY_RUN=1` validates
+partially staged files (naming them and the `git add -- <files>` that fixes them) and runs a
+normal `git commit` with hooks. If the hook fails, the files this run staged are unstaged
+again (edits kept; files you had staged, and a merge in progress, are untouched). `DRY_RUN=1` validates
 without staging or running hooks. Inherited `GIT_*` variables are refused (the refusal
 names them) except the presentation-only `GIT_PAGER`, `GIT_EDITOR` and
 `GIT_SEQUENCE_EDITOR`. The command prints where the hook keeps its full output
-(`.git/pre-commit-logs/`). Failure leaves the index and tree as they were.
+(`.git/pre-commit-logs/`). A failure leaves HEAD and the working tree as they were.
 
 `make push` publishes `HEAD` to the same-named branch on `origin` (upstream set if needed),
 refuses unexpected destinations, remote history outside local ancestry and protected
@@ -191,8 +205,11 @@ resolve as source edits and `make commit`.
 `PR_TITLE=` and `PR_BODY_FILE=/absolute/path` override. `Fixes #N` is always added.
 
 `make check-pr` prints JSON readiness: PR, CI state, mergeability, review decision, human
-gate status, commits behind base and reason codes. Exit status: 0 ready, 1 failed or invalid,
-2 pending, 3 policy blocked (read the `status` field). Ready requires passing checks, equal
+gate status, commits behind base, reason codes and `next_command`. Exit status: 0 ready, 1
+failed or invalid, 2 pending, 3 policy blocked (read the `status` field). `WAIT=<seconds>`
+(default off, capped at 1800) polls every 20 s and stops as soon as the status is ready,
+failed or blocked, or when the time is up (then exit status 2 as without it); it never merges
+and never changes state. Ready requires passing checks, equal
 local and PR heads, a clean tree, a current base, a nondraft mergeable PR and a clean merge
 state. Human gates: a `needs-human` label, or a changed path among CLAUDE.md, AGENTS.md,
 `docs/board.md`, `.claude/`, `.codex/`, `scripts/pre-commit.sh`, `.github/workflows/`. A GitHub

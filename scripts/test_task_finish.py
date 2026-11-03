@@ -192,7 +192,10 @@ class MergeTests(LifecycleFixture):
         self.assertNotIn("merges", json.loads(self.fixture.read_text()))
 
     def test_merge_then_idempotent(self):
-        self.assertEqual(self.merge()[0]["status"], "merged")
+        first = self.merge()[0]
+        self.assertEqual(first["status"], "merged")
+        self.assertTrue(first["next_command"].startswith("make finish-task SLOT="))
+        self.assertTrue(self.merge()[0]["next_command"].startswith("make finish-task SLOT="))
         self.assertEqual(self.merge()[1], 0)
         self.assertEqual(self.state["merges"], 1)
 
@@ -300,7 +303,9 @@ class FinishTests(LifecycleFixture):
             os.chdir(before)
 
     def test_success_preserves_slot_state_and_volumes_removes_credentials(self):
-        self.assertEqual(self.finish()["status"], "finished")
+        outcome = self.finish()
+        self.assertEqual(outcome["status"], "finished")
+        self.assertTrue(outcome["next_command"].startswith("make start-task BSS_TASK_OWNER="))
         self.assertFalse(self.active.exists())
         self.assertFalse(self.work.exists())
         self.assertFalse(self.secret.exists())

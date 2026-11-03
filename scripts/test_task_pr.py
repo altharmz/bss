@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import task_pr
 import task_telemetry
+from task_runtime import InvalidRuntime
 from test_task_git import GitTests
 
 
@@ -261,6 +262,73 @@ class PrTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 task_telemetry.event_sql(self.task, "check-pr", 1, 1, {}, **kwargs)
+
+    def test_next_command_for_every_status(self):
+        self.assertEqual(self.outcome("ready", 0)["next_command"], "make merge-task")
+        self.pr["statusCheckRollup"] = [{"__typename": "CheckRun", "status": "IN_PROGRESS"}]
+        self.assertEqual(self.outcome("pending", 2)["next_command"], "make check-pr WAIT=600")
+        self.pr["statusCheckRollup"] = [
+            {"__typename": "CheckRun", "status": "COMPLETED", "conclusion": "FAILURE"}
+        ]
+        self.assertIn("make push", self.outcome("failed", 1)["next_command"])
+        self.state["pr"] = None
+        self.assertEqual(self.outcome("missing", 1)["next_command"], "make create-pr")
+
+    def test_human_gate_prints_the_ready_to_copy_approval_form(self):
+        self.pr["labels"] = [{"name": "needs-human"}]
+        data = self.outcome("blocked", 3)
+        self.assertEqual(
+            data["next_command"],
+            f"Human approval needed for PR 123 at {self.head}; after approval: "
+            f"make merge-task HUMAN_APPROVAL=123:{self.head}",
+        )
+        self.env["HUMAN_APPROVAL"] = f"123:{self.head}"
+        data = self.outcome("ready", 0)
+        self.assertEqual(data["next_command"], f"make merge-task HUMAN_APPROVAL=123:{self.head}")
+
+    def test_create_pr_points_at_check_pr(self):
+        self.state["pr"] = None
+        self.state["new_pr"] = self.pr.copy()
+        _, output, error = self.command("create-pr")
+        self.assertEqual(
+            json.loads(output.splitlines()[-1])["next_command"], "make check-pr WAIT=600"
+        )
+
+    def wait(self, sequence, wait="600"):
+        replies = [({"status": status}, code) for status, code in sequence]
+        ticks = iter(range(0, 10_000, 20))
+        with (
+            patch.dict(os.environ, {"WAIT": wait}),
+            patch.object(task_pr, "readiness", side_effect=replies) as polled,
+            patch.object(task_pr.time, "sleep") as slept,
+            patch.object(task_pr.time, "monotonic", side_effect=lambda: next(ticks)),
+        ):
+            outcome, code = task_pr.await_readiness(None, "task", {})
+        return outcome["status"], code, polled.call_count, slept.call_count
+
+    def test_wait_polls_pending_until_ready(self):
+        self.assertEqual(
+            self.wait([("pending", 2), ("pending", 2), ("ready", 0)]), ("ready", 0, 3, 2)
+        )
+
+    def test_wait_stops_at_failed_and_blocked(self):
+        self.assertEqual(self.wait([("pending", 2), ("failed", 1)]), ("failed", 1, 2, 1))
+        self.assertEqual(self.wait([("blocked", 3)]), ("blocked", 3, 1, 0))
+
+    def test_wait_times_out_with_pending_status_2(self):
+        status, code, polls, _ = self.wait([("pending", 2)] * 20, wait="60")
+        self.assertEqual((status, code), ("pending", 2))
+        self.assertLess(polls, 6)
+
+    def test_wait_is_off_by_default_validated_and_capped(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(task_pr.wait_seconds(), 0)
+        with patch.dict(os.environ, {"WAIT": "99999"}):
+            self.assertEqual(task_pr.wait_seconds(), 1800)
+        for bad in ("abc", "-5", "1.5"):
+            with patch.dict(os.environ, {"WAIT": bad}), self.assertRaises(InvalidRuntime):
+                task_pr.wait_seconds()
+        self.assertEqual(self.wait([("pending", 2)], wait="0")[:3], ("pending", 2, 1))
 
 
 del GitTests

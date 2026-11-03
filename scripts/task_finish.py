@@ -43,7 +43,12 @@ def merge(root, task):
             data["headRefOid"] == query(root, "rev-parse", "HEAD").decode().strip(),
             "merged PR head differs from local task",
         )
-        return {"status": "merged", "pr_number": data["number"], "url": data["url"]}, 0
+        return {
+            "status": "merged",
+            "pr_number": data["number"],
+            "url": data["url"],
+            "next_command": finish_command(root),
+        }, 0
     issue = task_pr.issue_state(root, task)
     outcome, code = task_pr.readiness(root, task, issue)
     if code:
@@ -75,7 +80,17 @@ def merge(root, task):
         confirmed["state"] == "MERGED" and confirmed["headRefOid"] == outcome["head_sha"],
         "merge not confirmed; inspect GitHub before retrying (queue may still be pending)",
     )
-    return {**outcome, "status": "merged", "reasons": []}, 0
+    return {
+        **outcome,
+        "status": "merged",
+        "reasons": [],
+        "next_command": finish_command(root),
+    }, 0
+
+
+def finish_command(root):
+    slot = root.parent.name if root.name == "repo" else "<slot>"
+    return f"make finish-task SLOT={slot}"
 
 
 def regular(path):
@@ -437,6 +452,8 @@ def finish_steps(primary, common, slot):
             "slot": slot.name,
             "local_branch_retained": retained,
             "volumes_preserved": True,
+            "next_command": "make start-task BSS_TASK_OWNER="
+            + os.environ.get("BSS_TASK_OWNER", "<client>"),
         }
     finally:
         record(
