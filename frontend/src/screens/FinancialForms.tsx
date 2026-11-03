@@ -22,6 +22,7 @@ import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { parseAmount } from '../format/money';
 import { Button, Modal, Segmented, TextInput } from '../ui/kit';
+import { Combobox } from '../ui/combobox';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Field } from './SubscriberForms';
 import { uncertain } from './submissionKey';
@@ -261,24 +262,21 @@ function Body({
             <TextInput value={form.name} onChange={(e) => set({ name: e.target.value })} />
           </Field>
           <Field label="Owner">
-            <select
-              className="bss-input"
+            <Combobox
+              ui={`${MARKER[kind]}.owner`}
+              placeholder="Choose a party"
               value={form.owner?.id ?? ''}
-              onChange={(e) =>
+              options={owners.map((owner) => ({
+                value: owner.id,
+                label: `${owner.name} · ${owner.kind === 'Individual' ? 'person' : 'organization'}`,
+              }))}
+              onChange={(id) =>
                 set({
-                  owner: owners.find((o) => o.id === e.target.value) ?? null,
-                  // a link belongs to one owner: a new owner starts without one
+                  owner: owners.find((o) => o.id === id) ?? null,
                   ...(linkable ? { financialId: null } : {}),
                 })
               }
-            >
-              {form.owner === null && <option value="">Choose a party</option>}
-              {owners.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name} · {o.kind === 'Individual' ? 'person' : 'organization'}
-                </option>
-              ))}
-            </select>
+            />
           </Field>
           {account && !linkable && (
             <div className="caption">

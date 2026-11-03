@@ -136,12 +136,13 @@ describe('party and settlement accounts', () => {
     expectUi('ui.accounts.party.new');
     const dialog = await screen.findByRole('dialog', { name: 'New party account' });
     expectUi('ui.accounts.party.form');
-    await within(dialog).findByRole('option', { name: /Romashka LLC/ });
     expect((within(dialog).getByLabelText('Financial account') as HTMLSelectElement).disabled).toBe(
       true,
     ); // no owner yet
+    const owner = within(dialog).getByRole('combobox', { name: 'Owner' });
+    fireEvent.focus(owner);
+    fireEvent.click(await within(dialog).findByRole('option', { name: /Romashka LLC/ }));
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Treasury' } });
-    fireEvent.change(within(dialog).getByLabelText('Owner'), { target: { value: ROMASHKA } });
     await within(dialog).findByRole('option', { name: 'Group receivables' });
     expect(within(dialog).getByRole('option', { name: 'Old group (closed)' })).toBeTruthy();
     fireEvent.change(within(dialog).getByLabelText('Financial account'), {
@@ -174,9 +175,10 @@ describe('party and settlement accounts', () => {
     expectUi('ui.accounts.settlement.new');
     const dialog = await screen.findByRole('dialog', { name: 'New settlement account' });
     expectUi('ui.accounts.settlement.form');
-    await within(dialog).findByRole('option', { name: /Romashka LLC/ });
+    const owner = within(dialog).getByRole('combobox', { name: 'Owner' });
+    fireEvent.focus(owner);
+    fireEvent.click(await within(dialog).findByRole('option', { name: /Romashka LLC/ }));
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Payouts' } });
-    fireEvent.change(within(dialog).getByLabelText('Owner'), { target: { value: ROMASHKA } });
     fireEvent.change(within(dialog).getByLabelText('Credit limit currency'), {
       target: { value: 'eur' },
     });
@@ -242,15 +244,17 @@ describe('party and settlement accounts', () => {
     await screen.findByText('Payroll');
     fireEvent.click(screen.getByRole('button', { name: 'Edit Payroll' }));
     const dialog = await screen.findByRole('dialog', { name: 'Edit Payroll' });
-    await within(dialog).findByRole('option', { name: /Olga Kuznetsova/ });
-    fireEvent.change(within(dialog).getByLabelText('Owner'), { target: { value: OLGA } });
+    const owner = within(dialog).getByRole('combobox', { name: 'Owner' });
+    fireEvent.focus(owner);
+    fireEvent.change(owner, { target: { value: '' } });
+    fireEvent.click(await within(dialog).findByRole('option', { name: /Olga Kuznetsova/ }));
     expect((within(dialog).getByLabelText('Financial account') as HTMLSelectElement).value).toBe(
       '',
     );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     const alert = await within(dialog).findByRole('alert');
     expect(alert.textContent).toContain('another owner');
-    expect((within(dialog).getByLabelText('Owner') as HTMLSelectElement).value).toBe(OLGA);
+    expect(owner).toHaveProperty('value', 'Olga Kuznetsova · person');
     const sent = writes(fetchMock)[0]?.[2];
     expect(JSON.parse(String(sent))).toEqual({
       relatedParty: [

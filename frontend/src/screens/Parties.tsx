@@ -5,6 +5,8 @@ import type { CustomerStatus } from '../api/bss';
 import { explain } from '../api/client';
 import {
   accountsOf,
+  createCustomer,
+  createParty,
   customerBlock,
   customerChanges,
   customersOf,
@@ -13,25 +15,30 @@ import {
   loadCustomerDetail,
   loadPartyDetail,
   loadParties,
+  PARTY_STATUSES,
   partyBlock,
   partyChanges,
   patchCustomer,
   patchParty,
   type CustomerDetail,
+  type NewParty,
   type Parties,
   type Party,
   type PartyCustomer,
   type PartyDetail,
 } from '../api/parties';
+import { EMPTY_CONTACT, type ContactFields } from '../api/partyDocuments';
 import { useResource } from '../api/useResource';
-import { useSetCrumbs } from '../app/context';
+import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
+import { zonedDateTime } from '../format/dates';
 import { shortId } from '../format/ids';
 import { formatInt } from '../format/money';
 import {
   Button,
+  DateField,
   Modal,
-  PageTitle,
+  PageHeader,
   Panel,
   StatusPill,
   Segmented,
@@ -45,10 +52,10 @@ import { uncertain } from './submissionKey';
 import './screens.css';
 
 // Individuals, organizations and customers, whether or not they have a billing account.
-// A row opens the record (GET) with its subscriber links, a names-and-status edit that
-// reuses the subscriber form fields, and Delete. Delete is offered unless the loaded data
-// already shows a dependency; the server's 409 still shows. Design:
-// docs/next-slices-design.md section 15.
+// Parties and customers can be created here. A party row opens the record (GET) with its
+// subscriber links and an edit for its identity, status and documents; Delete is offered
+// unless the loaded data already shows a dependency, and the server's 409 still shows.
+// Design: docs/next-slices-design.md section 15.
 
 type Tab = 'individuals' | 'organizations' | 'customers';
 
@@ -93,6 +100,7 @@ export function PartiesScreen() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('All');
   const [open, setOpen] = useState<Open | null>(null);
+  const [creating, setCreating] = useState<'Individual' | 'Organization' | null>(null);
   const resource = useResource(`parties:${version}`, loadParties);
   const q = query.trim().toLowerCase();
   const data = resource.status === 'ok' ? resource.data : null;
@@ -114,25 +122,46 @@ export function PartiesScreen() {
     setQuery('');
     setStatus('All');
   };
+  const done = (message: string) => {
+    setOpen(null);
+    setCreating(null);
+    toast(message);
+    setVersion((v) => v + 1);
+  };
 
   return (
     <div className="bss-screen" data-ui="ui.parties">
-      <div className="bss-title-row">
-        <PageTitle
-          title="Parties"
-          count={
-            data
-              ? formatInt(
-                  customers
-                    ? data.customers.length
-                    : tab === 'individuals'
-                      ? data.individuals.length
-                      : data.organizations.length,
-                )
-              : undefined
-          }
-        />
-      </div>
+      <PageHeader
+        title="Parties"
+        count={
+          data
+            ? formatInt(
+                customers
+                  ? data.customers.length
+                  : tab === 'individuals'
+                    ? data.individuals.length
+                    : data.organizations.length,
+              )
+            : undefined
+        }
+        actions={
+          <>
+            <Button
+              data-ui="ui.parties.newOrganization"
+              onClick={() => setCreating('Organization')}
+            >
+              New organization
+            </Button>
+            <Button
+              variant="primary"
+              data-ui="ui.parties.newIndividual"
+              onClick={() => setCreating('Individual')}
+            >
+              New individual
+            </Button>
+          </>
+        }
+      />
       <div className="bss-toolbar">
         <Segmented
           label="Party sections"
@@ -189,16 +218,10 @@ export function PartiesScreen() {
         </div>
       </Panel>
       {open !== null && data !== null && (
-        <RecordModal
-          open={open}
-          data={data}
-          onClose={() => setOpen(null)}
-          onDone={(message) => {
-            setOpen(null);
-            toast(message);
-            setVersion((v) => v + 1);
-          }}
-        />
+        <RecordModal open={open} data={data} onClose={() => setOpen(null)} onDone={done} />
+      )}
+      {creating !== null && (
+        <NewPartyModal kind={creating} onClose={() => setCreating(null)} onDone={done} />
       )}
     </div>
   );
@@ -486,6 +509,208 @@ function DeleteControl({
   );
 }
 
+function ContactFieldsForm({
+  value,
+  onChange,
+  ui,
+}: {
+  value: ContactFields;
+  onChange: (change: Partial<ContactFields>) => void;
+  ui: string;
+}) {
+  return (
+    <section className="bss-form" data-ui={ui}>
+      <Field label="Email">
+        <TextInput
+          type="email"
+          value={value.email}
+          onChange={(e) => onChange({ email: e.target.value })}
+        />
+      </Field>
+      <Field label="Phone">
+        <TextInput
+          type="tel"
+          value={value.phone}
+          onChange={(e) => onChange({ phone: e.target.value })}
+        />
+      </Field>
+      <Field label="Street address">
+        <TextInput value={value.street1} onChange={(e) => onChange({ street1: e.target.value })} />
+      </Field>
+      <Field label="City">
+        <TextInput value={value.city} onChange={(e) => onChange({ city: e.target.value })} />
+      </Field>
+      <Field label="Postal code">
+        <TextInput
+          value={value.postCode}
+          onChange={(e) => onChange({ postCode: e.target.value })}
+        />
+      </Field>
+      <Field label="Country">
+        <TextInput value={value.country} onChange={(e) => onChange({ country: e.target.value })} />
+      </Field>
+    </section>
+  );
+}
+
+function NewPartyModal({
+  kind,
+  onClose,
+  onDone,
+}: {
+  kind: 'Individual' | 'Organization';
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const context = useSystemContext();
+  const write = useWrite(onDone);
+  const [form, setForm] = useState<NewParty>({
+    ...EMPTY_CONTACT,
+    givenName: '',
+    familyName: '',
+    organizationName: '',
+    status: PARTY_STATUSES[kind][0] ?? 'initialized',
+    birthDate: null,
+  });
+  const set = (change: Partial<NewParty>) => setForm((current) => ({ ...current, ...change }));
+  const name =
+    kind === 'Individual'
+      ? `${form.givenName.trim()} ${form.familyName.trim()}`
+      : form.organizationName.trim();
+  const valid =
+    kind === 'Individual'
+      ? form.givenName.trim() !== '' && form.familyName.trim() !== ''
+      : form.organizationName.trim() !== '';
+  const title = kind === 'Individual' ? 'New individual' : 'New organization';
+  return (
+    <Frame
+      title={title}
+      ui={`${kind === 'Individual' ? 'ui.parties.newIndividual' : 'ui.parties.newOrganization'}Form`}
+      subtitle="Contact details are optional"
+      state="ok"
+      retry={() => undefined}
+      body={
+        <>
+          <section className="bss-form">
+            {kind === 'Individual' ? (
+              <>
+                <Field label="Given name">
+                  <TextInput
+                    value={form.givenName}
+                    onChange={(e) => set({ givenName: e.target.value })}
+                  />
+                </Field>
+                <Field label="Family name">
+                  <TextInput
+                    value={form.familyName}
+                    onChange={(e) => set({ familyName: e.target.value })}
+                  />
+                </Field>
+                <Field label="Birth date">
+                  <DateField
+                    type="date"
+                    value={form.birthDate ?? ''}
+                    onChange={(e) => set({ birthDate: e.target.value })}
+                  />
+                </Field>
+              </>
+            ) : (
+              <Field label="Organization name">
+                <TextInput
+                  value={form.organizationName}
+                  onChange={(e) => set({ organizationName: e.target.value })}
+                />
+              </Field>
+            )}
+            <Segmented
+              label="Party status"
+              value={form.status}
+              onChange={(status) => set({ status })}
+              options={PARTY_STATUSES[kind].map((key) => ({ key, label: key }))}
+            />
+          </section>
+          <ContactFieldsForm value={form} onChange={set} ui="ui.parties.contactMedia" />
+        </>
+      }
+      write={write}
+      onClose={onClose}
+      onRefresh={() => onDone('Refreshed')}
+      actions={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            disabled={!valid || write.busy}
+            onClick={() =>
+              void write.run(async () => {
+                await createParty(kind, {
+                  ...form,
+                  birthDate: form.birthDate
+                    ? zonedDateTime(form.birthDate, '00:00', context.timeZone)
+                    : null,
+                });
+                return `${name} created`;
+              })
+            }
+          >
+            Create
+          </Button>
+        </>
+      }
+    />
+  );
+}
+
+function NewCustomerModal({
+  party,
+  onClose,
+  onDone,
+}: {
+  party: Party;
+  onClose: () => void;
+  onDone: (message: string) => void;
+}) {
+  const write = useWrite(onDone);
+  const [name, setName] = useState(party.name);
+  return (
+    <Frame
+      title="New customer"
+      ui="ui.parties.newCustomerForm"
+      subtitle={`${party.name} · ${shortId(party.id)}`}
+      state="ok"
+      retry={() => undefined}
+      body={
+        <section className="bss-form">
+          <Field label="Customer name">
+            <TextInput value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <div className="caption">The customer starts Active and engages this party.</div>
+        </section>
+      }
+      write={write}
+      onClose={onClose}
+      onRefresh={() => onDone('Refreshed')}
+      actions={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            disabled={name.trim() === '' || write.busy}
+            onClick={() =>
+              void write.run(async () => {
+                await createCustomer(party, name);
+                return `${name.trim()} created`;
+              })
+            }
+          >
+            Create customer
+          </Button>
+        </>
+      }
+    />
+  );
+}
+
 function PartyModal({
   party,
   data,
@@ -497,72 +722,131 @@ function PartyModal({
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
+  const context = useSystemContext();
   const detail = useResource(`party:${party.kind}:${party.id}`, (signal) =>
-    loadPartyDetail(party.kind, party.id, signal),
+    loadPartyDetail(party.kind, party.id, context.timeZone, signal),
   );
   const write = useWrite(onDone);
   const [editing, setEditing] = useState<PartyDetail | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [newCustomer, setNewCustomer] = useState(false);
   const own = customersOf(data, party.id);
   const accounts = accountsOf(
     data,
     own.map((c) => c.id),
   );
   const before = detail.status === 'ok' ? detail.data : null;
-  const changes = before && editing ? partyChanges(before, editing) : null;
+  const changes = before && editing ? partyChanges(before, editing, context.timeZone) : null;
   const named =
     editing !== null &&
     (editing.kind === 'Individual'
       ? editing.givenName.trim() !== '' && editing.familyName.trim() !== ''
       : editing.organizationName.trim() !== '');
+  const documentsValid =
+    editing !== null &&
+    Boolean(editing.identificationType.trim()) === Boolean(editing.identificationId.trim()) &&
+    Boolean(editing.externalType.trim()) === Boolean(editing.externalId.trim());
   const set = (change: Partial<PartyDetail>) =>
     setEditing((e) => (e === null ? e : { ...e, ...change }));
   const label = party.kind === 'Individual' ? 'person' : 'organization';
 
+  if (newCustomer)
+    return <NewCustomerModal party={party} onClose={() => setNewCustomer(false)} onDone={onDone} />;
+
   const body =
     before === null ? null : editing !== null ? (
-      <section className="bss-form">
-        {editing.kind === 'Individual' ? (
-          <>
-            <Field label="Given name">
+      <>
+        <section className="bss-form">
+          {editing.kind === 'Individual' ? (
+            <>
+              <Field label="Given name">
+                <TextInput
+                  value={editing.givenName}
+                  onChange={(e) => set({ givenName: e.target.value })}
+                />
+              </Field>
+              <Field label="Family name">
+                <TextInput
+                  value={editing.familyName}
+                  onChange={(e) => set({ familyName: e.target.value })}
+                />
+              </Field>
+              <Field label="Birth date">
+                <DateField
+                  type="date"
+                  value={editing.birthDate}
+                  onChange={(e) => set({ birthDate: e.target.value })}
+                />
+              </Field>
+            </>
+          ) : (
+            <Field label="Organization name">
               <TextInput
-                value={editing.givenName}
-                onChange={(e) => set({ givenName: e.target.value })}
+                value={editing.organizationName}
+                onChange={(e) => set({ organizationName: e.target.value })}
               />
             </Field>
-            <Field label="Family name">
-              <TextInput
-                value={editing.familyName}
-                onChange={(e) => set({ familyName: e.target.value })}
-              />
-            </Field>
-          </>
-        ) : (
-          <Field label="Organization name">
+          )}
+          <Segmented
+            label="Party status"
+            value={editing.status}
+            onChange={(status) => set({ status })}
+            options={PARTY_STATUSES[editing.kind].map((key) => ({ key, label: key }))}
+          />
+        </section>
+        <ContactFieldsForm value={editing} onChange={set} ui="ui.parties.contactMedia" />
+        <section className="bss-form" data-ui="ui.parties.identification">
+          <Field label="Identification type">
             <TextInput
-              value={editing.organizationName}
-              onChange={(e) => set({ organizationName: e.target.value })}
+              value={editing.identificationType}
+              onChange={(e) => set({ identificationType: e.target.value })}
             />
           </Field>
-        )}
-      </section>
-    ) : (
-      <>
-        <Facts
-          rows={[
-            ['Type', party.kind === 'Individual' ? 'Person' : 'Organization'],
-            ...(before.kind === 'Individual'
-              ? ([
-                  ['Given name', before.givenName],
-                  ['Family name', before.familyName],
-                ] as [string, ReactNode][])
-              : ([['Organization name', before.organizationName]] as [string, ReactNode][])),
-            ['Status', before.status ? <StatusPill kind="party" status={before.status} /> : dash],
-            ['Customers', own.length ? own.map((c) => c.name).join(', ') : dash],
-            ['Subscribers', <AccountLinks key="s" links={accounts} />],
-          ]}
-        />
+          <Field label="Identification ID">
+            <TextInput
+              value={editing.identificationId}
+              onChange={(e) => set({ identificationId: e.target.value })}
+            />
+          </Field>
+        </section>
+        <section className="bss-form" data-ui="ui.parties.externalReference">
+          <Field label="External reference ID">
+            <TextInput
+              value={editing.externalId}
+              onChange={(e) => set({ externalId: e.target.value })}
+            />
+          </Field>
+          <Field label="External reference type">
+            <TextInput
+              value={editing.externalType}
+              onChange={(e) => set({ externalType: e.target.value })}
+            />
+          </Field>
+          {!documentsValid && (
+            <Note tone="negative">Complete both the document type and its ID.</Note>
+          )}
+        </section>
       </>
+    ) : (
+      <Facts
+        rows={[
+          ['Type', party.kind === 'Individual' ? 'Person' : 'Organization'],
+          ...(before.kind === 'Individual'
+            ? ([
+                ['Given name', before.givenName],
+                ['Family name', before.familyName],
+                ...(before.birthDate
+                  ? ([['Birth date', before.birthDate]] as [string, ReactNode][])
+                  : []),
+              ] as [string, ReactNode][])
+            : ([['Organization name', before.organizationName]] as [string, ReactNode][])),
+          ['Status', before.status ? <StatusPill kind="party" status={before.status} /> : dash],
+          ['Email', before.email || dash],
+          ['Phone', before.phone || dash],
+          ['Customers', own.length ? own.map((c) => c.name).join(', ') : dash],
+          ['Subscribers', <AccountLinks key="s" links={accounts} />],
+        ]}
+      />
     );
 
   return (
@@ -598,6 +882,13 @@ function PartyModal({
             />
             <Button onClick={onClose}>Close</Button>
             <Button
+              data-ui="ui.parties.newCustomer"
+              disabled={before === null}
+              onClick={() => setNewCustomer(true)}
+            >
+              New customer
+            </Button>
+            <Button
               variant="primary"
               data-ui="ui.parties.edit"
               disabled={before === null}
@@ -618,7 +909,7 @@ function PartyModal({
             </Button>
             <Button
               variant="primary"
-              disabled={!named || changes === null || write.busy}
+              disabled={!named || !documentsValid || changes === null || write.busy}
               onClick={() =>
                 changes &&
                 void write.run(async () => {

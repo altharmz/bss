@@ -4,8 +4,15 @@
 // settlement accounts through their owner), so the delete rules are visible in the data.
 // Design: docs/next-slices-design.md section 15.
 
-import { getAll, getJson, patchJson, request } from './client';
+import { getAll, getJson, patchJson, postJson, request } from './client';
 import { PATHS, type PartyKind } from './bss';
+import { businessDate, zonedDateTime } from '../format/dates';
+import {
+  contactFields,
+  contactMedia,
+  type ContactFields,
+  type ContactMediumBody,
+} from './partyDocuments';
 
 const PARTIES = '/tmf-api/partyManagement/v5';
 const ACCOUNTS = '/tmf-api/accountManagement/v5';
@@ -161,21 +168,53 @@ export function customerBlock(data: Parties, customer: PartyCustomer): string | 
 
 // --- one record (GET) and its writes ---
 
-export interface PartyDetail {
+export const PARTY_STATUSES: Record<PartyKind, string[]> = {
+  Individual: ['initialized', 'validated', 'deceased'],
+  Organization: ['initialized', 'validated', 'closed'],
+};
+
+export interface PartyDetail extends ContactFields {
   id: string;
   kind: PartyKind;
   givenName: string;
   familyName: string;
   organizationName: string;
   status: string;
+  birthDate: string;
+  identificationType: string;
+  identificationId: string;
+  externalId: string;
+  externalType: string;
+}
+
+interface IdentificationBody {
+  '@type'?: string;
+  identificationType?: string;
+  identificationId?: string;
+}
+interface ExternalBody {
+  '@type'?: string;
+  externalIdentifierType?: string;
+  id?: string;
 }
 
 export async function loadPartyDetail(
   kind: PartyKind,
   id: string,
+  timeZone: string,
   signal: AbortSignal,
 ): Promise<PartyDetail> {
-  const body = await getJson<PartyBody>(`${PARTY_PATH[kind]}/${id}`, signal);
+  const body = await getJson<
+    PartyBody & {
+      birthDate?: string;
+      contactMedium?: ContactMediumBody[];
+      individualIdentification?: IdentificationBody[];
+      organizationIdentification?: IdentificationBody[];
+      externalReference?: ExternalBody[];
+    }
+  >(`${PARTY_PATH[kind]}/${id}`, signal);
+  const identification = (body.individualIdentification ?? body.organizationIdentification)?.[0];
+  const external = body.externalReference?.[0];
   return {
     id,
     kind,
@@ -183,6 +222,12 @@ export async function loadPartyDetail(
     familyName: body.familyName ?? '',
     organizationName: kind === 'Organization' ? need(body.name, 'organization name') : '',
     status: body.status ?? '',
+    birthDate: body.birthDate ? businessDate(body.birthDate, timeZone) : '',
+    ...contactFields(body.contactMedium),
+    identificationType: identification?.identificationType ?? '',
+    identificationId: identification?.identificationId ?? '',
+    externalId: external?.id ?? '',
+    externalType: external?.externalIdentifierType ?? '',
   };
 }
 
@@ -210,16 +255,82 @@ export async function loadCustomerDetail(id: string, signal: AbortSignal): Promi
   };
 }
 
-/** The merge-patch of only the changed names; null = nothing changed. */
-export function partyChanges(before: PartyDetail, after: PartyDetail) {
-  const changes: Record<string, string> = {};
+function identificationOf(form: PartyDetail): Record<string, string>[] {
+  if (!form.identificationType.trim() && !form.identificationId.trim()) return [];
+  return [
+    {
+      '@type':
+        form.kind === 'Individual' ? 'IndividualIdentification' : 'OrganizationIdentification',
+      identificationType: form.identificationType.trim(),
+      identificationId: form.identificationId.trim(),
+    },
+  ];
+}
+
+function externalOf(form: PartyDetail): Record<string, string>[] {
+  if (!form.externalType.trim() && !form.externalId.trim()) return [];
+  return [
+    {
+      '@type': 'ExternalIdentifier',
+      externalIdentifierType: form.externalType.trim(),
+      id: form.externalId.trim(),
+    },
+  ];
+}
+
+/** A merge-patch of changed fields; documents are replaced whole and null clears birthDate. */
+export function partyChanges(before: PartyDetail, after: PartyDetail, timeZone: string) {
+  const changes: Record<string, unknown> = {};
   if (before.kind === 'Individual') {
     if (after.givenName.trim() !== before.givenName) changes.givenName = after.givenName.trim();
     if (after.familyName.trim() !== before.familyName) changes.familyName = after.familyName.trim();
+    if (after.birthDate !== before.birthDate)
+      changes.birthDate = after.birthDate
+        ? zonedDateTime(after.birthDate, '00:00', timeZone)
+        : null;
   } else if (after.organizationName.trim() !== before.organizationName) {
     changes.name = after.organizationName.trim();
   }
+  if (after.status !== before.status) changes.status = after.status;
+  if (JSON.stringify(contactMedia(after)) !== JSON.stringify(contactMedia(before)))
+    changes.contactMedium = contactMedia(after);
+  const identificationKey =
+    before.kind === 'Individual' ? 'individualIdentification' : 'organizationIdentification';
+  if (JSON.stringify(identificationOf(after)) !== JSON.stringify(identificationOf(before)))
+    changes[identificationKey] = identificationOf(after);
+  if (JSON.stringify(externalOf(after)) !== JSON.stringify(externalOf(before)))
+    changes.externalReference = externalOf(after);
   return Object.keys(changes).length ? changes : null;
+}
+
+export interface NewParty extends ContactFields {
+  givenName: string;
+  familyName: string;
+  organizationName: string;
+  status: string;
+  birthDate: string | null;
+}
+
+export async function createParty(kind: PartyKind, form: NewParty): Promise<void> {
+  const media = contactMedia(form);
+  await postJson(PARTY_PATH[kind], {
+    '@type': kind,
+    ...(kind === 'Individual'
+      ? { givenName: form.givenName.trim(), familyName: form.familyName.trim() }
+      : { name: form.organizationName.trim() }),
+    status: form.status,
+    ...(media.length ? { contactMedium: media } : {}),
+    ...(kind === 'Individual' && form.birthDate ? { birthDate: form.birthDate } : {}),
+  });
+}
+
+export async function createCustomer(party: Party, name: string): Promise<void> {
+  await postJson(PATHS.customers, {
+    '@type': 'Customer',
+    name: name.trim(),
+    status: 'Active',
+    engagedParty: { id: party.id, '@type': 'PartyRef', '@referredType': party.kind },
+  });
 }
 
 export function customerChanges(before: CustomerDetail, after: CustomerDetail) {
@@ -232,7 +343,7 @@ export function customerChanges(before: CustomerDetail, after: CustomerDetail) {
 export async function patchParty(
   kind: PartyKind,
   id: string,
-  changes: Record<string, string>,
+  changes: Record<string, unknown>,
 ): Promise<void> {
   await patchJson(`${PARTY_PATH[kind]}/${id}`, changes);
 }

@@ -6,6 +6,7 @@ import { orderRefusal, type OrderError } from './orderErrors';
 
 import { toCents } from '../format/money';
 import { numberProduct } from './numbers';
+import { contactMedia, EMPTY_CONTACT } from './partyDocuments';
 import { addDays, businessDate, zonedDateTime } from '../format/dates';
 import {
   AMOUNT,
@@ -449,6 +450,8 @@ export interface NewSubscriber {
   givenName: string; // Individual
   familyName: string; // Individual
   organizationName: string; // Organization
+  email: string;
+  phone: string;
   accountName: string;
   cycleDay: number; // 1..28
   currency: string;
@@ -497,8 +500,13 @@ export async function createSubscriber(form: NewSubscriber): Promise<string> {
       throw new SubscriberStepError(`Creating the ${what} failed: ${explain(error)}.${done}`);
     }
   }
+  const media = contactMedia({ ...EMPTY_CONTACT, email: form.email, phone: form.phone });
   const party = await step('party', () =>
-    postJson<{ id?: string }>(partyPath(form.kind), { '@type': form.kind, ...partyBody(form) }),
+    postJson<{ id?: string }>(partyPath(form.kind), {
+      '@type': form.kind,
+      ...partyBody(form),
+      ...(media.length ? { contactMedium: media } : {}),
+    }),
   );
   const partyId = need(party.id, 'party id');
   created.push(`${form.kind.toLowerCase()} ${name}`);
