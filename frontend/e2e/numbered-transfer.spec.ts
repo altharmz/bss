@@ -161,4 +161,18 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
       { timeout: 90_000, intervals: [1000, 5000] },
     )
     .toBe('completed');
+
+  // retire what this run created in the catalog, so the stack does not keep it for sale
+  const retire = async (path: string, data: Record<string, unknown>) => {
+    const response = await page.request.patch(path, {
+      headers: { 'X-Bss-Request': '1', 'Content-Type': 'application/merge-patch+json' },
+      data,
+    });
+    expect(response.status(), await response.text()).toBe(200);
+  };
+  await retire(`${catalog}/productOffering/${fixture.id}`, {
+    lifecycleStatus: 'Retired',
+    isSellable: false,
+  });
+  await retire(`${catalog}/productSpecification/${spec.id}`, { lifecycleStatus: 'Retired' });
 });

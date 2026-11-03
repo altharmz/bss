@@ -20,7 +20,7 @@ Also used as the e2e fixture (stage 5 checkpoint 7): seed(client, clock, today).
 import logging
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from urllib.parse import urlparse
@@ -40,6 +40,9 @@ from tests.apidata import ACCOUNT, CATALOG, CUSTOMER
 START_DAYS = 120
 TZ = ZoneInfo(settings.billing_tz)
 MARKER_CODE = "MOB-S"  # the first offering the seed creates
+MOBILE_SPEC = "Mobile Voice & Data (numbered)"  # requires a subscriber number
+NUMBERS = "/tmf-api/resourceInventory/v5/resource"
+FIRST_NUMBER, NUMBER_COUNT = 12025550100, 20
 
 
 class SeedError(Exception):
@@ -63,15 +66,15 @@ class OfferingPlan:
     code: str
     name: str
     spec: str
-    price: int  # whole roubles: sent as a JSON integer, never through a float
+    price: int  # whole dollars: sent as a JSON integer, never through a float
     status: str
 
 
 CATALOG_PLAN = [
-    OfferingPlan("MOB-S", "Mobile S", "Mobile Voice & Data", 290, "Active"),
-    OfferingPlan("MOB-L", "Mobile L", "Mobile Voice & Data", 1290, "Active"),
-    OfferingPlan("NET-100", "Fiber 100", "Home Internet", 650, "Active"),
-    OfferingPlan("TV-BASE", "TV Basic", "TV", 399, "In Design"),
+    OfferingPlan("MOB-S", "Mobile S", MOBILE_SPEC, 29, "Active"),
+    OfferingPlan("MOB-L", "Mobile L", MOBILE_SPEC, 129, "Active"),
+    OfferingPlan("NET-100", "Fiber 100", "Home Internet", 65, "Active"),
+    OfferingPlan("TV-BASE", "TV Basic", "TV", 40, "In Design"),
 ]
 
 
@@ -86,22 +89,34 @@ class AccountPlan:
 
 
 ACCOUNTS_PLAN = [
-    AccountPlan("ivan", "Ivan Petrov", False, 1, "1000"),
-    AccountPlan("anna", "Anna Smirnova", False, 5, None),
-    AccountPlan("romashka", "Romashka LLC", True, 15, "5000"),
-    AccountPlan("sergey", "Sergey Volkov", False, 10, None),  # Suspended later
-    AccountPlan("olga", "Olga Kuznetsova", False, 28, "500"),  # never pays: negative
-    AccountPlan("dmitry", "Dmitry Sokolov", False, 1, None),  # terminated, then Closed
-    AccountPlan("elena", "Elena Morozova", False, 20, None),  # joins today
+    AccountPlan("ivan", "James Wilson", False, 1, "100"),
+    AccountPlan("anna", "Emily Carter", False, 5, None),
+    AccountPlan("romashka", "Acme Corporation", True, 15, "500"),
+    AccountPlan("sergey", "Michael Brooks", False, 10, None),  # Suspended later
+    AccountPlan("olga", "Sarah Johnson", False, 28, "50"),  # never pays: negative
+    AccountPlan("dmitry", "David Thompson", False, 1, None),  # terminated, then Closed
+    AccountPlan("elena", "Jessica Martinez", False, 20, None),  # joins today
     # prepaid: tops up, buys, renews from funds, runs out, tops up again
-    AccountPlan("pavel", "Pavel Orlov", False, 1, None, prepaid=True),
+    AccountPlan("pavel", "Robert Taylor", False, 1, None, prepaid=True),
     # prepaid, ran out: her renewal waits for a top-up
-    AccountPlan("vera", "Vera Lebedeva", False, 1, None, prepaid=True),
+    AccountPlan("vera", "Linda Harris", False, 1, None, prepaid=True),
 ]
 
 
 def account_name(plan: AccountPlan) -> str:
-    return f"{plan.customer} main"
+    return f"{plan.customer} {'corporate' if plan.organization else 'main'}"
+
+
+# categories, each with the offerings in it; catalogs, each with the categories it lists
+CATEGORIES_PLAN = {
+    "Mobile": ["MOB-S", "MOB-L"],
+    "Home Internet": ["NET-100"],
+    "TV": ["TV-BASE"],
+}
+CATALOGS_PLAN = {
+    "Consumer": ["Mobile", "Home Internet", "TV"],
+    "Business": ["Mobile", "Home Internet"],
+}
 
 
 # --- talking to the API ---
@@ -138,6 +153,7 @@ class World:
     offerings: dict[str, dict[str, Any]]
     accounts: dict[str, dict[str, Any]]
     products: dict[str, dict[str, Any]]
+    numbers: list[dict[str, Any]] = field(default_factory=list)  # the free ones, in order
 
 
 def build_catalog(api: Api, first_day: date) -> dict[str, dict[str, Any]]:
@@ -146,9 +162,19 @@ def build_catalog(api: Api, first_day: date) -> dict[str, dict[str, Any]]:
     offerings = {}
     for plan in CATALOG_PLAN:
         if plan.spec not in specs:
+            numbered = (
+                {"resourceSpecification": [{"id": "msisdn", "@type": "ResourceSpecificationRef"}]}
+                if plan.spec == MOBILE_SPEC
+                else {}
+            )
             specs[plan.spec] = api.post(
                 f"{CATALOG}/productSpecification",
-                {"@type": "ProductSpecification", "name": plan.spec, "lifecycleStatus": "Active"},
+                {
+                    "@type": "ProductSpecification",
+                    "name": plan.spec,
+                    "lifecycleStatus": "Active",
+                    **numbered,
+                },
             )
         price = api.post(
             f"{CATALOG}/productOfferingPrice",
@@ -178,6 +204,50 @@ def build_catalog(api: Api, first_day: date) -> dict[str, dict[str, Any]]:
             },
         )
     return offerings
+
+
+def build_numbers(api: Api) -> list[dict[str, Any]]:
+    """The subscriber numbers 12025550100-12025550119, free until a mobile add takes one."""
+    return [
+        api.post(
+            NUMBERS,
+            {
+                "@type": "LogicalResource",
+                "name": f"MSISDN {value}",
+                "value": value,
+                "administrativeState": "unlocked",
+                "resourceSpecification": {"id": "msisdn", "@type": "ResourceSpecificationRef"},
+            },
+        )
+        for value in (str(FIRST_NUMBER + i) for i in range(NUMBER_COUNT))
+    ]
+
+
+def build_classification(api: Api, offerings: dict[str, dict[str, Any]]) -> None:
+    """Every offering in a category; the catalogs list root categories."""
+    categories = {}
+    for name, codes in CATEGORIES_PLAN.items():
+        categories[name] = api.post(
+            f"{CATALOG}/category",
+            {
+                "@type": "Category",
+                "name": name,
+                "lifecycleStatus": "Active",
+                "productOffering": [
+                    {"id": offerings[code]["id"], "@type": "ProductOfferingRef"} for code in codes
+                ],
+            },
+        )
+    for name, roots in CATALOGS_PLAN.items():
+        api.post(
+            f"{CATALOG}/productCatalog",
+            {
+                "@type": "ProductCatalog",
+                "name": f"{name} catalog",
+                "lifecycleStatus": "Active",
+                "category": [{"id": categories[r]["id"], "@type": "CategoryRef"} for r in roots],
+            },
+        )
 
 
 def build_accounts(api: Api) -> dict[str, dict[str, Any]]:
@@ -230,16 +300,30 @@ def order(
     return placed
 
 
+def add_item(world: World, code: str) -> dict[str, Any]:
+    """An add item; a mobile add carries the next free number (the specification requires one)."""
+    offering = world.offerings[code]
+    if not code.startswith("MOB-"):
+        return apidata.add_item(offering)
+    number = world.numbers.pop(0)
+    product = {
+        "@type": "ProductRefOrValue",
+        "realizingResource": [
+            {"id": number["id"], "@type": "ResourceRef", "@referredType": "LogicalResource"}
+        ],
+    }
+    return apidata.add_item(offering, product=product)
+
+
 def add(api: Api, world: World, key: str, who: str, code: str, start: date) -> None:
-    placed = order(api, world, who, apidata.add_item(world.offerings[code]), start)
+    placed = order(api, world, who, add_item(world, code), start)
     world.products[key] = api.get(placed["productOrderItem"][0]["product"]["href"])
 
 
 def add_prepaid(api: Api, world: World, who: str, code: str) -> None:
     """An immediate prepaid purchase: accepted `inProgress`, completed by the worker's next
     command pass (`settle_prepaid`)."""
-    item = apidata.add_item(world.offerings[code])
-    order(api, world, who, item, None, state="inProgress")
+    order(api, world, who, add_item(world, code), None, state="inProgress")
 
 
 def delete(api: Api, world: World, key: str, who: str, end: date | None = None) -> None:
@@ -299,33 +383,33 @@ def events(today: date, start: date) -> dict[date, Callable[[Api, World], None]]
     on(d(2), lambda a, w: add(a, w, "rom-net-1", "romashka", "NET-100", d(2)))
     on(d(2), lambda a, w: add(a, w, "rom-net-2", "romashka", "NET-100", d(2)))
     on(d(3), lambda a, w: add(a, w, "sergey-mob", "sergey", "MOB-S", d(3)))
-    on(d(5), lambda a, w: pay(a, w, "ivan", 1500, "Bank card"))
-    on(d(5), lambda a, w: pay(a, w, "anna", 600, "Faster Payments"))
-    on(d(5), lambda a, w: pay(a, w, "romashka", 2000, "Bank transfer"))
+    on(d(5), lambda a, w: pay(a, w, "ivan", 150, "Bank card"))
+    on(d(5), lambda a, w: pay(a, w, "anna", 60, "Faster Payments"))
+    on(d(5), lambda a, w: pay(a, w, "romashka", 200, "Bank transfer"))
     on(d(10), lambda a, w: add(a, w, "olga-mob", "olga", "MOB-L", d(10)))
     on(d(10), lambda a, w: add(a, w, "dmitry-net", "dmitry", "NET-100", d(10)))
     on(d(20), lambda a, w: add(a, w, "ivan-net", "ivan", "NET-100", d(20)))
-    on(d(35), lambda a, w: pay(a, w, "ivan", 2000, "Bank card"))
-    on(d(35), lambda a, w: pay(a, w, "anna", 300, "Faster Payments"))
-    on(d(35), lambda a, w: pay(a, w, "romashka", 1300, "Bank transfer"))
-    on(d(35), lambda a, w: pay(a, w, "sergey", 290, "Bank card"))
+    on(d(35), lambda a, w: pay(a, w, "ivan", 200, "Bank card"))
+    on(d(35), lambda a, w: pay(a, w, "anna", 30, "Faster Payments"))
+    on(d(35), lambda a, w: pay(a, w, "romashka", 130, "Bank transfer"))
+    on(d(35), lambda a, w: pay(a, w, "sergey", 29, "Bank card"))
     on(d(45), lambda a, w: delete(a, w, "dmitry-net", "dmitry"))  # terminated that day
     on(d(60), lambda a, w: a.patch(w.accounts["dmitry"]["href"], {"state": "Closed"}))
-    on(d(65), lambda a, w: pay(a, w, "ivan", 1900, "Bank card"))
-    on(d(65), lambda a, w: pay(a, w, "anna", 290, "Faster Payments"))
-    on(d(65), lambda a, w: pay(a, w, "romashka", 1300, "Bank transfer"))
+    on(d(65), lambda a, w: pay(a, w, "ivan", 190, "Bank card"))
+    on(d(65), lambda a, w: pay(a, w, "anna", 29, "Faster Payments"))
+    on(d(65), lambda a, w: pay(a, w, "romashka", 130, "Bank transfer"))
     on(d(70), lambda a, w: add(a, w, "anna-net", "anna", "NET-100", d(70)))
     on(d(80), lambda a, w: a.patch(w.accounts["sergey"]["href"], {"state": "Suspended"}))
-    on(d(95), lambda a, w: pay(a, w, "ivan", 1940, "Bank card"))
-    on(d(95), lambda a, w: pay(a, w, "anna", 940, "Faster Payments"))
-    on(d(95), lambda a, w: pay(a, w, "romashka", 1300, "Bank transfer"))
+    on(d(95), lambda a, w: pay(a, w, "ivan", 194, "Bank card"))
+    on(d(95), lambda a, w: pay(a, w, "anna", 94, "Faster Payments"))
+    on(d(95), lambda a, w: pay(a, w, "romashka", 130, "Bank transfer"))
     on(d(100), lambda a, w: delete(a, w, "ivan-mob", "ivan"))  # mid-period: a refund
-    on(d(110), lambda a, w: pay(a, w, "romashka", 1300, "Bank transfer"))
-    on(d(4), lambda a, w: pay(a, w, "pavel", 600, "Bank card"))  # a top-up
+    on(d(110), lambda a, w: pay(a, w, "romashka", 130, "Bank transfer"))
+    on(d(4), lambda a, w: pay(a, w, "pavel", 60, "Bank card"))  # a top-up
     on(d(5), lambda a, w: add_prepaid(a, w, "pavel", "MOB-S"))
-    on(d(75), lambda a, w: pay(a, w, "pavel", 300, "Bank card"))  # after running out: resumes
-    on(d(110), lambda a, w: pay(a, w, "pavel", 300, "Bank card"))  # resumes the lapsed renewal
-    on(d(70), lambda a, w: pay(a, w, "vera", 300, "Bank card"))
+    on(d(75), lambda a, w: pay(a, w, "pavel", 30, "Bank card"))  # after running out: resumes
+    on(d(110), lambda a, w: pay(a, w, "pavel", 30, "Bank card"))  # resumes the lapsed renewal
+    on(d(70), lambda a, w: pay(a, w, "vera", 30, "Bank card"))
     on(d(71), lambda a, w: add_prepaid(a, w, "vera", "MOB-S"))  # her renewal at d(101) finds 10
     # today: a product starting in 5 days, one starting today (charged by tomorrow's
     # run), and a termination ordered for 12 days from now (pendingTerminate)
@@ -335,7 +419,7 @@ def events(today: date, start: date) -> dict[date, Callable[[Api, World], None]]
     # the bill lifecycle: Olga (who never pays) disputes her oldest bill; Sergey pays 100
     # towards his newest bill rather than the oldest
     on(today, lambda a, w: hold_oldest(a, w, "olga"))
-    on(today, lambda a, w: pay_newest(a, w, "sergey", 100, "Bank card"))
+    on(today, lambda a, w: pay_newest(a, w, "sergey", 10, "Bank card"))
 
     def run_all(steps: list[Callable[[Api, World], None]]) -> Callable[[Api, World], None]:
         def run(api: Api, world: World) -> None:
@@ -395,6 +479,8 @@ def seed(client: Any, clock: FixedClock, today: date) -> bool:
         return False
     world = World(offerings=build_catalog(api, start + timedelta(days=1)), accounts={}, products={})
     world.accounts = build_accounts(api)
+    world.numbers = build_numbers(api)
+    build_classification(api, world.offerings)
     plan = events(today, start)
     day = start + timedelta(days=1)
     with worker_db.connect() as worker:  # owns billing while the seed runs

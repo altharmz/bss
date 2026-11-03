@@ -699,7 +699,7 @@ request body is proven independent of the browser's zone. `make web-lint`: tsc, 
 prettier. `make web-e2e`: Playwright against the built UI and the seeded local stack,
 failing on any console error or 5xx (`frontend/e2e/smoke.spec.ts`; it also
 opens Billing runs and one run). Billing data is read-only except the prepaid test, which
-tops up and orders for Pavel Orlov on the disposable seeded stack.
+tops up and orders for Robert Taylor on the disposable seeded stack.
 
 - **Every request a component test makes must be stubbed** (`src/test/fetch.ts`): an
   unmatched one rejects (the UI shows a network error) *and* fails the test after it ends
