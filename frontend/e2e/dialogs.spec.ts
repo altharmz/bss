@@ -29,7 +29,7 @@ for (const viewport of [
     await edit.getByRole('button', { name: 'Cancel' }).click();
     await page.getByRole('button', { name: 'Add product', exact: true }).first().click();
     const add = page.getByRole('dialog', { name: 'Add product' });
-    await check(add, add.getByRole('button', { name: 'Activate', exact: true }));
+    await check(add, add.getByRole('button', { name: 'Add product', exact: true }));
     await add.getByRole('button', { name: 'Cancel' }).click();
     await page.goto('/catalog');
     await page.getByRole('button', { name: '+ New offering' }).click();

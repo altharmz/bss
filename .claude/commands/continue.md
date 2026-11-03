@@ -32,7 +32,9 @@ Then, in this order:
    task's PR; failing checks or requested changes come before new work. Do not perform a
    manual board or open-PR inventory to find new work.
    Run `make telemetry-collect` to bind the actual resumed client session and capture
-   registered sessions; follow `docs/telemetry-usage.md` when session identity is unavailable.
+   registered sessions. Kimi agents must always run
+   `make telemetry-collect CLIENT=kimi SESSION_ID=<actual-session-uuid>` instead, with the
+   actual session ID. Follow `docs/telemetry-usage.md` when session identity is unavailable.
    Verify the issue's starting statistics comment and, after PR creation, its second
    statistics comment showing the observed difference. Retry posting with
    `make telemetry-comment PHASE=start` or `PHASE=pr`; never guess missing counts.

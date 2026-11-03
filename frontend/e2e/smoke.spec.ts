@@ -214,7 +214,7 @@ test('prepaid: Pavel Orlov tops up and orders, Vera Lebedeva waits for funds, co
   }
   await page
     .getByRole('dialog', { name: 'Add product' })
-    .getByRole('button', { name: 'Activate', exact: true })
+    .getByRole('button', { name: /^Add / })
     .click();
   // accepted: the worker completes it (OrderWatch follows; no worker runs inside the test)
   await expect(

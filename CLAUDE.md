@@ -161,6 +161,8 @@ starting/latest counters and observed difference, client/model/session participa
 estimated cost with provenance when supported, and explicit missing/partial data.
 Never guess counts or present unknown usage/cost as zero. On resume/handoff run
 `make telemetry-collect`; source/session setup is in [telemetry-usage.md](docs/telemetry-usage.md).
+Kimi agents must always use `make telemetry-collect CLIENT=kimi SESSION_ID=<actual-session-uuid>`
+with the actual session ID, including on resume and handoff.
 
 `make new-priority-task` creates an explicitly approved P0 issue first in Ready, then stops.
 Run `make start-task` separately to select, claim and prepare work.

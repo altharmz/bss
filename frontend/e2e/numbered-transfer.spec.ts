@@ -112,7 +112,7 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
       (response) =>
         response.url().endsWith('/productOrder') && response.request().method() === 'POST',
     );
-    await add.getByRole('button', { name: 'Activate', exact: true }).click();
+    await add.getByRole('button', { name: /^Add / }).click();
     const order = (await (await orderResponse).json()) as { id: string };
     await expect
       .poll(

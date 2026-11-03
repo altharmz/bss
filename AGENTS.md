@@ -38,7 +38,8 @@ them and recover failures with `make telemetry-comment PHASE=start` or
 difference, participating clients/models/sessions, pricing provenance and explicit gaps.
 Never guess counts or report unknown usage/cost as zero. On resume/handoff run
 `make telemetry-collect`; bind the actual client session as described in
-[telemetry-usage.md](docs/telemetry-usage.md). These shared rules also apply to Kimi.
+[telemetry-usage.md](docs/telemetry-usage.md). Kimi agents must always include the actual
+session ID explicitly: `make telemetry-collect CLIENT=kimi SESSION_ID=<actual-session-uuid>`.
 
 `make new-priority-task` only creates an explicitly approved P0 issue first in Ready.
 It does not start work; selection and claim remain in the separate `make start-task`.
