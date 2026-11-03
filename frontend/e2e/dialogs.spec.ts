@@ -11,7 +11,7 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     await page.goto('/subscribers');
     await signIn(page);
-    await page.getByRole('row').filter({ hasText: 'Olga Kuznetsova' }).click();
+    await page.getByRole('row').filter({ hasText: 'Sarah Johnson' }).click();
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     const edit = page.getByRole('dialog', { name: 'Edit subscriber' });
     await expect(edit.getByLabel('Account name')).not.toHaveValue('');
