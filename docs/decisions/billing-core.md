@@ -283,19 +283,16 @@ naming the product's initial offering failed the prorated-billing API test.
 
 ## Open questions
 
-- **Changing `billCycleDay`.** PATCH is a 409 today. Not settled in stage 3: a change has
-  to decide how the current period is treated (close it early, stretch it, or only apply
-  from the next period). The billing core assumes a fixed cycle day; with a changed one,
-  stored ABRs no longer sit inside one cycle period and `compute` raises
-  `InconsistentState`.
-- ~~**Suspension semantics.**~~ Closed 2026-10-19 ("decide based on TMF", confirmed by
-  the human): products are suspended and resumed by TMF622 modify items with
-  `product.status` ([tmf-api.md](tmf-api.md#suspension-2026-10-19)), and **billing does
-  not change** - no spec says what a suspension does to charges, so `Suspended`/`Closed`
-  billing accounts and `suspended` products are billed by their dates like any other. A
-  rule that stops or reduces charges would be ours, a business decision for the human.
-  Ordering refuses only adding a product or changing its offering on a non-Active account
-  (C9).
+- **Changing `billCycleDay`** is issue #68. PATCH is a 409 today; the billing core assumes
+  a fixed cycle day (with a changed one, stored ABRs no longer sit inside one cycle period
+  and `compute` raises `InconsistentState`).
+- **Suspension semantics** (closed 2026-10-19, "decide based on TMF", confirmed by the
+  human): products are suspended and resumed by TMF622 modify items with `product.status`
+  ([tmf-api.md](tmf-api.md#suspension-2026-10-19)), and **billing does not change** - no
+  spec says what a suspension does to charges, so `Suspended`/`Closed` billing accounts and
+  `suspended` products are billed by their dates like any other. A rule that stops or
+  reduces charges would be ours, a business decision for the human. Ordering refuses only
+  adding a product or changing its offering on a non-Active account (C9).
 
 The resolved items of CLAUDE.md's old "Open questions" moved too: stale billing runs and
 `APP_ENV` to [worker.md](worker.md#resolved-questions), the two template ports to

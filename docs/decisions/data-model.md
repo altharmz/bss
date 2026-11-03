@@ -83,7 +83,7 @@ Index: [README.md](README.md).
   existing half-open `[start_date, termination_date)`: a product terminated "today" has
   `termination_date = today`, so today is not charged. A product activated and terminated
   on the same day is charged 0 days.
-- **`frontend/`** is planned (stage 5): a separate directory built to static files and
-  served by the shared Caddy.
+- **`frontend/`** is a separate directory built to static files and served by the shared
+  Caddy.
 - Stage 1 runs the migration as a NOSUPERUSER database owner in a test, like vps-infra's
   `make add-db` does; `btree_gist` works because it is a trusted extension (PG13+).

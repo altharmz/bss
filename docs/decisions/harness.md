@@ -2,8 +2,8 @@
 
 Principle: every regular operation is a `make` target; agents are told to use them
 ([worktrees.md](../worktrees.md)) and little is blocked. The agent's work ends at the merge
-to `master`; deploying is the human's (`make deploy`, [infra.md](infra.md)). Dated per-issue
-history is in [../archive/harness-history.md](../archive/harness-history.md).
+to `master`; deploying is the human's (`make deploy`, [infra.md](infra.md)). Per-issue
+history is in `git log` and the closed issues.
 
 ## Development cycle and gates
 
