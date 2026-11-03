@@ -1355,7 +1355,11 @@ def test_balances_screen_reads_as_the_ui_makes_them(api, db_conn):
         next(t["id"] for t in totals if t["partyAccount"]["id"] == tx.id)
     ]
     assert api.get(f"{prepay}/bucket/{tx.bucket}").json()["partyAccount"]["id"] == tx.id
-    assert api.get(f"{prepay}/accumulatedBalance/{one_total[0]['id']}").status_code == 200
+    total_detail = api.get(f"{prepay}/accumulatedBalance/{one_total[0]['id']}")
+    assert total_detail.status_code == 200
+    assert total_detail.json()["partyAccount"]["id"] == tx.id
+    assert total_detail.json()["totalBalance"] == one_total[0]["totalBalance"]
+    assert one_total[0]["totalBalance"] == {"amount": 40, "units": "USD"}
     # each kind's list, by account and status; the transfer is the sender's, created
     sent = api.get(f"{prepay}/transferBalance?partyAccount.id={tx.id}&{page}").json()
     assert [t["id"] for t in sent] == [moved["id"]]

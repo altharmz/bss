@@ -1221,6 +1221,13 @@
   padding-block: 20px;
 }
 
+.prepaid-account-total {
+  padding: var(--space-md);
+}
+.prepaid-account-total .bss-key-value {
+  column-gap: var(--space-md);
+}
+
 .subscriber-overview {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;

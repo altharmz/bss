@@ -34,7 +34,7 @@ const BILL_COLUMNS: Column[] = [
   { key: 'no', label: 'Bill', width: '120px', mono: true },
   { key: 'date', label: 'Bill date', width: '100px', mono: true },
   { key: 'due', label: 'Due', width: '1fr', mono: true },
-  { key: 'amount', label: 'Amount due', width: '120px', align: 'right', mono: true },
+  { key: 'amount', label: 'Total', width: '120px', align: 'right', mono: true },
   { key: 'remaining', label: 'Remaining', width: '120px', align: 'right', mono: true },
   { key: 'state', label: 'State', width: '120px' },
 ];
@@ -229,7 +229,7 @@ function BillBody({
           </div>
         </div>
         <div className="bss-kpi">
-          <div className="label">Amount due</div>
+          <div className="label">Total</div>
           <div className="value strong">{formatCents(toCents(bill.amountDue.value))}</div>
         </div>
         <div className="bss-kpi">
