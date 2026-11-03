@@ -139,7 +139,5 @@ it('explains why an account without numbered active products cannot transfer', a
       'This account has no active product with a subscriber number, so it cannot send a transfer. Only products whose specification requires a number carry one.',
     ),
   ).toBeTruthy();
-  expect(
-    (screen.getByRole('button', { name: 'Review transfer' }) as HTMLButtonElement).disabled,
-  ).toBe(true);
+  expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
 });
