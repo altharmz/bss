@@ -265,11 +265,24 @@ Both of these only showed up against the real VPS, never locally:
 
 ## Deploying the UI (stage 5, checkpoint 7)
 
-The Caddy side is vps-infra's: **`docs/vps-infra-change-request.md`** has the complete
-request - the read-only static mount of `~/bss/web` (created by vps-infra *before* Caddy is
-restarted, else Docker creates it root-owned), the site block (validated with Caddy 2.11.4
-in a local rehearsal), the GET-only `smoke` user, `/billing-status` unauthenticated, and
-the order of deploys (backup, vps-infra, then `make verify`).
+The Caddy side is vps-infra's. What bss relies on (applied; vps-infra owns the config):
+
+- `~/bss/web` on the VPS (the deploy user's home) holds the UI, written only by
+  `deploy.sh` with rsync *into* the directory, never replaced or renamed. vps-infra mounts
+  it read-only into Caddy (`/srv/bss-web`) and creates it before Caddy starts with the
+  mount (else Docker creates it root-owned and rsync cannot write).
+- Routes: `/healthz` and `/billing-status` are open (the external monitor); `/tmf-api/*`
+  and `/internal/*` reach `bss:8080` (a missing `/internal/*` makes `/internal/v1/context`
+  answer `index.html` with 200, which is why the web smoke checks for JSON); everything
+  else is the static UI with `try_files {path} /index.html`, `index.html` `no-cache` and
+  `/assets/*` immutable.
+- `X-Remote-User` is stripped on every route, never set; `X-Forwarded-For` is Caddy's
+  default (the sign-in throttle keys on its last entry, `APP_TRUST_FORWARDED`). On the
+  `bss2811` hostname requests pass the host nginx first, so all sign-ins there share one
+  throttle bucket (accepted). Caddy asks for no login since U11 ([users.md](users.md)).
+- Order of a first deploy: fresh backup, vps-infra's mount and site block, then
+  `make verify`. If the web smoke fails, the app is already deployed and healthy (the UI
+  ships last); fix the Caddy side and re-run `make deploy`.
 
 **First web deploy: done** - `9424b9b`, 2026-10-02, `make verify` end to end (migration
 0003 ran, web smoke 8/8 through Caddy).

@@ -283,8 +283,7 @@ the Edit tool):
    `.env.smoke`; its `.env.prod` guard against that line and the dry-run message can
    go), `.env.example`, `docs/operations.md`, `docs/decisions/infra.md`. The smoke
    cannot be rehearsed locally (no Caddy): `bash -n`, then the deploy's own run.
-4. **Docs.** A U11 section in `docs/vps-infra-change-request.md` (done on the infra side,
-   with the facts above); this file (as built, the bss2811 throttle bucket); CLAUDE.md
+4. **Docs.** The Caddy facts in `infra.md` (done on the infra side); this file (as built, the bss2811 throttle bucket); CLAUDE.md
    (no more "two logins"; the deploy-blocked state resolved).
 5. **Ship**: lint, `make test` x3, the human's OK on the diff, commit, push, `make
    verify` (the human's approval). **Then tell vps-infra** the web smoke passed: it
