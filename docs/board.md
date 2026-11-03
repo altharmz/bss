@@ -117,7 +117,10 @@ acceptance criteria and the board did not already close it.
    blocked until explicit conversation approval is supplied through
    `make merge-task HUMAN_APPROVAL=<PR-number>:<full-head-SHA>`; never bypass it with a raw
    merge command. See [approval input](worktrees.md#task-pull-requests-and-readiness).
-5. CI red: fix it on the same branch and push. If you cannot, move the item to Waiting with
+5. Immediately after a confirmed merge and Done board state, run
+   `make finish-task SLOT=<returned-slot>` from clean primary master without waiting for
+   another human prompt. Cleanup has no additional human gate; all merge gates stay unchanged.
+6. CI red: fix it on the same branch and push. If you cannot, move the item to Waiting with
    a comment (`Waiting on: <what> — unblocks when: <condition>`) and leave the PR open.
 
 **Never self-merge without explicit approval** (these wait for the human's review and explicit approval in the

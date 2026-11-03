@@ -36,9 +36,11 @@ of work and when the PR is created. The Make lifecycle posts both checkpoints; v
 them and recover failures with `make telemetry-comment PHASE=start` or
 `make telemetry-comment PHASE=pr`. Show the starting/latest counters and their observed
 difference, participating clients/models/sessions, pricing provenance and explicit gaps.
-Never guess counts or report unknown usage/cost as zero. On resume/handoff run
-`make telemetry-collect`; bind the actual client session as described in
-[telemetry-usage.md](docs/telemetry-usage.md). Kimi agents must always include the actual
+Never guess counts or report unknown usage/cost as zero. At Kimi startup, bind the active
+session automatically through its process-owned session-lock registry; if discovery is
+unavailable, supply `BSS_TELEMETRY_SESSION_ID=<actual-session-uuid>` to `make start-task`.
+On resume/handoff run `make telemetry-collect`; bind the actual client session as described
+in [telemetry-usage.md](docs/telemetry-usage.md). Kimi agents must always include the actual
 session ID explicitly: `make telemetry-collect CLIENT=kimi SESSION_ID=<actual-session-uuid>`.
 
 `make new-priority-task` only creates an explicitly approved P0 issue first in Ready.
@@ -56,7 +58,10 @@ inventory commands and do not ask for confirmation. The startup helper owns pref
 selection and claim; this explicit next-task path takes precedence over the general
 continue protocol's preliminary master-CI check. If the user asks only to trigger
 startup, report the result and stop; otherwise continue delivery in the returned worktree.
-Required tool sandbox approvals and human merge gates still apply.
+Required tool sandbox approvals and human merge gates still apply. After a confirmed merge
+and Done board state, immediately run `make finish-task SLOT=<returned-slot>` from clean
+primary master without waiting for another human prompt; cleanup has no additional human
+gate and leaves the existing merge gates unchanged.
 
 **Deployment is the human's, outside development** (the human, 2026-10-28): your work ends
 at the merge to master. Never run `make deploy`/`verify`/`remote`, never track or suggest a

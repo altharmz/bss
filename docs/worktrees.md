@@ -38,7 +38,8 @@ uses `make start-task`.
    issue, branch, slot and worktree; startup claims `agent:<client>` and moves it to Doing.
    It binds machine usage and posts the starting statistics comment on the selected issue.
    Set up the actual client session identity per [telemetry-usage.md](telemetry-usage.md);
-   unknown identities/counters are explicitly unavailable.
+   unknown identities/counters are explicitly unavailable. Kimi startup discovers its
+   process-owned session lock automatically, with `BSS_TELEMETRY_SESSION_ID` as fallback.
 2. In that task worktree: implement, with focused tests when useful. If another task
    merged meanwhile, use `make sync-task` from a clean checkout before continuing.
    On resume or client/session handoff run `make telemetry-collect`; this preserves earlier
@@ -56,8 +57,9 @@ uses `make start-task`.
    descriptions. Missing counters, pricing or final response usage remain visible.
 5. Use `make merge-task` when ready. Human-review gates remain blocked for the human;
    do not replace a blocked target with a raw merge command.
-6. After confirmed merge, issue closure and board Done, run
-   `make finish-task SLOT=<returned-slot>` from clean primary master.
+6. Immediately after confirmed merge, issue closure and board Done, without waiting for
+   another human prompt, run `make finish-task SLOT=<returned-slot>` from clean primary
+   master. Cleanup has no additional human gate and leaves the merge gates unchanged.
 
 `make commit` runs the authoritative pre-commit verification hook. `make check` is
 optional/on-demand; it is not a mandatory step immediately before committing. The
@@ -574,9 +576,11 @@ or unconfirmed merge is reported as a failure to confirm, preserving everything 
 inspection. A confirmed already-merged matching head succeeds without another merge.
 Remote branch deletion remains GitHub's repository setting.
 
-After the PR is merged and the issue is closed with its BSS project item Done, run
-`make finish-task SLOT=worker1` **from primary master**. Only persistent slot tasks are
-supported. Startup's common lock and the slot lock serialize completion with slot reuse.
+Immediately after the PR is merged and the issue is closed with its BSS project item Done,
+without waiting for another human prompt, run `make finish-task SLOT=worker1` **from primary
+master**. Cleanup has no additional human gate and leaves the merge gates unchanged. Only
+persistent slot tasks are supported. Startup's common lock and the slot lock serialize
+completion with slot reuse.
 The command validates the task reservation, clean worktree, PR head, issue and project
 state; fetches/prunes origin and fast-forwards clean primary master; and verifies the
 merge commit is in master before any resource removal.

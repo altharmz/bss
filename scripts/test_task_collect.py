@@ -239,7 +239,45 @@ class CollectionTests(unittest.TestCase):
             ("kimi", "KIMI_SESSION_ID"),
         ):
             self.assertEqual(collect.current({"BSS_TASK_OWNER": client, key: SID}), (client, SID))
-        self.assertEqual(collect.current({"BSS_TASK_OWNER": "kimi"}), ("kimi", "unavailable"))
+        with patch.object(collect, "kimi_session", return_value=None):
+            self.assertEqual(collect.current({"BSS_TASK_OWNER": "kimi"}), ("kimi", "unavailable"))
+
+    def test_kimi_session_matches_only_one_process_owned_session_lock(self):
+        self.source("kimi")
+        proc = self.home / "proc"
+        (proc / "123").mkdir(parents=True)
+        (proc / "123/stat").write_text("123 (kimi) R 1")
+        registry = self.home / ".kimi-code/locks/sessions"
+        registry.mkdir(parents=True)
+
+        def lock(session, pid=123):
+            (registry / f"session_{session}.lock").write_text(
+                json.dumps(
+                    dict(
+                        version=1,
+                        token=f"{pid}:{session}",
+                        pid=pid,
+                        hostname=os.uname().nodename,
+                    )
+                )
+            )
+
+        lock(SID)
+        with (
+            patch.object(Path, "home", return_value=self.home),
+            patch.object(collect.os, "getpid", return_value=123),
+        ):
+            self.assertEqual(collect.kimi_session(proc), SID)
+            with patch.object(collect, "kimi_session", return_value=SID):
+                self.assertEqual(collect.current({"BSS_TASK_OWNER": "kimi"}), ("kimi", SID))
+            other = "00000000-0000-0000-0000-000000000002"
+            self.source("kimi", session=other)
+            lock(other)
+            self.assertIsNone(collect.kimi_session(proc))
+            (registry / f"session_{other}.lock").unlink()
+            self.assertEqual(collect.kimi_session(proc), SID)
+            lock(SID, pid=999)
+            self.assertIsNone(collect.kimi_session(proc))
 
     def test_finish_collects_registered_clients_without_binding_operator(self):
         with patch.object(collect, "collect", return_value=[]) as run:

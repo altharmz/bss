@@ -280,12 +280,15 @@ validated worker slot. Successful commit/push results may also contain the commi
 PR lifecycle results may contain a positive PR number and allowlisted readiness/CI states.
 Other event metadata remains empty.
 
-Codex's UUID thread identifier is the reliable session source currently supported.
-Other runtimes may provide an explicit UUID in `BSS_TELEMETRY_SESSION_ID`; without a
-reliable identity events have no session. A session key includes task and provider, so
-one thread cannot accidentally associate events with a different task. Unknown model,
-usage, pricing and cost stay NULL; there is no inference from logs or fabricated zero
-usage. End timestamps/outcome remain NULL until `finish-task` confirms task completion;
+Codex's UUID thread identifier, Claude's process registry and Kimi's session-lock registry
+are reliable session sources. Kimi's registry match validates the lock version, ancestor
+PID/token and hostname, then verifies its main wire source; ambiguous locks fail closed
+rather than selecting the newest session. Runtimes may provide an explicit UUID in
+`BSS_TELEMETRY_SESSION_ID`; without a reliable identity events have no session. A session
+key includes task and provider, so one thread cannot accidentally associate events with a
+different task. Unknown model, usage, pricing and cost stay NULL; there is no inference
+from conversation content or fabricated zero usage. End timestamps/outcome remain NULL
+until `finish-task` confirms task completion;
 `down` only stops runtime and does not imply task completion.
 Startup duration is NULL because startup currently does not measure it. Historical
 rows are retained indefinitely; no task cleanup cascades or automatic deletion exist.

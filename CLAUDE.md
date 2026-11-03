@@ -159,7 +159,9 @@ through `start-task` and `create-pr`; verify the comments. Retry a failed checkp
 `make telemetry-comment PHASE=start` or `make telemetry-comment PHASE=pr`. Show the
 starting/latest counters and observed difference, client/model/session participation,
 estimated cost with provenance when supported, and explicit missing/partial data.
-Never guess counts or present unknown usage/cost as zero. On resume/handoff run
+Never guess counts or present unknown usage/cost as zero. Kimi startup discovers the active
+session through its process-owned session-lock registry; when unavailable, pass
+`BSS_TELEMETRY_SESSION_ID=<actual-session-uuid>` to `make start-task`. On resume/handoff run
 `make telemetry-collect`; source/session setup is in [telemetry-usage.md](docs/telemetry-usage.md).
 Kimi agents must always use `make telemetry-collect CLIENT=kimi SESSION_ID=<actual-session-uuid>`
 with the actual session ID, including on resume and handoff.
@@ -184,7 +186,10 @@ stay in the slice trackers in `docs/` and an issue only links to them. Rules in 
   renewed approval and all other gates still apply. Without that approval never self-merge a
   `needs-human` item or a PR touching CLAUDE.md, AGENTS.md, docs/board.md, `.claude/`,
   `scripts/pre-commit.sh` or `.github/workflows/`; never use `--admin`, merge on failing
-  or pending checks, or push to `master`. Details: board.md.
+  or pending checks, or push to `master`. After a confirmed merge and Done board state,
+  immediately run `make finish-task SLOT=<returned-slot>` from clean primary master without
+  waiting for another human prompt. Cleanup has no additional human gate and leaves the
+  existing merge gates unchanged. Details: board.md.
 - Never start work from Inbox without the human's OK; never move a `needs-human` item
   to Doing for yourself.
 - On "continue", or at session start without a concrete request, follow
