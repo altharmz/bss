@@ -718,11 +718,12 @@ Individuals / Organizations / Customers with name search and a status filter. On
 three lists plus the billing accounts (`fields=name,relatedParty`) and the owners of financial,
 party and settlement accounts (`fields=relatedParty`), so the delete rules read from loaded data.
 The detail dialog GETs the record; Edit reuses `Field` and `CUSTOMER_STATUSES` of
-`SubscriberForms.tsx` and patches only the changed names (party) or name and status (customer).
-Tests: `Parties.test.tsx` (lists, search and filter, links, edits, delete bodies, hidden Delete,
-server 409) and `tests/test_ui_requests.py::test_party_and_customer_writes_as_the_ui_sends_them`.
+`SubscriberForms.tsx` and patches only changed fields.
+G10 adds party creation, customer creation from a party, party statuses, birth date and document fields, optional subscriber contact media, and a shared Combobox for account owners; the existing API already stores all documents.
+Tests: `Parties.test.tsx` (lists, search and filter, links, creates, edits, delete bodies, hidden
+Delete, server 409), `combobox.test.tsx`, and the party/customer UI request replays.
 Deviation: "accounts it owns" is read from the financial, party and settlement account lists
-(three extra reads); the party status is shown but not edited (a record only).
+(three extra reads).
 
 
 ## UI: payments and refunds history (slice 19, 2026-10-25)

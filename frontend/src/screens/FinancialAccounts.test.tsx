@@ -193,10 +193,12 @@ describe('financial accounts', () => {
       const dialog = await screen.findByRole('dialog', { name: 'New financial account' });
       expectUi('ui.financialAccounts.form');
       const create = within(dialog).getByRole('button', { name: 'Create' }) as HTMLButtonElement;
-      await within(dialog).findByRole('option', { name: /Romashka LLC/ });
+      const owner = within(dialog).getByRole('combobox', { name: 'Owner' });
       expect(create.disabled).toBe(true);
       fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: ' Holding ' } });
-      fireEvent.change(within(dialog).getByLabelText('Owner'), { target: { value: ROMASHKA } });
+      fireEvent.focus(owner);
+      fireEvent.click(await within(dialog).findByRole('option', { name: /Romashka LLC/ }));
+      expectUi('ui.financialAccounts.owner');
       fireEvent.change(within(dialog).getByLabelText('Account type'), {
         target: { value: 'Business' },
       });
@@ -230,10 +232,12 @@ describe('financial accounts', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Edit Personal' }));
       expectUi('ui.financialAccounts.edit');
       let dialog = await screen.findByRole('dialog', { name: 'Edit Personal' });
-      await within(dialog).findByRole('option', { name: /Olga Kuznetsova/ });
+      const ownerPicker = within(dialog).getByRole('combobox', { name: 'Owner' });
       const save = within(dialog).getByRole('button', { name: 'Save' }) as HTMLButtonElement;
       expect(save.disabled).toBe(true); // nothing changed
-      fireEvent.change(within(dialog).getByLabelText('Owner'), { target: { value: OLGA } });
+      fireEvent.focus(ownerPicker);
+      fireEvent.change(ownerPicker, { target: { value: '' } });
+      fireEvent.click(await within(dialog).findByRole('option', { name: /Olga Kuznetsova/ }));
       fireEvent.change(within(dialog).getByLabelText('Description'), {
         target: { value: 'Spare' },
       });
@@ -246,7 +250,10 @@ describe('financial accounts', () => {
       await screen.findByText('Personal saved');
       fireEvent.click(await screen.findByRole('button', { name: 'Edit Group receivables' }));
       dialog = await screen.findByRole('dialog', { name: 'Edit Group receivables' });
-      await within(dialog).findByRole('option', { name: /Olga Kuznetsova/ });
+      expect(within(dialog).getByRole('combobox', { name: 'Owner' })).toHaveProperty(
+        'value',
+        'Romashka LLC · organization',
+      );
       fireEvent.change(within(dialog).getByLabelText('Account type'), { target: { value: '' } });
       fireEvent.change(within(dialog).getByLabelText(/^Credit limit \(/), {
         target: { value: '250' },
@@ -286,12 +293,14 @@ describe('financial accounts', () => {
       await screen.findByText('Group receivables');
       fireEvent.click(screen.getByRole('button', { name: 'Edit Group receivables' }));
       const dialog = await screen.findByRole('dialog', { name: 'Edit Group receivables' });
-      await within(dialog).findByRole('option', { name: /Olga Kuznetsova/ });
-      fireEvent.change(within(dialog).getByLabelText('Owner'), { target: { value: OLGA } });
+      const owner = within(dialog).getByRole('combobox', { name: 'Owner' });
+      fireEvent.focus(owner);
+      fireEvent.change(owner, { target: { value: '' } });
+      fireEvent.click(await within(dialog).findByRole('option', { name: /Olga Kuznetsova/ }));
       fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
       const alert = await within(dialog).findByRole('alert');
       expect(alert.textContent).toContain('owner cannot change');
-      expect((within(dialog).getByLabelText('Owner') as HTMLSelectElement).value).toBe(OLGA);
+      expect(owner).toHaveProperty('value', 'Olga Kuznetsova · person');
     });
 
     it('offers Delete only when nothing is linked: DELETE, no body', async () => {

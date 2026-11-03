@@ -1757,6 +1757,70 @@ def test_party_and_customer_writes_as_the_ui_sends_them(api):
     assert api.get(org["href"]).status_code == 404
 
 
+def test_g10_party_customer_and_subscriber_writes_as_the_ui_sends_them(api):
+    """G10 createParty(), partyChanges(), createCustomer() and createSubscriber() contact
+    media: exact bodies pinned in Parties.test.tsx and Subscribers.test.tsx."""
+    party = "/tmf-api/partyManagement/v5"
+    individual = api.post_raw(
+        f"{party}/individual",
+        '{"@type":"Individual","givenName":"Anna","familyName":"Lee","status":"validated",'
+        '"contactMedium":[{"@type":"EmailContactMedium","contactType":"email",'
+        '"emailAddress":"anna@example.org"},{"@type":"PhoneContactMedium","contactType":"phone",'
+        '"phoneNumber":"+7 900 000-00-00"},{"@type":"GeographicAddressContactMedium",'
+        '"contactType":"postalAddress","street1":"Tverskaya 1","city":"Moscow",'
+        '"postCode":"101000","country":"Russia"}],"birthDate":"1990-01-02T00:00:00+03:00"}',
+    )
+    assert individual.status_code == 201, individual.text
+    assert individual.json()["contactMedium"][2]["contactType"] == "postalAddress"
+    assert individual.json()["birthDate"] == "1990-01-01T21:00:00Z"
+
+    organization = api.post_raw(
+        f"{party}/organization",
+        '{"@type":"Organization","name":"New Co","status":"closed",'
+        '"contactMedium":[{"@type":"EmailContactMedium","contactType":"email",'
+        '"emailAddress":"office@example.org"}]}',
+    )
+    assert organization.status_code == 201, organization.text
+    assert organization.json()["status"] == "closed"
+
+    edited = api.patch_raw(
+        individual.json()["href"],
+        '{"birthDate":"1985-04-03T00:00:00+03:00","status":"validated",'
+        '"contactMedium":[{"@type":"EmailContactMedium","contactType":"email",'
+        '"emailAddress":"olga@example.org"},{"@type":"PhoneContactMedium","contactType":"phone",'
+        '"phoneNumber":"+1 555 0100"},{"@type":"GeographicAddressContactMedium",'
+        '"contactType":"postalAddress","street1":"Main 2","city":"Boston",'
+        '"postCode":"02108","country":"US"}],"individualIdentification":['
+        '{"@type":"IndividualIdentification","identificationType":"passport",'
+        '"identificationId":"P123"}],"externalReference":[{"@type":"ExternalIdentifier",'
+        '"externalIdentifierType":"crmId","id":"CRM-9"}]}',
+    )
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["individualIdentification"][0]["identificationId"] == "P123"
+    assert edited.json()["externalReference"][0]["id"] == "CRM-9"
+
+    customer = api.post_raw(
+        CUSTOMERS,
+        '{"@type":"Customer","name":"Lone Ltd","status":"Active",'
+        '"engagedParty":{"id":"'
+        + organization.json()["id"]
+        + '","@type":"PartyRef","@referredType":"Organization"}}',
+    )
+    assert customer.status_code == 201, customer.text
+    assert customer.json()["engagedParty"]["id"] == organization.json()["id"]
+    assert customer.json()["status"] == "Active"
+
+    subscriber_party = api.post_raw(
+        f"{party}/individual",
+        '{"@type":"Individual","givenName":"Olga","familyName":"K",'
+        '"contactMedium":[{"@type":"EmailContactMedium","contactType":"email",'
+        '"emailAddress":"olga@example.org"},{"@type":"PhoneContactMedium","contactType":"phone",'
+        '"phoneNumber":"+1 555 0100"}]}',
+    )
+    assert subscriber_party.status_code == 201, subscriber_party.text
+    assert subscriber_party.json()["contactMedium"][1]["phoneNumber"] == "+1 555 0100"
+
+
 def test_financial_account_writes_and_links_as_the_ui_sends_them(api):
     """createBody(), patchBody() of api/financial.ts, the link in updateSubscriber() and the
     deletes: bodies pinned in FinancialAccounts.test.tsx and SubscriberCard.test.tsx."""

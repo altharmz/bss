@@ -113,8 +113,9 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 A subscriber is three TMF resources; **there is no delete** (an account carries products,
 bills and payments - it can be Closed). **+ New subscriber** (list header): a person
 (given + family name) or an organization (name), the account name (default "<name>
-main"), postpaid billing cycle day 1-28 (default 1) and an optional credit limit; the currency is
-the UI currency. Three calls in reference order: the party (TMF632), the customer engaging
+main"), postpaid billing cycle day 1-28 (default 1), optional email and phone contact media, and
+an optional credit limit; the currency is the UI currency. Empty contact fields are omitted from
+the party body. Three calls in reference order: the party (TMF632), the customer engaging
 it with status **Active** (TMF629), the billing account (TMF666, `BssBillingAccount`, the
 credit limit as an exact number token). A failure stops there and names what was already
 created - nothing is undone behind the operator's back, as in New offering. On success the
@@ -460,24 +461,28 @@ Ledger v2: separate party and customer StatusPill kinds.
 Route `/parties`, sidebar **Customers > Parties** (no count request). Three tabs: Individuals,
 Organizations (name, status, number of customers, linked subscribers) and Customers (name,
 status, engaged party, billing accounts), each with a name search and a status filter, so a party
-or customer without a billing account is reachable. Subscriber links go to the card. A row opens
-the record read with GET (`ui.parties.individual|organization|customer`): the attributes the
-subscriber forms edit. **Edit** (`ui.parties.edit`) reuses the subscriber form fields for the
-party names or the customer name and status alone (merge patch of changed fields). **Delete**
-(`ui.parties.delete`, a confirmation) is offered unless the loaded data shows a dependency: a
-party with customers or owning a financial, party or settlement account, a customer with billing
-accounts (the dialog says what blocks it); the server's 409 still shows. After an uncertain result
-the dialog offers Refresh. API: `GET .../individual|organization`, `GET .../customer?fields=...`,
-`GET .../billingAccount?fields=name,relatedParty`, `GET .../financialAccount|partyAccount|
-settlementAccount?fields=relatedParty`; `PATCH|DELETE` on the three. Design:
+or customer without a billing account is reachable. **New individual** and **New organization**
+create a party with its type-specific status, optional birth date and email/phone/postal contact
+media. Subscriber links go to the card. A row opens the record read with GET
+(`ui.parties.individual|organization|customer`). **Edit** (`ui.parties.edit`) patches changed
+identity, status, contact media, identification and external-reference fields; a party dialog also
+offers **New customer**, defaulting its name to the party and status to Active. Customer edit still
+changes name and status alone. **Delete** (`ui.parties.delete`, a confirmation) is offered unless
+the loaded data shows a dependency: a party with customers or owning a financial, party or
+settlement account, a customer with billing accounts (the dialog says what blocks it); the server's
+409 still shows. After an uncertain result the dialog offers Refresh. API:
+`GET|POST|PATCH|DELETE .../individual|organization|customer`,
+`GET .../billingAccount?fields=name,relatedParty`, and
+`GET .../financialAccount|partyAccount|settlementAccount?fields=relatedParty`. Design:
 [next-slices-design.md](next-slices-design.md) section 15.
 
 ### Financial accounts writes (`ui.financialAccounts.new|edit|delete`) - `screens/FinancialForms.tsx`
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
-The Financial accounts screen has **+ New financial account** (name, owner from the individuals and
-organizations, account type, description, informational credit limit and currency, state), a row
+The Financial accounts screen has **+ New financial account** (name, owner chosen through a
+filtering Combobox of individuals and organizations, account type, description, informational
+credit limit and currency, state), a row
 **Edit** (merge patch of changed fields, owner editable, the server refuses while accounts link)
 and **Delete** (only when nothing is linked; confirmation). Server refusals show in the dialog;
 after an uncertain result it offers Refresh. API: `POST|PATCH|DELETE .../financialAccount`,

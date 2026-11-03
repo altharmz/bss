@@ -78,6 +78,8 @@ export function NewSubscriberModal({
   const [givenName, setGivenName] = useState('');
   const [familyName, setFamilyName] = useState('');
   const [organizationName, setOrganizationName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [accountName, setAccountName] = useState('');
   const [cycleDay, setCycleDay] = useState('1');
   const [limit, setLimit] = useState('');
@@ -109,6 +111,8 @@ export function NewSubscriberModal({
         givenName,
         familyName,
         organizationName,
+        email,
+        phone,
         accountName: effectiveAccountName,
         cycleDay: day,
         currency: context.currency,
@@ -172,6 +176,14 @@ export function NewSubscriberModal({
               />
             </Field>
           )}
+          <div data-ui="ui.subscribers.contactMedia">
+            <Field label="Email">
+              <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </Field>
+            <Field label="Phone">
+              <TextInput type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </Field>
+          </div>
           <Field label="Account name">
             <TextInput
               placeholder={named ? `${name} main` : 'Name main'}
