@@ -146,9 +146,8 @@ supported recovery is forward (a fixed image), not `alembic downgrade`.
 **Not part of this repository.** vps-infra dumps every database on the host, this one
 included, by cron; bss has no backup or restore tooling ([decisions/infra.md](decisions/infra.md#shared-infrastructure-vps-infra), "Shared
 infrastructure"). Make sure a fresh dump exists before any migration that alters or
-removes data. A restore drill from a cron-made dump is an open check (CLAUDE.md, "Open
-checks"). There is **no `/backup-status` endpoint** in bss; backup monitoring, if any,
-belongs to vps-infra (see [archive/doc-findings.md](archive/doc-findings.md)).
+removes data. A restore drill from a cron-made dump is an open check (issue #9). There is **no `/backup-status` endpoint** in bss; backup
+monitoring, if any, belongs to vps-infra.
 
 ## Monitoring
 

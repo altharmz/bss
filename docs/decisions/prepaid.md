@@ -1075,7 +1075,6 @@ the independent release proofs, progress generation and deployment approval.
 
 ## N6: subscriber-number release validation (2026-10-21)
 
-Release evidence is in [the validation record](../subscriber-number-release.md).
 Lock and quarantine mutations each made their targeted test fail and were reverted.
 Three complete backend suites passed 1,495 tests each (CI, dev and the serial progress
 collector); the initial dev attempt had one existing heartbeat timing failure under

@@ -5,8 +5,7 @@ The handoff is in `design-ref/design_handoff_bss_admin_v2/` (read-only). This fi
 file wins.** Nothing is left open: a worker never decides product questions. If reality
 contradicts this file, follow "When the spec is wrong".
 
-- Tracker and orchestration: [ui-redesign-slices.md](ui-redesign-slices.md).
-- Brief that produced the handoff: [ui-redesign-brief.md](ui-redesign-brief.md).
+- Tracker: the task list of epic #43 (one issue per slice).
 
 ## Rules for every slice
 

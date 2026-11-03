@@ -1,12 +1,10 @@
 # TMF conformance gap analysis
 
-**Contract expansion (N1/N3, 2026-10-20).** TMF639 v5 and TMF654 v4 are vendored
-for the subscriber-number/prepaid work. N3 implements TMF639's eight non-listener
-operations with number-only attribute/state restrictions recorded in
-`tests/tmf-gaps.txt`. TMF654's 28 non-listener operations remain planned and absent.
-The original eight APIs implement 129 operations; with TMF639, 137 of the expanded
-165-operation inventory are implemented. The dated completion claims below describe
-the original eight contracts. Number ordering/UI and prepaid runtime remain pending.
+**Contracts.** TMF639 v5 and TMF654 v4 are vendored for the subscriber-number and prepaid
+work, in addition to the original eight APIs. What is implemented per operation is in
+[PROGRESS.md](PROGRESS.md); the exact, test-locked list of deviations is
+`tests/tmf-gaps.txt`. The dated completion claims below describe the original eight
+contracts.
 
 **Following TMF (2026-10-17).** Rule: what the vendored specs define is implemented, the
 rest skipped ([the decision](decisions/tmf-api.md#following-tmf-2026-10-17)). The
@@ -298,7 +296,7 @@ Cross-cutting, true for every resource below:
 - (b) + (d) **`@type` on POST is never checked.** `check_type` (`common.py:153`) runs on
   PATCH only. `POST /individual` with `"@type": "Organization"` is stored as an
   individual and answered with `"@type": "Individual"`. Same for every POST. This is the
-  pattern doc-findings #3 (role) and #17 (`@referredType`) fixed elsewhere by refusing the
+  pattern earlier finding #3 (role) and #17 (`@referredType`) fixed elsewhere by refusing the
   mismatch.
 - (b) + (d) In references, `href` and `name` are accepted and ignored (`common.py:53-54`);
   the response states the stored name. Documented (decisions/tmf-api.md: "`href`, `name`,
@@ -493,7 +491,7 @@ they are given from general knowledge and not verified here.
 
 | # | Gap | Where | Value | Effort |
 |---|---|---|---|---|
-| C1 | `@type` on POST is unchecked and silently replaced; `@baseType`/`@schemaLocation` dropped | `common.py:28`, `:153` | high (same class as doc-findings #3, #17) | S |
+| C1 | `@type` on POST is unchecked and silently replaced; `@baseType`/`@schemaLocation` dropped | `common.py:28`, `:153` | high (same class as earlier finding #3, #17) | S |
 | C2 | A comma-separated filter value silently returns an empty list | `listing.py`, `_sql.py:66` | high (wrong answer, not an error; MCP clients try it) | S |
 | C3 | PATCH customer refuses an unchanged `engagedParty`, which the spec's PATCH schema requires and its example sends | `customer.py:121` | medium | S |
 | C4 | PATCH with `Content-Type: application/json` is a 415 though every v5 spec lists it | `deps.py:57` (D6) | medium (generic clients) | S, but changes a recorded decision |
@@ -569,7 +567,7 @@ match the code. Tensions worth a decision:
    dropped.**" The rule is about *unknown* attributes, and the code keeps it. But
    *known* attributes are silently dropped or rewritten in several places: `@type` on
    POST (C1), `paymentMethod.@type` (C5), item `billingAccount` (C8), `@baseType` /
-   `@schemaLocation`. doc-findings #3 and #17 treated the same pattern as bugs.
+   `@schemaLocation`. earlier finding #3 and #17 treated the same pattern as bugs.
 2. decisions/tmf-api.md, "Lists": "any other query parameter is a 400" - true for lists;
    POST and PATCH ignore their query string entirely (C6). Not covered by the wording.
 3. decisions/data-model.md: free-string fields take the spelling of the spec's examples.
