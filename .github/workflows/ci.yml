@@ -1,6 +1,8 @@
 # CI. Pull requests to master and pushes to master run the cheap gate (make lint, make
 # docs-check, make test-smoke: the tests marked `smoke`); the full make test runs nightly
-# and on demand. Decision: docs/decisions/harness.md, "CI".
+# and on demand. The harness job (no Docker) checks the documentation links on every run
+# and the harness script tests on pull requests that change them.
+# Decision: docs/decisions/harness.md, "CI".
 name: CI
 
 on:
@@ -69,3 +71,30 @@ jobs:
         if: env.FULL != 'true'
       - run: make test
         if: env.FULL == 'true'
+
+  # Backstop for the local commit hook: no Docker, needs only make, git and Python.
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # A few seconds: every relative link and the commands the docs name must exist.
+      - run: make docs-links
+
+      # About 100 s, so only when the harness itself changed (the nightly full run covers
+      # it through make test).
+      - name: Detect harness changes
+        id: harness
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --name-only "$BASE" "$HEAD" | grep -Eq '^(scripts/|\.claude/|\.codex/|Makefile$)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - run: make runtime-check
+        if: steps.harness.outputs.changed == 'true'

@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from task_telemetry import literal, sql
-from task_usage import TOKENS, identifier, price, timestamp, usage_sql, validate
+from task_usage import TOKENS, identifier, timestamp, usage_sql, validate
 
 CLIENTS = {"codex": "codex-rollout-v1", "claude": "claude-request-v1", "kimi": "kimi-wire-1.5"}
 
@@ -54,7 +54,7 @@ def add(*values):
     return sum(values) if all(v is not None for v in values) else None
 
 
-def project(client, path, session, with_state=False, unsupported_pricing=None):
+def project(client, path, session, with_state=False):
     """Return request metadata, final turn times, and parser coverage limitations.
 
     Codex cumulative totals become adjacent deltas, never last_usage + total_usage.
@@ -119,8 +119,6 @@ def project(client, path, session, with_state=False, unsupported_pricing=None):
             if any(v is not None and v < 0 for v in delta.values()):
                 reason = "counter_reset"
                 continue
-            if unsupported_pricing is not None and raw.get("cache_write_input_tokens", 0):
-                unsupported_pricing.add(f"counter-{index}")
             output.append(
                 dict(
                     sample_id=f"counter-{index}",
@@ -200,8 +198,6 @@ def project(client, path, session, with_state=False, unsupported_pricing=None):
                 raw.get("inputOther"), raw.get("inputCacheRead"), raw.get("inputCacheCreation")
             )
             out = count(raw.get("output"))
-            if unsupported_pricing is not None and raw.get("inputCacheCreation") != 0:
-                unsupported_pricing.add(f"request-{index}")
             output.append(
                 dict(
                     sample_id=f"request-{index}",
@@ -428,7 +424,7 @@ def collection_rows(task):
     )
 
 
-def collect_one(row, pricing=None, home=None):
+def collect_one(row, home=None):
     client, session = row["client"], row["external_session_id"]
     key = " AND ".join(
         f"{k}={literal(row[k])}" for k in ("task_id", "client", "external_session_id")
@@ -439,10 +435,7 @@ def collect_one(row, pricing=None, home=None):
         if session == "unavailable":
             raise CollectionError("session_identity_missing")
         path = locate(client, session, home)
-        unsupported_pricing = set()
-        items, ended, limitation, active = project(
-            client, path, session, with_state=True, unsupported_pricing=unsupported_pricing
-        )
+        items, ended, limitation, active = project(client, path, session, with_state=True)
         start = timestamp(row["bound_at"])
         close = timestamp(row["closed_at"]) if row.get("closed_at") else None
         # A make command runs before its enclosing model request finishes. Wait for
@@ -497,27 +490,10 @@ def collect_one(row, pricing=None, home=None):
                     **item,
                 )
             )
-            # Cache-write tokens need a separate rate for Anthropic pricing. The
-            # legacy three-rate interchange cannot price them safely.
-            applicable = (
-                pricing
-                if client != "claude"
-                and pricing
-                and item["sample_id"] not in unsupported_pricing
-                and all(pricing.get(k) == sample[k] for k in ("provider", "model"))
-                else None
-            )
-            if applicable:
-                try:
-                    price(sample, applicable)
-                except ValueError:
-                    # An unsupported/expired rate card is a pricing gap, not a
-                    # reason to discard trustworthy machine token counts.
-                    applicable = None
-            samples.append((sample, applicable))
+            samples.append(sample)
         if samples:
             status = "partial"
-            missing_counts = any(any(s[k] is None for k in TOKENS) for s, _ in samples)
+            missing_counts = any(any(s[k] is None for k in TOKENS) for s in samples)
             reason = limitation or (
                 "counters_missing"
                 if missing_counts
@@ -526,7 +502,7 @@ def collect_one(row, pricing=None, home=None):
             if (
                 end
                 and not limitation
-                and all(all(s[k] is not None for k in TOKENS) for s, _ in samples)
+                and all(all(s[k] is not None for k in TOKENS) for s in samples)
             ):
                 status, reason = "complete", "collected"
         elif limitation:
@@ -538,12 +514,8 @@ def collect_one(row, pricing=None, home=None):
     # One transaction for the entire projection and its coverage update. A failed
     # sample never advances coverage, and large sessions need only one DB roundtrip.
     statements = []
-    for sample, card in samples:
-        statements.append(
-            usage_sql(sample, card, preserve_pricing=True)
-            .removeprefix("BEGIN;")
-            .removesuffix("COMMIT;")
-        )
+    for sample in samples:
+        statements.append(usage_sql(sample).removeprefix("BEGIN;").removesuffix("COMMIT;"))
     statements.append(
         f"UPDATE usage_collections SET checked_at=now(),status={literal(status)},"
         f"reason={literal(reason)},baseline_tokens="
@@ -561,9 +533,7 @@ def collect_one(row, pricing=None, home=None):
     )
 
 
-def collect(task, client=None, session=None, close=False, pricing=None):
-    if pricing is not None and not isinstance(pricing, dict):
-        raise ValueError("invalid pricing card")
+def collect(task, client=None, session=None, close=False):
     if client:
         bind(task, client, session or "unavailable")
     expected = json.loads(
@@ -596,7 +566,7 @@ def collect(task, client=None, session=None, close=False, pricing=None):
             f"UPDATE usage_collections SET closed_at=COALESCE(closed_at,now()) "
             f"WHERE task_id={literal(task)};"
         )
-    return [collect_one(row, pricing) for row in collection_rows(task)]
+    return [collect_one(row) for row in collection_rows(task)]
 
 
 def watch(task, attempts=60, pause=2):

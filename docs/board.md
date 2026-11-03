@@ -96,45 +96,27 @@ Board automation (auto-add, item closed, pull request merged) is best-effort; th
 helpers add an item or set Done themselves when it is late. See
 [harness.md](decisions/harness.md#github-board-automation).
 
-### Parallel agents
-
-Several agents may run at the same time, and one agent may run multiple tasks in separate
-slots. `make start-task` checks eligibility, ownership and slot availability before moving
-the item to Doing. Never work on an item owned by another agent.
-
 ### Merging and closing
 
-All work goes on a branch and a PR; nothing is pushed to `master` directly. An agent merges
-its own PR, and closes an issue (`gh issue close`) once it is verified against the
-acceptance criteria and the board did not already close it.
-
-**Flow**
-
-1. Use `make create-pr` from the task checkout; it adds `Fixes #N` and publishes safely.
-2. Before a PR that touches billing, migrations or the API, run `make test` (the full
-   suite) locally.
-3. Observe `make check-pr`; repeat while pending (`gh pr checks --watch` is also read-only).
-4. Every check green and policy ready: `make merge-task`. A human-review gate stays
-   blocked until explicit conversation approval is supplied through
-   `make merge-task HUMAN_APPROVAL=<PR-number>:<full-head-SHA>`; never bypass it with a raw
-   merge command. See [approval input](worktrees.md#task-pull-requests-and-readiness).
-5. Immediately after a confirmed merge and Done board state, run
-   `make finish-task SLOT=<returned-slot>` from clean primary master without waiting for
-   another human prompt. Cleanup has no additional human gate; all merge gates stay unchanged.
-6. CI red: fix it on the same branch and push. If you cannot, move the item to Waiting with
-   a comment (`Waiting on: <what> — unblocks when: <condition>`) and leave the PR open.
+All work goes on a branch and a PR; the steps are in
+[worktrees.md](worktrees.md#normal-agent-workflow). An agent merges its own PR and closes an
+issue (`gh issue close`) once it is verified against the acceptance criteria and the board
+did not already close it. Never work on an item owned by another agent. CI red: fix it on the
+same branch; if you cannot, move the item to Waiting with a `Waiting on:` comment and leave
+the PR open.
 
 **Never self-merge without explicit approval** (these wait for the human's review and explicit approval in the
 conversation; an earlier approval of the work or the allow list does not count):
 
 - an item, or a PR, labelled `needs-human`;
-- a PR that touches `CLAUDE.md`, `AGENTS.md`, `docs/board.md`, `.claude/` (settings, hooks,
-  commands), `.codex/` (guards), `scripts/pre-commit.sh` or `.github/workflows/`.
+- a PR that touches a file that grants permissions, runs code or defines policy: `CLAUDE.md`,
+  `AGENTS.md`, `.claude/settings.json`, `.claude/hooks/`, `.codex/`, `scripts/pre-commit.sh` or
+  `.github/workflows/`. Other `docs/` and `.claude/` files (this file, `.claude/commands/`) are
+  not gated.
 
-Approval must name the concrete PR at its exact current head in the current conversation.
-Only then may the agent pass `HUMAN_APPROVAL=<PR-number>:<full-head-SHA>` to
-`make merge-task`. New commits require renewed approval. All other readiness gates and
-GitHub protections remain enforced; see the canonical approval input documentation above.
+Approval must name the concrete PR at its exact current head in the current conversation;
+new commits require renewed approval. How to pass it:
+[worktrees.md](worktrees.md#task-pull-requests-and-readiness).
 
 **Never**, for any PR: `gh pr merge --admin`, merging with failing or pending checks, a
 direct push to `master`, a force-push. The allow list cannot check labels or paths, so the
@@ -151,12 +133,8 @@ it, then carry on in the normal order. The revert PR follows the same flow.
 
 ### Mechanics
 
-Normal task startup is `make start-task BSS_TASK_OWNER=<client>`. Do not run a manual board
-snapshot, status count, candidate selection or claim before it; fetch the returned issue's body
-for implementation context afterward.
-
-The commands below are for explicitly requested board triage/administration or diagnosis
-of a specific reported condition, not normal startup. Keep those inspections compact;
+The commands below are for explicitly requested board triage or administration, not normal
+startup (`make start-task` claims work). Keep those inspections compact;
 fetch only relevant issue bodies using explicit JSON fields (the human-readable view
 can query deprecated Projects classic fields and fail):
 

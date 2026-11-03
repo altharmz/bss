@@ -17,17 +17,19 @@ from pathlib import Path
 import start_task
 import task_pr
 import task_telemetry
+from task_cleanup import command, docker, remove_leftovers
 from task_git import require, require_no_git_overrides, run
 from task_quality import context, paths, query, review
-from task_runtime import InvalidRuntime, unique_fields
+from task_runtime import (
+    InvalidRuntime,
+    Reexec,
+    diagnostic,
+    reexec_if_scripts_changed,
+    rerun,
+    unique_fields,
+)
 from task_telemetry import record
 from worker_slots import SlotError, slot_path
-
-
-def command(root, *args):
-    return subprocess.run(  # noqa: S603
-        list(args), cwd=root, capture_output=True, text=True, check=True, timeout=60
-    ).stdout
 
 
 def merged_pr(root, task):
@@ -43,7 +45,12 @@ def merge(root, task):
             data["headRefOid"] == query(root, "rev-parse", "HEAD").decode().strip(),
             "merged PR head differs from local task",
         )
-        return {"status": "merged", "pr_number": data["number"], "url": data["url"]}, 0
+        return {
+            "status": "merged",
+            "pr_number": data["number"],
+            "url": data["url"],
+            "next_command": finish_command(root),
+        }, 0
     issue = task_pr.issue_state(root, task)
     outcome, code = task_pr.readiness(root, task, issue)
     if code:
@@ -75,7 +82,17 @@ def merge(root, task):
         confirmed["state"] == "MERGED" and confirmed["headRefOid"] == outcome["head_sha"],
         "merge not confirmed; inspect GitHub before retrying (queue may still be pending)",
     )
-    return {**outcome, "status": "merged", "reasons": []}, 0
+    return {
+        **outcome,
+        "status": "merged",
+        "reasons": [],
+        "next_command": finish_command(root),
+    }, 0
+
+
+def finish_command(root):
+    slot = root.parent.name if root.name == "repo" else "<slot>"
+    return f"make finish-task SLOT={slot}"
 
 
 def regular(path):
@@ -204,14 +221,6 @@ def synchronize(primary):
     )
 
 
-def docker(root, *args):
-    require(
-        not {"DOCKER_HOST", "DOCKER_CONTEXT"} & os.environ.keys(),
-        "unset inherited Docker selectors",
-    )
-    return command(root, "docker", "--context", "default", *args)
-
-
 def runtime_inventory(root, task):
     """Inspect only bounded ownership fields, never container environment/secrets."""
     project = "bss-" + task
@@ -302,14 +311,23 @@ def finish(primary, common, slot):
     task_telemetry.ROOT = primary
     record(task, "finish-task-attempt", 0, 0, slot=slot.name)
     started, result = time.monotonic(), 1
+    handed_over = False
     try:
         outcome = finish_steps(primary, common, slot)
         result = 0
         return outcome
+    except Reexec:
+        handed_over = True
+        raise
     finally:
-        record(
-            task, "finish-task", result, int((time.monotonic() - started) * 1000), slot=slot.name
-        )
+        if not handed_over:
+            record(
+                task,
+                "finish-task",
+                result,
+                int((time.monotonic() - started) * 1000),
+                slot=slot.name,
+            )
         task_telemetry.ROOT = telemetry_root
 
 
@@ -329,7 +347,9 @@ def finish_steps(primary, common, slot):
     state = load(journal) if journal.exists() or journal.is_symlink() else None
     if state is not None:
         require(
-            set(state) == {"version", "task", "head", "runtime_stopped", "secret"}
+            {"version", "task", "head", "runtime_stopped", "secret"}
+            <= set(state)
+            <= {"version", "task", "head", "runtime_stopped", "secret", "removed"}
             and type(state["version"]) is int
             and state["version"] == 1
             and state["task"] == task
@@ -371,9 +391,13 @@ def finish_steps(primary, common, slot):
     record(task, "cleanup-task-attempt", 0, 0, slot=slot.name)
     started = time.monotonic()
     result = 1
+    handed_over = False
     try:
         commit = completed(primary, task, state["head"])
+        before = query(primary, "rev-parse", "HEAD").decode().strip()
         synchronize(primary)
+        # The old scripts ran this far; a fix merged by this task applies from here on.
+        reexec_if_scripts_changed(primary, before)
         run(primary, "merge-base", "--is-ancestor", commit, "HEAD")
         # Record task outcome and end timestamps before any disposable resources vanish.
         record(task, "task-completed", 0, 0, slot=slot.name)
@@ -410,21 +434,13 @@ def finish_steps(primary, common, slot):
             # An unexpected sibling file keeps the directory in place.
             if not any(secret.parent.iterdir()):
                 secret.parent.rmdir()
-        branch = f"refs/heads/{task}"
-        refs = (
-            query(primary, "for-each-ref", "--format=%(objectname)", branch).decode().splitlines()
-        )
-        retained = False
-        if refs:
-            require(refs == [state["head"]], "local task branch changed; preserved")
-            # Squash heads usually are not ancestors. Keep them rather than force-delete.
-            retained = (
-                subprocess.run(  # noqa: S603
-                    ["git", "-C", str(primary), "branch", "-d", "--", task],
-                    capture_output=True,
-                ).returncode
-                != 0
-            )
+        # Volumes, images and the branch are disposable development data. The removals are
+        # recorded as they happen, so a partial failure resumes from the checkpoint.
+        removed = state.setdefault("removed", {})
+        try:
+            removed, kept = remove_leftovers(primary, primary, task, state["head"], removed)
+        finally:
+            checkpoint(journal, state)
         completed(primary, task, state["head"])
         synchronize(primary)
         require(load(active) == reservation, "slot reservation changed during cleanup")
@@ -435,13 +451,23 @@ def finish_steps(primary, common, slot):
             "status": "finished",
             "task": task,
             "slot": slot.name,
-            "local_branch_retained": retained,
-            "volumes_preserved": True,
+            "removed": removed,
+            "kept": kept,
+            "next_command": "make start-task BSS_TASK_OWNER="
+            + os.environ.get("BSS_TASK_OWNER", "<client>"),
         }
+    except Reexec:
+        handed_over = True
+        raise
     finally:
-        record(
-            task, "cleanup-task", result, int((time.monotonic() - started) * 1000), slot=slot.name
-        )
+        if not handed_over:
+            record(
+                task,
+                "cleanup-task",
+                result,
+                int((time.monotonic() - started) * 1000),
+                slot=slot.name,
+            )
 
 
 def main():
@@ -476,11 +502,22 @@ def main():
                 outcome = finish(primary, common, location)
                 result = 0
         print(json.dumps(outcome))
+    except Reexec as handover:
+        # The locks are released by now; the updated script takes them again.
+        result = rerun(handover.root, "task_finish.py", operation)
     except (InvalidRuntime, SlotError, start_task.StartupError) as error:
         print(f"task lifecycle: {error}", file=sys.stderr)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError):
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        subprocess.SubprocessError,
+    ) as error:
         print(
-            "task lifecycle: operation failed; state preserved for inspection/retry",
+            f"task lifecycle: operation failed ({diagnostic(error)}); "
+            "state preserved for inspection/retry",
             file=sys.stderr,
         )
     finally:

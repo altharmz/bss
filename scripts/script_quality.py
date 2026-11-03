@@ -45,6 +45,55 @@ def select(root, raw=None):
     return sorted(set(selected))
 
 
+NOQA = re.compile(r"#\s*noqa:\s*([A-Z0-9, ]+)", re.IGNORECASE)
+
+
+def noqa_hints(root, findings, window=3):
+    """Name the line for a noqa comment that sits near, but not on, a finding's line."""
+    hints = []
+    for item in findings:
+        code, row = item.get("code"), (item.get("location") or {}).get("row")
+        name = str(item.get("filename", "")).removeprefix("/app/")
+        path = root / name
+        if not code or not row or not path.is_file():
+            continue
+        lines = path.read_text().splitlines()
+        for number in range(max(1, row - window), min(len(lines), row + window) + 1):
+            match = NOQA.search(lines[number - 1])
+            codes = {c.strip().upper() for c in match.group(1).split(",")} if match else set()
+            if number != row and code in codes:
+                hints.append(
+                    f"hint: {name}:{row} reports {code}, but its noqa comment is on line "
+                    f"{number}; move it to line {row}"
+                )
+                break
+    return hints
+
+
+def explain_noqa(root, base, files):
+    completed = subprocess.run(  # noqa: S603 - validated source argv, no shell
+        [
+            *base,
+            "check",
+            "--output-format",
+            "json",
+            "--config",
+            "/app/pyproject.toml",
+            *files,
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        findings = json.loads(completed.stdout)
+    except ValueError:
+        return
+    for hint in noqa_hints(root, findings):
+        print(hint, file=sys.stderr)
+
+
 def run(root, operation, files):
     if operation not in {"lint", "format"}:
         raise ValueError("unsupported harness quality operation")
@@ -64,6 +113,8 @@ def run(root, operation, files):
             [*base, *stage, "--config", "/app/pyproject.toml", *files], cwd=root, check=False
         )
         result = completed.returncode or result
+        if operation == "lint" and stage == ["check"] and completed.returncode:
+            explain_noqa(root, base, files)
     return result
 
 

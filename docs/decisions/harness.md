@@ -85,7 +85,47 @@ first position; `ISSUE=<n>` finishes a preserved issue without creating another.
 confirmed merge and closed issue, `make finish-task` waits up to 60 s
 (`BSS_BOARD_DONE_WAIT`) for Done, then sets Done itself. GraphQL calls are retried once
 (`BSS_GH_RETRY_PAUSE`, 2 s) and a failure prints a bounded one-line error and a pointer to
-githubstatus.com. Manual `gh project` commands are recovery only.
+githubstatus.com. Manual `gh project` commands are recovery only. After the 2026-11-03
+incident the automation was observed back to about 2 seconds (#138 set to Done 2 s after
+closing) and the fallbacks were not needed afterwards; they stay for incidents.
+
+## Lifecycle output and waiting
+
+Lifecycle targets print one result (a line or the JSON) with `next_command`/`Next:` as the
+last step; the task, modified, staged and untracked context lines need `VERBOSE=1`
+(`make review-task` always prints them). Generic failures print a bounded cause from
+`task_runtime.diagnostic` (exception class, first two command arguments, exit status, the
+sanitized first `gh` error line), never other stderr text. `make check-pr WAIT=<s>` is the
+only waiting mode: it polls read-only, so it cannot merge or change state. A failed
+pre-commit hook unstages what `make commit` staged, so an edit afterwards cannot trip the
+partial-staging refusal.
+
+## Task leftovers are disposable
+
+Task volumes and images are development data that nothing needs after the merge (a database
+volume holds demo data and the image is rebuilt in minutes), and they piled up: on
+2026-11-03, 38 tasks still had volumes (95), 69 images, 40 local branches and 18 credential
+directories, on a host shared with other projects. `make finish-task` therefore removes them
+(`scripts/task_cleanup.py`, `remove_leftovers`): volumes by the exact Compose project label
+`bss-<task id>` that no container uses, the exact tags `bss-<task id>-app:dev` / `-web:dev`,
+and the local branch only when its tip equals the merged PR's head (`git update-ref -d` with
+that value, so a moved branch is refused). Never touched: the `bss-telemetry` project and
+volume, base images and shared layers, the build cache, other projects, anything without the
+exact label or tag, the slot directory and its state. There is still no global prune; the
+code runs as a script child, so the guard keeps blocking manual `docker volume`, `network`
+and `system` cleanup by agents. `make clean-tasks` (list by default, `CONFIRM=1` to remove)
+applies the same function to earlier leftovers of finished tasks and reports abandoned work
+as kept.
+
+## Stale primary scripts
+
+The primary checkout runs old scripts until `master` is fast-forwarded (a fix in #140 once
+broke the finish of the very task that merged it). `start-task` (after its fast-forward,
+before any claim) and `finish-task` (after its first synchronization) call
+`reexec_if_scripts_changed`: if `scripts/` or the `Makefile` changed they raise `Reexec`, the
+locks unwind, and the updated primary script runs once more with `BSS_SCRIPTS_REEXEC=1`.
+The aborted run records no telemetry result of its own; the rerun does. Safety checks are
+not skipped: the rerun repeats them from the checkpoint.
 
 ## Tests in the hook: smoke plus affected
 
@@ -116,7 +156,11 @@ so cost shapes what runs). Pull requests to `master` and pushes to `master`: `ma
 `make docs-check` and the whole `make test` (including `make runtime-check`). A PR run is
 cancelled by a newer push; runs on `master` never are. The workflow uses a disposable
 database password, reads no repository secret (`contents: read`), never touches the VPS, and
-pins actions to commit SHAs. The dev image is built with the Actions layer cache. The web
+pins actions to commit SHAs. The dev image is built with the Actions layer cache. A second job, `harness` (no
+Docker, 15 minutes at most), runs `make docs-links` on every pull request and push and
+`make runtime-check` (about 100 s) on pull requests that change `scripts/`, `.claude/`,
+`.codex/` or the `Makefile` (a changed-files step); it is the backstop for the local commit
+hook, and the nightly full run covers the harness tests through `make test`. The web
 checks (`web-lint`, `web-test`, `web-e2e`) are not in CI. Branch protection is the human's.
 
 ## Codex

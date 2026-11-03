@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 
-from task_runtime import InvalidRuntime, git, unique_fields, validate_metadata
+from task_runtime import InvalidRuntime, diagnostic, git, unique_fields, validate_metadata
 from task_telemetry import record
 
 
@@ -45,6 +45,14 @@ def needs_ui(names):
         and name not in {"CLAUDE.md", "AGENTS.md"}
         for name in names
     )
+
+
+def format_targets(names):
+    """Backend always; the UI formatter only when UI sources changed or the base is unknown."""
+    if names is None or any(n.startswith(("frontend/", "spec/")) for n in names):
+        return ["fmt", "web-fmt"]
+    print("task quality: no changes under frontend/ or spec/; skipping web-fmt (UI formatter)")
+    return ["fmt"]
 
 
 def check_stages(names):
@@ -143,18 +151,21 @@ def forbidden(path):
     )
 
 
-def review(root, primary, task, slot, data, check_whitespace=True):
-    print(
-        json.dumps(
-            {
-                "task": task,
-                "issue": int(task.split("-")[1]),
-                "slot": slot,
-                "worktree": str(root),
-                "runtime": data,
-            }
+def review(root, primary, task, slot, data, check_whitespace=True, verbose=False):
+    """Validate the task state; print the context lines only for review-task or VERBOSE=1."""
+    show = verbose or os.environ.get("VERBOSE") == "1"
+    if show:
+        print(
+            json.dumps(
+                {
+                    "task": task,
+                    "issue": int(task.split("-")[1]),
+                    "slot": slot,
+                    "worktree": str(root),
+                    "runtime": data,
+                }
+            )
         )
-    )
     problems = []
     for label, args in (
         ("modified", ("diff", "--name-only", "-z")),
@@ -162,7 +173,8 @@ def review(root, primary, task, slot, data, check_whitespace=True):
         ("untracked", ("ls-files", "--others", "--exclude-standard", "-z")),
     ):
         names = paths(root, *args)
-        print(json.dumps({label: names}))
+        if show:
+            print(json.dumps({label: names}))
         if any(forbidden(name) for name in names):
             problems.append("protected or forbidden path in " + label)
     # Include ignored secret filenames; don't open them or traverse ignored build trees.
@@ -213,7 +225,15 @@ def main():
     result = 1
     try:
         root, primary, task, slot, data = context()
-        review(root, primary, task, slot, data, check_whitespace=operation != "format")
+        review(
+            root,
+            primary,
+            task,
+            slot,
+            data,
+            check_whitespace=operation != "format",
+            verbose=operation == "review-task",
+        )
         if operation == "review-task":
             result = 0
         else:
@@ -221,14 +241,15 @@ def main():
                 os.environ["HYPOTHESIS_PROFILE"] = "ci"
                 result = run_stages(root, check_stages(changed_paths(root)))
             else:
-                for target in ("fmt", "web-fmt"):
+                for target in format_targets(changed_paths(root)):
                     result = subprocess.run(["make", target], cwd=root).returncode  # noqa: S603, S607
                     if result:
                         break
     except (InvalidRuntime, OSError, ValueError, subprocess.CalledProcessError) as error:
         result = 1
-        # Errors contain only repository-controlled diagnostics, never file contents.
-        print(f"task quality: {error}", file=sys.stderr)
+        # Our own errors are repository-controlled; others get a bounded cause only.
+        shown = error if isinstance(error, InvalidRuntime) else diagnostic(error)
+        print(f"task quality: {shown}", file=sys.stderr)
     finally:
         if task:
             record(task, operation, result, int((time.monotonic() - started) * 1000), slot=slot)

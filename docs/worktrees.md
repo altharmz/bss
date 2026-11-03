@@ -26,9 +26,10 @@ standalone command, with its required variables.
 | Update from master | `make sync-task` | task |
 | Publish the branch | `make push` | task |
 | Create or reuse the PR | `make create-pr` | task |
-| Check PR and CI readiness | `make check-pr` (repeat while pending) | task |
+| Check PR and CI readiness | `make check-pr` (`WAIT=600` waits while pending) | task |
 | Merge when policy permits | `make merge-task` | task |
 | Finish and release the slot | `make finish-task SLOT=<slot>` | primary |
+| List / remove leftovers of finished tasks | `make clean-tasks` (list), `make clean-tasks CONFIRM=1` | primary |
 | Optional broader validation | `make check` | task |
 | Lint / format harness Python | `make scripts-lint` / `make scripts-fmt` | task |
 
@@ -37,22 +38,41 @@ standalone command, with its required variables.
    issue to Doing, creates the branch and worktree and records the session. Use exactly the
    returned issue, branch, slot and worktree; do not inspect the board or claim items first.
    If it fails or finds nothing, stop and report.
-2. **Work** in the returned worktree. Run `make web-install` once before the first
-   `make format`. After another task merged, `make sync-task` merges `master` into the branch.
+2. **Work** in the returned worktree. `make format` skips the UI formatter when the branch has
+   no changes under `frontend/` or `spec/`; run `make web-install` once before it formats UI
+   files. After another task merged, `make sync-task` merges `master` into the branch.
 3. **Commit** with `make commit`. It stages only the listed files and runs the normal
    pre-commit hook, which is the one local verification run (see Hooks and checks). Run
    `make test` (the full suite) before a PR touching billing, migrations or the API.
 4. **PR.** `make create-pr` publishes the branch and opens (or reuses) the PR with
-   `Fixes #N`. `make check-pr` reports readiness; repeat it while checks are pending.
+   `Fixes #N`. `make check-pr WAIT=600` reports readiness and waits for pending checks.
 5. **Merge.** `make merge-task` when ready. A human-gated PR stays blocked until the human
    approves that PR at its exact head in the conversation; then pass
    `HUMAN_APPROVAL=<PR-number>:<40-char-head-SHA>`. New commits need renewed approval.
 6. **Finish.** After the merge, issue closure and board Done, immediately run
    `make finish-task SLOT=<slot>` from clean primary `master`. No human gate.
 
+Every lifecycle target ends with its next step: a `Next: <command>` line, or a `next_command`
+field in the JSON result (commit -> `make create-pr`, create-pr -> `make check-pr WAIT=600`,
+check-pr ready -> `make merge-task`, merge-task -> `make finish-task SLOT=<slot>`, finish-task
+-> `make start-task`). When a human gate is the only blocker, `check-pr` gives the
+ready-to-copy form: `Human approval needed for PR <n> at <sha>; after approval: make
+merge-task HUMAN_APPROVAL=<n>:<sha>`.
+
+A commit that touches the harness runs the hook for 1.5 to 3 minutes, longer than a typical
+tool call limit. Run `make commit` in the background and read its exit status from the task
+itself, never through a pipe (a pipe hides the status, which hid a failed commit once);
+`make commit` prints its final status line even when the hook output is long.
+
 Commands for issue comments (`gh issue comment`) are always allowed: add a short note when
 something meaningful happens (a decision, a blocker, waiting on the human). Do not log every
 command.
+
+Lifecycle targets print one result line (or their JSON result) by default; `VERBOSE=1` adds
+the task, modified, staged and untracked context lines (`make review-task` always prints
+them). A generic failure names its cause: the exception class, the failing command's first
+two arguments and exit status, and for `gh` its sanitized first error line; never other
+stderr text, which can carry tokens or URLs.
 
 **When a target fails:** read the error and fix the underlying state; prefer another
 documented target; only if no target can represent the correction, take the smallest
@@ -147,13 +167,15 @@ worktree's `scripts/pre-commit.sh` and `scripts/pre-push.sh`. Details of the gat
   UI changes, and the harness script tests plus guard cases when `scripts/`, `Makefile` or
   `.claude/` change. Markdown-only commits skip everything. One run at a time per repository.
 - **pre-push** refuses bcrypt hashes, `.env*` paths, branch deletions and non-fast-forwards.
-- `make format` formats backend and UI (never stages). `make review-task` prints JSON about
+- `make format` formats backend and, if `frontend/` or `spec/` changed (or the base is
+  unknown), the UI (never stages). `make review-task` prints JSON about
   task identity, slot, runtime, changed files, whitespace, forbidden paths and suspicious
   secret filenames; it reads no secrets and changes nothing.
 - `make check` (optional) runs migration preflight, lint, the full backend suite, generated
   docs checks, guard cases, and UI and browser checks unless every change is confined to
   `scripts/`, `docs/`, `.claude/` or the instruction files. Stage failures are collected and
-  reported together.
+  reported together. `make scripts-lint` prints a hint when a `noqa` comment for the reported
+  code sits on a neighbouring line instead of the finding's line.
 - `make web-test` runs one timezone, adding `America/New_York` when `frontend/src/` changed.
 
 ## Commit and publish a task
@@ -161,11 +183,13 @@ worktree's `scripts/pre-commit.sh` and `scripts/pre-push.sh`. Details of the gat
 `make commit MESSAGE=... FILES=...` takes a JSON array of exact repository-relative file
 names (deletions included; never a directory or glob). It validates task identity, protected
 and secret paths and the installed hooks, stages only those files, refuses unrelated or
-partially staged files and runs a normal `git commit` with hooks. `DRY_RUN=1` validates
+partially staged files (naming them and the `git add -- <files>` that fixes them) and runs a
+normal `git commit` with hooks. If the hook fails, the files this run staged are unstaged
+again (edits kept; files you had staged, and a merge in progress, are untouched). `DRY_RUN=1` validates
 without staging or running hooks. Inherited `GIT_*` variables are refused (the refusal
 names them) except the presentation-only `GIT_PAGER`, `GIT_EDITOR` and
 `GIT_SEQUENCE_EDITOR`. The command prints where the hook keeps its full output
-(`.git/pre-commit-logs/`). Failure leaves the index and tree as they were.
+(`.git/pre-commit-logs/`). A failure leaves HEAD and the working tree as they were.
 
 `make push` publishes `HEAD` to the same-named branch on `origin` (upstream set if needed),
 refuses unexpected destinations, remote history outside local ancestry and protected
@@ -182,11 +206,16 @@ resolve as source edits and `make commit`.
 `PR_TITLE=` and `PR_BODY_FILE=/absolute/path` override. `Fixes #N` is always added.
 
 `make check-pr` prints JSON readiness: PR, CI state, mergeability, review decision, human
-gate status, commits behind base and reason codes. Exit status: 0 ready, 1 failed or invalid,
-2 pending, 3 policy blocked (read the `status` field). Ready requires passing checks, equal
+gate status, commits behind base, reason codes and `next_command`. Exit status: 0 ready, 1
+failed or invalid, 2 pending, 3 policy blocked (read the `status` field). `WAIT=<seconds>`
+(default off, capped at 1800) polls every 20 s and stops as soon as the status is ready,
+failed or blocked, or when the time is up (then exit status 2 as without it); it never merges
+and never changes state. Ready requires passing checks, equal
 local and PR heads, a clean tree, a current base, a nondraft mergeable PR and a clean merge
-state. Human gates: a `needs-human` label, or a changed path among CLAUDE.md, AGENTS.md,
-`docs/board.md`, `.claude/`, `.codex/`, `scripts/pre-commit.sh`, `.github/workflows/`. A GitHub
+state. Human gates: a `needs-human` label, or a changed path (or the old name of a
+renamed one) among CLAUDE.md, AGENTS.md, `.claude/settings.json`, `.claude/hooks/`, `.codex/`,
+`scripts/pre-commit.sh`, `.github/workflows/`: the files that grant permissions, run code or
+define policy. A GitHub
 approval does not satisfy them; only `HUMAN_APPROVAL=<PR-number>:<full-head-SHA>` does, and
 only for the local gate: CI, conflicts, reviews and branch protection still apply. Never infer
 approval from earlier sessions or heads.
@@ -200,11 +229,29 @@ succeeds again.
 
 `make finish-task SLOT=<slot>` runs from clean primary `master` under the startup and slot
 locks. It verifies the merged PR and head, the closed issue with Done board state, a clean
-worktree and matching Compose ownership; synchronizes `master`; stops the task's containers
-(no volumes, images or global prune); removes the worktree without force; removes the task's
-own external `.env` only if unchanged; deletes the local branch only with a safe `-d`
-(an unmerged squash head is kept and reported); closes telemetry windows and starts the
-final-tail collector. A `finish-<task>.json` checkpoint in the slot makes partial failures
+worktree and matching Compose ownership; synchronizes `master`; stops the task's containers;
+removes the worktree without force; removes the task's own external `.env` only if
+unchanged; then removes what the task created, as disposable development data: its Compose
+volumes (exact project label `bss-<task id>`, none in use), its images
+`bss-<task id>-app:dev` and `-web:dev` (exact tags, none in use) and its local branch when
+the tip equals the merged PR's head (that exact ref is deleted; any other tip is kept). The
+telemetry project and volume, base images, shared layers, build cache and other projects are
+never touched, and nothing prunes globally. The result lists `removed` and `kept` (with the
+reason for each); removals are recorded in the checkpoint as they happen. It closes
+telemetry windows and starts the final-tail collector. A `finish-<task>.json` checkpoint in the slot makes partial failures
 retryable by rerunning the same command; changed credentials, heads or unknown paths stop a
-retry. The slot directory and state persist. If primary predates this target, bootstrap with
+retry.
+
+`make clean-tasks` (primary) is the safety net for tasks whose finish failed and for leftovers
+from before finish removed them. It lists, and with `CONFIRM=1` removes, the volumes, images,
+local `issue-*` branches and credential directories (`~/.config/bss/tasks/<task id>`) of
+tasks that are finished: the issue is closed and Done, a PR for the branch is merged, and
+there is no open PR, registered worktree, slot reservation or running container. Everything
+else is listed as kept with its reason; an abandoned branch without a merged PR is reported,
+never deleted. It uses the same removal code as `finish-task`. The slot directory and state persist. `make start-task` and `make finish-task` run the
+primary checkout's scripts, which are stale until `master` is fast-forwarded. After the
+fast-forward, if `scripts/` or the `Makefile` changed, the target releases its locks and runs
+again once from the updated scripts (marker `BSS_SCRIPTS_REEXEC`, so it cannot loop), so a fix
+merged by a task applies to that task's own finish; all checks run again and the checkpoint
+resumes a finish. If primary predates this target, bootstrap with
 `make -f /absolute/task/worktree/Makefile finish-task SLOT=<slot>`.

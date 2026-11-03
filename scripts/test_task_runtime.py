@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parent
 
@@ -249,9 +250,7 @@ class RuntimeTests(unittest.TestCase):
         for key in ("COMPOSE_FILE", "DOCKER_HOST", "POSTGRES_PASSWORD"):
             with self.subTest(key=key):
                 self.env[key] = "fixture-secret-never-output"
-                self.rejected(
-                    self.wrapper("--deploy-web-build", "c8e7dec", cwd=self.primary), key
-                )
+                self.rejected(self.wrapper("--deploy-web-build", "c8e7dec", cwd=self.primary), key)
                 del self.env[key]
 
     def test_missing_external_secret(self):
@@ -371,6 +370,56 @@ class RuntimeTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 7)
         self.assertEqual(result.stdout, "B:again:still B")
+
+    def commit_file(self, name):
+        path = self.primary / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(name)
+        self.call(["git", "add", name], cwd=self.primary)
+        self.call(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@example.test", "commit", "-qm", name],
+            cwd=self.primary,
+        )
+
+    def test_reexec_only_when_scripts_or_makefile_changed_and_never_twice(self):
+        import task_runtime as runtime
+
+        base = self.call(["git", "rev-parse", "HEAD"], cwd=self.primary).stdout.strip()
+        self.commit_file("docs/note.md")
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop(runtime.REEXEC_MARKER, None)
+            runtime.reexec_if_scripts_changed(self.primary, base)  # docs only: no hand-over
+            for name in ("scripts/task_finish.py", "Makefile"):
+                before = self.call(["git", "rev-parse", "HEAD"], cwd=self.primary).stdout.strip()
+                self.commit_file(name)
+                with self.assertRaises(runtime.Reexec):
+                    runtime.reexec_if_scripts_changed(self.primary, before)
+            os.environ[runtime.REEXEC_MARKER] = "1"
+            runtime.reexec_if_scripts_changed(self.primary, base)  # marker: loop guard
+
+    def test_rerun_executes_the_primary_script_with_the_marker(self):
+        import task_runtime as runtime
+
+        with patch.object(runtime.subprocess, "run") as run, patch("builtins.print"):
+            run.return_value.returncode = 5
+            self.assertEqual(runtime.rerun(self.primary, "task_finish.py", "finish-task"), 5)
+        args, kwargs = run.call_args
+        self.assertEqual(
+            args[0][1:], ["-B", str(self.primary / "scripts/task_finish.py"), "finish-task"]
+        )
+        self.assertEqual(kwargs["cwd"], self.primary)
+        self.assertEqual(kwargs["env"][runtime.REEXEC_MARKER], "1")
+
+    def test_start_task_continues_with_the_updated_script(self):
+        import start_task
+
+        with (
+            patch("sys.argv", ["start_task.py", "--json"]),
+            patch.object(start_task, "start", side_effect=start_task.Reexec(self.primary)),
+            patch.object(start_task, "rerun", return_value=0) as rerun,
+        ):
+            self.assertEqual(start_task.main(), 0)
+        rerun.assert_called_once_with(self.primary, "start_task.py", "--json")
 
 
 if __name__ == "__main__":

@@ -293,6 +293,8 @@ runtime-check: ## The harness script tests (scripts/test_*.py, run in parallel, 
 		scripts/test_task_git.py \
 		scripts/test_task_quality.py \
 		scripts/test_task_runtime.py \
+		scripts/test_diagnostics.py \
+		scripts/test_task_cleanup.py \
 		scripts/test_start_task.py \
 		scripts/test_task_telemetry.py \
 		scripts/test_task_usage.py \
@@ -386,6 +388,11 @@ create-pr: ## Publish the task branch and create or confirm its PR
 check-pr: export HUMAN_APPROVAL := $(HUMAN_APPROVAL)
 check-pr: ## Report task PR readiness, including human review gates (never merges)
 	@python3 -B scripts/task_pr.py check-pr
+
+.PHONY: clean-tasks
+clean-tasks: export CONFIRM := $(CONFIRM)
+clean-tasks: ## List leftovers (volumes, images, branches, credentials) of finished tasks; CONFIRM=1 removes them. Primary only
+	@python3 -B scripts/task_cleanup.py
 
 .PHONY: merge-task finish-task
 merge-task: export HUMAN_APPROVAL := $(HUMAN_APPROVAL)

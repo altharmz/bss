@@ -19,7 +19,17 @@ import time
 import unicodedata
 from pathlib import Path
 
-from task_runtime import RESERVED_PORTS, InvalidRuntime, unique_fields, validate_metadata
+from task_runtime import (
+    RESERVED_PORTS,
+    InvalidRuntime,
+    Reexec,
+    diagnostic,
+    gh_detail,
+    reexec_if_scripts_changed,
+    rerun,
+    unique_fields,
+    validate_metadata,
+)
 from task_telemetry import record
 from worker_slots import SlotError, candidates, release, reserve, undo
 from worker_slots import claim as claim_slot
@@ -97,14 +107,6 @@ def run(*args, cwd=None, check=True):
             message += f" ({detail + '; ' if detail else ''}check {STATUS_URL})"
         raise StartupError(message)
     return result
-
-
-def gh_detail(stderr):
-    """One bounded, printable line of gh's error, without URLs or token-like words."""
-    line = next((s.strip() for s in (stderr or "").splitlines() if s.strip()), "")
-    line = re.sub(r"https?://[^\s)]+", "<url>", line)
-    line = re.sub(r"\b(gh[pousr]_|github_pat_)\w+|(?i:bearer|token)\s+\S+", "<redacted>", line)
-    return "".join(c for c in line if " " <= c <= "~")[:120].strip()
 
 
 def git(*args, cwd=None):
@@ -838,7 +840,10 @@ def start(on_ready=None):
             raise StartupError(
                 "cannot fast-forward master to origin/master; local commits are preserved"
             )
+        before = git("rev-parse", "HEAD", cwd=root)
         git("merge", "--ff-only", "origin/master", cwd=root)
+        # Nothing is claimed yet: continue with the updated scripts if they changed.
+        reexec_if_scripts_changed(root, before)
         clean(root)
         slot_name, slot = select_slot(root, common, stack)
         # Completion recovery can synchronize primary to a newer master.
@@ -974,6 +979,8 @@ def main():
                 )
         else:
             start(lambda result: print_result(result, args.json))
+    except Reexec as handover:
+        return rerun(handover.root, "start_task.py", *sys.argv[1:])
     except (
         StartupError,
         SlotError,
@@ -984,7 +991,9 @@ def main():
         TypeError,
         KeyboardInterrupt,
     ) as error:
-        print(f"start-task: {error}", file=sys.stderr)
+        # Our own errors carry a vetted message; anything else gets a bounded cause only.
+        known = isinstance(error, StartupError | SlotError | InvalidRuntime)
+        print(f"start-task: {error if known else diagnostic(error)}", file=sys.stderr)
         return 1
     return 0
 

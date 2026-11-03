@@ -14,7 +14,7 @@ from pathlib import Path
 
 from task_git import hooks, push, require, require_no_git_overrides
 from task_quality import context, query, review
-from task_runtime import InvalidRuntime
+from task_runtime import InvalidRuntime, diagnostic
 from task_telemetry import record
 
 REPOSITORY = "altharmz/bss"
@@ -23,14 +23,15 @@ FIELDS = (
     "number,url,state,body,baseRefName,headRefName,headRefOid,isCrossRepository,"
     "isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,labels,changedFiles"
 )
+# Files that grant permissions, run code or define policy; everything else merges on green.
 HUMAN_PATHS = {
     "CLAUDE.md",
     "AGENTS.md",
-    "docs/board.md",
     "scripts/pre-commit.sh",
-    ".codex/guard.sh",
-    ".codex/patch-guard.sh",
+    ".claude/settings.json",
+    ".claude/settings.local.json",
 }
+HUMAN_PREFIXES = (".claude/hooks/", ".codex/", ".github/workflows/")
 
 
 def gh(root, *args):
@@ -182,6 +183,7 @@ def create(root, task):
         "status": "created" if existing is None else "existing",
         "pr_number": data["number"],
         "url": data["url"],
+        "next_command": "make check-pr WAIT=600",
     }
 
 
@@ -215,10 +217,53 @@ def ci_state(checks):
     return "passed"
 
 
+def next_command(status, reasons, number, head, human, approval_state):
+    merge = "make merge-task" + (
+        f" HUMAN_APPROVAL={number}:{head}" if human and approval_state == "accepted" else ""
+    )
+    if status == "ready":
+        return merge
+    if status == "pending":
+        return "make check-pr WAIT=600"
+    if status == "failed":
+        return "fix the failure, make commit, make push, then make check-pr WAIT=600"
+    if reasons == ["human-approval-required"]:
+        return (
+            f"Human approval needed for PR {number} at {head}; after approval: "
+            f"make merge-task HUMAN_APPROVAL={number}:{head}"
+        )
+    return "resolve the listed reasons, then make check-pr"
+
+
+def wait_seconds():
+    raw = os.environ.get("WAIT", "")
+    if not raw:
+        return 0
+    require(re.fullmatch(r"[0-9]{1,6}", raw), "WAIT must be a number of seconds")
+    return min(int(raw), 1800)
+
+
+def await_readiness(root, task, issue):
+    """Poll every 20 s until ready, failed or blocked, or until WAIT seconds have passed."""
+    deadline = time.monotonic() + wait_seconds()
+    pause = float(os.environ.get("BSS_CHECK_PR_POLL", "20"))
+    while True:
+        outcome, result = readiness(root, task, issue)
+        remaining = deadline - time.monotonic()
+        if outcome["status"] != "pending" or remaining <= 0:
+            return outcome, result
+        time.sleep(min(pause, remaining))
+
+
 def readiness(root, task, issue, approval=None):
     data = find_pr(root, task)
     if data is None:
-        return {"status": "missing", "ci": "unknown", "reasons": ["missing-pr"]}, 1
+        return {
+            "status": "missing",
+            "ci": "unknown",
+            "reasons": ["missing-pr"],
+            "next_command": "make create-pr",
+        }, 1
     number = data["number"]
     pages = gh(
         root,
@@ -237,7 +282,7 @@ def readiness(root, task, issue, approval=None):
     # A rename away from an instruction or guard path still touches that protected path.
     names.extend(entry["previous_filename"] for entry in entries if "previous_filename" in entry)
     human = "needs-human" in {label["name"] for label in issue["labels"] + data["labels"]} or any(
-        n in HUMAN_PATHS or n.startswith((".claude/", ".github/workflows/")) for n in names
+        n in HUMAN_PATHS or n.startswith(HUMAN_PREFIXES) for n in names
     )
     head = data["headRefOid"]
     require(isinstance(head, str) and re.fullmatch(r"[a-f0-9]{40}", head), "invalid PR head")
@@ -290,6 +335,7 @@ def readiness(root, task, issue, approval=None):
     )
     status = "failed" if failed else "blocked" if policy else "pending" if reasons else "ready"
     return {
+        "next_command": next_command(status, reasons, number, head, human, approval_state),
         "status": status,
         "pr_number": number,
         "url": data["url"],
@@ -327,14 +373,22 @@ def main():
             outcome = create(root, task)
             result = 0
         else:
-            outcome, result = readiness(root, task, issue)
+            outcome, result = await_readiness(root, task, issue)
         print(json.dumps(outcome))
     except InvalidRuntime as error:
         print(f"task PR: {error}", file=sys.stderr)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError):
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        subprocess.SubprocessError,
+    ) as error:
         # API errors and argv may contain prose. Never echo arbitrary response payloads.
         print(
-            "task PR: Git/GitHub failed or returned incomplete state; inspect before retrying",
+            f"task PR: Git/GitHub failed or returned incomplete state ({diagnostic(error)}); "
+            "inspect before retrying",
             file=sys.stderr,
         )
     finally:

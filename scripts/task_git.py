@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 from task_quality import context, forbidden, paths, query, review
-from task_runtime import InvalidRuntime
+from task_runtime import InvalidRuntime, diagnostic
 from task_telemetry import record
 
 
@@ -121,11 +121,13 @@ def commit(root):
     staged = set(paths(root, "diff", "--cached", "--no-renames", "--name-only", "-z"))
     unmerged = set(paths(root, "diff", "--name-only", "--diff-filter=U", "-z"))
     require(staged <= set(selected), "unselected files already staged; inspect the index")
+    partial = sorted(
+        (staged - unmerged).intersection(paths(root, "diff", "--no-renames", "--name-only", "-z"))
+    )
     require(
-        not (staged - unmerged).intersection(
-            paths(root, "diff", "--no-renames", "--name-only", "-z")
-        ),
-        "partially staged files; inspect the index before committing",
+        not partial,
+        "partially staged files: " + ", ".join(partial) + "; stage the current edits with: "
+        "git add -- " + " ".join(partial),
     )
     # An unmerged index has stages 1/2/3, not a partially staged source version.
     # Explicit FILES authorizes staging the user's edited conflict resolution.
@@ -137,7 +139,27 @@ def commit(root):
         run(root, "--literal-pathspecs", "add", "--", *unstaged)
     logs = query(root, "rev-parse", "--absolute-git-dir").decode().strip()
     print(f"task commit: the hook keeps its full output in {logs}/pre-commit-logs/", flush=True)
-    run(root, "commit", "-m", message)
+    try:
+        run(root, "commit", "-m", message)
+    except subprocess.CalledProcessError:
+        # A failed hook must not leave this run's staging behind: a later edit of such a
+        # file would make the next commit refuse as partially staged. Keep the edits; skip
+        # a merge in progress, where the index holds the conflict resolution.
+        merging = (
+            subprocess.run(  # noqa: S603, S607
+                ["git", "-C", str(root), "rev-parse", "-q", "--verify", "MERGE_HEAD"],
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+        if unstaged and not merging:
+            run(root, "--literal-pathspecs", "restore", "--staged", "--", *unstaged)
+            print(
+                f"task commit: hook failed; unstaged the {len(unstaged)} file(s) this run "
+                f"staged (edits kept); full output in {logs}/pre-commit-logs/",
+                file=sys.stderr,
+            )
+        raise
     return query(root, "rev-parse", "HEAD").decode().strip()
 
 
@@ -263,12 +285,16 @@ def main():
         result = 0
         if identity:
             print(f"task {operation}: {identity}")
+        if identity or operation == "sync-task":
+            print("Next: " + ("make push" if operation == "sync-task" else "make create-pr"))
     except InvalidRuntime as error:
         print(f"task {operation}: {error}", file=sys.stderr)
-    except (OSError, ValueError, subprocess.CalledProcessError):
-        # CalledProcessError may include the commit message in argv; never echo it.
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        # CalledProcessError may include the commit message in argv; diagnostic() prints
+        # only the first two arguments.
         print(
-            f"task {operation}: Git/hook failed or refused; inspect state; no cleanup performed",
+            f"task {operation}: Git/hook failed or refused ({diagnostic(error)}); "
+            "inspect state; no cleanup performed",
             file=sys.stderr,
         )
     finally:

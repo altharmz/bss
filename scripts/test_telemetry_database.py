@@ -13,7 +13,7 @@ import task_collect
 from task_telemetry import event_sql, literal, sql
 from task_usage import REPORT_SQL, usage_sql
 from test_task_collect import PRIVATE, SID, fixture, when
-from test_task_usage import pricing, sample
+from test_task_usage import sample
 
 
 def main():
@@ -25,16 +25,8 @@ def main():
             .removeprefix("BEGIN;")
             .removesuffix("COMMIT;")
         )
-    usage = (
-        usage_sql(sample(task_id=task), pricing()).removeprefix("BEGIN;").removesuffix("COMMIT;")
-    )
+    usage = usage_sql(sample(task_id=task)).removeprefix("BEGIN;").removesuffix("COMMIT;")
     statements.extend([usage, usage])
-    # Managed retries keep existing auditable pricing even when no card is supplied.
-    statements.append(
-        usage_sql(sample(task_id=task), preserve_pricing=True)
-        .removeprefix("BEGIN;")
-        .removesuffix("COMMIT;")
-    )
     collected_task = f"issue-124-test-{uuid.uuid4().hex}"
     statements.append(
         event_sql(collected_task, "start-task", 0, 0, {}, client="codex")
@@ -103,15 +95,8 @@ def main():
             RAISE EXCEPTION 'collection replay, coverage or finish persistence regression';
         END IF;
         END $$;""")
-    for changed_sample, changed_pricing in (
-        (sample(task_id=task, output_tokens=51, total_tokens=1051), pricing()),
-        (sample(task_id=task), pricing(version="fixture-v2", input_per_million="4")),
-    ):
-        conflict = (
-            usage_sql(changed_sample, changed_pricing)
-            .removeprefix("BEGIN;")
-            .removesuffix("COMMIT;")
-        )
+    for changed_sample in (sample(task_id=task, output_tokens=51, total_tokens=1051),):
+        conflict = usage_sql(changed_sample).removeprefix("BEGIN;").removesuffix("COMMIT;")
         statements.append(
             "DO $conflict$ BEGIN BEGIN EXECUTE " + literal(conflict) + "; "
             "RAISE EXCEPTION 'conflict was accepted'; EXCEPTION WHEN raise_exception THEN "
@@ -131,10 +116,8 @@ BEGIN
         RAISE EXCEPTION 'task/session/event cardinality';
     END IF;
     IF (SELECT count(*) FROM usage_samples u JOIN agent_sessions a USING(session_id)
-        WHERE a.task_id = '{task}') <> 1 OR
-       (SELECT estimated_cost FROM usage_samples u JOIN agent_sessions a USING(session_id)
-        WHERE a.task_id = '{task}') <> 0.0021 THEN
-        RAISE EXCEPTION 'usage idempotency or exact pricing';
+        WHERE a.task_id = '{task}') <> 1 THEN
+        RAISE EXCEPTION 'usage idempotency';
     END IF;
     SELECT session_id INTO sid FROM agent_sessions WHERE task_id = '{task}' LIMIT 1;
     INSERT INTO usage_samples(session_id) VALUES (sid);

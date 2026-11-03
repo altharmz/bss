@@ -53,6 +53,7 @@ class GitTests(unittest.TestCase):
             "chosen.txt",
         )
         self.assertTrue((self.work / "unrelated.txt").exists())
+        self.assertIn("Next: make create-pr", result.stdout.splitlines())
 
     def test_clean_and_invalid_selection(self):
         for files in ([], ["missing"], ["."], [":(glob)*"]):
@@ -92,13 +93,44 @@ class GitTests(unittest.TestCase):
         self.assertNotEqual(self.command().returncode, 0)
         self.assertEqual(self.call(["git", "diff", "--cached"]).stdout, before)
 
-    def test_failed_commit_hook_leaves_index(self):
+    def test_failed_commit_hook_unstages_only_what_this_run_staged(self):
         self.change()
+        (self.work / "prestaged.txt").write_text("staged by the user\n")
+        self.call(["git", "add", "prestaged.txt"])
         (self.work / "scripts/pre-commit.sh").write_text("exit 7\n")
         head = self.call(["git", "rev-parse", "HEAD"]).stdout
-        self.assertNotEqual(self.command().returncode, 0)
+        result = self.command(files=["chosen.txt", "prestaged.txt"])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unstaged the 1 file(s) this run staged", result.stderr)
         self.assertEqual(self.call(["git", "rev-parse", "HEAD"]).stdout, head)
-        self.assertIn("chosen.txt", self.call(["git", "diff", "--cached", "--name-only"]).stdout)
+        # chosen.txt was staged by this run: unstaged again, edit kept. prestaged.txt stays.
+        self.assertEqual(
+            self.call(["git", "diff", "--cached", "--name-only"]).stdout.split(), ["prestaged.txt"]
+        )
+        self.assertEqual((self.work / "chosen.txt").read_text(), "chosen\n")
+
+    def test_edit_after_a_failed_hook_commits_without_the_partial_staging_refusal(self):
+        self.change()
+        hook = self.work / "scripts/pre-commit.sh"
+        hook.write_text("exit 7\n")
+        self.assertNotEqual(self.command().returncode, 0)
+        (self.work / "chosen.txt").write_text("edited after the failure\n")
+        hook.write_text("exit 0\n")
+        self.call(["git", "checkout", "--", "scripts/pre-commit.sh"])
+        result = self.command()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            self.call(["git", "show", "HEAD:chosen.txt"]).stdout, "edited after the failure\n"
+        )
+
+    def test_partial_staging_refusal_names_the_files_and_the_command(self):
+        self.change()
+        self.call(["git", "add", "chosen.txt"])
+        (self.work / "chosen.txt").write_text("later edit\n")
+        result = self.command()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("partially staged files: chosen.txt", result.stderr)
+        self.assertIn("git add -- chosen.txt", result.stderr)
 
     def test_missing_hooks(self):
         (self.primary / ".git/hooks/pre-commit").unlink()

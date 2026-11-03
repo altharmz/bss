@@ -1,5 +1,6 @@
 """Validate local runtime contexts before invoking Docker Compose."""
 
+import errno
 import json
 import os
 import re
@@ -16,6 +17,98 @@ RESERVED_PORTS = frozenset({443, 500, 992, 1194, 4500, 5555, 8444})
 
 class InvalidRuntime(Exception):
     pass
+
+
+def gh_detail(stderr):
+    """One bounded, printable line of gh's error, without URLs or token-like words."""
+    line = next((s.strip() for s in (stderr or "").splitlines() if s.strip()), "")
+    line = re.sub(r"https?://[^\s)]+", "<url>", line)
+    line = re.sub(r"\b(gh[pousr]_|github_pat_)\w+|(?i:bearer|token)\s+\S+", "<redacted>", line)
+    return "".join(c for c in line if " " <= c <= "~")[:120].strip()
+
+
+REEXEC_MARKER = "BSS_SCRIPTS_REEXEC"
+
+
+class Reexec(Exception):
+    """Primary scripts changed on master; unwind (releasing locks), then run the target again."""
+
+    def __init__(self, root):
+        super().__init__("harness scripts changed on master")
+        self.root = Path(root)
+
+
+def reexec_if_scripts_changed(root, before):
+    """Raise Reexec once when the fast-forward from `before` changed scripts/ or the Makefile."""
+    if os.environ.get(REEXEC_MARKER):
+        return
+    # Git hooks export repository selectors that would redirect `-C`; this reads `root` only.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") or k == "GIT_PAGER"}
+    changed = subprocess.run(  # noqa: S603 - fixed read-only Git command
+        [  # noqa: S607
+            "git",
+            "-C",
+            str(root),
+            "diff",
+            "--name-only",
+            before,
+            "HEAD",
+            "--",
+            "scripts",
+            "Makefile",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    ).stdout
+    if changed.strip():
+        raise Reexec(root)
+
+
+def rerun(root, script, *arguments):
+    """Run the updated primary script once more; the marker prevents a second hand-over."""
+    print("harness scripts changed on master; continuing with the updated scripts", flush=True)
+    return subprocess.run(  # noqa: S603 - fixed interpreter, primary's own script
+        [sys.executable, "-B", str(Path(root) / "scripts" / script), *arguments],
+        cwd=root,
+        env={**os.environ, REEXEC_MARKER: "1"},
+        check=False,
+    ).returncode
+
+
+def printable(value, limit=32):
+    text = re.sub(r"https?://\S+", "<url>", str(value))
+    return "".join(c for c in text if " " <= c <= "~")[:limit]
+
+
+def diagnostic(error):
+    """Bounded cause for a generic failure message, safe to print.
+
+    Names the exception class, a failing command's first two arguments and exit status, and
+    for gh the sanitized first stderr line. Never stderr text of other tools or exception
+    messages, which can carry tokens, URLs or file contents.
+    """
+    parts = [type(error).__name__]
+    argv = getattr(error, "cmd", None)
+    if isinstance(argv, (list, tuple)) and argv:
+        # `git -C <path> <subcommand>`: name the subcommand, not the directory.
+        shown = [*argv[:1], *argv[3:4]] if list(argv[1:2]) == ["-C"] else list(argv[:2])
+        parts.append("command " + " ".join(printable(a) for a in shown))
+        if isinstance(getattr(error, "returncode", None), int):
+            parts.append(f"exit {error.returncode}")
+        if argv[0] == "gh":
+            stderr = getattr(error, "stderr", None)
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode(errors="replace")
+            detail = gh_detail(stderr)
+            if detail:
+                parts.append(detail)
+    if isinstance(error, subprocess.TimeoutExpired):
+        parts.append("timed out")
+    if isinstance(error, OSError) and error.errno:
+        parts.append(errno.errorcode.get(error.errno, "errno " + str(error.errno)))
+    return "; ".join(parts)
 
 
 def unique_fields(pairs):
@@ -120,7 +213,7 @@ def deploy_web_build(args):
         "MCP_PUBLIC_URL": "http://localhost:18081",
     }
     validate_inherited(values, root, own, common)
-    env = dict(os.environ, **values, POSTGRES_PASSWORD="offline-ui-build-only")
+    env = dict(os.environ, **values, POSTGRES_PASSWORD="offline-ui-build-only")  # noqa: S106 - offline build placeholder
     command = [
         "docker",
         "--context",
