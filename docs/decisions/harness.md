@@ -100,6 +100,16 @@ only waiting mode: it polls read-only, so it cannot merge or change state. A fai
 pre-commit hook unstages what `make commit` staged, so an edit afterwards cannot trip the
 partial-staging refusal.
 
+## Stale primary scripts
+
+The primary checkout runs old scripts until `master` is fast-forwarded (a fix in #140 once
+broke the finish of the very task that merged it). `start-task` (after its fast-forward,
+before any claim) and `finish-task` (after its first synchronization) call
+`reexec_if_scripts_changed`: if `scripts/` or the `Makefile` changed they raise `Reexec`, the
+locks unwind, and the updated primary script runs once more with `BSS_SCRIPTS_REEXEC=1`.
+The aborted run records no telemetry result of its own; the rerun does. Safety checks are
+not skipped: the rerun repeats them from the checkpoint.
+
 ## Tests in the hook: smoke plus affected
 
 The full suite is too long for every commit (about 7 minutes locally, 30 on a CI runner), so

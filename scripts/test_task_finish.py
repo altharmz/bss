@@ -13,7 +13,7 @@ import task_finish as lifecycle
 import task_pr
 import task_telemetry
 import test_task_pr as fixtures
-from task_runtime import InvalidRuntime
+from task_runtime import REEXEC_MARKER, InvalidRuntime
 
 
 class LifecycleFixture(unittest.TestCase):
@@ -259,6 +259,9 @@ class FinishTests(LifecycleFixture):
         self.docker_state = self.base / "docker.json"
         self.env["BSS_TEST_DOCKER_STATE"] = str(self.docker_state)
         self.env["BSS_SLOT"] = "worker1"
+        # The fixture's primary is far behind master (scripts changed), which would hand
+        # over to the updated script; only the dedicated tests below exercise that.
+        self.env[REEXEC_MARKER] = "1"
         self.env["BSS_BOARD_DONE_WAIT"] = "0"
         self.env["BSS_GH_RETRY_PAUSE"] = "0"
         self.inventory = {"running": True, "mismatch": False, "fail_down": False}
@@ -315,6 +318,62 @@ class FinishTests(LifecycleFixture):
         self.assertEqual(
             self.call(["git", "rev-parse", "HEAD"], cwd=self.primary).stdout.strip(), self.head
         )
+
+    def advance_master(self, name):
+        """Push a commit to origin/master from a separate clone, as another task's merge."""
+        clone = self.base / "other-clone"
+        self.call(["git", "clone", "-q", str(self.remote), str(clone)], cwd=self.base)
+        (clone / name).parent.mkdir(parents=True, exist_ok=True)
+        (clone / name).write_text("changed\n")
+        self.call(["git", "add", name], cwd=clone)
+        self.call(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@example.test", "commit", "-qm", name],
+            cwd=clone,
+        )
+        self.call(["git", "push", "-q", "origin", "HEAD:refs/heads/master"], cwd=clone)
+
+    def sync_primary(self):
+        self.call(["git", "fetch", "-q", "origin"], cwd=self.primary)
+        self.call(["git", "merge", "-q", "--ff-only", "origin/master"], cwd=self.primary)
+
+    def test_changed_scripts_on_master_hand_over_once_then_resume(self):
+        self.sync_primary()
+        self.advance_master("scripts/task_finish.py")
+        del self.env[REEXEC_MARKER]
+        with self.assertRaises(lifecycle.Reexec):
+            self.finish()
+        # Nothing was removed or released; the checkpoint lets the rerun resume.
+        self.assertTrue(self.work.exists())
+        self.assertTrue(self.active.exists())
+        self.assertTrue(list(self.slot.glob("finish-*.json")))
+        # The marker (set by the hand-over) prevents a second hand-over.
+        self.env[REEXEC_MARKER] = "1"
+        self.assertEqual(self.finish()["status"], "finished")
+        self.assertFalse(self.active.exists())
+
+    def test_unrelated_changes_on_master_do_not_hand_over(self):
+        self.sync_primary()
+        self.advance_master("docs/note.md")
+        del self.env[REEXEC_MARKER]
+        self.assertEqual(self.finish()["status"], "finished")
+
+    def test_entrypoint_runs_the_updated_script_after_the_locks_are_released(self):
+        self.fixture.write_text(json.dumps(self.state))
+        before = os.getcwd()
+        try:
+            os.chdir(self.primary)
+            with (
+                patch.dict(os.environ, self.env, clear=True),
+                patch.object(sys, "argv", ["task_finish.py", "finish-task"]),
+                patch.object(lifecycle, "finish", side_effect=lifecycle.Reexec(self.primary)),
+                patch.object(lifecycle, "rerun", return_value=0) as rerun,
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                self.assertEqual(lifecycle.main(), 0)
+        finally:
+            os.chdir(before)
+        rerun.assert_called_once_with(self.primary, "task_finish.py", "finish-task")
 
     def test_primary_entrypoint_with_real_locks(self):
         self.fixture.write_text(json.dumps(self.state))

@@ -232,5 +232,10 @@ own external `.env` only if unchanged; deletes the local branch only with a safe
 (an unmerged squash head is kept and reported); closes telemetry windows and starts the
 final-tail collector. A `finish-<task>.json` checkpoint in the slot makes partial failures
 retryable by rerunning the same command; changed credentials, heads or unknown paths stop a
-retry. The slot directory and state persist. If primary predates this target, bootstrap with
+retry. The slot directory and state persist. `make start-task` and `make finish-task` run the
+primary checkout's scripts, which are stale until `master` is fast-forwarded. After the
+fast-forward, if `scripts/` or the `Makefile` changed, the target releases its locks and runs
+again once from the updated scripts (marker `BSS_SCRIPTS_REEXEC`, so it cannot loop), so a fix
+merged by a task applies to that task's own finish; all checks run again and the checkpoint
+resumes a finish. If primary predates this target, bootstrap with
 `make -f /absolute/task/worktree/Makefile finish-task SLOT=<slot>`.

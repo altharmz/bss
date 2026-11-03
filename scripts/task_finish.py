@@ -19,7 +19,14 @@ import task_pr
 import task_telemetry
 from task_git import require, require_no_git_overrides, run
 from task_quality import context, paths, query, review
-from task_runtime import InvalidRuntime, diagnostic, unique_fields
+from task_runtime import (
+    InvalidRuntime,
+    Reexec,
+    diagnostic,
+    reexec_if_scripts_changed,
+    rerun,
+    unique_fields,
+)
 from task_telemetry import record
 from worker_slots import SlotError, slot_path
 
@@ -317,14 +324,23 @@ def finish(primary, common, slot):
     task_telemetry.ROOT = primary
     record(task, "finish-task-attempt", 0, 0, slot=slot.name)
     started, result = time.monotonic(), 1
+    handed_over = False
     try:
         outcome = finish_steps(primary, common, slot)
         result = 0
         return outcome
+    except Reexec:
+        handed_over = True
+        raise
     finally:
-        record(
-            task, "finish-task", result, int((time.monotonic() - started) * 1000), slot=slot.name
-        )
+        if not handed_over:
+            record(
+                task,
+                "finish-task",
+                result,
+                int((time.monotonic() - started) * 1000),
+                slot=slot.name,
+            )
         task_telemetry.ROOT = telemetry_root
 
 
@@ -386,9 +402,13 @@ def finish_steps(primary, common, slot):
     record(task, "cleanup-task-attempt", 0, 0, slot=slot.name)
     started = time.monotonic()
     result = 1
+    handed_over = False
     try:
         commit = completed(primary, task, state["head"])
+        before = query(primary, "rev-parse", "HEAD").decode().strip()
         synchronize(primary)
+        # The old scripts ran this far; a fix merged by this task applies from here on.
+        reexec_if_scripts_changed(primary, before)
         run(primary, "merge-base", "--is-ancestor", commit, "HEAD")
         # Record task outcome and end timestamps before any disposable resources vanish.
         record(task, "task-completed", 0, 0, slot=slot.name)
@@ -455,10 +475,18 @@ def finish_steps(primary, common, slot):
             "next_command": "make start-task BSS_TASK_OWNER="
             + os.environ.get("BSS_TASK_OWNER", "<client>"),
         }
+    except Reexec:
+        handed_over = True
+        raise
     finally:
-        record(
-            task, "cleanup-task", result, int((time.monotonic() - started) * 1000), slot=slot.name
-        )
+        if not handed_over:
+            record(
+                task,
+                "cleanup-task",
+                result,
+                int((time.monotonic() - started) * 1000),
+                slot=slot.name,
+            )
 
 
 def main():
@@ -493,6 +521,9 @@ def main():
                 outcome = finish(primary, common, location)
                 result = 0
         print(json.dumps(outcome))
+    except Reexec as handover:
+        # The locks are released by now; the updated script takes them again.
+        result = rerun(handover.root, "task_finish.py", operation)
     except (InvalidRuntime, SlotError, start_task.StartupError) as error:
         print(f"task lifecycle: {error}", file=sys.stderr)
     except (

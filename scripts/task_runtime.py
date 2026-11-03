@@ -27,6 +27,56 @@ def gh_detail(stderr):
     return "".join(c for c in line if " " <= c <= "~")[:120].strip()
 
 
+REEXEC_MARKER = "BSS_SCRIPTS_REEXEC"
+
+
+class Reexec(Exception):
+    """Primary scripts changed on master; unwind (releasing locks), then run the target again."""
+
+    def __init__(self, root):
+        super().__init__("harness scripts changed on master")
+        self.root = Path(root)
+
+
+def reexec_if_scripts_changed(root, before):
+    """Raise Reexec once when the fast-forward from `before` changed scripts/ or the Makefile."""
+    if os.environ.get(REEXEC_MARKER):
+        return
+    # Git hooks export repository selectors that would redirect `-C`; this reads `root` only.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") or k == "GIT_PAGER"}
+    changed = subprocess.run(  # noqa: S603 - fixed read-only Git command
+        [  # noqa: S607
+            "git",
+            "-C",
+            str(root),
+            "diff",
+            "--name-only",
+            before,
+            "HEAD",
+            "--",
+            "scripts",
+            "Makefile",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    ).stdout
+    if changed.strip():
+        raise Reexec(root)
+
+
+def rerun(root, script, *arguments):
+    """Run the updated primary script once more; the marker prevents a second hand-over."""
+    print("harness scripts changed on master; continuing with the updated scripts", flush=True)
+    return subprocess.run(  # noqa: S603 - fixed interpreter, primary's own script
+        [sys.executable, "-B", str(Path(root) / "scripts" / script), *arguments],
+        cwd=root,
+        env={**os.environ, REEXEC_MARKER: "1"},
+        check=False,
+    ).returncode
+
+
 def printable(value, limit=32):
     text = re.sub(r"https?://\S+", "<url>", str(value))
     return "".join(c for c in text if " " <= c <= "~")[:limit]
