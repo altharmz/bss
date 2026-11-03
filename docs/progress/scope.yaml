@@ -103,6 +103,7 @@ items:
   - {id: ui.subscriber.financialAccount, area: ui, stage: 5, title: "Subscriber card: link to the account's financial account"}
   - {id: ui.financialAccounts.new, area: ui, stage: 5, title: "New financial account"}
   - {id: ui.financialAccounts.form, area: ui, stage: 5, title: "Financial account create and edit dialog"}
+  - {id: ui.financialAccounts.owner, area: ui, stage: 5, title: "Financial account owner combobox"}
   - {id: ui.financialAccounts.edit, area: ui, stage: 5, title: "Edit a financial account (owner, fields, state)"}
   - {id: ui.financialAccounts.delete, area: ui, stage: 5, title: "Delete a financial account with nothing linked"}
   - {id: ui.financialAccounts.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a financial account"}
@@ -365,6 +366,7 @@ items:
   - {id: ui.numbers.detail, area: ui, stage: 5, title: "Number details, assignments and lock/unlock"}
   - {id: ui.subscriber.number, area: ui, stage: 5, title: "Product number and order-based number change"}
   - {id: ui.subscribers.new, area: ui, stage: 5, title: "New subscriber: party, customer, billing account"}
+  - {id: ui.subscribers.contactMedia, area: ui, stage: 5, title: "New subscriber: optional email and phone contact media"}
   - {id: ui.subscriber.edit, area: ui, stage: 5, title: "Edit subscriber: names, statuses, credit limit"}
   - {id: ui.subscriber.moreActions, area: ui, stage: 5, title: "Subscriber account actions menu"}
   - {id: ui.subscriber.card, area: ui, stage: 5, title: "Subscriber card: account, products, charges, transactions"}
@@ -482,9 +484,18 @@ items:
   - {id: ui.parties.individuals, area: ui, stage: 5, title: "Parties tab: individuals with customers and subscribers"}
   - {id: ui.parties.organizations, area: ui, stage: 5, title: "Parties tab: organizations with customers and subscribers"}
   - {id: ui.parties.customers, area: ui, stage: 5, title: "Parties tab: customers with engaged party and billing accounts"}
-  - {id: ui.parties.individual, area: ui, stage: 5, title: "Individual detail and name edit"}
-  - {id: ui.parties.organization, area: ui, stage: 5, title: "Organization detail and name edit"}
+  - {id: ui.parties.individual, area: ui, stage: 5, title: "Individual detail and party edit"}
+  - {id: ui.parties.organization, area: ui, stage: 5, title: "Organization detail and party edit"}
   - {id: ui.parties.customer, area: ui, stage: 5, title: "Customer detail, name and status edit"}
+  - {id: ui.parties.newIndividual, area: ui, stage: 5, title: "New individual action"}
+  - {id: ui.parties.newOrganization, area: ui, stage: 5, title: "New organization action"}
+  - {id: ui.parties.newIndividualForm, area: ui, stage: 5, title: "Create an individual with contact details"}
+  - {id: ui.parties.newOrganizationForm, area: ui, stage: 5, title: "Create an organization with contact details"}
+  - {id: ui.parties.newCustomer, area: ui, stage: 5, title: "New customer from a party"}
+  - {id: ui.parties.newCustomerForm, area: ui, stage: 5, title: "Create a customer engaged to a party"}
+  - {id: ui.parties.contactMedia, area: ui, stage: 5, title: "Party email, phone and postal contact media"}
+  - {id: ui.parties.identification, area: ui, stage: 5, title: "Party identification document"}
+  - {id: ui.parties.externalReference, area: ui, stage: 5, title: "Party external reference"}
   - {id: ui.parties.edit, area: ui, stage: 5, title: "Edit a party or customer alone"}
   - {id: ui.parties.delete, area: ui, stage: 5, title: "Delete a party or customer without dependencies"}
   - {id: ui.billingRuns.list, area: ui, stage: 4, title: "Billing runs: latest run, history, failed badge in the nav"}

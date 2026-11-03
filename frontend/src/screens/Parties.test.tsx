@@ -163,6 +163,165 @@ describe('parties list', () => {
 });
 
 describe('party and customer dialogs', () => {
+  it('creates an individual with status, birth date and contact media', async () => {
+    const { fetchMock } = backend({
+      [`POST ${PARTY}/individual`]: () => json({ id: PAVEL }, { status: 201 }),
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'New individual' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New individual' });
+    expectUi('ui.parties.newIndividualForm');
+    fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: ' Anna ' } });
+    fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: ' Lee ' } });
+    fireEvent.change(within(dialog).getByLabelText('Birth date'), {
+      target: { value: '1990-01-02' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'validated' }));
+    fireEvent.change(within(dialog).getByLabelText('Email'), {
+      target: { value: ' anna@example.org ' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Phone'), {
+      target: { value: ' +7 900 000-00-00 ' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Street address'), {
+      target: { value: ' Tverskaya 1 ' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('City'), { target: { value: ' Moscow ' } });
+    fireEvent.change(within(dialog).getByLabelText('Postal code'), {
+      target: { value: ' 101000 ' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Country'), { target: { value: ' Russia ' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await screen.findByText('Anna Lee created');
+    expect(writes(fetchMock)).toEqual([
+      [
+        'POST',
+        `${PARTY}/individual`,
+        '{"@type":"Individual","givenName":"Anna","familyName":"Lee","status":"validated",' +
+          '"contactMedium":[{"@type":"EmailContactMedium","contactType":"email",' +
+          '"emailAddress":"anna@example.org"},{"@type":"PhoneContactMedium","contactType":"phone",' +
+          '"phoneNumber":"+7 900 000-00-00"},{"@type":"GeographicAddressContactMedium",' +
+          '"contactType":"postalAddress","street1":"Tverskaya 1","city":"Moscow",' +
+          '"postCode":"101000","country":"Russia"}],"birthDate":"1990-01-02T00:00:00+03:00"}',
+      ],
+    ]);
+  });
+
+  it('creates an organization with its own status enum and contact media', async () => {
+    const { fetchMock } = backend({
+      [`POST ${PARTY}/organization`]: () => json({ id: EMPTY_ORG }, { status: 201 }),
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'New organization' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New organization' });
+    expectUi('ui.parties.newOrganizationForm');
+    expect(within(dialog).queryByRole('button', { name: 'deceased' })).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText('Organization name'), {
+      target: { value: ' New Co ' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'closed' }));
+    fireEvent.change(within(dialog).getByLabelText('Email'), {
+      target: { value: 'office@example.org' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await screen.findByText('New Co created');
+    expect(writes(fetchMock)).toEqual([
+      [
+        'POST',
+        `${PARTY}/organization`,
+        '{"@type":"Organization","name":"New Co","status":"closed",' +
+          '"contactMedium":[{"@type":"EmailContactMedium","contactType":"email",' +
+          '"emailAddress":"office@example.org"}]}',
+      ],
+    ]);
+  });
+
+  it('edits every supported party document in one merge patch', async () => {
+    const { fetchMock } = backend({
+      [`GET ${PARTY}/individual/${OLGA}`]: () =>
+        json({ ...INDIVIDUALS[1], birthDate: '1990-01-01T21:00:00Z' }),
+      [`PATCH ${PARTY}/individual/${OLGA}`]: () => json({}),
+    });
+    await open();
+    fireEvent.click(await screen.findByText('Olga Kuznetsova'));
+    const dialog = await screen.findByRole('dialog', { name: 'Olga Kuznetsova' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Edit' }));
+    expect(within(dialog).getByLabelText('Birth date')).toHaveProperty('value', '1990-01-02');
+    fireEvent.change(within(dialog).getByLabelText('Birth date'), {
+      target: { value: '1985-04-03' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'validated' }));
+    fireEvent.change(within(dialog).getByLabelText('Email'), {
+      target: { value: 'olga@example.org' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Phone'), { target: { value: '+1 555 0100' } });
+    fireEvent.change(within(dialog).getByLabelText('Street address'), {
+      target: { value: 'Main 2' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('City'), { target: { value: 'Boston' } });
+    fireEvent.change(within(dialog).getByLabelText('Postal code'), { target: { value: '02108' } });
+    fireEvent.change(within(dialog).getByLabelText('Country'), { target: { value: 'US' } });
+    fireEvent.change(within(dialog).getByLabelText('Identification type'), {
+      target: { value: 'passport' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Identification ID'), {
+      target: { value: 'P123' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('External reference ID'), {
+      target: { value: 'CRM-9' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('External reference type'), {
+      target: { value: 'crmId' },
+    });
+    expectUi('ui.parties.contactMedia');
+    expectUi('ui.parties.identification');
+    expectUi('ui.parties.externalReference');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByText('Olga Kuznetsova saved');
+    expect(writes(fetchMock)).toEqual([
+      [
+        'PATCH',
+        `${PARTY}/individual/${OLGA}`,
+        '{"birthDate":"1985-04-03T00:00:00+04:00","status":"validated",' +
+          '"contactMedium":[{"@type":"EmailContactMedium","contactType":"email",' +
+          '"emailAddress":"olga@example.org"},{"@type":"PhoneContactMedium","contactType":"phone",' +
+          '"phoneNumber":"+1 555 0100"},{"@type":"GeographicAddressContactMedium",' +
+          '"contactType":"postalAddress","street1":"Main 2","city":"Boston",' +
+          '"postCode":"02108","country":"US"}],"individualIdentification":[' +
+          '{"@type":"IndividualIdentification","identificationType":"passport",' +
+          '"identificationId":"P123"}],"externalReference":[{"@type":"ExternalIdentifier",' +
+          '"externalIdentifierType":"crmId","id":"CRM-9"}]}',
+      ],
+    ]);
+  });
+
+  it('creates a customer from a party with its name and Active status', async () => {
+    const { fetchMock } = backend({
+      [`GET ${PARTY}/organization/${EMPTY_ORG}`]: () => json(ORGANIZATIONS[1]),
+      [`POST ${CUSTOMERS}`]: () => json({ id: C_ORPHAN }, { status: 201 }),
+    });
+    await open();
+    tab('Organizations');
+    fireEvent.click(await screen.findByText('Lone Ltd'));
+    const partyDialog = await screen.findByRole('dialog', { name: 'Lone Ltd' });
+    fireEvent.click(within(partyDialog).getByRole('button', { name: 'New customer' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New customer' });
+    expectUi('ui.parties.newCustomerForm');
+    expect((within(dialog).getByLabelText('Customer name') as HTMLInputElement).value).toBe(
+      'Lone Ltd',
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create customer' }));
+    await screen.findByText('Lone Ltd created');
+    expect(writes(fetchMock)).toEqual([
+      [
+        'POST',
+        CUSTOMERS,
+        '{"@type":"Customer","name":"Lone Ltd","status":"Active",' +
+          `"engagedParty":{"id":"${EMPTY_ORG}","@type":"PartyRef","@referredType":"Organization"}}`,
+      ],
+    ]);
+  });
+
   it('edits only the changed names of a person (merge patch) and refreshes', async () => {
     const { fetchMock } = backend({
       [`GET ${PARTY}/individual/${OLGA}`]: () => json(INDIVIDUALS[1]),

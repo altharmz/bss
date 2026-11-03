@@ -333,6 +333,37 @@ describe('new subscriber', () => {
     expect(bodies(fetchMock)).toHaveLength(3);
   });
 
+  it('creates a subscriber with email and phone contact media', async () => {
+    const { fetchMock } = backend(undefined, {
+      [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),
+      [`POST ${CUSTOMERS}`]: () => json({ id: NEW_CUSTOMER }, { status: 201 }),
+      [`POST ${ACCOUNTS}`]: () => json({ id: NEW_ACCOUNT }, { status: 201 }),
+      [`GET ${ACCOUNTS}/${NEW_ACCOUNT}`]: pending,
+    });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
+    fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
+    fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
+    fireEvent.change(within(dialog).getByLabelText('Email'), {
+      target: { value: ' olga@example.org ' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Phone'), {
+      target: { value: ' +1 555 0100 ' },
+    });
+    expectUi('ui.subscribers.contactMedia');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
+    await screen.findByRole('status');
+    expect(bodies(fetchMock)[0]).toEqual([
+      `${PARTY}/individual`,
+      '{"@type":"Individual","givenName":"Olga","familyName":"K",' +
+        '"contactMedium":[{"@type":"EmailContactMedium","contactType":"email",' +
+        '"emailAddress":"olga@example.org"},{"@type":"PhoneContactMedium","contactType":"phone",' +
+        '"phoneNumber":"+1 555 0100"}]}',
+    ]);
+    expect(bodies(fetchMock)).toHaveLength(3);
+  });
+
   it('creates the party, the customer and the account, then opens the card', async () => {
     const { fetchMock } = backend(undefined, {
       [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),
