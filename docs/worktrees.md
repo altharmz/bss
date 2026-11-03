@@ -22,6 +22,7 @@ standalone command, with its required variables.
 | Install UI dependencies (first time) | `make web-install` | task |
 | Format backend and UI | `make format` | task |
 | Review task state | `make review-task` | task |
+| Show the claimed issue (body, comments) | `make show-task` | task |
 | Commit selected files | `make commit MESSAGE="..." FILES='["path/a", "path/b"]'` (or `MESSAGE_FILE=` / `FILES_FILE=`) | task |
 | Update from master | `make sync-task` | task |
 | Publish the branch | `make push` | task |
@@ -50,7 +51,9 @@ standalone command, with its required variables.
    approves that PR at its exact head in the conversation; then pass
    `HUMAN_APPROVAL=<PR-number>:<40-char-head-SHA>`. New commits need renewed approval.
 6. **Finish.** After the merge, issue closure and board Done, immediately run
-   `make finish-task SLOT=<slot>` from clean primary `master`. No human gate.
+   `make finish-task SLOT=<slot>` from clean primary `master`. No human gate. It removes the
+   ignored output of Make targets (`frontend/dist`, `.shots`, `.e2e`, `src/api/generated`) with the
+   worktree and refuses any other ignored file.
 
 Every lifecycle target ends with its next step: a `Next: <command>` line, or a `next_command`
 field in the JSON result (commit -> `make create-pr`, create-pr -> `make check-pr WAIT=600`,

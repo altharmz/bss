@@ -199,6 +199,17 @@ class CollectionTests(unittest.TestCase):
             self.assertEqual(result["reason"], "source_missing")
             self.assertIn("'unavailable'", sql.call_args.args[0])
 
+    def test_subagent_source_with_parent_session_meta_is_accepted(self):
+        rows = fixture("codex")
+        rows.insert(
+            1,
+            dict(type="session_meta", payload=dict(id="parent-thread", model_provider="other")),
+        )
+        source = self.source("codex", rows)
+        items, _, _ = collect.project("codex", source, SID)
+        self.assertEqual({i["provider"] for i in items}, {"openai"})
+        self.assertEqual(len(items), 3)
+
     def test_counter_reset_and_missing_counts_never_create_zero_usage(self):
         rows = fixture("codex")
         rows[6]["payload"]["info"]["total_token_usage"] = tokens(1, 0, 0)

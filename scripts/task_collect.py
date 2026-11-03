@@ -79,9 +79,12 @@ def project(client, path, session, with_state=False):
             if not isinstance(payload, dict):
                 raise CollectionError("source_invalid")
             if kind == "session_meta":
-                if payload.get("id") != session:
+                if provider is None and payload.get("id") != session:
                     raise CollectionError("source_invalid")
-                provider = payload.get("model_provider")
+                # A forked or subagent thread replays its parent's session_meta after its
+                # own; only the first row identifies the bound session.
+                if provider is None:
+                    provider = payload.get("model_provider")
             if kind == "turn_context":
                 model = payload.get("model")
                 active = True
