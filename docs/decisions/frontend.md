@@ -91,8 +91,7 @@ at 1280/1600 confirm visible actions and no horizontal overflow.
 
 The first handoff (`design-ref/design_handoff_bss_admin/`) covered 4 screens and 2 modals.
 The other screens grew without a designer. The UI is restyled from the second handoff,
-`design-ref/design_handoff_bss_admin_v2/` ("Ledger"; brief:
-[ui-redesign-brief.md](../ui-redesign-brief.md)). The redesign covers:
+`design-ref/design_handoff_bss_admin_v2/` ("Ledger"). The redesign covers:
 - a 9-step type scale and warm-grey roles;
 - tables on the page;
 - 8 status families with glyphs;
@@ -114,8 +113,7 @@ The human delegated every decision, and all of them are made in
 - **D9:** the 5 s / 3 min polling is kept.
 - **Rule 1:** no HTTP request is added or changed.
 
-Progress: [ui-redesign-slices.md](../ui-redesign-slices.md), slices 1–16. Each slice adds a
-line below when built. Wherever its values differ from the v1 handoff, this entry wins.
+Progress: the task list of epic #43. Each slice adds a line below when built. Wherever its values differ from the v1 handoff, this entry wins.
 
 ## Next slices 1-24: designed (2026-10-24)
 
@@ -365,7 +363,7 @@ section label has the same style as the old "Operations" label. Each section is 
   `docs/ui.md` Shell section and `scope.yaml` items are updated with the code.
 
 **Orders screen** (`/orders`, `screens/Orders.tsx`, `data-ui="ui.orders"`). This replaces
-[UI gap slice 3](../ui-mcp-gap-plan.md)'s per-account order history. It is read-only
+the earlier per-account order history. It is read-only
 and frontend-only: TMF622 `GET /productOrder` already filters by `state` and
 `billingAccount.id`, and `GET /cancelProductOrder` by `productOrder.id`.
 
@@ -533,7 +531,7 @@ The approved UI follow-up below adds refund recording and on-demand bill request
 
 ## Refunds and on-demand bills UI (2026-10-20)
 
-The human approved slice 1 of [the UI gap plan](../ui-mcp-gap-plan.md#slice-1-design-for-approval-2026-10-20).
+The human approved this slice of the UI/MCP gap plan (removed; see `git log`).
 Refund unused credit lives beside the card's unused-credit figure, limited by both
 unused credit and the positive account balance. It records an already completed
 payout with amount, method and optional description; it never sends money. Closed
@@ -700,7 +698,7 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
 - **`findBy`/`waitFor` wait up to 5 s** (`asyncUtilTimeout` in `src/test/setup.ts`;
   `testTimeout` 15 s in `vite.config.ts`, so a miss still reports the query's own error).
   Testing Library's 1 s default made Catalog's first test flaky ("no row Mobile L",
-  doc-findings #19): a file's first render pays every cold cost (stubbed fetches, JSON,
+  earlier finding #19): a file's first render pays every cold cost (stubbed fetches, JSON,
   Intl, the table), and on a loaded workstation the single vitest pass of `make
   progress` took more than 1 s of wall clock for it. Proven (`cloud/quality-1`): delaying
   the catalog's price load by 1.2 s reproduced the exact error with the 1 s default and

@@ -336,7 +336,7 @@ Decision file: frontend.md. Frontend only.
 
 ### 7. Prepaid browser check and release evidence
 
-Decision file: none (evidence goes in prepaid-release.md).
+Decision file: none.
 
 - Extend `frontend/e2e/smoke.spec.ts` on the seeded stack (`make clean && make up &&
   make seed` if the seed is partial):
@@ -352,8 +352,6 @@ Decision file: none (evidence goes in prepaid-release.md).
   5. Open `/prepaid-commands` and see the list.
 - The test leaves the data changed. That is accepted because the e2e already runs
   against a disposable seeded stack. State this in the spec file's header comment.
-- Update prepaid-release.md: remove the first "Not covered" bullet and add a dated
-  "Browser check" paragraph with the `make web-e2e` result.
 
 ### 8. Prepaid lifecycle parity in the backend (dated status changes, number changes)
 
@@ -738,4 +736,3 @@ Decision file: harness.md (or mcp.md).
   - `get_hub_customer`: the internal list covers it.
   - Plus anything the earlier slices deliberately left out (for example `externalId` is
     not an operation, so it needs no entry).
-- Then mark [ui-mcp-gap-plan.md](ui-mcp-gap-plan.md) closed, with a pointer here.
