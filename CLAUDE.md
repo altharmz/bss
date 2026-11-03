@@ -34,7 +34,7 @@ take a `needs-human` item without the human's OK.
 
 Standing authorizations: repository edits (including instruction files), issue comments,
 commits and pushes on task branches need no approval. Merging a PR that touches
-`needs-human`, CLAUDE.md, AGENTS.md, `docs/board.md`, `.claude/`, `.codex/`,
+`needs-human`, CLAUDE.md, AGENTS.md, `.claude/settings.json`, `.claude/hooks/`, `.codex/`,
 `scripts/pre-commit.sh` or `.github/workflows/` needs the human's explicit approval of
 that PR at its exact head (`make merge-task HUMAN_APPROVAL=<PR>:<head-SHA>`).
 

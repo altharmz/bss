@@ -161,13 +161,29 @@ class PrTests(unittest.TestCase):
         for filename in (
             "CLAUDE.md",
             "AGENTS.md",
-            "docs/board.md",
+            ".claude/settings.json",
             ".claude/hooks/guard.sh",
+            ".claude/hooks/guard-cases.txt",
+            ".codex/hooks.json",
+            ".codex/rules/commit.rules",
             ".github/workflows/ci.yml",
             "scripts/pre-commit.sh",
         ):
-            self.state["files"] = [[{"filename": filename}]]
-            self.assertTrue(self.outcome("blocked", 3)["human_approval_required"])
+            with self.subTest(filename=filename):
+                self.state["files"] = [[{"filename": filename}]]
+                self.assertTrue(self.outcome("blocked", 3)["human_approval_required"])
+        # Documentation and ordinary commands are not human-gated.
+        for filename in (
+            "docs/board.md",
+            "docs/worktrees.md",
+            ".claude/commands/continue.md",
+            "scripts/pre-pre-commit.sh",
+            "scripts/task_pr.py",
+        ):
+            with self.subTest(filename=filename):
+                self.state["files"] = [[{"filename": filename}]]
+                data = self.outcome("ready", 0)
+                self.assertFalse(data["human_approval_required"])
         self.state["files"] = [[{"filename": "safe.txt"}]]
         for owner in (self.pr, self.state["issue"]):
             owner["labels"] = [{"name": "needs-human"}]
@@ -189,10 +205,16 @@ class PrTests(unittest.TestCase):
                 self.assertTrue(self.outcome("blocked", 3)["human_approval_required"])
 
     def test_rename_from_protected_path_requires_human(self):
-        self.state["files"] = [
-            [{"filename": "archived-instructions.md", "previous_filename": "CLAUDE.md"}]
-        ]
-        self.assertTrue(self.outcome("blocked", 3)["human_approval_required"])
+        for previous in ("CLAUDE.md", ".claude/hooks/guard.sh", ".codex/guard.sh"):
+            with self.subTest(previous=previous):
+                self.state["files"] = [
+                    [{"filename": "archived/old-file.md", "previous_filename": previous}]
+                ]
+                self.assertTrue(self.outcome("blocked", 3)["human_approval_required"])
+
+    def test_rename_into_an_unprotected_path_from_docs_is_not_gated(self):
+        self.state["files"] = [[{"filename": "docs/b.md", "previous_filename": "docs/board.md"}]]
+        self.assertFalse(self.outcome("ready", 0)["human_approval_required"])
 
     def test_unknown_host_closed_issue_and_incomplete_response(self):
         self.env["GH_HOST"] = "other.example"

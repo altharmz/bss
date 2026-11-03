@@ -211,8 +211,10 @@ failed or invalid, 2 pending, 3 policy blocked (read the `status` field). `WAIT=
 failed or blocked, or when the time is up (then exit status 2 as without it); it never merges
 and never changes state. Ready requires passing checks, equal
 local and PR heads, a clean tree, a current base, a nondraft mergeable PR and a clean merge
-state. Human gates: a `needs-human` label, or a changed path among CLAUDE.md, AGENTS.md,
-`docs/board.md`, `.claude/`, `.codex/`, `scripts/pre-commit.sh`, `.github/workflows/`. A GitHub
+state. Human gates: a `needs-human` label, or a changed path (or the old name of a
+renamed one) among CLAUDE.md, AGENTS.md, `.claude/settings.json`, `.claude/hooks/`, `.codex/`,
+`scripts/pre-commit.sh`, `.github/workflows/`: the files that grant permissions, run code or
+define policy. A GitHub
 approval does not satisfy them; only `HUMAN_APPROVAL=<PR-number>:<full-head-SHA>` does, and
 only for the local gate: CI, conflicts, reviews and branch protection still apply. Never infer
 approval from earlier sessions or heads.

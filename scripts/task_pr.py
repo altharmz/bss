@@ -23,14 +23,15 @@ FIELDS = (
     "number,url,state,body,baseRefName,headRefName,headRefOid,isCrossRepository,"
     "isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,labels,changedFiles"
 )
+# Files that grant permissions, run code or define policy; everything else merges on green.
 HUMAN_PATHS = {
     "CLAUDE.md",
     "AGENTS.md",
-    "docs/board.md",
     "scripts/pre-commit.sh",
-    ".codex/guard.sh",
-    ".codex/patch-guard.sh",
+    ".claude/settings.json",
+    ".claude/settings.local.json",
 }
+HUMAN_PREFIXES = (".claude/hooks/", ".codex/", ".github/workflows/")
 
 
 def gh(root, *args):
@@ -281,7 +282,7 @@ def readiness(root, task, issue, approval=None):
     # A rename away from an instruction or guard path still touches that protected path.
     names.extend(entry["previous_filename"] for entry in entries if "previous_filename" in entry)
     human = "needs-human" in {label["name"] for label in issue["labels"] + data["labels"]} or any(
-        n in HUMAN_PATHS or n.startswith((".claude/", ".github/workflows/")) for n in names
+        n in HUMAN_PATHS or n.startswith(HUMAN_PREFIXES) for n in names
     )
     head = data["headRefOid"]
     require(isinstance(head, str) and re.fullmatch(r"[a-f0-9]{40}", head), "invalid PR head")

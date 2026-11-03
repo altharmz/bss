@@ -109,8 +109,10 @@ the PR open.
 conversation; an earlier approval of the work or the allow list does not count):
 
 - an item, or a PR, labelled `needs-human`;
-- a PR that touches `CLAUDE.md`, `AGENTS.md`, `docs/board.md`, `.claude/` (settings, hooks,
-  commands), `.codex/` (guards), `scripts/pre-commit.sh` or `.github/workflows/`.
+- a PR that touches a file that grants permissions, runs code or defines policy: `CLAUDE.md`,
+  `AGENTS.md`, `.claude/settings.json`, `.claude/hooks/`, `.codex/`, `scripts/pre-commit.sh` or
+  `.github/workflows/`. Other `docs/` and `.claude/` files (this file, `.claude/commands/`) are
+  not gated.
 
 Approval must name the concrete PR at its exact current head in the current conversation;
 new commits require renewed approval. How to pass it:
