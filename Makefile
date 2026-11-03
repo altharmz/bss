@@ -293,6 +293,7 @@ runtime-check: ## The harness script tests (scripts/test_*.py, run in parallel, 
 		scripts/test_task_git.py \
 		scripts/test_task_quality.py \
 		scripts/test_task_runtime.py \
+		scripts/test_diagnostics.py \
 		scripts/test_start_task.py \
 		scripts/test_task_telemetry.py \
 		scripts/test_task_usage.py \

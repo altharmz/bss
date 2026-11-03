@@ -14,7 +14,7 @@ from pathlib import Path
 
 from task_git import hooks, push, require, require_no_git_overrides
 from task_quality import context, query, review
-from task_runtime import InvalidRuntime
+from task_runtime import InvalidRuntime, diagnostic
 from task_telemetry import record
 
 REPOSITORY = "altharmz/bss"
@@ -331,10 +331,18 @@ def main():
         print(json.dumps(outcome))
     except InvalidRuntime as error:
         print(f"task PR: {error}", file=sys.stderr)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError):
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        subprocess.SubprocessError,
+    ) as error:
         # API errors and argv may contain prose. Never echo arbitrary response payloads.
         print(
-            "task PR: Git/GitHub failed or returned incomplete state; inspect before retrying",
+            f"task PR: Git/GitHub failed or returned incomplete state ({diagnostic(error)}); "
+            "inspect before retrying",
             file=sys.stderr,
         )
     finally:

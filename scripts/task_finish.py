@@ -19,7 +19,7 @@ import task_pr
 import task_telemetry
 from task_git import require, require_no_git_overrides, run
 from task_quality import context, paths, query, review
-from task_runtime import InvalidRuntime, unique_fields
+from task_runtime import InvalidRuntime, diagnostic, unique_fields
 from task_telemetry import record
 from worker_slots import SlotError, slot_path
 
@@ -478,9 +478,17 @@ def main():
         print(json.dumps(outcome))
     except (InvalidRuntime, SlotError, start_task.StartupError) as error:
         print(f"task lifecycle: {error}", file=sys.stderr)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError, subprocess.SubprocessError):
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        subprocess.SubprocessError,
+    ) as error:
         print(
-            "task lifecycle: operation failed; state preserved for inspection/retry",
+            f"task lifecycle: operation failed ({diagnostic(error)}); "
+            "state preserved for inspection/retry",
             file=sys.stderr,
         )
     finally:

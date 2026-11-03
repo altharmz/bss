@@ -31,8 +31,17 @@ class QualityTests(unittest.TestCase):
             with self.subTest(target=target):
                 result = self.quality(target)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn(self.task, result.stdout)
+                # Context lines: always for review-task, otherwise only with VERBOSE=1.
+                self.assertEqual(f'"task": "{self.task}"' in result.stdout, target == "review-task")
+                self.assertEqual('{"staged"' in result.stdout, target == "review-task")
                 self.assertNotIn("fixture-secret-never-output", result.stdout + result.stderr)
+
+    def test_verbose_prints_the_full_context_before_the_result(self):
+        self.env["VERBOSE"] = "1"
+        result = self.quality("format")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for key in (f'"task": "{self.task}"', '{"modified"', '{"staged"', '{"untracked"'):
+            self.assertIn(key, result.stdout)
 
     def test_failed_child(self):
         for target, child in (("format", "fmt"), ("check", "check-preflight")):

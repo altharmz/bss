@@ -55,6 +55,12 @@ Commands for issue comments (`gh issue comment`) are always allowed: add a short
 something meaningful happens (a decision, a blocker, waiting on the human). Do not log every
 command.
 
+Lifecycle targets print one result line (or their JSON result) by default; `VERBOSE=1` adds
+the task, modified, staged and untracked context lines (`make review-task` always prints
+them). A generic failure names its cause: the exception class, the failing command's first
+two arguments and exit status, and for `gh` its sanitized first error line; never other
+stderr text, which can carry tokens or URLs.
+
 **When a target fails:** read the error and fix the underlying state; prefer another
 documented target; only if no target can represent the correction, take the smallest
 non-destructive plain command and report it in your summary. Never bypass human approval or

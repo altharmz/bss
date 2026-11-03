@@ -19,7 +19,14 @@ import time
 import unicodedata
 from pathlib import Path
 
-from task_runtime import RESERVED_PORTS, InvalidRuntime, unique_fields, validate_metadata
+from task_runtime import (
+    RESERVED_PORTS,
+    InvalidRuntime,
+    diagnostic,
+    gh_detail,
+    unique_fields,
+    validate_metadata,
+)
 from task_telemetry import record
 from worker_slots import SlotError, candidates, release, reserve, undo
 from worker_slots import claim as claim_slot
@@ -97,14 +104,6 @@ def run(*args, cwd=None, check=True):
             message += f" ({detail + '; ' if detail else ''}check {STATUS_URL})"
         raise StartupError(message)
     return result
-
-
-def gh_detail(stderr):
-    """One bounded, printable line of gh's error, without URLs or token-like words."""
-    line = next((s.strip() for s in (stderr or "").splitlines() if s.strip()), "")
-    line = re.sub(r"https?://[^\s)]+", "<url>", line)
-    line = re.sub(r"\b(gh[pousr]_|github_pat_)\w+|(?i:bearer|token)\s+\S+", "<redacted>", line)
-    return "".join(c for c in line if " " <= c <= "~")[:120].strip()
 
 
 def git(*args, cwd=None):
@@ -984,7 +983,9 @@ def main():
         TypeError,
         KeyboardInterrupt,
     ) as error:
-        print(f"start-task: {error}", file=sys.stderr)
+        # Our own errors carry a vetted message; anything else gets a bounded cause only.
+        known = isinstance(error, StartupError | SlotError | InvalidRuntime)
+        print(f"start-task: {error if known else diagnostic(error)}", file=sys.stderr)
         return 1
     return 0
 

@@ -234,7 +234,10 @@ class PrTests(unittest.TestCase):
         self.state.update(pr=None, new_pr=self.pr, fail_create=True)
         code, _, error = self.command("create-pr")
         self.assertEqual(code, 1)
-        self.assertNotIn("private API error", error)
+        # The cause is named (command and exit status; gh's first stderr line passes the
+        # shared sanitizer), so the failure is inspectable.
+        self.assertIn("command gh pr", error)
+        self.assertIn("exit 1", error)
         self.assertIn(self.task, self.call(["git", "ls-remote", "--heads", "origin"]).stdout)
 
     def test_unsafe_context_dirty_and_wrong_origin(self):

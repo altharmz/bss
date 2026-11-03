@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 from task_quality import context, forbidden, paths, query, review
-from task_runtime import InvalidRuntime
+from task_runtime import InvalidRuntime, diagnostic
 from task_telemetry import record
 
 
@@ -265,10 +265,12 @@ def main():
             print(f"task {operation}: {identity}")
     except InvalidRuntime as error:
         print(f"task {operation}: {error}", file=sys.stderr)
-    except (OSError, ValueError, subprocess.CalledProcessError):
-        # CalledProcessError may include the commit message in argv; never echo it.
+    except (OSError, ValueError, subprocess.CalledProcessError) as error:
+        # CalledProcessError may include the commit message in argv; diagnostic() prints
+        # only the first two arguments.
         print(
-            f"task {operation}: Git/hook failed or refused; inspect state; no cleanup performed",
+            f"task {operation}: Git/hook failed or refused ({diagnostic(error)}); "
+            "inspect state; no cleanup performed",
             file=sys.stderr,
         )
     finally:
