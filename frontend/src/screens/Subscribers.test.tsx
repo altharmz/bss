@@ -474,21 +474,81 @@ describe('new subscriber', () => {
     expect(account?.[1]).not.toContain('creditLimit');
   });
 
-  it('says what was already created when a later step fails', async () => {
-    backend(undefined, {
-      [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),
-      [`POST ${CUSTOMERS}`]: () => json({ id: NEW_CUSTOMER }, { status: 201 }),
-      [`POST ${ACCOUNTS}`]: () => tmfError(422, 'Unprocessable Entity'),
-    });
+  const fillOlga = async () => {
     await open();
     fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
     const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
     fireEvent.change(within(dialog).getByLabelText('Given name'), { target: { value: 'Olga' } });
     fireEvent.change(within(dialog).getByLabelText('Family name'), { target: { value: 'K' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
+    return dialog;
+  };
+  const deletes = (fetchMock: ReturnType<typeof stubFetch>['fetchMock']) =>
+    fetchMock.mock.calls
+      .filter(([, init]) => init?.method === 'DELETE')
+      .map(([url, init]) => [String(url), init?.body ?? null]);
+  const PARTY_URL = `${PARTY}/individual/${NEW_PARTY}`;
+  const CUSTOMER_URL = `${CUSTOMERS}/${NEW_CUSTOMER}`;
+
+  it('deletes the customer, then the party, when the account step fails', async () => {
+    const { fetchMock } = backend(undefined, {
+      [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),
+      [`POST ${CUSTOMERS}`]: () => json({ id: NEW_CUSTOMER }, { status: 201 }),
+      [`POST ${ACCOUNTS}`]: () => tmfError(422, 'Unprocessable Entity'),
+      [`DELETE ${CUSTOMER_URL}`]: () => new Response(null, { status: 204 }),
+      [`DELETE ${PARTY_URL}`]: () => new Response(null, { status: 204 }),
+    });
+    const dialog = await fillOlga();
     const alert = await within(dialog).findByRole('alert');
     expect(alert.textContent).toContain('Creating the billing account failed');
-    expect(alert.textContent).toContain('Already created: individual Olga K, customer Olga K.');
+    expect(alert.textContent).not.toContain('Could not remove');
+    expect(deletes(fetchMock)).toEqual([
+      [CUSTOMER_URL, null],
+      [PARTY_URL, null],
+    ]);
     expect(window.location.pathname).toBe('/subscribers');
+  });
+
+  it('deletes the party when the customer step fails', async () => {
+    const { fetchMock } = backend(undefined, {
+      [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),
+      [`POST ${CUSTOMERS}`]: () => tmfError(422, 'Unprocessable Entity'),
+      [`DELETE ${PARTY_URL}`]: () => new Response(null, { status: 204 }),
+    });
+    const dialog = await fillOlga();
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain('Creating the customer failed');
+    expect(deletes(fetchMock)).toEqual([[PARTY_URL, null]]);
+    expect(bodies(fetchMock)).toHaveLength(2);
+  });
+
+  it('deletes nothing when the party step fails', async () => {
+    const { fetchMock } = backend(undefined, {
+      [`POST ${PARTY}/individual`]: () => tmfError(422, 'Unprocessable Entity'),
+    });
+    const dialog = await fillOlga();
+    expect((await within(dialog).findByRole('alert')).textContent).toContain(
+      'Creating the party failed',
+    );
+    expect(deletes(fetchMock)).toEqual([]);
+  });
+
+  it('lists what is left, with a link to Parties, when a compensation fails', async () => {
+    const { fetchMock } = backend(undefined, {
+      [`POST ${PARTY}/individual`]: () => json({ id: NEW_PARTY }, { status: 201 }),
+      [`POST ${CUSTOMERS}`]: () => json({ id: NEW_CUSTOMER }, { status: 201 }),
+      [`POST ${ACCOUNTS}`]: () => tmfError(422, 'Unprocessable Entity'),
+      [`DELETE ${CUSTOMER_URL}`]: () => tmfError(503, 'Unavailable'),
+    });
+    const dialog = await fillOlga();
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain('Creating the billing account failed');
+    expect(alert.textContent).toContain(`customer Olga K ${NEW_CUSTOMER}`);
+    expect(alert.textContent).toContain(`individual Olga K ${NEW_PARTY}`);
+    expect(within(alert).getByRole('link', { name: 'Open Parties' }).getAttribute('href')).toBe(
+      '/parties',
+    );
+    // the party is not tried while its customer still exists
+    expect(deletes(fetchMock)).toEqual([[CUSTOMER_URL, null]]);
   });
 });

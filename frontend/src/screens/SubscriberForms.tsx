@@ -4,7 +4,9 @@ import { Note } from '../ui/Note';
 import { useState, type ReactNode } from 'react';
 import {
   BUILT_IN_CYCLE,
+  createBillingAccount,
   createSubscriber,
+  SubscriberStepError,
   loadAccount,
   loadProfile,
   partyName,
@@ -22,6 +24,7 @@ import { loadSettings } from '../api/billing';
 import { deleteBillingAccount, loadFinancialChoices } from '../api/financial';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
+import { hrefOf, Link } from '../app/router';
 import { accountLabel } from '../format/ids';
 import { parseAmount } from '../format/money';
 import { Button, Modal, Segmented, TextInput } from '../ui/kit';
@@ -66,6 +69,102 @@ const MODES: { key: RatingMode; label: string }[] = [
   { key: 'prepaid', label: 'Prepaid' },
 ];
 
+/** The account step shared by New subscriber and Add billing account. */
+function useAccountDraft(ownerName: string) {
+  const context = useSystemContext();
+  const [accountName, setAccountName] = useState('');
+  const [cycleDay, setCycleDay] = useState('1');
+  const [limit, setLimit] = useState('');
+  const [mode, setMode] = useState<RatingMode>('postpaid');
+  const prepaid = mode === 'prepaid';
+  const day = prepaid ? 1 : cycleDayOf(cycleDay);
+  // a prepaid account has no credit: the field is hidden and nothing is sent
+  const credit = prepaid ? { ok: true, value: null } : limitOf(limit);
+  const fallback = `${ownerName} main`;
+  return {
+    currency: context.currency,
+    mode,
+    setMode,
+    accountName,
+    setAccountName,
+    cycleDay,
+    setCycleDay,
+    limit,
+    setLimit,
+    prepaid,
+    day,
+    credit,
+    placeholder: ownerName === '' ? 'Name main' : fallback,
+    effectiveName: accountName.trim() || fallback,
+    valid: day !== null && credit.ok,
+  };
+}
+
+type AccountDraft = ReturnType<typeof useAccountDraft>;
+
+function AccountFields({ draft }: { draft: AccountDraft }) {
+  const { currency, prepaid } = draft;
+  return (
+    <>
+      <Field label="Account name">
+        <TextInput
+          placeholder={draft.placeholder}
+          value={draft.accountName}
+          onChange={(e) => draft.setAccountName(e.target.value)}
+        />
+      </Field>
+      {!prepaid && (
+        <Field label="Billing cycle day (1-28)">
+          <TextInput
+            mono
+            width={80}
+            value={draft.cycleDay}
+            onChange={(e) => draft.setCycleDay(e.target.value)}
+          />
+        </Field>
+      )}
+      {!prepaid && (
+        <Field label={`Credit limit, ${currency} (optional)`}>
+          <TextInput
+            mono
+            width={160}
+            value={draft.limit}
+            onChange={(e) => draft.setLimit(e.target.value)}
+          />
+        </Field>
+      )}
+      {draft.day === null && <Note tone="negative">The cycle day is 1 to 28.</Note>}
+      {!draft.credit.ok && (
+        <Note tone="negative">Enter a credit limit with at most 2 decimals.</Note>
+      )}
+      <div className="caption">
+        Currency {currency}.{' '}
+        {prepaid
+          ? 'The currency cannot be changed later.'
+          : 'The cycle day and the currency cannot be changed later.'}
+        {prepaid && ' A prepaid account spends only funds it holds; it takes no credit limit.'}
+      </div>
+    </>
+  );
+}
+
+/** A failed create: the message, and a link to Parties when records were left behind. */
+function StepProblem({ message, error }: { message: string; error: unknown }) {
+  return (
+    <Note tone="negative" className="footer-push">
+      {message}
+      {error instanceof SubscriberStepError && error.leftovers.length > 0 && (
+        <>
+          {' '}
+          <Link className="bss-link" href={hrefOf({ name: 'parties' })}>
+            Open Parties
+          </Link>
+        </>
+      )}
+    </Note>
+  );
+}
+
 export function NewSubscriberModal({
   onClose,
   onCreated,
@@ -73,19 +172,14 @@ export function NewSubscriberModal({
   onClose: () => void;
   onCreated: (accountId: string, name: string) => void;
 }) {
-  const context = useSystemContext();
   const [kind, setKind] = useState<PartyKind>('Individual');
   const [givenName, setGivenName] = useState('');
   const [familyName, setFamilyName] = useState('');
   const [organizationName, setOrganizationName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [accountName, setAccountName] = useState('');
-  const [cycleDay, setCycleDay] = useState('1');
-  const [limit, setLimit] = useState('');
-  const [mode, setMode] = useState<RatingMode>('postpaid');
   const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<{ message: string; error: unknown } | null>(null);
   const [initialProduct, setInitialProduct] = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
 
@@ -94,12 +188,9 @@ export function NewSubscriberModal({
     kind === 'Individual'
       ? givenName.trim() !== '' && familyName.trim() !== ''
       : organizationName.trim() !== '';
-  const prepaid = mode === 'prepaid';
-  const day = prepaid ? 1 : cycleDayOf(cycleDay);
-  // a prepaid account has no credit: the field is hidden and nothing is sent
-  const credit = prepaid ? { ok: true, value: null } : limitOf(limit);
-  const effectiveAccountName = accountName.trim() || `${name} main`;
-  const valid = named && day !== null && credit.ok;
+  const draft = useAccountDraft(named ? name : '');
+  const { day, credit } = draft;
+  const valid = named && draft.valid;
 
   async function submit() {
     if (!valid || day === null) return;
@@ -113,16 +204,16 @@ export function NewSubscriberModal({
         organizationName,
         email,
         phone,
-        accountName: effectiveAccountName,
+        accountName: draft.effectiveName,
         cycleDay: day,
-        currency: context.currency,
+        currency: draft.currency,
         creditLimit: credit.value,
-        ratingType: mode,
+        ratingType: draft.mode,
       });
       if (initialProduct) setCreatedId(accountId);
       else onCreated(accountId, name);
     } catch (error) {
-      setProblem(explain(error));
+      setProblem({ message: explain(error), error });
     } finally {
       setBusy(false);
     }
@@ -141,11 +232,7 @@ export function NewSubscriberModal({
       subtitle="A party, its customer and a billing account"
       footer={
         <>
-          {problem !== null && (
-            <Note tone="negative" className="footer-push">
-              {problem}
-            </Note>
-          )}
+          {problem !== null && <StepProblem {...problem} />}
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>
             Create subscriber
@@ -156,7 +243,12 @@ export function NewSubscriberModal({
       <div className="bss-modal-body">
         <section>
           <Segmented label="Subscriber type" value={kind} onChange={setKind} options={KINDS} />{' '}
-          <Segmented label="Account mode" value={mode} onChange={setMode} options={MODES} />
+          <Segmented
+            label="Account mode"
+            value={draft.mode}
+            onChange={draft.setMode}
+            options={MODES}
+          />
         </section>
         <section className="bss-form">
           {kind === 'Individual' ? (
@@ -184,42 +276,7 @@ export function NewSubscriberModal({
               <TextInput type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </Field>
           </div>
-          <Field label="Account name">
-            <TextInput
-              placeholder={named ? `${name} main` : 'Name main'}
-              value={accountName}
-              onChange={(e) => setAccountName(e.target.value)}
-            />
-          </Field>
-          {!prepaid && (
-            <Field label="Billing cycle day (1-28)">
-              <TextInput
-                mono
-                width={80}
-                value={cycleDay}
-                onChange={(e) => setCycleDay(e.target.value)}
-              />
-            </Field>
-          )}
-          {!prepaid && (
-            <Field label={`Credit limit, ${context.currency} (optional)`}>
-              <TextInput
-                mono
-                width={160}
-                value={limit}
-                onChange={(e) => setLimit(e.target.value)}
-              />
-            </Field>
-          )}
-          {day === null && <Note tone="negative">The cycle day is 1 to 28.</Note>}
-          {!credit.ok && <Note tone="negative">Enter a credit limit with at most 2 decimals.</Note>}
-          <div className="caption">
-            Currency {context.currency}.{' '}
-            {prepaid
-              ? 'The currency cannot be changed later.'
-              : 'The cycle day and the currency cannot be changed later.'}
-            {prepaid && ' A prepaid account spends only funds it holds; it takes no credit limit.'}
-          </div>
+          <AccountFields draft={draft} />
           <label>
             <input
               type="checkbox"
@@ -229,6 +286,81 @@ export function NewSubscriberModal({
             After creating the account, add a product. Offerings that need a subscriber number ask
             for one.
           </label>
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
+/** One more billing account for an existing customer: the account step of New subscriber. */
+export function AddBillingAccountModal({
+  customer,
+  onClose,
+  onCreated,
+}: {
+  customer: { id: string; name: string };
+  onClose: () => void;
+  onCreated: (accountId: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const draft = useAccountDraft(customer.name);
+  const { day, credit } = draft;
+
+  async function submit() {
+    if (!draft.valid || day === null) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      onCreated(
+        await createBillingAccount(customer, {
+          accountName: draft.effectiveName,
+          cycleDay: day,
+          currency: draft.currency,
+          creditLimit: credit.value,
+          ratingType: draft.mode,
+        }),
+      );
+    } catch (error) {
+      setProblem(explain(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      onSubmit={submitDialogPrimary}
+      title="Add billing account"
+      width={560}
+      onClose={onClose}
+      ui="ui.account.new"
+      subtitle={`Customer ${customer.name}`}
+      footer={
+        <>
+          {problem !== null && (
+            <Note tone="negative" className="footer-push">
+              {problem}
+            </Note>
+          )}
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!draft.valid || busy} onClick={() => void submit()}>
+            Add billing account
+          </Button>
+        </>
+      }
+    >
+      <div className="bss-modal-body">
+        <section>
+          <Segmented
+            label="Account mode"
+            value={draft.mode}
+            onChange={draft.setMode}
+            options={MODES}
+          />
+        </section>
+        <section className="bss-form">
+          <AccountFields draft={draft} />
         </section>
       </div>
     </Modal>

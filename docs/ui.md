@@ -120,15 +120,17 @@ API: `GET /tmf-api/accountManagement/v5/billingAccount` (all pages),
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
-A subscriber is three TMF resources; **there is no delete** (an account carries products,
-bills and payments - it can be Closed). **+ New subscriber** (list header): a person
+A subscriber is three TMF resources; a billing account with history cannot be deleted (it
+can be Closed). **+ New subscriber** (list header): a person
 (given + family name) or an organization (name), the account name (default "<name>
 main"), postpaid billing cycle day 1-28 (default 1), optional email and phone contact media, and
 an optional credit limit; the currency is the UI currency. Empty contact fields are omitted from
 the party body. Three calls in reference order: the party (TMF632), the customer engaging
 it with status **Active** (TMF629), the billing account (TMF666, `BssBillingAccount`, the
-credit limit as an exact number token). A failure stops there and names what was already
-created - nothing is undone behind the operator's back, as in New offering. On success the
+credit limit as an exact number token). TMF defines no composite operation, so a failure
+undoes what was created, newest first: a failed account DELETEs the customer and then the
+party, a failed customer the party. If an undo fails too, the error lists the records left
+(type, name, id) with a link to Parties. On success the
 new card opens. **Edit** (card header) loads the party, customer and account and offers
 the names, the customer status (Created / Active / Inactive), the account name, the
 account state (Active / Suspended / Closed, with a note that a non-Active account takes no
@@ -479,10 +481,15 @@ media. Subscriber links go to the card. A row opens the record read with GET
 (`ui.parties.individual|organization|customer`). **Edit** (`ui.parties.edit`) patches changed
 identity, status, contact media, identification and external-reference fields; a party dialog also
 offers **New customer**, defaulting its name to the party and status to Active. Customer edit still
-changes name and status alone. **Delete** (`ui.parties.delete`, a confirmation) is offered unless
+changes name and status alone. The customer dialog lists its billing accounts
+(`ui.parties.customerAccounts`), each with an inline-confirmed **Delete**
+(`ui.parties.deleteAccount`; the server's 409 shows on the row), and **Add billing account**
+(`ui.parties.addAccount`, also in the subscriber card's More actions, `ui.subscriber.addAccount`):
+the account step of New subscriber (`ui.account.new`: mode, name, cycle day and credit limit for
+postpaid) for that customer. **Delete** (`ui.parties.delete`, a confirmation) is offered unless
 the loaded data shows a dependency: a party with customers or owning a financial, party or
-settlement account, a customer with billing accounts (the dialog says what blocks it); the server's
-409 still shows. After an uncertain result the dialog offers Refresh. API:
+settlement account; a customer with billing accounts shows **Remove billing accounts first**
+(`ui.parties.removeAccountsFirst`, scrolls to the list) instead; the server's 409 still shows. After an uncertain result the dialog offers Refresh. API:
 `GET|POST|PATCH|DELETE .../individual|organization|customer`,
 `GET .../billingAccount?fields=name,relatedParty`, and
 `GET .../financialAccount|partyAccount|settlementAccount?fields=relatedParty`. Design:

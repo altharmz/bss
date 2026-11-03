@@ -61,7 +61,11 @@ import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
 import { watch, type Watched } from './watched';
 import { PaymentsPanel } from './Payments';
 import { AccountBills, RefundAction, RefundsPanel } from './AccountActions';
-import { DeleteSubscriberModal, EditSubscriberModal } from './SubscriberForms';
+import {
+  AddBillingAccountModal,
+  DeleteSubscriberModal,
+  EditSubscriberModal,
+} from './SubscriberForms';
 import { SubscriberOrders } from './SubscriberOrders';
 import './screens.css';
 
@@ -238,6 +242,7 @@ function Card({
   const [openBill, setOpenBill] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [addingAccount, setAddingAccount] = useState(false);
   const customerStatus = useResource(`customer:${account.customerId}:${version}`, (signal) =>
     loadCustomerStatus(account.customerId, signal),
   );
@@ -368,6 +373,11 @@ function Card({
                       },
                     ]
                   : []),
+                {
+                  label: 'Add billing account',
+                  ui: 'ui.subscriber.addAccount',
+                  onClick: () => setAddingAccount(true),
+                },
                 ...(deletable
                   ? [
                       {
@@ -756,6 +766,16 @@ function Card({
           onDeleted={(message) => {
             toast(message);
             navigate(hrefOf({ name: 'subscribers' }));
+          }}
+        />
+      )}
+      {addingAccount && (
+        <AddBillingAccountModal
+          customer={{ id: account.customerId, name: account.customerName }}
+          onClose={() => setAddingAccount(false)}
+          onCreated={(accountId) => {
+            toast('Billing account created');
+            navigate(hrefOf({ name: 'subscriber', accountId }));
           }}
         />
       )}

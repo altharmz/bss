@@ -1,7 +1,16 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { App } from '../app/App';
-import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
+import {
+  CONTEXT,
+  json,
+  NAV_RUNS,
+  noRuns,
+  pending,
+  stubFetch,
+  tmfError,
+  type Handler,
+} from '../test/fetch';
 import { expectUi } from '../test/expectUi';
 import { accountBody, billBody, billsUrl, NO_SETTLEMENT } from '../test/fixtures';
 
@@ -1371,6 +1380,37 @@ describe('delete a billing account', () => {
     expect(deletes(calls)).toEqual([DELETE_KEY]);
     const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'DELETE');
     expect(call?.[1]?.body).toBeUndefined();
+  });
+
+  it('adds a billing account for the same customer from More actions', async () => {
+    const NEW = 'ffff6666-0000-4000-8000-0000000000a6';
+    const { fetchMock } = backend({
+      ...EMPTY,
+      'POST /tmf-api/accountManagement/v5/billingAccount': () => json({ id: NEW }, { status: 201 }),
+      [`GET /tmf-api/accountManagement/v5/billingAccount/${NEW}`]: pending,
+    });
+    await open();
+    await screen.findByText('No active products');
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    expectUi('ui.subscriber.addAccount');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add billing account' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add billing account' });
+    fireEvent.change(within(dialog).getByLabelText('Billing cycle day (1-28)'), {
+      target: { value: '15' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Credit limit, USD (optional)'), {
+      target: { value: '1500.50' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add billing account' }));
+    await waitFor(() => expect(window.location.pathname).toBe(`/subscribers/${NEW}`));
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(String(post?.[1]?.body)).toBe(
+      '{"@type":"BssBillingAccount","name":"Olga Kuznetsova main","billCycleDay":15,' +
+        '"currency":"USD","relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef",' +
+        `"role":"customer","partyOrPartyRole":{"id":"${C}","name":"Olga Kuznetsova",` +
+        '"@type":"PartyRoleRef","@referredType":"Customer"}}],' +
+        '"creditLimit":{"unit":"USD","value":1500.50}}',
+    );
   });
 
   it('is not offered with a product, a charge, a transaction or a bill', async () => {
