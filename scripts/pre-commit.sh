@@ -106,6 +106,12 @@ if grep -qE '^(app|alembic|spec|scripts/docs)/|^tests/docs_collect' <<<"$staged"
   run make docs-check || fail "generated docs are out of date - git add docs/api docs/db and commit again"
 fi
 
+# The harness script tests (~3 min), only when the commit touches the harness. `make test`
+# (so the nightly run) includes them too.
+if grep -qE '^(scripts/|\.claude/|Makefile$)' <<<"$staged"; then
+  run make runtime-check || fail "make runtime-check"
+fi
+
 # The agent guard's cases, only when the commit touches .claude/.
 if grep -q '^\.claude/' <<<"$staged"; then
   run .claude/hooks/test-guard.sh || fail "guard regression cases (.claude/hooks/test-guard.sh)"

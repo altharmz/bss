@@ -28,8 +28,6 @@ HUMAN_PATHS = {
     "AGENTS.md",
     "docs/board.md",
     "scripts/pre-commit.sh",
-    "scripts/workflow_guard.py",
-    "scripts/test_workflow_guard.py",
     ".codex/guard.sh",
     ".codex/patch-guard.sh",
 }

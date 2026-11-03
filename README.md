@@ -89,10 +89,4 @@ constraints: [CLAUDE.md](CLAUDE.md#hard-constraints).
   (`make docs`).
 - [docs/decisions/](docs/decisions/README.md): decision records by area. They bind as much
   as [CLAUDE.md](CLAUDE.md), which holds the working rules for humans and the coding agent
-  (commands, hard constraints, guardrails, next steps).
-
-## Origin
-
-Generated from `vps-lab-template`; `make init` has run and removed itself. The template's
-setup steps are no longer needed here - see
-[docs/decisions/infra.md](docs/decisions/infra.md#template-origin-make-init).
+  (workflow, commands, rules, next steps).

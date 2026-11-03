@@ -642,34 +642,11 @@ def automatic(task, operation, client=None, result=0, pr_number=None):
         client = client or detected
         if operation.startswith(("finish-task", "cleanup-task")) or operation == "task-completed":
             client = session = None
-        from task_usage import load_json
-
-        pricing_path = os.environ.get("BSS_TELEMETRY_PRICING_FILE")
-        options = {"pricing": load_json(pricing_path)} if pricing_path else {}
-        results = collect(task, client, session, close=operation == "task-completed", **options)
+        results = collect(task, client, session, close=operation == "task-completed")
         if operation == "task-completed" and any(r["status"] == "partial" for r in results):
             launch_final_capture(task)
         if operation in {"start-task", "finish-task", "task-completed"}:
             print("telemetry collection: " + json.dumps(results, sort_keys=True), file=sys.stderr)
-        if result == 0 and operation in {"start-task", "create-pr"}:
-            from task_stats import post
-
-            try:
-                post(task, "start" if operation == "start-task" else "pr", pr_number)
-            except (
-                OSError,
-                ValueError,
-                RuntimeError,
-                TypeError,
-                KeyError,
-                StopIteration,
-                subprocess.SubprocessError,
-            ):
-                print(
-                    "telemetry: issue statistics comment failed; retry make telemetry-comment "
-                    "PHASE=start|pr",
-                    file=sys.stderr,
-                )
     except (
         OSError,
         ValueError,
@@ -733,16 +710,7 @@ def main():
         if args.watch:
             print(json.dumps({"collections": watch(task)}, sort_keys=True))
             return 0
-        from task_usage import load_json
-
-        card_path = os.environ.get("BSS_TELEMETRY_PRICING_FILE")
-        result = collect(
-            task,
-            client,
-            session,
-            close=os.environ.get("BSS_COLLECT_CLOSE") == "1",
-            pricing=load_json(card_path) if card_path else None,
-        )
+        result = collect(task, client, session, close=os.environ.get("BSS_COLLECT_CLOSE") == "1")
         print(json.dumps({"collections": result}, sort_keys=True))
         return int(not result or any(r["status"] == "unavailable" for r in result))
     except (

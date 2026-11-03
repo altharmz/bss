@@ -74,7 +74,7 @@ code, tests or docs yourself, apart from the one tracker fix described in step 3
 
 - run two subagents at once;
 - write code yourself;
-- deploy (`make deploy`, `make verify`, `/ship`);
+- deploy (`make deploy`, `make verify`);
 - force-push;
 - use `--no-verify`;
 - edit `design-ref/`.

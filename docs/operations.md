@@ -26,7 +26,7 @@ targets; do not invent commands** (CLAUDE.md, "Commands").
 | `make clean` | stop the stack **and drop the local database volume** |
 | `make web-install` | the only step that downloads npm packages (`npm ci`, exactly the lockfile) |
 | `make web-dev` / `web-build` / `web-lint` / `web-test` / `web-types` / `web-fmt` / `web-e2e` | the UI, always in the `web` / `web-offline` containers; offline targets fail with "run make web-install" if node_modules does not match the lockfile |
-| `make hooks` | install the pre-commit and pre-push hooks (symlinks) |
+| `make hooks` | install the shared pre-commit and pre-push hook dispatchers |
 | `make spec-verify-upstream` | re-fetch the spec blob SHAs from GitHub and compare with `spec/README.md` (network) |
 
 The local PostgreSQL runs with `fsync`, `full_page_writes` and `synchronous_commit` off
@@ -45,29 +45,16 @@ for test speed - not crash-safe; recover with `make clean && make up` ([decision
 | UI end-to-end | `make web-e2e` | Playwright on the built UI against the seeded local stack, read-only |
 | Generated docs | `make docs-check` | docs/api and docs/db match the code |
 
-### In a cloud session
-
-See [cloud.md](cloud.md). No Docker image can be built there (the build has no network);
-Python and Node checks run on the host after `bash scripts/cloud-setup.sh` (PostgreSQL 16,
-a pinned Python 3.12 venv in `/opt/bss-venv`, and the locked npm dependencies). Run ruff and
-`pytest -n auto -p no:cacheprovider` against the host database, plus the web checks described
-in cloud.md. The documentation generators run the same way (`python -m tests.docs_collect >
-.docs/collected.json`, then `python3 scripts/docs/generate.py`). **Cloud work is pushed to a
-branch and counts as unverified until a local `make check` passes** (`docs/cloud.md`).
-
 ## Hooks
 
 - **Pre-commit** (`scripts/pre-commit.sh`, installed by `make hooks`): refuses the commit
-  unless the working tree is exactly what is committed, then `make lint`, `make test-smoke`
-  and `make test-changed` (the smoke tests and the tests the change affects; the full
-  `make test` is nightly in CI and by hand before a PR that touches billing, migrations or
-  the API; plus `make web-lint` and `make web-test` when `frontend/` or `spec/` is staged,
-  `make docs-check` when the generated docs' sources are; nothing for Markdown only); keeps a
-  full log of every run under `.git/pre-commit-logs/`. Never skipped; it is the one local
-  test run of a development cycle ([decisions/harness.md](decisions/harness.md#development-cycle-and-gates)).
+  unless the working tree is exactly what is committed, then runs lint, the smoke tests and
+  the tests the change affects, plus UI and generated-docs checks when their sources change.
+  It is the one local test run of a development cycle; the full `make test` is nightly in CI
+  and by hand before a PR that touches billing, migrations or the API. Never skipped.
 - **Pre-push** (`scripts/pre-push.sh`): scans only the commits being pushed and refuses a
   bcrypt hash, an added `.env*` path (other than `.env.example`), a branch deletion or a
-  non-fast-forward. Never bypassed ([decisions/harness.md](decisions/harness.md#development-cycle-and-gates)).
+  non-fast-forward. Details: [decisions/harness.md](decisions/harness.md#development-cycle-and-gates).
 
 ## Deploy
 
@@ -76,7 +63,7 @@ the VPS; `make verify` is the same. The commit was already tested by the pre-com
 hook, so deploying does not test again; it exits non-zero and prints remote logs when
 anything fails. `make check` (`lint`, `test` with hypothesis `ci`, `docs-check`,
 `web-lint`, `web-test`, `web-e2e`) runs on demand - for a change that needs stronger
-testing, or a cloud branch before merging it.
+testing.
 
 What `deploy.sh` does, in order:
 
@@ -119,9 +106,9 @@ not roll the schema back (`alembic downgrade` by hand). `DEPLOYED` records the b
 that reached service health, even if a later API/web/MCP smoke fails; it does not
 certify the entire release gate; `.deployed` with `checks=running` after a deploy
 means a later smoke failed.
-Production config, limits and the hard constraints of the VPS (VPN ports, no prune,
-nothing published on 0.0.0.0): see
-CLAUDE.md, "Hard constraints". Never run `docker build` on the VPS.
+Production config, limits and the constraints of the VPS (VPN ports, no prune, nothing
+published on 0.0.0.0): see [decisions/infra.md](decisions/infra.md). Never run `docker build`
+on the VPS.
 
 ## Prepaid: recovery and rollback
 
@@ -180,20 +167,17 @@ repository).
 
 ## The agent harness
 
-Claude Code sessions on this repository run with guard rails against **agent mistakes,
-not a hostile agent** ([decisions/harness.md](decisions/harness.md#the-guard)):
+Every regular operation is a `make` target and agents are told to use them
+([worktrees.md](worktrees.md)). The few hard guard rails exist against **agent mistakes, not a
+hostile agent** ([decisions/harness.md](decisions/harness.md#the-guard)):
 
-- `.claude/settings.json`: `allow` (make, docker compose, git commit/push, read/edit of
-  the sources), `deny` (reading or editing `.env*`, docker prune and volume removal,
-  `sudo`, pnpm/yarn/corepack, edits under `design-ref/`).
-- `.claude/hooks/guard.sh`: a short pattern matcher run before every shell command -
-  blocks reading secrets, destructive docker cleanups, anything touching the VPN or its
-  ports, build or privileged commands over ssh, skipping the git hooks, host Node, and
-  force/delete pushes. Cases: `.claude/hooks/guard-cases.txt`, run by
-  `.claude/hooks/test-guard.sh`.
+- `.claude/settings.json`: `allow` (make, read-only git and gh, read/edit of the sources),
+  `deny` (reading or editing `.env*`, edits under `design-ref/`).
+- `.claude/hooks/guard.sh`: a short pattern matcher run before every shell command - blocks
+  reading secrets, destructive docker cleanups, force/delete pushes and skipping the git
+  hooks. Cases: `.claude/hooks/guard-cases.txt`, run by `.claude/hooks/test-guard.sh`.
 - `.claude/hooks/format.sh`: formats edited Python (ruff) and UI files (prettier) in
   containers.
 - **Approval rules**: commit and push need none. Agents merge their own PRs only under the
   [board rules](board.md#merging-and-closing); deployment is human-only and outside
-  development. Cloud sessions push only to `cloud/*` branches; a data-model or large design
-  change starts with a plan (CLAUDE.md, "Working style").
+  development. A data-model or large design change starts with a plan (CLAUDE.md).

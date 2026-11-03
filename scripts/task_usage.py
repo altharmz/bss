@@ -1,4 +1,4 @@
-"""Strict content-free usage export ingestion and task reporting; no conversation scanning."""
+"""Content-free usage validation and task usage reporting; no conversation scanning."""
 
 # All SQL values pass validators and literal quoting, never a shell.
 # ruff: noqa: S608
@@ -6,13 +6,11 @@
 import argparse
 import hashlib
 import json
-import os
 import re
 import subprocess
 import sys
 from datetime import datetime
 from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation, localcontext
-from pathlib import Path
 
 from task_telemetry import literal, sql
 
@@ -59,21 +57,6 @@ def identifier(value, nullable=False):
         r"[A-Za-z0-9][A-Za-z0-9_.:/@+-]{0,159}", value
     ):
         raise ValueError("invalid bounded identity")
-
-
-def load_json(path):
-    # Reject duplicate keys rather than silently accepting altered identity/usage.
-    def pairs(items):
-        result = {}
-        for key, value in items:
-            if key in result:
-                raise ValueError("duplicate JSON key")
-            result[key] = value
-        return result
-
-    if Path(path).stat().st_size > 65536:
-        raise ValueError("usage/pricing export exceeds size limit")
-    return json.loads(Path(path).read_text(), object_pairs_hook=pairs)
 
 
 def validate(sample):
@@ -374,20 +357,10 @@ def report(data):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["ingest", "report"])
-    parser.add_argument("--file", default=os.environ.get("BSS_TELEMETRY_USAGE_FILE") or None)
-    parser.add_argument("--pricing", default=os.environ.get("BSS_TELEMETRY_PRICING_FILE") or None)
-    args = parser.parse_args()
+    parser.add_argument("action", choices=["report"])
+    parser.parse_args()
     try:
-        if args.action == "ingest":
-            if not args.file:
-                raise ValueError("usage file required")
-            sql(usage_sql(load_json(args.file), load_json(args.pricing) if args.pricing else None))
-            print('{"status":"ingested"}')
-        else:
-            if args.file or args.pricing:
-                raise ValueError("report takes no input files")
-            print(json.dumps(report(json.loads(sql(REPORT_SQL))), sort_keys=True))
+        print(json.dumps(report(json.loads(sql(REPORT_SQL))), sort_keys=True))
     except (
         OSError,
         ValueError,
@@ -397,8 +370,8 @@ def main():
         RuntimeError,
         subprocess.SubprocessError,
     ):
-        # Never echo input, parser errors, database stderr or paths containing credentials.
-        print("telemetry: usage/report failed; check export schema and storage", file=sys.stderr)
+        # Never echo parser errors, database stderr or paths containing credentials.
+        print("telemetry: usage report failed; check storage", file=sys.stderr)
         return 1
     return 0
 

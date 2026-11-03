@@ -648,15 +648,9 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   *now* (top bar only). `npm test` runs the suite twice, in UTC and with
   `TZ=America/New_York`, so every request body is proven independent of the browser's
   zone; a local-`Date`-constructor bug passes the UTC run and fails the second one.
-- **Harness:** `settings.json` denies `pnpm`, `yarn`, `corepack` on the host and edits
-  under `design-ref/` (`npm`, `npx`, `node` are not denied there: a deny rule cannot
-  depend on cloud mode, see ["Agent guardrails"](harness.md#the-guard)); `guard.sh` blocks a command that runs a Node
-  tool on the host (also via `sh -c`, `xargs`, substitutions) unless it runs in one of the
-  compose services `web`, `web-offline`, `web-preview`, `e2e` (or another container), and
-  shell writes into `design-ref/`. It is quote-aware, so `docker compose run web-offline
-  sh -c '... && npm ...'` and text mentioning npm in quotes pass; a heredoc still goes
-  through the old raw-text checks. The format hook runs prettier (in `web-offline`) on
-  edited UI files.
+- **Harness:** Node runs only in the web containers (`make web-*`); the harness no longer
+  enforces this by hook, the CLAUDE.md rule stands. `settings.json` denies edits under
+  `design-ref/`. The format hook runs prettier (in `web-offline`) on edited UI files.
 - **Structure** (`frontend/src/`): `api/` (fetch client: every failure is an `ApiError`
   whose message is the call, "GET /path → 503 Service Unavailable"; `getPage` requires
   `X-Total-Count`; `getAll` pages by 100; `useResource` = loading/error/ok + retry, never
