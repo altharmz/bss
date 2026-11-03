@@ -439,8 +439,8 @@ export async function loadSubscribers(signal: AbortSignal): Promise<Subscribers>
 }
 
 // --- subscribers: create and edit (TMF632 party, TMF629 customer, TMF666 account) ---
-// A subscriber is three resources. There is no delete (docs/decisions/frontend.md):
-// an account carries products, bills and payments; it can be Closed.
+// A subscriber is three resources. An account with history is not deleted
+// (it carries products, bills and payments); it can be Closed.
 
 const PARTIES = '/tmf-api/partyManagement/v5';
 
@@ -472,8 +472,21 @@ export function partyName(form: {
     : form.organizationName.trim();
 }
 
-/** Which of the three creates failed, and what already exists then. */
-export class SubscriberStepError extends Error {}
+/** A record a failed create could not remove again, for the error to name. */
+export interface Leftover {
+  what: string;
+  id: string;
+}
+
+/** Which create failed, and which records are left behind then (none after a clean rollback). */
+export class SubscriberStepError extends Error {
+  constructor(
+    message: string,
+    readonly leftovers: Leftover[] = [],
+  ) {
+    super(message);
+  }
+}
 
 function partyBody(form: NewSubscriber | SubscriberProfile): Record<string, string> {
   return form.kind === 'Individual'
@@ -485,43 +498,20 @@ function partyPath(kind: PartyKind): string {
   return `${PARTIES}/${kind === 'Individual' ? 'individual' : 'organization'}`;
 }
 
-/**
- * Three TMF calls, in the order the references require: the party, the customer engaging
- * it (Active: the operator registers a real customer), then its billing account. A failure
- * stops there and says what was already created - nothing is deleted behind the
- * operator's back (there is no DELETE), as with New offering. Returns the account id.
- */
-export async function createSubscriber(form: NewSubscriber): Promise<string> {
-  const name = partyName(form);
-  const created: string[] = [];
-  async function step<T>(what: string, call: () => Promise<T>): Promise<T> {
-    try {
-      return await call();
-    } catch (error) {
-      const done = created.length ? ` Already created: ${created.join(', ')}.` : '';
-      throw new SubscriberStepError(`Creating the ${what} failed: ${explain(error)}.${done}`);
-    }
-  }
-  const media = contactMedia({ ...EMPTY_CONTACT, email: form.email, phone: form.phone });
-  const party = await step('party', () =>
-    postJson<{ id?: string }>(partyPath(form.kind), {
-      '@type': form.kind,
-      ...partyBody(form),
-      ...(media.length ? { contactMedium: media } : {}),
-    }),
-  );
-  const partyId = need(party.id, 'party id');
-  created.push(`${form.kind.toLowerCase()} ${name}`);
-  const customer = await step('customer', () =>
-    postJson<{ id?: string }>(PATHS.customers, {
-      '@type': 'Customer',
-      name,
-      status: 'Active',
-      engagedParty: { id: partyId, '@type': 'PartyRef', '@referredType': form.kind },
-    }),
-  );
-  const customerId = need(customer.id, 'customer id');
-  created.push(`customer ${name}`);
+/** The account step of New subscriber, also used alone by Add billing account. */
+export interface NewAccount {
+  accountName: string;
+  cycleDay: number; // 1..28
+  currency: string;
+  creditLimit: string | null; // canonical decimal string, or none (always none when prepaid)
+  ratingType: RatingMode;
+}
+
+/** POST one billing account for a customer. Returns the account id. */
+export async function createBillingAccount(
+  customer: { id: string; name: string },
+  form: NewAccount,
+): Promise<string> {
   const body = {
     '@type': 'BssBillingAccount',
     name: form.accountName.trim(),
@@ -534,8 +524,8 @@ export async function createSubscriber(form: NewSubscriber): Promise<string> {
         '@type': 'RelatedPartyRefOrPartyRoleRef',
         role: 'customer',
         partyOrPartyRole: {
-          id: customerId,
-          name,
+          id: customer.id,
+          name: customer.name,
           '@type': 'PartyRoleRef',
           '@referredType': 'Customer',
         },
@@ -543,13 +533,77 @@ export async function createSubscriber(form: NewSubscriber): Promise<string> {
     ],
     ...(form.creditLimit === null ? {} : { creditLimit: { unit: form.currency, value: AMOUNT } }),
   };
-  const account = await step('billing account', () =>
-    postJson<{ id?: string }>(
-      PATHS.accounts,
-      form.creditLimit === null ? body : jsonWithAmount(body, form.creditLimit),
-    ),
+  const account = await postJson<{ id?: string }>(
+    PATHS.accounts,
+    form.creditLimit === null ? body : jsonWithAmount(body, form.creditLimit),
   );
   return need(account.id, 'account id');
+}
+
+/**
+ * Three TMF calls, in the order the references require: the party, the customer engaging
+ * it (Active: the operator registers a real customer), then its billing account. TMF
+ * defines no composite operation, so a failure undoes what was created, newest first:
+ * a failed account DELETEs the customer and then the party, a failed customer the party.
+ * If an undo fails too, the error names what is left (with a link to Parties). Returns
+ * the account id.
+ */
+export async function createSubscriber(form: NewSubscriber): Promise<string> {
+  const name = partyName(form);
+  const kind = form.kind.toLowerCase();
+  // newest first: the order to undo in
+  const created: (Leftover & { undo: () => Promise<unknown> })[] = [];
+  async function step<T>(what: string, call: () => Promise<T>): Promise<T> {
+    try {
+      return await call();
+    } catch (error) {
+      const left: Leftover[] = [];
+      for (const record of created) {
+        if (left.length === 0) {
+          try {
+            await record.undo();
+            continue;
+          } catch {
+            // falls through: this record and every older one stay
+          }
+        }
+        left.push({ what: record.what, id: record.id });
+      }
+      const rest = left.length
+        ? ` Could not remove: ${left.map((r) => `${r.what} ${r.id}`).join(', ')}.`
+        : '';
+      throw new SubscriberStepError(`Creating the ${what} failed: ${explain(error)}.${rest}`, left);
+    }
+  }
+  const media = contactMedia({ ...EMPTY_CONTACT, email: form.email, phone: form.phone });
+  const party = await step('party', () =>
+    postJson<{ id?: string }>(partyPath(form.kind), {
+      '@type': form.kind,
+      ...partyBody(form),
+      ...(media.length ? { contactMedium: media } : {}),
+    }),
+  );
+  const partyId = need(party.id, 'party id');
+  created.unshift({
+    what: `${kind} ${name}`,
+    id: partyId,
+    undo: () => request('DELETE', `${partyPath(form.kind)}/${partyId}`),
+  });
+  const customer = await step('customer', () =>
+    postJson<{ id?: string }>(PATHS.customers, {
+      '@type': 'Customer',
+      name,
+      status: 'Active',
+      engagedParty: { id: partyId, '@type': 'PartyRef', '@referredType': form.kind },
+    }),
+  );
+  const customerId = need(customer.id, 'customer id');
+  created.unshift({
+    what: `customer ${name}`,
+    id: customerId,
+    undo: () => request('DELETE', `${PATHS.customers}/${customerId}`),
+  });
+  return step('billing account', () => createBillingAccount({ id: customerId, name }, form));
 }
 
 /** Everything the Edit dialog shows and may change. */

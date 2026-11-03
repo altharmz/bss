@@ -423,8 +423,11 @@ describe('party and customer dialogs', () => {
     tab('Customers');
     fireEvent.click((await screen.findAllByText('Ivan Petrov'))[0] as HTMLElement);
     dialog = await screen.findByRole('dialog', { name: 'Ivan Petrov' });
-    expect(within(dialog).queryByRole('button', { name: 'Delete' })).toBeNull();
-    expect(within(dialog).getByText(/It has 1 billing account/)).toBeTruthy();
+    // only the account's own Delete is there; the customer's waits for the accounts to go
+    expect(within(dialog).getAllByRole('button', { name: 'Delete' })).toHaveLength(1);
+    expect(
+      within(dialog).getByRole('button', { name: 'Remove billing accounts first' }),
+    ).toBeTruthy();
   });
 
   it('deletes a customer without accounts and shows the server 409 for a party', async () => {
@@ -454,5 +457,114 @@ describe('party and customer dialogs', () => {
       ['DELETE', `${PARTY}/organization/${EMPTY_ORG}`, null],
       ['DELETE', `${CUSTOMERS}/${C_ORPHAN}`, null],
     ]);
+  });
+});
+
+describe('billing accounts of a customer', () => {
+  const ACCOUNT_URL = `${ACCOUNTS}/billingAccount/${A1}`;
+  const customerDialog = async () => {
+    await open();
+    tab('Customers');
+    fireEvent.click((await screen.findAllByText('Ivan Petrov'))[0] as HTMLElement);
+    return screen.findByRole('dialog', { name: 'Ivan Petrov' });
+  };
+
+  it('adds a billing account with the body of New subscriber', async () => {
+    const { fetchMock } = backend({
+      [`POST ${ACCOUNTS}/billingAccount`]: () => json({ id: 'new' }, { status: 201 }),
+      [`GET ${CUSTOMERS}/${C_IVAN}`]: () => json(CUSTOMER_ROWS[0]),
+    });
+    const dialog = await customerDialog();
+    expectUi('ui.parties.addAccount');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add billing account' }));
+    const add = await screen.findByRole('dialog', { name: 'Add billing account' });
+    expectUi('ui.account.new');
+    fireEvent.change(within(add).getByLabelText('Billing cycle day (1-28)'), {
+      target: { value: '15' },
+    });
+    fireEvent.change(within(add).getByLabelText('Credit limit, USD (optional)'), {
+      target: { value: '1500.50' },
+    });
+    fireEvent.click(within(add).getByRole('button', { name: 'Add billing account' }));
+    await screen.findByText('Billing account created');
+    expect(writes(fetchMock)).toEqual([
+      [
+        'POST',
+        `${ACCOUNTS}/billingAccount`,
+        '{"@type":"BssBillingAccount","name":"Ivan Petrov main","billCycleDay":15,"currency":"USD",' +
+          '"relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef","role":"customer",' +
+          `"partyOrPartyRole":{"id":"${C_IVAN}","name":"Ivan Petrov","@type":"PartyRoleRef",` +
+          '"@referredType":"Customer"}}],"creditLimit":{"unit":"USD","value":1500.50}}',
+      ],
+    ]);
+  });
+
+  it('adds a prepaid account without cycle day or credit limit', async () => {
+    const { fetchMock } = backend({
+      [`POST ${ACCOUNTS}/billingAccount`]: () => json({ id: 'new' }, { status: 201 }),
+      [`GET ${CUSTOMERS}/${C_IVAN}`]: () => json(CUSTOMER_ROWS[0]),
+    });
+    const dialog = await customerDialog();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add billing account' }));
+    const add = await screen.findByRole('dialog', { name: 'Add billing account' });
+    fireEvent.click(within(add).getByRole('button', { name: 'Prepaid' }));
+    expect(within(add).queryByLabelText('Billing cycle day (1-28)')).toBeNull();
+    fireEvent.change(within(add).getByLabelText('Account name'), { target: { value: 'Wallet' } });
+    fireEvent.click(within(add).getByRole('button', { name: 'Add billing account' }));
+    await screen.findByText('Billing account created');
+    expect(writes(fetchMock)).toEqual([
+      [
+        'POST',
+        `${ACCOUNTS}/billingAccount`,
+        '{"@type":"BssBillingAccount","name":"Wallet","billCycleDay":1,"currency":"USD",' +
+          '"ratingType":"prepaid","relatedParty":[{"@type":"RelatedPartyRefOrPartyRoleRef",' +
+          `"role":"customer","partyOrPartyRole":{"id":"${C_IVAN}","name":"Ivan Petrov",` +
+          '"@type":"PartyRoleRef","@referredType":"Customer"}}]}',
+      ],
+    ]);
+  });
+
+  it('deletes an account in place after a confirm', async () => {
+    const { fetchMock } = backend({
+      [`GET ${CUSTOMERS}/${C_IVAN}`]: () => json(CUSTOMER_ROWS[0]),
+      [`DELETE ${ACCOUNT_URL}`]: () => new Response(null, { status: 204 }),
+    });
+    const dialog = await customerDialog();
+    expectUi('ui.parties.customerAccounts');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(writes(fetchMock)).toEqual([]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+    await screen.findByText('Ivan main deleted');
+    expect(writes(fetchMock)).toEqual([['DELETE', ACCOUNT_URL, null]]);
+  });
+
+  it('shows the server 409 on the account row and keeps the dialog', async () => {
+    backend({
+      [`GET ${CUSTOMERS}/${C_IVAN}`]: () => json(CUSTOMER_ROWS[0]),
+      [`DELETE ${ACCOUNT_URL}`]: () => tmfError(409, 'billingAccount has charges'),
+    });
+    const dialog = await customerDialog();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Yes' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert.textContent).toContain('409');
+    expect(screen.getByRole('dialog', { name: 'Ivan Petrov' })).toBeTruthy();
+    expect(
+      within(dialog).getByRole('button', { name: 'Remove billing accounts first' }),
+    ).toBeTruthy();
+  });
+
+  it('enables Delete customer once no account remains', async () => {
+    backend({
+      [`GET ${CUSTOMERS}/${C_ORPHAN}`]: () => json(CUSTOMER_ROWS[1]),
+    });
+    await open();
+    tab('Customers');
+    fireEvent.click(await screen.findByText('Ivan Second'));
+    const dialog = await screen.findByRole('dialog', { name: 'Ivan Second' });
+    expect(within(dialog).getByRole('button', { name: 'Delete' })).toBeTruthy();
+    expect(
+      within(dialog).queryByRole('button', { name: 'Remove billing accounts first' }),
+    ).toBeNull();
   });
 });
