@@ -15,9 +15,10 @@ import { ApiError, explain } from '../api/client';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { businessDate, clockTime } from '../format/dates';
-import { formatCents, parseAmount, toCents } from '../format/money';
-import { Button, Modal, Panel, TextInput, useToast } from '../ui/kit';
-import { ListState } from '../ui/states';
+import { formatCents, parseAmount, positiveAmountError, toCents } from '../format/money';
+import { Button, Field, Modal, Panel, TextInput, useToast } from '../ui/kit';
+import { Note } from '../ui/Note';
+import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { BillsPanel } from './Bills';
 
@@ -34,26 +35,27 @@ export function RefundAction({
   account,
   settlement,
   onChanged,
+  label = 'Refund unused credit',
+  ui = 'ui.subscriber.recordRefund',
 }: {
   account: Account;
   settlement: AccountSettlement | null;
   onChanged: () => void;
+  label?: string;
+  ui?: string;
 }) {
   const [open, setOpen] = useState(false);
   const toast = useToast();
   const limit = refundableCredit(account, settlement);
   return (
     <>
-      <div className="caption">
-        Refundable credit {settlement === null ? '…' : formatCents(limit)}
-      </div>
-      <Button
-        small
-        data-ui="ui.subscriber.recordRefund"
-        disabled={limit === 0}
-        onClick={() => setOpen(true)}
-      >
-        Refund unused credit
+      {label === 'Refund unused credit' && (
+        <div className="caption">
+          Refundable credit {settlement === null ? '…' : formatCents(limit)}
+        </div>
+      )}
+      <Button small data-ui={ui} disabled={limit === 0} onClick={() => setOpen(true)}>
+        {label}
       </Button>
       {open && (
         <RefundModal
@@ -98,7 +100,12 @@ export function RefundModal({
   const [whole, fraction] = (amount ?? '0.00').split('.');
   const cents = Number(whole) * 100 + Number(fraction);
   const methodName = method === 'other' ? other.trim() : method;
-  const valid = amount !== null && cents > 0 && cents <= limit && methodName !== '';
+  const valid =
+    amount !== null &&
+    cents > 0 &&
+    cents <= limit &&
+    methodName !== '' &&
+    description.trim() !== '';
 
   async function submit() {
     if (!valid || amount === null || saving.current || unknown) return;
@@ -171,6 +178,9 @@ export function RefundModal({
             method.
           </p>
         )}
+        {positiveAmountError(amountText) && (
+          <Note tone="negative">{positiveAmountError(amountText)}</Note>
+        )}
         <label className="bss-field">
           Method{' '}
           <select
@@ -193,20 +203,69 @@ export function RefundModal({
             onChange={(e) => setOther(e.target.value)}
           />
         )}
-        <label className="bss-field">
-          Description{' '}
-          <TextInput
-            aria-label="Refund description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </label>
+        <div data-ui="ui.subscriber.refund.description">
+          <Field
+            label="Description (required)"
+            error={description.trim() === '' ? 'Enter a refund description.' : undefined}
+          >
+            <TextInput
+              aria-label="Refund description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </Field>
+        </div>
         {problem && <p role="alert">{problem}</p>}
         {unknown && (
           <p role="alert">
             The outcome could not be confirmed. Close this dialog and check Recorded refunds before
             submitting again.
           </p>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/** A payment opens the same account-level payout form, never a payment-specific refund. */
+export function PaymentRefundModal({
+  accountId,
+  onClose,
+}: {
+  accountId: string;
+  onClose: () => void;
+}) {
+  const data = useResource(`refund-account:${accountId}`, async (signal) => {
+    const [account, settlement] = await Promise.all([
+      loadAccount(accountId, signal),
+      loadSettlement(accountId, signal),
+    ]);
+    return { account, settlement };
+  });
+  const toast = useToast();
+  if (data.status === 'ok')
+    return (
+      <RefundModal
+        account={data.data.account}
+        initialLimit={refundableCredit(data.data.account, data.data.settlement)}
+        onClose={onClose}
+        onRecorded={() => {
+          toast('Refund recorded');
+          onClose();
+        }}
+      />
+    );
+  return (
+    <Modal title="Record refund" width={620} onClose={onClose}>
+      <div className="bss-modal-body">
+        {data.status === 'loading' ? (
+          <p>Loading refundable credit…</p>
+        ) : (
+          <ErrorBlock
+            title="Failed to load refundable credit"
+            error={data.error}
+            onRetry={data.retry}
+          />
         )}
       </div>
     </Modal>

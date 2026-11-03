@@ -7,6 +7,16 @@ Enter cannot submit. Its before/after KeyValue uses available sender funds and r
 ledger. Record payment shows Balance and Balance after, allocation Fields, and Refresh
 after an uncertain outcome. Prepaid actions retain their existing safe idempotent Retry.
 
+G9 money parity: Top up optionally selects one of the account's active subscriber numbers
+(`logicalResource`); vouchers are unavailable. Record payment accepts External reference
+(`correlatorId`) and Description, with its date supplied by the business clock. Adjustments
+require a reason and refunds require a description before submitting. Zero and negative
+amounts say “Amount must be greater than 0” before decimal precision is checked. A hold's
+detail shows Holds through as the day before its exclusive end in the business zone.
+Record refund in the subscriber Payments header and payment detail reuses the same
+account-level refund dialog and request, without a payment reference; closing refreshes
+the card or global refund list, including after an uncertain outcome.
+
 A desktop admin console for billing operators: `frontend/` (Vite + React + TypeScript),
 built to static files and served by the shared Caddy on the same origin as the API.
 The app authenticates operators with sessions; removing Caddy's outer basic-auth prompt

@@ -5,9 +5,8 @@ import { expectUi } from '../test/expectUi';
 import { accountBody, billsUrl, NO_SETTLEMENT } from '../test/fixtures';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
-// Payments and refunds history (docs/next-slices-design.md section 19). Reads only: the
-// query strings asserted here are replayed against the real API by
-// tests/test_ui_requests.py - change both together.
+// Payments and refunds history, including the shared account-level refund entry points.
+// Requests are replayed against the real API by tests/test_ui_requests.py.
 
 const PAYMENT = '/tmf-api/payment/v4/payment';
 const REFUND = '/tmf-api/payment/v4/refund';
@@ -217,4 +216,101 @@ describe('payments panel on the subscriber card', () => {
     expectUi('ui.payments.detail');
     expect(calls).toContain(`GET ${PAYMENT}/${P1}`);
   });
+});
+
+describe('account-level refunds from payments', () => {
+  it.each(['subscriber header', 'subscriber payment', 'global payment'])(
+    'reuses the mandatory-description refund and exact account body from the %s',
+    async (entry) => {
+      const internal = `/internal/v1/billingAccount/${A1}`;
+      const { fetchMock, calls } = backend({
+        [`GET /tmf-api/accountManagement/v5/billingAccount/${A1}`]: () =>
+          json(
+            accountBody(
+              A1,
+              { id: C, name: 'Ivan Ivanov' },
+              {
+                accountBalance: [{ amount: usd(100.25) }],
+              },
+            ),
+          ),
+        [`GET /tmf-api/customer/v5/customer/${C}`]: () =>
+          json({ id: C, name: 'Ivan Ivanov', status: 'Active', '@type': 'Customer' }),
+        ...Object.fromEntries(
+          ['draft', 'acknowledged', 'inProgress'].map((state) => [
+            `GET /tmf-api/productOrderingManagement/v5/productOrder?billingAccount.id=${A1}&state=${state}&offset=0&limit=50`,
+            () => json([], { total: 0 }),
+          ]),
+        ),
+        [`GET ${internal}/products`]: () => json([], { total: 0 }),
+        [`GET ${internal}/charges?limit=20`]: () => json([], { total: 0 }),
+        [`GET ${internal}/transactions?limit=20`]: () => json([], { total: 0 }),
+        [`GET ${internal}/settlement`]: () =>
+          json({ ...NO_SETTLEMENT, unallocatedCredit: usd(100.25) }),
+        [billsUrl(A1)]: () => json([], { total: 0 }),
+        [`GET ${REFUND}?account.id=${A1}&${PAGE}`]: () => json([], { total: 0 }),
+        [`GET /tmf-api/customerBillManagement/v5/customerBillOnDemand?billingAccount.id=${A1}&${PAGE}`]:
+          () => json([], { total: 0 }),
+        [`GET ${PAYMENT}?account.id=${A1}&${PAGE}`]: () => json([PAY1], { total: 1 }),
+        [`GET ${PAYMENT}?${PAGE}`]: () => json([PAY1], { total: 1 }),
+        [`GET ${REFUND}?${PAGE}`]: () => json([], { total: 0 }),
+        [`GET ${PAYMENT}/${P1}`]: () => json(PAY1),
+        [`POST ${REFUND}`]: () => json({ ...REFUND1, totalAmount: usd(25.1) }),
+      });
+
+      if (entry === 'global payment') {
+        open('/payments');
+      } else {
+        open(`/subscribers/${A1}`);
+        await screen.findByRole('heading', { name: /Ivan Ivanov/ });
+        fireEvent.click(screen.getByRole('tab', { name: /^Payments/ }));
+      }
+
+      if (entry === 'subscriber header') {
+        const action = expectUi('ui.subscriber.payments.recordRefund');
+        await waitFor(() => expect(action).toHaveProperty('disabled', false));
+        expect(
+          within(expectUi('ui.subscriber.payments')).getByRole('button', {
+            name: 'Record refund',
+          }),
+        ).toBe(action);
+        fireEvent.click(action);
+      } else {
+        fireEvent.click(await screen.findByText('INV-77'));
+        const detail = await screen.findByRole('dialog', { name: 'Payment E0000001' });
+        const action = await within(detail).findByRole('button', { name: 'Record refund' });
+        expectUi('ui.payments.detail.recordRefund');
+        fireEvent.click(action);
+      }
+
+      const amount = await screen.findByLabelText('Refund amount');
+      const dialog = screen.getByRole('dialog', { name: 'Record refund' });
+      fireEvent.change(amount, { target: { value: '25.10' } });
+      const record = within(dialog).getByRole('button', { name: 'Record refund' });
+      expect(within(dialog).getByText('Enter a refund description.')).toBeTruthy();
+      expect(record).toHaveProperty('disabled', true);
+      fireEvent.change(within(dialog).getByLabelText('Refund description'), {
+        target: { value: '   ' },
+      });
+      expect(record).toHaveProperty('disabled', true);
+      expect(calls).not.toContain(`POST ${REFUND}`);
+      fireEvent.change(within(dialog).getByLabelText('Refund description'), {
+        target: { value: ' Returned deposit ' },
+      });
+      expect(record).toHaveProperty('disabled', false);
+      fireEvent.click(record);
+      await screen.findByText('Refund recorded');
+      const writes = fetchMock.mock.calls.filter((call) => call[1]?.method === 'POST');
+      expect(writes).toHaveLength(1);
+      expect(writes[0]?.[0]).toBe(REFUND);
+      expect(writes[0]?.[1]?.body).toBe(
+        `{"@type":"Refund","account":{"id":"${A1}","@referredType":"BillingAccount"},"totalAmount":{"unit":"USD","value":25.10},"paymentMethod":{"name":"bankTransfer"},"description":"Returned deposit"}`,
+      );
+      const refreshed =
+        entry === 'global payment'
+          ? `GET ${REFUND}?${PAGE}`
+          : `GET ${REFUND}?account.id=${A1}&${PAGE}`;
+      await waitFor(() => expect(calls.filter((call) => call === refreshed)).toHaveLength(2));
+    },
+  );
 });

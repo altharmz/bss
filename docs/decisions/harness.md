@@ -442,6 +442,32 @@ The user-level `~/.codex/rules/default.rules` allows every `make` target without
 (owner decision 2026-10-21). Codex matches a rule only against a plain command, so a
 `make test > log 2>&1` call misses it and prompts; AGENTS.md asks for bare `make` calls.
 
+Standing owner authorization includes `make commit MESSAGE=... FILES=...` in every
+authorized linked task worktree. The tracked `.codex/rules/commit.rules` records the
+narrow command permission for trusted project configuration; the existing user-level
+`make` rule already covers it. Neither rule changes explicit file selection, hooks,
+secret/design-reference restrictions or human merge gates. Codex loads rules at startup;
+a project rule requires its `.codex` configuration layer to be trusted. See the
+[official rules documentation](https://learn.chatgpt.com/docs/agent-configuration/rules).
+
+Command approval and filesystem access are separate. A task checkout's `.git` file
+points into the primary checkout's `.git/worktrees/`, and commits also write the shared
+`.git` directory. A workspace limited to the task directory can therefore refuse an
+already-authorized commit. The executor must include both the primary repository and
+its authorized worker root in writable roots (here `/home/petrg/projects/bss` and
+`/home/petrg/projects/bss-agents`), or run the already-allowed Make command outside that
+sandbox through the supported command permission. Do not rewrite Git metadata, disable
+guards or request repository edit consent again to recover a filesystem denial.
+
+On 2026-11-03, Codex CLI 0.166.0 loaded the persisted user rule in a fresh
+`codex execpolicy check` process and returned `allow` for a standalone task commit with
+both `MESSAGE` and JSON `FILES` arguments. The current executor's writable roots cover
+both locations, and a bare `make commit DRY_RUN=1` in `worker1/repo` validated task,
+hook and explicit-file checks without another approval prompt or index/HEAD mutation.
+This verifies persisted rule evaluation and current task execution; a new interactive
+session's executor configuration still needs its own check and is not established by
+those probes.
+
 ## UI/MCP parity check (2026-10-26)
 
 Design: [next-slices-design.md](../next-slices-design.md#24-parity-check). Built:

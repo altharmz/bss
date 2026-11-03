@@ -284,6 +284,8 @@ test('refund dialog opens on an account with unused credit without recording a p
   const dialog = page.getByRole('dialog', { name: 'Record refund' });
   await expect(dialog.getByText(/does not send money/)).toBeVisible();
   await expect(dialog.getByLabel('Refund amount')).not.toHaveValue('');
+  await expect(dialog.getByRole('button', { name: 'Record refund' })).toBeDisabled();
+  await dialog.getByLabel('Refund description').fill('Returned deposit');
   await expect(dialog.getByRole('button', { name: 'Record refund' })).toBeEnabled();
   await dialog.getByText('Close', { exact: true }).click();
   await expect(dialog).toBeHidden();

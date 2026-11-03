@@ -13,7 +13,7 @@ import {
 } from '../api/transfer';
 import { usePolled } from '../api/usePolled';
 import { useResource } from '../api/useResource';
-import { formatCents, parseAmount, toCents } from '../format/money';
+import { formatCents, parseAmount, positiveAmountError, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
 import {
@@ -359,8 +359,8 @@ export function PrepaidTransferModal({
                       onChange={(event) => setAmountText(event.target.value)}
                     />
                   </Field>
-                  {amountText.trim() !== '' && amount === null && (
-                    <Note tone="negative">Enter an amount with at most 2 decimals.</Note>
+                  {positiveAmountError(amountText) && (
+                    <Note tone="negative">{positiveAmountError(amountText)}</Note>
                   )}
                   {amount !== null && cents > spendable && (
                     <Note tone="negative">

@@ -219,6 +219,7 @@ export interface BalanceActionForm {
   method: string; // top-up only: the payment method name
   reason: string;
   expiresOn: string | null; // hold only: last business day the hold lasts through
+  numberId?: string; // top-up only: optional active logical resource
 }
 
 /** The exact request the form sends: path and JSON text (the amount as a verbatim token). */
@@ -239,6 +240,7 @@ export function balanceActionRequest(form: BalanceActionForm, timeZone: string) 
             bucket,
             partyAccount: owner,
             paymentMethod: { id: form.method, name: form.method },
+            ...(form.numberId ? { logicalResource: [{ id: form.numberId }] } : {}),
             ...reason,
           },
           form.amount,
@@ -1646,6 +1648,8 @@ export interface PaymentForm {
   currency: string;
   method: string; // stored as the payment method's name
   items: { billId: string; amount: string }[]; // explicit lettering; empty = oldest first
+  correlatorId?: string;
+  description?: string;
 }
 
 /** TMF676 POST /payment with exact amount tokens. Returns how many bills it paid now. */
@@ -1655,6 +1659,8 @@ export async function recordPayment(accountId: string, form: PaymentForm): Promi
     account: { id: accountId, '@referredType': 'BillingAccount' },
     totalAmount: { unit: form.currency, value: amountSlot(0) },
     paymentMethod: { name: form.method },
+    ...(form.correlatorId?.trim() ? { correlatorId: form.correlatorId.trim() } : {}),
+    ...(form.description?.trim() ? { description: form.description.trim() } : {}),
     ...(form.items.length === 0
       ? {}
       : {
