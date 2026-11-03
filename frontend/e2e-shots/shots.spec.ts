@@ -101,11 +101,59 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         await page.getByRole('button', { name: 'Add product', exact: true }).first().click();
         const add = page.getByRole('dialog', { name: 'Add product' });
         await expect(add.getByRole('radio').first()).toBeVisible();
-        await expect(add.getByRole('button', { name: 'Activate', exact: true })).toBeInViewport({
+        await expect(add.getByRole('button', { name: 'Add product', exact: true })).toBeInViewport({
           ratio: 1,
         });
+        await add.getByRole('radio').first().click();
+        await expect(add.getByTestId('first-charge')).toBeVisible();
+        await expect(add.locator('.bss-modal-footer .primary')).toBeInViewport({ ratio: 1 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
         await page.screenshot({ path: `/web/.shots/dialog-add-${width}.png` });
         await add.getByRole('button', { name: 'Cancel' }).click();
+      }
+      if (name === 'card-prepaid') {
+        await page.route('**/firstCharge?*', async (route) => {
+          const start = new URL(route.request().url()).searchParams.get('startDate');
+          const money = (value: number) => ({ unit: 'EUR', value });
+          await route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              startDate: start,
+              period: { start, end: '2026-11-15' },
+              cyclePeriod: { start: '2026-10-15', end: '2026-11-15' },
+              billableDays: 20,
+              periodDays: 31,
+              prorated: true,
+              price: money(24.9),
+              amount: money(16.06),
+              chargeRunDate: start,
+              billDate: '2026-11-15',
+              next: { start: '2026-11-15', amount: money(24.9) },
+              balance: money(13.5),
+              balanceAfter: money(-2.56),
+              creditLimit: null,
+              exceedsCreditLimit: false,
+              required: money(16.06),
+              available: money(13.5),
+              shortfall: money(2.56),
+            }),
+          });
+        });
+        await page.getByRole('button', { name: 'Add product', exact: true }).first().click();
+        const add = page.getByRole('dialog', { name: 'Add product' });
+        await add.getByRole('radio').first().click();
+        await expect(add.getByTestId('prepaid-required')).toHaveText('16.06 EUR');
+        await expect(
+          add.getByRole('note').filter({ hasText: 'Shortfall 2.56 EUR.' }),
+        ).toBeVisible();
+        await expect(add.getByRole('button', { name: 'Top up 2.56 EUR…' })).toBeInViewport({
+          ratio: 1,
+        });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+        await page.screenshot({ path: `/web/.shots/dialog-add-prepaid-${width}.png` });
+        await add.getByRole('button', { name: 'Cancel' }).click();
+        await page.unroute('**/firstCharge?*');
       }
       if (name === 'catalog') {
         await page.locator('.catalog-offerings .clickable').first().click();

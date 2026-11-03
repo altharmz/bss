@@ -43,6 +43,8 @@ uses `make start-task`.
    merged meanwhile, use `make sync-task` from a clean checkout before continuing.
    On resume or client/session handoff run `make telemetry-collect`; this preserves earlier
    bindings, captures all registered sessions and discovers supported delegated agents.
+   Kimi agents must always include the actual session explicitly:
+   `make telemetry-collect CLIENT=kimi SESSION_ID=<actual-session-uuid>`.
 3. In a newly created task worktree, run `make web-install` once before the first
    `make format`. Then run `make format` and `make review-task`. Commit the explicit
    intended files with `make commit MESSAGE="Describe the slice" FILES='["path/to/file"]'`.
@@ -97,7 +99,7 @@ make the command look shorter. Use automatic defaults unless a value is required
 |---|---|
 | Start and claim a task | `make start-task BSS_TASK_OWNER=codex` for Codex (primary) |
 | Create an explicitly approved P0 issue in Ready | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (primary) |
-| Collect actual client usage / resume a session | `make telemetry-collect` (task; source/session setup in telemetry-usage.md) |
+| Collect actual client usage / resume a session | `make telemetry-collect`; Kimi always uses `make telemetry-collect CLIENT=kimi SESSION_ID=<actual-session-uuid>` (task; source/session setup in telemetry-usage.md) |
 | Retry an issue statistics checkpoint | `make telemetry-comment PHASE=start` or `PHASE=pr` |
 | Format | `make format` |
 | Lint / format Python harness changes | `make scripts-lint` / `make scripts-fmt` (optional `SCRIPT_FILES='["scripts/example.py"]'`) |

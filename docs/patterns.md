@@ -116,6 +116,8 @@ Recipient, Amount (before/after KeyValue) and Confirm; only Confirm can write, a
 acknowledgement, and its final button cancels Enter. Record payment reuses Footer for
 refused/unsure states. Prepaid money actions retain idempotent uncertain Retry contracts.
 
+R10 Add product: an L Dialog places selectable offering rows, number/start fields and immediate-shortfall warning on the left, with a dedicated first-charge preview rail on the right. `Footer` accepts optional `left` content in `.bss-write-left` (here the server-preview timestamp); its action children still occupy the right. The Add button is secondary when a same-day shortfall makes footer Top up primary. Draft actions keep their existing markers and requests.
+
 R9 catalog: use Tabs/TabPanel for sections, page tables grouped by lifecycle with filtered group counts, and an L offering Dialog with lifecycle stepper, price figure, KeyValue and compact price history. Dialog accepts optional `headerActions` for an existing Menu; action markers belong on its menuitems. Missing dates render “—” or omit transition captions rather than synthesizing history. Non-sellable rows carry a Not sellable Tag in every lifecycle group. New offering loads category choices and sends description, sellability and selected category references; Add price posts the charge, then patches the complete old-plus-new price-reference list.
 
 `ui/base.css` imports `tokens.css`, temporary `legacy-tokens.css`, then the five font

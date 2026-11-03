@@ -538,7 +538,7 @@ describe('order writes', () => {
     expect((within(edit).getByLabelText('Start date') as HTMLInputElement).value).toBe(
       '2026-10-05',
     );
-    expect(within(edit).queryByRole('button', { name: /Activate/ })).toBeNull();
+    expect(within(edit).queryByRole('button', { name: /^Add / })).toBeNull();
     fireEvent.click(options[1] as HTMLElement);
     await within(edit).findByTestId('first-charge');
     press(edit, 'Save draft');
