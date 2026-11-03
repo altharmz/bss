@@ -288,6 +288,9 @@ describe('bills on the subscriber card', () => {
     await within(dialog).findByText('Mobile L');
     expect(within(dialog).queryByRole('button', { name: 'Put on hold' })).toBeNull();
     expect(within(dialog).queryByRole('button', { name: 'Release' })).toBeNull();
+    expect(within(dialog).getByText('Total', { exact: true })).toBeTruthy();
+    expect(within(dialog).getByText('Remaining', { exact: true })).toBeTruthy();
+    expect(within(dialog).queryByText('Amount due')).toBeNull();
   });
 });
 

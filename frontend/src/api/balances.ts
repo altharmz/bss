@@ -34,6 +34,37 @@ interface AccumulatedBody {
   partyAccount?: Ref;
 }
 
+export interface AccountTotal {
+  id: string;
+  account: { id: string; name: string | null };
+  cents: number;
+  currency: string;
+}
+
+function accountTotal(body: AccumulatedBody): AccountTotal {
+  return {
+    id: need(body.id, 'accumulated balance id'),
+    account: {
+      id: need(body.partyAccount?.id, 'accumulated balance partyAccount'),
+      name: body.partyAccount?.name ?? null,
+    },
+    cents: toCents(need(body.totalBalance?.amount, 'totalBalance')),
+    currency: need(body.totalBalance?.units, 'totalBalance units'),
+  };
+}
+
+export async function loadAccountTotals(
+  account: string | null,
+  signal: AbortSignal,
+): Promise<AccountTotal[]> {
+  const path = account === null ? ACCUMULATED : `${ACCUMULATED}?partyAccount.id=${account}`;
+  return (await getAll<AccumulatedBody>(path, signal)).map(accountTotal);
+}
+
+export async function loadAccountTotal(id: string, signal: AbortSignal): Promise<AccountTotal> {
+  return accountTotal(await getJson<AccumulatedBody>(`${ACCUMULATED}/${id}`, signal));
+}
+
 export interface BucketRow {
   bucketId: string;
   accumulatedId: string | null;

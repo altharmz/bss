@@ -95,6 +95,30 @@ function open(path: string) {
 const tab = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
 
 describe('balances screen', () => {
+  it('lists independent account totals, filters by account and GETs fresh detail', async () => {
+    const { calls } = backend({
+      [`GET ${BUCKETS}?partyAccount.id=${A1}&${PAGE}`]: () => json([], { total: 0 }),
+      [`GET ${ACC}?partyAccount.id=${A1}&${PAGE}`]: () => json([AB_OLGA], { total: 1 }),
+      [`GET ${ACC}?${PAGE}`]: () => json([AB_OLGA, AB_JAN], { total: 2 }),
+      [`GET ${ACC}/${AB1}`]: () => json({ ...AB_OLGA, totalBalance: money(130) }),
+    });
+    open(`/balances?account=${A1}`);
+    await screen.findByText('No buckets');
+    tab('Account totals');
+    expect(await screen.findByText('125.00')).toBeTruthy();
+    expectUi('ui.balances.totals');
+    expect(screen.queryByLabelText('Status')).toBeNull();
+    expect(screen.queryByText('Jan Petrov')).toBeNull();
+    fireEvent.click(screen.getByText('125.00'));
+    const dialog = await screen.findByRole('dialog', { name: 'Account total' });
+    expect(await within(dialog).findByText('130.00')).toBeTruthy();
+    expectUi('ui.balances.totalDetail');
+    expect(calls).toContain(`GET ${ACC}/${AB1}`);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    fireEvent.click(screen.getByLabelText('Remove the account filter'));
+    expect(await screen.findByText('Jan Petrov')).toBeTruthy();
+    expect(calls).toContain(`GET ${ACC}?${PAGE}`);
+  });
   it('lists the buckets joined with each account accumulated balance', async () => {
     const { calls } = backend({
       [`GET ${BUCKETS}?${PAGE}`]: () => json([B_OLGA, B_JAN], { total: 2 }),

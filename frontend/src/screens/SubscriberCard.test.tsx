@@ -173,6 +173,18 @@ function backend(routes: Record<string, Handler> = {}, account: object = ACCOUNT
     [`GET /internal/v1/prepaid/command?billingAccount.id=${A}&state=failedTechnical&offset=0&limit=100`]:
       () => json([], { total: 0 }),
     // asked only of a prepaid account: no balance actions yet
+    [`GET /tmf-api/prepayBalanceManagement/v4/accumulatedBalance?partyAccount.id=${A}&offset=0&limit=100`]:
+      () =>
+        json(
+          [
+            {
+              id: 'total-a',
+              partyAccount: { id: A },
+              totalBalance: { amount: 123.45, units: 'USD' },
+            },
+          ],
+          { total: 1 },
+        ),
     [`GET ${HISTORY}?partyAccount.id=${A}&offset=0&limit=100`]: () => json([], { total: 0 }),
     [`GET ${HISTORY}?receiverBucket.id=${BUCKET}&offset=0&limit=100`]: () => json([], { total: 0 }),
     [billsUrl(A)]: () => json([], { total: 0 }),
@@ -2609,6 +2621,18 @@ describe('prepaid balance actions', () => {
       .slice(1)
       .map((r) => r.textContent ?? '');
   };
+
+  it('shows the independently read accumulated balance in a KeyValue', async () => {
+    const { calls } = backend(routes(), PREPAID);
+    await open();
+    selectTab('Balance actions');
+    const total = await within(screen.getByRole('tabpanel')).findByText('123.45');
+    expect(total.closest('dl')?.className).toBe('bss-key-value');
+    expectUi('ui.subscriber.prepaid.accountTotal');
+    expect(calls).toContain(
+      `GET ${PREPAY}/accumulatedBalance?partyAccount.id=${A}&offset=0&limit=100`,
+    );
+  });
 
   it('merges the account and received-transfer requests, de-duplicated and newest first', async () => {
     const { calls } = backend(routes(), PREPAID);

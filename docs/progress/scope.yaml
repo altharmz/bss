@@ -430,6 +430,9 @@ items:
   - {id: ui.balances.status, area: ui, stage: 5, title: "Balances screen status filter"}
   - {id: ui.balances.accountChip, area: ui, stage: 5, title: "Balances screen account filter chip"}
   - {id: ui.balances.buckets, area: ui, stage: 5, title: "Balances buckets tab: bucket list joined with accumulated balances"}
+  - {id: ui.balances.totals, area: ui, stage: 5, title: "Account totals list of accumulated balances"}
+  - {id: ui.balances.totalDetail, area: ui, stage: 5, title: "Fresh accumulated balance detail"}
+  - {id: ui.subscriber.prepaid.accountTotal, area: ui, stage: 5, title: "Prepaid account accumulated balance KeyValue"}
   - {id: ui.balances.bucketDetail, area: ui, stage: 5, title: "Bucket detail dialog: bucket and accumulated balance GETs"}
   - {id: ui.balances.topups, area: ui, stage: 5, title: "Balances top-ups tab; a row opens the Balance action dialog"}
   - {id: ui.balances.adjustments, area: ui, stage: 5, title: "Balances adjustments tab; a row opens the Balance action dialog"}

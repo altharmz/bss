@@ -1,6 +1,14 @@
 import { submitDialogPrimary } from '../ui/kit';
 import { useState } from 'react';
-import { loadBucketDetail, loadBucketRows, BUCKET_STATUSES, type BucketRow } from '../api/balances';
+import {
+  loadBucketDetail,
+  loadBucketRows,
+  loadAccountTotals,
+  loadAccountTotal,
+  BUCKET_STATUSES,
+  type BucketRow,
+  type AccountTotal,
+} from '../api/balances';
 import {
   loadKindAction,
   loadKindActions,
@@ -13,7 +21,9 @@ import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatCents, formatInt } from '../format/money';
-import { Modal, PageTitle, Panel, StatusPill, Segmented } from '../ui/kit';
+import { Modal, PageTitle, Panel, StatusPill, Segmented, KeyValue } from '../ui/kit';
+import { Amount } from '../ui/Amount';
+import { Id } from '../ui/Id';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { actionLabel, ActionDialog, statusLabel } from './PrepaidHistory';
@@ -24,9 +34,9 @@ import './screens.css';
 // are the kinds' lists. A row opens the kind's GET detail with the Balance action dialog,
 // its actions included. Postpaid accounts have no bucket and never appear.
 
-type Tab = 'buckets' | 'topups' | 'adjustments' | 'holds' | 'transfers';
+type Tab = 'buckets' | 'totals' | 'topups' | 'adjustments' | 'holds' | 'transfers';
 
-const KIND_OF: Record<Exclude<Tab, 'buckets'>, ActionKind> = {
+const KIND_OF: Record<Exclude<Tab, 'buckets' | 'totals'>, ActionKind> = {
   topups: 'topup',
   adjustments: 'adjustment',
   holds: 'reservation',
@@ -50,6 +60,12 @@ const ACTION_COLUMNS: Column[] = [
   { key: 'requested', label: 'Requested', width: '170px', mono: true },
   { key: 'amount', label: 'Amount', width: '130px', align: 'right', mono: true },
   { key: 'status', label: 'Status', width: '120px' },
+];
+
+const TOTAL_COLUMNS: Column[] = [
+  { key: 'account', label: 'Subscriber', width: 'minmax(0, 1fr)' },
+  { key: 'id', label: 'Id', width: '180px' },
+  { key: 'total', label: 'Total', width: '180px', align: 'right', mono: true },
 ];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -91,6 +107,7 @@ export function BalancesScreen() {
   const [account, setAccount] = useState<string | null>(accountFromUrl);
   const [version, setVersion] = useState(0);
   const [openBucket, setOpenBucket] = useState<BucketRow | null>(null);
+  const [openTotal, setOpenTotal] = useState<string | null>(null);
   const [openAction, setOpenAction] = useState<{ id: string; kind: ActionKind } | null>(null);
   const filter = { account, status: status === '' ? null : status };
   const key = `${tab}:${account ?? ''}:${status}:${version}`;
@@ -99,9 +116,13 @@ export function BalancesScreen() {
     tab === 'buckets' ? loadBucketRows(filter, signal) : Promise.resolve([] as BucketRow[]),
   );
   const actions = useResource(`balances-actions:${key}`, (signal) =>
-    tab === 'buckets'
+    tab === 'buckets' || tab === 'totals'
       ? Promise.resolve([] as BalanceAction[])
       : loadKindActions(KIND_OF[tab], filter, signal),
+  );
+
+  const totals = useResource(`balances-totals:${key}`, (signal) =>
+    tab === 'totals' ? loadAccountTotals(account, signal) : Promise.resolve([] as AccountTotal[]),
   );
 
   const dropAccount = () => {
@@ -121,9 +142,13 @@ export function BalancesScreen() {
       ? buckets.status === 'ok'
         ? (buckets.data.find((r) => r.account.id === account)?.account.name ?? null)
         : null
-      : actions.status === 'ok'
-        ? (actions.data.find((a) => a.sender.id === account)?.sender.name ?? null)
-        : null;
+      : tab === 'totals'
+        ? totals.status === 'ok'
+          ? (totals.data.find((r) => r.account.id === account)?.account.name ?? null)
+          : null
+        : actions.status === 'ok'
+          ? (actions.data.find((a) => a.sender.id === account)?.sender.name ?? null)
+          : null;
   const statusOptions = tab === 'buckets' ? BUCKET_STATUSES : ACTION_STATUSES;
   const shown = (rows: number, all: number) =>
     rows === all ? `${formatInt(rows)}` : `${formatInt(rows)} of ${formatInt(all)}`;
@@ -141,25 +166,28 @@ export function BalancesScreen() {
           onChange={changeTab}
           options={[
             { key: 'buckets', label: 'Buckets' },
+            { key: 'totals', label: 'Account totals' },
             { key: 'topups', label: 'Top-ups' },
             { key: 'adjustments', label: 'Adjustments' },
             { key: 'holds', label: 'Holds' },
             { key: 'transfers', label: 'Transfers' },
           ]}
         />
-        <select
-          aria-label="Status"
-          data-ui="ui.balances.status"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="">All statuses</option>
-          {statusOptions.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        {tab !== 'totals' && (
+          <select
+            aria-label="Status"
+            data-ui="ui.balances.status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
+            <option value="">All statuses</option>
+            {statusOptions.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        )}
         {account !== null && (
           <span className="bss-run-tag" data-ui="ui.balances.accountChip">
             Account {name ?? accountLabel(account)}{' '}
@@ -175,7 +203,41 @@ export function BalancesScreen() {
         )}
       </div>
       <Panel>
-        {tab === 'buckets' ? (
+        {tab === 'totals' ? (
+          <div data-ui="ui.balances.totals">
+            <TableHead columns={TOTAL_COLUMNS} />
+            <ListState
+              resource={totals}
+              columns={TOTAL_COLUMNS}
+              errorTitle="Failed to load account totals"
+              empty={{
+                title: 'No account totals',
+                text: 'Prepaid account totals appear here once enabled.',
+              }}
+              total={(data) => data.length}
+              rows={(data) => data}
+              onResetFilters={reset}
+            >
+              {(rows) => (
+                <>
+                  {rows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      columns={TOTAL_COLUMNS}
+                      onClick={() => setOpenTotal(row.id)}
+                      cells={{
+                        account: <AccountLink id={row.account.id} name={row.account.name} />,
+                        id: <Id id={row.id} prefix="BAL-" />,
+                        total: <Amount cents={row.cents} currency={row.currency} />,
+                      }}
+                    />
+                  ))}
+                  <TableFooter left={`Showing ${formatInt(rows.length)}`} />
+                </>
+              )}
+            </ListState>
+          </div>
+        ) : tab === 'buckets' ? (
           <div data-ui="ui.balances.buckets">
             <TableHead columns={BUCKET_COLUMNS} />
             <ListState
@@ -244,6 +306,9 @@ export function BalancesScreen() {
           onClose={() => setOpenBucket(null)}
         />
       )}
+      {openTotal !== null && (
+        <AccountTotalDialog id={openTotal} onClose={() => setOpenTotal(null)} />
+      )}
       {openAction !== null && (
         <ActionDialog
           key={`${openAction.id}:${version}`}
@@ -254,6 +319,36 @@ export function BalancesScreen() {
         />
       )}
     </div>
+  );
+}
+
+function AccountTotalDialog({ id, onClose }: { id: string; onClose: () => void }) {
+  const detail = useResource(`account-total:${id}`, (signal) => loadAccountTotal(id, signal));
+  return (
+    <Modal title="Account total" width={520} onClose={onClose} ui="ui.balances.totalDetail">
+      <div className="bss-modal-body">
+        {detail.status === 'loading' && <SkeletonRows columns={TOTAL_COLUMNS} rows={3} />}
+        {detail.status === 'error' && (
+          <ErrorBlock
+            title="Failed to load the account total"
+            error={detail.error}
+            onRetry={detail.retry}
+          />
+        )}
+        {detail.status === 'ok' && (
+          <KeyValue
+            items={[
+              [
+                'Subscriber',
+                <AccountLink id={detail.data.account.id} name={detail.data.account.name} />,
+              ],
+              ['Id', <Id id={detail.data.id} prefix="BAL-" />],
+              ['Total', <Amount cents={detail.data.cents} currency={detail.data.currency} />],
+            ]}
+          />
+        )}
+      </div>
+    </Modal>
   );
 }
 

@@ -58,6 +58,33 @@ test('capture the admin pages at both design widths', async ({ page }) => {
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       await page.screenshot({ path: `/web/.shots/${name}-${width}.png`, fullPage: true });
+      if (name === 'balances') {
+        await page.getByRole('button', { name: 'Account totals', exact: true }).click();
+        await page.waitForLoadState('networkidle');
+        await expect(page.getByTestId('skeleton')).toHaveCount(0);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+        await page.screenshot({ path: `/web/.shots/balances-totals-${width}.png`, fullPage: true });
+        const first = page.locator('[data-ui="ui.balances.totals"] [role="row"].clickable').first();
+        if (await first.count()) {
+          await first.click();
+          const dialog = page.getByRole('dialog', { name: 'Account total' });
+          await expect(dialog.locator('.bss-key-value')).toBeVisible();
+          await page.screenshot({ path: `/web/.shots/balance-total-detail-${width}.png` });
+          await dialog.getByRole('button', { name: 'Close' }).click();
+        }
+      }
+      if (name === 'card-prepaid') {
+        await page.getByRole('tab', { name: 'Balance actions', exact: true }).click();
+        await expect(
+          page.locator('[data-ui="ui.subscriber.prepaid.accountTotal"] .bss-key-value'),
+        ).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+        await page.screenshot({
+          path: `/web/.shots/card-prepaid-balance-${width}.png`,
+          fullPage: true,
+        });
+        await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+      }
       if (name === 'orders') {
         const first = page.locator('[data-ui="ui.orders"] [role="row"].clickable').first();
         if (await first.count()) {
