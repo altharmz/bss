@@ -31,9 +31,10 @@ Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
 - **Ready**: triaged, with a clear goal, acceptance criteria as a task-list checklist,
   labels and no open blockers. Take the next item by priority label: P0 first, then P1,
   P2, P3. Among several with the same label, take the one highest on the board.
-- **Doing**: actively worked on. WIP limit: 1 item per agent. It has an `agent:<client>`
-  owner label (or `needs-human`) and, for code work, a branch `issue-<n>-<slug>` (cloud
-  sessions: `cloud/issue-<n>-<slug>`, the only pushable form).
+- **Doing**: actively worked on. An agent may own multiple Doing items when separate
+  worker slots are available. It has an `agent:<client>` owner label (or `needs-human`)
+  and, for code work, a branch `issue-<n>-<slug>` (cloud sessions:
+  `cloud/issue-<n>-<slug>`, the only pushable form).
 - **Waiting**: blocked by something outside the agent's control (another
   issue, a VPS step, the human's decision). Every move to Waiting gets a comment
   `Waiting on: <what> — unblocks when: <condition>`.
@@ -80,8 +81,8 @@ The shell hook cannot verify conversation approval; agents must enforce that req
 as they do the existing human-review rules. There is no approval flag or general bypass.
 
 `make new-priority-task TITLE=... BODY=... [LABELS=...]` creates an explicitly approved
-P0 issue first in Ready and stops. It does not claim ownership, check WIP/slots, create a
-worktree or credentials, or start runtime. Start it later through the independent
+P0 issue first in Ready and stops. It does not claim ownership, check slot availability,
+create a worktree or credentials, or start runtime. Start it later through the independent
 `make start-task BSS_TASK_OWNER=<client>` selection/claim workflow. A creation failure
 after GitHub created the issue identifies its number; inspect it before retrying to
 avoid duplicates.
@@ -94,10 +95,11 @@ human confirms it is done, close it (see Merging and closing).
 
 ### Parallel agents
 
-Claude Code and Codex may run at the same time. Use `make start-task` to select and claim
-work; it checks eligibility, ownership and WIP before moving the item to Doing. Strongly
-prefer `make start-task BSS_TASK_OWNER=codex` for Codex. Do not manually inspect or claim
-Ready items before startup. Never work on an item owned by the other agent.
+Claude Code and Codex may run at the same time, and one agent may run multiple tasks in
+separate slots. Use `make start-task` to select and claim work; it checks eligibility,
+ownership and slot availability before moving the item to Doing. Strongly prefer
+`make start-task BSS_TASK_OWNER=codex` for Codex. Do not manually inspect or claim Ready
+items before startup. Never work on an item owned by the other agent.
 
 ### Merging and closing
 

@@ -302,13 +302,6 @@ def status(item):
     return (item.get("fieldValueByName") or {}).get("name")
 
 
-def check_wip(items, agent, selected=None):
-    for item in items:
-        if item["id"] != selected and status(item) == "Doing" and item.get("content"):
-            if agent in ownership(item):
-                raise StartupError(f"WIP limit: {agent} already owns a Doing item")
-
-
 def set_status(issue, option):
     query(
         """mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
@@ -405,7 +398,6 @@ class Claim:
 
     def acquire(self):
         items = snapshot()
-        check_wip(items, self.agent)
         candidate = select_issue([i for i in items if i["id"] == self.issue["item_id"]], set())
         if candidate != self.issue:
             raise StartupError("Ready selection changed before claim; retry")
@@ -428,7 +420,6 @@ class Claim:
 
     def verify(self, expected="Doing"):
         items = snapshot()
-        check_wip(items, self.agent, self.issue["item_id"])
         matches = [i for i in items if i["id"] == self.issue["item_id"]]
         if (
             len(matches) != 1
@@ -752,7 +743,6 @@ def start(on_ready=None):
         prs = pages(PR_QUERY, lambda response: response["repository"]["pullRequests"])
         represented.update(issue_of(pr["headRefName"]) for pr in prs)
         items = snapshot()
-        check_wip(items, agent)
         issue = select_issue(items, represented)
         branch = branch_name(issue["number"], issue["title"])
         destination = slot / "repo"
@@ -863,7 +853,7 @@ def main():
             print("worker slot released; persistent state preserved")
         elif args.new_priority_task:
             request = new_task_request()
-            primary()  # Repository validation only: no fetch, slots, WIP or task setup.
+            primary()  # Repository validation only: no fetch, slots or task setup.
             result = create_priority_task(request)
             if args.json:
                 print(json.dumps(result), flush=True)

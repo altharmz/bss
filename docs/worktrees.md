@@ -25,7 +25,7 @@ For a concrete new request only when the human explicitly approves P0 priority a
 board position, use `make new-priority-task TITLE="Task title" BODY="Goal and acceptance
 criteria" LABELS="harness,docs"` from clean primary master. `LABELS` is optional; priority,
 ownership and gate labels are reserved. The command creates the P0 issue, moves it first in
-Ready, returns its number/URL/status and stops. Creation does not check agent WIP or slot
+Ready, returns its number/URL/status and stops. Creation does not check slot
 availability, claim ownership, create a branch/worktree, provision credentials or start
 runtime. Use `make start-task BSS_TASK_OWNER=<client>` separately when ready to work.
 If board setup fails, the error identifies the preserved issue; inspect that issue before
@@ -252,8 +252,8 @@ The corresponding `agent:<owner>` board label must already exist; startup create
 definition. The explicit identity takes precedence over detection and the legacy
 `BSS_TASK_AGENT` alias. Malformed owners fail closed, and a missing GitHub label fails the
 claim without silently selecting another owner. There are no per-slot labels: any client can
-use any free slot, and the existing per-owner WIP limit still applies. Successful startup
-telemetry records the validated `client` and `slot` as separate metadata fields.
+use any free slot, and one client may occupy multiple slots. Successful startup telemetry
+records the validated `client` and `slot` as separate metadata fields.
 Only the primary checkout on clean `master` is accepted; staged, tracked and non-ignored
 untracked changes fail. Local commits ahead of or diverging from `origin/master` fail;
 there is no stash, reset, rebase or history merge. Tracked secret paths in either the
@@ -269,9 +269,9 @@ Missing/multiple priority labels, incomplete responses, duplicate items or a fil
 sorted or non-unique board view fail rather than inventing an order. Ready remains the
 triage source of truth; the helper does not interpret dependencies from free-form prose.
 
-The helper checks the agent's Doing WIP limit, rechecks the selected item's eligibility,
-adds its existing ownership label, verifies the claim, moves Ready to Doing, then verifies
-again before reporting success. It creates no issue, label definition, PR or remote branch.
+The helper rechecks the selected item's eligibility, adds its existing ownership label,
+verifies the claim, moves Ready to Doing, then verifies again before reporting success.
+It creates no issue, label definition, PR or remote branch.
 The title is normalized to ASCII lowercase kebab form (fallback `task`) and truncated
 so the whole branch is at most 80 characters. Existing branch/path/registration
 collisions fail without reuse. A lock in the common Git directory serializes preparation
