@@ -47,6 +47,14 @@ def needs_ui(names):
     )
 
 
+def format_targets(names):
+    """Backend always; the UI formatter only when UI sources changed or the base is unknown."""
+    if names is None or any(n.startswith(("frontend/", "spec/")) for n in names):
+        return ["fmt", "web-fmt"]
+    print("task quality: no changes under frontend/ or spec/; skipping web-fmt (UI formatter)")
+    return ["fmt"]
+
+
 def check_stages(names):
     stages = ["check-preflight", "lint", "test", "docs-check"]
     if needs_ui(names):
@@ -221,7 +229,7 @@ def main():
                 os.environ["HYPOTHESIS_PROFILE"] = "ci"
                 result = run_stages(root, check_stages(changed_paths(root)))
             else:
-                for target in ("fmt", "web-fmt"):
+                for target in format_targets(changed_paths(root)):
                     result = subprocess.run(["make", target], cwd=root).returncode  # noqa: S603, S607
                     if result:
                         break

@@ -1,4 +1,4 @@
-"""Usage provenance, exact pricing, missing data, privacy and report regressions."""
+"""Usage provenance, missing data, privacy and report regressions."""
 
 import contextlib
 import copy
@@ -9,7 +9,6 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from decimal import ROUND_UP, localcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -32,23 +31,6 @@ def sample(**changes):
         "cached_input_tokens": 200,
         "output_tokens": 50,
         "total_tokens": 1050,
-        **changes,
-    }
-
-
-def pricing(**changes):
-    # Synthetic fixture rates, never a claim about a provider's prices.
-    return {
-        "version": "fixture-v1",
-        "provider": "example",
-        "model": "test-model",
-        "currency": "USD",
-        "source_url": "https://example.com/pricing",
-        "effective_from": "2026-10-01T00:00:00Z",
-        "effective_until": "2026-11-01T00:00:00Z",
-        "input_per_million": "2",
-        "cached_input_per_million": "0.5",
-        "output_per_million": "8",
         **changes,
     }
 
@@ -81,57 +63,18 @@ class UsageTests(unittest.TestCase):
                 ["-B", "scripts/task_usage.py", "report"],
             )
 
-    def test_cost_rounding_is_independent_of_callers_decimal_context(self):
-        # Exact cost 0.00000000005 must round half-even to zero, even under ROUND_UP.
-        s = usage.validate(
-            sample(input_tokens=1, cached_input_tokens=0, output_tokens=0, total_tokens=1)
-        )
-        with localcontext() as ctx:
-            ctx.rounding = ROUND_UP
-            self.assertEqual(
-                usage.price(s, pricing(input_per_million="0.00005"))[0], "0.0000000000"
-            )
+    def test_complete_usage_preserves_counts(self):
+        self.assertEqual(usage.validate(sample())["total_tokens"], 1050)
 
-    def test_complete_usage_preserves_counts_and_prices_inclusive_cache_exactly(self):
-        s = usage.validate(sample())
-        self.assertEqual(s["total_tokens"], 1050)
-        cost, currency, metadata = usage.price(s, pricing())
-        self.assertEqual(cost, "0.0021000000")
-        self.assertEqual(currency, "USD")
-        self.assertEqual(json.loads(metadata), pricing())
-
-    def test_partial_unavailable_and_no_pricing_stay_null(self):
-        for s in (
-            sample(cached_input_tokens=None),
-            sample(output_tokens=None),
-            sample(kind="unavailable", **dict.fromkeys(usage.TOKENS)),
-        ):
-            self.assertIsNone(usage.price(usage.validate(s), pricing())[0])
-        self.assertEqual(usage.price(usage.validate(sample()), None), (None, None, None))
+    def test_minimal_sample_leaves_tokens_and_model_null(self):
         minimal = {k: v for k, v in sample().items() if k not in (*usage.TOKENS, "model")}
         self.assertTrue(all(usage.validate(minimal)[k] is None for k in usage.TOKENS))
         self.assertIsNone(usage.validate(minimal)["model"])
 
-    def test_pricing_versions_are_preserved_and_not_applied_outside_validity(self):
-        first = usage.usage_sql(sample(), pricing())
-        second = usage.usage_sql(
-            sample(sample_id="request-2"), pricing(version="fixture-v2", input_per_million="4")
-        )
-        self.assertIn("fixture-v1", first)
-        self.assertIn("0.0021000000", first)
-        self.assertIn("fixture-v2", second)
-        self.assertIn("0.0037000000", second)
-        for changes in (
-            {"model": "different"},
-            {"provider": "other"},
-            {"effective_until": "2026-10-31T12:00:00Z"},
-            {"effective_from": "2026-11-01T00:00:00Z"},
-            {"input_per_million": 2.0},
-            {"input_per_million": "NaN"},
-            {"source_url": "https://user:password@example.com/"},
-        ):
-            with self.subTest(changes=changes), self.assertRaises(ValueError):
-                usage.price(usage.validate(sample()), pricing(**changes))
+    def test_sql_carries_no_cost_columns(self):
+        statement = usage.usage_sql(sample())
+        for column in ("estimated_cost", "currency", "pricing_metadata"):
+            self.assertNotIn(column, statement.split("INSERT INTO usage_samples")[1])
 
     def test_invalid_and_content_bearing_exports_are_rejected(self):
         for changes in (
@@ -154,8 +97,8 @@ class UsageTests(unittest.TestCase):
                 usage.validate(sample(**changes))
 
     def test_duplicates_are_serialized_and_conflicts_fail_instead_of_overwriting(self):
-        statement = usage.usage_sql(sample(), pricing())
-        self.assertEqual(statement, usage.usage_sql(copy.deepcopy(sample()), pricing()))
+        statement = usage.usage_sql(sample())
+        self.assertEqual(statement, usage.usage_sql(copy.deepcopy(sample())))
         self.assertIn("pg_advisory_xact_lock", statement)
         self.assertIn("ON CONFLICT DO NOTHING", statement)
         self.assertIn("conflicting usage sample", statement)
@@ -164,10 +107,7 @@ class UsageTests(unittest.TestCase):
         for identity in ("provider", "client", "session_id", "source", "sample_id"):
             self.assertNotEqual(
                 statement,
-                usage.usage_sql(
-                    sample(**{identity: "different"}),
-                    pricing() if identity != "provider" else pricing(provider="different"),
-                ),
+                usage.usage_sql(sample(**{identity: "different"})),
             )
 
     def test_database_failures_do_not_leak_content(self):

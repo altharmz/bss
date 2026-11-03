@@ -10,7 +10,7 @@ import re
 import subprocess
 import sys
 from datetime import datetime
-from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation, localcontext
+from decimal import Decimal, InvalidOperation
 
 from task_telemetry import literal, sql
 
@@ -26,18 +26,6 @@ REQUIRED = {
     "source",
     "sampled_at",
     "kind",
-}
-PRICING_KEYS = {
-    "version",
-    "source_url",
-    "effective_from",
-    "effective_until",
-    "provider",
-    "model",
-    "currency",
-    "input_per_million",
-    "cached_input_per_million",
-    "output_per_million",
 }
 
 
@@ -99,57 +87,8 @@ def validate(sample):
     return result
 
 
-def price(sample, pricing):
-    if pricing is None:
-        return None, None, None
-    if not isinstance(pricing, dict) or pricing.keys() != PRICING_KEYS:
-        raise ValueError("invalid pricing fields")
-    for key in ("version", "provider", "model"):
-        identifier(pricing[key])
-    if any(pricing[key] != sample[key] for key in ("provider", "model")):
-        raise ValueError("pricing identity mismatch")
-    url = pricing["source_url"]
-    if not isinstance(url, str) or not re.fullmatch(r"https://[A-Za-z0-9./_-]{1,250}", url):
-        raise ValueError("pricing requires a public source URL without credentials or query")
-    if not isinstance(pricing["currency"], str) or not re.fullmatch(
-        r"[A-Z]{3}", pricing["currency"]
-    ):
-        raise ValueError("invalid currency")
-    if (
-        not timestamp(pricing["effective_from"])
-        <= timestamp(sample["sampled_at"])
-        < timestamp(pricing["effective_until"])
-    ):
-        raise ValueError("sample outside pricing validity")
-    rates = []
-    for key in ("input_per_million", "cached_input_per_million", "output_per_million"):
-        value = pricing[key]
-        if not isinstance(value, str) or not re.fullmatch(r"[0-9]{1,6}(\.[0-9]{1,10})?", value):
-            raise ValueError("rates must be bounded decimal strings")
-        rates.append(Decimal(value))
-    metadata = json.dumps(pricing, sort_keys=True, separators=(",", ":"))
-    if len(metadata.encode()) > 1024:
-        raise ValueError("pricing metadata too large")
-    # Missing cache counts cannot be treated as zero, even if total usage is known.
-    if any(sample[key] is None for key in TOKENS[:3]):
-        return None, pricing["currency"], metadata
-    with localcontext() as ctx:
-        ctx.prec = 50
-        ctx.rounding = ROUND_HALF_EVEN
-        cost = (
-            (sample["input_tokens"] - sample["cached_input_tokens"]) * rates[0]
-            + sample["cached_input_tokens"] * rates[1]
-            + sample["output_tokens"] * rates[2]
-        ) / Decimal(1000000)
-        cost = cost.quantize(Decimal("0.0000000001"))
-    if cost >= Decimal("10000000000"):
-        raise ValueError("cost exceeds storage precision")
-    return format(cost, "f"), pricing["currency"], metadata
-
-
-def usage_sql(raw, pricing=None, preserve_pricing=False):
+def usage_sql(raw):
     sample = validate(raw)
-    cost, currency, metadata = price(sample, pricing)
     # Namespace externally reported sessions separately from workflow thread identities.
     identity = json.dumps([sample[k] for k in ("provider", "client", "session_id")])
     sid = sample["task_id"] + ":usage:" + hashlib.sha256(identity.encode()).hexdigest()
@@ -164,29 +103,21 @@ def usage_sql(raw, pricing=None, preserve_pricing=False):
         "external_session_id": sample["session_id"],
         "sampled_at": sample["sampled_at"],
         **{key: sample[key] for key in TOKENS},
-        "estimated_cost": cost,
-        "currency": currency,
-        "pricing_metadata": metadata,
     }
 
     def value(key, item):
         if item is None:
             return "NULL"
-        if key in TOKENS or key == "estimated_cost":
+        if key in TOKENS:
             return str(item)
-        quoted = literal(item)
-        if key == "pricing_metadata":
-            return quoted + "::jsonb"
         if key == "sampled_at":
-            return quoted + "::timestamptz"
-        return quoted
+            return literal(item) + "::timestamptz"
+        return literal(item)
 
     equal = " AND ".join(
-        f"{key} IS NOT DISTINCT FROM {value(key, item)}"
-        for key, item in values.items()
-        if not preserve_pricing or key not in {"estimated_cost", "currency", "pricing_metadata"}
+        f"{key} IS NOT DISTINCT FROM {value(key, item)}" for key, item in values.items()
     )
-    # A changed payload/pricing with an existing identity is an error, never an overwrite.
+    # A changed payload with an existing identity is an error, never an overwrite.
     # Serialize imports so concurrent retries cannot silently win a conflict.
     return (
         "BEGIN; SELECT pg_advisory_xact_lock(82002);\n"

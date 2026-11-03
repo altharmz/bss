@@ -5,7 +5,7 @@ import shutil
 import unittest
 from unittest.mock import patch
 
-from task_quality import changed_paths, check_stages, run_stages, web_test
+from task_quality import changed_paths, check_stages, format_targets, run_stages, web_test
 from test_task_runtime import SCRIPTS, RuntimeTests
 
 
@@ -57,6 +57,14 @@ class QualityTests(unittest.TestCase):
             self.assertEqual(stages[0], "check-preflight")
             self.assertIn("test", stages)
 
+    def test_format_skips_the_ui_formatter_without_ui_changes(self):
+        for names in (None, {"frontend/src/App.tsx"}, {"spec/tmf.json", "scripts/a.py"}):
+            self.assertEqual(format_targets(names), ["fmt", "web-fmt"])
+        for names in (set(), {"scripts/task_git.py"}, {"app/main.py", "docs/x.md"}):
+            with patch("builtins.print") as shown:
+                self.assertEqual(format_targets(names), ["fmt"])
+            self.assertIn("skipping web-fmt", shown.call_args.args[0])
+
     def test_multiple_failures_are_reported(self):
         from types import SimpleNamespace
 
@@ -77,7 +85,9 @@ class QualityTests(unittest.TestCase):
 
     def test_preflight_prepares_task_schema_before_testing(self):
         result = self.call([shutil.which("make"), "-n", "check-preflight"])
-        self.assertLess(result.stdout.index("alembic upgrade head"), result.stdout.index("pytest -q"))
+        self.assertLess(
+            result.stdout.index("alembic upgrade head"), result.stdout.index("pytest -q")
+        )
         self.assertLess(result.stdout.index("mkdir -p .testmon"), result.stdout.index("pytest -q"))
 
     def test_testmon_directory_preparation_preserves_data(self):

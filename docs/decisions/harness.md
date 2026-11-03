@@ -85,7 +85,9 @@ first position; `ISSUE=<n>` finishes a preserved issue without creating another.
 confirmed merge and closed issue, `make finish-task` waits up to 60 s
 (`BSS_BOARD_DONE_WAIT`) for Done, then sets Done itself. GraphQL calls are retried once
 (`BSS_GH_RETRY_PAUSE`, 2 s) and a failure prints a bounded one-line error and a pointer to
-githubstatus.com. Manual `gh project` commands are recovery only.
+githubstatus.com. Manual `gh project` commands are recovery only. After the 2026-11-03
+incident the automation was observed back to about 2 seconds (#138 set to Done 2 s after
+closing) and the fallbacks were not needed afterwards; they stay for incidents.
 
 ## Tests in the hook: smoke plus affected
 

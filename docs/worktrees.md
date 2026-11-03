@@ -37,8 +37,9 @@ standalone command, with its required variables.
    issue to Doing, creates the branch and worktree and records the session. Use exactly the
    returned issue, branch, slot and worktree; do not inspect the board or claim items first.
    If it fails or finds nothing, stop and report.
-2. **Work** in the returned worktree. Run `make web-install` once before the first
-   `make format`. After another task merged, `make sync-task` merges `master` into the branch.
+2. **Work** in the returned worktree. `make format` skips the UI formatter when the branch has
+   no changes under `frontend/` or `spec/`; run `make web-install` once before it formats UI
+   files. After another task merged, `make sync-task` merges `master` into the branch.
 3. **Commit** with `make commit`. It stages only the listed files and runs the normal
    pre-commit hook, which is the one local verification run (see Hooks and checks). Run
    `make test` (the full suite) before a PR touching billing, migrations or the API.
@@ -147,13 +148,15 @@ worktree's `scripts/pre-commit.sh` and `scripts/pre-push.sh`. Details of the gat
   UI changes, and the harness script tests plus guard cases when `scripts/`, `Makefile` or
   `.claude/` change. Markdown-only commits skip everything. One run at a time per repository.
 - **pre-push** refuses bcrypt hashes, `.env*` paths, branch deletions and non-fast-forwards.
-- `make format` formats backend and UI (never stages). `make review-task` prints JSON about
+- `make format` formats backend and, if `frontend/` or `spec/` changed (or the base is
+  unknown), the UI (never stages). `make review-task` prints JSON about
   task identity, slot, runtime, changed files, whitespace, forbidden paths and suspicious
   secret filenames; it reads no secrets and changes nothing.
 - `make check` (optional) runs migration preflight, lint, the full backend suite, generated
   docs checks, guard cases, and UI and browser checks unless every change is confined to
   `scripts/`, `docs/`, `.claude/` or the instruction files. Stage failures are collected and
-  reported together.
+  reported together. `make scripts-lint` prints a hint when a `noqa` comment for the reported
+  code sits on a neighbouring line instead of the finding's line.
 - `make web-test` runs one timezone, adding `America/New_York` when `frontend/src/` changed.
 
 ## Commit and publish a task

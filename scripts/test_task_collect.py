@@ -390,32 +390,13 @@ class CollectionTests(unittest.TestCase):
             collect.main()
         self.assertEqual(run.call_args.args[:3], (TASK, None, None))
 
-    def test_expired_rate_card_leaves_tokens_available_and_cost_unknown(self):
-        from test_task_usage import pricing
-
-        self.source("codex")
-        card = pricing(provider="openai", model="model-1")
-        with patch.object(collect, "sql") as sql:
-            result = collect.collect_one(self.row("codex"), pricing=card, home=self.home)
-        self.assertEqual(result["status"], "complete")
-        self.assertNotIn("fixture-v1", sql.call_args.args[0])
-
-    def test_kimi_cache_write_tokens_are_counted_but_not_priced_by_three_rate_card(self):
-        from test_task_usage import pricing
-
+    def test_kimi_cache_write_tokens_are_counted(self):
         rows = fixture("kimi")
         rows[2]["usage"]["inputCacheCreation"] = 20
         self.source("kimi", rows)
-        card = pricing(
-            provider="openai",
-            model="kimi/model-1",
-            effective_from=when(0),
-            effective_until=when(59),
-        )
-        with patch.object(collect, "sql") as sql:
-            result = collect.collect_one(self.row("kimi"), pricing=card, home=self.home)
+        with patch.object(collect, "sql"):
+            result = collect.collect_one(self.row("kimi"), home=self.home)
         self.assertEqual(result["status"], "complete")
-        self.assertNotIn("fixture-v1", sql.call_args.args[0])
         samples, _, _ = collect.project("kimi", collect.locate("kimi", SID, self.home), SID)
         self.assertEqual(samples[0]["input_tokens"], 70)
 
@@ -427,7 +408,7 @@ class CollectionTests(unittest.TestCase):
             result = collect.collect_one(self.row("kimi"), home=self.home)
         self.assertEqual((result["status"], result["reason"]), ("partial", "counters_missing"))
 
-    def test_coverage_is_independent_of_pricing_and_lists_missing_clients(self):
+    def test_coverage_lists_missing_clients(self):
         data = dict(
             tasks=[dict(task_id=TASK, started_at=when(1), ended_at=None, outcome=None)],
             events=[
