@@ -100,6 +100,23 @@ only waiting mode: it polls read-only, so it cannot merge or change state. A fai
 pre-commit hook unstages what `make commit` staged, so an edit afterwards cannot trip the
 partial-staging refusal.
 
+## Task leftovers are disposable
+
+Task volumes and images are development data that nothing needs after the merge (a database
+volume holds demo data and the image is rebuilt in minutes), and they piled up: on
+2026-11-03, 38 tasks still had volumes (95), 69 images, 40 local branches and 18 credential
+directories, on a host shared with other projects. `make finish-task` therefore removes them
+(`scripts/task_cleanup.py`, `remove_leftovers`): volumes by the exact Compose project label
+`bss-<task id>` that no container uses, the exact tags `bss-<task id>-app:dev` / `-web:dev`,
+and the local branch only when its tip equals the merged PR's head (`git update-ref -d` with
+that value, so a moved branch is refused). Never touched: the `bss-telemetry` project and
+volume, base images and shared layers, the build cache, other projects, anything without the
+exact label or tag, the slot directory and its state. There is still no global prune; the
+code runs as a script child, so the guard keeps blocking manual `docker volume`, `network`
+and `system` cleanup by agents. `make clean-tasks` (list by default, `CONFIRM=1` to remove)
+applies the same function to earlier leftovers of finished tasks and reports abandoned work
+as kept.
+
 ## Stale primary scripts
 
 The primary checkout runs old scripts until `master` is fast-forwarded (a fix in #140 once

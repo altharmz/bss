@@ -28,6 +28,10 @@ class DiagnosticTests(unittest.TestCase):
         text = diagnostic(failure(["git", "commit", "-m", LEAK]))
         self.assertEqual(text, "CalledProcessError; command git commit; exit 3")
 
+    def test_git_dash_c_names_the_subcommand_not_the_directory(self):
+        text = diagnostic(failure(["git", "-C", "/home/user/private-dir", "status", "--x"]))
+        self.assertEqual(text, "CalledProcessError; command git status; exit 3")
+
     def test_gh_detail_is_sanitized(self):
         text = diagnostic(failure(["gh", "api", "graphql"], stderr=LEAK))
         self.assertTrue(text.startswith("CalledProcessError; command gh api; exit 3; "))

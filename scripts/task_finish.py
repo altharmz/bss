@@ -17,6 +17,7 @@ from pathlib import Path
 import start_task
 import task_pr
 import task_telemetry
+from task_cleanup import command, docker, remove_leftovers
 from task_git import require, require_no_git_overrides, run
 from task_quality import context, paths, query, review
 from task_runtime import (
@@ -29,12 +30,6 @@ from task_runtime import (
 )
 from task_telemetry import record
 from worker_slots import SlotError, slot_path
-
-
-def command(root, *args):
-    return subprocess.run(  # noqa: S603
-        list(args), cwd=root, capture_output=True, text=True, check=True, timeout=60
-    ).stdout
 
 
 def merged_pr(root, task):
@@ -226,14 +221,6 @@ def synchronize(primary):
     )
 
 
-def docker(root, *args):
-    require(
-        not {"DOCKER_HOST", "DOCKER_CONTEXT"} & os.environ.keys(),
-        "unset inherited Docker selectors",
-    )
-    return command(root, "docker", "--context", "default", *args)
-
-
 def runtime_inventory(root, task):
     """Inspect only bounded ownership fields, never container environment/secrets."""
     project = "bss-" + task
@@ -360,7 +347,9 @@ def finish_steps(primary, common, slot):
     state = load(journal) if journal.exists() or journal.is_symlink() else None
     if state is not None:
         require(
-            set(state) == {"version", "task", "head", "runtime_stopped", "secret"}
+            {"version", "task", "head", "runtime_stopped", "secret"}
+            <= set(state)
+            <= {"version", "task", "head", "runtime_stopped", "secret", "removed"}
             and type(state["version"]) is int
             and state["version"] == 1
             and state["task"] == task
@@ -445,21 +434,13 @@ def finish_steps(primary, common, slot):
             # An unexpected sibling file keeps the directory in place.
             if not any(secret.parent.iterdir()):
                 secret.parent.rmdir()
-        branch = f"refs/heads/{task}"
-        refs = (
-            query(primary, "for-each-ref", "--format=%(objectname)", branch).decode().splitlines()
-        )
-        retained = False
-        if refs:
-            require(refs == [state["head"]], "local task branch changed; preserved")
-            # Squash heads usually are not ancestors. Keep them rather than force-delete.
-            retained = (
-                subprocess.run(  # noqa: S603
-                    ["git", "-C", str(primary), "branch", "-d", "--", task],
-                    capture_output=True,
-                ).returncode
-                != 0
-            )
+        # Volumes, images and the branch are disposable development data. The removals are
+        # recorded as they happen, so a partial failure resumes from the checkpoint.
+        removed = state.setdefault("removed", {})
+        try:
+            removed, kept = remove_leftovers(primary, primary, task, state["head"], removed)
+        finally:
+            checkpoint(journal, state)
         completed(primary, task, state["head"])
         synchronize(primary)
         require(load(active) == reservation, "slot reservation changed during cleanup")
@@ -470,8 +451,8 @@ def finish_steps(primary, common, slot):
             "status": "finished",
             "task": task,
             "slot": slot.name,
-            "local_branch_retained": retained,
-            "volumes_preserved": True,
+            "removed": removed,
+            "kept": kept,
             "next_command": "make start-task BSS_TASK_OWNER="
             + os.environ.get("BSS_TASK_OWNER", "<client>"),
         }

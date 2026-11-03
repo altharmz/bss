@@ -29,6 +29,7 @@ standalone command, with its required variables.
 | Check PR and CI readiness | `make check-pr` (`WAIT=600` waits while pending) | task |
 | Merge when policy permits | `make merge-task` | task |
 | Finish and release the slot | `make finish-task SLOT=<slot>` | primary |
+| List / remove leftovers of finished tasks | `make clean-tasks` (list), `make clean-tasks CONFIRM=1` | primary |
 | Optional broader validation | `make check` | task |
 | Lint / format harness Python | `make scripts-lint` / `make scripts-fmt` | task |
 
@@ -228,13 +229,26 @@ succeeds again.
 
 `make finish-task SLOT=<slot>` runs from clean primary `master` under the startup and slot
 locks. It verifies the merged PR and head, the closed issue with Done board state, a clean
-worktree and matching Compose ownership; synchronizes `master`; stops the task's containers
-(no volumes, images or global prune); removes the worktree without force; removes the task's
-own external `.env` only if unchanged; deletes the local branch only with a safe `-d`
-(an unmerged squash head is kept and reported); closes telemetry windows and starts the
-final-tail collector. A `finish-<task>.json` checkpoint in the slot makes partial failures
+worktree and matching Compose ownership; synchronizes `master`; stops the task's containers;
+removes the worktree without force; removes the task's own external `.env` only if
+unchanged; then removes what the task created, as disposable development data: its Compose
+volumes (exact project label `bss-<task id>`, none in use), its images
+`bss-<task id>-app:dev` and `-web:dev` (exact tags, none in use) and its local branch when
+the tip equals the merged PR's head (that exact ref is deleted; any other tip is kept). The
+telemetry project and volume, base images, shared layers, build cache and other projects are
+never touched, and nothing prunes globally. The result lists `removed` and `kept` (with the
+reason for each); removals are recorded in the checkpoint as they happen. It closes
+telemetry windows and starts the final-tail collector. A `finish-<task>.json` checkpoint in the slot makes partial failures
 retryable by rerunning the same command; changed credentials, heads or unknown paths stop a
-retry. The slot directory and state persist. `make start-task` and `make finish-task` run the
+retry.
+
+`make clean-tasks` (primary) is the safety net for tasks whose finish failed and for leftovers
+from before finish removed them. It lists, and with `CONFIRM=1` removes, the volumes, images,
+local `issue-*` branches and credential directories (`~/.config/bss/tasks/<task id>`) of
+tasks that are finished: the issue is closed and Done, a PR for the branch is merged, and
+there is no open PR, registered worktree, slot reservation or running container. Everything
+else is listed as kept with its reason; an abandoned branch without a merged PR is reported,
+never deleted. It uses the same removal code as `finish-task`. The slot directory and state persist. `make start-task` and `make finish-task` run the
 primary checkout's scripts, which are stale until `master` is fast-forwarded. After the
 fast-forward, if `scripts/` or the `Makefile` changed, the target releases its locks and runs
 again once from the updated scripts (marker `BSS_SCRIPTS_REEXEC`, so it cannot loop), so a fix

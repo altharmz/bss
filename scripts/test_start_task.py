@@ -86,6 +86,7 @@ class StartupTests(unittest.TestCase):
             "task_telemetry.py",
             "worker_slots.py",
             "task_finish.py",
+            "task_cleanup.py",
             "task_pr.py",
             "task_git.py",
             "task_quality.py",

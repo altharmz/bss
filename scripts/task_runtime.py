@@ -92,7 +92,9 @@ def diagnostic(error):
     parts = [type(error).__name__]
     argv = getattr(error, "cmd", None)
     if isinstance(argv, (list, tuple)) and argv:
-        parts.append("command " + " ".join(printable(a) for a in argv[:2]))
+        # `git -C <path> <subcommand>`: name the subcommand, not the directory.
+        shown = [*argv[:1], *argv[3:4]] if list(argv[1:2]) == ["-C"] else list(argv[:2])
+        parts.append("command " + " ".join(printable(a) for a in shown))
         if isinstance(getattr(error, "returncode", None), int):
             parts.append(f"exit {error.returncode}")
         if argv[0] == "gh":

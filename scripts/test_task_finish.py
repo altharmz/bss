@@ -264,7 +264,18 @@ class FinishTests(LifecycleFixture):
         self.env[REEXEC_MARKER] = "1"
         self.env["BSS_BOARD_DONE_WAIT"] = "0"
         self.env["BSS_GH_RETRY_PAUSE"] = "0"
-        self.inventory = {"running": True, "mismatch": False, "fail_down": False}
+        project = "bss-" + self.task
+        self.inventory = {
+            "running": True,
+            "mismatch": False,
+            "fail_down": False,
+            "volumes": {
+                f"{project}_db": {"com.docker.compose.project": project},
+                f"{project}_web_modules": {"com.docker.compose.project": project},
+                "bss-telemetry_data": {"com.docker.compose.project": "bss-telemetry"},
+            },
+            "images": [f"{project}-app:dev", f"{project}-web:dev", "postgres:16"],
+        }
         docker = self.bin / "docker"
         docker.write_text(
             "#!/usr/bin/env python3\n"
@@ -277,6 +288,28 @@ class FinishTests(LifecycleFixture):
             "  d['running']=False; p.write_text(json.dumps(d))\n"
             " if 'bss-telemetry' in a: sys.exit(1)\n"
             " sys.exit(0)\n"
+            """
+def save(): p.write_text(json.dumps(d))
+def label(name): return a[-1].split('=', 1)[1] if a[-1].startswith(name) else None
+if a[:2] == ['volume', 'ls']:
+    want = a[-1].split('=', 2)[2]
+    names = [n for n, v in d.get('volumes', {}).items()
+             if v.get('com.docker.compose.project') == want]
+    print('\\n'.join(names + d.get('mislabelled', []))); sys.exit(0)
+if a[:2] == ['volume', 'inspect']:
+    print(json.dumps(d['volumes'][a[-1]])); sys.exit(0)
+if a[:2] == ['volume', 'rm']:
+    if d.get('fail_volume_rm') == a[2]: sys.exit(1)
+    del d['volumes'][a[2]]; save(); sys.exit(0)
+if a[:2] == ['image', 'ls']:
+    print(a[-1] if a[-1] in d.get('images', []) else ''); sys.exit(0)
+if a[:2] == ['image', 'rm']:
+    d['images'].remove(a[2]); save(); sys.exit(0)
+if a[0] == 'ps' and any(x.startswith('volume=') for x in a):
+    print('user' if label('volume=') in d.get('volume_users', []) else ''); sys.exit(0)
+if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
+    print('user' if label('ancestor=') in d.get('image_users', []) else ''); sys.exit(0)
+"""
             "if a[0]=='ps': print('abc' if d['running'] else ''); sys.exit(0)\n"
             "if a[:2]==['network','ls']: sys.exit(0)\n"
             "if a[0]=='inspect':\n"
@@ -318,6 +351,85 @@ class FinishTests(LifecycleFixture):
         self.assertEqual(
             self.call(["git", "rev-parse", "HEAD"], cwd=self.primary).stdout.strip(), self.head
         )
+
+    def docker_now(self):
+        return json.loads(self.docker_state.read_text())
+
+    def set_docker(self, **changes):
+        self.inventory.update(changes)
+        self.docker_state.write_text(json.dumps(self.inventory))
+
+    def test_finish_removes_the_tasks_volumes_images_and_branch_only(self):
+        project = "bss-" + self.task
+        outcome = self.finish()
+        self.assertEqual(
+            outcome["removed"],
+            {
+                "volumes": [f"{project}_db", f"{project}_web_modules"],
+                "images": [f"{project}-app:dev", f"{project}-web:dev"],
+                "branch": self.task,
+            },
+        )
+        self.assertEqual(outcome["kept"], [])
+        now = self.docker_now()
+        # The telemetry volume and unrelated images are never touched.
+        self.assertEqual(list(now["volumes"]), ["bss-telemetry_data"])
+        self.assertEqual(now["images"], ["postgres:16"])
+        refs = self.call(["git", "for-each-ref", f"refs/heads/{self.task}"], cwd=self.primary)
+        self.assertEqual(refs.stdout, "")
+
+    def test_mislabelled_in_use_and_unmerged_leftovers_are_kept_with_reasons(self):
+        project = "bss-" + self.task
+        self.set_docker(
+            volumes={
+                **self.inventory["volumes"],
+                "stray_volume": {"com.docker.compose.project": "other-project"},
+            },
+            mislabelled=["stray_volume"],
+            volume_users=[f"{project}_web_modules"],
+            image_users=[f"{project}-web:dev"],
+        )
+        outcome = self.finish()
+        kept = {row["item"]: row["reason"] for row in outcome["kept"]}
+        self.assertEqual(
+            kept,
+            {
+                "volume stray_volume": "project label mismatch",
+                f"volume {project}_web_modules": "in use by a container",
+                f"image {project}-web:dev": "in use by a container",
+            },
+        )
+        self.assertEqual(outcome["removed"]["volumes"], [f"{project}_db"])
+        self.assertEqual(outcome["removed"]["images"], [f"{project}-app:dev"])
+        self.assertIn("stray_volume", self.docker_now()["volumes"])
+
+    def test_branch_with_a_different_tip_is_kept(self):
+        import task_cleanup
+
+        with patch.dict(os.environ, self.env, clear=True):
+            removed, kept = task_cleanup.remove_leftovers(
+                self.primary, self.primary, self.task, "b" * 40, {}
+            )
+        self.assertNotIn("branch", removed)
+        self.assertIn(
+            {"item": f"branch {self.task}", "reason": "tip differs from the merged PR head"}, kept
+        )
+        refs = self.call(["git", "for-each-ref", f"refs/heads/{self.task}"], cwd=self.primary)
+        self.assertIn(self.task, refs.stdout)
+
+    def test_partial_removal_failure_resumes_from_the_checkpoint(self):
+        project = "bss-" + self.task
+        self.set_docker(fail_volume_rm=f"{project}_web_modules")
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.finish()
+        checkpoint = json.loads(next(self.slot.glob("finish-*.json")).read_text())
+        self.assertEqual(checkpoint["removed"], {"volumes": [f"{project}_db"]})
+        self.assertTrue(self.active.exists())
+        self.set_docker(fail_volume_rm=None, volumes=self.docker_now()["volumes"])
+        outcome = self.finish()
+        self.assertEqual(outcome["removed"]["volumes"], [f"{project}_db", f"{project}_web_modules"])
+        self.assertFalse(self.active.exists())
+        self.assertEqual(list(self.docker_now()["volumes"]), ["bss-telemetry_data"])
 
     def advance_master(self, name):
         """Push a commit to origin/master from a separate clone, as another task's merge."""
