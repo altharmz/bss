@@ -285,6 +285,17 @@ class CollectionTests(unittest.TestCase):
                 collect.automatic(TASK, "task-completed", "codex")
         run.assert_called_once_with(TASK, None, None, close=True)
 
+    def test_startup_without_samples_explains_that_it_is_normal(self):
+        empty = [dict(status="unavailable", reason="counters_missing", observed_samples=0)]
+        with patch.object(collect, "collect", return_value=empty):
+            with contextlib.redirect_stderr(io.StringIO()) as error:
+                collect.automatic(TASK, "start-task", "claude")
+        self.assertIn("normal at startup", error.getvalue())
+        with patch.object(collect, "collect", return_value=empty):
+            with contextlib.redirect_stderr(io.StringIO()) as error:
+                collect.automatic(TASK, "commit", "claude")
+        self.assertNotIn("normal at startup", error.getvalue())
+
     def test_final_tail_retries_until_machine_turn_end_and_survives_cleanup(self):
         partial = [dict(status="partial", reason="final_counter_pending")]
         complete = [dict(status="complete", reason="collected")]

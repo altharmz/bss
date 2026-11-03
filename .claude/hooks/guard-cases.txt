@@ -8,7 +8,14 @@ allow	grep -rn foo .env.example
 allow	docker compose config --quiet
 allow	docker compose logs app
 allow	ssh vps-test ls
+allow	gh issue create --title t --body "mentions docker volume rm, git push --force and cat .env only as text"
+allow	git commit -m "explain why git commit --no-verify and docker system prune are blocked"
+allow	make new-priority-task TITLE=x BODY="never run docker volume prune or head .env.prod"
+allow	python3 - <<'PY'\nprint("docker network prune")\nPY
+allow	cat <<'EOF'\ngit push --force\nEOF
+allow	grep -rn "docker volume rm" docs/
 block	cat .env
+block	cat ".env"
 block	head -3 .env.prod
 block	grep PASSWORD .env.smoke
 block	docker compose config
@@ -23,8 +30,14 @@ block	git push origin --delete feature
 block	git push origin :feature
 block	git push origin +master
 block	git push --mirror
+block	git push "--force"
 block	git commit --no-verify -m x
 block	git commit -n -m x
 block	git push --no-verify
 block	git -c core.hooksPath=/dev/null commit -m x
 block	git config core.hooksPath /dev/null
+block	bash -c 'docker volume prune'
+block	sh -c "git push --force origin master"
+block	echo ok && docker volume rm x
+block	bash <<'EOF'\ndocker system prune\nEOF
+block	git commit -m "message" --no-verify

@@ -72,6 +72,8 @@ class StartupTests(unittest.TestCase):
             BSS_TEST_PRS=str(self.base / "prs.json"),
             BSS_TEST_CALLS=str(self.base / "calls.jsonl"),
             BSS_TASK_AGENT="codex",
+            BSS_GH_RETRY_PAUSE="0",
+            BSS_BOARD_ADD_WAIT="0",
         )
         self.call(["git", "init", "--bare", "-q", "-b", "master", str(self.remote)], cwd=self.base)
         self.call(["git", "init", "-q", "-b", "master", str(self.primary)], cwd=self.base)
@@ -121,6 +123,10 @@ class StartupTests(unittest.TestCase):
             "  'blockedBy': {'totalCount': 0, 'nodes': []},\n"
             "  'linkedBranches': {'totalCount': 0, 'nodes': []},\n"
             "  'closedByPullRequestsReferences': {'totalCount': 0, 'nodes': []}}}\n"
+            " if os.environ.get('BSS_TEST_FAIL') == 'noadd':\n"
+            "  with open(board_path + '.hidden', 'w') as output: json.dump(row, output)\n"
+            "  print(f'https://github.com/altharmz/bss/issues/{number}')\n"
+            "  sys.exit(0)\n"
             " board[0]['node']['items']['nodes'].append(row)\n"
             " for page in board: page['node']['items']['totalCount'] += 1\n"
             " with open(board_path, 'w') as output: json.dump(board, output)\n"
@@ -136,7 +142,30 @@ class StartupTests(unittest.TestCase):
             " row['content']['labels']['totalCount'] = len(labels)\n"
             " with open(board_path, 'w') as output: json.dump(board, output)\n"
             " sys.exit(0)\n"
+            "if args[:2] == ['issue', 'view']:\n"
+            " row = next(r for r in rows if str(r['content']['number']) == args[2])\n"
+            " c = row['content']\n"
+            " print(json.dumps({'number': c['number'], 'state': c['state'], 'title': c['title'],\n"
+            "  'url': f\"https://github.com/altharmz/bss/issues/{c['number']}\",\n"
+            "  'labels': c['labels']['nodes']}))\n"
+            " sys.exit(0)\n"
             "document = next(a for a in args if a.startswith('query='))\n"
+            "flaky = os.environ.get('BSS_TEST_FLAKY')\n"
+            "if flaky and not os.path.exists(flaky):\n"
+            " open(flaky, 'w').close()\n"
+            " print('HTTP 502: Bad Gateway (https://api.github.com/graphql)', file=sys.stderr)\n"
+            " sys.exit(1)\n"
+            "if 'addProjectV2ItemById' in document:\n"
+            " with open(board_path + '.hidden') as source: row = json.load(source)\n"
+            " board[0]['node']['items']['nodes'].append(row)\n"
+            " for page in board: page['node']['items']['totalCount'] += 1\n"
+            " with open(board_path, 'w') as output: json.dump(board, output)\n"
+            " print(json.dumps({'data': {'addProjectV2ItemById': {'item': {'id': row['id']}}}}))\n"
+            " sys.exit(0)\n"
+            "if 'issue(number' in document:\n"
+            " n = next(a[7:] for a in args if a.startswith('number='))\n"
+            " print(json.dumps({'data': {'repository': {'issue': {'id': f'issue-{n}'}}}}))\n"
+            " sys.exit(0)\n"
             "if 'updateProjectV2ItemPosition' in document:\n"
             " if os.environ.get('BSS_TEST_FAIL') == 'position': sys.exit(1)\n"
             " item = next(a[5:] for a in args if a.startswith('item='))\n"
@@ -370,7 +399,7 @@ class StartupTests(unittest.TestCase):
 
     def test_paginate_board_and_prs_before_selection(self):
         self.board([issue(81, "P0"), issue(82, "P0"), issue(83, "P1")], split=1)
-        self.prs(["unrelated", "cloud/issue-81-already-active"], split=1)
+        self.prs(["unrelated", "issue-81-already-active"], split=1)
         self.assertEqual(self.result()["issue"], 82)
 
     def test_incomplete_relationships_fail_closed(self):
@@ -422,9 +451,9 @@ class StartupTests(unittest.TestCase):
         self.assertTrue(lock.exists())
 
     def test_existing_remote_branch_excludes_issue(self):
-        self.git("branch", "cloud/issue-81-previous-name")
-        self.git("push", "-q", "origin", "cloud/issue-81-previous-name")
-        self.git("branch", "-d", "cloud/issue-81-previous-name")
+        self.git("branch", "issue-81-previous-name")
+        self.git("push", "-q", "origin", "issue-81-previous-name")
+        self.git("branch", "-d", "issue-81-previous-name")
         self.rejected("no eligible Ready issue")
 
     def test_open_pr_task_branch_excludes_issue(self):
@@ -692,6 +721,103 @@ class StartupTests(unittest.TestCase):
         )
         self.assertEqual(json.loads(result.stdout)["status"], "Ready")
         self.assertFalse(self.destination().exists())
+
+    def test_new_priority_task_reads_the_body_from_a_file(self):
+        # Text that merely mentions a blocked command must not matter when it comes from a file.
+        body = (
+            "Mentions "
+            + "docker volume"
+            + " rm and a secret read without running them\n\n- [ ] Done"
+        )
+        path = self.base / "body.md"
+        path.write_text(body)
+        result = self.call(
+            [
+                "make",
+                "--no-print-directory",
+                "new-priority-task",
+                "TITLE=From a file",
+                f"BODY_FILE={path}",
+                "JSON=1",
+            ]
+        )
+        self.assertEqual(json.loads(result.stdout)["issue"], 82)
+        calls = [
+            json.loads(line) for line in Path(self.env["BSS_TEST_CALLS"]).read_text().splitlines()
+        ]
+        create = next(call for call in calls if call[:2] == ["issue", "create"])
+        self.assertEqual(create[create.index("--body") + 1], body)
+        for extra, message in (
+            (["BODY=x", f"BODY_FILE={path}"], "BODY or BODY_FILE"),
+            (["BODY_FILE=relative.md"], "absolute path"),
+            ([f"BODY_FILE={self.base}"], "regular file"),
+        ):
+            with self.subTest(extra=extra):
+                failed = self.call(
+                    ["make", "--no-print-directory", "new-priority-task", "TITLE=t", *extra],
+                    check=False,
+                )
+                self.assertNotEqual(failed.returncode, 0)
+                self.assertIn(message, failed.stderr)
+        self.assertEqual(self.remote_item()["content"]["number"], 82)
+
+    def test_new_priority_task_adds_the_issue_when_board_automation_is_late(self):
+        self.env["BSS_TEST_FAIL"] = "noadd"
+        result = self.call(
+            [
+                "make",
+                "--no-print-directory",
+                "new-priority-task",
+                "TITLE=Late automation",
+                "BODY=Goal",
+                "JSON=1",
+            ],
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("adding it directly", result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual((data["issue"], data["status"]), (82, "Ready"))
+        item = self.remote_item()
+        self.assertEqual(item["content"]["number"], 82)
+        self.assertEqual(task.status(item), "Ready")
+
+    def test_preserved_issue_is_finished_without_creating_another(self):
+        self.env["BSS_TEST_FAIL"] = "position"
+        failed = self.call(
+            ["make", "--no-print-directory", "new-priority-task", "TITLE=T", "BODY=B"],
+            check=False,
+        )
+        self.assertIn("make new-priority-task ISSUE=82", failed.stderr)
+        self.env.pop("BSS_TEST_FAIL")
+        result = self.call(
+            ["make", "--no-print-directory", "new-priority-task", "ISSUE=82", "JSON=1"]
+        )
+        self.assertEqual(json.loads(result.stdout)["issue"], 82)
+        self.assertEqual(task.status(self.remote_item()), "Ready")
+        calls = [
+            json.loads(line) for line in Path(self.env["BSS_TEST_CALLS"]).read_text().splitlines()
+        ]
+        self.assertEqual(sum(call[:2] == ["issue", "create"] for call in calls), 1)
+        for args in (["ISSUE=81"], ["ISSUE=x"], ["ISSUE=82", "TITLE=t"]):
+            with self.subTest(args=args):
+                refused = self.call(
+                    ["make", "--no-print-directory", "new-priority-task", *args], check=False
+                )
+                self.assertNotEqual(refused.returncode, 0)
+
+    def test_github_call_is_retried_once_and_errors_are_bounded(self):
+        self.env["BSS_TEST_FLAKY"] = str(self.base / "flaky")
+        self.assertEqual(self.result()["issue"], 81)
+        self.assertEqual(
+            task.gh_detail("HTTP 502: Bad Gateway (https://api.github.com/graphql)\nsecond"),
+            "HTTP 502: Bad Gateway (<url>)",
+        )
+        self.assertEqual(
+            task.gh_detail("token ghp_abcdefghijklmnopqrstuvwxyz0123456789"), "<redacted>"
+        )
+        self.assertLessEqual(len(task.gh_detail("x" * 500)), 120)
+        self.assertEqual(task.gh_detail(""), "")
 
     def test_new_priority_task_rejects_missing_input_and_reserved_labels(self):
         cases = [

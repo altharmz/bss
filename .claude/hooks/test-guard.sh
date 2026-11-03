@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs guard-cases.txt through guard.sh as Claude Code calls it (JSON on stdin).
+# Runs guard-cases.txt through guard.sh as Claude Code calls it (JSON on stdin; \n in a case is a newline).
 # Called by scripts/pre-commit.sh whenever .claude/ changes.
 set -uo pipefail
 
@@ -7,6 +7,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 failed=0
 while IFS=$'\t' read -r expected command; do
   [[ -z "${expected}" || "${expected}" == \#* ]] && continue
+  command="$(printf '%b' "${command}")" # a literal \n in a case is a newline
   python3 -c 'import json,sys; print(json.dumps({"tool_input": {"command": sys.argv[1]}}))' "${command}" |
     "${here}/guard.sh" >/dev/null 2>&1
   [[ $? == 2 ]] && got=block || got=allow

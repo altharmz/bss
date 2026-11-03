@@ -59,6 +59,11 @@ check_tree() {
 }
 check_tree
 
+# Markdown links and the commands the agent docs name (cheap, no Docker), for any staged .md.
+if grep -qE '\.md$' <<<"$staged"; then
+  run make docs-links || fail "make docs-links: fix the broken links above"
+fi
+
 # Markdown only: nothing to lint or test. Not spec/ (tests read spec/README.md) or
 # scripts/docs/ (the API notes are sources of the generated docs).
 if [[ -n "$staged" ]] && ! grep -vE '\.md$' <<<"$staged" | grep -q . &&

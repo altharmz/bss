@@ -21,6 +21,10 @@ def require(condition, message):
         raise InvalidRuntime(message)
 
 
+# Inherited variables that only change how Git presents or edits text, never what it does.
+PRESENTATION = {"GIT_PAGER", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR"}
+
+
 def run(root, *args):
     # Hooks start their own normal Make invocation. Outer command-line assignments
     # must not override its tests, and inherited dry-run flags must not skip them.
@@ -32,7 +36,9 @@ def run(root, *args):
         "MAKEFILES",
         "MAKELEVEL",
         "MESSAGE",
+        "MESSAGE_FILE",
         "FILES",
+        "FILES_FILE",
         "DRY_RUN",
     }
     environ = {key: value for key, value in os.environ.items() if key not in controls}
@@ -59,12 +65,30 @@ def hooks(root):
         )
 
 
+def text_input(inline, from_file):
+    """A value given inline (MESSAGE, FILES) or as an absolute file path (MESSAGE_FILE, ...)."""
+    value, path = os.environ.get(inline, ""), os.environ.get(from_file, "")
+    if not path:
+        return value
+    require(not value, f"give {inline} or {from_file}, not both")
+    source = Path(path)
+    require(
+        source.is_absolute() and source.is_file() and not source.is_symlink(),
+        f"{from_file} must be an absolute path to a regular file",
+    )
+    require(source.stat().st_size <= 65536, f"{from_file} exceeds the 64 KiB limit")
+    try:
+        return source.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raise InvalidRuntime(f"{from_file} is not readable UTF-8 text") from None
+
+
 def commit(root):
     dry_run = os.environ.get("DRY_RUN", "0")
     require(dry_run in {"0", "1"}, "DRY_RUN must be 0 or 1")
-    message = os.environ.get("MESSAGE", "")
-    require(message.strip(), "MESSAGE is required")
-    selected = json.loads(os.environ.get("FILES", "[]"))
+    message = text_input("MESSAGE", "MESSAGE_FILE")
+    require(message.strip(), "MESSAGE or MESSAGE_FILE is required")
+    selected = json.loads(text_input("FILES", "FILES_FILE") or "[]")
     require(
         isinstance(selected, list) and selected and all(isinstance(n, str) for n in selected),
         "FILES must be an explicit JSON array of repository-relative filenames",
@@ -87,7 +111,9 @@ def commit(root):
     unmerged = set(paths(root, "diff", "--name-only", "--diff-filter=U", "-z"))
     require(staged <= set(selected), "unselected files already staged; inspect the index")
     require(
-        not (staged - unmerged).intersection(paths(root, "diff", "--no-renames", "--name-only", "-z")),
+        not (staged - unmerged).intersection(
+            paths(root, "diff", "--no-renames", "--name-only", "-z")
+        ),
         "partially staged files; inspect the index before committing",
     )
     # An unmerged index has stages 1/2/3, not a partially staged source version.
@@ -98,6 +124,8 @@ def commit(root):
         return None
     if unstaged:
         run(root, "--literal-pathspecs", "add", "--", *unstaged)
+    logs = query(root, "rev-parse", "--absolute-git-dir").decode().strip()
+    print(f"task commit: the hook keeps its full output in {logs}/pre-commit-logs/", flush=True)
     run(root, "commit", "-m", message)
     return query(root, "rev-parse", "HEAD").decode().strip()
 
@@ -160,7 +188,8 @@ def push(root, task):
         subprocess.run(  # noqa: S603, S607
             ["git", "-C", str(root), "merge-base", "--is-ancestor", base, "HEAD"],
             capture_output=True,
-        ).returncode == 0,
+        ).returncode
+        == 0,
         "task is behind origin/master; run make sync-task, then retry",
     )
     ref = f"refs/heads/{task}"
@@ -211,9 +240,13 @@ def main():
     started = time.monotonic()
     try:
         require(operation in {"commit", "push", "sync-task"}, "unknown operation")
+        refused = sorted(
+            key for key in os.environ if key.startswith("GIT_") and key not in PRESENTATION
+        )
         require(
-            not any(key.startswith("GIT_") and key != "GIT_PAGER" for key in os.environ),
-            "unset inherited GIT_* overrides (GIT_PAGER is presentation-only)",
+            not refused,
+            f"unset inherited GIT_* overrides: {', '.join(refused)} "
+            f"({', '.join(sorted(PRESENTATION))} are presentation-only)",
         )
         root, primary, task, slot, data = context()
         record(task, event_operation + "-attempt", 0, 0, slot=slot)

@@ -26,10 +26,11 @@ from worker_slots import claim as claim_slot
 
 PROJECT = "PVT_kwHOEpM-b84BpHA0"
 STATUS_FIELD = "PVTSSF_lAHOEpM-b84BpHA0zhnkE7M"
-READY, DOING = "abe5d139", "47fc9ee4"
+READY, DOING, DONE = "abe5d139", "47fc9ee4", "98236657"
+STATUS_URL = "https://www.githubstatus.com"
 REPOSITORY = "altharmz/bss"
 PORT_START, PORT_END = 21000, 21998
-TASK_BRANCH = re.compile(r"^(?:cloud/)?issue-([1-9][0-9]*)-")
+TASK_BRANCH = re.compile(r"^issue-([1-9][0-9]*)-")
 GIT_SELECTORS = {
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -90,8 +91,20 @@ def run(*args, cwd=None, check=True):
     )
     if check and result.returncode:
         # Do not echo subprocess data: URLs and hook output can contain credentials.
-        raise StartupError(f"command failed: {' '.join(args[:3])}")
+        message = f"command failed: {' '.join(args[:3])}"
+        if args[0] == "gh":
+            detail = gh_detail(result.stderr)
+            message += f" ({detail + '; ' if detail else ''}check {STATUS_URL})"
+        raise StartupError(message)
     return result
+
+
+def gh_detail(stderr):
+    """One bounded, printable line of gh's error, without URLs or token-like words."""
+    line = next((s.strip() for s in (stderr or "").splitlines() if s.strip()), "")
+    line = re.sub(r"https?://[^\s)]+", "<url>", line)
+    line = re.sub(r"\b(gh[pousr]_|github_pat_)\w+|(?i:bearer|token)\s+\S+", "<redacted>", line)
+    return "".join(c for c in line if " " <= c <= "~")[:120].strip()
 
 
 def git(*args, cwd=None):
@@ -155,7 +168,14 @@ def query(document, **variables):
         if value is not None:
             args.extend(["-f", f"{key}={value}"])
     try:
-        data = json.loads(run(*args).stdout)
+        # One retry after a short pause: every GraphQL call here is a read or an idempotent
+        # mutation (status, position, add to board), so repeating it is safe.
+        try:
+            output = run(*args).stdout
+        except StartupError:
+            time.sleep(float(os.environ.get("BSS_GH_RETRY_PAUSE", "2")))
+            output = run(*args).stdout
+        data = json.loads(output)
         if data.get("errors"):
             raise ValueError
         return data["data"]
@@ -268,11 +288,36 @@ def agent_label():
     return f"agent:{task_owner()}"
 
 
+def body_from_file(path):
+    file = Path(path)
+    if not file.is_absolute() or file.is_symlink() or not file.is_file():
+        raise StartupError("BODY_FILE must be an absolute path to a regular file")
+    if file.stat().st_size > 65536:
+        raise StartupError("BODY_FILE exceeds the 64 KiB limit")
+    try:
+        return file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raise StartupError("BODY_FILE is not readable UTF-8 text") from None
+
+
 def new_task_request():
+    """(title, body, labels) for a new issue, or (None, number, None) to finish an existing one."""
+    resume = os.environ.get("BSS_NEW_TASK_ISSUE", "").strip()
     title = os.environ.get("BSS_NEW_TASK_TITLE", "").strip()
     body = os.environ.get("BSS_NEW_TASK_BODY", "")
+    body_file = os.environ.get("BSS_NEW_TASK_BODY_FILE", "")
+    if resume:
+        if title or body or body_file or os.environ.get("BSS_NEW_TASK_LABELS"):
+            raise StartupError("ISSUE finishes an existing issue; give no TITLE, BODY or LABELS")
+        if not re.fullmatch(r"[1-9][0-9]*", resume):
+            raise StartupError("ISSUE must be an issue number")
+        return None, int(resume), None
+    if body_file:
+        if body:
+            raise StartupError("give BODY or BODY_FILE, not both")
+        body = body_from_file(body_file)
     if not title or not body.strip():
-        raise StartupError("new-priority-task requires non-empty TITLE and BODY")
+        raise StartupError("new-priority-task requires non-empty TITLE and BODY (or BODY_FILE)")
     labels = list(
         dict.fromkeys(
             label.strip()
@@ -317,8 +362,116 @@ def set_status(issue, option):
     )
 
 
+def board_item(number):
+    matches = [item for item in snapshot() if (item.get("content") or {}).get("number") == number]
+    if len(matches) > 1:
+        raise StartupError("new issue has ambiguous project items")
+    return matches[0] if matches else None
+
+
+def wait_for_board_item(number, seconds):
+    """Poll for the issue's board item; the project's own automation adds it, usually in seconds."""
+    for attempt in range(int(seconds) + 1):
+        created = board_item(number)
+        if created is not None:
+            return created
+        if attempt < int(seconds):
+            time.sleep(1)
+    return None
+
+
+def add_to_board(number):
+    """Fallback when the project's auto-add did not run (adding twice returns the same item)."""
+    issue = query(
+        """query($number: Int!) { repository(owner: "altharmz", name: "bss") {
+          issue(number: $number) { id }
+        } }""",
+        number=number,
+    )["repository"]["issue"]
+    query(
+        """mutation($project: ID!, $content: ID!) {
+          addProjectV2ItemById(input: {projectId: $project, contentId: $content}) {
+            item { id }
+          }
+        }""",
+        project=PROJECT,
+        content=issue["id"],
+    )
+
+
+def prioritize(number, url, title):
+    """Put an existing P0 issue on the board as the first Ready item."""
+    try:
+        created = wait_for_board_item(number, float(os.environ.get("BSS_BOARD_ADD_WAIT", "20")))
+        if created is None:
+            print(
+                f"start-task: #{number} was not added to the board by its automation; "
+                "adding it directly",
+                file=sys.stderr,
+            )
+            add_to_board(number)
+            created = wait_for_board_item(number, 5)
+        if created is None:
+            raise StartupError("new issue did not appear on the BSS board")
+        set_status(dict(created, item_id=created["id"]), READY)
+        query(
+            """mutation($project: ID!, $item: ID!) {
+              updateProjectV2ItemPosition(input: {projectId: $project, itemId: $item}) {
+                clientMutationId
+              }
+            }""",
+            project=PROJECT,
+            item=created["id"],
+        )
+        items = snapshot()
+        if (
+            not items
+            or items[0]["id"] != created["id"]
+            or status(items[0]) != "Ready"
+            or items[0]["content"]["number"] != number
+        ):
+            raise StartupError("new issue is not first in Ready after prioritization")
+        return {
+            "issue": number,
+            "url": url,
+            "title": title,
+            "status": "Ready",
+            "next_command": "make start-task BSS_TASK_OWNER=<client>",
+        }
+    except (StartupError, OSError, ValueError, KeyError, TypeError) as error:
+        raise StartupError(
+            f"new issue #{number} is preserved after setup failure: {error}; "
+            f"finish it with: make new-priority-task ISSUE={number}"
+        ) from None
+
+
+def existing_priority_issue(number):
+    """A preserved issue to finish: open, P0, unclaimed (never someone's active work)."""
+    data = json.loads(
+        run(
+            "gh",
+            "issue",
+            "view",
+            str(number),
+            "--repo",
+            REPOSITORY,
+            "--json",
+            "number,state,title,url,labels",
+        ).stdout
+    )
+    labels = {label["name"] for label in data["labels"]}
+    if data["number"] != number or data["state"] != "OPEN" or "P0" not in labels:
+        raise StartupError(f"#{number} is not an open P0 issue")
+    if any(label.startswith("agent:") for label in labels):
+        raise StartupError(f"#{number} is already claimed by an agent")
+    return data["url"], data["title"]
+
+
 def create_priority_task(request):
     title, body, labels = request
+    if title is None:
+        url, existing = existing_priority_issue(body)
+        return prioritize(body, url, existing)
     args = [
         "gh",
         "issue",
@@ -342,51 +495,7 @@ def create_priority_task(request):
         raise StartupError(
             "issue creation returned an unexpected URL; review GitHub before retrying"
         )
-    number = int(match[1])
-    try:
-        created = None
-        for attempt in range(5):
-            matches = [
-                item for item in snapshot() if (item.get("content") or {}).get("number") == number
-            ]
-            if len(matches) > 1:
-                raise StartupError("new issue has ambiguous project items")
-            if matches:
-                created = matches[0]
-                break
-            if attempt < 4:
-                time.sleep(1)
-        if created is None:
-            raise StartupError("new issue did not appear on the BSS board")
-        set_status(dict(created, item_id=created["id"]), READY)
-        query(
-            """mutation($project: ID!, $item: ID!) {
-              updateProjectV2ItemPosition(input: {projectId: $project, itemId: $item}) {
-                clientMutationId
-              }
-            }""",
-            project=PROJECT,
-            item=created["id"],
-        )
-        items = snapshot()
-        if (
-            not items
-            or items[0]["id"] != created["id"]
-            or status(items[0]) != "Ready"
-            or items[0]["content"]["number"] != number
-        ):
-            raise StartupError("new issue is not first in Ready after prioritization")
-        return {
-            "issue": number,
-            "url": result.stdout.strip(),
-            "title": title,
-            "status": "Ready",
-            "next_command": "make start-task BSS_TASK_OWNER=<client>",
-        }
-    except (StartupError, OSError, ValueError, KeyError, TypeError) as error:
-        raise StartupError(
-            f"new issue #{number} is preserved after setup failure: {error}"
-        ) from None
+    return prioritize(int(match[1]), result.stdout.strip(), title)
 
 
 class Claim:

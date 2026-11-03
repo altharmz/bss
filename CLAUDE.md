@@ -51,7 +51,8 @@ make docs                           # regenerate docs/api + docs/db
 make web-install                    # npm ci, the only step that downloads
 make web-lint / web-test / web-build / web-types / web-fmt / web-e2e
 make scripts-lint / scripts-fmt     # Python harness scripts
-make runtime-check                  # harness script tests (~3 min)
+make runtime-check                  # harness script tests (~1.5 min, parallel)
+make docs-links                     # Markdown links and the commands the docs name
 make telemetry-collect / telemetry-report
 ```
 

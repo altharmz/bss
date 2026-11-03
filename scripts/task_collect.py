@@ -647,6 +647,14 @@ def automatic(task, operation, client=None, result=0, pr_number=None):
             launch_final_capture(task)
         if operation in {"start-task", "finish-task", "task-completed"}:
             print("telemetry collection: " + json.dumps(results, sort_keys=True), file=sys.stderr)
+        if operation == "start-task" and any(
+            r["reason"] == "counters_missing" and r["observed_samples"] == 0 for r in results
+        ):
+            print(
+                "telemetry: no usage observed after the binding yet - normal at startup; "
+                "later lifecycle targets capture it",
+                file=sys.stderr,
+            )
     except (
         OSError,
         ValueError,

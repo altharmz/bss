@@ -44,6 +44,20 @@ class LifecycleFixture(unittest.TestCase):
                 " d['merges']=d.get('merges',0)+1; d['pr']['state']='MERGED'\n"
                 " p.write_text(json.dumps(d)); sys.exit(0)\n"
                 "elif a==['api','repos/altharmz/bss']: out=d['policy']\n"
+                "elif a[:2]==['api','graphql']:\n"
+                " doc=[x for x in a if x.startswith('query=')][0]\n"
+                " status=d['issue']['projectItems'][0]['status']\n"
+                " if 'mutation' in doc:\n"
+                "  if d.get('fail_board'): sys.exit(1)\n"
+                "  status['name']='Done'; d['board_sets']=d.get('board_sets',0)+1\n"
+                "  p.write_text(json.dumps(d)); out={'data':{'updated':True}}\n"
+                " else:\n"
+                "  views={'totalCount':1,'nodes':[{'layout':'BOARD_LAYOUT','filter':None,\n"
+                "   'sortByFields':{'totalCount':0}}]}\n"
+                "  items={'totalCount':1,'pageInfo':{'hasNextPage':False,'endCursor':None},\n"
+                "   'nodes':[{'id':'item-77','fieldValueByName':{'name':status['name']},\n"
+                "   'content':{'number':77}}]}\n"
+                "  out={'data':{'node':{'views':views,'items':items}}}\n"
                 "elif a[:2]==['issue','view']:",
             )
         )
@@ -242,6 +256,8 @@ class FinishTests(LifecycleFixture):
         self.docker_state = self.base / "docker.json"
         self.env["BSS_TEST_DOCKER_STATE"] = str(self.docker_state)
         self.env["BSS_SLOT"] = "worker1"
+        self.env["BSS_BOARD_DONE_WAIT"] = "0"
+        self.env["BSS_GH_RETRY_PAUSE"] = "0"
         self.inventory = {"running": True, "mismatch": False, "fail_down": False}
         docker = self.bin / "docker"
         docker.write_text(
@@ -436,10 +452,31 @@ class FinishTests(LifecycleFixture):
         self.assertTrue(self.work.exists())
         self.assertTrue(self.secret.exists())
 
-    def test_unconfirmed_issue_or_board_preserves_resources(self):
-        self.state["issue"]["projectItems"][0]["status"]["name"] = "Doing"
+    def test_unclosed_issue_preserves_resources(self):
+        self.state["issue"]["state"] = "OPEN"
         with self.assertRaises(InvalidRuntime):
             self.finish()
+        self.assertTrue(self.work.exists())
+        self.assertTrue(self.secret.exists())
+        self.assertNotIn("board_sets", json.loads(self.fixture.read_text()))
+
+    def test_late_board_automation_is_replaced_by_setting_done(self):
+        # Merge and closure are confirmed; the board never moved the item to Done.
+        self.state["issue"]["projectItems"][0]["status"]["name"] = "Doing"
+        self.assertEqual(self.finish()["status"], "finished")
+        self.assertEqual(json.loads(self.fixture.read_text())["board_sets"], 1)
+        self.assertFalse(self.work.exists())
+
+    def test_board_already_done_is_not_touched(self):
+        self.assertEqual(self.finish()["status"], "finished")
+        self.assertNotIn("board_sets", json.loads(self.fixture.read_text()))
+
+    def test_failed_board_fallback_preserves_resources(self):
+        self.state["issue"]["projectItems"][0]["status"]["name"] = "Doing"
+        self.state["fail_board"] = True
+        with self.assertRaises(InvalidRuntime) as raised:
+            self.finish()
+        self.assertIn("could not be set", str(raised.exception))
         self.assertTrue(self.work.exists())
         self.assertTrue(self.secret.exists())
 

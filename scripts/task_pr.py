@@ -34,9 +34,17 @@ HUMAN_PATHS = {
 
 
 def gh(root, *args):
-    result = subprocess.run(  # noqa: S603, S607 - fixed executable, argv, no shell
-        ["gh", *args], cwd=root, capture_output=True, text=True, check=True, timeout=60
-    )
+    # Read calls only (creation runs separately): one retry rides out a transient GitHub error.
+    for attempt in (1, 2):
+        try:
+            result = subprocess.run(  # noqa: S603, S607 - fixed executable, argv, no shell
+                ["gh", *args], cwd=root, capture_output=True, text=True, check=True, timeout=60
+            )
+            break
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            if attempt == 2:
+                raise
+            time.sleep(float(os.environ.get("BSS_GH_RETRY_PAUSE", "2")))
     if "--paginate" not in args:
         return json.loads(result.stdout)
     # Older installed gh versions emit consecutive JSON documents, without --slurp.

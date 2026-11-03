@@ -102,6 +102,46 @@ def checkpoint(path, data):
     temporary.replace(path)
 
 
+def board_done(root, number):
+    issue = task_pr.gh(
+        root, "issue", "view", str(number), "--repo", task_pr.REPOSITORY, "--json", "projectItems"
+    )
+    items = [i for i in issue["projectItems"] if i["title"] == "BSS"]
+    return len(items) == 1 and items[0]["status"]["name"] == "Done"
+
+
+def settle_done(root, task, number):
+    """The merge and the issue closure are confirmed; the board's automation sets Done.
+
+    Wait a bounded time for it (it usually acts within seconds). If it never does, for
+    instance during a GitHub incident, set Done directly rather than block the cleanup.
+    """
+    wait = int(float(os.environ.get("BSS_BOARD_DONE_WAIT", "60")))
+    for attempt in range(wait // 5 + 1):
+        if board_done(root, number):
+            return
+        if attempt < wait // 5:
+            time.sleep(5)
+    try:
+        items = [
+            item
+            for item in start_task.snapshot()
+            if (item.get("content") or {}).get("number") == number
+        ]
+        require(len(items) == 1, "task project item not found; check the BSS board")
+        print(
+            f"finish-task: the board did not set #{number} to Done after {wait} s; setting it "
+            "(merge and issue closure are confirmed)",
+            file=sys.stderr,
+        )
+        start_task.set_status({"item_id": items[0]["id"]}, start_task.DONE)
+    except start_task.StartupError as error:
+        raise InvalidRuntime(
+            f"task project state is not Done and could not be set: {error}"
+        ) from None
+    require(board_done(root, number), "task project state is not Done after setting it")
+
+
 def completed(root, task, head):
     data = merged_pr(root, task)
     require(
@@ -123,10 +163,8 @@ def completed(root, task, head):
         "task issue closure not confirmed; wait for GitHub",
     )
     items = [i for i in issue["projectItems"] if i["title"] == "BSS"]
-    require(
-        len(items) == 1 and items[0]["status"]["name"] == "Done",
-        "task project state is not Done; wait for board automation",
-    )
+    if not (len(items) == 1 and items[0]["status"]["name"] == "Done"):
+        settle_done(root, task, int(task.split("-")[1]))
     commit = task_pr.gh(
         root,
         "pr",

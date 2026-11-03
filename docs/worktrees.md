@@ -17,12 +17,12 @@ standalone command, with its required variables.
 | Step | Command | Where |
 |---|---|---|
 | Start and claim a task | `make start-task BSS_TASK_OWNER=<client>` | primary |
-| Create an approved P0 issue in Ready | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` | primary |
+| Create an approved P0 issue in Ready | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (`BODY_FILE=/abs/path` for long text; `ISSUE=<n>` finishes a preserved one) | primary |
 | Resume / hand off a session | `make telemetry-collect` | task |
 | Install UI dependencies (first time) | `make web-install` | task |
 | Format backend and UI | `make format` | task |
 | Review task state | `make review-task` | task |
-| Commit selected files | `make commit MESSAGE="..." FILES='["path/a", "path/b"]'` | task |
+| Commit selected files | `make commit MESSAGE="..." FILES='["path/a", "path/b"]'` (or `MESSAGE_FILE=` / `FILES_FILE=`) | task |
 | Update from master | `make sync-task` | task |
 | Publish the branch | `make push` | task |
 | Create or reuse the PR | `make create-pr` | task |
@@ -66,7 +66,9 @@ tests and docs, validation results (including whether `make check` ran), the PR 
 status, and whether the slot was released. Deployment is outside this workflow.
 
 Keep the tree unchanged while checks run; batch fixes; do not kill and restart a long check
-merely because it is slow.
+merely because it is slow. Long text (issue bodies, commit messages, file lists) can be passed
+as a file: `BODY_FILE=`, `MESSAGE_FILE=`, `FILES_FILE=`, `PR_BODY_FILE=` (absolute paths).
+Editor tools require reading a file before rewriting it.
 
 ## Persistent worker slots
 
@@ -160,8 +162,10 @@ worktree's `scripts/pre-commit.sh` and `scripts/pre-push.sh`. Details of the gat
 names (deletions included; never a directory or glob). It validates task identity, protected
 and secret paths and the installed hooks, stages only those files, refuses unrelated or
 partially staged files and runs a normal `git commit` with hooks. `DRY_RUN=1` validates
-without staging or running hooks. Inherited `GIT_*` variables are refused except
-`GIT_PAGER`. Failure leaves the index and tree as they were.
+without staging or running hooks. Inherited `GIT_*` variables are refused (the refusal
+names them) except the presentation-only `GIT_PAGER`, `GIT_EDITOR` and
+`GIT_SEQUENCE_EDITOR`. The command prints where the hook keeps its full output
+(`.git/pre-commit-logs/`). Failure leaves the index and tree as they were.
 
 `make push` publishes `HEAD` to the same-named branch on `origin` (upstream set if needed),
 refuses unexpected destinations, remote history outside local ancestry and protected
