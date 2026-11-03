@@ -1,12 +1,9 @@
 # Prepaid subscriptions: finalized scope
 
-Status: **design complete**, 2026-10-20. The human authorized completing remaining
-choices according to TMF and committing/pushing the design. This scope and
-[the finalized implementation design](prepaid-implementation.md) are the hand-off
-for a separate development session. The latter contains pinned contract references,
-explicit deviations, exact lifecycle/recovery rules and API/UI examples; it takes
-precedence over earlier proposal wording. No runtime implementation or deployment
-is included in the design commit. Existing accounts stay postpaid.
+Built (P1-P6; migrations `0034`-`0047`). This is the scope and the TMF mapping; the exact
+lifecycle rules, contract pins and deviations are in [prepaid-implementation.md](prepaid-implementation.md),
+which wins where the two differ; the decisions as built are in
+[decisions/prepaid.md](decisions/prepaid.md). Existing accounts stay postpaid.
 
 ## First release
 
@@ -47,9 +44,8 @@ design is to **vendor two more specs** under `spec/` (pinned commit, blob SHA,
 | TMF639 Resource Inventory v5.0.0 | `TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml` | An MSISDN is a `LogicalResource` whose `value` holds the number (the spec's own example: "'0746712345' for MSISDN's"). TMF622/637 already reference it as `realizingResource`. |
 | TMF654 Prepay Balance Management v4.0.0 | `TMF654-PrepayBalance-v4.0.0.swagger.json` | Stable contract for prepaid balances, top-ups, reservations, adjustments and transfers. v5 exists as a preview; this release uses stable v4. Its actions identify subscribers by `LogicalResourceRef` ("eg MSISDN"). |
 
-Both were read upstream on 2026-10-20 (`tmforum-apis/TMF639_ResourceInventory`,
-`tmforum-apis/TMF654_PrepayBalanceManagement`); every name below is re-checked against
-the vendored files in stage 1. Money and Quantity values are JSON numbers in both,
+Both are vendored from upstream (`tmforum-apis/TMF639_ResourceInventory`,
+`tmforum-apis/TMF654_PrepayBalanceManagement`). Money and Quantity values are JSON numbers in both,
 read and written as `Decimal` exactly like TMF676 v4 (`tmfjson`).
 
 Not vendored, deliberately: TMF685 Resource Pool (number reservation for a basket) and
@@ -117,7 +113,7 @@ and the conditional history response exception. The business scope exclusions ar
 
 | Spec element | Prepaid meaning |
 |---|---|
-| TMF666 `BillingAccount.ratingType` | `prepaid` or `postpaid` (before P5a: always `postpaid`, anything else 422). Settable on POST; PATCH only before financial or product history (409 otherwise). |
+| TMF666 `BillingAccount.ratingType` | `prepaid` or `postpaid` . Settable on POST; PATCH only before financial or product history (409 otherwise). |
 | TMF622/637/678 `BillingAccountRef.ratingType` | Accepted when it equals the referenced account's value, as `postpaid` is today; a mismatch stays a 422. |
 | TMF666 `creditLimit` | A prepaid account may carry none or zero; a positive value is a 422 (an overdraft this mode cannot honour, the reasoning that refuses `ratingType: prepaid` today). |
 | TMF666 `accountBalance[]` | Unchanged entry: one `currentBalance` per currency, now payments + adjustments ± transfers - ABRs. Spendable and reserved amounts live on the TMF654 bucket, not in invented `balanceType`s. |
@@ -130,47 +126,13 @@ and the conditional history response exception. The business scope exclusions ar
 | TMF678 customerBill | `runType: offCycle`, `state: settled` from the reserved sources in the same transaction. Monthly `onCycle` invoicing stays postpaid-only. |
 | TMF620 price | Unchanged; prepaid is the account's mode, not the price's. `priceType` stays `recurring` (free text; the spec defines no prepaid value). |
 
-## What the current system requires us to change
-
-- No vendored spec has a number inventory or prepaid balance resources; TMF639 and
-  TMF654 must be vendored, with new base paths, routers, MCP tools and gap lines.
-- `realizingResource` is stored today as an unchecked document on products. It becomes
-  a checked reference to the number inventory for products whose specification needs
-  a number; other products keep today's behavior.
-- TMF666 `ratingType` describes prepaid/postpaid in the vendored contract, but the
-  implementation only accepts and returns `postpaid`, including account references
-  in orders, inventory and bills.
-- Charges are already calculated in advance. Today their posting is independent of
-  available funds; credit limits are informational. Prepaid must enforce funding.
-- Only billing runs write charges and bills. The daily worker sees orders through
-  the preceding midnight. Immediate prepaid authorization needs an additional worker
-  command path; the postpaid cutoff and replay rules must remain unchanged.
-- Orders complete synchronously, so TMF622 `inProgress` and TMF637 `pendingActive`
-  are never reached ([tmf-api.md](decisions/tmf-api.md)). Prepaid starts are
-  asynchronous and use them; the recorded "never reached" lists change.
-- Billing follows product dates even when a product is suspended. Prepaid must use
-  explicit funded service intervals; setting `suspended` alone cannot stop charges,
-  and a funding suspension must not be confused with an operator's.
-- The derived balance gains two entry kinds (adjustments, transfers). They are ledger
-  entries, not ABRs, so "only the billing run creates ABRs" holds; transfer costs are
-  charges and go through billing.
-- Settlement and refunds consume particular payment/credit sources. Prepaid funding,
-  adjustments and transfers must share their locking and source bounds, rather than
-  introduce a second wallet. The TMF654 bucket is a view of those sources.
-
-Relevant foundations: [accounts](decisions/accounts.md),
-[billing](decisions/billing-core.md), [charge periods](decisions/charge-periods.md),
-[worker](decisions/worker.md), [settlement](decisions/bills.md),
-[refunds](decisions/billing-completion.md), [events](decisions/events.md),
-[catalog](decisions/catalog.md) and [TMF conventions](decisions/tmf-api.md).
-
 ## Business rules
 
-| Choice | Proposed first-release behavior |
+| Choice | Behavior |
 |---|---|
 | Where prepaid is selected | On the billing account: TMF666 `ratingType = prepaid` or `postpaid`; one mode per account. A customer can own accounts of both kinds. |
 | Existing accounts and products | Remain postpaid and number-less, with unchanged money, history and behavior. |
-| Switching mode | Allowed only before financial/product history exists. Moving a live account is a separate future workflow. |
+| Switching mode | Allowed only before financial/product history exists. Moving a live account is issue #150. |
 | Numbers | Required where the product specification says so, in both modes; assigned by the order, released on termination. |
 | Funding | TMF654 `topupBalance` (`monetary`), backed by a TMF676 payment; direct TMF676 payments count as top-ups. No overdraft, credit-limit allowance or grace period. |
 | Spendable funds | The bucket's `remainingValue`: derived balance less held reservations (`reservedValue`), reconciled with unused payment/credit sources; include unbilled charges and recorded payouts. Do not subtract bill allocations twice. |
@@ -186,7 +148,7 @@ Relevant foundations: [accounts](decisions/accounts.md),
 | Transfers | Between prepaid accounts in the same currency, limited to spendable funds including the fee; final, corrected through a new opposite transfer. Never across modes or currencies. |
 | Adjustments | Operator goodwill credits and corrective debits; a debit cannot exceed spendable funds. |
 | Cash refund | Continue recording a completed TMF676 refund, limited to funds left after reservations and existing obligations. Refunds never initiate an external transfer. |
-| Offering changes | Initially permit changes at the next prepaid renewal. Defer mid-period prepaid upgrades/downgrades and their extra reservation/refund rules. |
+| Offering changes | Changes apply at the next prepaid renewal; mid-period upgrades/downgrades are issue #151. |
 | Documents | A successful prepaid purchase/renewal (and a transfer cost) produces an `offCycle` bill, `settled` from its funding sources in the same transaction. Keep monthly invoicing unchanged for postpaid. |
 | Events | TMF639 resource events; TMF654 create/cancel/failure events; TMF637 state changes for `pendingActive`/`active`/`suspended`; TMF622 order state changes. All through the existing outbox. |
 
@@ -232,60 +194,6 @@ Relevant foundations: [accounts](decisions/accounts.md),
 The concurrency model and run extension are essential scope, not optional polish.
 Reservations alone are insufficient if existing payouts or settlement can ignore them.
 
-## Delivery stages
-
-| Stage | Reviewable result |
-|---|---|
-| 1. Design and contracts | Design is complete in this scope and the linked implementation hand-off. Development begins by vendoring the pinned TMF639/654 contracts, provenance checks, enum/gap accounting and executable API fixtures. Add progress scope when implementing; design completion does not mean contracts are vendored or runtime coverage exists. |
-| 2. Subscriber numbers | TMF639 resources, the built-in `msisdn` specification, `realizingResource` assignment/change/release through TMF622, lookups, events, MCP tools, UI number inventory and number picker in New subscriber. Works for postpaid; shippable on its own. |
-| 3. Schema and funding core | Additive migrations: account mode, reservation/source accounting, adjustments, transfers, paid intervals and command-run identity. Existing rows default to postpaid. Prove concurrency and rollback with existing populated financial history, including immutable refunds. |
-| 4. API and worker | TMF666 `ratingType: prepaid`; TMF654 resources and hub; order/product states for pending activation and funding suspension; renewal, expiry/resumption, termination credits, transfers, settled documents and durable recovery. Update TMF account references, internal previews, MCP tools and the gap lock together. Preserve postpaid behavior. |
-| 5. Admin UI | Account mode selector/filter; available, reserved and paid-through figures from the bucket; Record top-up, adjustment and transfer (by number); funding status and renewal shortfall; pending activation/resumption; clear refusal and retry messages. Pin request bodies in frontend and backend tests. |
-| 6. Release validation | Mixed prepaid/postpaid demo data with numbers; full backend/frontend/browser checks; TMF639/654 bodies validated against the vendored specs; documented operational recovery and migration rollback limits. Shipped through the normal cycle. |
-
-Stages 3 and 4 are developed together behind an unavailable prepaid create path
-(`ratingType: prepaid` stays a 422) until money accounting and worker recovery are
-complete. Do not expose partially working prepaid accounts merely because the
-database can store the mode.
-
-## Acceptance criteria
-
-All prepaid slices are done; the slice history is in `git log` and [decisions/prepaid.md](decisions/prepaid.md).
-
-- Numbers: a duplicate or malformed `value` is refused; a locked, busy or unknown number
-  rejects the order; a number realizes at most one live product; termination and
-  cancellation return it to `idle`; a modify item moves a product to a new number;
-  products of specifications without `msisdn` behave exactly as today. With
-  `MSISDN_QUARANTINE_DAYS=0` a released number is assignable the same day; with N > 0
-  it is rejected through release date + N - 1 and assignable on release date + N.
-- Exact funds permit a purchase, one cent short rejects it (`insufficientFunds`), and
-  tax is included in both decisions. Zero-priced periods work without requiring a
-  positive balance.
-- Two concurrent starts cannot overspend; payouts, adjustments, transfers and
-  explicit/automatic settlement cannot consume reserved sources. Concurrent top-ups,
-  transfers in both directions and renewals serialize without deadlock.
-- Worker death at each transition leaves either no financial change or one complete
-  charge, settled bill and funded interval. Retries and duplicate commands cannot double-charge.
-- Exhaustion stops future funded service without accruing debt. Top-up resumes only
-  eligible products and does not fund an earlier gap or override manual suspension.
-- Cancelling a top-up or positive adjustment whose original source was spent or held
-  is a 409; an eligible cancellation restores the balance exactly. Transfers cannot
-  be cancelled; a compensating opposite transfer is a new action with current checks.
-- Test all supported cadences, month ends, leap years, DST and midnight boundaries;
-  several products with insufficient shared funds; scheduled orders; price/tax changes;
-  zero prices; termination credits; refunds; and recovery after missed renewals.
-- A delayed worker, historical replay and a top-up received after expiry have explicit,
-  consistent results. Prepaid command runs do not alter daily-run scheduling or counts.
-- Every TMF639 and TMF654 response validates against the vendored schema, with the
-  single documented conditional exception for non-transfer history receivers; bucket
-  figures equal the ledger and source allocations; `balanceActionHistory` lists every
-  action exactly once. Order, product and bill states match the mapping tables.
-- Existing postpaid cases retain their current results. Mixed-mode customers and
-  financial-account balances reconcile with the ledger and source allocations.
-- New migrations preserve existing account/product/payment/bill/refund history and
-  database protections. Downgrade refuses numbers or prepaid history that older code
-  cannot represent.
-
 ## Final design decisions
 
 Decisions finalized under the human's authorization to choose according to TMF:
@@ -310,8 +218,6 @@ Decisions finalized under the human's authorization to choose according to TMF:
 Decided by the human (2026-10-20):
 
 7. Number quarantine after release is a setting, `MSISDN_QUARANTINE_DAYS`, default 0.
-8. Subscriber numbers (stage 2) ship on their own, before the prepaid stages are
-   complete; they ship through the normal cycle (commit, push, deploy, no approval).
 
 9. Late recovery buys one interval from today's authorization date, never historical
    catch-up, even with older funds. Entitlement cannot outlive its persisted grant.
@@ -320,7 +226,3 @@ Decided by the human (2026-10-20):
 11. Reservations require an explicit amount; missing top-up payment method records
     an unspecified receipt. No guessed cash payment, all-funds hold or fictitious
     history receiver is created.
-
-Design completion and its commit/push are authorized in this session. Development
-starts in another session; implementation commits follow CLAUDE.md's development cycle
-(no approval). Deployment only when the human asks (2026-10-21).
