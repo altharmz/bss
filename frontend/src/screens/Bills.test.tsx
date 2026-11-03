@@ -303,8 +303,10 @@ describe('record payment', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
     expectUi('ui.subscriber.recordPayment');
-    fireEvent.change(within(dialog).getByLabelText('Amount'), { target: { value: '1,500.5' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Record payment' }));
+    fireEvent.change(within(dialog).getByLabelText('Amount received'), {
+      target: { value: '1,500.5' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record 1,500.50 USD' }));
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
       'Payment of 1,500.50 USD recorded · applied to 2 bills',
@@ -333,7 +335,9 @@ describe('record payment', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
-    fireEvent.change(within(dialog).getByLabelText('Amount'), { target: { value: '350' } });
+    fireEvent.change(within(dialog).getByLabelText('Amount received'), {
+      target: { value: '350' },
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'cash' }));
     fireEvent.click(within(dialog).getByLabelText(/Apply to specific bills/));
     // oldest first: B1 takes 300, B2 the 50 left; the credit note is not offered
@@ -348,7 +352,7 @@ describe('record payment', () => {
       within(dialog).getByText('BL-B2000002: enter at most its remaining amount.'),
     ).toBeTruthy();
     const submit = within(dialog).getByRole('button', {
-      name: 'Record payment',
+      name: 'Record 350.00 USD',
     }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
 
@@ -374,7 +378,9 @@ describe('record payment', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
-    fireEvent.change(within(dialog).getByLabelText('Amount'), { target: { value: '100' } });
+    fireEvent.change(within(dialog).getByLabelText('Amount received'), {
+      target: { value: '100' },
+    });
     fireEvent.click(within(dialog).getByLabelText(/Apply to specific bills/));
     fireEvent.change(within(dialog).getByLabelText('Amount for BL-B2000002'), {
       target: { value: '50' },
@@ -383,7 +389,7 @@ describe('record payment', () => {
     fireEvent.change(within(dialog).getByLabelText('Amount for BL-B1000001'), {
       target: { value: '50' },
     });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Record payment' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record 100.00 USD' }));
     expect(await within(dialog).findByRole('alert')).toBeTruthy();
     expect(screen.getByRole('dialog', { name: 'Record payment' })).toBeTruthy();
   });
@@ -400,12 +406,12 @@ describe('record payment', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Record payment' }));
     const dialog = await screen.findByRole('dialog', { name: 'Record payment' });
     expect(within(dialog).getByText(/No open bill/)).toBeTruthy();
-    fireEvent.change(within(dialog).getByLabelText('Amount'), { target: { value: '10' } });
+    fireEvent.change(within(dialog).getByLabelText('Amount received'), { target: { value: '10' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Other' }));
     fireEvent.change(within(dialog).getByLabelText('Payment method name'), {
       target: { value: 'Faster Payments' },
     });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Record payment' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Record 10.00 USD' }));
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
       'Payment of 10.00 USD recorded · kept as credit',

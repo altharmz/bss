@@ -1,5 +1,12 @@
 # Admin UI (stage 5)
 
+R11 money dialogs use the M Ledger Dialog, account context IDs, currency MoneyFields,
+outcome and busy labels, and Balance after computed from loaded figures. Transfer has
+Recipient, Amount and Confirm steps; Confirm requires subscriber acknowledgement and
+Enter cannot submit. Its before/after KeyValue uses available sender funds and recipient
+ledger. Record payment shows Balance and Balance after, allocation Fields, and Refresh
+after an uncertain outcome. Prepaid actions retain their existing safe idempotent Retry.
+
 A desktop admin console for billing operators: `frontend/` (Vite + React + TypeScript),
 built to static files and served by the shared Caddy on the same origin as the API.
 The app authenticates operators with sessions; removing Caddy's outer basic-auth prompt

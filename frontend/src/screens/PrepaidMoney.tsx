@@ -11,9 +11,10 @@ import {
 import { explain } from '../api/client';
 import { useSystemContext } from '../app/context';
 import { isIsoDate } from '../format/dates';
-import { accountLabel } from '../format/ids';
 import { formatCents, parseAmount, toCents } from '../format/money';
-import { Button, Modal, Segmented, TextInput } from '../ui/kit';
+import { Amount } from '../ui/Amount';
+import { Id } from '../ui/Id';
+import { Button, Dialog, Field, MoneyField, Segmented, TextInput } from '../ui/kit';
 import { uncertain, useSubmissionKey } from './submissionKey';
 
 // The money forms of a prepaid account: top-up, adjustment (credit or debit) and operator
@@ -25,6 +26,25 @@ import { uncertain, useSubmissionKey } from './submissionKey';
 export type MoneyForm = 'topup' | 'adjust' | 'hold';
 
 const METHODS = ['bankTransfer', 'card', 'cash'];
+
+/** Reserve both outcome labels in the shared write-button grid while saving. */
+export function MoneySubmitButton({
+  busy = false,
+  busyLabel,
+  children,
+  ...props
+}: React.ComponentProps<typeof Button>) {
+  return (
+    <Button {...props} className="bss-write-button" busy={busy}>
+      <span className="bss-write-idle-label" aria-hidden={busy}>
+        {children}
+      </span>
+      <span className="bss-write-busy-label" aria-hidden={!busy}>
+        {busyLabel}
+      </span>
+    </Button>
+  );
+}
 
 const TITLE: Record<MoneyForm, string> = {
   topup: 'Top up',
@@ -124,61 +144,79 @@ export function PrepaidMoneyModal({
   }
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={TITLE[form]}
-      width={560}
+      size="M"
       onClose={() => {
         if (!saving.current) onClose();
       }}
       ui={`ui.subscriber.prepaid.${form}`}
-      subtitle={`${account.customerName} · ${accountLabel(account.id)}`}
+      context={
+        <>
+          {account.customerName} · <Id id={account.id} prefix="BA-" />
+        </>
+      }
       footer={
         <>
           {problem !== null && (
-            <Note tone="negative" className="footer-push">
-              {problem}
-            </Note>
+            <div className="footer-push" role={retry ? 'alert' : undefined}>
+              <Note tone={retry ? 'warning' : 'negative'} lead={retry ? '' : 'Refused.'}>
+                {problem}
+              </Note>
+            </div>
           )}
           <Button disabled={busy} onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" disabled={!valid || busy} onClick={() => void submit()}>
-            {retry ? 'Retry' : TITLE[form]}
-          </Button>
+          <MoneySubmitButton
+            variant="primary"
+            busy={busy}
+            busyLabel={
+              form === 'topup' ? 'Topping up…' : form === 'adjust' ? 'Applying…' : 'Holding…'
+            }
+            disabled={!valid || busy}
+            onClick={() => void submit()}
+          >
+            {retry
+              ? 'Retry'
+              : form === 'adjust'
+                ? 'Apply adjustment'
+                : `${form === 'topup' ? 'Top up' : 'Hold'}${amount !== null && cents > 0 ? ` ${formatCents(cents)} ${account.currency}` : ''}`}
+          </MoneySubmitButton>
         </>
       }
     >
-      <div className="bss-modal-body">
+      <fieldset className="bss-form bss-write-fields" disabled={busy}>
         <p className="bss-secondary">
           Available {formatCents(balance.availableCents)} {account.currency} · reserved{' '}
           {formatCents(balance.reservedCents)}
         </p>
         {form === 'adjust' && (
           <section>
-            <div className="bss-step-head">Direction</div>
-            <Segmented
-              label="Adjustment direction"
-              value={direction}
-              onChange={setDirection}
-              options={[
-                { key: 'credit', label: 'Credit' },
-                { key: 'debit', label: 'Debit' },
-              ]}
-            />
+            <Field label="Direction">
+              <Segmented
+                label="Adjustment direction"
+                value={direction}
+                onChange={setDirection}
+                options={[
+                  { key: 'credit', label: 'Credit' },
+                  { key: 'debit', label: 'Debit' },
+                ]}
+              />
+            </Field>
           </section>
         )}
         <section>
-          <div className="bss-step-head">Amount</div>
-          <TextInput
-            mono
-            width={180}
-            aria-label="Amount"
-            placeholder="0.00"
-            value={amountText}
-            onChange={(event) => setAmountText(event.target.value)}
-          />{' '}
-          <span className="bss-secondary">{account.currency}</span>
+          <Field label="Amount">
+            <MoneyField
+              currency={account.currency}
+              aria-label="Amount"
+              placeholder="0.00"
+              value={amountText}
+              onChange={(event) => setAmountText(event.target.value)}
+            />
+          </Field>
           {amountText.trim() !== '' && amount === null && (
             <Note tone="negative">Enter an amount with at most 2 decimals.</Note>
           )}
@@ -188,49 +226,64 @@ export function PrepaidMoneyModal({
         </section>
         {form === 'topup' && (
           <section>
-            <div className="bss-step-head">Payment method</div>
-            <Segmented
-              label="Payment method"
-              value={method}
-              onChange={setMethod}
-              options={[...METHODS, 'other'].map((m) => ({
-                key: m,
-                label: m === 'other' ? 'Other' : m,
-              }))}
-            />
-            {method === 'other' && (
-              <TextInput
-                aria-label="Payment method name"
-                value={other}
-                onChange={(event) => setOther(event.target.value)}
+            <Field label="Payment method">
+              <Segmented
+                label="Payment method"
+                value={method}
+                onChange={setMethod}
+                options={[...METHODS, 'other'].map((m) => ({
+                  key: m,
+                  label: m === 'other' ? 'Other' : m,
+                }))}
               />
+            </Field>
+            {method === 'other' && (
+              <Field label="Payment method name">
+                <TextInput
+                  aria-label="Payment method name"
+                  value={other}
+                  onChange={(event) => setOther(event.target.value)}
+                />
+              </Field>
             )}
           </section>
         )}
         {form === 'hold' && (
           <section>
-            <div className="bss-step-head">Holds through (optional)</div>
-            <TextInput
-              mono
-              width={180}
-              aria-label="Hold expires on"
-              placeholder="YYYY-MM-DD"
-              value={expiresOn}
-              onChange={(event) => setExpiresOn(event.target.value)}
-            />
+            <Field label="Holds through (optional)">
+              <TextInput
+                mono
+                width={180}
+                aria-label="Hold expires on"
+                placeholder="YYYY-MM-DD"
+                value={expiresOn}
+                onChange={(event) => setExpiresOn(event.target.value)}
+              />
+            </Field>
             {!expiryShape && <Note tone="negative">Enter a date as YYYY-MM-DD.</Note>}
             {expiryPast && <Note tone="negative">Enter today or a later business date.</Note>}
           </section>
         )}
         <section>
-          <div className="bss-step-head">Reason (optional)</div>
-          <TextInput
-            aria-label="Reason"
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-          />
+          <Field label="Reason (optional)">
+            <TextInput
+              aria-label="Reason"
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </Field>
         </section>
-      </div>
-    </Modal>
+        <div className="money-balance-line" data-ui="ui.subscriber.prepaid.balanceAfter">
+          Balance after{' '}
+          <Amount
+            cents={
+              (form === 'hold' ? balance.availableCents : balance.ledgerCents) +
+              (kind === 'debit' || kind === 'hold' ? -cents : cents)
+            }
+            currency={account.currency}
+          />
+        </div>
+      </fieldset>
+    </Dialog>
   );
 }
