@@ -674,7 +674,7 @@ class StartupTests(unittest.TestCase):
         self.assertEqual(create[create.index("--body") + 1], body)
         self.assertEqual(self.result()["issue"], 82)
 
-    def test_new_priority_creation_ignores_wip_and_unavailable_slots(self):
+    def test_new_priority_creation_ignores_doing_items_and_unavailable_slots(self):
         active = issue(90, labels=connection([{"name": "agent:codex"}]))
         active["fieldValueByName"]["name"] = "Doing"
         self.board([issue(), active])
@@ -759,11 +759,14 @@ class StartupTests(unittest.TestCase):
                 self.assertEqual(task.status(self.remote_item()), "Ready")
                 self.assertNotIn("agent:codex", task.ownership(self.remote_item()))
 
-    def test_wip_limit(self):
+    def test_same_agent_doing_item_does_not_block_startup(self):
         active = issue(90, labels=connection([{"name": "agent:codex"}]))
         active["fieldValueByName"]["name"] = "Doing"
         self.board([issue(), active])
-        self.rejected("WIP limit")
+        result = self.result()
+        self.assertEqual(result["issue"], 81)
+        self.assertEqual(task.status(self.remote_item()), "Doing")
+        self.assertIn("agent:codex", task.ownership(self.remote_item()))
 
     def test_claim_race_after_selection(self):
         choose = task.select_issue

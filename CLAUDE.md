@@ -173,9 +173,10 @@ stay in the slice trackers in `docs/` and an issue only links to them. Rules in 
 - Read [docs/board.md](docs/board.md) before any board operation (statuses, ids, `gh`
   commands, merge/close rules).
 - Statuses: Inbox, Ready, Doing, Waiting, Done. `make start-task` selects from Ready by priority label (P0-P3), then board order among equals; do not select manually.
-- WIP limit: 1 item per agent. Startup claims an item with your `agent:<client>` label (for example
-  `agent:claude`, `agent:codex` or `agent:kimi`) and move it to Doing in one step; never
-  touch another agent's items.
+- Concurrency is limited only by available worker slots, not by per-agent WIP. Startup
+  claims an item with your `agent:<client>` label (for example `agent:claude`,
+  `agent:codex` or `agent:kimi`) and moves it to Doing in one step; never touch another
+  agent's items.
 - Merging: use `make create-pr` (adds `Fixes #N`), observe `make check-pr`, and merge with
   `make merge-task` only when ready. After explicit human approval of the concrete PR and
   exact current head in this conversation, pass

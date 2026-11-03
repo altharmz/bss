@@ -9,6 +9,14 @@ the merge to master, and it neither tracks nor reasons about what is deployed
 
 ## Development cycle and gates
 
+### Slot-only agent concurrency (2026-11-03, #129)
+
+`make start-task` no longer rejects startup when the same `agent:<client>` already owns a
+Doing item. Available worker slots are the only local concurrency limit; each task still
+requires its own issue, branch, worktree, slot reservation, runtime and credentials.
+Issue eligibility, ownership labels, claim verification and slot locking are unchanged.
+This supersedes the earlier per-client WIP policy below.
+
 ### Python harness lint and formatting (2026-11-02, #124)
 
 Use `make scripts-lint` and `make scripts-fmt` for Python sources below `scripts/`.
@@ -91,7 +99,7 @@ remain. See [worktrees.md](../worktrees.md).
 `make new-priority-task TITLE=... BODY=... [LABELS=...]` handles a concrete new request
 only after explicit human approval for P0 and first board position. Under the existing
 repository/GitHub validation, it creates one issue, adds P0, moves it to Ready and
-first position, verifies the result and stops (#124). It does not check WIP or slot
+first position, verifies the result and stops (#124). It does not check slot
 availability or allocate task resources; selection, claim and setup are exclusively
 the independent `make start-task` operation.
 Reserved priority, ownership and gate labels are rejected. A created issue is preserved for
@@ -111,8 +119,9 @@ Conversation approval is an agent obligation, not a caller-controlled trust toke
 ### Client-general task ownership (2026-10-31, #100)
 
 `BSS_TASK_OWNER` accepts a validated lowercase client slug rather than only Codex or Claude.
-The existing `agent:<client>` GitHub label supplies board ownership and the per-client WIP
-limit; `agent:kimi` joins the existing labels. Worker slots remain provider-neutral and may
+The `agent:<client>` GitHub label supplies board ownership; `agent:kimi` joins the
+existing labels. The former per-client WIP limit is superseded by #129 above. Worker
+slots remain provider-neutral and may
 be reused by different clients over time. Successful startup telemetry records validated
 `client` and `slot` metadata independently, with no schema migration or inferred session,
 model or usage identity. Codex/Claude detection and the legacy `BSS_TASK_AGENT` alias remain
@@ -208,9 +217,10 @@ Keep runtime identity issue-specific; path reuse must not reuse Compose state or
 Slot occupancy is a locked local reservation, separate from observational telemetry;
 unknown state fails closed. Explicit `release-slot` only acknowledges safe prior worktree
 removal and preserves the persistent directory/state. Automatic selection (#109 above)
-supersedes the original omitted-SLOT legacy startup path. Existing board ownership labels and WIP
-policy remain intact; explicit BSS_TASK_OWNER separates policy ownership from client
-detection. Slots have no provider labels and task/session cardinality remains many-to-one.
+supersedes the original omitted-SLOT legacy startup path. Board ownership labels remain
+intact, while #129 above supersedes the former WIP policy. Explicit BSS_TASK_OWNER
+separates policy ownership from client detection. Slots have no provider labels and
+task/session cardinality remains many-to-one.
 Successful startup adds the validated slot to workflow event metadata using the existing
 schema, with no telemetry migration or inferred model/usage/provider values.
 
