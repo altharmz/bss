@@ -8,28 +8,28 @@
 }
 .bss-toolbar .right {
   margin-left: auto;
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font-size: var(--size-label);
+  color: var(--color-ink-3);
 }
 .bss-toolbar .neg-count {
   font-family: var(--font-mono);
   font-weight: 500;
-  color: var(--neg);
+  color: var(--color-negative);
 }
 
 /* --- subscribers --- */
 .bss-subno {
-  color: var(--primary);
+  color: var(--color-primary);
 }
 .bss-name {
   font-weight: 500;
 }
 .bss-secondary {
-  font-size: var(--fs-115);
-  color: var(--faint);
+  font-size: var(--size-label);
+  color: var(--color-ink-3);
 }
 .bss-zero {
-  color: var(--num-disabled);
+  color: var(--color-ink-4);
 }
 
 .bss-subscribers-screen {
@@ -106,19 +106,19 @@
   align-items: center;
   gap: 10px;
   margin: 0;
-  font-size: var(--fs-20);
+  font-size: var(--size-page);
   font-weight: 600;
 }
 .bss-meta {
   display: flex;
   gap: 18px;
   margin-top: 6px;
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font-size: var(--size-label);
+  color: var(--color-ink-3);
 }
 .bss-meta .value {
   font-family: var(--font-mono);
-  color: var(--ink);
+  color: var(--color-ink-1);
 }
 .bss-card-action {
   margin-left: auto;
@@ -126,8 +126,8 @@
 }
 .bss-card-action .caption {
   margin-top: 4px;
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font-size: var(--size-label);
+  color: var(--color-ink-3);
 }
 .bss-kpis {
   display: grid;
@@ -135,36 +135,36 @@
 }
 .bss-kpi {
   padding: 14px 20px;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--color-border);
 }
 .bss-kpi:last-child {
   border-right: 0;
 }
 .bss-kpi .label {
-  font-size: var(--fs-11);
+  font-size: var(--size-micro);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  color: var(--color-ink-3);
 }
 .bss-kpi .value {
   margin-top: 4px;
   font-family: var(--font-mono);
-  font-size: var(--fs-20);
+  font-size: var(--size-page);
   font-variant-numeric: tabular-nums;
 }
 .bss-kpi .value.negative {
-  color: var(--neg);
+  color: var(--color-negative);
 }
 .bss-kpi .value.strong {
   font-weight: 600;
 }
 .bss-kpi .caption {
   margin-top: 2px;
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font-size: var(--size-label);
+  color: var(--color-ink-3);
 }
 .bss-kpi .caption.negative {
-  color: var(--neg);
+  color: var(--color-negative);
 }
 .bss-two-col {
   display: grid;
@@ -177,8 +177,8 @@
 }
 .bss-code {
   font-family: var(--font-mono);
-  font-size: var(--fs-11);
-  color: var(--faint);
+  font-size: var(--size-micro);
+  color: var(--color-ink-3);
 }
 .bss-confirm {
   display: inline-flex;
@@ -186,19 +186,19 @@
   gap: 6px;
 }
 .bss-confirm .ask {
-  color: var(--neg);
+  color: var(--color-negative);
   font-weight: 500;
 }
 .bss-prorated {
-  color: var(--prorate);
+  color: var(--color-warning);
 }
 .bss-dash {
-  color: var(--num-disabled);
+  color: var(--color-ink-4);
 }
 .bss-panel-count {
   font-family: var(--font-mono);
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font-size: var(--size-label);
+  color: var(--color-ink-3);
 }
 
 /* --- catalog --- */
@@ -208,7 +208,7 @@
   justify-content: space-between;
 }
 .bss-retired {
-  color: var(--faint);
+  color: var(--color-ink-3);
 }
 .bss-details {
   display: grid;
@@ -217,7 +217,7 @@
   margin: 0;
 }
 .bss-details dt {
-  color: var(--muted);
+  color: var(--color-ink-3);
 }
 .bss-details dd {
   margin: 0;
@@ -231,8 +231,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font-size: var(--size-label);
+  color: var(--color-ink-3);
 }
 .bss-form .bss-input {
   width: 100%;
@@ -249,7 +249,7 @@
   gap: 10px;
   margin-top: 16px;
   padding-top: 14px;
-  border-top: 1px solid var(--divider);
+  border-top: 1px solid var(--color-border);
   align-items: flex-start;
 }
 .bss-price-change .bss-form {
@@ -274,9 +274,9 @@
   font-weight: 600;
 }
 .bss-step-head .caption {
-  font-size: var(--fs-12);
+  font-size: var(--size-label);
   font-weight: 400;
-  color: var(--muted);
+  color: var(--color-ink-3);
 }
 .bss-step-head .filter {
   margin-left: auto;
@@ -284,8 +284,8 @@
 .bss-offer-list {
   max-height: 236px;
   overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 .bss-offer {
   display: grid;
@@ -293,31 +293,31 @@
   align-items: center;
   min-height: 40px;
   padding: 6px 12px;
-  border-bottom: 1px solid var(--divider);
+  border-bottom: 1px solid var(--color-border);
   cursor: pointer;
 }
 .bss-offer:last-child {
   border-bottom: 0;
 }
 .bss-offer[aria-checked='true'] {
-  background: var(--sel-2);
+  background: var(--color-bg-selected);
 }
 .bss-radio {
   width: 14px;
   height: 14px;
-  border: 1.5px solid var(--radio-border);
+  border: 1.5px solid var(--color-border-strong);
   border-radius: 50%;
 }
 .bss-offer[aria-checked='true'] .bss-radio {
-  border-color: var(--primary);
-  box-shadow: inset 0 0 0 3px var(--surface);
-  background: var(--primary);
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 3px var(--color-bg);
+  background: var(--color-primary);
 }
 .bss-preview {
   padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-panel);
-  background: var(--preview-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-subtle);
 }
 .bss-preview-grid {
   display: grid;
@@ -331,22 +331,22 @@
   margin: 0;
 }
 .bss-preview dt {
-  color: var(--muted);
+  color: var(--color-ink-3);
 }
 .bss-preview dd {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: var(--fs-125);
+  font-size: var(--size-body);
 }
 .bss-preview .first {
   font-family: var(--font-mono);
-  font-size: var(--fs-17);
+  font-size: var(--size-section);
   font-weight: 500;
 }
 .bss-preview .footnote {
   margin-top: 12px;
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font-size: var(--size-label);
+  color: var(--color-ink-3);
 }
 
 .bss-dialog-body:has(.bss-add-product) {
@@ -401,12 +401,12 @@
 }
 .bss-add-product-offering:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--color-primary-tint);
 }
 .bss-add-product-offering[aria-checked='true']:focus-visible {
   box-shadow:
     inset 2px 0 0 var(--color-primary),
-    var(--focus-ring);
+    var(--color-primary-tint);
 }
 .bss-add-product-offering[aria-checked='true'] .bss-radio {
   border-color: var(--color-primary);
@@ -533,18 +533,18 @@
 
 /* --- billing runs (README "Screen 4") --- */
 .bss-caption {
-  font-size: var(--fs-12);
-  color: var(--muted);
+  font-size: var(--size-label);
+  color: var(--color-ink-3);
 }
 .bss-mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 .bss-text-2 {
-  color: var(--text-2);
+  color: var(--color-ink-2);
 }
 .bss-faint {
-  color: var(--faint);
+  color: var(--color-ink-3);
 }
 .bss-title-row .bss-caption {
   margin-right: auto;
@@ -557,11 +557,11 @@
 }
 .bss-run-tag {
   padding: 0 6px;
-  border: 1px solid var(--input-border);
-  border-radius: var(--r-tag);
-  font-size: var(--fs-11);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--size-micro);
   font-weight: 400;
-  color: var(--muted);
+  color: var(--color-ink-3);
   white-space: nowrap;
 }
 .bss-run-tag.latest {
@@ -576,24 +576,24 @@
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  border: 1px solid var(--run-border);
-  border-radius: var(--r-panel);
-  background: var(--sel-3);
-  font-size: var(--fs-125);
-  color: var(--text-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-hover);
+  font-size: var(--size-body);
+  color: var(--color-ink-2);
 }
 .bss-run-note.warn {
-  border-color: var(--run-failed-border);
-  background: var(--run-failed-bg);
-  color: var(--neg);
+  border-color: var(--color-negative);
+  background: var(--color-negative-tint);
+  color: var(--color-negative);
 }
 .bss-run-banner {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  border-radius: var(--r-panel);
-  background: var(--alert);
+  border-radius: var(--radius-md);
+  background: var(--color-negative);
   color: var(--color-on-primary);
 }
 .bss-run-banner .icon {
@@ -605,8 +605,8 @@
   height: 20px;
   border-radius: 50%;
   background: var(--color-bg);
-  color: var(--alert);
-  font-size: var(--fs-12);
+  color: var(--color-negative);
+  font-size: var(--size-label);
   font-weight: 600;
 }
 .bss-run-banner .strong {
@@ -620,11 +620,11 @@
   margin-left: auto;
   padding: 0 12px;
   border: 1px solid var(--color-on-primary);
-  border-radius: var(--r-ctl);
+  border-radius: var(--radius-sm);
   background: var(--color-bg);
-  color: var(--neg);
+  color: var(--color-negative);
   font: inherit;
-  font-size: var(--fs-125);
+  font-size: var(--size-body);
   font-weight: 600;
   cursor: pointer;
 }
@@ -633,33 +633,33 @@
   cursor: not-allowed;
 }
 .bss-run-latest {
-  border: 1px solid var(--run-border);
-  border-radius: var(--r-panel);
-  background: var(--surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
 }
 .bss-run-latest.failed {
-  border-color: var(--run-failed-border);
-  background: var(--run-failed-bg);
+  border-color: var(--color-negative);
+  background: var(--color-negative-tint);
 }
 .bss-run-latest.skeleton {
-  border-color: var(--border);
+  border-color: var(--color-border);
 }
 .bss-run-latest header {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 20px;
-  border-bottom: 1px solid var(--run-border);
+  border-bottom: 1px solid var(--color-border-strong);
 }
 .bss-run-latest.failed header {
-  border-bottom-color: var(--run-failed-border);
+  border-bottom-color: var(--color-negative);
 }
 .bss-run-latest header .label {
-  font-size: var(--fs-11);
+  font-size: var(--size-micro);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  color: var(--color-ink-3);
 }
 .bss-run-latest header .date {
   font-family: var(--font-mono);
@@ -668,8 +668,8 @@
 .bss-run-latest header .id {
   margin-left: auto;
   font-family: var(--font-mono);
-  font-size: var(--fs-115);
-  color: var(--faint);
+  font-size: var(--size-label);
+  color: var(--color-ink-3);
 }
 .bss-run-kpis {
   display: grid;
@@ -682,14 +682,14 @@
   padding: 12px 20px;
 }
 .bss-run-kpi .label {
-  font-size: var(--fs-11);
+  font-size: var(--size-micro);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  color: var(--color-ink-3);
 }
 .bss-run-kpi .value {
   font-family: var(--font-mono);
-  font-size: var(--fs-16);
+  font-size: var(--size-section);
   font-variant-numeric: tabular-nums;
 }
 .bss-run-kpi .value.strong {
@@ -701,37 +701,37 @@
   gap: 12px;
   padding: 0 20px 14px;
   font-family: var(--font-mono);
-  font-size: var(--fs-12);
-  color: var(--text-2);
+  font-size: var(--size-label);
+  color: var(--color-ink-2);
 }
 .bss-run-progress .track {
   flex: 1;
   height: 6px;
   overflow: hidden;
   border-radius: 3px;
-  background: var(--run-track);
+  background: var(--color-bg-sunken);
 }
 .bss-run-progress .fill {
   height: 100%;
-  background: var(--primary);
+  background: var(--color-primary);
 }
 .bss-run-error {
   margin: 0 20px 14px;
   padding: 8px 12px;
-  border: 1px solid var(--run-failed-border);
-  border-radius: var(--r-ctl);
-  background: var(--surface);
+  border: 1px solid var(--color-negative);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
   font-family: var(--font-mono);
-  font-size: var(--fs-12);
-  color: var(--neg);
+  font-size: var(--size-label);
+  color: var(--color-negative);
 }
 .bss-run-error.inline {
   margin: 0;
 }
 .bss-run-error-text {
   font-family: var(--font-mono);
-  font-size: var(--fs-115);
-  color: var(--neg);
+  font-size: var(--size-label);
+  color: var(--color-negative);
 }
 .bss-run-note-cell {
   display: flex;
@@ -741,9 +741,9 @@
 }
 .bss-run-note-cell .error {
   font-family: var(--font-mono);
-  font-size: var(--fs-115);
+  font-size: var(--size-label);
   font-weight: 400;
-  color: var(--neg);
+  color: var(--color-negative);
 }
 .bss-run-note-cell .bss-link {
   margin-left: auto;
@@ -751,7 +751,7 @@
   border: 0;
   background: none;
   font: inherit;
-  font-size: var(--fs-12);
+  font-size: var(--size-label);
   font-weight: 400;
   white-space: nowrap;
 }
@@ -937,7 +937,7 @@
   justify-content: space-between;
   gap: 12px;
   min-height: 32px;
-  border-bottom: 1px solid var(--divider);
+  border-bottom: 1px solid var(--color-border);
 }
 .bss-line:last-child {
   border-bottom: 0;
@@ -968,7 +968,7 @@
   gap: 12px;
 }
 .bss-field .label {
-  color: var(--muted);
+  color: var(--color-ink-3);
 }
 
 /* The order dialog's item and cancellation tables */
@@ -977,7 +977,7 @@
   font: var(--type-label);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-2, inherit);
+  color: var(--color-ink-2);
 }
 .bss-mini {
   width: 100%;
@@ -1002,7 +1002,7 @@
   gap: 12px;
 }
 .bss-facts dt {
-  color: var(--muted);
+  color: var(--color-ink-3);
 }
 .bss-facts dd {
   margin: 0;
@@ -1625,4 +1625,11 @@
 .money-balance-line {
   border-top: 1px solid var(--color-border);
   padding-top: var(--space-sm);
+}
+.wrap-anywhere {
+  overflow-wrap: anywhere;
+}
+.bss-not-found {
+  margin: 0;
+  color: var(--color-ink-2);
 }

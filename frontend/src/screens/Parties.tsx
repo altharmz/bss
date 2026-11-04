@@ -37,7 +37,7 @@ import { formatInt } from '../format/money';
 import {
   Button,
   DateField,
-  Modal,
+  Dialog,
   PageHeader,
   Panel,
   StatusPill,
@@ -432,13 +432,13 @@ interface FrameProps {
 
 function Frame(p: FrameProps) {
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={p.title}
-      width={560}
+      size="M"
       onClose={p.onClose}
       ui={p.ui}
-      subtitle={p.subtitle}
+      context={p.subtitle}
       footer={
         <>
           {p.write.problem !== null && (
@@ -460,7 +460,7 @@ function Frame(p: FrameProps) {
         )}
         {p.state === 'ok' && p.body}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 

@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { loadRuns } from '../api/bss';
 import { countFailedCommands } from '../api/commands';
 import { countOrders } from '../api/orders';
@@ -9,7 +9,8 @@ import { businessDate, utcLabel } from '../format/dates';
 import { useCrumbs, useNavVersion, type SystemContext } from './context';
 import { Link, useRouter, type Route } from './router';
 import './shell.css';
-import { Badge, Tag } from '../ui/kit';
+import { Badge, Segmented, Tag } from '../ui/kit';
+import { readTheme, saveTheme, type Theme } from './theme';
 import { SignOut, useSession } from './session';
 
 // The frame around every screen: sidebar (brand, navigation, operator) and top bar
@@ -233,12 +234,36 @@ export function Sidebar({ context }: { context: SystemContext }) {
             </span>
           </summary>
           <nav aria-label="User menu">
+            <ThemeChoice />
             <Link href="/change-password">Change password</Link>
             <SignOut />
           </nav>
         </details>
       </div>
     </aside>
+  );
+}
+
+const THEMES: { key: Theme; label: string }[] = [
+  { key: 'system', label: 'System' },
+  { key: 'light', label: 'Light' },
+  { key: 'dark', label: 'Dark' },
+];
+
+export function ThemeChoice() {
+  const [theme, setTheme] = useState<Theme>(readTheme);
+  return (
+    <div className="theme-choice" data-ui="ui.shell.theme">
+      <Segmented
+        label="Theme"
+        options={THEMES}
+        value={theme}
+        onChange={(next) => {
+          saveTheme(next);
+          setTheme(next);
+        }}
+      />
+    </div>
   );
 }
 

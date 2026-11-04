@@ -18,7 +18,7 @@ import { clockTime, businessDate, lastDay } from '../format/dates';
 import { accountLabel } from '../format/ids';
 import { formatCents, parseAmount, positiveAmountError, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, Dialog, Field, MoneyField, Modal, Panel, StatusPill, TextInput } from '../ui/kit';
+import { Button, Dialog, Field, MoneyField, Panel, StatusPill, TextInput } from '../ui/kit';
 import { Id } from '../ui/Id';
 import { Footer } from './FinancialForms';
 import { uncertain } from './submissionKey';
@@ -147,13 +147,13 @@ export function BillDialog({
   const context = useSystemContext();
   const detail = useResource(`bill:${billId}`, (signal) => loadBillDetail(billId, signal));
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={detail.status === 'ok' ? `Bill ${detail.data.billNo}` : 'Bill'}
-      width={760}
+      size="L"
       onClose={onClose}
       ui="ui.subscriber.billDetail"
-      subtitle={
+      context={
         detail.status === 'ok'
           ? `${accountLabel(detail.data.billingAccount.id)} · billed ${detail.data.billDate}`
           : undefined
@@ -171,7 +171,7 @@ export function BillDialog({
           </>
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 

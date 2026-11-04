@@ -22,7 +22,7 @@ import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { addDays, businessDate } from '../format/dates';
 import { formatCents, parseAmount } from '../format/money';
-import { Button, Modal, TextInput } from '../ui/kit';
+import { Button, Dialog, TextInput } from '../ui/kit';
 
 // Edit offering, and the price dialog (edit, end, delete) opened from the offering
 // detail. The server decides what is allowed: a refusal is shown with the entered values
@@ -84,10 +84,10 @@ export function OfferingEditModal({
         : [...form.categoryIds, id],
     );
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={`Edit ${detail.name}`}
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.catalog.editOffering"
       footer={
@@ -196,7 +196,7 @@ export function OfferingEditModal({
             ))}
         </fieldset>
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -214,10 +214,10 @@ export function PriceModal({
   const price = useResource(`price:${priceId}`, (signal) => loadPriceDetail(priceId, signal));
   if (price.status !== 'ok') {
     return (
-      <Modal
+      <Dialog
         onSubmit={submitDialogPrimary}
         title="Price"
-        width={520}
+        size="M"
         onClose={onClose}
         ui="ui.catalog.priceDetail"
         footer={<Button onClick={onClose}>Close</Button>}
@@ -229,7 +229,7 @@ export function PriceModal({
             <Note tone="negative">{price.error.message}</Note>
           )}
         </div>
-      </Modal>
+      </Dialog>
     );
   }
   return <PriceBody price={price.data} onClose={onClose} onChanged={onChanged} />;
@@ -304,11 +304,11 @@ function PriceBody({
 
   const message = problem ?? error ?? (ending ? endError : null);
   return (
-    <Modal
+    <Dialog
       onSubmit={ending || deleting ? undefined : submitDialogPrimary}
       title={price.name}
-      subtitle={price.priceType ?? undefined}
-      width={520}
+      context={price.priceType ?? undefined}
+      size="M"
       onClose={onClose}
       ui="ui.catalog.priceDetail"
       footer={
@@ -423,6 +423,6 @@ function PriceBody({
             </div>
           ))}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

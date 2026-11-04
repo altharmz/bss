@@ -32,8 +32,8 @@ import { accountLabel, shortId } from '../format/ids';
 import { formatAmount, formatInt } from '../format/money';
 import {
   Button,
-  Modal,
-  PageTitle,
+  Dialog,
+  PageHeader,
   Panel,
   StatusPill,
   Segmented,
@@ -179,7 +179,7 @@ export function OrdersScreen() {
   return (
     <div className="bss-screen" data-ui="ui.orders">
       <div className="bss-title-row">
-        <PageTitle title="Orders" />
+        <PageHeader title="Orders" />
         <span className="bss-caption">Every product order, newest first</span>
       </div>
       <div className="bss-toolbar">
@@ -414,10 +414,10 @@ function EditDraft({
       />
     );
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Edit draft"
-      width={560}
+      size="M"
       onClose={onClose}
       footer={<Button onClick={onClose}>Close</Button>}
     >
@@ -432,7 +432,7 @@ function EditDraft({
           <div className="bss-caption">Loading…</div>
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -576,11 +576,11 @@ export function OrderModal({
     );
 
   return (
-    <Modal
+    <Dialog
       onSubmit={panel === null || panel === 'details' ? submitDialogPrimary : undefined}
       title={`Order ${shortId(orderId)}`}
-      subtitle={<StatusPill kind="order" status={order.state ?? ''} label={order.state ?? '—'} />}
-      width={680}
+      context={<StatusPill kind="order" status={order.state ?? ''} label={order.state ?? '—'} />}
+      size="L"
       ui="ui.orders.detail"
       onClose={onClose}
       footer={
@@ -859,6 +859,6 @@ export function OrderModal({
             </table>
           ))}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

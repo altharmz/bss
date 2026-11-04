@@ -20,7 +20,7 @@ import { ApiError, explain } from '../api/client';
 import { useSystemContext } from '../app/context';
 import { businessDate } from '../format/dates';
 import { formatInt } from '../format/money';
-import { Button, Modal, StatusPill, TextInput } from '../ui/kit';
+import { Button, Dialog, StatusPill, TextInput } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import type { ResourceWithRetry } from '../api/useResource';
@@ -229,10 +229,10 @@ export function SpecificationModal({
     });
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={spec === null ? 'New product specification' : spec.name}
-      width={520}
+      size="M"
       onClose={onClose}
       ui={spec === null ? 'ui.catalog.newSpecification' : 'ui.catalog.editSpecification'}
       footer={
@@ -444,6 +444,6 @@ export function SpecificationModal({
           </label>
         </fieldset>
       </div>
-    </Modal>
+    </Dialog>
   );
 }

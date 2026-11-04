@@ -219,7 +219,7 @@
 .bss-content {
   display: flex;
   flex-direction: column;
-  gap: var(--gap-panel);
+  gap: var(--space-lg);
   padding: 20px var(--space-xl) var(--space-3xl);
 }
 
@@ -230,17 +230,35 @@
 }
 
 .bss-auth {
-  max-width: 460px;
-  margin: 10vh auto;
+  display: flex;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 10vh var(--space-xl) var(--space-xl);
+  background: var(--color-bg-subtle);
+}
+.bss-auth > * {
+  width: 400px;
+  max-width: 100%;
+  align-self: flex-start;
 }
 .bss-auth-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 24px;
+  gap: var(--space-lg);
+  padding: var(--space-xl);
+}
+.bss-auth-form h1 {
+  margin: 0;
+  font: var(--type-page);
+  letter-spacing: var(--tracking-page);
 }
 .bss-auth-form label {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+.bss-operator .theme-choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
 }

@@ -149,7 +149,7 @@ describe('routes', () => {
     backend();
     start('/billing');
     expect(await screen.findByText('Page not found')).toBeTruthy();
-    expect(screen.getByText('Nothing lives at /billing.')).toBeTruthy();
+    expect(screen.getByText(/Nothing lives at \/billing\./)).toBeTruthy();
   });
 });
 

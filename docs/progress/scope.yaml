@@ -351,6 +351,9 @@ items:
   - {id: ui.users.manage, area: ui, stage: 5, title: "Create, edit, disable and reset users"}
   - {id: ui.shell.businessDate, area: ui, stage: 5, title: "Business-date chip and context-based drift"}
   - {id: ui.shell.operator, area: ui, stage: 5, title: "Operator footer menu trigger"}
+  - {id: ui.shell.theme, area: ui, stage: 5, title: "Theme choice (System / Light / Dark) in the operator menu"}
+  - {id: ui.notFound, area: ui, stage: 5, title: "Page not found: heading, a sentence and a link to Subscribers"}
+  - {id: ui.users.denied, area: ui, stage: 5, title: "Users: not allowed for non-administrators"}
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
   - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
   - {id: ui.subscribers.prepaid, area: ui, stage: 5, title: "Subscribers prepaid account mode"}
@@ -588,3 +591,4 @@ items:
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}
   - {id: ui.notFound, area: ui, reason: "not-found page, not a product feature"}
+  - {id: ui.users.denied, area: ui, stage: 5, title: "Users: not allowed for non-administrators"}

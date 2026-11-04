@@ -13,7 +13,7 @@ import { businessDate } from '../format/dates';
 import { accountLabel } from '../format/ids';
 import { formatInt, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { PageTitle, Panel, StatusPill, Segmented, TextInput } from '../ui/kit';
+import { PageHeader, Panel, StatusPill, Segmented, TextInput } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { BillDialog } from './Bills';
@@ -86,7 +86,7 @@ export function BillsScreen() {
   return (
     <div className="bss-screen" data-ui="ui.bills">
       <div className="bss-title-row">
-        <PageTitle title="Bills" />
+        <PageHeader title="Bills" />
         <span className="bss-caption">
           Every account's bills and the billing cycles, newest first
         </span>

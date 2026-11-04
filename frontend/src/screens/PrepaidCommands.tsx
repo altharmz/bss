@@ -17,7 +17,7 @@ import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatCents, formatInt, toCents } from '../format/money';
-import { Button, Modal, PageTitle, Panel, StatusPill, Segmented } from '../ui/kit';
+import { Button, Dialog, PageHeader, Panel, StatusPill, Segmented } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -103,7 +103,7 @@ export function PrepaidCommandsScreen() {
   return (
     <div className="bss-screen" data-ui="ui.prepaidCommands">
       <div className="bss-title-row">
-        <PageTitle title="Prepaid commands" />
+        <PageHeader title="Prepaid commands" />
         <span className="bss-caption">
           Orders, renewals and transfers the billing worker carries out
         </span>
@@ -262,15 +262,15 @@ function CommandModal({
   }
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={`Command ${shortId(command.id)}`}
-      subtitle={
+      context={
         <>
           <StatusPill kind="command" status={command.state} label={command.state} /> {command.kind}
         </>
       }
-      width={640}
+      size="L"
       ui="ui.prepaidCommands.detail"
       onClose={onClose}
       footer={
@@ -376,6 +376,6 @@ function CommandModal({
           </div>
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

@@ -14,7 +14,7 @@ import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
 import { Link } from '../app/router';
-import { Button, Modal, PageTitle, Panel, TextInput, useToast } from '../ui/kit';
+import { Button, Dialog, PageHeader, Panel, TextInput, useToast } from '../ui/kit';
 import { Footer, useWrite } from './FinancialForms';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
@@ -35,7 +35,7 @@ export function NumbersScreen() {
   return (
     <div className="bss-screen" data-ui="ui.numbers.list">
       <div className="bss-title-row">
-        <PageTitle title="Numbers" />
+        <PageHeader title="Numbers" />
         <Button onClick={() => setCreating(true)}>New number</Button>
       </div>
       <TextInput
@@ -115,10 +115,10 @@ function NewNumber({ onClose, onCreated }: { onClose: () => void; onCreated: () 
     }
   }
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="New number"
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.numbers.create"
       footer={
@@ -142,7 +142,7 @@ function NewNumber({ onClose, onCreated }: { onClose: () => void; onCreated: () 
         <p>E.164 digits only, 8–15 digits, without a plus sign or spaces.</p>
         {problem && <div role="alert">{problem}</div>}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -190,10 +190,10 @@ function NumberDetail({
     }
   }
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={number.value ?? 'Number'}
-      width={640}
+      size="L"
       onClose={onClose}
       ui="ui.numbers.detail"
       footer={
@@ -271,7 +271,7 @@ function NumberDetail({
             <p>No current or future product assignment.</p>
           ))}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 

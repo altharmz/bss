@@ -13,7 +13,7 @@ import {
 import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { businessDate, clockTime } from '../format/dates';
-import { Button, Modal, PageTitle, Panel, StatusPill, TextInput, useToast } from '../ui/kit';
+import { Button, Dialog, PageHeader, Panel, StatusPill, TextInput, useToast } from '../ui/kit';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { Footer, useWrite } from './FinancialForms';
@@ -51,7 +51,7 @@ export function IntegrationsScreen() {
   return (
     <div className="bss-screen" data-ui="ui.integrations">
       <div className="bss-title-row">
-        <PageTitle title="Integrations" />
+        <PageHeader title="Integrations" />
         <span className="bss-caption">Where the TMF event notifications are sent</span>
       </div>
       <Panel
@@ -164,10 +164,10 @@ function NewSubscription({
   const toggle = (event: string) =>
     setChosen(chosen.includes(event) ? chosen.filter((e) => e !== event) : [...chosen, event]);
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="New subscription"
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.integrations.form"
       footer={
@@ -230,7 +230,7 @@ function NewSubscription({
           </fieldset>
         </fieldset>
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -245,10 +245,10 @@ function DeleteSubscription({
 }) {
   const write = useWrite(onDone);
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Delete subscription"
-      width={480}
+      size="M"
       onClose={onClose}
       ui="ui.integrations.confirmDelete"
       footer={
@@ -275,7 +275,7 @@ function DeleteSubscription({
           Events not yet delivered are dropped.
         </p>
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 

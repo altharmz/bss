@@ -13,7 +13,7 @@ import { hrefOf, Link } from '../app/router';
 import { shortId } from '../format/ids';
 import { formatInt } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, PageTitle, Panel, StatusPill, Segmented, useToast } from '../ui/kit';
+import { Button, PageHeader, Panel, StatusPill, Segmented, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { DeleteFinancialModal, FinancialFormModal } from './FinancialForms';
@@ -82,7 +82,7 @@ function FinancialTab({ tabs }: { tabs: React.ReactNode }) {
   return (
     <div className="bss-screen" data-ui="ui.financialAccounts.list">
       <div className="bss-title-row">
-        <PageTitle
+        <PageHeader
           title="Accounts"
           count={accounts.status === 'ok' ? formatInt(accounts.data.length) : undefined}
         />
@@ -252,7 +252,7 @@ function PartyTab({ kind, tabs }: { kind: PartyAccountKind; tabs: React.ReactNod
   return (
     <div className="bss-screen" data-ui={marker}>
       <div className="bss-title-row">
-        <PageTitle
+        <PageHeader
           title="Accounts"
           count={accounts.status === 'ok' ? formatInt(accounts.data.length) : undefined}
         />

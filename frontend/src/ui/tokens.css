@@ -91,9 +91,14 @@
   --tracking-figure: -0.01em;
   --row-height-dense: 28px;
   --color-on-primary-dim: rgba(255, 255, 255, 0.35);
+  /* Font sizes for rules that set only the size (the --type-* shorthands set all of it). */
+  --size-micro: 11px;
+  --size-label: 12px;
+  --size-body: 13px;
+  --size-section: 15px;
+  --size-page: 20px;
 }
 
-/* enabled in slice 14
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --color-bg: #121315;
@@ -112,7 +117,7 @@
     --color-primary-hover: #9BB3F5;
     --color-primary-tint: #1B2643;
     --color-on-primary: #121315;
-  --color-on-primary-dim: rgba(18, 19, 21, 0.35);
+    --color-on-primary-dim: rgba(18, 19, 21, 0.35);
     --color-negative: #F08A80;
     --color-negative-tint: #3A1B19;
     --color-positive: #6FCB96;
@@ -123,8 +128,6 @@
     --color-info-tint: #15283B;
   }
 }
-
-*/
 
 :root[data-theme="dark"] {
   --color-bg: #121315;

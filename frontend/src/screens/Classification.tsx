@@ -25,7 +25,7 @@ import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { formatInt } from '../format/money';
-import { Button, Modal, StatusPill, TextInput, useToast } from '../ui/kit';
+import { Button, Dialog, StatusPill, TextInput, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -330,14 +330,14 @@ function ClassificationModal({
     });
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={
         record === null
           ? `New ${kind === 'category' ? 'category' : 'product catalog'}`
           : record.name
       }
-      width={520}
+      size="M"
       onClose={onClose}
       ui={`ui.catalog.${record === null ? 'new' : 'edit'}${noun}`}
       footer={
@@ -474,6 +474,6 @@ function ClassificationModal({
         )}
         {error !== null && form.name.trim() !== '' && <Note tone="negative">{error}</Note>}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

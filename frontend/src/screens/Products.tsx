@@ -7,7 +7,7 @@ import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
-import { Button, Modal, PageTitle, Panel, StatusPill, TextInput } from '../ui/kit';
+import { Button, Dialog, PageHeader, Panel, StatusPill, TextInput } from '../ui/kit';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -75,7 +75,7 @@ export function ProductsScreen() {
   return (
     <div className="bss-screen" data-ui="ui.products">
       <div className="bss-title-row">
-        <PageTitle title="Products" />
+        <PageHeader title="Products" />
         <span className="bss-caption">Every product, in every status</span>
       </div>
       <div className="bss-toolbar">
@@ -185,11 +185,11 @@ function ProductDetail({ product, onClose }: { product: InventoryProduct; onClos
   const loaded = useResource(`product:${id}`, (signal) => loadProduct(id, signal));
   const p = loaded.status === 'ok' ? loaded.data : product;
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={`Product ${shortId(id)}`}
-      subtitle={p.productOffering?.name ?? p.name}
-      width={640}
+      context={p.productOffering?.name ?? p.name}
+      size="L"
       onClose={onClose}
       ui="ui.products.detail"
       footer={<Button onClick={onClose}>Close</Button>}
@@ -249,6 +249,6 @@ function ProductDetail({ product, onClose }: { product: InventoryProduct; onClos
           ))}
         </div>
       </div>
-    </Modal>
+    </Dialog>
   );
 }

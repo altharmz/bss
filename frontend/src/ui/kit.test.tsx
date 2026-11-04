@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { Button, Dialog, Modal, StatusPill, Segmented, ToastProvider, useToast } from './kit';
+import { Button, Dialog, StatusPill, Segmented, ToastProvider, useToast } from './kit';
 
 describe('StatusPill', () => {
   it('uses the explicit product family and preserves the note label', () => {
@@ -46,13 +46,13 @@ describe('Button', () => {
   });
 });
 
-describe('Modal', () => {
+describe('Dialog closing', () => {
   it('closes on ×, on the overlay and on Escape - not on a click inside', () => {
     const onClose = vi.fn();
     render(
-      <Modal title="Add product" width={720} onClose={onClose}>
+      <Dialog title="Add product" size="L" onClose={onClose}>
         <p>body</p>
-      </Modal>,
+      </Dialog>,
     );
     fireEvent.click(screen.getByText('body'));
     expect(onClose).not.toHaveBeenCalled();
@@ -61,23 +61,6 @@ describe('Modal', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(3);
     expect(screen.getByRole('dialog').classList.contains('bss-dialog-L')).toBe(true);
-  });
-
-  it.each([
-    [400, 'S'],
-    [440, 'S'],
-    [441, 'M'],
-    [620, 'M'],
-    [621, 'L'],
-    [900, 'L'],
-  ])('maps width %s to Ledger size %s', (width, size) => {
-    render(
-      <Modal title="Confirm" width={Number(width)} onClose={() => {}}>
-        Body
-      </Modal>,
-    );
-    expect(screen.getByRole('dialog').classList.contains(`bss-dialog-${size}`)).toBe(true);
-    expect(screen.getByRole('dialog').hasAttribute('style')).toBe(false);
   });
 });
 

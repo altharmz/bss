@@ -27,7 +27,7 @@ import { useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { accountLabel } from '../format/ids';
 import { parseAmount } from '../format/money';
-import { Button, Modal, Segmented, TextInput } from '../ui/kit';
+import { Button, Dialog, Segmented, TextInput } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { AddProductModal } from './AddProduct';
 import { uncertain } from './submissionKey';
@@ -223,13 +223,13 @@ export function NewSubscriberModal({
     return <InitialProduct accountId={createdId} onDone={() => onCreated(createdId, name)} />;
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="New subscriber"
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.subscribers.new"
-      subtitle="A party, its customer and a billing account"
+      context="A party, its customer and a billing account"
       footer={
         <>
           {problem !== null && <StepProblem {...problem} />}
@@ -288,7 +288,7 @@ export function NewSubscriberModal({
           </label>
         </section>
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -329,13 +329,13 @@ export function AddBillingAccountModal({
   }
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Add billing account"
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.account.new"
-      subtitle={`Customer ${customer.name}`}
+      context={`Customer ${customer.name}`}
       footer={
         <>
           {problem !== null && (
@@ -363,7 +363,7 @@ export function AddBillingAccountModal({
           <AccountFields draft={draft} />
         </section>
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -381,10 +381,10 @@ function InitialProduct({ accountId, onDone }: { accountId: string; onDone: () =
       />
     );
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Subscriber created"
-      width={560}
+      size="M"
       onClose={onDone}
       footer={<Button onClick={onDone}>Open subscriber</Button>}
     >
@@ -398,7 +398,7 @@ function InitialProduct({ accountId, onDone }: { accountId: string; onDone: () =
           />
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -416,13 +416,13 @@ export function EditSubscriberModal({
 }) {
   const profile = useResource(`profile:${account.id}`, (signal) => loadProfile(account, signal));
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Edit subscriber"
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.subscriber.edit"
-      subtitle={`${account.customerName} · ${accountLabel(account.id)}`}
+      context={`${account.customerName} · ${accountLabel(account.id)}`}
     >
       {profile.status === 'loading' && (
         <div className="bss-modal-body">
@@ -446,7 +446,7 @@ export function EditSubscriberModal({
           onSaved={onSaved}
         />
       )}
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -754,13 +754,13 @@ export function DeleteSubscriberModal({
   }
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Delete billing account"
-      width={480}
+      size="M"
       onClose={onClose}
       ui="ui.subscriber.deleteConfirm"
-      subtitle={`${account.customerName} · ${accountLabel(account.id)}`}
+      context={`${account.customerName} · ${accountLabel(account.id)}`}
       footer={
         <>
           {problem !== null && (
@@ -779,6 +779,6 @@ export function DeleteSubscriberModal({
       <div className="bss-modal-body">
         <p>Deletes the billing account. Its customer and party stay (delete them under Parties).</p>
       </div>
-    </Modal>
+    </Dialog>
   );
 }

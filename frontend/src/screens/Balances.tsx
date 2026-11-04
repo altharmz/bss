@@ -21,7 +21,7 @@ import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatCents, formatInt } from '../format/money';
-import { Modal, PageTitle, Panel, StatusPill, Segmented, KeyValue } from '../ui/kit';
+import { Dialog, PageHeader, Panel, StatusPill, Segmented, KeyValue } from '../ui/kit';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
@@ -156,7 +156,7 @@ export function BalancesScreen() {
   return (
     <div className="bss-screen" data-ui="ui.balances">
       <div className="bss-title-row">
-        <PageTitle title="Balances" />
+        <PageHeader title="Balances" />
         <span className="bss-caption">Prepaid funds and the operations on them (TMF654)</span>
       </div>
       <div className="bss-toolbar">
@@ -325,7 +325,7 @@ export function BalancesScreen() {
 function AccountTotalDialog({ id, onClose }: { id: string; onClose: () => void }) {
   const detail = useResource(`account-total:${id}`, (signal) => loadAccountTotal(id, signal));
   return (
-    <Modal title="Account total" width={520} onClose={onClose} ui="ui.balances.totalDetail">
+    <Dialog title="Account total" size="M" onClose={onClose} ui="ui.balances.totalDetail">
       <div className="bss-modal-body">
         {detail.status === 'loading' && <SkeletonRows columns={TOTAL_COLUMNS} rows={3} />}
         {detail.status === 'error' && (
@@ -348,7 +348,7 @@ function AccountTotalDialog({ id, onClose }: { id: string; onClose: () => void }
           />
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -357,10 +357,10 @@ function BucketDialog({ row, onClose }: { row: BucketRow; onClose: () => void })
   const { timeZone } = useSystemContext();
   const detail = useResource(`bucket:${row.bucketId}`, (signal) => loadBucketDetail(row, signal));
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Bucket"
-      width={520}
+      size="M"
       onClose={onClose}
       ui="ui.balances.bucketDetail"
     >
@@ -400,6 +400,6 @@ function BucketDialog({ row, onClose }: { row: BucketRow; onClose: () => void })
           </dl>
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

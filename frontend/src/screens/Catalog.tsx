@@ -27,9 +27,8 @@ import { addDays, businessDate } from '../format/dates';
 import { formatCents, formatInt, parseAmount } from '../format/money';
 import {
   Button,
-  Modal,
-  PageHeader,
   Dialog,
+  PageHeader,
   KeyValue,
   Menu,
   Tabs,
@@ -743,10 +742,10 @@ function AddPriceModal({
 
   const message = problem ?? error;
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={`Add price · ${detail.name}`}
-      width={520}
+      size="M"
       onClose={busy ? () => undefined : onClose}
       ui="ui.catalog.addPrice"
       footer={
@@ -794,7 +793,7 @@ function AddPriceModal({
           onChange={(event) => setValidFrom(event.target.value)}
         />
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -965,10 +964,10 @@ export function NewOfferingModal({
   const message = problem ?? checked.error;
   return (
     <>
-      <Modal
+      <Dialog
         onSubmit={submitDialogPrimary}
         title="New product offering"
-        width={600}
+        size="M"
         onClose={creatingSpec ? () => undefined : onClose}
         ui="ui.catalog.newOffering"
         footer={
@@ -1115,7 +1114,7 @@ export function NewOfferingModal({
             onChange={(e) => set('validTo')(e.target.value)}
           />
         </div>
-      </Modal>
+      </Dialog>
       {creatingSpec && (
         <SpecificationModal
           onClose={() => setCreatingSpec(false)}
