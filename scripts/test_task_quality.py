@@ -36,6 +36,14 @@ class QualityTests(unittest.TestCase):
                 self.assertEqual('{"staged"' in result.stdout, target == "review-task")
                 self.assertNotIn("fixture-secret-never-output", result.stdout + result.stderr)
 
+    def test_show_task_prints_the_claimed_issue(self):
+        gh = self.bin / "gh"
+        gh.write_text('#!/bin/sh\necho "gh $*"\n')
+        gh.chmod(0o755)
+        result = self.quality("show-task")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"gh issue view {self.task.split('-')[1]} --json", result.stdout)
+
     def test_verbose_prints_the_full_context_before_the_result(self):
         self.env["VERBOSE"] = "1"
         result = self.quality("format")

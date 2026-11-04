@@ -278,6 +278,18 @@ def runtime_inventory(root, task):
     return containers, networks
 
 
+# Ignored build and test output of Make targets (web-build, web-shots, web-types, web-e2e).
+DISPOSABLE = (
+    ".testmon/",
+    ".docs/",
+    ".progress/",
+    "frontend/dist/",
+    "frontend/.shots/",
+    "frontend/.e2e/",
+    "frontend/src/api/generated/",
+)
+
+
 def clean_task(root):
     require(
         not query(root, "status", "--porcelain=v1", "--untracked-files=all"),
@@ -288,7 +300,7 @@ def clean_task(root):
     for name in ignored:
         require(
             name == ".task/runtime.json"
-            or name.startswith((".testmon/", ".docs/", ".progress/", "frontend/dist/"))
+            or name.startswith(DISPOSABLE)
             or any(p in {"__pycache__", ".pytest_cache", ".ruff_cache"} for p in Path(name).parts),
             "unknown ignored task files; preserved for inspection",
         )
