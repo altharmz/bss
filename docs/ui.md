@@ -459,7 +459,7 @@ result (no response or 5xx) the dialog says it is unsure and offers Refresh.
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
-Ledger v2: command StatusPill uses the actual command state.
+Ledger v2: command StatusPill uses the `command` kind mapping (Queued, Completed, Failed (technical)). Slice 13: the table is `density="dense"`, ids are `Id` (`CMD-`, `BA-`, `ORD-`, `PRD-`, `BL-`), and the detail is a `Dialog` (M) with a `KeyValue` list. The Id copies on click and does not open the row.
 
 Route `/prepaid-commands`, sidebar after Billing runs with a red badge while any command is
 `failedTechnical`. Lists the internal prepaid command journal (id, kind, account, state, due date,
