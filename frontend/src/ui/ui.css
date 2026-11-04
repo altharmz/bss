@@ -185,6 +185,15 @@
 .bss-row > .cell.mono {
   font: var(--type-num);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.bss-row > .cell.nowrap {
+  white-space: nowrap;
+}
+.bss-row > .cell.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .bss-row.head {
   min-height: 32px;
@@ -1060,4 +1069,20 @@
 
 .bss-modal-footer:empty {
   display: none;
+}
+.bss-file-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.bss-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.bss-file-name {
+  color: var(--color-ink-2);
+  font: var(--type-body);
 }

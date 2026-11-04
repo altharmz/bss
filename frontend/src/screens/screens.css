@@ -1089,11 +1089,13 @@
   font: var(--type-code);
 }
 .event-options {
-  max-height: 220px;
-  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-lg);
+  width: 100%;
 }
 .event-option {
-  display: block;
+  flex: 0 1 auto;
 }
 .system-key {
   display: inline;

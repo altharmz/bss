@@ -11,6 +11,7 @@ import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { shortId } from '../format/ids';
+import { plural } from '../format/labels';
 import { formatInt } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Button, PageTitle, Panel, StatusPill, Segmented, useToast } from '../ui/kit';
@@ -44,7 +45,7 @@ const KIND_LABEL: Record<ContainedKind, string> = {
 type Tab = 'financial' | 'party' | 'settlement';
 
 export function FinancialAccountsScreen() {
-  useSetCrumbs([{ label: 'Accounts' }], 'financialAccounts');
+  useSetCrumbs([{ label: 'Financial accounts' }], 'financialAccounts');
   const [tab, setTab] = useState<Tab>('financial');
   const tabs = (
     <div className="bss-toolbar">
@@ -195,7 +196,7 @@ function FinancialTab({ tabs }: { tabs: React.ReactNode }) {
                 />
               ))}
               <TableFooter
-                left={`${formatInt(rows.length)} financial accounts`}
+                left={plural(rows.length, 'financial account')}
                 right="Balance: sum of the linked billing accounts, per currency"
               />
             </>
@@ -330,7 +331,7 @@ function PartyTab({ kind, tabs }: { kind: PartyAccountKind; tabs: React.ReactNod
                   }}
                 />
               ))}
-              <TableFooter left={`${formatInt(rows.length)} ${word} accounts`} right="" />
+              <TableFooter left={plural(rows.length, `${word} account`)} right="" />
             </>
           )}
         </ListState>

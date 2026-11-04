@@ -42,3 +42,22 @@ describe('Ledger table rows', () => {
     expect(screen.getByRole('row').classList.contains('density-dense')).toBe(true);
   });
 });
+
+describe('Table cells (B16, B17)', () => {
+  it('ellipsizes a name cell with the full text in title and never wraps a date', () => {
+    const dated = [
+      { key: 'name', label: 'Name', width: '1fr' },
+      { key: 'date', label: 'Date', width: '100px' },
+    ];
+    const { container } = render(
+      <TableRow
+        columns={dated}
+        cells={{ name: 'A very long customer name', date: '2026-10-27' }}
+      />,
+    );
+    const cells = container.querySelectorAll('[role="cell"]');
+    expect(cells[0]?.className).toContain('name');
+    expect(cells[0]?.getAttribute('title')).toBe('A very long customer name');
+    expect(cells[1]?.className).toContain('nowrap');
+  });
+});

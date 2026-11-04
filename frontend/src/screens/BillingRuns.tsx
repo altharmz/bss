@@ -24,12 +24,13 @@ import {
 import { explain, type Page } from '../api/client';
 import { usePolled } from '../api/usePolled';
 import { useResource } from '../api/useResource';
+import { agoLabel, plural } from '../format/labels';
 import { useRefreshNav, useSetCrumbs, useSystemContext, type SystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { addDays, businessDate, clockTime, utcLabel, zonedDateTime } from '../format/dates';
 import { shortId } from '../format/ids';
 import { formatCents, formatInt, toCents } from '../format/money';
-import { Button, PageHeader, Panel, StatusPill, Segmented, TextInput, useToast } from '../ui/kit';
+import { Button, PageHeader, Panel, StatusPill, Segmented, DateField, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -125,7 +126,7 @@ function failureText(run: BillingRun): string {
     return 'The run itself failed; no later date is billed until it succeeds.';
   }
   const missing = run.accounts.failed + run.accounts.blocked;
-  return `${formatInt(missing)} of ${formatInt(run.accounts.total)} accounts were not billed; charges are incomplete.`;
+  return `${formatInt(missing)} of ${plural(run.accounts.total, 'account')} ${missing === 1 ? 'was' : 'were'} not billed; charges are incomplete.`;
 }
 
 export function BillingRunsScreen() {
@@ -235,6 +236,8 @@ export function BillingRunsScreen() {
         meta={
           <>
             Nightly at {context.billingRunAt} {utcLabel(context.utcOffset)}
+            {latest !== null &&
+              ` · Last run ${latest.runDate} · ${agoLabel(latest.startedAt, context.now)}`}
           </>
         }
         actions={
@@ -242,10 +245,8 @@ export function BillingRunsScreen() {
             <label className="bss-caption" htmlFor="catch-up-to">
               Catch up to
             </label>
-            <TextInput
+            <DateField
               id="catch-up-to"
-              type="date"
-              mono
               value={upTo}
               max={due}
               onChange={(event) => setUpTo(event.target.value)}

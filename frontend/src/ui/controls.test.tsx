@@ -1,7 +1,17 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
-import { Button, Checkbox, DateField, Field, MoneyField, Segmented, SelectField } from './kit';
+import { unlabeledControls } from '../test/unlabeled';
+import {
+  Button,
+  Checkbox,
+  DateField,
+  Field,
+  FileField,
+  MoneyField,
+  Segmented,
+  SelectField,
+} from './kit';
 import { expectUi } from '../test/expectUi';
 import { UiKitScreen } from '../screens/UiKit';
 
@@ -106,5 +116,35 @@ describe('Ledger controls', () => {
         control.labels?.length === 0 && (control.getAttribute('aria-labelledby') ?? '') === '',
     );
     expect(unlabeled).toEqual([]);
+  });
+
+  it('renders a checkbox with text as one clickable label (B12)', () => {
+    const { container } = render(<Checkbox label="Sellable" />);
+    const label = container.querySelector('label.bss-check');
+    expect(label?.textContent).toBe('Sellable');
+    fireEvent.click(screen.getByLabelText('Sellable'));
+    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('shows the chosen file name in a FileField (B26)', () => {
+    const onFile = vi.fn();
+    render(<FileField label="JSON file" fileName="catalog.json" onFile={onFile} />);
+    expect(screen.getByText('catalog.json')).toBeTruthy();
+    const file = new File(['{}'], 'catalog.json');
+    fireEvent.change(screen.getByLabelText('JSON file'), { target: { files: [file] } });
+    expect(onFile).toHaveBeenCalledWith(file);
+  });
+
+  it('reports a control without a label or aria name (B27)', () => {
+    const { container } = render(
+      <>
+        <input id="a" />
+        <label htmlFor="b">B</label>
+        <input id="b" />
+        <input aria-label="C" />
+      </>,
+    );
+    expect(unlabeledControls(container)).toEqual(['<input id="a">']);
+    cleanup();
   });
 });

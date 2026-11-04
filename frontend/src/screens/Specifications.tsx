@@ -20,7 +20,7 @@ import { ApiError, explain } from '../api/client';
 import { useSystemContext } from '../app/context';
 import { businessDate } from '../format/dates';
 import { formatInt } from '../format/money';
-import { Button, Modal, StatusPill, TextInput } from '../ui/kit';
+import { SelectField, Button, Checkbox, Modal, StatusPill, TextInput } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import type { ResourceWithRetry } from '../api/useResource';
@@ -277,15 +277,14 @@ export function SpecificationModal({
             Name
             <TextInput value={form.name} onChange={(e) => set('name')(e.target.value)} />
           </label>
-          <label data-ui="ui.catalog.specificationNumberRequirement">
-            <input
-              type="checkbox"
+          <div data-ui="ui.catalog.specificationNumberRequirement">
+            <Checkbox
               checked={form.requiresNumber}
               disabled={requirementLocked}
               onChange={(e) => setForm({ ...form, requiresNumber: e.target.checked })}
+              label="Requires a subscriber number"
             />
-            Requires a subscriber number
-          </label>
+          </div>
           <section data-ui="ui.catalog.specificationCharacteristics" className="bss-form">
             <h3>Characteristics</h3>
             <p className="bss-secondary">
@@ -314,8 +313,7 @@ export function SpecificationModal({
                     />
                   </Field>
                   <Field label="Value type">
-                    <select
-                      className="bss-input"
+                    <SelectField
                       value={row.valueType}
                       onChange={(e) =>
                         update({
@@ -330,7 +328,7 @@ export function SpecificationModal({
                       {['string', 'integer', 'boolean'].map((type) => (
                         <option key={type}>{type}</option>
                       ))}
-                    </select>
+                    </SelectField>
                   </Field>
                   <Field label="Characteristic description">
                     <TextInput
@@ -338,14 +336,11 @@ export function SpecificationModal({
                       onChange={(e) => update({ description: e.target.value })}
                     />
                   </Field>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={row.configurable}
-                      onChange={(e) => update({ configurable: e.target.checked })}
-                    />
-                    Configurable
-                  </label>
+                  <Checkbox
+                    checked={row.configurable}
+                    onChange={(e) => update({ configurable: e.target.checked })}
+                    label="Configurable"
+                  />
                   <Field label="Values">
                     <TextInput
                       disabled={row.valueType === 'boolean'}
@@ -430,8 +425,7 @@ export function SpecificationModal({
           </label>
           <label>
             Lifecycle status
-            <select
-              className="bss-input"
+            <SelectField
               value={form.lifecycleStatus}
               onChange={(e) => set('lifecycleStatus')(e.target.value)}
             >
@@ -440,7 +434,7 @@ export function SpecificationModal({
                   {l}
                 </option>
               ))}
-            </select>
+            </SelectField>
           </label>
         </fieldset>
       </div>

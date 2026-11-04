@@ -133,6 +133,37 @@ export function SelectField({ className = '', ...rest }: SelectHTMLAttributes<HT
   );
 }
 
+/** A file chooser: a button plus the chosen file's name (the native input stays hidden). */
+export function FileField({
+  label,
+  fileName,
+  onFile,
+  accept,
+}: {
+  label: string;
+  fileName?: string | null;
+  onFile: (file: File | undefined) => void;
+  accept?: string;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <span className="bss-file-field">
+      <input
+        ref={input}
+        type="file"
+        className="bss-file-input"
+        aria-label={label}
+        {...(accept === undefined ? {} : { accept })}
+        onChange={(event) => onFile(event.target.files?.[0])}
+      />
+      <Button small onClick={() => input.current?.click()}>
+        Choose file
+      </Button>
+      <span className="bss-file-name">{fileName ?? 'No file chosen'}</span>
+    </span>
+  );
+}
+
 export function DateField(props: Omit<InputHTMLAttributes<HTMLInputElement>, 'width'>) {
   return (
     <span className="bss-date-wrap">
@@ -157,8 +188,21 @@ export function MoneyField({
   );
 }
 
-export function Checkbox({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} type="checkbox" className={`bss-checkbox ${className}`.trim()} />;
+/** A checkbox; with `label` it renders as <label class="bss-check"><input/> text</label>. */
+export function Checkbox({
+  className = '',
+  label,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & { label?: ReactNode }) {
+  const input = <input {...props} type="checkbox" className={`bss-checkbox ${className}`.trim()} />;
+  return label === undefined ? (
+    input
+  ) : (
+    <label className="bss-check">
+      {input}
+      <span>{label}</span>
+    </label>
+  );
 }
 
 export interface SegmentOption<K extends string> {
@@ -401,7 +445,16 @@ export function StatusPill({
   label?: string;
 }) {
   const [family, defaultLabel] = statusPresentation(kind, status);
-  return <span className={`status-pill pill-${family}`}>{label ?? defaultLabel}</span>;
+  return (
+    <span className={`status-pill pill-${family}`} title={status}>
+      {label ?? defaultLabel}
+    </span>
+  );
+}
+
+/** A human label for an API code; the raw code stays in the tooltip. */
+export function Coded({ code, label }: { code: string; label: string }) {
+  return <span title={code}>{label}</span>;
 }
 
 export function Tag({ children }: { children: ReactNode }) {

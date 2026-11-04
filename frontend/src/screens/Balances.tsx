@@ -21,7 +21,7 @@ import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { shortId } from '../format/ids';
 import { formatCents, formatInt } from '../format/money';
-import { Modal, PageTitle, Panel, StatusPill, Segmented, KeyValue } from '../ui/kit';
+import { SelectField, Modal, PageTitle, Panel, StatusPill, Segmented, KeyValue } from '../ui/kit';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
@@ -175,7 +175,7 @@ export function BalancesScreen() {
           ]}
         />
         {tab !== 'totals' && (
-          <select
+          <SelectField
             aria-label="Status"
             data-ui="ui.balances.status"
             value={status}
@@ -187,7 +187,7 @@ export function BalancesScreen() {
                 {s}
               </option>
             ))}
-          </select>
+          </SelectField>
         )}
         {account !== null && (
           <span className="bss-run-tag" data-ui="ui.balances.accountChip">

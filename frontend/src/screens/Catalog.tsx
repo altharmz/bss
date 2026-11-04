@@ -26,8 +26,10 @@ import { useSetCrumbs, useSystemContext } from '../app/context';
 import { addDays, businessDate } from '../format/dates';
 import { formatCents, formatInt, parseAmount } from '../format/money';
 import {
+  SelectField,
   Button,
   Modal,
+  Checkbox,
   PageHeader,
   Dialog,
   KeyValue,
@@ -37,6 +39,7 @@ import {
   StatusPill,
   Tag,
   Segmented,
+  DateField,
   TextInput,
   useToast,
 } from '../ui/kit';
@@ -114,6 +117,7 @@ export function CatalogScreen() {
     setFilter('All');
   };
   const q = query.trim().toLowerCase();
+  const [newRequests, setNewRequests] = useState(0);
   const newButton = (
     <Button variant="primary" onClick={() => setCreating(true)} disabled={catalog.status !== 'ok'}>
       + New offering
@@ -132,7 +136,24 @@ export function CatalogScreen() {
             : undefined
         }
         actions={
-          specs ? (
+          tab === 'categories' ? (
+            <Button
+              variant="primary"
+              data-ui="ui.catalog.newCategory"
+              disabled={catalog.status !== 'ok'}
+              onClick={() => setNewRequests((n) => n + 1)}
+            >
+              + New category
+            </Button>
+          ) : tab === 'catalogs' ? (
+            <Button
+              variant="primary"
+              data-ui="ui.catalog.newCatalog"
+              onClick={() => setNewRequests((n) => n + 1)}
+            >
+              + New catalog
+            </Button>
+          ) : specs ? (
             <Button
               variant="primary"
               data-ui="ui.catalog.newSpecification"
@@ -210,9 +231,13 @@ export function CatalogScreen() {
           </div>
         )}
         {tab === 'categories' && (
-          <CategoriesTab offerings={catalog.status === 'ok' ? catalog.data : null} query={query} />
+          <CategoriesTab
+            offerings={catalog.status === 'ok' ? catalog.data : null}
+            query={query}
+            newRequests={newRequests}
+          />
         )}
-        {tab === 'catalogs' && <CatalogsTab query={query} />}
+        {tab === 'catalogs' && <CatalogsTab query={query} newRequests={newRequests} />}
         {tab === 'jobs' && <JobsTab />}
         {offeringsTab && (
           <div className="catalog-offerings" role="table" aria-label="Offerings">
@@ -223,7 +248,7 @@ export function CatalogScreen() {
               errorTitle="Failed to load the catalog"
               empty={{
                 title: 'Catalog is empty',
-                text: 'Create the first product offering. It starts in In Design.',
+                text: 'Create the first product offering. It starts in In design.',
                 action: newButton,
               }}
               total={(data) => data.offerings.length}
@@ -342,7 +367,7 @@ export function CatalogScreen() {
             setCreating(false);
             reset();
             setFresh(id);
-            toast(`Offering ${code} created in In Design`);
+            toast(`Offering ${code} created in In design`);
             setVersion((v) => v + 1);
           }}
         />
@@ -767,15 +792,14 @@ function AddPriceModal({
     >
       <div className="bss-modal-body bss-form">
         <label htmlFor="add-price-type">Charge type</label>
-        <select
+        <SelectField
           id="add-price-type"
-          className="bss-input"
           value={priceType}
           onChange={(event) => setPriceType(event.target.value as 'oneTime' | 'recurring')}
         >
           <option value="oneTime">One time</option>
           <option value="recurring">Monthly recurring</option>
-        </select>
+        </SelectField>
         <label htmlFor="add-price-amount">Amount, {context.currency}</label>
         <TextInput
           id="add-price-amount"
@@ -785,10 +809,8 @@ function AddPriceModal({
           onChange={(event) => setAmount(event.target.value)}
         />
         <label htmlFor="add-price-from">Valid from</label>
-        <TextInput
+        <DateField
           id="add-price-from"
-          mono
-          type="date"
           min={today}
           value={validFrom}
           onChange={(event) => setValidFrom(event.target.value)}
@@ -868,13 +890,7 @@ function PriceChangeSection({
         </label>
         <label>
           From
-          <TextInput
-            mono
-            type="date"
-            min={tomorrow}
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-          />
+          <DateField min={tomorrow} value={from} onChange={(e) => setFrom(e.target.value)} />
         </label>
       </div>
       <Note tone="info" className="bss-price-change-note">
@@ -984,7 +1000,7 @@ export function NewOfferingModal({
               disabled={!checked.ready || categories.status !== 'ok' || busy}
               onClick={() => void create()}
             >
-              Create in In Design
+              Create as In design
             </Button>
           </>
         }
@@ -1010,19 +1026,14 @@ export function NewOfferingModal({
             value={form.description}
             onChange={(e) => set('description')(e.target.value)}
           />
-          <div>
-            <input
-              id="new-offering-sellable"
-              type="checkbox"
-              checked={form.isSellable}
-              onChange={(e) => set('isSellable')(e.target.checked)}
-            />{' '}
-            <label htmlFor="new-offering-sellable">Sellable</label>
-          </div>
+          <Checkbox
+            checked={form.isSellable}
+            onChange={(e) => set('isSellable')(e.target.checked)}
+            label="Sellable"
+          />
           <label htmlFor="new-offering-specification">Specification</label>
-          <select
+          <SelectField
             id="new-offering-specification"
-            className="bss-input"
             value={form.specificationId}
             onChange={(e) => set('specificationId')(e.target.value)}
           >
@@ -1031,16 +1042,15 @@ export function NewOfferingModal({
                 {spec.name}
               </option>
             ))}
-          </select>
+          </SelectField>
           <div>
             <Button small onClick={() => setCreatingSpec(true)}>
               New specification…
             </Button>
           </div>
           <label htmlFor="new-offering-categories">Categories</label>
-          <select
+          <SelectField
             id="new-offering-categories"
-            className="bss-input"
             multiple
             disabled={categories.status !== 'ok'}
             value={form.categoryIds}
@@ -1054,7 +1064,7 @@ export function NewOfferingModal({
                   {category.name}
                 </option>
               ))}
-          </select>
+          </SelectField>
           {categories.status === 'loading' && <Note tone="info">Loading categories…</Note>}
           {categories.status === 'error' && <Note tone="negative">{categories.error.message}</Note>}
           <div className="bss-form-pair">
@@ -1070,9 +1080,8 @@ export function NewOfferingModal({
             </div>
             <div>
               <label htmlFor="new-offering-recurrence">Recurrence</label>
-              <select
+              <SelectField
                 id="new-offering-recurrence"
-                className="bss-input"
                 value={form.recurringPeriodType}
                 onChange={(e) => set('recurringPeriodType')(e.target.value)}
               >
@@ -1080,7 +1089,7 @@ export function NewOfferingModal({
                 <option value="weekly">week</option>
                 <option value="monthly">month</option>
                 <option value="yearly">year</option>
-              </select>
+              </SelectField>
             </div>
           </div>
           <label htmlFor="new-offering-charge-every">Charge every</label>
@@ -1097,19 +1106,15 @@ export function NewOfferingModal({
             Selected periods per charge; price covers the entire interval.
           </span>
           <label htmlFor="new-offering-valid-from">Valid from</label>
-          <TextInput
+          <DateField
             id="new-offering-valid-from"
-            mono
-            type="date"
             min={tomorrow}
             value={form.validFrom}
             onChange={(e) => set('validFrom')(e.target.value)}
           />
           <label htmlFor="new-offering-valid-to">Valid to (empty = open-ended)</label>
-          <TextInput
+          <DateField
             id="new-offering-valid-to"
-            mono
-            type="date"
             min={form.validFrom || tomorrow}
             value={form.validTo}
             onChange={(e) => set('validTo')(e.target.value)}

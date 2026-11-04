@@ -277,14 +277,11 @@ export function NewSubscriberModal({
             </Field>
           </div>
           <AccountFields draft={draft} />
-          <label className="bss-check">
-            <Checkbox
-              checked={initialProduct}
-              onChange={(e) => setInitialProduct(e.target.checked)}
-            />{' '}
-            After creating the account, add a product. Offerings that need a subscriber number ask
-            for one.
-          </label>
+          <Checkbox
+            checked={initialProduct}
+            onChange={(e) => setInitialProduct(e.target.checked)}
+            label="After creating the account, add a product. Offerings that need a subscriber number ask for one."
+          />
         </section>
       </>
     </Dialog>
@@ -661,19 +658,18 @@ function EditForm({
             )}
             {media.status === 'ok' &&
               media.data.map((choice) => (
-                <label key={choice.id} className="bss-check">
-                  <Checkbox
-                    checked={form.billing.mediaIds.includes(choice.id)}
-                    onChange={(e) =>
-                      setBilling({
-                        mediaIds: e.target.checked
-                          ? [...form.billing.mediaIds, choice.id]
-                          : form.billing.mediaIds.filter((id) => id !== choice.id),
-                      })
-                    }
-                  />{' '}
-                  {choice.name}
-                </label>
+                <Checkbox
+                  key={choice.id}
+                  checked={form.billing.mediaIds.includes(choice.id)}
+                  onChange={(e) =>
+                    setBilling({
+                      mediaIds: e.target.checked
+                        ? [...form.billing.mediaIds, choice.id]
+                        : form.billing.mediaIds.filter((id) => id !== choice.id),
+                    })
+                  }
+                  label={choice.name}
+                />
               ))}
           </fieldset>
           {(cycles.status === 'error' ||

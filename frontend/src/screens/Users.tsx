@@ -5,7 +5,7 @@ import { explain, getJson, postJson, request } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { useSession } from '../app/session';
-import { Button, Modal, PageTitle, Panel, TextInput } from '../ui/kit';
+import { SelectField, Button, Checkbox, Modal, PageTitle, Panel, TextInput } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { businessDate, clockTime } from '../format/dates';
@@ -200,22 +200,19 @@ function UserForm({
         {kind !== 'reset' && (
           <label>
             Role
-            <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'user')}>
+            <SelectField value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'user')}>
               <option value="user">user</option>
               <option value="admin">admin</option>
-            </select>
+            </SelectField>
           </label>
         )}
         {kind === 'edit' && (
-          <label>
-            <input
-              type="checkbox"
-              checked={disabled}
-              disabled={self}
-              onChange={(e) => setDisabled(e.target.checked)}
-            />
-            Disabled{self && ' (you cannot disable yourself)'}
-          </label>
+          <Checkbox
+            checked={disabled}
+            disabled={self}
+            onChange={(e) => setDisabled(e.target.checked)}
+            label={`Disabled${self ? ' (you cannot disable yourself)' : ''}`}
+          />
         )}
         {kind !== 'edit' && (
           <>
