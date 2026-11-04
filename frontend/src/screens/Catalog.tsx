@@ -43,6 +43,7 @@ import {
   useToast,
 } from '../ui/kit';
 import { ListState } from '../ui/states';
+import { useMediaQuery, WIDE_QUERY } from '../ui/useMediaQuery';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { OfferingEditModal, PriceModal } from './OfferingEdit';
 import { JobsTab } from './CatalogJobs';
@@ -107,6 +108,22 @@ export function CatalogScreen() {
   const [open, setOpen] = useState<CatalogOffering | null>(null);
   const catalog = useResource(`catalog:${version}`, loadCatalog);
   const cols = columns(context.currency);
+  const wide = useMediaQuery(WIDE_QUERY);
+  const offeringDetail =
+    open !== null ? (
+      <OfferingModal
+        key={open.id}
+        offering={open}
+        inspector={wide}
+        specifications={catalog.status === 'ok' ? catalog.data.specifications : []}
+        onClose={() => setOpen(null)}
+        onChanged={(message) => {
+          setOpen(null);
+          toast(message);
+          setVersion((v) => v + 1);
+        }}
+      />
+    ) : null;
 
   const offerings = catalog.status === 'ok' ? catalog.data.offerings : [];
   const countOf = (f: Filter) =>
@@ -239,105 +256,113 @@ export function CatalogScreen() {
         {tab === 'catalogs' && <CatalogsTab query={query} newRequests={newRequests} />}
         {tab === 'jobs' && <JobsTab />}
         {offeringsTab && (
-          <div className="catalog-offerings" role="table" aria-label="Offerings">
-            <TableHead columns={cols} />
-            <ListState
-              resource={catalog}
-              columns={cols}
-              errorTitle="Failed to load the catalog"
-              empty={{
-                title: 'Catalog is empty',
-                text: 'Create the first product offering. It starts in In design.',
-                action: newButton,
-              }}
-              total={(data) => data.offerings.length}
-              rows={(data) =>
-                data.offerings.filter(
-                  (o) =>
-                    (filter === 'All' || o.status === filter) &&
-                    (!q ||
-                      o.name.toLowerCase().includes(q) ||
-                      (o.code ?? '').toLowerCase().includes(q)),
-                )
-              }
-              onResetFilters={reset}
-            >
-              {(rows, data) => (
-                <>
-                  {(['In Design', 'Active', 'Retired'] as const).map((status) => {
-                    const group = rows.filter((offering) => offering.status === status);
-                    if (group.length === 0) return null;
-                    return (
-                      <Fragment key={status}>
-                        <div
-                          role="row"
-                          className="catalog-group"
-                          data-ui="ui.catalog.lifecycleGroup"
-                        >
-                          <span role="rowheader">
-                            {status === 'In Design' ? 'In design' : status}
-                          </span>
-                          <span className="mono">{formatInt(group.length)}</span>
-                          <span>{GROUP_HINTS[status]}</span>
-                        </div>
-                        {group.map((offering) => {
-                          const price = shownPrice(offering.prices, context.now, context.currency);
-                          return (
-                            <TableRow
-                              key={offering.id}
-                              columns={cols}
-                              onClick={() => setOpen(offering)}
-                              className={offering.id === fresh ? 'catalog-fresh' : ''}
-                              cells={{
-                                name: (
-                                  <div className="catalog-offering-name">
-                                    <span
-                                      className={`bss-name ellipsis${offering.status === 'Retired' ? ' bss-retired' : ''}`}
-                                    >
-                                      {offering.name}
-                                    </span>
-                                    <span className="catalog-code">{offering.code ?? '—'}</span>
-                                    {!offering.isSellable && (
-                                      <span data-ui="ui.catalog.notSellable">
-                                        <Tag>Not sellable</Tag>
+          <div className="bss-with-inspector">
+            <div className="catalog-offerings" role="table" aria-label="Offerings">
+              <TableHead columns={cols} />
+              <ListState
+                resource={catalog}
+                columns={cols}
+                errorTitle="Failed to load the catalog"
+                empty={{
+                  title: 'Catalog is empty',
+                  text: 'Create the first product offering. It starts in In design.',
+                  action: newButton,
+                }}
+                total={(data) => data.offerings.length}
+                rows={(data) =>
+                  data.offerings.filter(
+                    (o) =>
+                      (filter === 'All' || o.status === filter) &&
+                      (!q ||
+                        o.name.toLowerCase().includes(q) ||
+                        (o.code ?? '').toLowerCase().includes(q)),
+                  )
+                }
+                onResetFilters={reset}
+              >
+                {(rows, data) => (
+                  <>
+                    {(['In Design', 'Active', 'Retired'] as const).map((status) => {
+                      const group = rows.filter((offering) => offering.status === status);
+                      if (group.length === 0) return null;
+                      return (
+                        <Fragment key={status}>
+                          <div
+                            role="row"
+                            className="catalog-group"
+                            data-ui="ui.catalog.lifecycleGroup"
+                          >
+                            <span role="rowheader">
+                              {status === 'In Design' ? 'In design' : status}
+                            </span>
+                            <span className="mono">{formatInt(group.length)}</span>
+                            <span>{GROUP_HINTS[status]}</span>
+                          </div>
+                          {group.map((offering) => {
+                            const price = shownPrice(
+                              offering.prices,
+                              context.now,
+                              context.currency,
+                            );
+                            return (
+                              <TableRow
+                                key={offering.id}
+                                columns={cols}
+                                onClick={() => setOpen(offering)}
+                                selected={wide && open?.id === offering.id}
+                                className={offering.id === fresh ? 'catalog-fresh' : ''}
+                                cells={{
+                                  name: (
+                                    <div className="catalog-offering-name">
+                                      <span
+                                        className={`bss-name ellipsis${offering.status === 'Retired' ? ' bss-retired' : ''}`}
+                                      >
+                                        {offering.name}
                                       </span>
-                                    )}
-                                    <span className="sr-only">{offering.specification}</span>
-                                    <span className="sr-only">
-                                      {validity(offering, context.timeZone)}
-                                    </span>
-                                  </div>
-                                ),
-                                price:
-                                  price === null ? (
-                                    <span className="bss-dash">—</span>
-                                  ) : (
-                                    <div>
-                                      {formatCents(price.cents)}
-                                      {price.from !== null && (
-                                        <div className="bss-secondary">
-                                          from {businessDate(price.from, context.timeZone)}
-                                        </div>
+                                      <span className="catalog-code">{offering.code ?? '—'}</span>
+                                      {!offering.isSellable && (
+                                        <span data-ui="ui.catalog.notSellable">
+                                          <Tag>Not sellable</Tag>
+                                        </span>
                                       )}
+                                      <span className="sr-only">{offering.specification}</span>
+                                      <span className="sr-only">
+                                        {validity(offering, context.timeZone)}
+                                      </span>
                                     </div>
                                   ),
-                                period: recurrence(price?.interval ?? 'month'),
-                                status: <StatusPill kind="lifecycle" status={offering.status} />,
-                                updated: <span className="bss-dash">—</span>,
-                              }}
-                            />
-                          );
-                        })}
-                      </Fragment>
-                    );
-                  })}
-                  <TableFooter
-                    left={`Showing ${formatInt(rows.length)} of ${formatInt(data.offerings.length)}`}
-                    right="Prices exclude taxes · taxes are not applied"
-                  />
-                </>
-              )}
-            </ListState>
+                                  price:
+                                    price === null ? (
+                                      <span className="bss-dash">—</span>
+                                    ) : (
+                                      <div>
+                                        {formatCents(price.cents)}
+                                        {price.from !== null && (
+                                          <div className="bss-secondary">
+                                            from {businessDate(price.from, context.timeZone)}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ),
+                                  period: recurrence(price?.interval ?? 'month'),
+                                  status: <StatusPill kind="lifecycle" status={offering.status} />,
+                                  updated: <span className="bss-dash">—</span>,
+                                }}
+                              />
+                            );
+                          })}
+                        </Fragment>
+                      );
+                    })}
+                    <TableFooter
+                      left={`Showing ${formatInt(rows.length)} of ${formatInt(data.offerings.length)}`}
+                      right="Prices exclude taxes · taxes are not applied"
+                    />
+                  </>
+                )}
+              </ListState>
+            </div>
+            {wide && offeringDetail}
           </div>
         )}
         {offeringsTab && (
@@ -371,18 +396,7 @@ export function CatalogScreen() {
           }}
         />
       )}
-      {open !== null && (
-        <OfferingModal
-          offering={open}
-          specifications={catalog.status === 'ok' ? catalog.data.specifications : []}
-          onClose={() => setOpen(null)}
-          onChanged={(message) => {
-            setOpen(null);
-            toast(message);
-            setVersion((v) => v + 1);
-          }}
-        />
-      )}
+      {!wide && offeringDetail}
     </div>
   );
 }
@@ -406,10 +420,13 @@ const CONFIRM: Record<Lifecycle, { button: string; ask: string }> = {
 export function OfferingModal({
   offering,
   specifications = [],
+  inspector = false,
   onClose,
   onChanged,
 }: {
   offering: CatalogOffering;
+  /** At >= 1536 px the same detail shows as a side panel (R15). */
+  inspector?: boolean;
   specifications?: Specification[];
   onClose: () => void;
   onChanged: (message: string) => void;
@@ -471,6 +488,7 @@ export function OfferingModal({
         title={offering.name}
         context={[offering.code, offering.specification].filter(Boolean).join(' · ')}
         size="L"
+        inspector={inspector}
         headerActions={
           <Menu
             label="Offering actions"
@@ -498,7 +516,7 @@ export function OfferingModal({
           />
         }
         onClose={price !== null || editing || addingPrice ? () => undefined : onClose}
-        ui="ui.catalog.offeringDetail"
+        ui={inspector ? 'ui.catalog.inspector' : 'ui.catalog.offeringDetail'}
         footer={
           <>
             {problem !== null && (

@@ -1654,3 +1654,31 @@
   display: inline-flex;
   gap: var(--space-sm);
 }
+
+/* Inspector (>= 1536 px): the Subscribers table keeps its bleed; the panel sits beside it. */
+.bss-subscribers-body > .bss-subscribers-table {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.bss-subscriber-inspector .bss-inspector-name {
+  margin: 0 0 var(--space-sm);
+  font: var(--type-section);
+}
+.bss-inspector-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+.bss-inspector-balance {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+.bss-inspector-label {
+  color: var(--color-ink-3);
+}
+.bss-inspector-figure {
+  font: var(--type-figure);
+}
