@@ -161,10 +161,10 @@ def test_catch_up_queues_a_request_and_says_which_dates(api, db_conn):
 
 def test_a_request_from_mcp_is_requested_by_its_principal(api, worker):
     s = scenario(api, worker, broken=True)
-    mcp = {"X-Bss-Service": "test-service-credential", "X-Remote-User": "mcp:demo"}
+    mcp = {"X-Bss-Service": "test-service-credential", "X-Remote-User": "mcp-token:demo"}
     response = api.post(f"{RUNS}/{s['runs'][DEC1]['id']}/retry", None, headers=mcp)
     assert response.status_code == 202
-    assert response.json()["request"]["requestedBy"] == "mcp:demo"
+    assert response.json()["request"]["requestedBy"] == "mcp-token:demo"
 
 
 def test_catch_up_when_nothing_is_due_queues_nothing(api, worker):

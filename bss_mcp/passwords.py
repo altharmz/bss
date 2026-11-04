@@ -1,21 +1,13 @@
-"""The login users (MCP_USERS) and their password hashes - stdlib scrypt, no bcrypt.
+"""Password hashing for the app's users (app/users.py) - stdlib scrypt, no bcrypt.
 
-MCP_USERS = "name:<hash>[,name:<hash>]", hash = "scrypt.<n>.<r>.<p>.<salt b64>.<key b64>".
-No "$" in the format: compose would try to interpolate it in .env; base64url never
-contains "." or ",".
-The values live in .env / .env.prod only, never in the repo. A new hash:
-
-    docker compose run --rm --no-deps app python -m bss_mcp.passwords
+Hash format: "scrypt.<n>.<r>.<p>.<salt b64>.<key b64>" (no "$": base64url never contains
+"." either). The hashes live in the app_user table only.
 """
 
 import base64
-import getpass
 import hashlib
 import hmac
 import secrets
-import sys
-
-from bss_mcp.store import NAME
 
 N, R, P = 2**14, 8, 1  # 16 MiB per check
 _DUMMY = None
@@ -47,31 +39,9 @@ def check_password(password: str, stored: str | None) -> bool:
     return hmac.compare_digest(candidate, _unb64(key)) and known
 
 
-def parse_users(raw: str) -> dict[str, str]:
-    """MCP_USERS -> {name: hash}. A malformed entry stops the service at start."""
-    users: dict[str, str] = {}
-    for entry in filter(None, (e.strip() for e in raw.split(","))):
-        name, sep, stored = entry.partition(":")
-        if not sep or not NAME.match(name) or not stored.startswith("scrypt."):
-            raise ValueError(f"MCP_USERS: malformed entry for {name!r} (expected name:scrypt....)")
-        if name in users:
-            raise ValueError(f"MCP_USERS: {name} appears twice")
-        users[name] = stored
-    return users
-
-
 def _b64(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
 def _unb64(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
-
-
-if __name__ == "__main__":
-    first = getpass.getpass("password: ")
-    if len(first) < 12:
-        sys.exit("at least 12 characters")
-    if getpass.getpass("again: ") != first:
-        sys.exit("the two do not match")
-    print(hash_password(first))

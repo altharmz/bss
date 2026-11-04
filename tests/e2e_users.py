@@ -66,7 +66,10 @@ def prepare_numbered_catalog():
     try:
         with TestClient(
             app,
-            headers={"X-Bss-Service": settings.bss_service_secret, "X-Remote-User": "mcp:e2e"},
+            headers={
+                "X-Bss-Service": settings.bss_service_secret,
+                "X-Remote-User": "mcp-token:e2e",
+            },
         ) as client:
             return numbered_offering(client)
     finally:

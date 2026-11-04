@@ -191,8 +191,8 @@ def change_password(request: Request, body: JsonBody, tx: Tx, clock: ClockDep):
         ):
             raise TmfError(403, "current password is incorrect")
         conn.execute(
-            "UPDATE app_user SET password_hash = %s, must_change_password = false, updated_at = %s"
-            " WHERE username = %s",
+            "UPDATE app_user SET password_hash = %s, must_change_password = false, updated_at = %s,"
+            " credential_version = credential_version + 1 WHERE username = %s",
             (hash_password(data.newPassword.get_secret_value()), clock.now(), username),
         )
         conn.execute("DELETE FROM app_session WHERE username = %s", (username,))
@@ -278,7 +278,8 @@ def patch_user(username: str, request: Request, body: JsonBody, tx: Tx, clock: C
             conn.cursor(row_factory=dict_row)
             .execute(
                 "UPDATE app_user SET role = %s, disabled = %s, password_hash = %s,"
-                " must_change_password = %s, updated_at = %s WHERE username = %s RETURNING *",
+                " must_change_password = %s, updated_at = %s,"
+                " credential_version = credential_version + 1 WHERE username = %s RETURNING *",
                 (
                     role,
                     disabled,
@@ -300,3 +301,40 @@ def patch_user(username: str, request: Request, body: JsonBody, tx: Tx, clock: C
                 clock.now(),
             )
     return TmfJSONResponse(view(updated))
+
+
+@router.post("/service/credential-check")
+def credential_check(request: Request, body: JsonBody, tx: Tx, clock: ClockDep):
+    """The MCP login's backend: is this an active app user's password? Service credential
+    only (app/auth.py lets nothing else reach the handler as role "service")."""
+    no_query(request)
+    if request.state.role != "service":
+        raise TmfError(403, "only the MCP service credential may check credentials")
+    data = parse(Login, body)
+    now = clock.now()
+    limit_login(request, data.username, now)
+    with tx() as conn:
+        user = (
+            conn.cursor(row_factory=dict_row)
+            .execute("SELECT * FROM app_user WHERE username = %s FOR UPDATE", (data.username,))
+            .fetchone()
+        )
+        # an unknown user costs one scrypt too; unknown, wrong and disabled look the same
+        valid = check_password(
+            data.password.get_secret_value(), user["password_hash"] if user else None
+        )
+        if not valid or user["disabled"]:
+            raise TmfError(401, "invalid username or password", code="invalidCredentials")
+        if user["must_change_password"]:
+            raise TmfError(403, "change your password first", code="passwordChangeRequired")
+        conn.execute(
+            "UPDATE app_user SET last_login_at = %s WHERE username = %s", (now, data.username)
+        )
+    return TmfJSONResponse(
+        {
+            "username": user["username"],
+            "role": user["role"],
+            "credentialVersion": user["credential_version"],
+        },
+        headers={"Cache-Control": "no-store"},
+    )

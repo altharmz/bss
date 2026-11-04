@@ -1,9 +1,9 @@
 """The login and consent page that /authorize sends the browser to (one page, /login).
 
 GET shows who is asking (the client's self-declared name and, more trustworthy, the host
-its redirect goes to) and the scope choice; POST checks the password (MCP_USERS) and
-either issues the authorization code or answers access_denied - always by redirecting to
-the redirect URI registered for the client.
+its redirect goes to) and the scope choice; POST asks the app to check the user and
+password (credential-check) and either issues the authorization code or answers
+access_denied - always by redirecting to the redirect URI registered for the client.
 
 The `request` parameter is the only handle on the parked /authorize request: unguessable,
 bound to it, single use and short-lived - which also makes it the form's CSRF token. The
@@ -12,20 +12,27 @@ registration is open).
 """
 
 import html
+import logging
+import re
 from urllib.parse import urlsplit
 
+import httpx2
 from mcp.server.auth.provider import AuthorizationParams, construct_redirect_uri
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, RedirectResponse, Response
 
 from bss_mcp.audit import audit
-from bss_mcp.auth import WRITE, principal_of
+from bss_mcp.auth import WRITE, user_principal
+from bss_mcp.bss import Bss
 from bss_mcp.clock import Clock
 from bss_mcp.config import Settings
 from bss_mcp.oauth import Provider, granted_scopes
-from bss_mcp.passwords import check_password
 from bss_mcp.ratelimit import RateLimit
-from bss_mcp.store import NAME
+
+log = logging.getLogger("bss_mcp")
+
+# the app's username pattern (app_user.username)
+USERNAME = re.compile(r"^[A-Za-z0-9._@-]{1,64}$")
 
 HEADERS = {
     "Cache-Control": "no-store",
@@ -80,14 +87,14 @@ class Login:
     def __init__(
         self,
         provider: Provider,
-        users: dict[str, str],
+        bss: Bss,
         clock: Clock,
         settings: Settings,
         user_limit: RateLimit,
     ) -> None:
         self.provider = provider
         self.store = provider.store
-        self.users = users
+        self.bss = bss
         self.clock = clock
         self.settings = settings
         self.user_limit = user_limit
@@ -160,12 +167,34 @@ class Login:
 
         user = str(form.get("user", ""))
         password = str(form.get("password", ""))
-        known = NAME.match(user) is not None
-        principal = principal_of(user) if known else None
+        known = USERNAME.match(user) is not None
+        principal = user_principal(user) if known else None
         if known and self.user_limit.take(f"user:{user}") is not None:
             audit(self.clock, event="login", principal=principal, ip=ip, outcome=429)
             return self._form(request_id, client, params, "Too many attempts. Wait a minute.", 429)
-        if not check_password(password, self.users.get(user) if known else None):
+        verdict = None
+        if known:
+            try:
+                verdict = await self.bss.credential_check(user, password)
+            except httpx2.HTTPError as exc:
+                log.warning("login: credential check failed: %r", exc)
+                audit(self.clock, event="login", principal=principal, ip=ip, outcome="bss down")
+                return self._form(request_id, client, params, "bss is not reachable.", 503)
+            if verdict.status_code == 403:  # the right password, but it must be changed first
+                audit(self.clock, event="login", principal=principal, ip=ip, outcome="must change")
+                return self._form(
+                    request_id, client, params, "Change your password in the BSS UI first.", 403
+                )
+            if verdict.status_code == 429:
+                audit(self.clock, event="login", principal=principal, ip=ip, outcome=429)
+                return self._form(
+                    request_id, client, params, "Too many attempts. Wait a minute.", 429
+                )
+            if verdict.status_code not in (200, 401):
+                log.warning("login: credential check answered %s", verdict.status_code)
+                audit(self.clock, event="login", principal=principal, ip=ip, outcome="bss error")
+                return self._form(request_id, client, params, "bss could not check this.", 503)
+        if verdict is None or verdict.status_code != 200:
             self.store.fail_pending(request_id, self.settings.mcp_login_attempts)
             audit(
                 self.clock,
@@ -177,7 +206,7 @@ class Login:
             )
             if self.store.pending(request_id) is None:
                 return gone()
-            return self._form(request_id, client, params, "Wrong user or password.", 401)
+            return self._form(request_id, client, params, "Wrong user name or password.", 401)
 
         choice = str(form.get("scope", "read"))
         allowed = ["read", WRITE] if params.scopes is None or WRITE in params.scopes else ["read"]
@@ -185,8 +214,11 @@ class Login:
             return self._form(request_id, client, params, "Choose one of the offered scopes.", 400)
         if not self.store.drop_pending(request_id):  # used up in a parallel request
             return gone()
-        assert principal is not None
-        code = self.provider.issue_code(client.client_id, params, principal, granted_scopes(choice))
+        assert principal is not None and verdict is not None
+        version = verdict.json()["credentialVersion"]
+        code = self.provider.issue_code(
+            client.client_id, params, principal, granted_scopes(choice), version
+        )
         audit(
             self.clock,
             event="login",

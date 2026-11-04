@@ -41,14 +41,27 @@ class Bss:
         body: bytes | None = None,
         content_type: str | None = None,
         headers: dict[str, str] | None = None,
+        credential_version: int | None = None,
     ) -> httpx2.Response:
         # X-Remote-User: who did it, for the app's operator (display and bill history)
         headers = {**(headers or {}), "X-Remote-User": principal, "Accept": "application/json"}
         if self.service_secret:
             headers["X-Bss-Service"] = self.service_secret
+        if credential_version is not None:
+            headers["X-Bss-Credential-Version"] = str(credential_version)
         if content_type:
             headers["Content-Type"] = content_type
         return await self.client.request(method, path, params=params, content=body, headers=headers)
+
+    async def credential_check(self, username: str, password: str) -> httpx2.Response:
+        """The app's answer to "is this an active user's password?" (the OAuth login).
+        200 {username, role, credentialVersion}; 401 invalidCredentials; 403
+        passwordChangeRequired; 429 too many attempts."""
+        return await self.client.post(
+            "/internal/v1/service/credential-check",
+            json={"username": username, "password": password},
+            headers={"X-Bss-Service": self.service_secret, "Accept": "application/json"},
+        )
 
     async def identify(self, clock: Clock, wait: float) -> None:
         """Refuse to serve unless BSS_API_URL is bss: `GET /` must answer exactly
