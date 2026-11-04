@@ -46,7 +46,7 @@ alembic/                  migrations; alembic.ini reads DATABASE_URL from the en
 compose.yaml              base definition: only what both modes share (the app image)
 compose.override.yaml     local dev only (own postgres on `lab`, bind mount, --reload, ports;
                           `tools` service: writable mount for make fmt + format hook)
-compose.prod.yaml         VPS only (shared network + alias, DATABASE_URL, limits, log rotation)
+compose.prod.yaml         VPS only (bss-edge/bss-db networks + alias, DATABASE_URL, limits, log rotation)
 scripts/deploy.sh         build -> save -> ssh load -> migrate -> up -> healthcheck -> smoke
 scripts/smoke.sh          HTTP smoke test against a base URL
 scripts/pre-commit.sh     make lint + smoke + affected tests (harness.md); installed via `make hooks`
@@ -222,11 +222,14 @@ On the VPS, Postgres and Caddy are **not ours**. The separate vps-infra project 
 deployed once per host and runs one Postgres and one Caddy for every app there, owning
 their config, data, TLS and backups. This repo only ships the app container.
 
-- **Network**: the app joins the external network `shared`, created by vps-infra. It must
-  exist before `make deploy`; `scripts/deploy.sh` checks for it and fails early with
+- **Network**: bss is not on `shared` (every app's container could reach `bss:8080` and
+  `bss-mcp:8080` there, bypassing Caddy). vps-infra creates two per-app networks:
+  `bss-edge` (Caddy, app, mcp) and `bss-db` (Postgres, app, worker, the migration
+  container). `mcp` has no DB and `worker` serves no HTTP, so each is on one only. Both
+  must exist before `make deploy`; `scripts/deploy.sh` checks for them and fails early with
   "deploy vps-infra first" otherwise. vps-infra is never needed locally — do not start it
   for development.
-- **Alias**: on `shared` the app is reachable as `bss` (network alias in
+- **Alias**: on `bss-edge` the app is reachable as `bss` (network alias in
   `compose.prod.yaml`). Every app there names its service `app`, so that name is
   ambiguous; always use `bss`. The MCP connector (`mcp`, [mcp.md](mcp.md)) is
   `bss-mcp:8080` there and calls the app as `bss:8080`.
