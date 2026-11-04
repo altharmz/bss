@@ -21,8 +21,8 @@ import { Id } from '../ui/Id';
 import { paymentMethodLabel } from '../format/labels';
 import {
   Coded,
-  Modal,
-  PageTitle,
+  Dialog,
+  PageHeader,
   Panel,
   StatusPill,
   Segmented,
@@ -198,13 +198,13 @@ export function PaymentDialog({
       />
     );
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={`Payment ${shortId(paymentId)}`}
-      width={640}
+      size="L"
       onClose={onClose}
       ui="ui.payments.detail"
-      subtitle={payment === null ? undefined : stamp(payment.paymentDate, timeZone)}
+      context={payment === null ? undefined : stamp(payment.paymentDate, timeZone)}
       footer={
         <>
           {payment !== null && (
@@ -276,7 +276,7 @@ export function PaymentDialog({
           </>
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -321,7 +321,7 @@ export function PaymentsScreen() {
   return (
     <div className="bss-screen" data-ui="ui.payments">
       <div className="bss-title-row">
-        <PageTitle title="Payments" />
+        <PageHeader title="Payments" />
         <span className="bss-caption">Received payments and recorded refunds, newest first</span>
       </div>
       <div className="bss-toolbar">

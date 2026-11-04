@@ -338,7 +338,7 @@
 .bss-btn:focus-visible,
 .bss-seg button:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--color-primary-tint);
 }
 .bss-btn.is-busy:disabled {
   background: var(--color-bg);
@@ -653,7 +653,7 @@
 }
 .bss-modal-header .close:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--color-primary-tint);
 }
 .bss-modal-footer {
   flex-shrink: 0;
@@ -744,7 +744,7 @@
 }
 .bss-toast button:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--color-primary-tint);
 }
 .bss-toast-preview {
   position: static;
@@ -945,7 +945,7 @@
 }
 .bss-id:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--color-primary-tint);
 }
 
 .bss-row {
@@ -984,7 +984,7 @@
 }
 .bss-tabs [role='tab']:focus-visible,
 [role='tabpanel']:focus-visible {
-  outline: var(--focus-ring);
+  outline: var(--color-primary-tint);
 }
 .bss-menu {
   position: relative;

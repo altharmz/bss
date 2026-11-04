@@ -5,7 +5,7 @@ import { explain, getJson, postJson, request } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { useSession } from '../app/session';
-import { SelectField, Button, Checkbox, Modal, PageTitle, Panel, TextInput } from '../ui/kit';
+import { SelectField, Button, Checkbox, Dialog, PageHeader, TextInput } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { businessDate, clockTime } from '../format/dates';
@@ -25,10 +25,10 @@ export function UsersScreen() {
   const session = useSession();
   if (session?.role !== 'admin')
     return (
-      <Panel>
-        <h1>Not allowed</h1>
-        <p>Only administrators can manage users.</p>
-      </Panel>
+      <div className="bss-screen" data-ui="ui.users.denied">
+        <PageHeader title="Not allowed" />
+        <p className="bss-not-found">Only administrators can manage users.</p>
+      </div>
     );
   return (
     <div className="bss-screen" data-ui="ui.users.list">
@@ -46,59 +46,57 @@ function UsersList() {
   );
   return (
     <>
-      <PageTitle title="Users" />
-      <Panel
+      <PageHeader
         title="Users"
-        right={<Button onClick={() => setDialog({ kind: 'new' })}>New user</Button>}
-      >
-        <div role="table" aria-label="Users">
-          <TableHead columns={columns} />
-          <ListState
-            resource={users}
-            columns={columns}
-            errorTitle="Failed to load users"
-            empty={{ title: 'No users', text: 'Create a user to grant access.' }}
-            total={(data) => data.length}
-            rows={(data) => data}
-            onResetFilters={() => {}}
-          >
-            {(rows) =>
-              rows.map((user) => (
-                <TableRow
-                  key={user.username}
-                  columns={columns}
-                  cells={{
-                    username: <span style={{ overflowWrap: 'anywhere' }}>{user.username}</span>,
-                    role: user.role,
-                    active: user.disabled ? 'No' : 'Yes',
-                    last: user.lastLoginAt
-                      ? `${businessDate(user.lastLoginAt, timeZone)} ${clockTime(user.lastLoginAt, timeZone)}`
-                      : 'Never',
-                    actions: (
-                      <>
-                        <Button
-                          small
-                          aria-label={`Edit ${user.username}`}
-                          onClick={() => setDialog({ kind: 'edit', user })}
-                        >
-                          Edit
-                        </Button>{' '}
-                        <Button
-                          small
-                          aria-label={`Reset password for ${user.username}`}
-                          onClick={() => setDialog({ kind: 'reset', user })}
-                        >
-                          Reset password
-                        </Button>
-                      </>
-                    ),
-                  }}
-                />
-              ))
-            }
-          </ListState>
-        </div>
-      </Panel>
+        actions={<Button onClick={() => setDialog({ kind: 'new' })}>New user</Button>}
+      />
+      <div role="table" aria-label="Users">
+        <TableHead columns={columns} />
+        <ListState
+          resource={users}
+          columns={columns}
+          errorTitle="Failed to load users"
+          empty={{ title: 'No users', text: 'Create a user to grant access.' }}
+          total={(data) => data.length}
+          rows={(data) => data}
+          onResetFilters={() => {}}
+        >
+          {(rows) =>
+            rows.map((user) => (
+              <TableRow
+                key={user.username}
+                columns={columns}
+                cells={{
+                  username: <span className="wrap-anywhere">{user.username}</span>,
+                  role: user.role,
+                  active: user.disabled ? 'No' : 'Yes',
+                  last: user.lastLoginAt
+                    ? `${businessDate(user.lastLoginAt, timeZone)} ${clockTime(user.lastLoginAt, timeZone)}`
+                    : 'Never',
+                  actions: (
+                    <>
+                      <Button
+                        small
+                        aria-label={`Edit ${user.username}`}
+                        onClick={() => setDialog({ kind: 'edit', user })}
+                      >
+                        Edit
+                      </Button>{' '}
+                      <Button
+                        small
+                        aria-label={`Reset password for ${user.username}`}
+                        onClick={() => setDialog({ kind: 'reset', user })}
+                      >
+                        Reset password
+                      </Button>
+                    </>
+                  ),
+                }}
+              />
+            ))
+          }
+        </ListState>
+      </div>
       {dialog && (
         <UserForm
           kind={dialog.kind}
@@ -140,11 +138,11 @@ function UserForm({
   const title =
     kind === 'new' ? 'New user' : `${kind === 'edit' ? 'Edit' : 'Reset password for'} ${username}`;
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       ui="ui.users.manage"
       title={title}
-      width={480}
+      size="M"
       onClose={() => {
         if (!busy) onClose();
       }}
@@ -245,6 +243,6 @@ function UserForm({
           </Button>
         </DialogFooter>
       </form>
-    </Modal>
+    </Dialog>
   );
 }

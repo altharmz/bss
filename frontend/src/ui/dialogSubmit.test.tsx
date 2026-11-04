@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { Button, Dialog, DialogFooter, Modal, submitDialogPrimary } from './kit';
+import { Button, Dialog, DialogFooter, submitDialogPrimary } from './kit';
 
 describe('dialog scrolling and submission', () => {
   it('activates an explicitly designated legacy footer primary without restyling it', () => {
@@ -23,10 +23,10 @@ describe('dialog scrolling and submission', () => {
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Number' }), { key: 'Enter' });
     expect(submit).toHaveBeenCalledOnce();
   });
-  it('portals a loaded child footer outside the scrolling body inherited by Modal', () => {
+  it('portals a loaded child footer outside the scrolling body inherited by Dialog', () => {
     const submit = vi.fn();
     render(
-      <Modal width={560} title="Edit" onClose={() => {}} onSubmit={submitDialogPrimary}>
+      <Dialog size="M" title="Edit" onClose={() => {}} onSubmit={submitDialogPrimary}>
         <div>
           <input aria-label="Field" />
           <DialogFooter>
@@ -35,7 +35,7 @@ describe('dialog scrolling and submission', () => {
             </Button>
           </DialogFooter>
         </div>
-      </Modal>,
+      </Dialog>,
     );
     const dialog = screen.getByRole('dialog');
     const body = dialog.querySelector('.bss-dialog-body');

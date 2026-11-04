@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { KeyValue, MoneyStrip, PageHeader, PageTitle, Panel } from './kit';
+import { KeyValue, MoneyStrip, PageHeader, Panel } from './kit';
 
 describe('Ledger summaries', () => {
   it('keeps a money figure marker around its label, value and caption', () => {
@@ -82,7 +82,7 @@ describe('Ledger summaries', () => {
     expect(container.querySelector('.count')?.textContent).toBe('0');
     expect(screen.getByText('Accounts').className).toBe('bss-page-meta');
     expect(screen.getByRole('textbox').parentElement?.className).toBe('bss-page-filters');
-    rerender(<PageTitle title="Bills" count={3} />);
+    rerender(<PageHeader title="Bills" count={3} />);
     expect(container.querySelector('.bss-page-header h1')?.textContent).toBe('Bills');
   });
   it('renders a panel header only when a title exists', () => {

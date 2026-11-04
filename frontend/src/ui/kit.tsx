@@ -3,7 +3,6 @@ import { statusPresentation, type StatusKind } from './status';
 export { Menu, Tabs, TabPanel } from './navigation';
 export { Note } from './Note';
 export { KeyValue, MoneyStrip, PageHeader } from './summaries';
-import { PageHeader } from './summaries';
 export type { MenuItem, TabOption } from './navigation';
 import {
   createContext,
@@ -53,11 +52,7 @@ export function Button({
   );
 }
 
-// --- page title and panel ---
-
-export function PageTitle({ title, count }: { title: string; count?: ReactNode }) {
-  return <PageHeader title={title} count={count} />;
-}
+// --- panel ---
 
 export function Panel({
   title,
@@ -366,20 +361,6 @@ export function Dialog({
         </footer>
       </div>
     </div>
-  );
-}
-
-/** Temporary compatibility wrapper; all widths map to the three Ledger sizes. */
-export function Modal({
-  width,
-  subtitle,
-  ...props
-}: Omit<Parameters<typeof Dialog>[0], 'size' | 'context' | 'step' | 'preview'> & {
-  width: number;
-  subtitle?: ReactNode;
-}) {
-  return (
-    <Dialog {...props} context={subtitle} size={width <= 440 ? 'S' : width <= 620 ? 'M' : 'L'} />
   );
 }
 

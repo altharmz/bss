@@ -73,6 +73,28 @@ function checkStyles(file: string, source: string): string[] {
   });
 }
 
+function undefinedVariables(
+  file: string,
+  source: string,
+  tokens: Set<string>,
+  runtime: Set<string>,
+): string[] {
+  return source.split('\n').flatMap((line, index) =>
+    Array.from(line.matchAll(/var\((--[\w-]+)/g), (match) => match[1] ?? '')
+      .filter((name) => !tokens.has(name) && !runtime.has(name))
+      .map((name) => `${file}:${index + 1}: ${name}`),
+  );
+}
+
+function inlineStyles(file: string, source: string): string[] {
+  const problems: string[] = [];
+  for (const match of source.matchAll(/style=\{\{(?!\s*['"]--)/g)) {
+    const line = source.slice(0, match.index).split('\n').length;
+    problems.push(`${file}:${line}: inline style`);
+  }
+  return problems;
+}
+
 const src = join(process.cwd(), 'src');
 
 describe('Ledger style guard', () => {
@@ -175,31 +197,47 @@ describe('Ledger style guard', () => {
     expect(legacyUses).toEqual([]);
   });
 
-  it('defines an alias for every legacy variable still used by CSS and components', () => {
+  it('uses only custom properties that tokens.css or a runtime style prop defines (d)', () => {
+    expect(
+      undefinedVariables(
+        'fixture.css',
+        'a { color: var(--ink); width: var(--progress); gap: var(--space-sm); }',
+        new Set(['--space-sm']),
+        new Set(['--progress']),
+      ),
+    ).toEqual(['fixture.css:1: --ink']);
     const tokens = readFileSync(join(src, 'ui/tokens.css'), 'utf8');
-    const legacy = readFileSync(join(src, 'ui/legacy-tokens.css'), 'utf8');
-    const definitions = (text: string) =>
-      new Set(Array.from(text.matchAll(/(--[\w-]+)\s*:/g), (match) => match[1]));
-    const modern = definitions(tokens);
-    const aliases = definitions(legacy);
-    const local = definitions(
-      files(src)
-        .filter((file) => file.endsWith('.css') && !file.endsWith('legacy-tokens.css'))
-        .map((file) => readFileSync(file, 'utf8'))
-        .join('\n'),
+    const defined = new Set(
+      Array.from(tokens.matchAll(/(--[\w-]+)\s*:/g), (match) => match[1] ?? ''),
     );
-    const missing = files(src)
-      .filter((file) => /\.(css|tsx)$/.test(file))
-      .flatMap((file) =>
-        Array.from(
-          readFileSync(file, 'utf8').matchAll(/var\((--[\w-]+)/g),
-          (match) => match[1] ?? '',
-        )
-          .filter((name) => !modern.has(name) && !local.has(name) && !aliases.has(name))
-          .map((name) => `${file}: ${name}`),
-      );
-    expect(missing).toEqual([]);
-    expect(aliases.has('--ink')).toBe(true);
-    expect(aliases.has('--fs-125')).toBe(true);
+    const runtime = new Set(
+      files(src)
+        .filter((file) => /\.(css|tsx)$/.test(file) && !file.includes('.test.'))
+        .flatMap((file) =>
+          Array.from(
+            readFileSync(file, 'utf8').matchAll(/['"](--[\w-]+)['"]\s*:|^\s*(--[\w-]+)\s*:/gm),
+            (match) => match[1] ?? match[2] ?? '',
+          ),
+        ),
+    );
+    expect(
+      files(src)
+        .filter((file) => /\.(css|tsx)$/.test(file) && !file.includes('.test.'))
+        .flatMap((file) => undefinedVariables(file, readFileSync(file, 'utf8'), defined, runtime)),
+    ).toEqual([]);
+  });
+
+  it('keeps inline styles to runtime custom properties (e)', () => {
+    expect(
+      inlineStyles(
+        'fixture.tsx',
+        "<a style={{ color: 'red' }} />\n<b style={{ '--progress': '4%' }} />\n<c style={{\n '--x': 1 }} />",
+      ),
+    ).toEqual(['fixture.tsx:1: inline style']);
+    expect(
+      files(src)
+        .filter((file) => file.endsWith('.tsx') && !file.includes('.test.'))
+        .flatMap((file) => inlineStyles(file, readFileSync(file, 'utf8'))),
+    ).toEqual([]);
   });
 });

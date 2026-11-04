@@ -22,7 +22,7 @@ import { Id } from '../ui/Id';
 import { formatCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { eventTypeLabel, paymentMethodLabel } from '../format/labels';
-import { Button, Coded, Modal, Panel, StatusPill, TextInput, useToast, KeyValue } from '../ui/kit';
+import { Button, Coded, Dialog, Panel, StatusPill, TextInput, useToast, KeyValue } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -266,10 +266,10 @@ export function ActionDialog({
     if (a.product) rows.push(['Product', a.product.name ?? shortId(a.product.id)]);
   }
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Balance action"
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.subscriber.prepaid.historyDetail"
     >
@@ -296,7 +296,7 @@ export function ActionDialog({
           </>
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 

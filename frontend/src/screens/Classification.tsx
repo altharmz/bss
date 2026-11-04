@@ -29,7 +29,7 @@ import {
   SelectField,
   Button,
   Checkbox,
-  Modal,
+  Dialog,
   StatusPill,
   DateField,
   TextInput,
@@ -337,14 +337,14 @@ function ClassificationModal({
     });
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={
         record === null
           ? `New ${kind === 'category' ? 'category' : 'product catalog'}`
           : record.name
       }
-      width={520}
+      size="M"
       onClose={onClose}
       ui={`ui.catalog.${record === null ? 'new' : 'edit'}${noun}`}
       footer={
@@ -466,6 +466,6 @@ function ClassificationModal({
         )}
         {error !== null && form.name.trim() !== '' && <Note tone="negative">{error}</Note>}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

@@ -25,7 +25,6 @@ import {
   Dialog,
   Field,
   MoneyField,
-  Modal,
   Panel,
   StatusPill,
   TextInput,
@@ -158,13 +157,13 @@ export function BillDialog({
   const context = useSystemContext();
   const detail = useResource(`bill:${billId}`, (signal) => loadBillDetail(billId, signal));
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={detail.status === 'ok' ? `Bill ${detail.data.billNo}` : 'Bill'}
-      width={760}
+      size="L"
       onClose={onClose}
       ui="ui.subscriber.billDetail"
-      subtitle={
+      context={
         detail.status === 'ok' ? (
           <>
             <Id id={detail.data.billingAccount.id} prefix="BA-" /> · billed {detail.data.billDate}
@@ -184,7 +183,7 @@ export function BillDialog({
           </>
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 

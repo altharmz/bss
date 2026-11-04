@@ -19,7 +19,7 @@ import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { businessDate, clockTime } from '../format/dates';
 import { plural } from '../format/labels';
-import { SelectField, Button, Field, FileField, Modal, StatusPill, useToast } from '../ui/kit';
+import { SelectField, Button, Field, FileField, Dialog, StatusPill, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -194,10 +194,10 @@ function ExportModal({
   }
   const document = job?.status === 'Succeeded' && job.url !== null ? fromDataUrl(job.url) : null;
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Export the catalog"
-      width={480}
+      size="M"
       onClose={onClose}
       ui="ui.catalog.export"
       footer={
@@ -252,7 +252,7 @@ function ExportModal({
         )}
         {job?.errorLog != null && <ErrorLog text={job.errorLog} />}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -308,10 +308,10 @@ function ImportModal({
     }
   }
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Import a catalog document"
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.catalog.import"
       footer={
@@ -359,7 +359,7 @@ function ImportModal({
         </Note>
         {failed !== null && <ErrorLog text={failed} />}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -390,11 +390,11 @@ function JobModal({
     }
   }
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={isImport ? 'Import job' : 'Export job'}
-      subtitle={job.status}
-      width={520}
+      context={job.status}
+      size="M"
       onClose={onClose}
       ui="ui.catalog.job"
       footer={
@@ -443,6 +443,6 @@ function JobModal({
         {job.query !== null && <span>Scope {job.query}</span>}
         {job.errorLog !== null && <ErrorLog text={job.errorLog} />}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

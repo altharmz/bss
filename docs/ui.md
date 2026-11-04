@@ -760,3 +760,11 @@ finish; a confirmation that resolves without a request shows “Not sent. Try ag
 Subscriber create/delete, offering create/delete and order POSTs refresh sidebar counts.
 
 G5 subscriber card: Customer no. identifies the customer; future products show Starts <date>. Next charge is the first future run that writes a charge, including an uncharged first prorated period. Overview lists account-scoped draft, acknowledged and in-progress orders above Products, with the requested-start offering price for drafts and Open to the existing order dialog. Prepaid Add product says Paid from the balance on <date>, hides cycle-day context, and disables immediate activation on a server-preview shortfall. Resume at or after paid-through likewise loads the preview and offers the existing Top up handoff. New prepaid subscriber forms hide cycle day and retain the API-required default of 1.
+
+Ledger v2 slice 14 (visual only): Users, Integrations/System, Sign-in, Change password and Not found
+use the shared primitives. Users is a page table with "New user" in the page header and a "Not
+allowed" page for non-admins; Sign-in and Change password are a 400 px Panel column on
+`--color-bg-subtle` with a `--type-page` title; Not found is a PageHeader, a sentence and a link to
+Subscribers. `legacy-tokens.css`, `PageTitle` and `Modal` are removed. The operator menu has a Theme
+choice (System / Light / Dark, remembered in localStorage); the dark palette follows the system
+setting unless a choice is made.

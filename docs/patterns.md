@@ -21,7 +21,7 @@ A screen touches four files besides its own (example: `payments`):
 
 A screen file starts with the design reference comment, then imports from `../api/*`,
 `../app/context` (`useSetCrumbs`, `useSystemContext`), `../app/router` (`Link`, `hrefOf`),
-`../ui/kit` (`Modal`, `PageTitle`, `Panel`, `Pill`, `Button`, ...), `../ui/states`
+`../ui/kit` (`Dialog`, `PageHeader`, `Panel`, `StatusPill`, `Button`, ...), `../ui/states`
 (`ErrorBlock`, `ListState`, `SkeletonRows`), `../ui/Table` and `./screens.css`.
 Interactive and visible parts carry `data-ui="ui.<area>.<name>"`.
 
@@ -120,10 +120,11 @@ R10 Add product: an L Dialog places selectable offering rows, number/start field
 
 R9 catalog: use Tabs/TabPanel for sections, page tables grouped by lifecycle with filtered group counts, and an L offering Dialog with lifecycle stepper, price figure, KeyValue and compact price history. Dialog accepts optional `headerActions` for an existing Menu; action markers belong on its menuitems. Missing dates render “—” or omit transition captions rather than synthesizing history. Non-sellable rows carry a Not sellable Tag in every lifecycle group. New offering loads category choices and sends description, sellability and selected category references; Add price posts the charge, then patches the complete old-plus-new price-reference list.
 
-`ui/base.css` imports `tokens.css`, temporary `legacy-tokens.css`, then the five font
-faces. New CSS uses the Ledger role and type tokens; legacy aliases bridge screens until
-the cleanup slice. `ui/styleGuard.test.ts` checks CSS literals, font weights and alias
-coverage. `make web-shots` captures seeded pages at both design widths without billing
+`ui/base.css` imports `tokens.css`, then the five font faces. CSS uses the Ledger role and
+type tokens only (`legacy-tokens.css` is gone); `--size-*` tokens give a size where a rule
+sets only `font-size`. `ui/styleGuard.test.ts` checks CSS literals, font weights, that every
+`var(--…)` is defined in `tokens.css` or set at runtime by a `style={{ '--x': … }}` prop (d),
+and that `style={{` appears only with such a custom property (e). `make web-shots` captures seeded pages at both design widths without billing
 writes; screenshot output is ignored.
 
 ### Ledger controls (slice 2a)
@@ -198,7 +199,7 @@ context is unavailable, omitting the timestamp until context exists.
 ### Ledger summary foundations (slice 3b2b1)
 
 `PageHeader({ title, count?, meta?, actions?, filters? })` supplies the title/count row,
-right actions, metadata and wrapping filter row. `PageTitle` delegates to it until slice 14.
+right actions, metadata and wrapping filter row. It is the only page title.
 `KeyValue({ items })` renders pairs of React nodes as a semantic two-column definition list.
 `MoneyStrip({ figures, operators?, divider?, actions? })` takes labelled value/caption
 figures. `emphasis="figure"` enlarges inputs; `emphasis="answer"` enlarges and emphasizes
@@ -218,7 +219,7 @@ bottom-left. `ToastMessage` shares the visual rendering with the gallery's stati
 `Dialog({ size: 'S'|'M'|'L', title, context?, step?: { n, of }, footer?, ui?, onClose })`
 uses fixed 400/560/760 px sizes, a padded body and subtle footer. The dialog is a
 viewport-bounded column (`100dvh` less two `--space-8` gutters); only
-`.bss-dialog-body` scrolls, while header/footer stay fixed. `Modal` inherits this.
+`.bss-dialog-body` scrolls, while header/footer stay fixed.
 Loaded child forms use `DialogFooter` to portal actions into the fixed footer without
 moving form state. Native form submit buttons keep an explicit `form` id association
 when portaled, preserving browser validation. Form callers pass optional
@@ -230,8 +231,7 @@ pass `undefined` to opt out explicitly, as do destructive End and cancellation p
 Order metadata's Save details lives in the footer and owns Enter while that panel is
 open; draft Submit stays available as a secondary action. Its context line sits
 under the title; the step follows the title. `preview` renders static gallery examples
-without an overlay or Escape handler. `Modal` temporarily delegates to Dialog, mapping
-widths ≤440 to S, ≤620 to M, and larger widths to L; existing `subtitle` becomes context.
+without an overlay or Escape handler.
 Existing callers' `bss-modal-body` containers own the same 20 px body spacing without
 double padding. Escape, overlay clicks and the close button preserve closing behavior.
 
@@ -328,3 +328,9 @@ SubscriberOrders reuses loadOrderPage for each of draft, acknowledged and inProg
 ### Ledger billing runs (R8)
 
 The latest-run band and selected compact history share the existing loaded run list. Outcomes replaces the dialog but keeps its lazy detail/account loaders, firstFilter and exact filter queries: activate Accounts or select a history row. Key the outcomes owner by run id so selection resets its filter. Run details stays in a disclosure; account names link to cards beside copyable Id controls. The next-run countdown uses zonedDateTime for latest date + 1 at billingRunAt, including the target date's DST offset, and context.now only. Outcomes/history wrap below the band when their compact tables cannot fit side by side.
+
+**Theme (slice 14).** `app/theme.ts` keeps System / Light / Dark under localStorage `bss.theme`
+(every access in try/catch; a throwing storage means System) and sets `data-theme` on `<html>`
+(System removes it, so `prefers-color-scheme` in `tokens.css` decides). `index.html` applies the
+saved value in an inline script before first paint. The choice lives in the operator menu
+(`ThemeChoice`, `data-ui="ui.shell.theme"`). `make web-shots` also writes `-dark` PNGs.

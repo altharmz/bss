@@ -17,7 +17,7 @@ import { useSystemContext } from '../app/context';
 import { businessDate, clockTime } from '../format/dates';
 import { formatCents, parseAmount, positiveAmountError, toCents } from '../format/money';
 import { PAYMENT_METHOD_OPTIONS, paymentMethodLabel } from '../format/labels';
-import { Button, Coded, Field, Modal, Panel, Segmented, TextInput, useToast } from '../ui/kit';
+import { Button, Coded, Field, Dialog, Panel, Segmented, TextInput, useToast } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
@@ -138,10 +138,10 @@ export function RefundModal({
   }
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Record refund"
-      width={620}
+      size="M"
       onClose={() => {
         if (!saving.current) onClose();
       }}
@@ -217,7 +217,7 @@ export function RefundModal({
           </p>
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -250,7 +250,7 @@ export function PaymentRefundModal({
       />
     );
   return (
-    <Modal title="Record refund" width={620} onClose={onClose}>
+    <Dialog title="Record refund" size="M" onClose={onClose}>
       <div className="bss-modal-body">
         {data.status === 'loading' ? (
           <p>Loading refundable credit…</p>
@@ -262,7 +262,7 @@ export function PaymentRefundModal({
           />
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -493,10 +493,10 @@ export function AccountBills({
         </Panel>
       </div>
       {open && (
-        <Modal
+        <Dialog
           onSubmit={submitDialogPrimary}
           title="Bill now"
-          width={620}
+          size="M"
           onClose={() => {
             if (!saving.current) setOpen(false);
           }}
@@ -528,7 +528,7 @@ export function AccountBills({
               </p>
             )}
           </div>
-        </Modal>
+        </Dialog>
       )}
     </>
   );

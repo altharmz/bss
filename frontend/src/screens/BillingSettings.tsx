@@ -21,8 +21,8 @@ import { formatInt } from '../format/money';
 import {
   SelectField,
   Button,
-  Modal,
-  PageTitle,
+  Dialog,
+  PageHeader,
   Panel,
   Tag,
   Segmented,
@@ -116,7 +116,7 @@ function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode 
   return (
     <div className="bss-screen" data-ui={marker}>
       <div className="bss-title-row">
-        <PageTitle
+        <PageHeader
           title="Billing settings"
           count={rows.status === 'ok' ? formatInt(rows.data.length) : undefined}
         />
@@ -242,10 +242,10 @@ function SettingFormModal({
   const body = setting ? patchBody(kind, setting, form) : createBody(kind, form);
   const valid = form.name.trim() !== '';
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={setting ? `Edit ${setting.name}` : `New ${tab.word}`}
-      width={480}
+      size="M"
       onClose={onClose}
       ui={`ui.billingSettings.${kind}.form`}
       footer={
@@ -307,7 +307,7 @@ function SettingFormModal({
           )}
         </fieldset>
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -324,10 +324,10 @@ function DeleteSettingModal({
 }) {
   const write = useWrite(onDone);
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={`Delete ${setting.name}`}
-      width={480}
+      size="M"
       onClose={onClose}
       ui={`ui.billingSettings.${kind}.confirmDelete`}
       footer={
@@ -354,6 +354,6 @@ function DeleteSettingModal({
           a billing account still names it.
         </p>
       </div>
-    </Modal>
+    </Dialog>
   );
 }

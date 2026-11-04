@@ -22,7 +22,7 @@ import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { addDays, isIsoDate } from '../format/dates';
 import { formatCents, toCents } from '../format/money';
-import { Button, Menu, Modal, DateField, TextInput, type MenuItem } from '../ui/kit';
+import { Button, Menu, Dialog, DateField, TextInput, type MenuItem } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Preview } from './AddProduct';
 import { uncertain } from './submissionKey';
@@ -229,10 +229,10 @@ export function ProductChangeDialog({
   }
 
   return (
-    <Modal
+    <Dialog
       onSubmit={change === 'end' ? undefined : submitDialogPrimary}
       title={`${TITLE[change]}: ${name}`}
-      width={change === 'end' ? 400 : 520}
+      size={change === 'end' ? 'S' : 'M'}
       onClose={() => {
         if (!saving.current) onClose();
       }}
@@ -278,7 +278,7 @@ export function ProductChangeDialog({
           </div>
         )}
       </fieldset>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -386,10 +386,10 @@ export function ChangeOfferingDialog({
   }
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={`Change offering: ${name}`}
-      width={720}
+      size="L"
       onClose={() => {
         if (!saving.current) onClose();
       }}
@@ -521,7 +521,7 @@ export function ChangeOfferingDialog({
           </div>
         </section>
       </fieldset>
-    </Modal>
+    </Dialog>
   );
 }
 

@@ -6,7 +6,7 @@ import { useSystemContext } from '../app/context';
 import { businessDate } from '../format/dates';
 import { shortId } from '../format/ids';
 import { formatAmount } from '../format/money';
-import { Button, Modal } from '../ui/kit';
+import { Button, Dialog } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -51,10 +51,10 @@ function DetailDialog({
   onClose: () => void;
 }) {
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={title}
-      width={640}
+      size="L"
       onClose={onClose}
       ui={ui}
       footer={<Button onClick={onClose}>Close</Button>}
@@ -66,7 +66,7 @@ function DetailDialog({
         )}
         {detail.status === 'ok' && <Fields body={detail.data} />}
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 

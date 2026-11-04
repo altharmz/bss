@@ -17,7 +17,7 @@ import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { shortId } from '../format/ids';
 import { formatCents, formatInt, toCents } from '../format/money';
-import { Button, Dialog, KeyValue, PageTitle, Panel, StatusPill, Segmented } from '../ui/kit';
+import { Button, Dialog, KeyValue, PageHeader, Panel, StatusPill, Segmented } from '../ui/kit';
 import { Id } from '../ui/Id';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
@@ -104,7 +104,7 @@ export function PrepaidCommandsScreen() {
   return (
     <div className="bss-screen" data-ui="ui.prepaidCommands">
       <div className="bss-title-row">
-        <PageTitle title="Prepaid commands" />
+        <PageHeader title="Prepaid commands" />
         <span className="bss-caption">
           Orders, renewals and transfers the billing worker carries out
         </span>

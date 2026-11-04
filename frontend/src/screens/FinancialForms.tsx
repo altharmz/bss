@@ -21,7 +21,7 @@ import {
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { parseAmount } from '../format/money';
-import { SelectField, Button, Modal, Segmented, TextInput } from '../ui/kit';
+import { SelectField, Button, Dialog, Segmented, TextInput } from '../ui/kit';
 import { Combobox } from '../ui/combobox';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Field } from './SubscriberForms';
@@ -177,10 +177,10 @@ export function FinancialFormModal({
   const owners = useResource('financial-owners', loadOwnerChoices);
   const title = account ? `Edit ${account.name}` : `New ${NAME[kind]}`;
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={title}
-      width={560}
+      size="M"
       onClose={onClose}
       ui={`${MARKER[kind]}.form`}
     >
@@ -207,7 +207,7 @@ export function FinancialFormModal({
           onDone={onDone}
         />
       )}
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -404,10 +404,10 @@ export function DeleteFinancialModal({
 }) {
   const write = useWrite(onDone);
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={`Delete ${account.name}`}
-      width={480}
+      size="M"
       onClose={onClose}
       ui={`${MARKER[kind]}.confirmDelete`}
       footer={
@@ -434,6 +434,6 @@ export function DeleteFinancialModal({
           {kind === 'FinancialAccount' ? 'No account links to it.' : 'Nothing refers to it.'}
         </p>
       </div>
-    </Modal>
+    </Dialog>
   );
 }

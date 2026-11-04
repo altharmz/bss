@@ -8,7 +8,7 @@ import type { PendingOrder } from '../api/commands';
 import { PATHS } from '../api/bss';
 import { changeNumber, requiresNumber } from '../api/numbers';
 import { useResource } from '../api/useResource';
-import { Button, Modal } from '../ui/kit';
+import { Button, Dialog } from '../ui/kit';
 import { ErrorBlock } from '../ui/states';
 import { NumberPicker } from './Numbers';
 
@@ -100,10 +100,10 @@ export function NumberModal({
     }
   }
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Subscriber number"
-      width={600}
+      size="M"
       onClose={onClose}
       ui="ui.subscriber.number"
       footer={
@@ -161,6 +161,6 @@ export function NumberModal({
           </>
         )}
       </fieldset>
-    </Modal>
+    </Dialog>
   );
 }

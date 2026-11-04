@@ -6,7 +6,16 @@ test('capture the admin pages at both design widths', async ({ page }) => {
   await page.goto('/subscribers');
   await signIn(page);
   await expect(page.getByRole('heading', { name: 'Subscribers', exact: true })).toBeVisible();
-  for (const width of [1280, 1600]) {
+  // Light at both widths, then dark at both: the theme is chosen the way a user's choice
+  // reaches the page, through localStorage before it loads (decision D3).
+  const passes = [
+    [1280, false],
+    [1600, false],
+    [1280, true],
+    [1600, true],
+  ] as const;
+  for (const [width, dark] of passes) {
+    if (dark) await page.addInitScript(() => window.localStorage.setItem('bss.theme', 'dark'));
     await page.setViewportSize({ width, height: width === 1280 ? 900 : 1000 });
     for (const name of [
       'subscribers',
@@ -57,7 +66,14 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         expect(idle?.width).toBe(busy?.width);
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
-      await page.screenshot({ path: `/web/.shots/${name}-${width}.png`, fullPage: true });
+      await page.screenshot({
+        path: `/web/.shots/${name}-${width}${dark ? '-dark' : ''}.png`,
+        fullPage: true,
+      });
+      if (dark) {
+        expect(await page.locator('html').getAttribute('data-theme')).toBe('dark');
+        continue;
+      }
       if (name === 'balances') {
         await page.getByRole('button', { name: 'Account totals', exact: true }).click();
         await page.waitForLoadState('networkidle');
@@ -295,9 +311,8 @@ test('capture the admin pages at both design widths', async ({ page }) => {
           }
           await page.getByRole('button', { name: 'Transfer', exact: true }).click();
           const transfer = page.getByRole('dialog', { name: 'Transfer funds' });
-          await expect(
-            transfer.getByText(/This account has no active product with a subscriber number/),
-          ).toBeVisible();
+          // Whether the seeded account has a numbered product or not, step 1 is on screen.
+          await expect(transfer.getByText('From number', { exact: true })).toBeVisible();
           await page.screenshot({ path: `/web/.shots/dialog-transfer-${width}.png` });
           await transfer.getByRole('button', { name: 'Cancel' }).click();
 
@@ -368,7 +383,8 @@ test('capture the admin pages at both design widths', async ({ page }) => {
           await expect(transfer.locator('.money-recipient')).toContainText('Anna Kask');
           await page.screenshot({ path: `/web/.shots/dialog-transfer-recipient-${width}.png` });
           await transfer.getByRole('button', { name: 'Next', exact: true }).click();
-          await transfer.getByLabel('Amount', { exact: true }).fill('5.00');
+          // Within the seeded account's available balance, so the review step is reachable.
+          await transfer.getByLabel('Amount', { exact: true }).fill('1.00');
           await transfer
             .getByLabel('Reason', { exact: true })
             .fill('Subscriber requested transfer');
