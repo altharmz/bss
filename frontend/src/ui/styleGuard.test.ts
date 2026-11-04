@@ -24,6 +24,28 @@ function currencyLiterals(file: string, source: string): string[] {
   return problems;
 }
 
+/** Template literals that end in "${n} <plural noun>": a count must go through plural(). */
+function pluralisations(file: string, source: string): string[] {
+  const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const problems: string[] = [];
+  function visit(node: ts.Node) {
+    if (
+      (ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) &&
+      /^ [a-z]+(?:s|ies)$/i.test(node.text) &&
+      ts.isTemplateSpan(node.parent) &&
+      /^(?:n|count|total|-?days|formatInt\(.*\)|.*\.(?:length|total|size))$/.test(
+        node.parent.expression.getText(tree),
+      )
+    ) {
+      const { line } = tree.getLineAndCharacterOfPosition(node.getStart(tree));
+      problems.push(`${file}:${line + 1}: use plural() for a count`);
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(tree);
+  return problems;
+}
+
 function files(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
@@ -89,6 +111,25 @@ describe('Ledger style guard', () => {
     ]);
     expect(
       currencyLiterals('fixture.tsx', "const currency = account.currency; const a = 'USDT';"),
+    ).toEqual([]);
+  });
+
+  it('detects a pluralised count that does not use plural()', () => {
+    expect(
+      pluralisations(
+        'f.tsx',
+        'const a = `${n} products`; const b = `${n} days ago`; const c = `${x.length} jobs`; const d = `No ${word} accounts`;',
+      ),
+    ).toEqual(['f.tsx:1: use plural() for a count', 'f.tsx:1: use plural() for a count']);
+  });
+
+  it('pluralises every count with plural()', () => {
+    expect(
+      files(src)
+        .filter(
+          (file) => /\.tsx?$/.test(file) && !file.includes('.test.') && !file.includes('generated'),
+        )
+        .flatMap((file) => pluralisations(file, readFileSync(file, 'utf8'))),
     ).toEqual([]);
   });
 

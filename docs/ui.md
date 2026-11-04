@@ -38,7 +38,7 @@ Tested means a passing component test saw the marker on screen (`expectUi`, see 
 | System context | `frontend/src/app/context.tsx` | loads `GET /internal/v1/context` before any screen: no date can be shown without the business date and zone |
 | API client | `frontend/src/api/client.ts`, `bss.ts` | fetch wrapper; every failure is an `ApiError` whose message is the call ("GET /path -> 503 Service Unavailable"); `getAll` pages by 100; `useResource` = loading / error / ok + retry; `usePolled` = the same, refreshed in the background every few seconds while a predicate on the data holds (a failed refresh keeps the data and stops) |
 | Types | `frontend/scripts/gen-types.mjs` -> `src/api/generated/` (git-ignored) | generated from `spec/` (TMF620, 622, 637, 666 and the internal API) on every build, lint and test - never from FastAPI's `/openapi.json` |
-| UI kit | `/ui-kit`, `frontend/src/ui/` | Ledger v2 buttons (busy and outcome labels), Field/TextInput/SelectField/DateField/MoneyField/Checkbox, filter and radio Segmented, live controls gallery including every D4 status via explicit StatusPill kinds, Tag/Flag/Badge variants, neutral-positive Amount figures and copyable Id examples; all status callers use explicit D4 kinds; default/compact/dense selected tables and loading/error/empty/no-results previews; keyboard Tabs and TabPanel, open Menu with disabled/negative items and separators, structured table range and paging previews; KeyValue definition grid, prepaid/postpaid MoneyStrip, PageHeader slots and titled/untitled Panel previews |
+| UI kit | `/ui-kit`, `frontend/src/ui/` | Ledger v2 buttons (busy and outcome labels), Field/TextInput/SelectField/DateField/FileField/MoneyField/Checkbox (with label), filter and radio Segmented, live controls gallery including every D4 status via explicit StatusPill kinds, Tag/Flag/Badge variants, neutral-positive Amount figures and copyable Id examples; all status callers use explicit D4 kinds; default/compact/dense selected tables and loading/error/empty/no-results previews; keyboard Tabs and TabPanel, open Menu with disabled/negative items and separators, structured table range and paging previews; KeyValue definition grid, prepaid/postpaid MoneyStrip, PageHeader slots and titled/untitled Panel previews |
 | Money | `frontend/src/format/money.ts` | amounts become integer cents at the edge; no float arithmetic; typed amounts are sent as the validated decimal string as an exact JSON number (`jsonWithAmount`); negatives use U+2212 |
 | Dates | `frontend/src/format/dates.ts` | business dates in BILLING_TZ via `Intl`, never the browser's zone; dates sent carry BILLING_TZ's offset *for that date* (`zonedDateTime`) |
 
@@ -459,7 +459,7 @@ result (no response or 5xx) the dialog says it is unsure and offers Refresh.
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
-Ledger v2: command StatusPill uses the actual command state.
+Ledger v2: command StatusPill uses the `command` kind mapping (Queued, Completed, Failed (technical)). Slice 13: the table is `density="dense"`, ids are `Id` (`CMD-`, `BA-`, `ORD-`, `PRD-`, `BL-`), and the detail is a `Dialog` (M) with a `KeyValue` list. The Id copies on click and does not open the row.
 
 Route `/prepaid-commands`, sidebar after Billing runs with a red badge while any command is
 `failedTechnical`. Lists the internal prepaid command journal (id, kind, account, state, due date,

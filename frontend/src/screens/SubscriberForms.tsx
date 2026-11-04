@@ -27,7 +27,7 @@ import { useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { accountLabel } from '../format/ids';
 import { parseAmount } from '../format/money';
-import { Button, Dialog, Segmented, TextInput } from '../ui/kit';
+import { SelectField, Button, Checkbox, Dialog, Segmented, TextInput } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { AddProductModal } from './AddProduct';
 import { uncertain } from './submissionKey';
@@ -277,15 +277,11 @@ export function NewSubscriberModal({
             </Field>
           </div>
           <AccountFields draft={draft} />
-          <label>
-            <input
-              type="checkbox"
-              checked={initialProduct}
-              onChange={(e) => setInitialProduct(e.target.checked)}
-            />{' '}
-            After creating the account, add a product. Offerings that need a subscriber number ask
-            for one.
-          </label>
+          <Checkbox
+            checked={initialProduct}
+            onChange={(e) => setInitialProduct(e.target.checked)}
+            label="After creating the account, add a product. Offerings that need a subscriber number ask for one."
+          />
         </section>
       </div>
     </Dialog>
@@ -580,8 +576,7 @@ function EditForm({
           </Field>
           {!credit.ok && <Note tone="negative">Enter a credit limit with at most 2 decimals.</Note>}
           <Field label="Financial account">
-            <select
-              className="bss-input"
+            <SelectField
               data-ui="ui.subscriber.financialLink"
               value={form.financialAccountId ?? ''}
               disabled={financial.status === 'loading'}
@@ -600,7 +595,7 @@ function EditForm({
                   financial.status === 'ok' &&
                   financial.data.some((choice) => choice.id === form.financialAccountId)
                 ) && <option value={form.financialAccountId}>Current financial account</option>}
-            </select>
+            </SelectField>
           </Field>
           {financial.status === 'error' && (
             <Note tone="negative">
@@ -617,8 +612,7 @@ function EditForm({
         <section className="bss-form" data-ui="ui.subscriber.billingGroup">
           <div className="bss-step-head">Billing</div>
           <Field label="Cycle specification">
-            <select
-              className="bss-input"
+            <SelectField
               data-ui="ui.subscriber.cycleSpecification"
               value={form.billing.cycleId ?? BUILT_IN_CYCLE}
               disabled={cycles.status !== 'ok'}
@@ -635,11 +629,10 @@ function EditForm({
               ) : (
                 <option value={form.billing.cycleId ?? BUILT_IN_CYCLE}>Current</option>
               )}
-            </select>
+            </SelectField>
           </Field>
           <Field label="Bill format">
-            <select
-              className="bss-input"
+            <SelectField
               data-ui="ui.subscriber.billFormat"
               value={form.billing.formatId ?? ''}
               disabled={formats.status !== 'ok'}
@@ -655,7 +648,7 @@ function EditForm({
               ) : form.billing.formatId !== null ? (
                 <option value={form.billing.formatId}>Current</option>
               ) : null}
-            </select>
+            </SelectField>
           </Field>
           <fieldset aria-label="Presentation media" data-ui="ui.subscriber.presentationMedia">
             <legend className="label">Presentation media</legend>
@@ -664,20 +657,18 @@ function EditForm({
             )}
             {media.status === 'ok' &&
               media.data.map((choice) => (
-                <label key={choice.id} className="bss-check">
-                  <input
-                    type="checkbox"
-                    checked={form.billing.mediaIds.includes(choice.id)}
-                    onChange={(e) =>
-                      setBilling({
-                        mediaIds: e.target.checked
-                          ? [...form.billing.mediaIds, choice.id]
-                          : form.billing.mediaIds.filter((id) => id !== choice.id),
-                      })
-                    }
-                  />{' '}
-                  {choice.name}
-                </label>
+                <Checkbox
+                  key={choice.id}
+                  checked={form.billing.mediaIds.includes(choice.id)}
+                  onChange={(e) =>
+                    setBilling({
+                      mediaIds: e.target.checked
+                        ? [...form.billing.mediaIds, choice.id]
+                        : form.billing.mediaIds.filter((id) => id !== choice.id),
+                    })
+                  }
+                  label={choice.name}
+                />
               ))}
           </fieldset>
           {(cycles.status === 'error' ||

@@ -18,7 +18,17 @@ import {
 import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
 import { formatInt } from '../format/money';
-import { Button, Dialog, PageHeader, Panel, Tag, Segmented, TextInput, useToast } from '../ui/kit';
+import {
+  SelectField,
+  Button,
+  Dialog,
+  PageHeader,
+  Panel,
+  Tag,
+  Segmented,
+  TextInput,
+  useToast,
+} from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { Footer, useWrite } from './FinancialForms';
@@ -265,11 +275,7 @@ function SettingFormModal({
         <fieldset className="bss-form bss-write-fields" disabled={write.busy}>
           <Field label="Name">
             {kind === 'formats' ? (
-              <select
-                className="bss-input"
-                value={form.name}
-                onChange={(e) => set({ name: e.target.value })}
-              >
+              <SelectField value={form.name} onChange={(e) => set({ name: e.target.value })}>
                 {form.name === '' && <option value="">Choose a format</option>}
                 {form.name !== '' && !(FORMAT_NAMES as readonly string[]).includes(form.name) && (
                   <option value={form.name}>{form.name}</option>
@@ -279,7 +285,7 @@ function SettingFormModal({
                     {name}
                   </option>
                 ))}
-              </select>
+              </SelectField>
             ) : (
               <TextInput value={form.name} onChange={(e) => set({ name: e.target.value })} />
             )}

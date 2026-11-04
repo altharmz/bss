@@ -341,7 +341,7 @@ describe('record payment', () => {
     fireEvent.change(within(dialog).getByLabelText('Amount received'), {
       target: { value: '350' },
     });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'cash' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cash' }));
     fireEvent.click(within(dialog).getByLabelText(/Apply to specific bills/));
     // oldest first: B1 takes 300, B2 the 50 left; the credit note is not offered
     const b1 = within(dialog).getByLabelText('Amount for BL-B1000001') as HTMLInputElement;

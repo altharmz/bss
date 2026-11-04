@@ -97,8 +97,9 @@ describe('payments screen', () => {
     expect(within(row).getByRole('link', { name: 'Ivan Ivanov' }).getAttribute('href')).toBe(
       `/subscribers/${A1}`,
     );
-    expect(within(row).getByText('100.00 USD')).toBeTruthy();
-    expect(within(row).getByText('bankTransfer')).toBeTruthy();
+    expect(within(row).getByText('+100.00')).toBeTruthy();
+    expect(within(row).getByText('USD')).toBeTruthy();
+    expect(within(row).getByText('Bank transfer')).toBeTruthy();
     expect(within(row).getByText('INV-77')).toBeTruthy();
     expect(screen.getByText('Showing 2')).toBeTruthy();
 
@@ -107,10 +108,13 @@ describe('payments screen', () => {
     const refund = screen
       .getAllByRole('row')
       .find((r) => within(r).queryByText('Returned deposit')) as HTMLElement;
-    expect(within(refund).getByRole('link', { name: 'BA-A0000001' }).getAttribute('href')).toBe(
+    expect(within(refund).getByRole('link', { name: 'Account' }).getAttribute('href')).toBe(
       `/subscribers/${A1}`,
     );
-    expect(within(refund).getByText('10.00 USD')).toBeTruthy();
+    expect(within(refund).getByText('BA-')).toBeTruthy();
+    expect(within(refund).getByText('A0000001')).toBeTruthy();
+    expect(within(refund).getByText('−10.00')).toBeTruthy();
+    expect(within(refund).getByText('USD')).toBeTruthy();
     expect(calls.filter((c) => c.startsWith(`GET ${PAYMENT}?`))).toHaveLength(1);
   });
 
@@ -159,7 +163,9 @@ describe('payments screen', () => {
     open('/payments');
     fireEvent.click(await screen.findByText('INV-77'));
     const dialog = await screen.findByRole('dialog');
-    await within(dialog).findByText('Bill B1000001: 60.00 USD');
+    await within(dialog).findByText('B1000001');
+    expect(within(dialog).getByText('BL-')).toBeTruthy();
+    expect(within(dialog).getAllByText('60.00').length).toBeGreaterThan(0);
     expectUi('ui.payments.detail');
     expect(within(dialog).getByText('Payment E0000001')).toBeTruthy();
     expect(within(dialog).getByRole('link', { name: 'Ivan Ivanov' })).toBeTruthy();

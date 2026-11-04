@@ -1,6 +1,7 @@
 import { cleanup, configure } from '@testing-library/react';
 import { afterEach, expect, vi } from 'vitest';
 import { takeUnexpectedRequests } from './fetch';
+import { unlabeledControls } from './unlabeled';
 
 // findBy/waitFor give up after asyncUtilTimeout of wall-clock time. Testing Library's
 // 1 s default made Catalog's first test flaky ("no row Mobile L", 3.5 s, in the single
@@ -16,9 +17,11 @@ configure({ asyncUtilTimeout: 5000 });
 // timers never leak into the next test either.
 afterEach(() => {
   const unexpected = takeUnexpectedRequests();
+  const unlabeled = unlabeledControls();
   cleanup();
   vi.unstubAllGlobals();
   vi.useRealTimers();
   window.history.replaceState(null, '', '/');
   expect(unexpected, 'requests without a stub (src/test/fetch.ts)').toEqual([]);
+  expect(unlabeled, 'form controls without a label or aria name').toEqual([]);
 });

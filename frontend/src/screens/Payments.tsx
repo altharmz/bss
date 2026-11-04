@@ -14,9 +14,21 @@ import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
-import { accountLabel, shortId } from '../format/ids';
-import { formatAmount, formatInt } from '../format/money';
-import { Dialog, PageHeader, Panel, StatusPill, Segmented, TextInput, Button } from '../ui/kit';
+import { shortId } from '../format/ids';
+import { formatInt, toCents } from '../format/money';
+import { Amount } from '../ui/Amount';
+import { Id } from '../ui/Id';
+import { paymentMethodLabel } from '../format/labels';
+import {
+  Coded,
+  Dialog,
+  PageHeader,
+  Panel,
+  StatusPill,
+  Segmented,
+  DateField,
+  Button,
+} from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -59,8 +71,9 @@ function accountFromUrl(): string | null {
   return value !== null && UUID.test(value) ? value.toLowerCase() : null;
 }
 
-function moneyText(money: { value: number; unit: string }): string {
-  return `${formatAmount(money.value)} ${money.unit}`;
+function money(value: { value: number; unit: string }, { signed = false, negate = false } = {}) {
+  const cents = toCents(value.value);
+  return <Amount cents={negate ? -cents : cents} currency={value.unit} signed={signed} />;
 }
 
 function newestFirst<T>(rows: T[], at: (row: T) => string): T[] {
@@ -71,11 +84,15 @@ function stamp(instant: string, timeZone: string): string {
   return `${businessDate(instant, timeZone)} ${clockTime(instant, timeZone).slice(0, 5)}`;
 }
 
+function methodCell(code: string | undefined) {
+  return code === undefined ? '—' : <Coded code={code} label={paymentMethodLabel(code)} />;
+}
+
 function paymentCells(payment: PaymentRecord, timeZone: string) {
   return {
     date: stamp(payment.paymentDate, timeZone),
-    amount: moneyText(payment.totalAmount),
-    method: payment.paymentMethod.name ?? payment.paymentMethod['@type'] ?? '—',
+    amount: money(payment.totalAmount, { signed: true }),
+    method: methodCell(payment.paymentMethod.name ?? payment.paymentMethod['@type']),
     status: <StatusPill kind="payment" status={payment.status} />,
     reference: referenceOf(payment),
   };
@@ -211,25 +228,30 @@ export function PaymentDialog({
         {payment !== null && (
           <>
             <div className="bss-kpis">
-              <Field label="Total">{moneyText(payment.totalAmount)}</Field>
-              <Field label="Net">{moneyText(payment.amount)}</Field>
-              <Field label="Tax">{moneyText(payment.taxAmount)}</Field>
+              <Field label="Total">{money(payment.totalAmount, { signed: true })}</Field>
+              <Field label="Net">{money(payment.amount, { signed: true })}</Field>
+              <Field label="Tax">{money(payment.taxAmount)}</Field>
               <Field label="Status">
                 <StatusPill kind="payment" status={payment.status} />
               </Field>
             </div>
             <dl className="bss-caption">
+              <dt>Id</dt>
+              <dd>
+                <Id id={payment.id} prefix="PAY-" />
+              </dd>
               <dt>Subscriber</dt>
               <dd>
                 <Link
                   className="bss-link"
                   href={hrefOf({ name: 'subscriber', accountId: payment.account.id })}
                 >
-                  {payment.account.name ?? accountLabel(payment.account.id)}
-                </Link>
+                  {payment.account.name ?? 'Account'}
+                </Link>{' '}
+                <Id id={payment.account.id} prefix="BA-" />
               </dd>
               <dt>Method</dt>
-              <dd>{payment.paymentMethod.name ?? payment.paymentMethod['@type'] ?? '—'}</dd>
+              <dd>{methodCell(payment.paymentMethod.name ?? payment.paymentMethod['@type'])}</dd>
               <dt>Reference</dt>
               <dd>{referenceOf(payment)}</dd>
               {payment.description !== undefined && (
@@ -246,7 +268,7 @@ export function PaymentDialog({
               <ul>
                 {(payment.paymentItem ?? []).map((item) => (
                   <li key={item.item.id}>
-                    Bill {shortId(item.item.id)}: {moneyText(item.amount)}
+                    <Id id={item.item.id} prefix="BL-" />: {money(item.amount)}
                   </li>
                 ))}
               </ul>
@@ -324,10 +346,8 @@ export function PaymentsScreen() {
         <label className="bss-caption" htmlFor="payments-from">
           From
         </label>
-        <TextInput
+        <DateField
           id="payments-from"
-          type="date"
-          mono
           value={from}
           max={to === '' ? undefined : to}
           onChange={(event) => setFrom(event.target.value)}
@@ -335,17 +355,15 @@ export function PaymentsScreen() {
         <label className="bss-caption" htmlFor="payments-to">
           To
         </label>
-        <TextInput
+        <DateField
           id="payments-to"
-          type="date"
-          mono
           value={to}
           min={from === '' ? undefined : from}
           onChange={(event) => setTo(event.target.value)}
         />
         {account !== null && (
           <span className="bss-run-tag" data-ui="ui.payments.accountChip">
-            Account {name ?? accountLabel(account)}{' '}
+            Account {name ?? <Id id={account} prefix="BA-" />}{' '}
             <button
               type="button"
               className="bss-link"
@@ -389,8 +407,9 @@ export function PaymentsScreen() {
                               className="bss-link"
                               href={hrefOf({ name: 'subscriber', accountId: payment.account.id })}
                             >
-                              {payment.account.name ?? accountLabel(payment.account.id)}
-                            </Link>
+                              {payment.account.name ?? 'Account'}
+                            </Link>{' '}
+                            <Id id={payment.account.id} prefix="BA-" />
                           </span>
                         ),
                         ...paymentCells(payment, timeZone),
@@ -445,16 +464,19 @@ function RefundRow({ refund, timeZone }: { refund: RefundRecord; timeZone: strin
       columns={REFUND_COLUMNS}
       cells={{
         account: (
-          <Link
-            className="bss-link"
-            href={hrefOf({ name: 'subscriber', accountId: refund.account.id })}
-          >
-            {refund.account.name ?? accountLabel(refund.account.id)}
-          </Link>
+          <>
+            <Link
+              className="bss-link"
+              href={hrefOf({ name: 'subscriber', accountId: refund.account.id })}
+            >
+              {refund.account.name ?? 'Account'}
+            </Link>{' '}
+            <Id id={refund.account.id} prefix="BA-" />
+          </>
         ),
         date: stamp(refund.refundDate, timeZone),
-        amount: moneyText(refund.totalAmount),
-        method: refund.paymentMethod.name ?? '—',
+        amount: money(refund.totalAmount, { signed: true, negate: true }),
+        method: methodCell(refund.paymentMethod.name),
         status: <StatusPill kind="payment" status={refund.status} />,
         reference,
       }}

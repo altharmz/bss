@@ -22,7 +22,7 @@ import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { addDays, businessDate } from '../format/dates';
 import { formatCents, parseAmount } from '../format/money';
-import { Button, Dialog, TextInput } from '../ui/kit';
+import { SelectField, Button, Checkbox, Dialog, DateField, TextInput } from '../ui/kit';
 
 // Edit offering, and the price dialog (edit, end, delete) opened from the offering
 // detail. The server decides what is allowed: a refusal is shown with the entered values
@@ -128,8 +128,7 @@ export function OfferingEditModal({
         </label>
         <label>
           Specification
-          <select
-            className="bss-input"
+          <SelectField
             value={form.specificationId}
             onChange={(e) => set('specificationId', e.target.value)}
           >
@@ -139,39 +138,24 @@ export function OfferingEditModal({
                 {spec.name}
               </option>
             ))}
-          </select>
+          </SelectField>
           <span className="bss-secondary">
             The server refuses it once the offering was ordered.
           </span>
         </label>
-        <label>
-          <span>
-            <input
-              type="checkbox"
-              checked={form.isSellable}
-              onChange={(e) => set('isSellable', e.target.checked)}
-            />{' '}
-            Sellable
-          </span>
-        </label>
+        <Checkbox
+          checked={form.isSellable}
+          onChange={(e) => set('isSellable', e.target.checked)}
+          label="Sellable"
+        />
         <div className="bss-form-pair">
           <label>
             Valid from
-            <TextInput
-              mono
-              type="date"
-              value={form.validFrom}
-              onChange={(e) => set('validFrom', e.target.value)}
-            />
+            <DateField value={form.validFrom} onChange={(e) => set('validFrom', e.target.value)} />
           </label>
           <label>
             Valid to (empty = open-ended)
-            <TextInput
-              mono
-              type="date"
-              value={form.validTo}
-              onChange={(e) => set('validTo', e.target.value)}
-            />
+            <DateField value={form.validTo} onChange={(e) => set('validTo', e.target.value)} />
           </label>
         </div>
         <fieldset aria-label="Categories">
@@ -184,14 +168,11 @@ export function OfferingEditModal({
           {categories.status === 'ok' &&
             categories.data.map((c) => (
               <div key={c.id}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={form.categoryIds.includes(c.id)}
-                    onChange={() => toggle(c.id)}
-                  />{' '}
-                  {c.name}
-                </label>
+                <Checkbox
+                  checked={form.categoryIds.includes(c.id)}
+                  onChange={() => toggle(c.id)}
+                  label={c.name}
+                />
               </div>
             ))}
         </fieldset>
@@ -395,9 +376,7 @@ function PriceBody({
         {price.validTo === null &&
           (ending ? (
             <div className="bss-confirm">
-              <TextInput
-                mono
-                type="date"
+              <DateField
                 aria-label="Price ends on"
                 min={tomorrow}
                 value={endDay}

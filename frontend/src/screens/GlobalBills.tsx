@@ -10,10 +10,11 @@ import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate } from '../format/dates';
-import { accountLabel } from '../format/ids';
+import { Id } from '../ui/Id';
 import { formatInt, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { PageHeader, Panel, StatusPill, Segmented, TextInput } from '../ui/kit';
+import { runTriggerLabel } from '../format/labels';
+import { Coded, PageHeader, Panel, StatusPill, Segmented, DateField } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { BillDialog } from './Bills';
@@ -115,16 +116,10 @@ export function BillsScreen() {
         <label className="bss-caption" htmlFor="bills-date">
           Billing date
         </label>
-        <TextInput
-          id="bills-date"
-          type="date"
-          mono
-          value={date}
-          onChange={(event) => setDate(event.target.value)}
-        />
+        <DateField id="bills-date" value={date} onChange={(event) => setDate(event.target.value)} />
         {tab === 'bills' && account !== null && (
           <span className="bss-run-tag" data-ui="ui.bills.accountChip">
-            Account {name ?? accountLabel(account)}{' '}
+            Account {name ?? <Id id={account} prefix="BA-" />}{' '}
             <button
               type="button"
               className="bss-link"
@@ -171,8 +166,9 @@ export function BillsScreen() {
                                 accountId: bill.billingAccount.id,
                               })}
                             >
-                              {bill.billingAccount.name ?? accountLabel(bill.billingAccount.id)}
-                            </Link>
+                              {bill.billingAccount.name ?? 'Account'}
+                            </Link>{' '}
+                            <Id id={bill.billingAccount.id} prefix="BA-" />
                           </span>
                         ),
                         date: businessDate(bill.billDate, timeZone),
@@ -183,7 +179,11 @@ export function BillsScreen() {
                             currency={bill.amountDue.unit}
                           />
                         ),
-                        kind: bill.runType ?? '—',
+                        kind: bill.runType ? (
+                          <Coded code={bill.runType} label={runTriggerLabel(bill.runType)} />
+                        ) : (
+                          '—'
+                        ),
                       }}
                     />
                   ))}

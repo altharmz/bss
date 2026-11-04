@@ -1687,7 +1687,7 @@ describe('prepaid money forms', () => {
     expectUi('ui.subscriber.prepaid.topup');
     type(form, 'Amount', '1,250.5');
     type(form, 'Reason', ' Cash at the desk ');
-    press(form, 'cash');
+    press(form, 'Cash');
     fireEvent.click(within(form).getByRole('button', { name: /^Top up [\d,]+\.\d{2} USD$/ }));
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
@@ -2504,7 +2504,7 @@ describe('prepaid first-charge preview in Add product', () => {
     expect(screen.queryByRole('dialog', { name: 'Add product' })).toBeNull();
     const form = await screen.findByRole('dialog', { name: 'Top up' });
     expect((within(form).getByLabelText('Amount') as HTMLInputElement).value).toBe('1250.50');
-    fireEvent.click(within(form).getByRole('button', { name: 'cash' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Cash' }));
     fireEvent.click(within(form).getByRole('button', { name: /^Top up [\d,]+\.\d{2} USD$/ }));
     await screen.findByRole('status');
     const sent = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
@@ -2775,7 +2775,7 @@ describe('prepaid balance actions', () => {
     fireEvent.click(within(panel('Balance actions')).getByText('Top-up'));
     const first = await screen.findByRole('dialog', { name: 'Balance action' });
     expect(await within(first).findByText('Payment method')).toBeTruthy();
-    expect(within(first).getAllByText('cash').length).toBeGreaterThan(0);
+    expect(within(first).getAllByText('Cash').length).toBeGreaterThan(0);
     fireEvent.click(within(first).getByRole('button', { name: 'Close' }));
     fireEvent.click(within(panel('Balance actions')).getByText('Hold'));
     const second = await screen.findByRole('dialog', { name: 'Balance action' });
@@ -2820,7 +2820,7 @@ describe('prepaid balance actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Top up' }));
     const form = await screen.findByRole('dialog', { name: 'Top up' });
     fireEvent.change(within(form).getByLabelText('Amount'), { target: { value: '5' } });
-    fireEvent.click(within(form).getByRole('button', { name: 'cash' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Cash' }));
     fireEvent.click(within(form).getByRole('button', { name: /^Top up [\d,]+\.\d{2} USD$/ }));
     await waitFor(() =>
       expect(
@@ -2894,6 +2894,7 @@ describe('prepaid balance actions', () => {
     const buttons = (dialog: HTMLElement) =>
       within(dialog)
         .queryAllByRole('button')
+        .filter((b) => !(b.getAttribute('aria-label') ?? '').startsWith('Copy '))
         .map((b) => b.textContent)
         .filter((t) => t !== '×');
 

@@ -18,8 +18,8 @@ import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { businessDate, clockTime } from '../format/dates';
-import { formatInt } from '../format/money';
-import { Button, Dialog, StatusPill, useToast } from '../ui/kit';
+import { plural } from '../format/labels';
+import { SelectField, Button, Field, FileField, Dialog, StatusPill, useToast } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -107,7 +107,7 @@ export function JobsTab() {
                 />
               ))}
               <TableFooter
-                left={`${formatInt(rows.length)} jobs`}
+                left={plural(rows.length, 'job')}
                 right="A job is a record; deleting it undoes nothing"
               />
             </>
@@ -231,8 +231,7 @@ function ExportModal({
       <div className="bss-modal-body bss-form">
         <label>
           Scope
-          <select
-            className="bss-input"
+          <SelectField
             value={scope}
             disabled={job !== null}
             onChange={(e) => setScope(e.target.value)}
@@ -243,7 +242,7 @@ function ExportModal({
                 {c.name}
               </option>
             ))}
-          </select>
+          </SelectField>
         </label>
         {job !== null && (
           <Note tone="info">
@@ -278,6 +277,7 @@ function ImportModal({
   onDone: (message: string) => void;
 }) {
   const [text, setText] = useState(initial);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -333,14 +333,17 @@ function ImportModal({
       }
     >
       <div className="bss-modal-body bss-form">
-        <label>
-          JSON file
-          <input
-            type="file"
+        <Field label="JSON file">
+          <FileField
+            label="JSON file"
             accept=".json,application/json"
-            onChange={(e) => void choose(e.target.files?.[0])}
+            fileName={fileName}
+            onFile={(file) => {
+              setFileName(file?.name ?? null);
+              void choose(file);
+            }}
           />
-        </label>
+        </Field>
         <label>
           Or paste the document
           <textarea

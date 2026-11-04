@@ -258,7 +258,7 @@ export function PrepaidTransferModal({
               This is final. A transfer can't be undone here. Correcting it needs a new transfer
               from the recipient, with their consent.
             </Note>
-            <label
+            <div
               className="money-acknowledgement"
               data-ui="ui.subscriber.prepaid.transfer.acknowledgement"
             >
@@ -266,9 +266,9 @@ export function PrepaidTransferModal({
                 checked={acknowledged}
                 disabled={busy}
                 onChange={(event) => setAcknowledged(event.target.checked)}
+                label="I confirmed the amount and the recipient's number with the subscriber"
               />
-              I confirmed the amount and the recipient's number with the subscriber
-            </label>
+            </div>
           </section>
         ) : (
           <fieldset className="bss-form bss-write-fields" disabled={busy}>
@@ -303,7 +303,7 @@ export function PrepaidTransferModal({
                     mono
                     width={220}
                     aria-label="Receiver number"
-                    placeholder="79991234001"
+                    placeholder="12025550123"
                     value={digits}
                     onChange={(event) => {
                       setDigits(event.target.value);

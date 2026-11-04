@@ -15,9 +15,10 @@ import { useResource } from '../api/useResource';
 import { useRefreshNav, useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
-import { accountLabel, shortId } from '../format/ids';
+import { shortId } from '../format/ids';
 import { formatCents, formatInt, toCents } from '../format/money';
-import { Button, Dialog, PageHeader, Panel, StatusPill, Segmented } from '../ui/kit';
+import { Button, Dialog, KeyValue, PageHeader, Panel, StatusPill, Segmented } from '../ui/kit';
+import { Id } from '../ui/Id';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -120,7 +121,7 @@ export function PrepaidCommandsScreen() {
         />
         {account !== null && (
           <span className="bss-run-tag" data-ui="ui.prepaidCommands.accountChip">
-            Account {name ?? accountLabel(account)}{' '}
+            Account {name ?? <Id id={account} prefix="BA-" />}{' '}
             <button
               type="button"
               className="bss-link"
@@ -133,7 +134,7 @@ export function PrepaidCommandsScreen() {
         )}
       </div>
       <Panel>
-        <TableHead columns={COLUMNS} />
+        <TableHead columns={COLUMNS} density="dense" />
         <ListState
           resource={list}
           columns={COLUMNS}
@@ -152,9 +153,10 @@ export function PrepaidCommandsScreen() {
                 <TableRow
                   key={command.id}
                   columns={COLUMNS}
+                  density="dense"
                   onClick={() => setOpen(command)}
                   cells={{
-                    id: <span title={command.id}>{shortId(command.id)}</span>,
+                    id: <Id id={command.id} prefix="CMD-" />,
                     kind: command.kind,
                     account: (
                       <span className="ellipsis" onClick={(event) => event.stopPropagation()}>
@@ -165,14 +167,12 @@ export function PrepaidCommandsScreen() {
                             accountId: command.billingAccount.id,
                           })}
                         >
-                          {accountLabel(command.billingAccount.id)}
+                          {command.billingAccount.name ?? 'Account'}
                         </Link>{' '}
-                        {command.billingAccount.name}
+                        <Id id={command.billingAccount.id} prefix="BA-" />
                       </span>
                     ),
-                    state: (
-                      <StatusPill kind="command" status={command.state} label={command.state} />
-                    ),
+                    state: <StatusPill kind="command" status={command.state} />,
                     due: command.dueDate,
                     attempts: formatInt(command.attempts),
                     next: (
@@ -267,10 +267,10 @@ function CommandModal({
       title={`Command ${shortId(command.id)}`}
       context={
         <>
-          <StatusPill kind="command" status={command.state} label={command.state} /> {command.kind}
+          <StatusPill kind="command" status={command.state} /> {command.kind}
         </>
       }
-      size="L"
+      size="M"
       ui="ui.prepaidCommands.detail"
       onClose={onClose}
       footer={
@@ -296,74 +296,82 @@ function CommandModal({
           </Note>
         )}
         {problem !== null && <Note tone="negative">{problem}</Note>}
-        <dl className="bss-details">
-          <dt>Id</dt>
-          <dd className="bss-mono">{command.id}</dd>
-          <dt>Kind</dt>
-          <dd>{command.kind}</dd>
-          <dt>State</dt>
-          <dd>{command.state}</dd>
-          <dt>Account</dt>
-          <dd>
-            <Link className="bss-link" href={card}>
-              {accountLabel(command.billingAccount.id)}
-            </Link>{' '}
-            {command.billingAccount.name}
-          </dd>
-          <dt>Due date</dt>
-          <dd className="bss-mono">{command.dueDate}</dd>
-          <dt>Created</dt>
-          <dd className="bss-mono">{when(command.createdAt, context.timeZone)}</dd>
-          <dt>Attempts</dt>
-          <dd className="bss-mono">{formatInt(command.attempts)}</dd>
-          <dt>Last attempt</dt>
-          <dd className="bss-mono">{when(command.attemptedAt, context.timeZone)}</dd>
-          <dt>Next retry</dt>
-          <dd className="bss-mono">{when(command.nextRetryAt, context.timeZone)}</dd>
-          <dt>Outcome</dt>
-          <dd>{command.outcome ?? '—'}</dd>
-          <dt>Reason</dt>
-          <dd>{command.reason ?? '—'}</dd>
-          <dt>Error</dt>
-          <dd className={command.error !== null ? 'bss-run-error inline' : undefined}>
-            {command.error ?? '—'}
-          </dd>
-          <dt>Order</dt>
-          <dd>
-            {command.productOrder === null ? (
-              '—'
-            ) : (
-              <Link className="bss-link bss-mono" href={card} title={command.productOrder.id}>
-                {shortId(command.productOrder.id)}
-              </Link>
-            )}
-          </dd>
-          <dt>Products</dt>
-          <dd>
-            {command.products.length === 0
-              ? '—'
-              : command.products.map((product) => (
-                  <Link
-                    key={product.id}
-                    className="bss-link bss-mono"
-                    href={card}
-                    title={product.id}
-                  >
-                    {shortId(product.id)}{' '}
-                  </Link>
-                ))}
-          </dd>
-          <dt>Billing run</dt>
-          <dd className="bss-mono">
-            {command.billingRun === null ? '—' : command.billingRun.runDate}
-          </dd>
-          <dt>Bills</dt>
-          <dd className="bss-mono">
-            {command.bills.length === 0
-              ? '—'
-              : command.bills.map((bill) => shortId(bill.id)).join(' ')}
-          </dd>
-        </dl>
+        <KeyValue
+          items={[
+            ['Id', <Id id={command.id} prefix="CMD-" />],
+            ['Kind', command.kind],
+            ['State', <StatusPill kind="command" status={command.state} />],
+            [
+              'Account',
+              <>
+                <Link className="bss-link" href={card}>
+                  {command.billingAccount.name ?? 'Account'}
+                </Link>{' '}
+                <Id id={command.billingAccount.id} prefix="BA-" />
+              </>,
+            ],
+            ['Due date', <span className="bss-mono">{command.dueDate}</span>],
+            [
+              'Created',
+              <span className="bss-mono">{when(command.createdAt, context.timeZone)}</span>,
+            ],
+            ['Attempts', <span className="bss-mono">{formatInt(command.attempts)}</span>],
+            [
+              'Last attempt',
+              <span className="bss-mono">{when(command.attemptedAt, context.timeZone)}</span>,
+            ],
+            [
+              'Next retry',
+              <span className="bss-mono">{when(command.nextRetryAt, context.timeZone)}</span>,
+            ],
+            ['Outcome', command.outcome ?? '—'],
+            ['Reason', command.reason ?? '—'],
+            [
+              'Error',
+              <span className={command.error !== null ? 'bss-run-error inline' : undefined}>
+                {command.error ?? '—'}
+              </span>,
+            ],
+            [
+              'Order',
+              command.productOrder === null ? (
+                '—'
+              ) : (
+                <Id id={command.productOrder.id} prefix="ORD-" />
+              ),
+            ],
+            [
+              'Products',
+              command.products.length === 0 ? (
+                '—'
+              ) : (
+                <>
+                  {command.products.map((product) => (
+                    <Id key={product.id} id={product.id} prefix="PRD-" />
+                  ))}
+                </>
+              ),
+            ],
+            [
+              'Billing run',
+              <span className="bss-mono">
+                {command.billingRun === null ? '—' : command.billingRun.runDate}
+              </span>,
+            ],
+            [
+              'Bills',
+              command.bills.length === 0 ? (
+                '—'
+              ) : (
+                <>
+                  {command.bills.map((bill) => (
+                    <Id key={bill.id} id={bill.id} prefix="BL-" />
+                  ))}
+                </>
+              ),
+            ],
+          ]}
+        />
         {command.needs_topup !== null && (
           <div className="bss-run-note warn" data-ui="ui.prepaidCommands.needsTopup" role="status">
             Needs a top-up: requires {formatCents(toCents(command.needs_topup.required))}, available{' '}

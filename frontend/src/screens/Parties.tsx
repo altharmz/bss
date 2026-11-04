@@ -132,7 +132,7 @@ export function PartiesScreen() {
   return (
     <div className="bss-screen" data-ui="ui.parties">
       <PageHeader
-        title="Parties"
+        title={customers ? 'Customers' : 'Parties'}
         count={
           data
             ? formatInt(
@@ -608,7 +608,6 @@ function NewPartyModal({
                 </Field>
                 <Field label="Birth date">
                   <DateField
-                    type="date"
                     value={form.birthDate ?? ''}
                     onChange={(e) => set({ birthDate: e.target.value })}
                   />
@@ -773,7 +772,6 @@ function PartyModal({
               </Field>
               <Field label="Birth date">
                 <DateField
-                  type="date"
                   value={editing.birthDate}
                   onChange={(e) => set({ birthDate: e.target.value })}
                 />

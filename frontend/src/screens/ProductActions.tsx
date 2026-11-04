@@ -22,7 +22,7 @@ import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { addDays, isIsoDate } from '../format/dates';
 import { formatCents, toCents } from '../format/money';
-import { Button, Menu, Dialog, TextInput, type MenuItem } from '../ui/kit';
+import { Button, Menu, Dialog, DateField, TextInput, type MenuItem } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Preview } from './AddProduct';
 import { uncertain } from './submissionKey';
@@ -257,9 +257,7 @@ export function ProductChangeDialog({
       <fieldset disabled={busy} className="bss-write-fields bss-modal-body">
         <section>
           <div className="bss-step-head">{change === 'end' ? 'End on' : 'Date'}</div>
-          <TextInput
-            mono
-            width={180}
+          <DateField
             aria-label="Date"
             placeholder="YYYY-MM-DD"
             value={day}

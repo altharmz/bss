@@ -15,10 +15,20 @@ import { explain } from '../api/client';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { clockTime, businessDate, lastDay } from '../format/dates';
-import { accountLabel } from '../format/ids';
 import { formatCents, parseAmount, positiveAmountError, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, Dialog, Field, MoneyField, Panel, StatusPill, TextInput } from '../ui/kit';
+import { eventTypeLabel, PAYMENT_METHOD_OPTIONS } from '../format/labels';
+import {
+  Segmented,
+  Button,
+  Checkbox,
+  Dialog,
+  Field,
+  MoneyField,
+  Panel,
+  StatusPill,
+  TextInput,
+} from '../ui/kit';
 import { Id } from '../ui/Id';
 import { Footer } from './FinancialForms';
 import { uncertain } from './submissionKey';
@@ -71,7 +81,7 @@ export function BillsPanel({
     <div className="bss-screen" data-ui="ui.subscriber.bills">
       <Panel
         title="Bills"
-        subtitle="CustomerBill"
+        subtitle={eventTypeLabel('CustomerBill')}
         right={
           <>
             {bills.status === 'ok' && <span className="bss-panel-count">{bills.data.length}</span>}{' '}
@@ -154,9 +164,11 @@ export function BillDialog({
       onClose={onClose}
       ui="ui.subscriber.billDetail"
       context={
-        detail.status === 'ok'
-          ? `${accountLabel(detail.data.billingAccount.id)} · billed ${detail.data.billDate}`
-          : undefined
+        detail.status === 'ok' ? (
+          <>
+            <Id id={detail.data.billingAccount.id} prefix="BA-" /> · billed {detail.data.billDate}
+          </>
+        ) : undefined
       }
     >
       <div className="bss-modal-body">
@@ -317,8 +329,6 @@ function BillBody({
   );
 }
 
-const METHODS = ['bankTransfer', 'card', 'cash'];
-
 export function RecordPaymentModal({
   account,
   bills,
@@ -331,7 +341,7 @@ export function RecordPaymentModal({
   onRecorded: (message: string) => void;
 }) {
   const [amountText, setAmountText] = useState('');
-  const [method, setMethod] = useState(METHODS[0] ?? 'cash');
+  const [method, setMethod] = useState(PAYMENT_METHOD_OPTIONS[0]?.key ?? 'cash');
   const [other, setOther] = useState('');
   const [lettering, setLettering] = useState(false);
   const [correlatorId, setCorrelatorId] = useState('');
@@ -461,18 +471,12 @@ export function RecordPaymentModal({
         </section>
         <section>
           <Field label="Method">
-            <div className="bss-seg" role="group" aria-label="Payment method">
-              {[...METHODS, 'other'].map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={m === method}
-                  onClick={() => setMethod(m)}
-                >
-                  {m === 'other' ? 'Other' : m}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              label="Payment method"
+              value={method}
+              onChange={setMethod}
+              options={PAYMENT_METHOD_OPTIONS}
+            />
           </Field>
           {method === 'other' && (
             <Field label="Payment method name">
@@ -502,18 +506,15 @@ export function RecordPaymentModal({
               />
             </Field>
           </div>
-          <label className="bss-check">
-            <input
-              type="checkbox"
-              checked={lettering}
-              disabled={open.length === 0}
-              onChange={(event) => {
-                setLettering(event.target.checked);
-                if (event.target.checked) prefill(amount);
-              }}
-            />{' '}
-            Apply to specific bills
-          </label>
+          <Checkbox
+            checked={lettering}
+            disabled={open.length === 0}
+            onChange={(event) => {
+              setLettering(event.target.checked);
+              if (event.target.checked) prefill(amount);
+            }}
+            label="Apply to specific bills"
+          />
           <div className="caption">
             {open.length === 0
               ? 'No open bill: the payment is kept as credit for the next bills.'

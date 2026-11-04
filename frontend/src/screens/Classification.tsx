@@ -1,6 +1,6 @@
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   catalogChanges,
   categoryChanges,
@@ -25,7 +25,16 @@ import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { formatInt } from '../format/money';
-import { Button, Dialog, StatusPill, TextInput, useToast } from '../ui/kit';
+import {
+  SelectField,
+  Button,
+  Checkbox,
+  Dialog,
+  StatusPill,
+  DateField,
+  TextInput,
+  useToast,
+} from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -50,24 +59,34 @@ const dash = <span className="bss-dash">—</span>;
 const statusCell = (s: Category['status']) =>
   s === null ? dash : <StatusPill kind="lifecycle" status={s} />;
 
-export function CategoriesTab({ offerings, query }: { offerings: Catalog | null; query: string }) {
+/** Opens the "new" dialog when the page header's New button raises `requests`. */
+function useNewRequest(requests: number, open: () => void) {
+  const seen = useRef(requests);
+  useEffect(() => {
+    if (requests !== seen.current) {
+      seen.current = requests;
+      open();
+    }
+  }, [requests, open]);
+}
+
+export function CategoriesTab({
+  offerings,
+  query,
+  newRequests,
+}: {
+  offerings: Catalog | null;
+  query: string;
+  newRequests: number;
+}) {
   const toast = useToast();
   const [version, setVersion] = useState(0);
   const [open, setOpen] = useState<Category | 'new' | null>(null);
   const resource = useResource(`categories-tab:${version}`, loadCategoryList);
   const q = query.trim().toLowerCase();
+  useNewRequest(newRequests, () => setOpen('new'));
   return (
     <div data-ui="ui.catalog.categories">
-      <div className="bss-toolbar">
-        <Button
-          variant="primary"
-          data-ui="ui.catalog.newCategory"
-          disabled={resource.status !== 'ok' || offerings === null}
-          onClick={() => setOpen('new')}
-        >
-          + New category
-        </Button>
-      </div>
       <div className="catalog-table">
         <TableHead columns={CATEGORY_COLUMNS} />
         <ListState
@@ -129,24 +148,15 @@ export function CategoriesTab({ offerings, query }: { offerings: Catalog | null;
   );
 }
 
-export function CatalogsTab({ query }: { query: string }) {
+export function CatalogsTab({ query, newRequests }: { query: string; newRequests: number }) {
   const toast = useToast();
   const [version, setVersion] = useState(0);
   const [open, setOpen] = useState<ProductCatalog | 'new' | null>(null);
   const resource = useResource(`catalogs-tab:${version}`, loadCatalogList);
   const q = query.trim().toLowerCase();
+  useNewRequest(newRequests, () => setOpen('new'));
   return (
     <div data-ui="ui.catalog.catalogs">
-      <div className="bss-toolbar">
-        <Button
-          variant="primary"
-          data-ui="ui.catalog.newCatalog"
-          disabled={resource.status !== 'ok'}
-          onClick={() => setOpen('new')}
-        >
-          + New catalog
-        </Button>
-      </div>
       <div className="catalog-table">
         <TableHead columns={CATALOG_COLUMNS} />
         <ListState
@@ -227,14 +237,11 @@ function CheckList({
       {items.length === 0 && <Note tone="info">{none}</Note>}
       {items.map((item) => (
         <div key={item.id}>
-          <label>
-            <input
-              type="checkbox"
-              checked={chosen.includes(item.id)}
-              onChange={() => onToggle(item.id)}
-            />{' '}
-            {item.name}
-          </label>
+          <Checkbox
+            checked={chosen.includes(item.id)}
+            onChange={() => onToggle(item.id)}
+            label={item.name}
+          />
         </div>
       ))}
     </fieldset>
@@ -396,11 +403,7 @@ function ClassificationModal({
         {isCategory ? (
           <label>
             Parent category
-            <select
-              className="bss-input"
-              value={form.parentId}
-              onChange={(e) => set('parentId', e.target.value)}
-            >
+            <SelectField value={form.parentId} onChange={(e) => set('parentId', e.target.value)}>
               <option value="">None (a root)</option>
               {parents.map(({ category, depth }) => (
                 <option key={category.id} value={category.id}>
@@ -408,7 +411,7 @@ function ClassificationModal({
                   {category.name}
                 </option>
               ))}
-            </select>
+            </SelectField>
           </label>
         ) : (
           <label>
@@ -421,8 +424,7 @@ function ClassificationModal({
         )}
         <label>
           Lifecycle status
-          <select
-            className="bss-input"
+          <SelectField
             value={form.lifecycleStatus}
             onChange={(e) =>
               set('lifecycleStatus', e.target.value as ClassificationFields['lifecycleStatus'])
@@ -433,26 +435,16 @@ function ClassificationModal({
                 {l}
               </option>
             ))}
-          </select>
+          </SelectField>
         </label>
         <div className="bss-form-pair">
           <label>
             Valid from
-            <TextInput
-              mono
-              type="date"
-              value={form.validFrom}
-              onChange={(e) => set('validFrom', e.target.value)}
-            />
+            <DateField value={form.validFrom} onChange={(e) => set('validFrom', e.target.value)} />
           </label>
           <label>
             Valid to (empty = open-ended)
-            <TextInput
-              mono
-              type="date"
-              value={form.validTo}
-              onChange={(e) => set('validTo', e.target.value)}
-            />
+            <DateField value={form.validTo} onChange={(e) => set('validTo', e.target.value)} />
           </label>
         </div>
         {isCategory ? (
