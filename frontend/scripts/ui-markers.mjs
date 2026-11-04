@@ -1,6 +1,6 @@
 // Lists the UI's data-ui markers for the progress tracker (docs/progress/scope.yaml, make
 // progress): every literal `data-ui="..."` JSX attribute, and every literal `ui="..."`
-// prop of <Modal> (the kit renders it as data-ui), in src/ outside tests. Parsed with the
+// prop of <Dialog> (the kit renders it as data-ui), in src/ outside tests. Parsed with the
 // TypeScript compiler API, not a text search, so comments and strings never count.
 // Prints JSON to stdout: [{ "marker", "file", "line" }], sorted.
 import { readdirSync, readFileSync } from 'node:fs';
@@ -34,7 +34,8 @@ for (const file of sources(SRC)) {
     if (ts.isJsxAttribute(node)) {
       const name = node.name.getText(source);
       const tag = node.parent.parent.tagName?.getText(source);
-      const value = name === 'data-ui' || (name === 'ui' && tag === 'Modal') ? literal(node) : null;
+      const value =
+        name === 'data-ui' || (name === 'ui' && tag === 'Dialog') ? literal(node) : null;
       if (value !== null) {
         const { line } = source.getLineAndCharacterOfPosition(node.getStart(source));
         markers.push({ marker: value, file: relative(ROOT, file), line: line + 1 });
