@@ -46,7 +46,7 @@ alembic/                  migrations; alembic.ini reads DATABASE_URL from the en
 compose.yaml              base definition: only what both modes share (the app image)
 compose.override.yaml     local dev only (own postgres on `lab`, bind mount, --reload, ports;
                           `tools` service: writable mount for make fmt + format hook)
-compose.prod.yaml         VPS only (shared network + alias, DATABASE_URL, limits, log rotation)
+compose.prod.yaml         VPS only (bss-edge/bss-db networks + alias, DATABASE_URL, limits, log rotation)
 scripts/deploy.sh         build -> save -> ssh load -> migrate -> up -> healthcheck -> smoke
 scripts/smoke.sh          HTTP smoke test against a base URL
 scripts/pre-commit.sh     make lint + smoke + affected tests (harness.md); installed via `make hooks`
@@ -222,11 +222,14 @@ On the VPS, Postgres and Caddy are **not ours**. The separate vps-infra project 
 deployed once per host and runs one Postgres and one Caddy for every app there, owning
 their config, data, TLS and backups. This repo only ships the app container.
 
-- **Network**: the app joins the external network `shared`, created by vps-infra. It must
-  exist before `make deploy`; `scripts/deploy.sh` checks for it and fails early with
+- **Network**: bss is not on `shared` (every app's container could reach `bss:8080` and
+  `bss-mcp:8080` there, bypassing Caddy). vps-infra creates two per-app networks:
+  `bss-edge` (Caddy, app, mcp) and `bss-db` (Postgres, app, worker, the migration
+  container). `mcp` has no DB and `worker` serves no HTTP, so each is on one only. Both
+  must exist before `make deploy`; `scripts/deploy.sh` checks for them and fails early with
   "deploy vps-infra first" otherwise. vps-infra is never needed locally — do not start it
   for development.
-- **Alias**: on `shared` the app is reachable as `bss` (network alias in
+- **Alias**: on `bss-edge` the app is reachable as `bss` (network alias in
   `compose.prod.yaml`). Every app there names its service `app`, so that name is
   ambiguous; always use `bss`. The MCP connector (`mcp`, [mcp.md](mcp.md)) is
   `bss-mcp:8080` there and calls the app as `bss:8080`.
@@ -362,68 +365,3 @@ via a temp file and `mv`. `make deployed` prints it and `git log <commit>..HEAD`
 never write it: Claude's Edit deny rule, `.codex/patch-guard.sh` and a guard.sh rule
 against shell writes (cases in `guard-cases.txt`). The VPS's `~/bss/DEPLOYED` stays the
 authority; `.deployed` is the workstation's copy of the last deploy made from it.
-
-## To port to vps-lab-template
-
-Two fixes made here and still missing in the template (moved from CLAUDE.md's "Open
-questions").
-
-- **Port the format fix to vps-lab-template** (fixed here, not there). In the template,
-  `make fmt` and `.claude/hooks/format.sh` both fail silently:
-  - `compose.override.yaml` mounts `app/` and `tests/` read-only on `app`, so
-    `docker compose run app ruff format` cannot write ("Read-only file system");
-  - the hook passes Claude Code's absolute host path into the container, where it does not
-    exist, sends format output to /dev/null, prints `ruff check` to stdout (not shown for
-    PostToolUse) and always exits 0.
-
-  Fix as done here: a `tools` service in `compose.override.yaml` (same `dev` target and
-  image, `profiles: [tools]`, only `./app`, `./tests`, `./alembic` mounted read-write and
-  `./pyproject.toml` read-only under `/app` - not the whole project, so the container
-  never sees `.env`, `.env.prod`, `.git` or `.claude` - venv stays in `/opt/venv`, no
-  ports, no DB, `network_mode: none`); `make fmt` runs
-  `docker compose run --rm tools sh -c 'ruff format . && ruff check --fix .'`, `make lint`
-  stays on `app`. The hook: no host-ruff branch (the container pins the ruff version);
-  acts only on `*.py` under `$CLAUDE_PROJECT_DIR`, passes the project-relative path; a
-  `.py` outside the mounted directories is reported as FAILED, not skipped silently; one
-  container start running `ruff format --force-exclude` then `ruff check --fix
-  --force-exclude --output-format concise`; clean -> exit 0 silently, findings -> stderr +
-  exit 2, any failure to run -> "format hook FAILED to run: <reason>" + exit 2; explicit
-  `timeout` in `.claude/settings.json`.
-- **Port the SSH hardening to vps-lab-template** (fixed here, not there). The template's
-  `deploy.sh` opens a new SSH connection per step (~15 per deploy) with no timeouts. The
-  VPS intermittently stalls *new* connections at the banner exchange
-  (`kex_exchange_identification: read: Connection timed out`); an rsync hung for minutes
-  and a `docker save | ssh` ship hung 17 min before failing. Fix as done here:
-  - refuse a dirty tree first, before any network call: `git status --porcelain` must be
-    empty - the tag is the commit hash, so a dirty build (image or compose files) would
-    ship different content under a clean-looking tag;
-  - one master per deploy: `SSH_OPTS=(-o ControlMaster=auto -o ControlPath=~/.ssh/cm-%C
-    -o ControlPersist=60 -o ConnectTimeout=15 -o ServerAliveInterval=15
-    -o ServerAliveCountMax=4 -o BatchMode=yes)`, opened explicitly with `ssh -MNf` before
-    the build (or reused if `ssh -O check` already finds one), verified with `ssh -O check`;
-  - the master is backgrounded, so it logs to a file: `-o ControlMaster=yes -o
-    LogLevel=VERBOSE -E "$(mktemp)"`. One `trap finish EXIT` closes the master with
-    `ssh -O exit` (only if this deploy opened it), prints the last 20 lines of that log
-    when the exit code is non-zero, and removes the log;
-  - every remote call rides the master: an `rssh` wrapper, `rsync -az --timeout=60 -e "ssh
-    <same opts>"`, and `timeout N ssh "${SSH_OPTS[@]}"` where `timeout` needs a binary;
-  - exactly one retry, 5 s apart, and only when opening the master exits 255; later steps
-    are never retried;
-  - skip the ship when the server already has the image. Not by `.Id`: both sides use the
-    containerd image store, where `.Id` is the manifest digest and differs between two
-    builds of identical content. Compare a fingerprint instead, computed by the same `sh`
-    snippet locally and remotely: sha256 of `docker image inspect --format '{{json
-    .RootFS.Layers}}{{json .Config}}'` (Layers alone miss a CMD/ENV/HEALTHCHECK-only
-    change). A missing image yields an empty fingerprint and never matches;
-  - Makefile `ssh`/`tunnel`/`remote` get the same timeouts and `BatchMode=yes` (no
-    multiplexing there).
-
-  Proven here: 1 TCP connection per deploy (sampled with `ss`), a dead endpoint (silent
-  listener or blackhole IP) fails in ~35 s (15 + 5 + 15) with a clear message.
-  Skip proven across hosts: two consecutive plain `make verify` runs of the same commit
-  (`921603f`) against the VPS - the first shipped the image, the second printed "image
-  already on server, skipping ship (fingerprint 8258832b6d9c)", so the Layers+Config
-  fingerprint survives `docker save | docker load`. The master-open retry also fired once
-  in real use, in the second run (exit 255, then success on the second attempt).
-  Connection counts were not sampled in these two runs. A run where the retry fires shows
-  2 connection attempts by design: the failed one plus the successful one.

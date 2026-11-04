@@ -161,11 +161,13 @@ fi
 log "Opening one SSH connection to ${REMOTE} for the whole deploy"
 open_master
 
-log "Checking that the shared network from vps-infra exists on ${REMOTE}"
-# Postgres and Caddy live in the vps-infra project, which also creates this network.
-# Without it compose fails with a vaguer error, so check up front.
-rssh "docker network inspect shared >/dev/null 2>&1" \
-  || fail "network 'shared' not found on ${REMOTE} - deploy vps-infra first"
+log "Checking that the bss-edge and bss-db networks from vps-infra exist on ${REMOTE}"
+# Postgres and Caddy live in the vps-infra project, which also creates these networks.
+# Without them compose fails with a vaguer error, so check up front.
+for net in bss-edge bss-db; do
+  rssh "docker network inspect ${net} >/dev/null 2>&1" \
+    || fail "network '${net}' not found on ${REMOTE} - deploy vps-infra first"
+done
 
 log "Building ${IMAGE_NAME}:${TAG} locally (runtime stage)"
 docker build --target runtime -t "${IMAGE_NAME}:${TAG}" .
@@ -215,8 +217,8 @@ if (( migrate_rc == 124 )); then
   rssh "docker ps -aq --filter 'label=com.docker.compose.project=bss' --filter 'label=com.docker.compose.oneoff=True' | xargs -r docker rm -f >/dev/null 2>&1" || true
   fail "migrations did not finish within ${MIGRATE_TIMEOUT}s - the database is most likely unreachable.
   Check ${REMOTE_DIR}/.env on ${REMOTE} (POSTGRES_PASSWORD must be the bss role's password in vps-infra)
-  and that the vps-infra postgres is running and attached to the 'shared' network:
-    docker network inspect shared --format '{{range .Containers}}{{.Name}} {{end}}'"
+  and that the vps-infra postgres is running and attached to the 'bss-db' network:
+    docker network inspect bss-db --format '{{range .Containers}}{{.Name}} {{end}}'"
 elif (( migrate_rc != 0 )); then
   fail "database migration failed (see output above)"
 fi

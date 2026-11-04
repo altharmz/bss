@@ -1,8 +1,9 @@
 # VPS overlay. Used explicitly: docker compose -f compose.yaml -f compose.prod.yaml ...
 #
 # Postgres and Caddy are NOT part of this stack: the vps-infra project runs one of each
-# for every app on the host. We only join its `shared` network. Do not add db or caddy
-# services back here.
+# for every app on the host. We only join its per-app networks `bss-edge` (Caddy + app +
+# mcp) and `bss-db` (postgres + app + worker); bss is not on `shared`. Do not add db or
+# caddy services back here.
 #
 # The VPS has 1 vCPU / 2 GB and runs a production VPN server. Every limit below exists
 # so that this stack can never starve it: without mem_limit the OOM killer is free to
@@ -45,10 +46,11 @@ services:
       # on its last entry, else the peer (loopback, the tunnel: trusted hosts anyway)
       APP_TRUST_FORWARDED: "true"
     networks:
-      shared:
-        # Every app on the shared network calls its service `app`, so that name is
-        # ambiguous there. vps-infra's Caddyfile reaches us as bss:8080.
+      bss-edge:
+        # Every app on the host calls its service `app`, so that name is ambiguous.
+        # vps-infra's Caddyfile reaches us as bss:8080.
         aliases: [bss]
+      bss-db: {}
     logging:
       driver: json-file
       options:
@@ -93,7 +95,7 @@ services:
       start_period: 30s
       start_interval: 2s
       retries: 3
-    networks: [shared]
+    networks: [bss-db]
     logging:
       driver: json-file
       options:
@@ -101,9 +103,9 @@ services:
         max-file: "3"
 
   # The MCP connector (bss_mcp/, docs/mcp.md): the same image, its own process. Reaches
-  # the app over HTTP only, as bss:8080 (`app` is ambiguous on `shared`), and refuses to
+  # the app over HTTP only, as bss:8080 (`app` is ambiguous), and refuses to
   # start unless that answers as bss. Publishes nothing: the shared Caddy reaches it as
-  # bss-mcp:8080 on `shared` (docs/decisions/infra.md). Tokens and OAuth clients
+  # bss-mcp:8080 on `bss-edge` (docs/decisions/infra.md). Tokens and OAuth clients
   # live in SQLite on the mcp-data volume, not in the bss database; losing it only means
   # clients re-authorize and static tokens are issued again.
   mcp:
@@ -143,7 +145,7 @@ services:
     volumes:
       - mcp-data:/data
     networks:
-      shared:
+      bss-edge:
         aliases: [bss-mcp]
     logging:
       driver: json-file
@@ -156,7 +158,10 @@ volumes:
   mcp-data:
 
 networks:
-  shared:
-    # Created and owned by vps-infra; must exist before this stack starts.
+  # Created and owned by vps-infra; must exist before this stack starts.
+  bss-edge:
     external: true
-    name: shared
+    name: bss-edge
+  bss-db:
+    external: true
+    name: bss-db

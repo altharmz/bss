@@ -303,7 +303,8 @@ runtime-check: ## The harness script tests (scripts/test_*.py, run in parallel, 
 		scripts/test_task_usage.py \
 		scripts/test_task_collect.py \
 		scripts/test_script_quality.py \
-		scripts/test_docs_links.py
+		scripts/test_docs_links.py \
+		scripts/test_compose_prod.py
 
 .PHONY: telemetry-collect telemetry-probe telemetry-watch
 telemetry-watch: export BSS_COLLECT_TASK = $(TASK)
