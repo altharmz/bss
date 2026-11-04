@@ -71,6 +71,7 @@ export function TableRow({
   columns,
   cells,
   onClick,
+  onActivate,
   style,
   className = '',
   density = 'default',
@@ -80,6 +81,8 @@ export function TableRow({
   columns: Column[];
   cells: Record<string, ReactNode>;
   onClick?: () => void;
+  /** Enter, Space or a double click; defaults to onClick. */
+  onActivate?: () => void;
   style?: CSSProperties;
   className?: string;
   density?: Density;
@@ -100,10 +103,11 @@ export function TableRow({
           (event.key === 'Enter' || event.key === ' ')
         ) {
           event.preventDefault();
-          onClick();
+          (onActivate ?? onClick)();
         }
       }}
       onClick={onClick}
+      {...(onActivate ? { onDoubleClick: onActivate } : {})}
     >
       {columns.map((column) => (
         <div

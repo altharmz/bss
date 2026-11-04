@@ -7,7 +7,18 @@ import { matchesShortId } from '../format/ids';
 import { formatInt } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
-import { Button, Flag, PageHeader, StatusPill, Segmented, TextInput, useToast } from '../ui/kit';
+import {
+  Button,
+  Flag,
+  KeyValue,
+  PageHeader,
+  StatusPill,
+  Segmented,
+  Tag,
+  TextInput,
+  useToast,
+} from '../ui/kit';
+import { useMediaQuery, WIDE_QUERY } from '../ui/useMediaQuery';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { NewSubscriberModal } from './SubscriberForms';
@@ -47,6 +58,64 @@ function matches(account: Account, query: string): boolean {
   );
 }
 
+function SubscriberInspector({
+  account,
+  active,
+  onOpen,
+}: {
+  account: Account;
+  active: number;
+  onOpen: () => void;
+}) {
+  const overLimit =
+    account.creditLimitCents !== null && account.balanceCents < -account.creditLimitCents;
+  return (
+    <aside
+      className="bss-inspector bss-subscriber-inspector"
+      data-ui="ui.subscribers.inspector"
+      aria-label={`${account.customerName} account`}
+    >
+      <div className="bss-modal">
+        <div className="bss-dialog-body">
+          <h2 className="bss-inspector-name">{account.customerName}</h2>
+          <div className="bss-inspector-meta">
+            <Id prefix="BA-" id={account.id} />
+            <StatusPill kind="account" status={account.state} />
+            <Tag>{account.ratingType === 'prepaid' ? 'Prepaid' : 'Postpaid'}</Tag>
+          </div>
+          <div className="bss-inspector-balance">
+            <span className="bss-inspector-label">Balance</span>
+            <span className="bss-inspector-figure">
+              <Amount cents={account.balanceCents} currency={account.currency} />
+            </span>
+            {overLimit && <Flag>Over limit</Flag>}
+          </div>
+          <KeyValue
+            items={[
+              ['Customer', account.customerName],
+              ['Cycle day', account.ratingType === 'prepaid' ? '—' : account.cycleDay],
+              [
+                'Credit limit',
+                account.creditLimitCents === null ? (
+                  '—'
+                ) : (
+                  <Amount cents={account.creditLimitCents} currency={account.currency} />
+                ),
+              ],
+              ['Products', `${formatInt(active)} active`],
+            ]}
+          />
+        </div>
+        <footer className="bss-modal-footer">
+          <Button variant="primary" onClick={onOpen}>
+            Open account
+          </Button>
+        </footer>
+      </div>
+    </aside>
+  );
+}
+
 export function SubscribersScreen() {
   useSetCrumbs([{ label: 'Subscribers' }], 'subscribers');
   const { navigate } = useRouter();
@@ -55,6 +124,8 @@ export function SubscribersScreen() {
   const [mode, setMode] = useState<ModeFilter>('All');
   const subscribers = useResource('subscribers', loadSubscribers);
   const [creating, setCreating] = useState(false);
+  const wide = useMediaQuery(WIDE_QUERY);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const toast = useToast();
   const search = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -71,6 +142,15 @@ export function SubscribersScreen() {
     window.addEventListener('keydown', focusSearch);
     return () => window.removeEventListener('keydown', focusSearch);
   }, []);
+
+  useEffect(() => {
+    if (!wide || selectedId === null) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedId(null);
+    };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [wide, selectedId]);
 
   const accounts = subscribers.status === 'ok' ? subscribers.data.accounts : [];
   const currencies = new Set(accounts.map((account) => account.currency));
@@ -96,6 +176,12 @@ export function SubscribersScreen() {
     setState('All');
     setMode('All');
   };
+
+  const openCard = (accountId: string) => navigate(hrefOf({ name: 'subscriber', accountId }));
+  const selected =
+    wide && subscribers.status === 'ok'
+      ? (accounts.find((a) => a.id === selectedId) ?? null)
+      : null;
 
   return (
     <div className="bss-screen bss-subscribers-screen" data-ui="ui.subscribers.list">
@@ -163,89 +249,98 @@ export function SubscribersScreen() {
           </>
         }
       />
-      <div role="table" aria-label="Subscribers" className="bss-subscribers-table">
-        <TableHead columns={columns} />
-        <ListState
-          resource={subscribers}
-          columns={columns}
-          errorTitle="Failed to load subscribers"
-          empty={{
-            title: 'No subscribers yet',
-            text: 'Create one with New subscriber.',
-          }}
-          total={(data) => data.accounts.length}
-          rows={() => visibleAccounts}
-          query={query}
-          filters={[
-            ...(state !== 'All' ? [{ label: 'Status', value: state }] : []),
-            ...(mode !== 'All'
-              ? [{ label: 'Mode', value: mode === 'prepaid' ? 'Prepaid' : 'Postpaid' }]
-              : []),
-          ]}
-          onResetFilters={reset}
-        >
-          {(rows, data) => {
-            const perCustomer = new Map<string, number>();
-            for (const a of data.accounts) {
-              perCustomer.set(a.customerId, (perCustomer.get(a.customerId) ?? 0) + 1);
-            }
-            return (
-              <>
-                {rows.map((account) => {
-                  const active = data.activeProducts.get(account.id) ?? 0;
-                  return (
-                    <TableRow
-                      key={account.id}
-                      columns={columns}
-                      onClick={() =>
-                        navigate(hrefOf({ name: 'subscriber', accountId: account.id }))
-                      }
-                      cells={{
-                        name: (
-                          <div className="ellipsis">
-                            <span className="bss-name">{account.customerName}</span>
-                            {(perCustomer.get(account.customerId) ?? 0) > 1 && (
-                              <span className="bss-secondary"> · {account.name}</span>
-                            )}
-                          </div>
-                        ),
-                        account: <Id prefix="BA-" id={account.id} />,
-                        status: <StatusPill kind="account" status={account.state} />,
-                        mode: (
-                          <span
-                            className="bss-subscriber-mode"
-                            data-ui={
-                              account.ratingType === 'prepaid'
-                                ? 'ui.subscribers.prepaid'
-                                : undefined
-                            }
-                          >
-                            {account.ratingType === 'prepaid' ? 'Prepaid' : 'Postpaid'}
-                          </span>
-                        ),
-                        balance: (
-                          <span className="bss-subscriber-balance">
-                            {account.creditLimitCents !== null &&
-                              account.balanceCents < -account.creditLimitCents && (
-                                <Flag>Over limit</Flag>
+      <div className="bss-with-inspector bss-subscribers-body">
+        <div role="table" aria-label="Subscribers" className="bss-subscribers-table">
+          <TableHead columns={columns} />
+          <ListState
+            resource={subscribers}
+            columns={columns}
+            errorTitle="Failed to load subscribers"
+            empty={{
+              title: 'No subscribers yet',
+              text: 'Create one with New subscriber.',
+            }}
+            total={(data) => data.accounts.length}
+            rows={() => visibleAccounts}
+            query={query}
+            filters={[
+              ...(state !== 'All' ? [{ label: 'Status', value: state }] : []),
+              ...(mode !== 'All'
+                ? [{ label: 'Mode', value: mode === 'prepaid' ? 'Prepaid' : 'Postpaid' }]
+                : []),
+            ]}
+            onResetFilters={reset}
+          >
+            {(rows, data) => {
+              const perCustomer = new Map<string, number>();
+              for (const a of data.accounts) {
+                perCustomer.set(a.customerId, (perCustomer.get(a.customerId) ?? 0) + 1);
+              }
+              return (
+                <>
+                  {rows.map((account) => {
+                    const active = data.activeProducts.get(account.id) ?? 0;
+                    return (
+                      <TableRow
+                        key={account.id}
+                        columns={columns}
+                        onClick={() => (wide ? setSelectedId(account.id) : openCard(account.id))}
+                        {...(wide ? { onActivate: () => openCard(account.id) } : {})}
+                        selected={wide && account.id === selectedId}
+                        cells={{
+                          name: (
+                            <div className="ellipsis">
+                              <span className="bss-name">{account.customerName}</span>
+                              {(perCustomer.get(account.customerId) ?? 0) > 1 && (
+                                <span className="bss-secondary"> · {account.name}</span>
                               )}
-                            <Amount cents={account.balanceCents} currency={account.currency} />
-                          </span>
-                        ),
-                        products: <span className={active ? '' : 'bss-zero'}>{active}</span>,
-                        cycle: account.ratingType === 'prepaid' ? '—' : account.cycleDay,
-                      }}
-                    />
-                  );
-                })}
-                <TableFooter
-                  left={`Showing ${formatInt(rows.length)} of ${formatInt(data.accounts.length)}`}
-                  right="Amounts in billing account currency"
-                />
-              </>
-            );
-          }}
-        </ListState>
+                            </div>
+                          ),
+                          account: <Id prefix="BA-" id={account.id} />,
+                          status: <StatusPill kind="account" status={account.state} />,
+                          mode: (
+                            <span
+                              className="bss-subscriber-mode"
+                              data-ui={
+                                account.ratingType === 'prepaid'
+                                  ? 'ui.subscribers.prepaid'
+                                  : undefined
+                              }
+                            >
+                              {account.ratingType === 'prepaid' ? 'Prepaid' : 'Postpaid'}
+                            </span>
+                          ),
+                          balance: (
+                            <span className="bss-subscriber-balance">
+                              {account.creditLimitCents !== null &&
+                                account.balanceCents < -account.creditLimitCents && (
+                                  <Flag>Over limit</Flag>
+                                )}
+                              <Amount cents={account.balanceCents} currency={account.currency} />
+                            </span>
+                          ),
+                          products: <span className={active ? '' : 'bss-zero'}>{active}</span>,
+                          cycle: account.ratingType === 'prepaid' ? '—' : account.cycleDay,
+                        }}
+                      />
+                    );
+                  })}
+                  <TableFooter
+                    left={`Showing ${formatInt(rows.length)} of ${formatInt(data.accounts.length)}`}
+                    right="Amounts in billing account currency"
+                  />
+                </>
+              );
+            }}
+          </ListState>
+        </div>
+        {selected && subscribers.status === 'ok' && (
+          <SubscriberInspector
+            account={selected}
+            active={subscribers.data.activeProducts.get(selected.id) ?? 0}
+            onOpen={() => openCard(selected.id)}
+          />
+        )}
       </div>
     </div>
   );
