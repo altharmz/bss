@@ -58,15 +58,25 @@ describe('prepaid commands', () => {
     window.history.replaceState(null, '', '/prepaid-commands');
     render(<App />);
 
-    fireEvent.click(await screen.findByText('C0000001'));
+    // The Id button copies and stops the click, so the row opens from another cell.
+    expect(await screen.findByText('C0000001')).toBeTruthy();
+    expect(screen.getByText('CMD-')).toBeTruthy();
+    expect(screen.getByText('BA-')).toBeTruthy();
+    expect(
+      screen
+        .getAllByRole('row')
+        .slice(1)
+        .every((r) => r.classList.contains('density-dense')),
+    ).toBe(true);
+    fireEvent.click(screen.getByText('order'));
     const dialog = await screen.findByRole('dialog', { name: 'Command C0000001' });
     expectUi('ui.prepaidCommands.detail');
-    expect(within(dialog).getAllByText('failedTechnical')).not.toHaveLength(0);
+    expect(within(dialog).getAllByText('Failed (technical)')).not.toHaveLength(0);
     const retry = within(dialog).getByRole('button', { name: 'Retry' });
     expect(retry).toBe(expectUi('ui.prepaidCommands.retry'));
     fireEvent.click(retry);
 
-    await waitFor(() => expect(within(dialog).getAllByText('pending')).not.toHaveLength(0));
+    await waitFor(() => expect(within(dialog).getAllByText('Queued')).not.toHaveLength(0));
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(post?.[0]).toBe(`${COMMANDS}/${COMMAND_ID}/retry`);
     expect(post?.[1]?.body).toBeUndefined();

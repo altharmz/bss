@@ -25,7 +25,7 @@ import { Footer, useWrite } from './FinancialForms';
 import { Field } from './SubscriberForms';
 import './screens.css';
 
-// Billing settings (docs/next-slices-design.md section 18): the cycle specifications, bill
+// Billing settings (docs/ui.md): the cycle specifications, bill
 // formats and presentation media a billing account may name in its billStructure. The
 // subscriber Edit form selects them. The server decides: its 409/422 text is shown in the
 // dialog and the entered values stay.

@@ -1,6 +1,6 @@
 // Financial account writes (TMF666) and the lists the forms need: owners to choose from and
-// the financial accounts a billing account may link to. Design: docs/next-slices-design.md
-// section 16; rules in docs/decisions/accounts.md.
+// the financial accounts a billing account may link to. Design: docs/ui.md;
+// rules in docs/decisions/accounts.md.
 
 import { AMOUNT, getAll, jsonWithAmount, patchJson, postJson, request } from './client';
 import { PATHS, type AccountRecord, type AccountState, type PartyKind } from './bss';

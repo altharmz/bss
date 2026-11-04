@@ -1,6 +1,6 @@
 // Billing settings (TMF666 billingCycleSpecification, billFormat, billPresentationMedia):
 // the lists and the writes of the Billing settings screen. Design:
-// docs/next-slices-design.md section 18; rules in docs/decisions/accounts.md.
+// docs/ui.md; rules in docs/decisions/accounts.md.
 
 import { getAll, patchJson, postJson, request } from './client';
 import { BUILT_IN_CYCLE, type Account } from './bss';

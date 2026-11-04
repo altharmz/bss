@@ -191,7 +191,7 @@ account's `description`/`account_type`).
 
 ## UI: financial account writes, linking and billing account delete (slice 16, 2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 16), frontend only;
+Built as designed, frontend only;
 it replaces "UI: read-only" above. `api/financial.ts`, `screens/FinancialForms.tsx`.
 
 - **Financial accounts screen:** `ui.financialAccounts.new` opens the form (`.form`): name, owner
@@ -218,7 +218,7 @@ it replaces "UI: read-only" above. `api/financial.ts`, `screens/FinancialForms.t
 
 ## UI: party and settlement accounts (slice 17, 2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 17), frontend only.
+Built as designed, frontend only.
 The Financial accounts screen is titled **Accounts** (sidebar, crumb, heading) with tabs
 Financial, Party and Settlement; the route stays `/financial-accounts` (the router has no aliases).
 `api/financial.ts` takes the account kind (`@type` of the body, resource path); the forms in
@@ -234,7 +234,7 @@ Create sends `financialAccount` only when chosen; edit sends it (a ref or `null`
 
 ## UI: billing settings (slice 18, 2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 18), frontend only.
+Built as designed, frontend only.
 Route `/billing-settings` (`screens/BillingSettings.tsx`, `api/billing.ts`), sidebar Billing >
 Billing settings, three tabs. The built-in `monthly` row is read-only; stored cycle specifications,
 bill formats and presentation media have New/Edit (`name`, `description`: the only attributes

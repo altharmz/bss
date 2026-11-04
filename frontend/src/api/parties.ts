@@ -2,7 +2,7 @@
 // screen shows them: reachable even without a billing account. One load holds the three
 // lists and what refers to them (billing accounts through customers, party/financial/
 // settlement accounts through their owner), so the delete rules are visible in the data.
-// Design: docs/next-slices-design.md section 15.
+// Design: docs/ui.md.
 
 import { getAll, getJson, patchJson, postJson, request } from './client';
 import { PATHS, type PartyKind } from './bss';

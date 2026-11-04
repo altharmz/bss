@@ -20,7 +20,7 @@ import { DeleteFinancialModal, FinancialFormModal } from './FinancialForms';
 import './screens.css';
 
 // The Accounts screen (route /financial-accounts: the router has no aliases) has three tabs:
-// Financial (below), Party and Settlement (docs/next-slices-design.md section 17).
+// Financial (below), Party and Settlement (docs/ui.md).
 // A financial account groups a party's accounts (docs/decisions/accounts.md). It is created,
 // edited and deleted here; accounts are linked in the subscriber's Edit form. The balance is
 // the sum of the linked billing accounts, one line per currency.

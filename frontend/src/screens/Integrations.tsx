@@ -20,7 +20,7 @@ import { Footer, useWrite } from './FinancialForms';
 import { Field } from './SubscriberForms';
 import './screens.css';
 
-// Event subscriptions (hubs) and the System panel (docs/next-slices-design.md section 23).
+// Event subscriptions (hubs) and the System panel (docs/ui.md).
 // The list is ours (internal API); create and delete go to each API's TMF /hub. The server
 // decides: its 422 for a callback it refuses is shown as it is, the entered values stay.
 // Visible to every role, as the hub API is (users.md U4).

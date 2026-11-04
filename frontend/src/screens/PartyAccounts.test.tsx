@@ -4,7 +4,7 @@ import { App } from '../app/App';
 import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
-// The Party and Settlement tabs of the Accounts screen (docs/next-slices-design.md section 17).
+// The Party and Settlement tabs of the Accounts screen (docs/ui.md).
 
 const ACC = '/tmf-api/accountManagement/v5';
 const PARTY = '/tmf-api/partyManagement/v5';

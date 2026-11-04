@@ -1,5 +1,5 @@
 """Dated prepaid suspend/resume through the billing owner, and number-only changes
-(next-slices-design.md, slice 8)."""
+(docs/ui.md)."""
 
 from datetime import datetime, time, timedelta
 from types import SimpleNamespace

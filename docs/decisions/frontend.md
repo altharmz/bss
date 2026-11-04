@@ -105,8 +105,8 @@ The other screens grew without a designer. The UI is restyled from the second ha
 It is **visual only**: API calls, bodies, routes and polling are unchanged, so
 `tests/test_ui_requests.py` is untouched.
 
-The human delegated every decision, and all of them are made in
-[ui-redesign-design.md](../ui-redesign-design.md):
+The human delegated every decision; they are in epic #43 (rules and D1-D13) until the
+redesign is done, and the ones that matter after that are:
 - **D4:** every TMF state (TMF620/622/629/632/637/654/666/676/678) and every internal
   state maps to a status family, with an explicit kind per call site.
 - **D11:** artboard content that needs data or requests the API does not offer is
@@ -121,13 +121,12 @@ Progress: the task list of epic #43. Each slice adds a line below when built. Wh
 ## Next slices 1-24: designed (2026-10-24)
 
 The human delegated every design decision on 2026-10-24. The UI for the remaining
-prepaid actions and for MCP parity is designed in
-[next-slices-design.md](../next-slices-design.md) (done; see `git log`). Slice 10 supersedes "No writes in this screen"
+prepaid actions and for MCP parity is designed slice by slice (done; see `git log`). Slice 10 supersedes "No writes in this screen"
 below. Each slice adds its own entry here when built.
 
 ## Slice 1: prepaid first-charge preview in Add product (2026-10-24)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 1); frontend only,
+Built as designed; frontend only,
 no new request (the internal `firstCharge` already carried `required`/`available`/`shortfall`).
 `Preview` in `AddProduct.tsx` branches on a prepaid account **and** `required` being present;
 the postpaid branch is unchanged. The prepaid branch shows period, price and "paid in full in
@@ -144,7 +143,7 @@ it, so there the warning shows without the Top-up button (`onTopUp` is optional)
 
 ## Slice 2: Balance actions panel (2026-10-24)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 2; the backend
+Built as designed (the backend
 half is in [prepaid.md](prepaid.md#slice-2-transactions-include-balance-actions-2026-10-24)).
 `PrepaidHistory.tsx` and `api/history.ts`: the **Balance actions** panel
 (`ui.subscriber.prepaid.history`, prepaid cards only, above Charge history) merges
@@ -164,7 +163,7 @@ Deviations (the code differs from the design's facts):
 
 ## Slice 22: Balances screen (TMF654 reads) (2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 22), frontend only.
+Built as designed, frontend only.
 `screens/Balances.tsx` (route `/balances`, sidebar Billing > Balances) and `api/balances.ts`
 (buckets) and `api/history.ts` (`loadKindActions`, `loadKindAction`): five tabs, each with a status
 filter and an account chip (`partyAccount.id`). The buckets tab joins `GET bucket` with
@@ -188,7 +187,7 @@ Deviations (the design's facts against the code and the vendored TMF654 spec):
 
 ## Slice 21: Product and number inventory (2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 21), frontend only.
+Built as designed, frontend only.
 `screens/Products.tsx` and `api/products.ts`: the `/products` screen (Products > Products) lists
 `GET product` over every status with the server filters `status` and `billingAccount.id` (the
 `?account=` chip) and client filters on offering name and number. A row opens the detail from
@@ -207,7 +206,7 @@ the new `GET resource/{id}`.
 
 ## Slice 10: Order writes: cancel, drafts, order details (2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 10), frontend only. It
+Built as designed, frontend only. It
 supersedes "No writes in this screen" of the 2026-10-21 decision: the human delegated the writes on
 2026-10-24 and TMF622 defines them for clients. The order dialog (`screens/Orders.tsx`) offers Cancel
 order (`cancelProductOrder` with the order and an optional reason), Edit details (PATCH of the changed
@@ -229,7 +228,7 @@ Deviations:
 
 ## Slice 9: Sidebar sections and the global Orders screen (2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 9 and the 2026-10-21
+Built as designed (see the 2026-10-21
 decision above), frontend only. One `<nav aria-label="Main">` holds the three sections (Customers,
 Products, Billing, in the design's item order; Financial accounts has no count and no count
 request). `/orders` is `screens/Orders.tsx` with `api/orders.ts`; the order dialog links an
@@ -249,7 +248,7 @@ Deviations:
 
 ## Slice 6: Prepaid commands screen (2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 6), frontend only.
+Built as designed, frontend only.
 Route `/prepaid-commands`, `screens/PrepaidCommands.tsx` (`ui.prepaidCommands`), sidebar item
 after Billing runs with a red `failed` badge from `?state=failedTechnical&limit=1` and
 `X-Total-Count` (`countFailedCommands`; refreshed after a Retry). List: pages of 50 as served,
@@ -268,7 +267,7 @@ Deviations:
 
 ## Slice 5: Change offering (2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 5), frontend only.
+Built as designed, frontend only.
 **Change offering…** (`ui.subscriber.changeOffering`) joins the Actions menu for an active or
 suspended product with no end and no pending offering change (prepaid also needs `paidThrough`).
 `ChangeOfferingDialog` (`screens/ProductActions.tsx`, `orderOfferingChange` in `api/bss.ts`,
@@ -290,7 +289,7 @@ Deviations:
 
 ## Slice 4: Product actions and pending changes (2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 4). The product row
+Built as designed. The product row
 gets **Actions ▾** (`ui.subscriber.productActions`) with Suspend, Resume and End on a date
 (`ui.subscriber.suspend|resume|endOnDate`), all through `ProductChangeDialog`
 (`screens/ProductActions.tsx`, `orderProductChange` in `api/bss.ts`): one TMF622 order, a `modify`
@@ -316,7 +315,7 @@ Deviations:
 
 ## Slice 3: Cancel, release, remove and edit-note writes (2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 3), frontend only.
+Built as designed, frontend only.
 The Balance action dialog (`PrepaidHistory.tsx` `ActionWrites`, `api/history.ts`) offers Cancel
 top-up, Cancel adjustment, Release hold, Remove and Edit note (markers
 `ui.subscriber.prepaid.cancelTopup|cancelAdjustment|releaseHold|removeFailed|editNote`), each
@@ -715,7 +714,7 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
 
 ## UI: parties and customers (slice 15, 2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 15), frontend only.
+Built as designed, frontend only.
 Route `/parties` (`screens/Parties.tsx`, `api/parties.ts`), sidebar Customers > Parties, tabs
 Individuals / Organizations / Customers with name search and a status filter. One load holds the
 three lists plus the billing accounts (`fields=name,relatedParty`) and the owners of financial,
@@ -731,7 +730,7 @@ Deviation: "accounts it owns" is read from the financial, party and settlement a
 
 ## UI: payments and refunds history (slice 19, 2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 19), frontend only.
+Built as designed, frontend only.
 `screens/Payments.tsx` and `api/payments.ts`: the card's Payments panel with a detail dialog
 (`GET /payment/{id}`), and the `/payments` screen (Billing > Payments) with Payments | Refunds tabs,
 a status filter, the `?account=` chip (sent as `account.id`) and a client-side date range. Both
@@ -745,7 +744,7 @@ TEST-CHANGE: the shell test's expected sidebar links gain `/payments`.
 
 ## Slice 23: Event subscriptions (hubs) and System panel (2026-10-26)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 23): a backend list,
+Built as designed: a backend list,
 its MCP tool and the UI. No migration. `GET /internal/v1/eventSubscription` (internal contract
 first; `app/internal/event_subscriptions.py`, `hubs.page`) lists live hubs newest first with
 `offset`/`limit` and an `api` filter; each item has `id`, `api` {id, name}, `hub` (the API's
@@ -772,3 +771,4 @@ Deviations:
   balance action). An uncertain result offers Refresh, as for any other write.
 - TEST-CHANGE: `App.test.tsx` expects the System section in the sidebar.
 
+Ledger v2 slice 13 (R13): Prepaid commands (dense table, `Dialog` + `KeyValue`), Bills, Global bills, Payments, Balances and Prepaid history print billing-account, command, payment, balance-action and bill-link ids as `Id` (never `accountLabel`/`shortId` text); payment and balance movements use `Amount` (payments and balance actions `signed`, refunds negative). Deviation: financial, party and settlement accounts, and buckets have no D5 prefix, so their ids stay plain text; "Built in" was already a `Tag`; the order and product ids in the command dialog are no longer links (an `Id` is a copy button).

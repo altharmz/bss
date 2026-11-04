@@ -5,7 +5,7 @@ import { expectUi } from '../test/expectUi';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 import { accountBody } from '../test/fixtures';
 
-// The Billing settings screen (docs/next-slices-design.md section 18).
+// The Billing settings screen (docs/ui.md).
 
 const ACC = '/tmf-api/accountManagement/v5';
 const PAGE = 'offset=0&limit=100';

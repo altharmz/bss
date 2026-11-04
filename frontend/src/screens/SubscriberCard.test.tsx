@@ -2894,6 +2894,7 @@ describe('prepaid balance actions', () => {
     const buttons = (dialog: HTMLElement) =>
       within(dialog)
         .queryAllByRole('button')
+        .filter((b) => !(b.getAttribute('aria-label') ?? '').startsWith('Copy '))
         .map((b) => b.textContent)
         .filter((t) => t !== '×');
 

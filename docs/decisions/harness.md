@@ -203,8 +203,7 @@ entry. A path taken from a variable at run time is declared next to the call as
 `// parity: METHOD <path expression>`. The allowlist holds `create/patch/delete_product`
 (orders alone), detail reads that list rows already carry, and probes without a screen
 (`healthz`, `billing_status`, `extension_schema`). The scan matches method and path
-template, not query parameters or bodies. Design:
-[next-slices-design.md](../next-slices-design.md#24-parity-check).
+template, not query parameters or bodies.
 
 ## Progress tracker
 

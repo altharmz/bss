@@ -1,4 +1,4 @@
-"""`pendingChanges` on the internal open products (next-slices-design.md, slice 4)."""
+"""`pendingChanges` on the internal open products (docs/ui.md)."""
 
 from datetime import date, timedelta
 from uuid import UUID

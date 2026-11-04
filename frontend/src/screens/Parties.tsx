@@ -55,7 +55,7 @@ import './screens.css';
 // Parties and customers can be created here. A party row opens the record (GET) with its
 // subscriber links and an edit for its identity, status and documents; Delete is offered
 // unless the loaded data already shows a dependency, and the server's 409 still shows.
-// Design: docs/next-slices-design.md section 15.
+// Design: docs/ui.md.
 
 type Tab = 'individuals' | 'organizations' | 'customers';
 
