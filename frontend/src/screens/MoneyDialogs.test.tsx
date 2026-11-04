@@ -90,7 +90,7 @@ describe('Ledger money outcomes', () => {
     expect(screen.queryByText(/voucher/i)).toBeNull();
     fireEvent.change(screen.getByLabelText('Number'), { target: { value: 'number' } });
     fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '1,250.5' } });
-    fireEvent.click(screen.getByRole('button', { name: 'cash' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cash' }));
     fireEvent.click(screen.getByRole('button', { name: 'Top up 1,250.50 USD' }));
     await waitFor(() => expect(done).toHaveBeenCalledOnce());
     const sent = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');

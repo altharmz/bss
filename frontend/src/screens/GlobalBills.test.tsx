@@ -104,7 +104,7 @@ describe('bills screen', () => {
     );
     expect(within(row).getByText('BL-B2000002')).toBeTruthy();
     expect(within(row).getByText('2026-10-01')).toBeTruthy();
-    expect(within(row).getByText('offCycle')).toBeTruthy();
+    expect(within(row).getByText('Off-cycle')).toBeTruthy();
     expect(within(row).getByText('Unpaid')).toBeTruthy();
     expect(screen.getByText('Showing 2')).toBeTruthy();
   });

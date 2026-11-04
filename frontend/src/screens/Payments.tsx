@@ -18,7 +18,17 @@ import { shortId } from '../format/ids';
 import { formatInt, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
-import { Modal, PageTitle, Panel, StatusPill, Segmented, TextInput, Button } from '../ui/kit';
+import { paymentMethodLabel } from '../format/labels';
+import {
+  Coded,
+  Modal,
+  PageTitle,
+  Panel,
+  StatusPill,
+  Segmented,
+  DateField,
+  Button,
+} from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -74,11 +84,15 @@ function stamp(instant: string, timeZone: string): string {
   return `${businessDate(instant, timeZone)} ${clockTime(instant, timeZone).slice(0, 5)}`;
 }
 
+function methodCell(code: string | undefined) {
+  return code === undefined ? '—' : <Coded code={code} label={paymentMethodLabel(code)} />;
+}
+
 function paymentCells(payment: PaymentRecord, timeZone: string) {
   return {
     date: stamp(payment.paymentDate, timeZone),
     amount: money(payment.totalAmount, { signed: true }),
-    method: payment.paymentMethod.name ?? payment.paymentMethod['@type'] ?? '—',
+    method: methodCell(payment.paymentMethod.name ?? payment.paymentMethod['@type']),
     status: <StatusPill kind="payment" status={payment.status} />,
     reference: referenceOf(payment),
   };
@@ -237,7 +251,7 @@ export function PaymentDialog({
                 <Id id={payment.account.id} prefix="BA-" />
               </dd>
               <dt>Method</dt>
-              <dd>{payment.paymentMethod.name ?? payment.paymentMethod['@type'] ?? '—'}</dd>
+              <dd>{methodCell(payment.paymentMethod.name ?? payment.paymentMethod['@type'])}</dd>
               <dt>Reference</dt>
               <dd>{referenceOf(payment)}</dd>
               {payment.description !== undefined && (
@@ -332,10 +346,8 @@ export function PaymentsScreen() {
         <label className="bss-caption" htmlFor="payments-from">
           From
         </label>
-        <TextInput
+        <DateField
           id="payments-from"
-          type="date"
-          mono
           value={from}
           max={to === '' ? undefined : to}
           onChange={(event) => setFrom(event.target.value)}
@@ -343,10 +355,8 @@ export function PaymentsScreen() {
         <label className="bss-caption" htmlFor="payments-to">
           To
         </label>
-        <TextInput
+        <DateField
           id="payments-to"
-          type="date"
-          mono
           value={to}
           min={from === '' ? undefined : from}
           onChange={(event) => setTo(event.target.value)}
@@ -466,7 +476,7 @@ function RefundRow({ refund, timeZone }: { refund: RefundRecord; timeZone: strin
         ),
         date: stamp(refund.refundDate, timeZone),
         amount: money(refund.totalAmount, { signed: true, negate: true }),
-        method: refund.paymentMethod.name ?? '—',
+        method: methodCell(refund.paymentMethod.name),
         status: <StatusPill kind="payment" status={refund.status} />,
         reference,
       }}

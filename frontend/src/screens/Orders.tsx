@@ -31,6 +31,7 @@ import { businessDate, clockTime } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatAmount, formatInt } from '../format/money';
 import {
+  SelectField,
   Button,
   Modal,
   PageTitle,
@@ -733,8 +734,7 @@ export function OrderModal({
             </label>
             <label className="bss-field">
               Priority{' '}
-              <select
-                className="bss-input"
+              <SelectField
                 aria-label="Order priority"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
@@ -745,7 +745,7 @@ export function OrderModal({
                     {p === '0' ? '0 (highest)' : p}
                   </option>
                 ))}
-              </select>
+              </SelectField>
             </label>
           </div>
         )}

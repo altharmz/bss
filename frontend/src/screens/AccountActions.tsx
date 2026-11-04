@@ -16,7 +16,8 @@ import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { businessDate, clockTime } from '../format/dates';
 import { formatCents, parseAmount, positiveAmountError, toCents } from '../format/money';
-import { Button, Field, Modal, Panel, TextInput, useToast } from '../ui/kit';
+import { PAYMENT_METHOD_OPTIONS, paymentMethodLabel } from '../format/labels';
+import { Button, Coded, Field, Modal, Panel, Segmented, TextInput, useToast } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
@@ -181,21 +182,14 @@ export function RefundModal({
         {positiveAmountError(amountText) && (
           <Note tone="negative">{positiveAmountError(amountText)}</Note>
         )}
-        <label className="bss-field">
-          Method{' '}
-          <select
-            className="bss-input"
-            aria-label="Refund method"
+        <Field label="Method">
+          <Segmented
+            label="Refund method"
             value={method}
-            onChange={(e) => setMethod(e.target.value)}
-          >
-            {['bankTransfer', 'card', 'cash', 'other'].map((m) => (
-              <option key={m} value={m}>
-                {m === 'other' ? 'Other' : m}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={setMethod}
+            options={PAYMENT_METHOD_OPTIONS}
+          />
+        </Field>
         {method === 'other' && (
           <TextInput
             aria-label="Refund method name"
@@ -317,7 +311,12 @@ export function RefundsPanel({
                 cells={{
                   date: `${businessDate(r.refundDate, timeZone)} ${clockTime(r.refundDate, timeZone)}`,
                   amount: `${formatCents(toCents(r.totalAmount.value))} ${r.totalAmount.unit}`,
-                  method: r.paymentMethod.name,
+                  method: (
+                    <Coded
+                      code={r.paymentMethod.name ?? ''}
+                      label={paymentMethodLabel(r.paymentMethod.name ?? '')}
+                    />
+                  ),
                   description: r.description ?? '—',
                 }}
               />

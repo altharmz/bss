@@ -14,7 +14,7 @@ import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
 import { Link } from '../app/router';
-import { Button, Modal, PageTitle, Panel, TextInput, useToast } from '../ui/kit';
+import { SelectField, Button, Modal, PageTitle, Panel, TextInput, useToast } from '../ui/kit';
 import { Footer, useWrite } from './FinancialForms';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
@@ -291,7 +291,7 @@ export function NumberPicker({
   return (
     <label className="bss-field">
       Subscriber number
-      <select
+      <SelectField
         aria-label="Subscriber number"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -308,7 +308,7 @@ export function NumberPicker({
                 {n.value}
               </option>
             ))}
-      </select>
+      </SelectField>
       <Note tone="info">
         The order checks availability for the requested dates, including future claims and
         quarantine.

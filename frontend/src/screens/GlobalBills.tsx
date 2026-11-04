@@ -13,7 +13,8 @@ import { businessDate } from '../format/dates';
 import { Id } from '../ui/Id';
 import { formatInt, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { PageTitle, Panel, StatusPill, Segmented, TextInput } from '../ui/kit';
+import { runTriggerLabel } from '../format/labels';
+import { Coded, PageTitle, Panel, StatusPill, Segmented, DateField } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import { BillDialog } from './Bills';
@@ -115,13 +116,7 @@ export function BillsScreen() {
         <label className="bss-caption" htmlFor="bills-date">
           Billing date
         </label>
-        <TextInput
-          id="bills-date"
-          type="date"
-          mono
-          value={date}
-          onChange={(event) => setDate(event.target.value)}
-        />
+        <DateField id="bills-date" value={date} onChange={(event) => setDate(event.target.value)} />
         {tab === 'bills' && account !== null && (
           <span className="bss-run-tag" data-ui="ui.bills.accountChip">
             Account {name ?? <Id id={account} prefix="BA-" />}{' '}
@@ -184,7 +179,11 @@ export function BillsScreen() {
                             currency={bill.amountDue.unit}
                           />
                         ),
-                        kind: bill.runType ?? '—',
+                        kind: bill.runType ? (
+                          <Coded code={bill.runType} label={runTriggerLabel(bill.runType)} />
+                        ) : (
+                          '—'
+                        ),
                       }}
                     />
                   ))}

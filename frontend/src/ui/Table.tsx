@@ -18,11 +18,25 @@ export function gridOf(columns: Column[]): string {
   return columns.map((column) => column.width).join(' ');
 }
 
+/** Dates and periods never wrap (B17). */
+const NOWRAP_KEYS = new Set([
+  'date',
+  'period',
+  'due',
+  'created',
+  'updated',
+  'since',
+  'from',
+  'activated',
+]);
+
 function cellClass(column: Column): string {
   return [
     'cell',
     column.align === 'right' ? 'right' : '',
     column.mono ? 'mono' : '',
+    column.key === 'name' ? 'name' : '',
+    NOWRAP_KEYS.has(column.key) ? 'nowrap' : '',
     column.kind === 'actions' ? 'actions' : '',
   ]
     .filter(Boolean)
@@ -92,7 +106,14 @@ export function TableRow({
       onClick={onClick}
     >
       {columns.map((column) => (
-        <div key={column.key} className={cellClass(column)} role="cell">
+        <div
+          key={column.key}
+          className={cellClass(column)}
+          role="cell"
+          {...(column.key === 'name' && typeof cells[column.key] === 'string'
+            ? { title: cells[column.key] as string }
+            : {})}
+        >
           {column.kind === 'actions' && actions ? <Menu items={actions} /> : cells[column.key]}
         </div>
       ))}

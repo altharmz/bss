@@ -21,7 +21,8 @@ import { shortId } from '../format/ids';
 import { Id } from '../ui/Id';
 import { formatCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, Modal, Panel, StatusPill, TextInput, useToast, KeyValue } from '../ui/kit';
+import { eventTypeLabel, paymentMethodLabel } from '../format/labels';
+import { Button, Coded, Modal, Panel, StatusPill, TextInput, useToast, KeyValue } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -135,7 +136,7 @@ export function BalanceActions({
   return (
     <>
       {summary}
-      <Panel title="Balance actions" subtitle="TMF654 balanceActionHistory">
+      <Panel title="Balance actions" subtitle={eventTypeLabel('TMF654 balanceActionHistory')}>
         {balance.status === 'error' ? (
           <ErrorBlock
             title="Failed to load the balance actions"
@@ -166,7 +167,7 @@ function ActionsPanel({
     loadBalanceActions(accountId, bucketId, signal),
   );
   return (
-    <Panel title="Balance actions" subtitle="TMF654 balanceActionHistory">
+    <Panel title="Balance actions" subtitle={eventTypeLabel('TMF654 balanceActionHistory')}>
       <div data-ui="ui.subscriber.prepaid.history">
         <TableHead columns={COLUMNS} />
         <ListState
@@ -243,7 +244,11 @@ export function ActionDialog({
     if (a.confirmationDate) rows.push(['Confirmed', when(a.confirmationDate, timeZone)]);
     if (a.reason) rows.push(['Reason', a.reason]);
     if (a.description) rows.push(['Description', a.description]);
-    if (a.paymentMethod) rows.push(['Payment method', a.paymentMethod]);
+    if (a.paymentMethod)
+      rows.push([
+        'Payment method',
+        <Coded code={a.paymentMethod} label={paymentMethodLabel(a.paymentMethod)} />,
+      ]);
     if (a.expiry)
       rows.push(
         a.kind === 'reservation'
@@ -399,7 +404,7 @@ function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged:
               : 'Deletes this refused request. It moved no money.'}
           </span>
           <Button
-            variant="danger"
+            variant={pending === 'cancel' && kind === 'reservation' ? 'primary' : 'danger'}
             small
             disabled={busy}
             onClick={() =>
@@ -419,7 +424,7 @@ function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged:
           {cancel !== null && (
             <Button
               variant="quiet"
-              tone="negative"
+              {...(kind === 'reservation' ? {} : { tone: 'negative' as const })}
               small
               data-ui={cancel.ui}
               onClick={() => setPending('cancel')}
