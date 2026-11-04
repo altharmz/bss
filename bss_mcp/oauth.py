@@ -32,7 +32,7 @@ from mcp.server.auth.provider import (
 from mcp.shared.auth import OAuthClientInformationFull, OAuthToken
 
 from bss_mcp.audit import audit
-from bss_mcp.auth import READ, WRITE
+from bss_mcp.auth import READ, WRITE, Caller
 from bss_mcp.clock import Clock
 from bss_mcp.config import Settings
 from bss_mcp.store import Store
@@ -111,7 +111,12 @@ class Provider:
         return f"{self.issuer}/login?request={request_id}"
 
     def issue_code(
-        self, client_id: str, params: AuthorizationParams, principal: str, scopes: list[str]
+        self,
+        client_id: str,
+        params: AuthorizationParams,
+        principal: str,
+        scopes: list[str],
+        credential_version: int,
     ) -> str:
         """Called by the login page after a successful login and consent."""
         code = secrets.token_urlsafe(32)
@@ -124,7 +129,9 @@ class Provider:
             "resource": params.resource,
             "subject": principal,
         }
-        self.store.save_code(code, client_id, json.dumps(data), self.settings.mcp_code_ttl)
+        # not an AuthorizationCode field: read back from the store at the exchange
+        stored = {**data, "credential_version": credential_version}
+        self.store.save_code(code, client_id, json.dumps(stored), self.settings.mcp_code_ttl)
         return code
 
     async def load_authorization_code(
@@ -135,14 +142,15 @@ class Provider:
             return None
         # expiry: checked by the store with the injected clock; the SDK's own check
         # (against the wall clock) gets a value it never trips
-        return AuthorizationCode(
-            code=authorization_code, expires_at=float("inf"), **json.loads(row["data"])
-        )
+        data = json.loads(row["data"])
+        data.pop("credential_version", None)
+        return AuthorizationCode(code=authorization_code, expires_at=float("inf"), **data)
 
     async def exchange_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
     ) -> OAuthToken:
-        if not self.store.use_code(authorization_code.code):
+        row = self.store.code(authorization_code.code)
+        if row is None or not self.store.use_code(authorization_code.code):
             audit(self.clock, event="token", client_id=client.client_id, outcome="code reused")
             raise TokenError("invalid_grant", "authorization code already used")
         assert authorization_code.subject is not None
@@ -151,6 +159,7 @@ class Provider:
             authorization_code.subject,
             authorization_code.scopes,
             authorization_code.resource,
+            json.loads(row["data"])["credential_version"],
             grant_id=secrets.token_hex(8),
         )
         audit(
@@ -185,8 +194,9 @@ class Provider:
         scopes: list[str],
     ) -> OAuthToken:
         """Rotation: the refresh token is spent, a new pair is issued in the same grant."""
+        live = self.store.token(refresh_token.token, "refresh")
         row = self.store.revoke_token(refresh_token.token)
-        if row is None or row["kind"] != "refresh":
+        if live is None or row is None or row["kind"] != "refresh":
             raise TokenError("invalid_grant", "refresh token already used or revoked")
         assert refresh_token.subject is not None
         scopes = granted_scopes(WRITE if WRITE in scopes else READ)
@@ -195,6 +205,7 @@ class Provider:
             refresh_token.subject,
             scopes,
             refresh_token.resource,
+            live["credential_version"],
             grant_id=row["grant_id"],
         )
         audit(
@@ -212,12 +223,14 @@ class Provider:
         row = self.store.token(token, "access")
         if row is None:
             return None
-        return AccessToken(
+        return Caller(
             token=token,
             client_id=row["client_id"],
             scopes=row["scopes"].split(),
             resource=row["resource"],
             subject=row["subject"],
+            grant_id=row["grant_id"],
+            credential_version=row["credential_version"],
         )
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
@@ -241,6 +254,7 @@ class Provider:
         principal: str,
         scopes: list[str],
         resource: str | None,
+        credential_version: int,
         *,
         grant_id: str,
     ) -> OAuthToken:
@@ -252,6 +266,7 @@ class Provider:
             "subject": principal,
             "scopes": scopes,
             "resource": resource,
+            "credential_version": credential_version,
         }
         self.store.save_token(access, kind="access", ttl=self.settings.mcp_access_ttl, **common)
         self.store.save_token(refresh, kind="refresh", ttl=self.settings.mcp_refresh_ttl, **common)

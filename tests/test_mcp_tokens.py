@@ -18,9 +18,10 @@ def tool(mcp, *argv: str) -> tuple[int, str, str]:
 
 
 @pytest.fixture
-def users(mcp_settings, request):
-    mcp_settings.mcp_users = flow.USERS
-    return request.getfixturevalue("mcp")
+def users(db_conn, mcp):
+    for name, password in flow.USERS.items():
+        flow.add_user(db_conn, name, password)
+    return mcp
 
 
 def test_create_prints_the_token_once_and_it_works_with_its_scope(mcp, caplog):

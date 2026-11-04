@@ -535,7 +535,7 @@ def main() -> int:
                     raise_server_exceptions=True,
                     headers={
                         "X-Bss-Service": settings.bss_service_secret,
-                        "X-Remote-User": "mcp:seed",
+                        "X-Remote-User": "mcp-token:seed",
                     },
                 )
             )

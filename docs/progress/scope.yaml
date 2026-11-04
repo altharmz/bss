@@ -79,6 +79,7 @@ items:
   - {id: api.internal.session.get, area: api, stage: 5, method: GET, path: /internal/v1/session, title: "Current session"}
   - {id: api.internal.session.delete, area: api, stage: 5, method: DELETE, path: /internal/v1/session, title: "Sign out"}
   - {id: api.internal.session.password, area: api, stage: 5, method: POST, path: /internal/v1/session/password, title: "Change own password"}
+  - {id: api.internal.service.credentialCheck, area: api, stage: 5, method: POST, path: /internal/v1/service/credential-check, title: "MCP login backend: check a user password (service credential only)"}
   - {id: api.internal.users.list, area: api, stage: 5, method: GET, path: /internal/v1/users, title: "List users (admin)"}
   - {id: api.internal.users.create, area: api, stage: 5, method: POST, path: /internal/v1/users, title: "Create user (admin)"}
   - {id: api.internal.users.patch, area: api, stage: 5, method: PATCH, path: "/internal/v1/users/{username}", title: "Manage user (admin)"}

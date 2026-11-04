@@ -3,7 +3,8 @@
 Every bearer token - a static API token now, an OAuth access token from slice 2 on -
 resolves to the SDK's AccessToken with:
   scopes   ["read"] or ["read", "write"] - write implies read;
-  subject  the principal, "mcp:<user or token name>", sent to the app as X-Remote-User.
+  subject  the principal, sent to the app as X-Remote-User: "mcp:<app username>" for an
+           OAuth grant (with its credential version), "mcp-token:<name>" for a static token.
 
 The scope is enforced here, in the server: a read token is not shown the write tools and
 is refused (HTTP 403) if it calls one anyway. Nothing on the client side is trusted.
@@ -26,7 +27,20 @@ def scopes_for(scope: Scope) -> list[str]:
 
 
 def principal_of(name: str) -> str:
-    return f"mcp:{name}"
+    """A static token's principal."""
+    return f"mcp-token:{name}"
+
+
+def user_principal(username: str) -> str:
+    """An OAuth grant's principal: an app user."""
+    return f"mcp:{username}"
+
+
+class Caller(AccessToken):
+    """The SDK's AccessToken plus what the app needs to recognise a revoked credential."""
+
+    grant_id: str | None = None  # OAuth only
+    credential_version: int | None = None  # OAuth only; sent as X-Bss-Credential-Version
 
 
 class AccessTokenSource(Protocol):
@@ -45,7 +59,7 @@ class TokenVerifier:
         static = self.store.find_static_token(token)
         if static is None:
             return await self.oauth.load_access_token(token) if self.oauth else None
-        return AccessToken(
+        return Caller(
             token=token,
             client_id=f"static:{static.name}",
             scopes=scopes_for(static.scope),
@@ -53,7 +67,9 @@ class TokenVerifier:
         )
 
 
-def caller(scope: AsgiScope) -> AccessToken | None:
+def caller(scope: AsgiScope) -> Caller | None:
     """The authenticated caller of an HTTP request (set by the SDK's BearerAuthBackend)."""
     user = scope.get("user")
-    return user.access_token if isinstance(user, AuthenticatedUser) else None
+    if isinstance(user, AuthenticatedUser) and isinstance(user.access_token, Caller):
+        return user.access_token
+    return None

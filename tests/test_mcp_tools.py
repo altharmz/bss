@@ -814,4 +814,4 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
 
     assert called == {n for n, t in generated().items() if not t.read_only}
     history = api.get(f"/internal/v1/customerBill/{world['bill']['id']}").json()["history"]
-    assert history[-1]["operator"] == "mcp:writer"
+    assert history[-1]["operator"] == "mcp-token:writer"

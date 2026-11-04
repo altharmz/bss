@@ -102,9 +102,16 @@ operator pattern without `:` -> both operator tests fail; identity check accepti
   /authorize request - unguessable, single use, 10 minutes, 5 wrong passwords - and so
   the form's CSRF token. No `form-action` in the CSP: Chrome applies it to the redirect
   after the POST, which goes to the client.
-- **Users**: `MCP_USERS=name:hash,...`, stdlib scrypt (n=2^14, r=8, p=1), `.`-separated -
-  no `$`, which compose would interpolate in `.env`. An unknown user costs a scrypt too
-  (no timing difference).
+- **Users** (issue #146): the app's. `POST /internal/v1/service/credential-check` (service
+  credential only) answers 200 `{username, role, credentialVersion}`, 401
+  `invalidCredentials` (unknown, wrong password and disabled look the same; an unknown
+  user costs a scrypt too) or 403 `passwordChangeRequired`; it uses the app's sign-in rate
+  limiter. Grants carry the user's `credential_version` (`app_user`, migration `0048`, +1
+  on password change, reset, role change and disable). Principals sent to the app: `mcp:<username>`
+  with `X-Bss-Credential-Version`, checked on every request (401 `credentialRevoked`: the
+  connector ends the grant and answers the client 401 `invalid_token`), and
+  `mcp-token:<name>` for static tokens, not checked against users. Grants from before
+  the change (no stored version) are deleted at start. `MCP_USERS` is gone.
 - **Scopes**: registration defaults to `read write`; consent narrows to read or keeps
   write (only if the client asked for it); a token's scopes are `[read]` or `[read,
   write]`; a refresh can narrow, never widen (the SDK's check).
@@ -173,9 +180,7 @@ with one) are unit-tested.
   reloader, 73 MB prod-like after startup; scrypt adds 16 MB per login in flight), the
   app's hardening (read-only root, tmpfs, no-new-privileges), `restart: unless-stopped`,
   no published port, alias `bss-mcp` on `shared`, volume `mcp-data`. Budget: 384 + 256 +
-  192 = 832 MB of the VPS's 1931 MB. `MCP_USERS` is required (`${MCP_USERS:?...}`), so a
-  prod start without a login user fails loudly; deploy.sh checks it before any network
-  step.
+  192 = 832 MB of the VPS's 1931 MB.
 - **No `depends_on`** in prod (the base compose rule) and none needed: after the nightly
   reboot Docker restarts each container on its own; the identity check waits up to 60 s
   for the app and the restart policy covers a longer wait.
@@ -197,7 +202,7 @@ Rehearsal and proofs (Caddy 2.11.4 on the workstation, prod-like `mcp` from the 
 image): the smoke test passes through Caddy; with a `path` matcher it fails ("GET /MCP
 answered 404 without basic auth"); with `/token` dropped from the list it fails ("POST
 /token answered 401 Basic"). The prod composition validates (`config --quiet`, dummy
-values) and refuses to start without `MCP_USERS`.
+values).
 
 ## Slice 5: token tooling and client docs (2026-10-11)
 

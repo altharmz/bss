@@ -13,10 +13,10 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 from bss_mcp.operations import OPERATIONS
-from bss_mcp.passwords import check_password, hash_password, parse_users
+from bss_mcp.passwords import hash_password
 
 PASSWORD = "correct horse battery"
-USERS = f"demo:{hash_password(PASSWORD)},ops:{hash_password('another password!')}"
+USERS = {"demo": PASSWORD, "ops": "another password!"}
 REDIRECT = "https://client.example/callback"
 GIVEN = {"givenName": "Zoya", "familyName": "Kosmodemyanskaya"}
 
@@ -27,10 +27,22 @@ def pkce() -> tuple[str, str]:
     return verifier, base64.urlsafe_b64encode(digest).decode().rstrip("=")
 
 
+def add_user(db_conn, username, password, *, must_change=False, disabled=False, role="user"):
+    from tests.timeline import NOW
+
+    db_conn.execute(
+        "INSERT INTO app_user (username, role, password_hash, must_change_password, disabled,"
+        " created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (username, role, hash_password(password), must_change, disabled, NOW, NOW),
+    )
+    db_conn.commit()
+
+
 @pytest.fixture
-def oauth(mcp_settings, request):
-    mcp_settings.mcp_users = USERS
-    return request.getfixturevalue("mcp")
+def oauth(db_conn, mcp):
+    for name, password in USERS.items():
+        add_user(db_conn, name, password)
+    return mcp
 
 
 def register(mcp, redirect_uris=(REDIRECT,), **over):
@@ -91,12 +103,12 @@ def token(mcp, cid, **form):
     return mcp.client.post("/token", data={"client_id": cid, **form})
 
 
-def tokens(mcp, *, scope="write", requested="read write", user="demo") -> dict:
+def tokens(mcp, *, scope="write", requested="read write", user="demo", password=PASSWORD) -> dict:
     """A complete authorization: register, authorize, log in, exchange the code."""
     cid = client_id(mcp)
     verifier, challenge = pkce()
     request_id = login_link(mcp, cid, challenge, scope=requested)
-    code = code_from(login(mcp, request_id, scope=scope, user=user))
+    code = code_from(login(mcp, request_id, scope=scope, user=user, password=password))
     response = token(
         mcp,
         cid,
@@ -237,7 +249,7 @@ def test_a_wrong_password_issues_nothing_and_five_end_the_link(oauth):
     request_id = login_link(oauth, cid, challenge)
     for _ in range(4):
         wrong = login(oauth, request_id, password="wrong password")
-        assert wrong.status_code == 401 and "Wrong user or password" in wrong.text
+        assert wrong.status_code == 401 and "Wrong user name or password" in wrong.text
         assert "location" not in wrong.headers
     assert login(oauth, request_id, password="wrong password").status_code == 400  # 5th
     assert login(oauth, request_id).status_code == 400  # the link is gone, right password too
@@ -370,7 +382,6 @@ def test_registration_accepts_https_and_local_http(oauth, uri):
 
 
 def test_registration_is_capped(mcp_settings, request):
-    mcp_settings.mcp_users = USERS
     mcp_settings.mcp_max_clients = 2
     mcp = request.getfixturevalue("mcp")
     assert register(mcp).status_code == 201
@@ -449,7 +460,6 @@ def test_access_tokens_expire_and_refresh_tokens_outlive_them(oauth):
 
 
 def test_the_auth_endpoints_are_rate_limited_per_ip(mcp_settings, request):
-    mcp_settings.mcp_users = USERS
     mcp_settings.mcp_auth_rate_per_min = 3
     mcp = request.getfixturevalue("mcp")
     for _ in range(3):
@@ -497,21 +507,121 @@ def test_the_root_resource_metadata_is_the_same_document(oauth):
     assert root == oauth.client.get("/.well-known/oauth-protected-resource/mcp").json()
 
 
-# --- users and passwords ---
+# --- the app's users (issue #146) ---
 
 
-def test_users_parse_and_passwords_check():
-    users = parse_users(USERS)
-    assert set(users) == {"demo", "ops"}
-    assert check_password(PASSWORD, users["demo"])
-    assert not check_password(PASSWORD, users["ops"])
-    assert not check_password(PASSWORD, None)
-    assert "$" not in users["demo"]  # compose would interpolate it in .env
+def set_user(db_conn, username, sql):
+    db_conn.execute(f"UPDATE app_user SET {sql} WHERE username = %s", (username,))  # noqa: S608
+    db_conn.commit()
+
+
+def test_an_oauth_grant_acts_as_the_app_user_in_the_apps_history(oauth, db_conn):
+    issued = tokens(oauth)
+    is_error, answer = oauth.result(issued["access_token"], "create_individual", {"body": GIVEN})
+    assert not is_error and answer["status"] == 201
+    row = db_conn.execute("SELECT last_login_at FROM app_user WHERE username='demo'").fetchone()
+    assert row[0] is not None
+
+
+def test_a_user_who_must_change_the_password_is_sent_to_the_ui(oauth, db_conn):
+    set_user(db_conn, "demo", "must_change_password = true")
+    cid = client_id(oauth)
+    _, challenge = pkce()
+    request_id = login_link(oauth, cid, challenge)
+    response = login(oauth, request_id)
+    assert response.status_code == 403 and "Change your password in the BSS UI" in response.text
+    assert "location" not in response.headers
+
+
+def test_a_disabled_user_cannot_sign_in(oauth, db_conn):
+    set_user(db_conn, "demo", "disabled = true")
+    cid = client_id(oauth)
+    _, challenge = pkce()
+    request_id = login_link(oauth, cid, challenge)
+    response = login(oauth, request_id)
+    assert response.status_code == 401 and "Wrong user name or password" in response.text
+
+
+def test_the_apps_rate_limit_is_shown_as_too_many_attempts(oauth):
+    cid = client_id(oauth)
+    _, challenge = pkce()
+    seen = set()
+    for _ in range(25):  # more wrong passwords than the app allows a minute
+        request_id = login_link(oauth, cid, challenge)
+        seen.add(login(oauth, request_id, user="ops", password="wrong one!").status_code)
+    assert 429 in seen
+
+
+def test_app_user_names_are_not_limited_to_the_static_token_pattern(oauth, db_conn):
+    add_user(db_conn, "Ivan.Petrov@example", PASSWORD)
+    issued = tokens(oauth, user="Ivan.Petrov@example")
+    assert oauth.rpc("tools/list", None, issued["access_token"]).status_code == 200
 
 
 @pytest.mark.parametrize(
-    "raw", ["demo", "demo:plain", "Demo:scrypt.x", "a:scrypt.1,a:scrypt.2", "a b:scrypt.1"]
+    "change",
+    [
+        "credential_version = credential_version + 1",
+        "disabled = true",
+    ],
 )
-def test_malformed_users_stop_the_service(raw):
-    with pytest.raises(ValueError, match="MCP_USERS"):
-        parse_users(raw)
+def test_a_changed_credential_ends_the_grant_and_the_client_authorizes_again(
+    oauth, db_conn, change
+):
+    issued = tokens(oauth)
+    access = issued["access_token"]
+    assert oauth.rpc("tools/list", None, access).status_code == 200
+    set_user(db_conn, "demo", change)
+    revoked = oauth.call(access, "list_customers")
+    assert revoked.status_code == 401
+    assert 'error="invalid_token"' in revoked.headers["www-authenticate"]
+    assert "resource_metadata=" in revoked.headers["www-authenticate"]
+    # the grant is gone: the access and refresh tokens no longer work
+    assert oauth.rpc("tools/list", None, access).status_code == 401
+    again = token(
+        oauth,
+        issued["client_id"],
+        grant_type="refresh_token",
+        refresh_token=issued["refresh_token"],
+    )
+    assert again.status_code == 400
+
+
+def test_another_users_grant_survives_a_change_to_one_user(oauth, db_conn):
+    mine, theirs = tokens(oauth), tokens(oauth, user="ops", password=USERS["ops"])
+    set_user(db_conn, "demo", "credential_version = credential_version + 1")
+    assert oauth.call(mine["access_token"], "list_customers").status_code == 401
+    assert oauth.call(theirs["access_token"], "list_customers").status_code == 200
+
+
+def test_a_static_token_is_the_mcp_token_principal_and_ignores_users(oauth, db_conn):
+    static = oauth.token("ops-bot", "write")
+    is_error, answer = oauth.result(static, "create_individual", {"body": GIVEN})
+    assert not is_error and answer["status"] == 201
+    set_user(db_conn, "demo", "disabled = true")
+    assert oauth.call(static, "list_customers").status_code == 200
+
+
+def test_the_store_drops_grants_without_a_credential_version_and_keeps_static_tokens(tmp_path):
+    import sqlite3
+
+    from bss_mcp.clock import FixedClock
+    from bss_mcp.store import Store
+
+    path = str(tmp_path / "old.db")
+    clock = FixedClock()
+    first = Store(path, clock)
+    _, static = first.create_static_token("kept", "read")
+    first.save_token(
+        "bss_at_old", kind="access", grant_id="g", client_id="c", subject="mcp:demo",
+        scopes=["read"], resource=None, credential_version=1, ttl=60,
+    )  # fmt: skip
+    first.save_code("old-code", "c", '{"subject": "mcp:demo"}', 60)  # a code without a version
+    db = sqlite3.connect(path)
+    db.execute("UPDATE oauth_token SET credential_version = NULL")  # what an old file holds
+    db.commit()
+    db.close()
+    second = Store(path, clock)
+    assert second.token("bss_at_old", "access") is None
+    assert second.code("old-code") is None
+    assert second.find_static_token(static) is not None

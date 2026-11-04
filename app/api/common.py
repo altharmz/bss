@@ -279,7 +279,7 @@ def not_null(data: BaseModel, *names: str) -> None:
 # as "mcp:<user or token name>"; absent locally. A basic-auth user cannot contain ":", so
 # an operator with ":" always comes from MCP. A value outside this shape is reported as no
 # operator rather than echoed.
-OPERATOR = re.compile(r"^[A-Za-z0-9._@:-]{1,64}$")
+OPERATOR = re.compile(r"^[A-Za-z0-9._@:-]{1,68}$")  # mcp:<64-char username> at most
 
 
 def operator_of(request: Request) -> str | None:
