@@ -24,6 +24,29 @@ def digest(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+CREDENTIAL_CHECK_PATH = "/internal/v1/service/credential-check"
+# The two principal forms the MCP connector sends with the service secret: an OAuth
+# grant's app user, whose credential version is checked on every request, and a static
+# token's name, which is not a user.
+USER_PRINCIPAL = re.compile(r"mcp:([A-Za-z0-9._@-]{1,64})")
+TOKEN_PRINCIPAL = re.compile(r"mcp-token:[a-z0-9][a-z0-9._-]{0,47}")
+
+
+def check_principal(tx, principal: str, version: str) -> None:
+    if TOKEN_PRINCIPAL.fullmatch(principal):
+        return
+    match = USER_PRINCIPAL.fullmatch(principal)
+    if match is None or not version.isascii() or not version.isdigit() or len(version) > 9:
+        raise TmfError(403, "invalid MCP principal")
+    with tx() as conn:
+        row = conn.execute(
+            "SELECT credential_version, disabled FROM app_user WHERE username = %s",
+            (match.group(1),),
+        ).fetchone()
+    if row is None or row[1] or row[0] != int(version):
+        raise TmfError(401, "the credential was revoked", code="credentialRevoked")
+
+
 def authenticate(request: Request, tx: Tx, clock: ClockDep) -> None:
     if (request.method, request.url.path) in OPEN:
         return
@@ -39,12 +62,19 @@ def authenticate(request: Request, tx: Tx, clock: ClockDep) -> None:
         )
         if not mcp and not smoke:
             raise TmfError(401, "invalid service credential")
+        if path == CREDENTIAL_CHECK_PATH:
+            # the connector's login backend: the service credential alone, no principal
+            if not mcp:
+                raise TmfError(403, "only the MCP service credential may check credentials")
+            request.state.operator = "mcp-login"
+            request.state.role = "service"
+            return
         if path.startswith((SESSION_PATH, "/internal/v1/users")):
             raise TmfError(403, "service principals cannot manage users or sessions")
-        if mcp and not re.fullmatch(r"mcp:[a-z0-9][a-z0-9._-]{0,47}", principal):
-            raise TmfError(403, "invalid MCP principal")
         if smoke and request.method not in {"GET", "HEAD"}:
             raise TmfError(403, "smoke credential is read-only")
+        if mcp:
+            check_principal(tx, principal, request.headers.get("x-bss-credential-version", ""))
         request.state.operator = principal if mcp else "smoke"
         request.state.role = "service"
         return

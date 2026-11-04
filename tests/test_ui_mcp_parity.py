@@ -1,4 +1,4 @@
-"""UI vs MCP parity (docs/decisions/harness.md): every MCP operation has a call in the
+"""UI vs MCP parity (docs/decisions/tracking.md): every MCP operation has a call in the
 admin UI or a reasoned line in tests/ui-mcp-allowlist.txt. The scan is
 scripts/ui_mcp_parity.py over frontend/src (mounted read-only by compose.override.yaml)."""
 

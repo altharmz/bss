@@ -24,8 +24,10 @@ Written at the human's request:
   create users nor change a password, and has no role to check.
 - The `smoke` basic-auth user (GET/HEAD only, enforced by Caddy) runs
   `scripts/web-smoke.sh` after every deploy.
-- The MCP service has its own users (`MCP_USERS`) and calls the app over the `shared`
-  network with `X-Remote-User: mcp:<name>`; its scopes are enforced in `bss_mcp`.
+- The MCP service calls the app over the `shared` network with the service secret and
+  `X-Remote-User: mcp:<app username>` (OAuth, with `X-Bss-Credential-Version`) or
+  `mcp-token:<name>` (static token); its scopes are enforced in `bss_mcp`. Its OAuth
+  login uses the app's users (Q7).
 
 **Consequence:** roles cannot be enforced while identity is Caddy's. The app has to own
 authentication - and then it must authenticate **every** request, not only the UI's,
@@ -103,8 +105,9 @@ or a user could do over `/tmf-api` what the UI denies.
 - **Q5** Session lifetime: proposed 8 hours idle, 7 days absolute.
 - **Q6** The smoke test: a service credential limited to GET/HEAD (proposed), or an app
   user?
-- **Q7** Should the MCP login (`MCP_USERS`) later use the app's users? Not this slice;
-  issue #146.
+- **Q7** Should the MCP login use the app's users? **Yes** (issue #146, done): the
+  connector asks `POST /internal/v1/service/credential-check`, grants carry
+  `app_user.credential_version`, `MCP_USERS` is removed. See [mcp.md](mcp.md).
 
 ### Slices
 

@@ -62,6 +62,7 @@ AUTH_OPERATIONS = {
     ("POST", "/internal/v1/session"),
     ("DELETE", "/internal/v1/session"),
     ("POST", "/internal/v1/session/password"),
+    ("POST", "/internal/v1/service/credential-check"),
     ("GET", "/internal/v1/users"),
     ("POST", "/internal/v1/users"),
     ("PATCH", "/internal/v1/users/{username}"),

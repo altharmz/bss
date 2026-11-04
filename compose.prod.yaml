@@ -139,7 +139,6 @@ services:
       MCP_STORE: /data/mcp.db
       # behind Caddy: the client IP is the last X-Forwarded-For entry (Caddy sets it)
       MCP_TRUST_FORWARDED: "true"
-      MCP_USERS: ${MCP_USERS:?MCP_USERS is required - see .env.example}
       # same value as the app's: without it every tool call is a 401
       BSS_SERVICE_SECRET: ${BSS_SERVICE_SECRET:?BSS_SERVICE_SECRET is required - see .env.example}
     volumes:

@@ -66,7 +66,7 @@ def test_context_business_date_is_the_date_in_billing_tz(api):
     [
         ("i.petrova", "i.petrova"),
         ("  i.petrova ", "i.petrova"),
-        ("mcp:demo", "mcp:demo"),  # the MCP connector's principal
+        ("mcp-token:demo", "mcp-token:demo"),  # the MCP connector's principal
         ("a b", None),
         ("a/b", None),
         ("x" * 65, None),

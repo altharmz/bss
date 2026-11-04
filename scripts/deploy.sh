@@ -104,11 +104,6 @@ grep -q '^BSS_SERVICE_SECRET=.' .env.prod \
 grep -q '^BSS_SMOKE_SECRET=.' .env.prod \
   || fail "BSS_SMOKE_SECRET is empty or missing in .env.prod (see .env.example)"
 
-# The MCP login needs at least one user; checked here, before any network step (the value
-# is never printed). compose would refuse too, but only after the migration.
-grep -q '^MCP_USERS=.' .env.prod \
-  || fail "MCP_USERS is empty or missing in .env.prod (see .env.example; hashes: python -m bss_mcp.passwords)"
-
 # What ships, in one place: the real deploy calls these with the VPS as destination,
 # DRY_RUN=1 with --dry-run against a local scratch directory - the same calls.
 # Chained with && so a failed rsync fails the function wherever it is called - set -e does

@@ -48,7 +48,6 @@ from bss_mcp.clock import Clock
 from bss_mcp.config import Settings
 from bss_mcp.login import Login
 from bss_mcp.oauth import Provider
-from bss_mcp.passwords import parse_users
 from bss_mcp.ratelimit import RateLimit
 from bss_mcp.routes import AuthIpLimit, oauth_routes
 from bss_mcp.store import Store
@@ -120,6 +119,10 @@ class BodyLimit:
         await self.app(scope, _replay(b"".join(chunks), receive), send)
 
 
+# set on the ASGI scope by a tool call whose grant the app revoked (Guard answers 401)
+REVOKED = "bss_mcp"  # a dict: the SDK copies the scope, the dict inside stays shared
+
+
 class Guard:
     """After authentication: the per-principal rate limit, and the scope of a tools/call
     decided before the SDK sees it - a write tool with a read token is an HTTP 403
@@ -177,7 +180,25 @@ class Guard:
                 )
                 return
             receive = _replay(body, receive)
-        await self.app(scope, receive, send)
+
+        holder: dict[str, bool] = scope.setdefault(REVOKED, {})
+
+        async def guarded_send(message: Any) -> None:
+            if not holder.get("credential_revoked"):
+                await send(message)
+            elif message["type"] == "http.response.start":
+                # the app said the grant's credential is gone: the client must re-authorize
+                await _send_json(
+                    send,
+                    401,
+                    {"error": "invalid_token", "error_description": "sign in again"},
+                    {
+                        "WWW-Authenticate": 'Bearer error="invalid_token",'
+                        f' resource_metadata="{self.resource_metadata_url}"'
+                    },
+                )
+
+        await self.app(scope, receive, guarded_send)
 
     def _called_tool(self, body: bytes) -> Tool | None:
         try:
@@ -189,6 +210,15 @@ class Guard:
         params = message.get("params")
         name = params.get("name") if isinstance(params, dict) else None
         return self.tools.get(name) if isinstance(name, str) else None
+
+
+def _error_code(content: bytes) -> str | None:
+    try:
+        body = json.loads(content)
+    except ValueError:
+        return None
+    code = body.get("code") if isinstance(body, dict) else None
+    return code if isinstance(code, str) else None
 
 
 def _tool_listing(tool: Tool) -> types.Tool:
@@ -271,7 +301,9 @@ def build_app(
             return _error("invalid arguments:\n" + "\n".join(problems))
         request = tool.request(arguments)
         try:
-            response = await bss.request(principal=principal, **request)
+            response = await bss.request(
+                principal=principal, credential_version=token.credential_version, **request
+            )
         except httpx2.TimeoutException:
             done("timeout")
             return _error(f"bss did not answer within {settings.mcp_api_timeout:g} s")
@@ -279,6 +311,14 @@ def build_app(
             done("unreachable")
             log.warning("call to bss failed: %r", exc)
             return _error("bss is not reachable")
+        if response.status_code == 401 and _error_code(response.content) == "credentialRevoked":
+            # the user's password, role or state changed since the login: end the grant
+            # and let Guard answer the client 401 so it authorizes again
+            if token.grant_id:
+                store.revoke_grant(token.grant_id)
+            ctx.request.scope[REVOKED]["credential_revoked"] = True
+            done("credential_revoked")
+            return _error("your sign-in is no longer valid: connect again")
         done(response.status_code)
         text = result_text(response.status_code, dict(response.headers), response.content)
         return types.CallToolResult(
@@ -333,12 +373,9 @@ def build_app(
             yield
         await bss.aclose()
 
-    users = parse_users(settings.mcp_users)
-    if not users:
-        log.warning("MCP_USERS is empty: nobody can sign in through OAuth (static tokens work)")
     provider = Provider(store, clock, settings)
     auth_limit = RateLimit(clock, settings.mcp_auth_rate_per_min)
-    login = Login(provider, users, clock, settings, user_limit=auth_limit)
+    login = Login(provider, bss, clock, settings, user_limit=auth_limit)
 
     return Starlette(
         routes=[

@@ -38,7 +38,6 @@ class RuntimeTests(unittest.TestCase):
                 "POSTGRES_PASSWORD",
                 "POSTGRES_USER",
                 "POSTGRES_DB",
-                "MCP_USERS",
                 "BSS_SERVICE_SECRET",
                 "BSS_SMOKE_SECRET",
                 "DATABASE_URL",
@@ -258,7 +257,7 @@ class RuntimeTests(unittest.TestCase):
         self.rejected(self.wrapper("ps"), "development secret file is missing")
 
     def test_required_development_password(self):
-        for contents in ("", "MCP_USERS=\n", "POSTGRES_PASSWORD=\n", 'POSTGRES_PASSWORD=""\n'):
+        for contents in ("", "BSS_SERVICE_SECRET=\n", "POSTGRES_PASSWORD=\n", 'POSTGRES_PASSWORD=""\n'):
             self.secret.write_text(contents)
             self.rejected(self.wrapper("--check"), "POSTGRES_PASSWORD is required")
 

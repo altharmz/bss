@@ -66,7 +66,9 @@ CREATE TABLE IF NOT EXISTS oauth_token (
     resource    TEXT,
     created_at  REAL NOT NULL,
     expires_at  REAL NOT NULL,
-    revoked_at  REAL
+    revoked_at  REAL,
+    -- the app user's credential_version this grant was issued for (docs/mcp.md)
+    credential_version INTEGER
 );
 CREATE INDEX IF NOT EXISTS oauth_token_grant ON oauth_token (grant_id);
 """
@@ -95,6 +97,16 @@ class Store:
         with self._lock:
             self._db.execute("PRAGMA journal_mode=WAL")
             self._db.executescript(SCHEMA)
+            self._migrate()
+
+    def _migrate(self) -> None:
+        """OAuth grants from before the app's users (no credential_version) are dropped:
+        the clients authorize once more. Static tokens are kept."""
+        columns = {row["name"] for row in self._db.execute("PRAGMA table_info(oauth_token)")}
+        if "credential_version" not in columns:
+            self._db.execute("ALTER TABLE oauth_token ADD COLUMN credential_version INTEGER")
+        self._db.execute("DELETE FROM oauth_token WHERE credential_version IS NULL")
+        self._db.execute("DELETE FROM oauth_code WHERE data NOT LIKE '%credential_version%'")
 
     def ping(self) -> None:
         with self._lock:
@@ -250,6 +262,7 @@ class Store:
         subject: str,
         scopes: list[str],
         resource: str | None,
+        credential_version: int,
         ttl: float,
     ) -> float:
         """Stores the token's hash; returns its expiry (epoch seconds)."""
@@ -257,7 +270,8 @@ class Store:
         with self._lock:
             self._db.execute(
                 "INSERT INTO oauth_token (token_hash, kind, grant_id, client_id, subject, scopes,"
-                " resource, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " resource, credential_version, created_at, expires_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     token_hash(token),
                     kind,
@@ -266,6 +280,7 @@ class Store:
                     subject,
                     " ".join(scopes),
                     resource,
+                    credential_version,
                     now,
                     now + ttl,
                 ),
@@ -276,7 +291,8 @@ class Store:
         """The live token of this kind (not revoked, not expired), or None."""
         with self._lock:
             return self._db.execute(
-                "SELECT grant_id, client_id, subject, scopes, resource, expires_at"
+                "SELECT grant_id, client_id, subject, scopes, resource, credential_version,"
+                " expires_at"
                 " FROM oauth_token WHERE token_hash = ? AND kind = ? AND revoked_at IS NULL"
                 " AND expires_at >= ?",
                 (token_hash(token), kind, self.clock.now()),

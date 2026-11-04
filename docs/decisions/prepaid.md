@@ -1288,7 +1288,7 @@ physical SIM inventory, network provisioning.
   `...Required`, and a set that changes nothing is `...Unavailable` ("already uses"). MSISDN
   and IMSI may change in one item; offering-change, prepaid timing and status exclusivity
   follow the MSISDN rules. Only changed kinds release and claim.
-- **Data.** Migration `0048`: `subscriber_number` kind and value checks, `UNIQUE(kind, value)`,
+- **Data.** Migration `0049`: `subscriber_number` kind and value checks, `UNIQUE(kind, value)`,
   `UNIQUE(id, kind)`, `iccid`; `number_assignment.resource_specification_id` (default
   `msisdn`) with a composite foreign key and the product exclusion per kind;
   `product.requires_imsi`. Downgrade refuses while an IMSI or an IMSI-requiring product exists.

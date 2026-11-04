@@ -56,7 +56,7 @@ def run(argv: list[str], store: Store, clock: Clock, out: TextIO, err: TextIO) -
         except ValueError as e:
             print(f"refused: {e}", file=err)
             return 1
-        audit(clock, event="token_create", principal=f"mcp:{record.name}", outcome=args.scope)
+        audit(clock, event="token_create", principal=f"mcp-token:{record.name}", outcome=args.scope)
         print(f"id {record.id}  name {record.name}  scope {record.scope}", file=err)
         print("The token is shown this once; only its hash is stored:", file=err)
         print(token, file=out)
