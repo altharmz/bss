@@ -1,7 +1,7 @@
 import { getAll, getJson } from './client';
 import { PAYMENTS, REFUNDS } from './bss';
 
-// Payments and refunds history (docs/next-slices-design.md section 19): TMF676 reads only.
+// Payments and refunds history (docs/ui.md): TMF676 reads only.
 // Both resources have one status today ("done"); the filter still sends it, so a later
 // status needs no change here.
 

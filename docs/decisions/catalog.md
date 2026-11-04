@@ -328,7 +328,7 @@ the required `scripts/docs/` registry and notes edits. No commit or deployment m
 
 ## UI: product specifications (slice 11, 2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 11), frontend only.
+Built as designed, frontend only.
 The Catalog screen has the tabs Offerings | Specifications (`ui.catalog.specifications`):
 name, status, brand, version, the number of loaded offerings using it, last update. A row opens
 one dialog (`ui.catalog.editSpecification`) with name, description, brand, version, product
@@ -346,7 +346,7 @@ lifecycle filter shows on the Offerings tab only.
 
 ## UI: offering and price detail, edit, delete (slice 12, 2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 12), frontend only.
+Built as designed, frontend only.
 The offering dialog loads `GET productOffering/{id}` (description, sellable, code, specification,
 categories). **Edit offering** (`ui.catalog.editOffering`) sends a merge patch of the changed
 fields only; an unchanged `validFor` start is sent as loaded, the code edit rewrites the
@@ -367,7 +367,7 @@ offering's order history is not loaded); only the price amount is a charge field
 
 ## UI: categories and product catalogs (slice 13, 2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 13), frontend only.
+Built as designed, frontend only.
 Catalog tabs **Categories** (`ui.catalog.categories`: tree by `parent`, roots first, status,
 offering and subcategory counts) and **Catalogs** (`ui.catalog.catalogs`: name, type, status, root
 category names). One dialog per kind (`newCategory`/`editCategory`/`deleteCategory` and the
@@ -386,7 +386,7 @@ refuses a "Valid to" without "Valid from" (the refusal is certain).
 
 ## UI: import and export jobs (slice 14, 2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 14), frontend only.
+Built as designed, frontend only.
 Catalog tab **Import / export** (`ui.catalog.jobs`, `screens/CatalogJobs.tsx`, `api/catalogJobs.ts`):
 both job lists merged newest first; export dialog (scope select, then Download and Copy as import),
 import dialog (file or pasted JSON, `Failed` keeps the dialog open with the whole `errorLog`), and

@@ -1,4 +1,4 @@
-// Ledger v2: BillingRuns.dc.html; docs/ui-redesign-design.md slice 8.
+// Ledger v2: BillingRuns.dc.html; decisions/frontend.md (Ledger v2, R8).
 import { Note } from '../ui/Note';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';

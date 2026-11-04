@@ -10,7 +10,7 @@ import { Button, Modal } from '../ui/kit';
 import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 
-// What a bill links to (docs/next-slices-design.md section 20): its bill cycle (the daily
+// What a bill links to (docs/ui.md): its bill cycle (the daily
 // billing run that issued it) and the applied rates on it. Both load only when opened, so
 // the bill dialog itself makes no extra request.
 

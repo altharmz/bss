@@ -5,7 +5,7 @@ import { expectUi } from '../test/expectUi';
 import { billBody } from '../test/fixtures';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
-// Global bills, bill cycles and rates (docs/next-slices-design.md section 20). Reads only:
+// Global bills, bill cycles and rates (docs/ui.md). Reads only:
 // the query strings asserted here are replayed against the real API by
 // tests/test_ui_requests.py - change both together.
 

@@ -104,8 +104,8 @@ Unknown values stay unknown, never zero. Setup and reporting: [telemetry-usage.m
 - **Built:** the TMF APIs with the billing worker, the MCP connector, the prepaid line,
   subscriber numbers, every MCP operation in the UI with the UI/MCP parity check, and the
   Ledger v2 redesign.
-- **Planned code work** is board issues, listed in run order in epic #43 (specs:
-  [ui-redesign-design.md](docs/ui-redesign-design.md), [patterns.md](docs/patterns.md); the
+- **Planned code work** is board issues, listed in run order in epic #43 (rules and specs: the epic
+  and slice issues, [patterns.md](docs/patterns.md); the
   handoff `design-ref/design_handoff_bss_admin_v2/` is read-only). Everything else open
   (bugs, human-only checks, ideas) is a board issue. History is `git log` and closed PRs.
 

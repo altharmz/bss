@@ -28,7 +28,7 @@ import { Preview } from './AddProduct';
 import { uncertain } from './submissionKey';
 
 // Product actions of the subscriber card: suspend, resume and end on a date, as TMF622 orders
-// (docs/next-slices-design.md slice 4, decisions/frontend.md). The server decides every rule;
+// (docs/ui.md, decisions/frontend.md). The server decides every rule;
 // the menu hides an item only when the row's own data makes the refusal certain.
 
 /** A menu item: a status or end change, or the offering change of slice 5. */

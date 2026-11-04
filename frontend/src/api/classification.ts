@@ -1,7 +1,7 @@
 // TMF620 categories and product catalogs: the records the Catalog screen's Categories and
 // Catalogs tabs show and write. Categories form a tree by `parent`; a catalog lists root
 // categories; a category's `productOffering[]` is the membership and is replaced whole.
-// Design: docs/next-slices-design.md section 13.
+// Design: docs/ui.md.
 
 import { addDays, businessDate } from '../format/dates';
 import { getAll, patchJson, postJson, request } from './client';

@@ -27,13 +27,13 @@ import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Field } from './SubscriberForms';
 import { uncertain } from './submissionKey';
 
-// New, edit and delete of a financial account (docs/next-slices-design.md section 16).
+// New, edit and delete of a financial account (docs/ui.md).
 // The server decides: its 409/422 text is shown in the dialog and the entered values stay.
 // After an uncertain result (no answer, 5xx) the dialog offers Refresh, never a retry.
 
 const STATES: AccountState[] = ['Active', 'Suspended', 'Closed'];
 
-// The party and settlement tabs reuse these dialogs (docs/next-slices-design.md section 17).
+// The party and settlement tabs reuse these dialogs (docs/ui.md).
 const NAME: Record<AccountKind, string> = {
   FinancialAccount: 'financial account',
   PartyAccount: 'party account',

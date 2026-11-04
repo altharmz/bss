@@ -31,7 +31,7 @@ import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 
 // Catalog tabs "Categories" (a tree by parent, offering membership) and "Catalogs"
 // (TMF620 productCatalog with root categories). Records only: billing never reads them.
-// Design: docs/next-slices-design.md section 13.
+// Design: docs/ui.md.
 
 const CATEGORY_COLUMNS: Column[] = [
   { key: 'name', label: 'Name', width: '1fr' },

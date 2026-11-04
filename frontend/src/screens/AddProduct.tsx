@@ -655,7 +655,7 @@ export function Preview({
 }
 
 // A prepaid account pays the whole first interval, taxes included, in advance (docs/decisions/
-// frontend.md, next-slices-design.md section 1). The figures are the backend's: required,
+// frontend.md, docs/ui.md). The figures are the backend's: required,
 // available, shortfall and balanceAfter; nothing here is computed except the comparison with 0
 // that decides which hint to show.
 function PrepaidPreview({

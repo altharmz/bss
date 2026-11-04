@@ -20,7 +20,7 @@ import { BillDialog } from './Bills';
 import { CycleDialog } from './BillLinks';
 import './screens.css';
 
-// Global bills and bill cycles (docs/next-slices-design.md section 20): TMF678 reads, plus
+// Global bills and bill cycles (docs/ui.md): TMF678 reads, plus
 // the existing bill dialog (hold/release PATCH). State and account filter on the server; the
 // billing date is applied client side to the loaded rows.
 

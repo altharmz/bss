@@ -24,7 +24,7 @@ import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 
 // Catalog tab "Import / export": TMF620 importJob and exportJob. Both run inside their
-// request, so there is no polling. Design: docs/next-slices-design.md section 14.
+// request, so there is no polling. Design: docs/ui.md.
 
 const COLUMNS: Column[] = [
   { key: 'kind', label: 'Kind', width: '100px' },

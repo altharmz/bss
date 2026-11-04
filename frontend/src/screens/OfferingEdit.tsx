@@ -26,7 +26,7 @@ import { Button, Modal, TextInput } from '../ui/kit';
 
 // Edit offering, and the price dialog (edit, end, delete) opened from the offering
 // detail. The server decides what is allowed: a refusal is shown with the entered values
-// kept. Design: docs/next-slices-design.md section 12.
+// kept. Design: docs/ui.md.
 
 const CODE = /^[A-Z0-9][A-Z0-9_-]{0,31}$/;
 

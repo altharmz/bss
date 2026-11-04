@@ -296,7 +296,7 @@ export function ActionDialog({
 
 type Pending = 'cancel' | 'remove' | null;
 
-/** The writes of one balance action (docs/next-slices-design.md section 3). The UI offers
+/** The writes of one balance action (docs/ui.md). The UI offers
  * what the entry's kind and status allow and shows the server's refusal in place. */
 function ActionWrites({ action, onChanged }: { action: BalanceAction; onChanged: () => void }) {
   const toast = useToast();

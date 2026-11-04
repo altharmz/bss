@@ -1,7 +1,7 @@
 import { getAll, getJson } from './client';
 import { BILLS } from './bss';
 
-// Global bills, bill cycles and rates (docs/next-slices-design.md section 20): TMF678 reads
+// Global bills, bill cycles and rates (docs/ui.md): TMF678 reads
 // only. The bill list filters on the server by state and billingAccount.id; the billing date
 // is applied client side to the loaded rows (the API has no billingDate filter on bills).
 

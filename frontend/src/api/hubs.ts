@@ -1,5 +1,5 @@
-// Event subscriptions (hubs), docs/decisions/events.md and docs/next-slices-design.md section
-// 23. TMF defines POST/DELETE /hub per API; the list is ours (internal API). The base paths and
+// Event subscriptions (hubs), docs/decisions/events.md and docs/ui.md.
+// TMF defines POST/DELETE /hub per API; the list is ours (internal API). The base paths and
 // the event types below are the server's (app/events/types.py); tests/test_ui_requests.py
 // compares them, so a change there fails until this file follows.
 

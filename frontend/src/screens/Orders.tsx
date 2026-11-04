@@ -49,7 +49,7 @@ import { uncertain } from './submissionKey';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
 
-// The global Orders list (docs/decisions/frontend.md, docs/next-slices-design.md section 9):
+// The global Orders list (docs/decisions/frontend.md, docs/ui.md):
 // TMF622 reads, and (slice 10) the order dialog's writes: cancel, edit details, drafts.
 
 const COLUMNS: Column[] = [

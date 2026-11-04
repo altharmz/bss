@@ -22,8 +22,8 @@ import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
 
-// The prepaid command journal (docs/decisions/frontend.md, docs/next-slices-design.md section
-// 6): the worker's queue behind prepaid orders, renewals and transfers, read from the
+// The prepaid command journal (docs/decisions/frontend.md, docs/ui.md):
+// the worker's queue behind prepaid orders, renewals and transfers, read from the
 // internal API. The one write is Retry, for a command that failed technically; the server
 // decides everything else (a 409 is shown as it is).
 
