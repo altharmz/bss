@@ -182,6 +182,7 @@ describe('number inventory', () => {
       [`GET ${PATHS.products}/product`]: () =>
         json({ id: 'product', status: 'active', productSpecification: { id: 'spec' } }),
       [`GET ${PATHS.specifications}/spec`]: () => json({ resourceSpecification: [] }),
+      [list]: () => json([], { total: 0 }),
     });
     render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
     fireEvent.click(screen.getByText('Subscriber number'));
@@ -244,5 +245,103 @@ describe('number inventory', () => {
         },
       ],
     });
+  });
+
+  it('creates an IMSI with its ICCID and filters the inventory by kind', async () => {
+    const sim = {
+      ...stock,
+      id: 'sim1',
+      name: 'IMSI 001010123456789',
+      value: '001010123456789',
+      resourceSpecification: { id: 'imsi', '@type': 'ResourceSpecificationRef' },
+    };
+    const { fetchMock } = stubFetch({
+      [list]: () => json([stock, sim], { total: 2 }),
+      [`POST ${NUMBERS}`]: () => json(sim),
+    });
+    inventory();
+    await screen.findByRole('button', { name: sim.value });
+    fireEvent.change(screen.getByLabelText('Kind'), { target: { value: 'imsi' } });
+    expect(screen.queryByRole('button', { name: stock.value })).toBeNull();
+    expect(screen.getByRole('button', { name: sim.value })).toBeTruthy();
+    fireEvent.click(screen.getByText('New number'));
+    const create = screen.getByRole('dialog');
+    fireEvent.change(within(create).getByLabelText('Kind'), { target: { value: 'imsi' } });
+    fireEvent.change(within(create).getByLabelText('IMSI'), { target: { value: sim.value } });
+    fireEvent.change(within(create).getByLabelText('ICCID (optional)'), {
+      target: { value: '123' },
+    });
+    expect(within(create).getByText('Create number').hasAttribute('disabled')).toBe(true);
+    fireEvent.change(within(create).getByLabelText('ICCID (optional)'), {
+      target: { value: '8900000000000000001' },
+    });
+    fireEvent.click(within(create).getByText('Create number'));
+    await screen.findByText('New number');
+    expect(
+      JSON.parse(
+        String(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')?.[1]?.body),
+      ),
+    ).toEqual({
+      '@type': 'LogicalResource',
+      name: sim.name,
+      value: sim.value,
+      administrativeState: 'unlocked',
+      resourceSpecification: { id: 'imsi', '@type': 'ResourceSpecificationRef' },
+      resourceCharacteristic: [
+        {
+          '@type': 'StringCharacteristic',
+          name: 'iccid',
+          valueType: 'string',
+          value: '8900000000000000001',
+        },
+      ],
+    });
+  });
+
+  it('changes the SIM with the complete resulting set', async () => {
+    const msisdn = { ...stock, id: 'num', value: '12025550122' };
+    const oldSim = {
+      ...stock,
+      id: 'oldsim',
+      value: '001010123456780',
+      allocationStatus: 'allocated',
+      resourceSpecification: { id: 'imsi', '@type': 'ResourceSpecificationRef' },
+      resourceCharacteristic: [
+        { '@type': 'StringCharacteristic', name: 'iccid', value: '8900000000000000009' },
+      ],
+    };
+    const newSim = {
+      ...stock,
+      id: 'newsim',
+      value: '001010123456781',
+      resourceSpecification: { id: 'imsi', '@type': 'ResourceSpecificationRef' },
+    };
+    const { fetchMock } = stubFetch({
+      [`GET ${PATHS.products}/product`]: () =>
+        json({
+          id: 'product',
+          status: 'active',
+          productSpecification: { id: 'spec' },
+          realizingResource: [{ id: 'num' }, { id: 'oldsim' }],
+        }),
+      ['GET /tmf-api/productCatalogManagement/v5/productSpecification/spec']: () =>
+        json({ resourceSpecification: [{ id: 'msisdn' }, { id: 'imsi' }] }),
+      [list]: () => json([msisdn, oldSim, newSim], { total: 3 }),
+      [`POST ${PATHS.orders}`]: () => json({ state: 'completed' }),
+    });
+    render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
+    fireEvent.click(screen.getByText('Subscriber number'));
+    expect(await screen.findByText('ICCID 8900000000000000009')).toBeTruthy();
+    await screen.findByRole('option', { name: newSim.value });
+    fireEvent.change(screen.getByLabelText('IMSI'), { target: { value: 'newsim' } });
+    fireEvent.click(screen.getByText('Change SIM'));
+    await screen.findByRole('button', { name: 'Subscriber number' });
+    const body = JSON.parse(
+      String(fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')?.[1]?.body),
+    );
+    expect(body.productOrderItem[0].product.realizingResource).toEqual([
+      { id: 'num', '@type': 'ResourceRef', '@referredType': 'LogicalResource' },
+      { id: 'newsim', '@type': 'ResourceRef', '@referredType': 'LogicalResource' },
+    ]);
   });
 });

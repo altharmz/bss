@@ -95,7 +95,7 @@ def numbers(conn: psycopg.Connection, product_ids: list[UUID], today: date) -> l
         """SELECT DISTINCT ON (a.product_id) n.id, n.name, a.product_id
         FROM number_assignment a JOIN subscriber_number n ON n.id = a.subscriber_number_id
         WHERE a.product_id = ANY(%(ids)s) AND a.cancelled_at IS NULL
-          AND NOT isempty(a.valid_for)
+          AND a.resource_specification_id = 'msisdn' AND NOT isempty(a.valid_for)
           AND (a.released_on IS NULL OR a.released_on > %(today)s)
         ORDER BY a.product_id, a.effective_from""",
         {"ids": product_ids, "today": today},

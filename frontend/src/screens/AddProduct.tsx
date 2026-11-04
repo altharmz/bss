@@ -2,7 +2,7 @@ import { Footer } from './FinancialForms';
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
-import { requiresNumber } from '../api/numbers';
+import { requirements } from '../api/numbers';
 import { NumberPicker } from './Numbers';
 import {
   loadFirstCharge,
@@ -51,6 +51,7 @@ export interface DraftToEdit {
   offeringId: string;
   start: string | null; // business date; null = none requested yet
   numberId: string;
+  imsiId?: string;
 }
 
 export function AddProductModal({
@@ -86,6 +87,7 @@ export function AddProductModal({
   const [problem, setProblem] = useState<string[]>([]);
   const [code, setCode] = useState<string | undefined>();
   const [numberId, setNumberId] = useState(draft?.numberId ?? '');
+  const [imsiId, setImsiId] = useState(draft?.imsiId ?? '');
   const [uncertain, setUncertain] = useState(false);
   const [previewAnswer, setPreviewAnswer] = useState<{ key: string; at: string } | null>(null);
 
@@ -118,23 +120,23 @@ export function AddProductModal({
     `number-requirement:${chosen?.specificationId ?? ''}`,
     (signal) =>
       chosen?.specificationId
-        ? requiresNumber(chosen.specificationId, signal)
-        : Promise.resolve(false),
+        ? requirements(chosen.specificationId, signal)
+        : Promise.resolve({ msisdn: false, imsi: false }),
   );
-  const needsNumber = requirement.status === 'ok' && requirement.data;
+  const needsNumber = requirement.status === 'ok' && requirement.data.msisdn;
+  const needsImsi = requirement.status === 'ok' && requirement.data.imsi;
+  // one reference per required kind
+  const resources = [needsNumber && numberId, needsImsi && imsiId].filter(Boolean) as string[];
+  const chosenResources = resources.length === 0 ? undefined : resources;
+  const complete = (!needsNumber || numberId !== '') && (!needsImsi || imsiId !== '');
   const shortNow =
     account.ratingType === 'prepaid' &&
     start === today &&
     first?.shortfall !== undefined &&
     toCents(first.shortfall.value) > 0;
-  const ready =
-    !shortNow && first !== null && requirement.status === 'ok' && (!needsNumber || numberId !== '');
+  const ready = !shortNow && first !== null && requirement.status === 'ok' && complete;
 
-  const draftReady =
-    chosen !== undefined &&
-    startValid &&
-    requirement.status === 'ok' &&
-    (!needsNumber || numberId !== '');
+  const draftReady = chosen !== undefined && startValid && requirement.status === 'ok' && complete;
 
   async function saveDraft() {
     if (offeringId === null || chosen === undefined) return;
@@ -148,7 +150,7 @@ export function AddProductModal({
           offeringId,
           start,
           context.timeZone,
-          needsNumber ? numberId : undefined,
+          chosenResources,
           draft.itemId,
         );
         if (result.state === 'rejected') {
@@ -163,7 +165,7 @@ export function AddProductModal({
           offeringId,
           start,
           context.timeZone,
-          needsNumber ? numberId : undefined,
+          chosenResources,
           newIdempotencyKey(),
         );
         if (result.state === 'rejected') {
@@ -205,7 +207,7 @@ export function AddProductModal({
         offeringId,
         start,
         context.timeZone,
-        needsNumber ? numberId : undefined,
+        chosenResources,
       );
       if (result.state === 'completed') {
         onOrdered(
@@ -378,6 +380,7 @@ export function AddProductModal({
             )}
             <div className="bss-add-product-schedule">
               {needsNumber && <NumberPicker value={numberId} onChange={setNumberId} />}
+              {needsImsi && <NumberPicker kind="imsi" value={imsiId} onChange={setImsiId} />}
               <Field
                 label="Start date"
                 help={start === today ? 'Today (business date)' : undefined}

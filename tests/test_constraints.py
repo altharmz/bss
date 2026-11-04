@@ -79,7 +79,7 @@ def test_duplicate_abr_is_rejected(db_conn):
 
 def test_one_charge_per_period_and_offering_overlaps_are_allowed(db_conn):
     """Since 0027 (offering changes) a charge is refunded, never shortened, so the old
-    offering's charge overlaps the new one's; since 0049 (mid-period prepaid change) they
+    offering's charge overlaps the new one's; since 0050 (mid-period prepaid change) they
     may share a first day. What stays unique is the product, offering and period."""
     w = world(db_conn)
     charge(db_conn, w, days(date(2026, 1, 1), date(2026, 2, 1)))

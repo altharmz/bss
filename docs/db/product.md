@@ -26,6 +26,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `details` | `jsonb` | no | `'{}'::jsonb` | TMF637 descriptive attributes as sent, validated against the spec; billing never reads them. |
 | `requires_msisdn` | `boolean` | no | `false` | Built-in msisdn requirement at ordering; existing products remain unchecked. |
 | `manually_suspended` | `boolean` | no | `false` | Operator suspension independent of prepaid funded coverage and account state. |
+| `requires_imsi` | `boolean` | no | `false` | Built-in imsi requirement at ordering; existing products remain unchecked. |
 
 ## Foreign keys
 

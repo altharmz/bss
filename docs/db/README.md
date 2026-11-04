@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0049**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0050**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -26,7 +26,7 @@ PostgreSQL schema at Alembic head **0049**, read from `pg_catalog` of a throwawa
 | [`product`](product.md) | inventory | SID Product (TMF637 product): an instance of an offering on a billing account. Written only by orders; billable on start_date <= d < termination_date. |
 | [`product_offering_change`](product_offering_change.md) | inventory | TMF622 modify items: the product's offering from change_date on (billed prorated). The offering on day d is the latest change on or before d, else product.product_offering_id. |
 | [`product_status_change`](product_status_change.md) | inventory | TMF622 modify items with product.status: the product is suspended (or active again) from change_date on. Billing does not read it. |
-| [`subscriber_number`](subscriber_number.md) | inventory | TMF639 LogicalResource inventory: canonical E.164 digits, built-in msisdn specification. |
+| [`subscriber_number`](subscriber_number.md) | inventory | TMF639 LogicalResource inventory: subscriber identities, built-in msisdn (E.164 digits) and imsi specifications. |
 | [`number_assignment`](number_assignment.md) | inventory | Order-owned number claims; half-open business dates, retained cancelled audit versions. |
 | [`billing_run`](billing_run.md) | billing | Daily runs have one identity per business date; prepaid command runs have one retained identity per command. Only billing runs write ABRs and bills. |
 | [`applied_customer_billing_rate`](applied_customer_billing_rate.md) | billing | SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recurring charge for the billable days of one cycle period, or the one refund of such a charge. Written only by a billing run. |
@@ -221,6 +221,7 @@ flowchart LR
   number_assignment -->|"assigned_by_item_id"| product_order_item
   number_assignment -->|"cancelled_by_item_id"| product_order_item
   number_assignment -->|"ended_by_item_id"| product_order_item
+  number_assignment -->|"subscriber_number_id, resource_specification_id"| subscriber_number
   number_assignment -->|"product_id"| product
   number_assignment -->|"subscriber_number_id"| subscriber_number
   offering_category -->|"category_id"| category
@@ -574,6 +575,7 @@ erDiagram
     jsonb details
     boolean requires_msisdn
     boolean manually_suspended
+    boolean requires_imsi
   }
   product_offering_change {
     uuid id PK
@@ -606,6 +608,7 @@ erDiagram
     text description
     jsonb attrs
     jsonb tmf_meta
+    text iccid
   }
   number_assignment {
     uuid id PK
@@ -622,6 +625,7 @@ erDiagram
     integer quarantine_days
     timestamptz cancelled_at
     uuid cancelled_by_item_id FK
+    text resource_specification_id FK
   }
   billing_account {
     uuid id PK
@@ -646,6 +650,7 @@ erDiagram
   product_order_item ||--o{ product_offering_change : "changed_by_item_id"
   product_order_item ||--o{ product_status_change : "changed_by_item_id"
   subscriber_number ||--o{ number_assignment : "subscriber_number_id"
+  subscriber_number ||--o{ number_assignment : "subscriber_number_id, resource_specification_id"
 ```
 
 Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product_order_item`](product_order_item.md), [`product_offering`](product_offering.md).

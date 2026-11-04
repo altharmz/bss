@@ -406,7 +406,10 @@ def patch_specification(
             changes["details"] = merge_documents(current["details"], documents)
             from app.ordering.numbers import required
 
-            if required(current["details"]) != required(changes["details"]):
+            if any(
+                required(current["details"], kind) != required(changes["details"], kind)
+                for kind in ("msisdn", "imsi")
+            ):
                 ordered = conn.execute(
                     """SELECT 1 FROM product_order_item i JOIN product_offering o
                     ON o.id = i.product_offering_id
@@ -415,7 +418,8 @@ def patch_specification(
                 ).fetchone()
                 if ordered:
                     raise conflict(
-                        "resourceSpecification: the msisdn requirement cannot change after ordering"
+                        "resourceSpecification: the msisdn or imsi requirement cannot change"
+                        " after ordering"
                     )
         old = emit.before(conn, API, "productSpecification", lambda: specification_body(current))
         row = catalog.update_product_specification(conn, uid, changes)

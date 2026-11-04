@@ -142,7 +142,7 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
         *(c["changed_by_item_id"] for c in products.status_changes_of(conn, row["id"])),
         row["terminated_by_item_id"],
     ]
-    if row.get("requires_msisdn"):
+    if row.get("requires_msisdn") or row.get("requires_imsi"):
         number_items = conn.execute(
             """SELECT DISTINCT assigned_by_item_id
             FROM number_assignment WHERE product_id = %s AND cancelled_at IS NULL
@@ -212,24 +212,22 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
                 )
             ]
     details = dict(row["details"])
-    if row.get("requires_msisdn"):
-        claim = conn.execute(
+    if row.get("requires_msisdn") or row.get("requires_imsi"):
+        claims = conn.execute(
             """SELECT subscriber_number_id FROM number_assignment
-            WHERE product_id = %s AND cancelled_at IS NULL AND valid_for @> %s::date""",
+            WHERE product_id = %s AND cancelled_at IS NULL AND valid_for @> %s::date
+            ORDER BY resource_specification_id DESC""",
             (row["id"], max(today, row["start_date"])),
-        ).fetchone()
-        details["realizingResource"] = (
-            []
-            if claim is None
-            else [
-                {
-                    "id": str(claim[0]),
-                    "@type": "ResourceRef",
-                    "@referredType": "LogicalResource",
-                    "href": f"/tmf-api/resourceInventory/v5/resource/{claim[0]}",
-                }
-            ]
-        )
+        ).fetchall()
+        details["realizingResource"] = [
+            {
+                "id": str(claim[0]),
+                "@type": "ResourceRef",
+                "@referredType": "LogicalResource",
+                "href": f"/tmf-api/resourceInventory/v5/resource/{claim[0]}",
+            }
+            for claim in claims
+        ]
     return without_nulls(
         {
             "id": str(row["id"]),
@@ -512,7 +510,9 @@ def patch_product(
         if account["rating_type"] == "prepaid":
             billing.load_account(conn, account["id"])
         before = product_body(conn, current, today)
-        if current.get("requires_msisdn") and "realizingResource" in documents:
+        if (
+            current.get("requires_msisdn") or current.get("requires_imsi")
+        ) and "realizingResource" in documents:
             raise conflict("realizingResource: change subscriber numbers through a product order")
         check_server_set(server_set, before)
         _check_fixed(data, current)

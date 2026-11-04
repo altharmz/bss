@@ -35,7 +35,7 @@ back; the hold and the pending tree stay for retry; replay posts nothing twice. 
 changes and completes the command `cancelled`. On or after `D`: 409 (change the offering
 again with a new order). Upgrade and downgrade are the same flow. Postpaid is unchanged.
 
-**Schema (migration `0049`).** The issue expected no schema change; the new grant
+**Schema (migration `0050`).** The issue expected no schema change; the new grant
 `[D, D + interval)` overlaps the old `[start, paidThrough)`, which three rules refused.
 `funded_interval.supersedes_interval_id` (nullable, unique, FK with the product) marks the
 grant that replaces another. The no-overlap exclusion and the
@@ -1315,3 +1315,41 @@ the new contract.
 See [mcp.md](mcp.md#p5b-mcp-for-prepaid-2026-10-23): the six journaled POST tools take an
 optional `idempotency_key` (the `Idempotency-Key` header); `make mcp-smoke` records one
 top-up and one future-start purchase locally.
+
+## IMSI (issue #66)
+
+The IMSI is a second TMF639 `LogicalResource` beside the MSISDN, assigned and changed by
+TMF622 orders exactly like the subscriber number (plan: issue #66). Out of scope: port-in/out,
+physical SIM inventory, network provisioning.
+
+- **Resource.** Built-in specification `imsi` (fixed reference, no href). `value` is
+  `^[0-9]{14,15}$`, unique per specification. The optional ICCID is the `resourceCharacteristic`
+  `{"@type": "StringCharacteristic", "name": "iccid", "valueType": "string", "value": "89..."}`
+  (`@type` is required by the vendored TMF639 schema), `^89[0-9]{16,18}$`, unique over IMSI
+  resources, 422 on an MSISDN, changeable only while the IMSI has never been assigned (409
+  after). It lives in the `iccid` column and is rendered back as the characteristic; other
+  characteristics stay documents. Filter `resourceSpecification.id` lists either kind.
+- **Released IMSI reuse is not automatic.** Accepting an order that releases an IMSI
+  (termination, IMSI change) sets its `administrativeState` to `locked` in the same
+  transaction. The assignment is untouched, so a future-dated release works until its date,
+  and cancelling the releasing order leaves the IMSI locked but assigned. An operator may
+  PATCH it back to `unlocked`. No quarantine for IMSI.
+- **Ordering.** A specification listing `imsi` requires exactly one IMSI
+  (`product.requires_imsi`, snapshotted like `requires_msisdn`, frozen once an offering using
+  the specification has order history). `realizingResource[]` holds at most one reference per
+  kind; the server resolves the kind from the inventory. Stored rejections: `imsiRequired`,
+  `imsiUnavailable`, `imsiNotRequired`, `realizingResourceDuplicate`; MSISDN codes unchanged.
+  A reference the inventory does not know is attributed to the first required kind still
+  missing.
+- **Modify** carries the complete resulting set: a member equal to the product's current one
+  of its kind is unchanged, a different one is a change, a required kind left out is
+  `...Required`, and a set that changes nothing is `...Unavailable` ("already uses"). MSISDN
+  and IMSI may change in one item; offering-change, prepaid timing and status exclusivity
+  follow the MSISDN rules. Only changed kinds release and claim.
+- **Data.** Migration `0049`: `subscriber_number` kind and value checks, `UNIQUE(kind, value)`,
+  `UNIQUE(id, kind)`, `iccid`; `number_assignment.resource_specification_id` (default
+  `msisdn`) with a composite foreign key and the product exclusion per kind;
+  `product.requires_imsi`. Downgrade refuses while an IMSI or an IMSI-requiring product exists.
+- **Balances** (`logicalResource` on buckets and top-ups) list MSISDNs only.
+
+Tests: `tests/test_imsi.py`.

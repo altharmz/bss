@@ -12,25 +12,53 @@ function toNumber(body: NumberBody): SubscriberNumber {
   return { ...body, id: body.id, value: body.value };
 }
 
-export async function requiresNumber(specificationId: string, signal: AbortSignal) {
+export type ResourceKind = 'msisdn' | 'imsi';
+
+export function kindOf(n: { resourceSpecification?: { id?: string } }): ResourceKind {
+  return n.resourceSpecification?.id === 'imsi' ? 'imsi' : 'msisdn';
+}
+
+export function iccidOf(n: NumberBody): string | undefined {
+  return (n.resourceCharacteristic as { name?: string; value?: unknown }[] | undefined)?.find(
+    (c) => c.name === 'iccid',
+  )?.value as string | undefined;
+}
+
+export async function requirements(specificationId: string, signal: AbortSignal) {
   const spec = await getJson<{ resourceSpecification?: { id?: string }[] }>(
     `/tmf-api/productCatalogManagement/v5/productSpecification/${specificationId}`,
     signal,
   );
-  return (spec.resourceSpecification ?? []).some((ref) => ref.id === 'msisdn');
+  const ids = (spec.resourceSpecification ?? []).map((ref) => ref.id);
+  return { msisdn: ids.includes('msisdn'), imsi: ids.includes('imsi') };
+}
+
+export async function requiresNumber(specificationId: string, signal: AbortSignal) {
+  return (await requirements(specificationId, signal)).msisdn;
 }
 
 export async function loadNumbers(signal: AbortSignal): Promise<SubscriberNumber[]> {
   return (await getAll<NumberBody>(NUMBERS, signal)).map(toNumber);
 }
 
-export function createNumber(value: string): Promise<SubscriberNumber> {
+export function createNumber(
+  value: string,
+  kind: ResourceKind = 'msisdn',
+  iccid = '',
+): Promise<SubscriberNumber> {
   return postJson<NumberBody>(NUMBERS, {
     '@type': 'LogicalResource',
-    name: `MSISDN ${value}`,
+    name: `${kind === 'imsi' ? 'IMSI' : 'MSISDN'} ${value}`,
     value,
     administrativeState: 'unlocked',
-    resourceSpecification: { id: 'msisdn', '@type': 'ResourceSpecificationRef' },
+    resourceSpecification: { id: kind, '@type': 'ResourceSpecificationRef' },
+    ...(kind === 'imsi' && iccid
+      ? {
+          resourceCharacteristic: [
+            { '@type': 'StringCharacteristic', name: 'iccid', valueType: 'string', value: iccid },
+          ],
+        }
+      : {}),
   }).then(toNumber);
 }
 
@@ -49,10 +77,15 @@ export async function deleteNumber(id: string): Promise<void> {
   await request('DELETE', `${NUMBERS}/${id}`);
 }
 
-export function numberProduct(id: string) {
+/** One reference per resource kind: the complete set the product realizes. */
+export function numberProduct(ids: string | string[]) {
   return {
     '@type': 'ProductRefOrValue',
-    realizingResource: [{ id, '@type': 'ResourceRef', '@referredType': 'LogicalResource' }],
+    realizingResource: [ids].flat().map((id) => ({
+      id,
+      '@type': 'ResourceRef',
+      '@referredType': 'LogicalResource',
+    })),
   };
 }
 
@@ -63,7 +96,11 @@ export function loadNumberProducts(id: string, signal: AbortSignal) {
   );
 }
 
-export async function changeNumber(accountId: string, productId: string, numberId: string) {
+export async function changeNumber(
+  accountId: string,
+  productId: string,
+  numberId: string | string[],
+) {
   return postJson<{
     id: string;
     state: string;
