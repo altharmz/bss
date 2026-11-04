@@ -143,7 +143,7 @@ lists issue, branch, worktree, ports, the secret file path and the Doing/claim r
 the worktree: `~/.config/bss/tasks/<task_id>/.env` (or under `$XDG_CONFIG_HOME`), created by
 startup with a random `POSTGRES_PASSWORD` (directory mode 0700, file 0600, never overwritten,
 never copied from the primary). Optional keys: `POSTGRES_USER`, `POSTGRES_DB`,
-`BSS_SERVICE_SECRET`, `MCP_USERS`. Task worktrees must not contain `.env*` files.
+`BSS_SERVICE_SECRET`. Task worktrees must not contain `.env*` files.
 
 Local Compose goes through `./scripts/task-compose` (the Make targets use it); it selects the
 worktree's files and secret file and derives the project `bss-<task_id>`, images

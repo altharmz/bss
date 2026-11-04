@@ -88,7 +88,7 @@ def test_a_read_token_calling_a_write_tool_is_a_403_and_nothing_is_applied(api, 
     assert 'error="insufficient_scope"' in challenge and 'scope="read write"' in challenge
     assert count(api, INDIVIDUALS) == before
     [line] = [json.loads(r.getMessage()) for r in caplog.records]
-    assert line["outcome"] == 403 and line["principal"] == "mcp:reader"
+    assert line["outcome"] == 403 and line["principal"] == "mcp-token:reader"
 
 
 def test_a_write_token_writes_and_reads(api, mcp):
@@ -178,7 +178,7 @@ def test_the_app_records_the_principal_as_the_operator(api, db_conn, mcp):
     assert not is_error and answer["body"]["state"] == "onHold", answer
     history = api.get(f"/internal/v1/customerBill/{b['id']}").json()["history"]
     assert history[-1]["toState"] == "onHold"
-    assert history[-1]["operator"] == "mcp:ops-bot"
+    assert history[-1]["operator"] == "mcp-token:ops-bot"
 
 
 # --- limits ---
@@ -219,7 +219,9 @@ def test_the_audit_log_has_one_line_per_call_and_no_secrets(api, mcp, caplog):
         ("create_individual", 201),
         ("create_payment", "invalid_arguments"),
     ]
-    assert all(line["principal"] == "mcp:writer" and line["time"].endswith("Z") for line in lines)
+    assert all(
+        line["principal"] == "mcp-token:writer" and line["time"].endswith("Z") for line in lines
+    )
     text = caplog.text
     assert token not in text and "Zoya" not in text and "10.5" not in text
 

@@ -241,8 +241,8 @@ def test_an_ended_product_cannot_change(
     assert order["state"] == "rejected" and "productAlreadyEnded" in errors(order)
 
 
-def test_0048_round_trips(temp_db_url):
+def test_0049_round_trips(temp_db_url):
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "head")
-    command.downgrade(cfg, "0047")
+    command.downgrade(cfg, "0048")
     command.upgrade(cfg, "head")

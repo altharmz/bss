@@ -77,8 +77,9 @@ What a client does, from nothing but the URL `<public url>/mcp`:
    optional `resource` that must be `<public url>/mcp`) -> 302 to the **login page**.
 6. **`/login`**: one page for login and consent. It shows the client's self-declared name
    and - more trustworthy - the host the browser goes back to, and offers **Read only**
-   or **Read and write** (write only if the client asked for it). User and password from
-   `MCP_USERS`. Approve -> 302 to the redirect URI with `code` and `state`; Deny -> with
+   or **Read and write** (write only if the client asked for it). User and password are an app user's (the app checks them, `POST
+   /internal/v1/service/credential-check`; a user who must change the password is sent
+   to the BSS UI first). Approve -> 302 to the redirect URI with `code` and `state`; Deny -> with
    `error=access_denied`. The link is single use, expires after 10 minutes and dies after
    5 wrong passwords; the page cannot be framed and escapes everything it shows.
 7. **`POST /token`**: code + `code_verifier` -> an access token (`bss_at_...`, **1 hour**)
@@ -88,9 +89,12 @@ What a client does, from nothing but the URL `<public url>/mcp`:
 8. **`POST /revoke`** (RFC 7009): an access token, or a refresh token - which revokes its
    whole grant (every access token from that login).
 
-The principal of an OAuth token is `mcp:<user>`. Users: `MCP_USERS` in `.env` /
-`.env.prod` (format in `.env.example`; hashes are scrypt, made with
-`docker compose run --rm --no-deps app python -m bss_mcp.passwords`).
+The principal of an OAuth token is `mcp:<app username>`. The users are the app's (UI -> Users,
+role `user` is enough; both roles get the same MCP scopes). Each grant remembers the
+user's `credential_version`, which the app increments on a password change, a password
+reset, a role change and a disable; the connector sends it with every call and, when the
+app answers 401 `credentialRevoked`, ends the grant and answers the client 401
+`invalid_token`, so it authorizes again.
 
 Compatibility is tested with the official MCP Python SDK's own OAuth client
 (`tests/test_mcp_sdk_client.py`): discovery, registration, PKCE, login, tools, as a real
@@ -105,7 +109,7 @@ revocable; no expiry. Managed with the make targets in
 
 ### Principal and operator
 
-**The principal** is `mcp:<user>` (OAuth) or `mcp:<token name>` (static). It goes to
+**The principal** is `mcp:<app username>` (OAuth) or `mcp-token:<token name>` (static). It goes to
 the app as `X-Remote-User`, so writes are attributed - the app shows it as the operator
 and records it in a bill's state history. A basic-auth user cannot contain `:` (it
 separates user and password), so **an operator with `:` always comes from MCP**
@@ -183,7 +187,7 @@ the URL and the header are what matter.
 
 **claude.ai** - Settings -> Connectors -> *Add custom connector*: a name (`bss`) and the
 server URL; leave the advanced OAuth fields empty (the connector registers itself). Then
-*Connect*: the login page opens; log in with an `MCP_USERS` user and pick the scope. In a
+*Connect*: the login page opens; log in with your BSS user and pick the scope. In a
 chat, enable the connector from the tools menu. claude.ai asks before each write tool
 call (they are marked `destructiveHint`); keep that on.
 
@@ -261,9 +265,9 @@ Claude Code would print it into the session). The listing never shows a token, o
 Each create and revoke writes an audit line (`token_create`, `token_revoke`,
 `grant_revoke`) to the run's stderr.
 
-- **Users** (the OAuth login): `MCP_USERS` - add or remove a `name:hash` pair, then
-  redeploy. Removing a user does not end their live grants: revoke them with
-  `revoke-grant` (`tokens list` shows the user of each grant).
+- **Users** (the OAuth login): the app's users (UI -> Users). Disabling a user, resetting
+  their password or changing their role ends their grants at the next call (401, the
+  client authorizes again); no redeploy.
 - **Everything at once**: losing the store (the `mcp_data` / `mcp-data` volume) ends every
   token and client registration; clients re-register on their next use. Removing the
   volume is the human's call (CLAUDE.md: never `docker volume rm` from a session).
@@ -309,8 +313,7 @@ tokens or passwords (a test checks the log for each).
   `MCP_PUBLIC_URL=https://bss2811.duckdns.org` (every OAuth URL is built from it),
   `MCP_TRUST_FORWARDED=true`. Its store
   is the volume `mcp-data` (`/data/mcp.db`).
-- **`MCP_USERS` in `.env.prod` is required**: `deploy.sh` refuses to start without it
-  (checked before any network step, never printed), and so does compose.
+- The OAuth login needs at least one active app user with a changed password.
 - **Routing** (vps-infra's Caddy):
   ten exact, case-sensitive paths of the bss site (`vpn2811.duckdns.org:8445` and, since
   2026-10-12, `bss2811.duckdns.org` - 443 is the host's nginx SNI router, which passes that
@@ -340,7 +343,7 @@ tokens or passwords (a test checks the log for each).
   registrant chose ("Claude" included). The page also shows the host the browser goes
   back to and says to approve only a connection you just started; the password is the
   real gate.
-- **Write access over the public internet.** Anyone holding an `MCP_USERS` password or a
+- **Write access over the public internet.** Anyone holding an app user's password or a
   `write` token can create customers, orders, payments, price changes and billing runs on
   the demo instance - every write tool, with no per-tool approval on the server. Bounded
   by: demo data only (no real customers, ever), the scopes (consent offers read only),

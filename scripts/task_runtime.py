@@ -183,7 +183,6 @@ def validate_inherited(values, root, own, common):
             "POSTGRES_PASSWORD",
             "POSTGRES_USER",
             "POSTGRES_DB",
-            "MCP_USERS",
             "BSS_SERVICE_SECRET",
             "BSS_SMOKE_SECRET",
             "APP_ENV",
@@ -291,7 +290,6 @@ def context():
         "POSTGRES_PASSWORD",
         "POSTGRES_USER",
         "POSTGRES_DB",
-        "MCP_USERS",
         "BSS_SERVICE_SECRET",
     }
     seen = set()
@@ -335,7 +333,6 @@ def context():
             "POSTGRES_PASSWORD",
             "POSTGRES_USER",
             "POSTGRES_DB",
-            "MCP_USERS",
             "BSS_SERVICE_SECRET",
             "BSS_SMOKE_SECRET",
             "APP_ENV",

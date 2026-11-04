@@ -27,7 +27,7 @@ from bss_mcp.clock import FixedClock
 from bss_mcp.operations import OPERATIONS
 from bss_mcp.server import build_app
 from bss_mcp.store import Store
-from tests.test_mcp_oauth import PASSWORD, USERS
+from tests.test_mcp_oauth import PASSWORD, USERS, add_user
 
 pytestmark = pytest.mark.smoke
 
@@ -54,8 +54,9 @@ class Memory:
         self.client = client_info
 
 
-def test_the_sdk_client_signs_in_lists_and_calls(api, mcp_settings):
-    mcp_settings.mcp_users = USERS
+def test_the_sdk_client_signs_in_lists_and_calls(api, db_conn, mcp_settings):
+    for name, password in USERS.items():
+        add_user(db_conn, name, password)
     clock = FixedClock()
     connector = build_app(
         mcp_settings,

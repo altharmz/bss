@@ -18,6 +18,7 @@ Application identity: admin or user; disabled, never deleted.
 | `created_at` | `timestamp with time zone` | no |  |  |
 | `updated_at` | `timestamp with time zone` | no |  |  |
 | `last_login_at` | `timestamp with time zone` | yes |  |  |
+| `credential_version` | `integer` | no | `1` | Incremented on password change, password reset, role change and disable; an MCP OAuth grant issued for another version is revoked. |
 
 ## Constraints
 

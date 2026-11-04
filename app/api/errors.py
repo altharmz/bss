@@ -15,8 +15,16 @@ log = logging.getLogger("app.api")
 
 
 class TmfError(Exception):
-    def __init__(self, status: int, message: str, *, headers: dict[str, str] | None = None):
+    def __init__(
+        self,
+        status: int,
+        message: str,
+        *,
+        headers: dict[str, str] | None = None,
+        code: str | None = None,
+    ):
         super().__init__(message)
+        self.code = code  # machine-readable; replaces the status in the body's `code`
         self.status = status
         self.message = message
         self.headers = headers
@@ -39,11 +47,11 @@ def unprocessable(message: str) -> TmfError:
 
 
 def error_response(
-    status: int, message: str, headers: dict[str, str] | None = None
+    status: int, message: str, headers: dict[str, str] | None = None, code: str | None = None
 ) -> TmfJSONResponse:
     body = {
         "@type": "Error",
-        "code": str(status),
+        "code": code or str(status),
         "reason": HTTPStatus(status).phrase,
         "message": message,
         "status": str(status),
@@ -89,7 +97,7 @@ def validation_error(exc: ValidationError) -> TmfError:
 def install(app: FastAPI) -> None:
     @app.exception_handler(TmfError)
     def _tmf(request: Request, exc: TmfError) -> TmfJSONResponse:
-        return error_response(exc.status, exc.message, exc.headers)
+        return error_response(exc.status, exc.message, exc.headers, exc.code)
 
     @app.exception_handler(StarletteHTTPException)
     def _http(request: Request, exc: StarletteHTTPException) -> TmfJSONResponse:

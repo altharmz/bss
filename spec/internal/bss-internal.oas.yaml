@@ -54,6 +54,30 @@ paths:
             schema: {$ref: '#/components/schemas/ChangePassword'}
       responses:
         '204': {description: Password changed; sign in again}
+  /service/credential-check:
+    post:
+      summary: MCP login backend - check a user's password (service credential only).
+      description: >
+        Accepted only with the MCP service credential (X-Bss-Service); a session or the
+        smoke credential gets 403. 401 invalidCredentials covers an unknown user, a wrong
+        password and a disabled user alike; 403 passwordChangeRequired when the user must
+        change the password first. Rate limited like sign-in.
+      security:
+        - ServiceCredential: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SignIn'}
+      responses:
+        '200':
+          description: The password is right for an active user
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CredentialCheck'}
+        '401': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '429': {$ref: '#/components/responses/Error'}
   /users:
     get:
       summary: List users (admin only).
@@ -477,6 +501,14 @@ components:
       properties:
         username: {type: string, minLength: 1, maxLength: 64}
         password: {type: string, maxLength: 1024, writeOnly: true}
+    CredentialCheck:
+      type: object
+      additionalProperties: false
+      required: [username, role, credentialVersion]
+      properties:
+        username: {type: string, pattern: '^[A-Za-z0-9._18772 18772]{1,64}$'}
+        role: {type: string, enum: [admin, user]}
+        credentialVersion: {type: integer, minimum: 1}
     ChangePassword:
       type: object
       additionalProperties: false

@@ -16,8 +16,6 @@ class Settings(BaseSettings):
     # protected resource (`<url>/mcp`) are built from it.
     mcp_public_url: str = "http://localhost:8090"
     mcp_store: str = "/data/mcp.db"
-    # name:<scrypt hash>[,name:<hash>] - the OAuth login users (docs/mcp.md)
-    mcp_users: str = ""
     # per principal, on /mcp
     mcp_rate_per_min: int = Field(default=60, ge=1)
     # bytes, any request

@@ -3,8 +3,8 @@ the old one: the grant overlaps only the grant it replaces (issue #151)."""
 
 from alembic import op
 
-revision = "0048"
-down_revision = "0047"
+revision = "0049"
+down_revision = "0048"
 branch_labels = depends_on = None
 
 
@@ -47,11 +47,11 @@ def downgrade():
     op.execute("""
         DO $$ BEGIN
             IF EXISTS (SELECT 1 FROM funded_interval WHERE supersedes_interval_id IS NOT NULL) THEN
-                RAISE EXCEPTION 'superseding grants must be retained at revision 0048';
+                RAISE EXCEPTION 'superseding grants must be retained at revision 0049';
             END IF;
             IF EXISTS (SELECT 1 FROM applied_customer_billing_rate GROUP BY product_id,
                        charge_type, lower(period) HAVING count(*) > 1) THEN
-                RAISE EXCEPTION 'charges sharing a first day must be retained at revision 0048';
+                RAISE EXCEPTION 'charges sharing a first day must be retained at revision 0049';
             END IF;
         END $$;
         DROP INDEX abr_one_per_start;

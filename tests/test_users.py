@@ -347,8 +347,8 @@ def test_user_input(client, body, status):
 
 def test_service_credentials(client, monkeypatch):
     monkeypatch.setattr(settings, "bss_smoke_secret", "test-smoke-credential")
-    mcp = {"X-Bss-Service": "test-service-credential", "X-Remote-User": "mcp:demo"}
-    assert client.get("/internal/v1/context", headers=mcp).json()["operator"] == "mcp:demo"
+    mcp = {"X-Bss-Service": "test-service-credential", "X-Remote-User": "mcp-token:demo"}
+    assert client.get("/internal/v1/context", headers=mcp).json()["operator"] == "mcp-token:demo"
     assert client.get(USERS, headers=mcp).status_code == 403
     assert client.get(SESSION, headers=mcp).status_code == 403
     assert (
@@ -372,3 +372,155 @@ def test_service_credentials(client, monkeypatch):
 def test_no_interactive_api_docs(client):
     for path in ("/docs", "/redoc", "/openapi.json"):
         assert client.get(path).status_code == 404
+
+
+# --- the MCP login backend and credential versions (issue #146) ---
+
+CHECK = "/internal/v1/service/credential-check"
+SERVICE = {"X-Bss-Service": "test-service-credential"}
+REPLACED = "replacement-password"
+
+
+def check(client, username, password, headers=SERVICE):
+    return client.post(CHECK, json={"username": username, "password": password}, headers=headers)
+
+
+def version(db_conn, username="alice"):
+    db_conn.rollback()  # a fresh snapshot
+    return db_conn.execute(
+        "SELECT credential_version FROM app_user WHERE username = %s", (username,)
+    ).fetchone()[0]
+
+
+def as_mcp(client, username="alice", at=1, path="/internal/v1/context"):
+    headers = {**SERVICE, "X-Remote-User": f"mcp:{username}", "X-Bss-Credential-Version": str(at)}
+    return client.get(path, headers=headers)
+
+
+def test_credential_check_accepts_an_active_users_password(client, db_conn):
+    assert login(client).status_code == 200
+    create(client)
+    client.cookies.clear()
+    activate(client)
+    client.cookies.clear()
+    response = check(client, "alice", REPLACED)
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "username": "alice",
+        "role": "user",
+        "credentialVersion": version(db_conn),
+    }
+    contract.assert_valid("INTERNAL", "CredentialCheck", response.json())
+    db_conn.rollback()
+    last = db_conn.execute("SELECT last_login_at FROM app_user WHERE username='alice'").fetchone()
+    assert last[0] is not None
+
+
+def test_credential_check_does_not_tell_unknown_wrong_and_disabled_apart(client):
+    assert login(client).status_code == 200
+    create(client)
+    create(client, "bob")
+    activate(client, "bob")
+    client.cookies.clear()
+    assert login(client).status_code == 200
+    assert client.patch(f"{USERS}/bob", json={"disabled": True}).status_code == 200
+    client.cookies.clear()
+    answers = [
+        check(client, "nobody", PASSWORD),
+        check(client, "alice", "wrong-password-123"),
+        check(client, "bob", "replacement-password"),
+    ]
+    assert {a.status_code for a in answers} == {401}
+    assert {a.json()["code"] for a in answers} == {"invalidCredentials"}
+    assert len({a.json()["message"] for a in answers}) == 1
+
+
+def test_credential_check_refuses_a_password_that_must_change(client):
+    assert login(client).status_code == 200
+    create(client)  # created with must_change_password
+    client.cookies.clear()
+    response = check(client, "alice", PASSWORD)
+    assert response.status_code == 403
+    assert response.json()["code"] == "passwordChangeRequired"
+
+
+def test_credential_check_is_for_the_mcp_service_credential_only(client, monkeypatch):
+    monkeypatch.setattr(settings, "bss_smoke_secret", "test-smoke-credential")
+    assert check(client, "i.petrova", PASSWORD, headers={}).status_code == 401
+    assert check(client, "i.petrova", PASSWORD, {"X-Bss-Service": "wrong"}).status_code == 401
+    smoke = {"X-Bss-Service": "test-smoke-credential"}
+    assert check(client, "i.petrova", PASSWORD, smoke).status_code == 403
+    assert login(client).status_code == 200  # a session, with the CSRF header the client sends
+    assert check(client, "i.petrova", PASSWORD, headers={}).status_code == 403
+    client.cookies.clear()
+    assert check(client, "i.petrova", PASSWORD).status_code == 200
+
+
+def test_credential_check_is_rate_limited(client):
+    # the fixture's own sign-in already counted once: the limit is 20 a minute per address
+    statuses = [check(client, "i.petrova", "wrong-password-123").status_code for _ in range(21)]
+    assert statuses[:19] == [401] * 19 and set(statuses[19:]) == {429}
+
+
+def test_the_credential_version_changes_with_each_revoking_event(client, db_conn):
+    assert login(client).status_code == 200
+    create(client)
+    seen = [version(db_conn)]
+    assert client.patch(f"{USERS}/alice", json={"role": "admin"}).status_code == 200
+    seen.append(version(db_conn))
+    assert (
+        client.patch(f"{USERS}/alice", json={"password": "another-password-1"}).status_code == 200
+    )
+    seen.append(version(db_conn))
+    assert client.patch(f"{USERS}/alice", json={"disabled": True}).status_code == 200
+    seen.append(version(db_conn))
+    assert client.patch(f"{USERS}/alice", json={"disabled": False}).status_code == 200
+    seen.append(version(db_conn))
+    client.cookies.clear()
+    assert login(client, "alice", "another-password-1").status_code == 200
+    changed = client.post(
+        SESSION + "/password",
+        json={"currentPassword": "another-password-1", "newPassword": REPLACED},
+    )
+    assert changed.status_code == 204
+    seen.append(version(db_conn))
+    assert seen == sorted(set(seen)) and len(seen) == 6  # strictly increasing
+
+
+def test_an_mcp_user_principal_needs_its_current_credential_version(client, db_conn):
+    assert login(client).status_code == 200
+    create(client)
+    at = version(db_conn)
+    ok = as_mcp(client, at=at)
+    assert ok.status_code == 200 and ok.json()["operator"] == "mcp:alice"
+    stale = as_mcp(client, at=at - 1)
+    assert stale.status_code == 401 and stale.json()["code"] == "credentialRevoked"
+    assert as_mcp(client, "nobody", at=1).json()["code"] == "credentialRevoked"
+    headers = {**SERVICE, "X-Remote-User": "mcp:alice"}  # no version at all
+    assert client.get("/internal/v1/context", headers=headers).status_code == 403
+    for bad in ("x", "-1", "1.0", " 1", ""):
+        assert as_mcp(client, at=bad).status_code == 403, bad
+    assert as_mcp(client, "bad name", at=at).status_code == 403
+    assert client.patch(f"{USERS}/alice", json={"disabled": True}).status_code == 200
+    gone = as_mcp(client, at=version(db_conn))  # the current version, but disabled
+    assert gone.status_code == 401 and gone.json()["code"] == "credentialRevoked"
+
+
+def test_a_static_token_principal_is_not_checked_against_users(client):
+    headers = {**SERVICE, "X-Remote-User": "mcp-token:ops-bot"}
+    response = client.get("/internal/v1/context", headers=headers)
+    assert response.status_code == 200 and response.json()["operator"] == "mcp-token:ops-bot"
+    for bad in ("mcp-token:Upper", "mcp-token:", "mcp-token:" + "a" * 49, "other:x", ""):
+        assert (
+            client.get(
+                "/internal/v1/context", headers={**SERVICE, "X-Remote-User": bad}
+            ).status_code
+            == 403
+        ), bad
+
+
+def test_the_longest_mcp_user_principal_is_a_valid_operator(client, db_conn):
+    assert login(client).status_code == 200
+    name = "u" * 64
+    create(client, name)
+    assert as_mcp(client, name, at=version(db_conn, name)).json()["operator"] == "mcp:" + name

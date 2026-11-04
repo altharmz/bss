@@ -35,7 +35,7 @@ back; the hold and the pending tree stay for retry; replay posts nothing twice. 
 changes and completes the command `cancelled`. On or after `D`: 409 (change the offering
 again with a new order). Upgrade and downgrade are the same flow. Postpaid is unchanged.
 
-**Schema (migration `0048`).** The issue expected no schema change; the new grant
+**Schema (migration `0049`).** The issue expected no schema change; the new grant
 `[D, D + interval)` overlaps the old `[start, paidThrough)`, which three rules refused.
 `funded_interval.supersedes_interval_id` (nullable, unique, FK with the product) marks the
 grant that replaces another. The no-overlap exclusion and the
