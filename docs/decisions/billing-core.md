@@ -295,5 +295,4 @@ naming the product's initial offering failed the prorated-billing API test.
   adding a product or changing its offering on a non-Active account (C9).
 
 The resolved items of CLAUDE.md's old "Open questions" moved too: stale billing runs and
-`APP_ENV` to [worker.md](worker.md#resolved-questions), the two template ports to
-[infra.md](infra.md#to-port-to-vps-lab-template).
+`APP_ENV` to [worker.md](worker.md#resolved-questions).
