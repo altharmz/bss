@@ -94,7 +94,7 @@ def post_termination(
             ):
                 if run is None:
                     run = commands.ensure_run(conn, command_id, run_date=today, now=now)
-                posted = _credit_grant(conn, account, run, grant, cmd["due_date"], now, today)
+                posted = credit_grant(conn, account, run, grant, cmd["due_date"], now, today)
                 if posted is not None:
                     credits.append(posted)
         if run is not None:
@@ -110,7 +110,7 @@ def post_termination(
         return commands.complete(conn, command_id, result, now=now)["result"]
 
 
-def _credit_grant(conn, account, run, grant, ends, now, today):
+def credit_grant(conn, account, run, grant, ends, now, today):
     charge = billing.get_abr(conn, grant["applied_rate_id"])
     if fetch_one(
         conn,

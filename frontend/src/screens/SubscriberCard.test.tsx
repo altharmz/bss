@@ -3724,6 +3724,7 @@ describe('change offering', () => {
     fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
   const preview = (start: string) =>
     `GET ${INTERNAL}/firstCharge?productOffering.id=${O2}&startDate=${start}`;
+  const forProduct = (start: string) => `${preview(start)}&product.id=${P1}`;
   const PREPAID = accountBody(
     A,
     { id: C, name: 'Olga Kuznetsova' },
@@ -3959,7 +3960,7 @@ describe('change offering', () => {
     expect(body.requestedStartDate).toBe('2026-10-05T12:00:00+03:00');
   });
 
-  it('fixes the prepaid date at paidThrough, shows the funds preview and follows an accepted order', async () => {
+  it('defaults the prepaid date to paidThrough, shows the funds preview and follows an accepted order', async () => {
     let finish: (() => void) | undefined;
     const { fetchMock } = backend(
       {
@@ -3968,7 +3969,7 @@ describe('change offering', () => {
         [`GET ${INTERNAL}/products`]: only([
           product(P1, { paidThrough: '2026-10-20', needs_topup: null, suspensionCause: null }),
         ]),
-        [preview('2026-10-20')]: () =>
+        [forProduct('2026-10-20')]: () =>
           json({
             ...FIRST_CHARGE,
             startDate: '2026-10-20',
@@ -4012,9 +4013,12 @@ describe('change offering', () => {
     await within(dialog).findByText('Fiber 100');
     const date = within(dialog).getByLabelText('Date') as HTMLInputElement;
     expect(date.value).toBe('2026-10-20');
-    expect(date.readOnly).toBe(true);
+    expect(date.readOnly).toBe(false);
+    expect(date.max).toBe('2026-10-20');
     fireEvent.change(date, { target: { value: '2026-10-25' } });
-    // a read-only field is not edited by typing; the dialog keeps the renewal date it was given
+    // after the paid-through date the order would be refused: the dialog says so
+    expect(within(dialog).getByText('Enter a date from 2026-10-01 to 2026-10-20.')).toBeTruthy();
+    fireEvent.change(date, { target: { value: '2026-10-20' } });
     expect(
       within(dialog).getByText(/The change applies at the next renewal \(2026-10-20\)/),
     ).toBeTruthy();
@@ -4035,6 +4039,65 @@ describe('change offering', () => {
     await screen.findByText('Change of Mobile L to Fiber 100 completed');
   });
 
+  it('changes a prepaid offering inside the paid interval and shows the credit', async () => {
+    const { fetchMock } = backend(
+      {
+        ...catalog,
+        ...prepaidRoutes,
+        [`GET ${INTERNAL}/products`]: only([
+          product(P1, { paidThrough: '2026-10-20', needs_topup: null, suspensionCause: null }),
+        ]),
+        [forProduct('2026-10-10')]: () =>
+          json({
+            ...FIRST_CHARGE,
+            startDate: '2026-10-10',
+            required: usd(780),
+            available: usd(900),
+            shortfall: usd(0),
+            amount: usd(780),
+            credit: usd(300),
+            balanceAfter: usd(-360),
+          }),
+        [`POST ${ORDERS}`]: () =>
+          json({ id: 'ob', state: 'inProgress', '@type': 'ProductOrder' }, { status: 201 }),
+        'GET /internal/v1/prepaid/command/ob': () =>
+          json({
+            id: 'ob',
+            kind: 'order',
+            state: 'pending',
+            outcome: null,
+            billingAccount: { id: A, name: 'Olga' },
+            dueDate: '2026-10-10',
+            createdAt: '2026-10-01T06:00:00Z',
+            attempts: 0,
+            attemptedAt: null,
+            nextRetryAt: null,
+            reason: null,
+            error: null,
+            needs_topup: null,
+            productOrder: null,
+            products: [],
+            billingRun: null,
+            bills: [],
+          }),
+      },
+      PREPAID,
+    );
+    const { dialog } = await openDialog();
+    await within(dialog).findByText('Fiber 100');
+    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-10-10' } });
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Fiber 100/ }));
+    await within(dialog).findByTestId('prepaid-required');
+    expect(within(dialog).getByText('Held now')).toBeTruthy();
+    expect(within(dialog).getByText('Credit for unused days')).toBeTruthy();
+    expect(within(dialog).getByText('300.00 USD')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Change offering' }));
+    await waitFor(() => expect(posts(fetchMock)).toHaveLength(1));
+    const body = JSON.parse(String(posts(fetchMock)[0]?.[1]?.body));
+    expect(body.requestedStartDate).toBe('2026-10-10T12:00:00+03:00');
+    expect(body.productOrderItem[0].product).toEqual({ id: P1, '@type': 'ProductRef' });
+  });
+
   it('uses today for a prepaid product whose paid interval has ended', async () => {
     const { fetchMock } = backend(
       {
@@ -4043,7 +4106,7 @@ describe('change offering', () => {
         [`GET ${INTERNAL}/products`]: only([
           product(P1, { paidThrough: '2026-09-20', needs_topup: null, suspensionCause: null }),
         ]),
-        [preview('2026-10-01')]: () => json(FIRST_CHARGE),
+        [forProduct('2026-10-01')]: () => json(FIRST_CHARGE),
         [`POST ${ORDERS}`]: completed,
       },
       PREPAID,
@@ -4090,7 +4153,9 @@ describe('change offering', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Change offering' }));
     expect(await within(dialog).findByRole('alert')).toHaveProperty(
       'textContent',
-      expect.stringContaining('Choose the prepaid product’s renewal date for the offering change.'),
+      expect.stringContaining(
+        'Choose a date from today to the prepaid product’s paid-through date for the offering change.',
+      ),
     );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Change offering' }));
     await waitFor(() =>

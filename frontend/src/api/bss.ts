@@ -753,8 +753,11 @@ export function loadFirstCharge(
   offeringId: string,
   startDate: string,
   signal: AbortSignal,
+  productId?: string,
 ): Promise<FirstCharge> {
-  const query = `productOffering.id=${encodeURIComponent(offeringId)}&startDate=${startDate}`;
+  const query =
+    `productOffering.id=${encodeURIComponent(offeringId)}&startDate=${startDate}` +
+    (productId === undefined ? '' : `&product.id=${encodeURIComponent(productId)}`);
   return getJson<FirstCharge>(`${PATHS.internal}/${accountId}/firstCharge?${query}`, signal);
 }
 

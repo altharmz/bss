@@ -36,7 +36,7 @@ def lock_renewals(conn, product_ids):
     rows = fetch_all(
         conn,
         "SELECT DISTINCT ON (product_id) id FROM funded_interval WHERE product_id = ANY(%s)"
-        " ORDER BY product_id, upper(period) DESC",
+        " ORDER BY product_id, lower(period) DESC, authorized_at DESC",
         (list(product_ids),),
     )
     ids = sorted(commands.renewal_id(row["id"]) for row in rows)
@@ -54,7 +54,7 @@ def problems(conn, request, account, start, today):
     if all(item.action == "delete" for item in request.items):
         return _not_started(conn, request)
     if all(item.action == "modify" and item.product_offering_id for item in request.items):
-        return _not_at_renewal(conn, request, start, today)
+        return _offering_problems(conn, request, start, today)
     if number_only(request):
         return []
     if any(item.action != "modify" or item.product_status is None for item in request.items):
@@ -100,31 +100,113 @@ def _not_started(conn, request):
     ]
 
 
-def _not_at_renewal(conn, request, start, today):
-    """An offering (and number) change takes effect at the next renewal: the latest
-    grant's paid-through date, or today once that has passed."""
+def _offering_problems(conn, request, start, today):
+    """An offering change takes effect at the next renewal (the latest grant's paid-through
+    date, or today once that has passed) or, on a live grant, on a date inside the paid
+    interval (slice 151). One change may wait per product."""
     found = _not_started(conn, request)
     for item in request.items:
         grant = entitlement.latest_grant(conn, item.product_id)
         if grant is None:
             continue
-        boundary = max(grant["period"].upper, today)
-        if start != boundary:
+        paid = grant["period"].upper
+        if paid <= today and start != today:
             found.append(
                 (
                     item.item_id,
                     "offeringChangeNotAtRenewal",
-                    f"a prepaid offering changes at its renewal on {boundary}",
+                    f"a funding-suspended prepaid offering changes today ({today})",
+                )
+            )
+        elif paid > today and start > paid:
+            found.append(
+                (
+                    item.item_id,
+                    "offeringChangeNotAtRenewal",
+                    f"{start} is after the current paid-through date {paid}",
                 )
             )
     return found
 
 
-def change_offerings(conn, order, request, rows, start, today, now):
-    """Retain each change for the renewal on `start`; only a funded renewal applies it
-    (app/billing/prepaid.py). A number change takes effect on `start` regardless."""
+def waiting_change(conn, product_id):
+    """The product's retained offering change that has not taken effect yet."""
+    return fetch_one(
+        conn,
+        "SELECT * FROM product_offering_change WHERE product_id = %s"
+        " AND effect_announced_at IS NULL",
+        (product_id,),
+    )
+
+
+def mid_period(conn, request, start):
+    """The items changing inside their paid interval (before its end)."""
+    return [
+        item
+        for item in request.items
+        if entitlement.latest_grant(conn, item.product_id)["period"].upper > start
+    ]
+
+
+def prepare_changes(conn, request, account, quotes, start, now):
+    """Quote the new offering's first interval from `start` for each mid-period item and
+    check the total against current spendable funds: the anticipated credit never funds it.
+    Returns the quotes, or None when every item changes at its renewal."""
+    items = mid_period(conn, request, start)
+    if not items:
+        return None
+    core = billing.core_account(account)
+    prices = {
+        p.id: p for p in billing.load_recurring_prices(conn, [i.product_offering_id for i in items])
+    }
+    tz = ZoneInfo(settings.billing_tz)
+    out = []
+    for item in items:
+        price = prices[quotes[item.item_id]["id"]]
+        out.append(
+            IntervalQuote(
+                product_id=item.product_id,
+                offering_id=item.product_offering_id,
+                price_id=price.id,
+                currency=account["currency"],
+                amount=price.amount,
+                taxes=[
+                    TaxQuote(category=t.category, rate=t.rate, amount=t.amount)
+                    for t in charge_taxes(price.amount, price, core, start, tz)
+                ],
+                anchor=start,
+                index=0,
+                unit=price.recurring_period,
+                length=price.recurring_period_length,
+            )
+        )
+    balance_actions.release_expired(conn, account["id"], now)
+    funding.plan(conn, account["id"], quote_total(out))
+    return out
+
+
+def quote_total(quotes):
+    return sum(
+        (q.amount + sum((t.amount for t in q.taxes), Decimal(0)) for q in quotes), Decimal(0)
+    )
+
+
+def change_offerings(conn, order, request, rows, start, today, now, command_id, quoted=None):
+    """Retain each change. At a renewal only a funded renewal applies it
+    (app/billing/prepaid.py) and the order completes at once. A mid-period change holds
+    the quoted amount and leaves the order inProgress until its command, due `start`, is
+    posted (app/billing/offering_change.py). A number change takes effect on `start`
+    regardless."""
     state = order_transition(order["state"], "inProgress")
     orders.set_order_state(conn, order["id"], state)
+    if quoted:
+        funding.reserve_for_command(
+            conn,
+            order["billing_account_id"],
+            quote_total(quoted),
+            command_id=command_id,
+            held_at=now,
+        )
     for item in request.items:
         row = rows[item.item_id]
         progress = item_transition(row["state"], "inProgress")
@@ -140,7 +222,22 @@ def change_offerings(conn, order, request, rows, start, today, now):
             numbers.execute(conn, item, item.product_id, row["id"], start, now)
             if start <= today:
                 emit.product(conn, item.product_id, "AttributeValueChange", at=now, today=today)
-        orders.set_order_item_state(conn, row["id"], item_transition(progress, "completed"))
+        if not quoted:
+            orders.set_order_item_state(conn, row["id"], item_transition(progress, "completed"))
+    if quoted:
+        commands.enqueue(
+            conn,
+            command_id,
+            order["billing_account_id"],
+            kind="order",
+            due_date=start,
+            request={
+                "order_id": str(order["id"]),
+                "offering_changes": [q.model_dump(mode="json") for q in quoted],
+            },
+            now=now,
+        )
+        return
     orders.set_order_state(
         conn, order["id"], order_transition(state, "completed"), completion_date=now
     )

@@ -295,6 +295,8 @@ def _cancel_prepaid(conn, order, command, request, now, today):
         return _cancel_status(conn, order, command, request, now)
     if "terminations" in command["request"]:
         raise CancelRefused("a prepaid termination cannot be cancelled once accepted")
+    if "offering_changes" in command["request"]:
+        return _cancel_offering_change(conn, order, command, request, now, today)
     if order["state"] != "inProgress" or command["state"] == "completed":
         raise CancelRefused("prepaid order cannot be cancelled after its first grant")
     parties.get_billing_account(conn, order["billing_account_id"], "update")
@@ -325,6 +327,47 @@ def _cancel_prepaid(conn, order, command, request, now, today):
         products.cancel_unstarted(conn, item["product_id"])
         orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "cancelled"))
         emit.product(conn, item["product_id"], "StateChange", at=now, today=today)
+    number_orders.changed(conn, number_rows, old_numbers, now, today)
+    commands.complete(conn, command["id"], {"outcome": "cancelled"}, now=now)
+    return _cancelled(conn, order, request, now)
+
+
+def _cancel_offering_change(conn, order, command, request, now, today):
+    """A mid-period offering change before its date: release the hold, drop the retained
+    changes and the command. On or after its date the order is applied (or being applied)."""
+    if order["state"] != "inProgress" or command["state"] == "completed":
+        raise CancelRefused(
+            f"productOrder {order['id']} is {order['state']}: it cannot be cancelled"
+        )
+    if command["due_date"] <= today:
+        raise CancelRefused(
+            f"the offering change takes effect on {command['due_date']}: change the offering"
+            " again with a new order"
+        )
+    parties.get_billing_account(conn, order["billing_account_id"], "update")
+    items = orders.items_of(conn, order["id"])
+    locked = products.lock_products(conn, [i["product_id"] for i in items])
+    number_rows = number_orders.lock(conn, list(locked))
+    problem = number_orders.cancellation_problem(conn, items)
+    if problem:
+        raise CancelRefused(problem)
+    old_numbers = number_orders.before(conn, number_rows, today)
+    number_orders.cancel(conn, items, now)
+    hold = fetch_one(
+        conn, "SELECT hold_id FROM funding_command_hold WHERE command_id = %s", (command["id"],)
+    )
+    if hold:
+        funding.release(
+            conn,
+            order["billing_account_id"],
+            hold["hold_id"],
+            released_at=now,
+            command_id=command["id"],
+        )
+    for item in items:
+        products.undo_change(conn, item["id"])
+        emit.product(conn, item["product_id"], "AttributeValueChange", at=now, today=today)
+        orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "cancelled"))
     number_orders.changed(conn, number_rows, old_numbers, now, today)
     commands.complete(conn, command["id"], {"outcome": "cancelled"}, now=now)
     return _cancelled(conn, order, request, now)

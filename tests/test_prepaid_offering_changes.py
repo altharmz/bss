@@ -101,12 +101,9 @@ def test_change_at_paid_through_applies_with_the_funded_renewal(api, db_conn, gr
     assert [e["event"]["product"]["id"] for _, e in events] == [first["id"]]
 
 
-@pytest.mark.parametrize("days", [0, 5, 40])
-def test_change_off_the_renewal_date_is_rejected(api, db_conn, granted, days):
+def test_change_after_the_paid_through_date_is_rejected(api, db_conn, granted):
     first, _ = granted.products
-    day = api.clock.now().date() + timedelta(days=days)
-    if day == first["due"]:
-        day += timedelta(days=1)
+    day = first["due"] + timedelta(days=1)
     order = switch(api, granted.acc, first, granted.b, day)
     assert order["state"] == "rejected" and errors(order) == ["offeringChangeNotAtRenewal"]
     assert db_conn.execute("SELECT count(*) FROM product_offering_change").fetchone() == (0,)
@@ -139,7 +136,7 @@ def test_expired_product_changes_today_and_resumes_on_the_new_plan(api, db_conn,
     at_due = switch(api, granted.acc, first, granted.b, first["due"])
     assert errors(at_due) == ["requestedStartDateInPast"]
     order = switch(api, granted.acc, first, granted.b, later.date())
-    assert order["state"] == "completed", order
+    assert order["state"] == "completed", errors(order)
     pay(db_conn, UUID(granted.acc["id"]), "6", later + timedelta(minutes=1))
     tick(db_conn, later + timedelta(minutes=2))
     assert renewed(db_conn, first) == (granted.b["id"], D("5.00"), D("1.00"), later.date())

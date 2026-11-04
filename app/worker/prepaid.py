@@ -14,6 +14,7 @@ import psycopg
 
 from app.billing import entitlement, transfer_fee
 from app.billing.funding import InsufficientFunds
+from app.billing.offering_change import post_offering_change
 from app.billing.prepaid import post_interval
 from app.billing.status_change import post_status_change, renewal_ids
 from app.billing.termination import post_termination
@@ -33,7 +34,7 @@ log = logging.getLogger("app.worker")
 _DUE_RENEWALS = (
     "SELECT g.id, g.product_id, g.billing_account_id, g.due FROM ("
     " SELECT DISTINCT ON (product_id) id, product_id, billing_account_id, upper(period) AS due"
-    " FROM funded_interval ORDER BY product_id, upper(period) DESC) g"
+    " FROM funded_interval ORDER BY product_id, lower(period) DESC, authorized_at DESC) g"
     " JOIN product p ON p.id = g.product_id JOIN billing_account a ON a.id = g.billing_account_id"
     " WHERE g.due <= %(today)s AND a.rating_type = 'prepaid' AND a.state = 'Active'"
     " AND NOT p.manually_suspended AND p.status NOT IN ('terminated', 'cancelled', 'aborted')"
@@ -193,6 +194,8 @@ def process_commands(
                 post = (
                     post_termination
                     if "terminations" in current["request"]
+                    else post_offering_change
+                    if "offering_changes" in current["request"]
                     else post_status_change
                     if "status_changes" in current["request"]
                     else post_interval

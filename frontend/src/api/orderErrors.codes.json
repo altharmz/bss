@@ -12,6 +12,7 @@
   "numberRequirementDiffers",
   "numberUnavailable",
   "offeringChangeNotAtRenewal",
+  "offeringChangePending",
   "offeringNotSellable",
   "offeringNotValid",
   "offeringUnchanged",
