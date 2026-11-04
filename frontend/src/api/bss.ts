@@ -1305,6 +1305,7 @@ export interface SpecificationFields {
   productNumber: string;
   lifecycleStatus: Lifecycle;
   requiresNumber: boolean;
+  requiresImsi?: boolean;
   characteristics: CharacteristicFields[];
 }
 
@@ -1377,8 +1378,12 @@ export async function createSpecification(form: SpecificationFields): Promise<Sp
     lifecycleStatus: form.lifecycleStatus,
   };
   for (const key of SPEC_TEXT) if (form[key].trim()) body[key] = form[key].trim();
-  if (form.requiresNumber)
-    body.resourceSpecification = [{ id: 'msisdn', '@type': 'ResourceSpecificationRef' }];
+  const required = [form.requiresNumber && 'msisdn', form.requiresImsi && 'imsi'].filter(Boolean);
+  if (required.length)
+    body.resourceSpecification = required.map((id) => ({
+      id,
+      '@type': 'ResourceSpecificationRef',
+    }));
   if (form.characteristics.length)
     body.productSpecCharacteristic = characteristicDocuments(form.characteristics);
   return toSpecification(await postJson<SpecBody>(PATHS.specifications, body));
@@ -1396,11 +1401,16 @@ export function specificationChanges(
     if (now !== (before[key] ?? '')) changes[key] = now === '' ? null : now;
   }
   if (form.lifecycleStatus !== before.status) changes.lifecycleStatus = form.lifecycleStatus;
-  const required = (before.resourceSpecification ?? []).some((ref) => ref.id === 'msisdn');
-  if (required !== form.requiresNumber)
+  const had = (id: string) => (before.resourceSpecification ?? []).some((ref) => ref.id === id);
+  const wanted = { msisdn: form.requiresNumber, imsi: form.requiresImsi ?? had('imsi') };
+  if (had('msisdn') !== wanted.msisdn || had('imsi') !== wanted.imsi)
     changes.resourceSpecification = [
-      ...(before.resourceSpecification ?? []).filter((ref) => ref.id !== 'msisdn'),
-      ...(form.requiresNumber ? [{ id: 'msisdn', '@type': 'ResourceSpecificationRef' }] : []),
+      ...(before.resourceSpecification ?? []).filter(
+        (ref) => ref.id !== 'msisdn' && ref.id !== 'imsi',
+      ),
+      ...(['msisdn', 'imsi'] as const)
+        .filter((id) => wanted[id])
+        .map((id) => ({ id, '@type': 'ResourceSpecificationRef' })),
     ];
   if (JSON.stringify(form.characteristics) !== JSON.stringify(characteristicFields(before)))
     changes.productSpecCharacteristic = characteristicDocuments(form.characteristics);
@@ -1444,7 +1454,7 @@ export function requestedDate(day: string, timeZone: string): string {
   return zonedDateTime(day, '12:00', timeZone);
 }
 
-function addItem(offeringId: string, numberId: string | undefined, id = '1') {
+function addItem(offeringId: string, numberId: string | string[] | undefined, id = '1') {
   return {
     '@type': 'ProductOrderItem',
     id,
@@ -1461,7 +1471,7 @@ export async function orderAdd(
   offeringId: string,
   startDate: string,
   timeZone: string,
-  numberId?: string,
+  numberId?: string | string[],
   draftKey?: string,
 ): Promise<OrderOutcome> {
   const order = await postJson<OrderBody>(
@@ -1484,7 +1494,7 @@ export async function replaceDraft(
   offeringId: string,
   startDate: string,
   timeZone: string,
-  numberId: string | undefined,
+  numberId: string | string[] | undefined,
   itemId: string,
 ): Promise<OrderOutcome> {
   const order = await patchJson<OrderBody>(`${PATHS.orders}/${orderId}`, {

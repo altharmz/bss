@@ -109,6 +109,95 @@ def test_ui_number_inventory_and_orders(api):
     assert [p["id"] for p in lookup] == [product["id"]]
 
 
+def test_ui_imsi_inventory_orders_and_sim_change(api):
+    """Exact IMSI bodies pinned in Numbers.test.tsx: create with ICCID, add with the
+    MSISDN and IMSI together, SIM change as the complete resulting set."""
+    url = "/tmf-api/resourceInventory/v5/resource"
+    ref = {"@type": "ResourceRef", "@referredType": "LogicalResource"}
+
+    def resource(kind, value, extra=None):
+        body = {
+            "@type": "LogicalResource",
+            "name": f"{'IMSI' if kind == 'imsi' else 'MSISDN'} {value}",
+            "value": value,
+            "administrativeState": "unlocked",
+            "resourceSpecification": {"id": kind, "@type": "ResourceSpecificationRef"},
+            **(extra or {}),
+        }
+        created = api.post(url, body)
+        assert created.status_code == 201, created.text
+        return created.json()
+
+    iccid = {
+        "resourceCharacteristic": [
+            {
+                "@type": "StringCharacteristic",
+                "name": "iccid",
+                "valueType": "string",
+                "value": "8900000000000000001",
+            }
+        ]
+    }
+    msisdn = resource("msisdn", "12025550123")
+    old = resource("imsi", "001010123456780", iccid)
+    new = resource("imsi", "001010123456781")
+    offering = apidata.sellable_offering(api)
+    assert (
+        api.patch(
+            offering["productSpecification"]["href"],
+            {
+                "resourceSpecification": [
+                    {"id": "msisdn", "@type": "ResourceSpecificationRef"},
+                    {"id": "imsi", "@type": "ResourceSpecificationRef"},
+                ]
+            },
+        ).status_code
+        == 200
+    )
+    account = apidata.account(api)
+
+    def post(item, **extra):
+        response = api.post(
+            ORDER,
+            {
+                "@type": "ProductOrder",
+                "billingAccount": {"id": account["id"], "@type": "BillingAccountRef"},
+                **extra,
+                "productOrderItem": [{"@type": "ProductOrderItem", "id": "1", **item}],
+            },
+        )
+        assert response.status_code == 201, response.text
+        assert response.json()["state"] == "completed", response.text
+        return response.json()
+
+    added = post(
+        {
+            "action": "add",
+            "productOffering": {"id": offering["id"], "@type": "ProductOfferingRef"},
+            "product": {
+                "@type": "ProductRefOrValue",
+                "realizingResource": [{"id": msisdn["id"], **ref}, {"id": old["id"], **ref}],
+            },
+        },
+        requestedStartDate="2026-10-02T12:00:00+03:00",
+    )
+    product = apidata.product_of(api, added)
+    api.clock.set(datetime.fromisoformat("2026-10-02T09:00:00+00:00"))
+    post(
+        {
+            "action": "modify",
+            "product": {
+                "@type": "ProductRefOrValue",
+                "id": product["id"],
+                "realizingResource": [{"id": msisdn["id"], **ref}, {"id": new["id"], **ref}],
+            },
+        }
+    )
+    lookup = api.get(f"{apidata.PRODUCT}?realizingResource.id={new['id']}").json()
+    assert [p["id"] for p in lookup] == [product["id"]]
+    assert api.get(old["href"]).json()["administrativeState"] == "locked"
+
+
 def test_ui_user_management_requests(api):
     """Same bodies as Users.test.tsx and session.test.tsx, through real cookies."""
     from fastapi.testclient import TestClient

@@ -394,8 +394,9 @@ function draftToEdit(order: Order, timeZone: string): DraftToEdit | null {
     order.id === undefined
   )
     return null;
-  const resource = (item.product as { realizingResource?: { id?: string }[] } | undefined)
-    ?.realizingResource?.[0];
+  const resources = (item.product as { realizingResource?: { id?: string }[] } | undefined)
+    ?.realizingResource;
+  const resource = resources?.[0];
   return {
     orderId: order.id,
     itemId: item.id ?? '1',
@@ -405,6 +406,7 @@ function draftToEdit(order: Order, timeZone: string): DraftToEdit | null {
         ? null
         : businessDate(order.requestedStartDate, timeZone),
     numberId: resource?.id ?? '',
+    imsiId: resources?.[1]?.id ?? '',
   };
 }
 

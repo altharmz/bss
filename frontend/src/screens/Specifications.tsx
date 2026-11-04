@@ -136,6 +136,7 @@ function fieldsOf(spec: Specification | null): SpecificationFields {
     productNumber: spec?.productNumber ?? '',
     lifecycleStatus: spec?.status ?? 'In Design',
     requiresNumber: (spec?.resourceSpecification ?? []).some((ref) => ref.id === 'msisdn'),
+    requiresImsi: (spec?.resourceSpecification ?? []).some((ref) => ref.id === 'imsi'),
     characteristics: characteristicFields(spec),
   };
 }
@@ -201,10 +202,14 @@ export function SpecificationModal({
       if (
         error instanceof ApiError &&
         error.status === 409 &&
-        explain(error).includes('msisdn requirement cannot change')
+        explain(error).includes('requirement cannot change')
       ) {
         setRequirementLocked(true);
-        setForm((f) => ({ ...f, requiresNumber: fieldsOf(spec).requiresNumber }));
+        setForm((f) => ({
+          ...f,
+          requiresNumber: fieldsOf(spec).requiresNumber,
+          requiresImsi: fieldsOf(spec).requiresImsi ?? false,
+        }));
       }
       setConfirming(false);
     } finally {
@@ -283,6 +288,12 @@ export function SpecificationModal({
               disabled={requirementLocked}
               onChange={(e) => setForm({ ...form, requiresNumber: e.target.checked })}
               label="Requires a subscriber number"
+            />
+            <Checkbox
+              checked={form.requiresImsi ?? false}
+              disabled={requirementLocked}
+              onChange={(e) => setForm({ ...form, requiresImsi: e.target.checked })}
+              label="Requires an IMSI"
             />
           </div>
           <section data-ui="ui.catalog.specificationCharacteristics" className="bss-form">
