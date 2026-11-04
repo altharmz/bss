@@ -1,9 +1,10 @@
 """TMF639 subscriber numbers. Assignment state is derived; only orders assign numbers."""
 
+import re
 from typing import Literal
 
 from fastapi import APIRouter, Request, Response
-from pydantic import Field, field_validator
+from pydantic import Field
 
 from app.api import listing, specschema
 from app.api.common import (
@@ -22,7 +23,7 @@ from app.api.common import (
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
-from app.api.errors import conflict, not_found
+from app.api.errors import conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.config import settings
 from app.events import emit
@@ -32,7 +33,14 @@ from app.repository._sql import delete_by_id, jsonb
 API = "TMF639"
 BASE = "/tmf-api/resourceInventory/v5"
 router = APIRouter(prefix=BASE)
-SPECIFICATION = {"id": "msisdn", "@type": "ResourceSpecificationRef"}
+KINDS = ("msisdn", "imsi")
+ICCID = re.compile(r"^89[0-9]{16,18}$")
+
+
+def specification(kind):
+    return {"id": kind, "@type": "ResourceSpecificationRef"}
+
+
 # Descriptive documents carry no provisioning or assignment behaviour.
 DOCUMENTS = (
     "category",
@@ -63,15 +71,6 @@ class ResourceCreate(ResourceDocuments):
     description: str | None = None
     administrative_state: Literal["locked", "unlocked"] = "unlocked"
 
-    @field_validator("value")
-    @classmethod
-    def canonical_number(cls, value):
-        if not (
-            8 <= len(value) <= 15 and value.isascii() and value.isdecimal() and value[0] != "0"
-        ):
-            raise ValueError("must be E.164 digits without formatting (8..15, first digit 1..9)")
-        return value
-
 
 class ResourcePatch(ResourceDocuments):
     name: str | None = Field(default=None, min_length=1)
@@ -97,13 +96,61 @@ def resource_body(conn, row, today):
                 "value": row["value"],
                 "administrativeState": row["administrative_state"],
                 "creationDate": utc(row["created_at"]),
-                "resourceSpecification": SPECIFICATION,
+                "resourceSpecification": specification(row["resource_specification_id"]),
             }
         )
         | row["attrs"]
+        | characteristics(row)
         | row["tmf_meta"]
         | state
     )
+
+
+def characteristics(row):
+    """The stored descriptive characteristics, plus the ICCID kept in its own column."""
+    stored = list(row["attrs"].get("resourceCharacteristic") or [])
+    if row["iccid"] is not None:
+        stored.append(
+            {
+                "@type": "StringCharacteristic",
+                "name": "iccid",
+                "valueType": "string",
+                "value": row["iccid"],
+            }
+        )
+    return {"resourceCharacteristic": stored} if stored else {}
+
+
+def split_iccid(kind, documents):
+    """(iccid or None, documents without the iccid characteristic). 422 when invalid."""
+    sent = documents.get("resourceCharacteristic")
+    if not sent:
+        return None, documents
+    iccid = None
+    rest = []
+    for item in sent:
+        if item.get("name") == "iccid":
+            iccid = item.get("value")
+        else:
+            rest.append(item)
+    if iccid is None:
+        return None, documents
+    if kind != "imsi":
+        raise unprocessable("the iccid characteristic is allowed only on imsi resources")
+    if not isinstance(iccid, str) or not ICCID.fullmatch(iccid):
+        raise unprocessable("iccid must be 18..20 digits starting with 89")
+    return iccid, {**documents, "resourceCharacteristic": rest or None}
+
+
+def check_value(kind, value):
+    if kind == "imsi":
+        ok = 14 <= len(value) <= 15 and value.isascii() and value.isdecimal()
+        message = "must be 14 or 15 IMSI digits without formatting"
+    else:
+        ok = 8 <= len(value) <= 15 and value.isascii() and value.isdecimal() and value[0] != "0"
+        message = "must be E.164 digits without formatting (8..15, first digit 1..9)"
+    if not ok:
+        raise unprocessable(f"value {message}")
 
 
 def require(conn, uid, *, lock=False):
@@ -168,25 +215,39 @@ def create_resource(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -
     check_type(body, "LogicalResource")
     uid = take_id(body)
     server, problems = server_values(body)
+    sent_kind = (server.get("resourceSpecification") or {}).get("id")
+    kind = sent_kind if sent_kind in KINDS else "msisdn"
     data, documents = parse_documented(
         ResourceCreate, body, DOCUMENTS, API, "LogicalResource_FVO", found=problems
     )
+    check_value(kind, data.value)
+    iccid, documents = split_iccid(kind, documents)
     with tx() as conn:
         claim_id(conn, "subscriber_number", uid)
         # The unique constraint also protects callers outside this API. This lock gives
         # concurrent API duplicates a useful 409 rather than an aborted transaction.
         conn.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
-            (f"subscriber_number:value:{data.value}",),
+            (f"subscriber_number:value:{kind}:{data.value}",),
         )
         if conn.execute(
-            "SELECT 1 FROM subscriber_number WHERE value = %s", (data.value,)
+            "SELECT 1 FROM subscriber_number WHERE resource_specification_id = %s AND value = %s",
+            (kind, data.value),
         ).fetchone():
-            raise conflict("a resource with this number value already exists")
+            raise conflict("a resource with this value already exists")
+        if (
+            iccid is not None
+            and conn.execute(
+                "SELECT 1 FROM subscriber_number WHERE iccid = %s", (iccid,)
+            ).fetchone()
+        ):
+            raise conflict("a resource with this iccid already exists")
         now = clock.now()
         values = {
             "name": data.name,
             "value": data.value,
+            "resource_specification_id": kind,
+            "iccid": iccid,
             "description": data.description,
             "administrative_state": data.administrative_state,
             "created_at": now,
@@ -223,13 +284,25 @@ def patch_resource(
         not_null(data, "name", "value", "administrative_state")
         if "value" in data.model_fields_set and data.value != row["value"]:
             raise conflict("number value is immutable")
+        iccid, documents = split_iccid(row["resource_specification_id"], documents)
+        iccid_change = {}
+        if iccid is not None and iccid != row["iccid"]:
+            if conn.execute(
+                "SELECT 1 FROM number_assignment WHERE subscriber_number_id = %s LIMIT 1", (uid,)
+            ).fetchone():
+                raise conflict("iccid cannot change once the IMSI has been assigned")
+            if conn.execute(
+                "SELECT 1 FROM subscriber_number WHERE iccid = %s AND id <> %s", (iccid, uid)
+            ).fetchone():
+                raise conflict("a resource with this iccid already exists")
+            iccid_change = {"iccid": iccid}
         old = emit.before(conn, API, "resource", lambda: before)
         changes = {
             key: getattr(data, key)
             for key in ("name", "description", "administrative_state")
             if key in data.model_fields_set
         }
-        changes |= {
+        changes |= iccid_change | {
             "attrs": jsonb(merge_documents(row["attrs"], documents)),
             "tmf_meta": metadata(data, row["tmf_meta"]),
             "updated_at": now,

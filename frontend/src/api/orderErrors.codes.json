@@ -2,6 +2,9 @@
   "accountNotActive",
   "billingAccountMismatch",
   "combinedChangeUnavailable",
+  "imsiNotRequired",
+  "imsiRequired",
+  "imsiUnavailable",
   "insufficientFunds",
   "noRecurringPrice",
   "numberNotRequired",
@@ -19,6 +22,7 @@
   "productAlreadyEnded",
   "productNotStarted",
   "productOfOtherAccount",
+  "realizingResourceDuplicate",
   "requestedStartDateInPast",
   "statusUnchanged",
   "terminationInPeriod"

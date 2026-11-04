@@ -7,16 +7,36 @@ from app.events import emit
 from app.repository import catalog
 from app.repository._sql import fetch_all, fetch_one
 
+KINDS = ["msisdn", "imsi"]
+# stored order rejection codes per kind
+CODES = {
+    "msisdn": ("numberRequired", "numberUnavailable", "numberNotRequired"),
+    "imsi": ("imsiRequired", "imsiUnavailable", "imsiNotRequired"),
+}
+NOUN = {"msisdn": "subscriber number", "imsi": "IMSI"}
 
-def required(details):
-    return any(r.get("id") == "msisdn" for r in details.get("resourceSpecification", []))
+
+def required(details, kind="msisdn"):
+    return any(r.get("id") == kind for r in details.get("resourceSpecification", []))
 
 
-def offering_requires(conn, offering_id):
+def offering_requires(conn, offering_id, kind="msisdn"):
     offering = catalog.get_product_offering(conn, offering_id)
     uid = offering["product_specification_id"]
     spec = catalog.lock_product_specification(conn, uid, share=True) if uid else None
-    return bool(spec and required(spec["details"]))
+    return bool(spec and required(spec["details"], kind))
+
+
+def requirements(conn, offering_id):
+    """{kind: bool} for the offering's specification."""
+    offering = catalog.get_product_offering(conn, offering_id)
+    uid = offering["product_specification_id"]
+    spec = catalog.lock_product_specification(conn, uid, share=True) if uid else None
+    return {k: bool(spec and required(spec["details"], k)) for k in KINDS}
+
+
+def product_requirements(product):
+    return {k: bool(product and product.get(f"requires_{k}")) for k in KINDS}
 
 
 def references(item):
@@ -52,7 +72,7 @@ def lock(conn, product_ids, requested=()):
     }
 
 
-def unavailable(conn, uid, start, end, *, exclude_product=None):
+def unavailable(conn, uid, start, end, *, exclude_product=None, kind="msisdn"):
     return (
         fetch_one(
             conn,
@@ -68,11 +88,18 @@ def unavailable(conn, uid, start, end, *, exclude_product=None):
                 "start": start,
                 "end": end,
                 "product": exclude_product,
-                "days": settings.msisdn_quarantine_days,
+                "days": settings.msisdn_quarantine_days if kind == "msisdn" else 0,
             },
         )
         is not None
     )
+
+
+def _uuid(reference):
+    try:
+        return UUID(reference.get("id", ""))
+    except (ValueError, TypeError, AttributeError):
+        return None
 
 
 def validate(conn, request, products, locked, start):
@@ -80,13 +107,12 @@ def validate(conn, request, products, locked, start):
     seen = set()
     for item in request.items:
         product = products.get(item.product_id)
-        needs = (
-            offering_requires(conn, item.product_offering_id)
-            if item.action == "add"
-            else bool(product and product.get("requires_msisdn"))
-        )
+        if item.action == "add":
+            needs = requirements(conn, item.product_offering_id)
+        else:
+            needs = product_requirements(product)
         refs = references(item)
-        if not needs and item.action == "modify" and refs is not None:
+        if not any(needs.values()) and item.action == "modify" and refs is not None:
             problems.append(
                 (
                     item.item_id,
@@ -95,38 +121,88 @@ def validate(conn, request, products, locked, start):
                 )
             )
             continue
-        if not needs or item.action not in ("add", "modify"):
+        if not any(needs.values()) or item.action not in ("add", "modify"):
             continue
         if refs is None and item.action == "modify":
             continue
-        if not refs or len(refs) != 1:
+        problems += _item_problems(conn, item, product, needs, refs or [], locked, start, seen)
+    return problems
+
+
+def _item_problems(conn, item, product, needs, refs, locked, start, seen):
+    by_kind = {}
+    unknown = []
+    for ref in refs:
+        row = locked.get(_uuid(ref))
+        if row is None:
+            unknown.append(ref)
+        else:
+            by_kind.setdefault(row["resource_specification_id"], []).append(row)
+    problems = []
+    for kind in KINDS:
+        if len(by_kind.get(kind, [])) > 1:
             problems.append(
-                (item.item_id, "numberRequired", "exactly one realizingResource is required")
+                (
+                    item.item_id,
+                    "realizingResourceDuplicate",
+                    f"at most one {kind} realizingResource is allowed",
+                )
+            )
+    if problems:
+        return problems
+    # a reference the inventory does not know fills the first required kind still missing
+    for kind in KINDS:
+        if needs[kind] and kind not in by_kind and unknown:
+            by_kind[kind] = [(unknown.pop(0))]
+    end = product["termination_date"] if product else None
+    current = {}
+    if product:
+        for c in claims(conn, [product["id"]]):
+            if start in c["valid_for"]:
+                current[c["resource_specification_id"]] = c["subscriber_number_id"]
+    changed = 0
+    for kind in KINDS:
+        required_code, unavailable_code, extra_code = CODES[kind]
+        found = by_kind.get(kind, [])
+        if not needs[kind]:
+            if found:
+                problems.append((item.item_id, extra_code, f"the product needs no {kind}"))
+            continue
+        if not found:
+            problems.append(
+                (
+                    item.item_id,
+                    required_code,
+                    f"exactly one {kind} realizingResource is required",
+                )
             )
             continue
-        try:
-            uid = UUID(refs[0].get("id", ""))
-        except (ValueError, TypeError, AttributeError):
-            uid = None
-        number = locked.get(uid)
-        end = product["termination_date"] if product else None
-        if number is None:
-            reason = "subscriber number does not exist"
-        elif number["administrative_state"] != "unlocked":
-            reason = "subscriber number is locked"
-        elif uid in seen or unavailable(conn, uid, start, end):
-            reason = "subscriber number is assigned, reserved or quarantined"
-        elif product and any(c["effective_from"] > start for c in claims(conn, [product["id"]])):
-            reason = "number changes must follow existing assignments"
+        row = found[0]
+        if "resource_specification_id" not in row:
+            problems.append((item.item_id, unavailable_code, f"{NOUN[kind]} does not exist"))
+            continue
+        uid = row["id"]
+        if item.action == "modify" and current.get(kind) == uid:
+            continue  # unchanged member of the complete resulting set
+        changed += 1
+        if row["administrative_state"] != "unlocked":
+            reason = f"{NOUN[kind]} is locked"
+        elif uid in seen or unavailable(conn, uid, start, end, kind=kind):
+            reason = f"{NOUN[kind]} is assigned, reserved or quarantined"
         elif product and any(
-            c["subscriber_number_id"] == uid and start in c["valid_for"]
+            c["effective_from"] > start and c["resource_specification_id"] == kind
             for c in claims(conn, [product["id"]])
         ):
-            reason = "the product already uses this number"
+            reason = f"{kind} changes must follow existing assignments"
         else:
             seen.add(uid)
             continue
-        problems.append((item.item_id, "numberUnavailable", reason))
+        problems.append((item.item_id, unavailable_code, reason))
+    if item.action == "modify" and not changed and not problems:
+        kind = next(k for k in KINDS if needs[k])
+        problems.append(
+            (item.item_id, CODES[kind][1], f"the product already uses this {NOUN[kind]}")
+        )
     return problems
 
 
@@ -144,7 +220,9 @@ def before(conn, locked, today):
 def changed(conn, locked, old, now, today):
     from app.api.resource_inventory import resource_body
 
-    for uid, row in locked.items():
+    for uid in locked:
+        # re-read: an accepted release may have locked the IMSI in this transaction
+        row = fetch_one(conn, "SELECT * FROM subscriber_number WHERE id = %s", (uid,))
         emit.changed(
             conn,
             "TMF639",
@@ -156,14 +234,29 @@ def changed(conn, locked, old, now, today):
         )
 
 
+def _release_imsi(conn, product_id, end, now):
+    """An accepted release locks the IMSI so it is not reused unless an operator unlocks it."""
+    conn.execute(
+        """UPDATE subscriber_number SET administrative_state = 'locked', updated_at = %s
+        WHERE resource_specification_id = 'imsi' AND administrative_state <> 'locked'
+        AND id IN (SELECT subscriber_number_id FROM number_assignment
+            WHERE product_id = %s AND cancelled_at IS NULL AND resource_specification_id = 'imsi'
+            AND (released_on IS NULL OR released_on > %s))""",
+        (now, product_id, end),
+    )
+
+
 def execute(conn, item, product_id, item_id, start, now):
     product = fetch_one(conn, "SELECT * FROM product WHERE id = %s", (product_id,))
     if item.action == "add":
-        needs = offering_requires(conn, item.product_offering_id)
-        conn.execute("UPDATE product SET requires_msisdn = %s WHERE id = %s", (needs, product_id))
+        needs = requirements(conn, item.product_offering_id)
+        conn.execute(
+            "UPDATE product SET requires_msisdn = %s, requires_imsi = %s WHERE id = %s",
+            (needs["msisdn"], needs["imsi"], product_id),
+        )
     else:
-        needs = product["requires_msisdn"]
-    if not needs:
+        needs = product_requirements(product)
+    if not any(needs.values()):
         return
     refs = references(item)
     if item.action == "delete":
@@ -174,30 +267,52 @@ def execute(conn, item, product_id, item_id, start, now):
         end = None
     else:
         return
-    if item.action != "add":
-        conn.execute(
-            """UPDATE number_assignment SET released_on = %s, ended_by_item_id = %s, updated_at = %s
-            WHERE product_id = %s AND cancelled_at IS NULL AND
-            (released_on IS NULL OR released_on > %s)""",
-            (end, item_id, now, product_id, end),
-        )
-    if item.action in ("add", "modify"):
-        conn.execute(
-            """INSERT INTO number_assignment (subscriber_number_id, product_id, assigned_by_item_id,
-            effective_from, released_on, ended_by_item_id, quarantine_days, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
-            (
-                UUID(refs[0]["id"]),
-                product_id,
-                item_id,
-                start,
-                product["termination_date"],
-                product["terminated_by_item_id"],
-                settings.msisdn_quarantine_days,
-                now,
-                now,
-            ),
-        )
+    chosen = {}
+    for ref in refs or []:
+        kind = fetch_one(
+            conn,
+            "SELECT resource_specification_id FROM subscriber_number WHERE id = %s",
+            (UUID(ref["id"]),),
+        )["resource_specification_id"]
+        chosen[kind] = UUID(ref["id"])
+    current = {}
+    if item.action == "modify":
+        for c in claims(conn, [product_id]):
+            if start in c["valid_for"]:
+                current[c["resource_specification_id"]] = c["subscriber_number_id"]
+    for kind in KINDS:
+        if item.action == "delete":
+            pass
+        elif item.action == "modify" and (kind not in chosen or current.get(kind) == chosen[kind]):
+            continue
+        if item.action != "add":
+            if kind == "imsi":
+                _release_imsi(conn, product_id, end, now)
+            conn.execute(
+                """UPDATE number_assignment SET released_on = %s, ended_by_item_id = %s,
+                updated_at = %s WHERE product_id = %s AND cancelled_at IS NULL
+                AND resource_specification_id = %s AND (released_on IS NULL OR released_on > %s)""",
+                (end, item_id, now, product_id, kind, end),
+            )
+        if item.action in ("add", "modify") and kind in chosen:
+            conn.execute(
+                """INSERT INTO number_assignment (subscriber_number_id, resource_specification_id,
+                product_id, assigned_by_item_id, effective_from, released_on, ended_by_item_id,
+                quarantine_days, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (
+                    chosen[kind],
+                    kind,
+                    product_id,
+                    item_id,
+                    start,
+                    product["termination_date"],
+                    product["terminated_by_item_id"],
+                    settings.msisdn_quarantine_days if kind == "msisdn" else 0,
+                    now,
+                    now,
+                ),
+            )
 
 
 def cancellation_problem(conn, items):

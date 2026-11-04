@@ -4,7 +4,7 @@
 
 Area: **inventory** ([all tables](README.md))
 
-TMF639 LogicalResource inventory: canonical E.164 digits, built-in msisdn specification.
+TMF639 LogicalResource inventory: subscriber identities, built-in msisdn (E.164 digits) and imsi specifications.
 
 ## Columns
 
@@ -13,31 +13,36 @@ TMF639 LogicalResource inventory: canonical E.164 digits, built-in msisdn specif
 | `id` | `uuid` | no | `gen_random_uuid()` | Resource UUID. |
 | `created_at` | `timestamp with time zone` | no |  | Creation instant from the injected clock. |
 | `updated_at` | `timestamp with time zone` | no |  | Last edit instant from the injected clock. |
-| `value` | `text` | no |  | Unique E.164 digits without plus or formatting; 8..15 digits, first nonzero. |
+| `value` | `text` | no |  | Digits unique per specification: msisdn 8..15 digits, first nonzero; imsi 14..15 digits. |
 | `administrative_state` | `resource_administrative_state_type` (enum, see [README](README.md#enums)) | no | `'unlocked'::resource_administrative_state_type` | TMF639 administrativeState; locking does not end service. |
-| `resource_specification_id` | `text` | no | `'msisdn'::text` | Built-in msisdn reference; no resource catalog href. |
+| `resource_specification_id` | `text` | no | `'msisdn'::text` | Built-in msisdn or imsi reference; no resource catalog href. |
 | `name` | `text` | no |  | TMF639 resource display name. |
 | `description` | `text` | yes |  | TMF639 resource description. |
 | `attrs` | `jsonb` | no | `'{}'::jsonb` | Schema-validated descriptive TMF639 attributes. |
 | `tmf_meta` | `jsonb` | no | `'{}'::jsonb` | TMF polymorphism metadata as sent. |
+| `iccid` | `text` | yes |  | ICCID of the SIM profile (imsi only), optional, unique; changeable only before first assignment. |
 
 ## Constraints
 
 | Name | Kind | Definition |
 |---|---|---|
 | `subscriber_number_attrs_check` | check | `CHECK ((jsonb_typeof(attrs) = 'object'::text))` |
-| `subscriber_number_resource_specification_id_check` | check | `CHECK ((resource_specification_id = 'msisdn'::text))` |
+| `subscriber_number_iccid_check` | check | `CHECK (((iccid IS NULL) OR ((resource_specification_id = 'imsi'::text) AND (iccid ~ '^89[0-9]{16,18}$'::text))))` |
+| `subscriber_number_kind_check` | check | `CHECK ((resource_specification_id = ANY (ARRAY['msisdn'::text, 'imsi'::text])))` |
 | `subscriber_number_tmf_meta_check` | check | `CHECK ((jsonb_typeof(tmf_meta) = 'object'::text))` |
-| `subscriber_number_value_check` | check | `CHECK ((value ~ '^[1-9][0-9]{7,14}$'::text))` |
+| `subscriber_number_value_check` | check | `CHECK ((((resource_specification_id = 'msisdn'::text) AND (value ~ '^[1-9][0-9]{7,14}$'::text)) OR ((resource_specification_id = 'imsi'::text) AND (value ~ '^[0-9]{14,15}$'::text))))` |
 | `subscriber_number_pkey` | primary key | `PRIMARY KEY (id)` |
-| `subscriber_number_value_key` | unique | `UNIQUE (value)` |
+| `subscriber_number_id_kind_key` | unique | `UNIQUE (id, resource_specification_id)` |
+| `subscriber_number_kind_value_key` | unique | `UNIQUE (resource_specification_id, value)` |
 
 ## Indexes
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `subscriber_number_iccid_key` | `CREATE UNIQUE INDEX subscriber_number_iccid_key ON subscriber_number USING btree (iccid) WHERE (iccid IS NOT NULL)` | no |
+| `subscriber_number_id_kind_key` | `CREATE UNIQUE INDEX subscriber_number_id_kind_key ON subscriber_number USING btree (id, resource_specification_id)` | yes |
+| `subscriber_number_kind_value_key` | `CREATE UNIQUE INDEX subscriber_number_kind_value_key ON subscriber_number USING btree (resource_specification_id, value)` | yes |
 | `subscriber_number_pkey` | `CREATE UNIQUE INDEX subscriber_number_pkey ON subscriber_number USING btree (id)` | yes |
-| `subscriber_number_value_key` | `CREATE UNIQUE INDEX subscriber_number_value_key ON subscriber_number USING btree (value)` | yes |
 
 ## Referenced by
 

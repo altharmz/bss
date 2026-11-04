@@ -24,6 +24,7 @@ Order-owned number claims; half-open business dates, retained cancelled audit ve
 | `quarantine_days` | `integer` | no |  | Quarantine setting at acceptance; later changes cannot revoke a claim. |
 | `cancelled_at` | `timestamp with time zone` | yes |  | Cancellation instant; cancelled versions retain audit but claim no range. |
 | `cancelled_by_item_id` | `uuid` | yes |  | Order item whose cancellation voided this audit version. |
+| `resource_specification_id` | `text` | no | `'msisdn'::text` | Kind of the claimed resource; at most one live claim per product and kind. |
 
 ## Foreign keys
 
@@ -32,6 +33,7 @@ Order-owned number claims; half-open business dates, retained cancelled audit ve
 | `assigned_by_item_id` | [`product_order_item`](product_order_item.md) (id) | `number_assignment_assigned_by_item_id_fkey` |
 | `cancelled_by_item_id` | [`product_order_item`](product_order_item.md) (id) | `number_assignment_cancelled_by_item_id_fkey` |
 | `ended_by_item_id` | [`product_order_item`](product_order_item.md) (id) | `number_assignment_ended_by_item_id_fkey` |
+| `subscriber_number_id`, `resource_specification_id` | [`subscriber_number`](subscriber_number.md) (id, resource_specification_id) | `number_assignment_kind_fkey` |
 | `product_id` | [`product`](product.md) (id) | `number_assignment_product_id_fkey` |
 | `subscriber_number_id` | [`subscriber_number`](subscriber_number.md) (id) | `number_assignment_subscriber_number_id_fkey` |
 
@@ -47,7 +49,7 @@ Order-owned number claims; half-open business dates, retained cancelled audit ve
 | `number_assignment_pkey` | primary key | `PRIMARY KEY (id)` |
 | `number_assignment_audit_sequence_key` | unique | `UNIQUE (audit_sequence)` |
 | `number_assignment_number_no_overlap` | exclusion | `EXCLUDE USING gist (subscriber_number_id WITH =, valid_for WITH &&) WHERE ((cancelled_at IS NULL))` |
-| `number_assignment_product_no_overlap` | exclusion | `EXCLUDE USING gist (product_id WITH =, valid_for WITH &&) WHERE ((cancelled_at IS NULL))` |
+| `number_assignment_product_no_overlap` | exclusion | `EXCLUDE USING gist (product_id WITH =, resource_specification_id WITH =, valid_for WITH &&) WHERE ((cancelled_at IS NULL))` |
 
 ## Indexes
 
@@ -60,5 +62,5 @@ Order-owned number claims; half-open business dates, retained cancelled audit ve
 | `number_assignment_number_no_overlap` | `CREATE INDEX number_assignment_number_no_overlap ON number_assignment USING gist (subscriber_number_id, valid_for) WHERE (cancelled_at IS NULL)` | yes |
 | `number_assignment_pkey` | `CREATE UNIQUE INDEX number_assignment_pkey ON number_assignment USING btree (id)` | yes |
 | `number_assignment_product_id_audit_sequence_idx` | `CREATE INDEX number_assignment_product_id_audit_sequence_idx ON number_assignment USING btree (product_id, audit_sequence)` | no |
-| `number_assignment_product_no_overlap` | `CREATE INDEX number_assignment_product_no_overlap ON number_assignment USING gist (product_id, valid_for) WHERE (cancelled_at IS NULL)` | yes |
+| `number_assignment_product_no_overlap` | `CREATE INDEX number_assignment_product_no_overlap ON number_assignment USING gist (product_id, resource_specification_id, valid_for) WHERE (cancelled_at IS NULL)` | yes |
 | `number_assignment_subscriber_number_id_audit_sequence_idx` | `CREATE INDEX number_assignment_subscriber_number_id_audit_sequence_idx ON number_assignment USING btree (subscriber_number_id, audit_sequence)` | no |
