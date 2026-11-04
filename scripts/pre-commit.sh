@@ -121,6 +121,10 @@ fi
 if grep -q '^\.claude/' <<<"$staged"; then
   run .claude/hooks/test-guard.sh || fail "guard regression cases (.claude/hooks/test-guard.sh)"
 fi
+# The Codex guard's cases, only when the commit touches .codex/ or the shared guard.
+if grep -qE '^(\.codex/|\.claude/hooks/)' <<<"$staged"; then
+  run .codex/test-guard.sh || fail "Codex guard regression cases (.codex/test-guard.sh)"
+fi
 
 # The admin UI, only when the commit touches it or the specs its types come from. These
 # targets run offline and never install: if node_modules is out of date they fail with

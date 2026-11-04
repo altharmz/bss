@@ -1,0 +1,19 @@
+# .codex/guard.sh cases: <expect>\t<command>; expect = allow|block. Run by .codex/test-guard.sh.
+allow	make commit MESSAGE='Finish the slice' FILES='["docs/ui.md"]'
+allow	make push
+allow	git status
+allow	git diff --stat
+allow	git log --oneline -5
+allow	git rev-parse HEAD
+allow	gh issue comment 1 --body "ran git commit -m x and git push by mistake"
+allow	cat <<'EOF'\ngit push origin master\nEOF
+allow	rg -n "git commit" docs/
+block	git add -A
+block	git add docs/ui.md
+block	git commit -m "Finish the slice"
+block	git push origin HEAD
+block	git -C /tmp/x commit -m x
+block	make test && git push
+block	cd repo; git commit -m x
+block	echo done | xargs git push
+block	cat .env
