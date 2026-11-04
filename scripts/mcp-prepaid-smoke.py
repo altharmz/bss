@@ -4,8 +4,8 @@ explicit idempotency_key and replayed once (the retry must return the first answ
 Usage (make mcp-smoke does this with a throwaway write token it revokes afterwards):
     MCP_SMOKE_TOKEN=... python3 scripts/mcp-prepaid-smoke.py http://localhost:8090
 
-Creates demo data in the LOCAL stack (a catalog entry, a customer, a prepaid account);
-refuses any host but localhost, so it can never reach the deployed instance.
+Creates demo data in the LOCAL stack (a catalog entry, a customer, a prepaid account)
+and retires the catalog entries at the end; refuses any host but localhost, so it can never reach the deployed instance.
 """
 
 import json
@@ -184,4 +184,13 @@ if order["state"] == "rejected":
 if ok("create_order", purchase) != order:
     fail("the purchase retry did not replay the first answer")
 print(f"  ok  create_order -> {order['id']} {order['state']}, retry replayed")
+
+# retire what the run created, so the local catalog does not fill up with smoke entries
+ok(
+    "patch_offering",
+    {"offering_id": offering["id"], "body": {"lifecycleStatus": "Retired", "isSellable": False}},
+    status=200,
+)
+ok("patch_specification", {"spec_id": spec["id"], "body": {"lifecycleStatus": "Retired"}}, status=200)
+print("  ok  the smoke offering and specification are Retired and not sellable")
 print("mcp prepaid smoke: all checks passed")

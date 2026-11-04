@@ -1,9 +1,10 @@
-# Stage 4 - the billing worker: design note (checkpoint 1, no code)
+# Stage 4 - the billing worker: design
 
-Status: reviewed three times; every decision is recorded in the **"Decided"** sections
-at the end, and nothing is open. Every rule from
-stage 3 stays as it is ([decisions/billing-core.md](../decisions/billing-core.md), "Billing (stage 3)"); this note decides who calls
-`bill_account`, when, and what happens when it does not go to plan.
+Built (migration 0004, `app/worker/`). Every rule from stage 3 stays as it is
+([decisions/billing-core.md](../decisions/billing-core.md), "Billing (stage 3)"); this
+note decides who calls `bill_account`, when, and what happens when it does not go to
+plan. Section numbers and the D-W/Q labels are cited by code; the decisions as built are in
+[decisions/worker.md](../decisions/worker.md).
 
 ## 1. What the worker is
 
@@ -158,7 +159,7 @@ request is pending.
 
 ## 8. Freshness signal for the external monitor
 
-**`GET /billing-status`** (decided: unauthenticated, exposing only the date, the status
+**`GET /billing-status`** (unauthenticated, exposing only the date, the status
 and the age - no amounts, no names, no counts):
 
     200 {"date": "2026-10-01", "status": "ok", "ageSeconds": 3600}
@@ -211,36 +212,13 @@ approval when implemented**):
   long-running local worker. It is a `docker compose run --rm app python -m app.worker
   --once` (Makefile, protected).
 
-## 10. Migration 0004 (sketch)
+## 10. Migration 0004
 
-- `billing_run`: `trigger` (enum, ours), `attempt int NOT NULL DEFAULT 1`,
-  `heartbeat_at timestamptz`, `accounts_total|ok|failed|blocked int NOT NULL DEFAULT 0`.
-  Defaults are safe: the existing rows (local seeds only; production has no runs) are
-  complete runs.
-- `billing_run_account` (section 3) and `worker_request` (section 7).
-- No change to ABRs, bills or products.
+`billing_run` gains `trigger` (`scheduled | catchUp | retry`), `attempt`, `heartbeat_at`
+and the four `accounts_*` counters; `billing_run_account` (section 3) and `worker_request`
+(section 7) are new. No change to ABRs, bills or products.
 
-## 11. Tests and negative proofs (plan)
-
-- pure: the due dates, the expected date of the freshness signal, the wake-up decision -
-  on FixedClock values around 00:00, 00:30 and the grace end;
-- `start_run`: every row of the table in section 2; takeover with two connections (lock
-  held: `RunInProgress`; holder closed: takeover, no duplicate ABR);
-- isolation: one account with an inconsistent state -> its `(run, account)` `failed`, the
-  run `failed`, every other account billed; the next dates: the account `blocked`,
-  others billed; after the fix and a retry: the account billed for each date in order,
-  and its rows equal those of a run where nothing failed; the runs recomputed to
-  `completed`;
-- whole-run failure: connection dropped mid-run -> `failed`, no advance, retried;
-- replay: the stage 3 outage test driven through the worker;
-- flips: statuses after run D for orders completed before and after 00:00 of D;
-- API, queue and `/billing-status`: contract tests, each status code, and that
-  `/billing-status` carries no amount or name;
-- negative proofs: takeover ignoring the lock, billing a blocked account for a later
-  date, advancing past a whole-run failure, a retry that reprocesses ok accounts,
-  flipping by status instead of dates, a freshness check ignoring `failed`.
-
-## Decided (owner, after the first review)
+## Decided: isolation, retry, ownership
 
 - **Isolation per account**, tracked per (run, account) with status and error. A failed
   account is **not billed for later dates** until fixed; then it **catches up its dates
@@ -256,7 +234,7 @@ approval when implemented**):
   age** - no amounts or names. (Was D-W7.)
 - "Run any date" is replaced by **"catch up to date X"** (agreed in stage 5). (Was D-W10.)
 
-## Decided (owner, second review)
+## Decided: gaps, deploys, alerting
 
 - **D-W18 - gaps are prevented at the catalog** (implemented, commit `fd0c0a7`): ending
   or moving the end of a recurring price is a 409 if any product of that offering, in
@@ -285,7 +263,7 @@ approval when implemented**):
 - **D-W19** - freshness grace 2 h after `BILLING_RUN_AT`; a run `running` longer than
   that reports 503 `running`.
 
-## Decided and implemented (third review: the two findings of D-W18)
+## Decided: price gaps
 
 - **D-W20 - ordering rejects a price gap** (`60f2a58`): an add item is rejected with
   `priceEnds` unless, from the product's start date, the offering's recurring prices in
@@ -301,5 +279,3 @@ approval when implemented**):
   The catalog dialog has a "Change price" action whose copy states that existing
   products pick up the new price from their next billing period starting on or after the
   date, new orders from the date.
-
-Nothing from the reviews is open any more; stage 4 can be implemented from this note.

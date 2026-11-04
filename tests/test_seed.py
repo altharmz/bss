@@ -72,7 +72,7 @@ def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
     assert lifecycle == {"Active", "In Design"}
 
     # the history panels of an account with charges, a refund and payments are not empty
-    ivan = next(a for a in accounts if a["name"] == "Ivan Petrov main")
+    ivan = next(a for a in accounts if a["name"] == "James Wilson main")
     kinds = {
         c["kind"]
         for c in api.get(f"/internal/v1/billingAccount/{ivan['id']}/charges?limit=100").json()
@@ -120,7 +120,7 @@ def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
     assert min(days) > start and max(days) <= TODAY
 
     # the prepaid account: topped up, bought a product, renewed from funds
-    pavel = next(a for a in accounts if a["name"] == "Pavel Orlov main")
+    pavel = next(a for a in accounts if a["name"] == "Robert Taylor main")
     assert pavel["ratingType"] == "prepaid"
     assert db_conn.execute(
         "SELECT count(*) FROM product WHERE billing_account_id = %s AND status = 'active'",
@@ -130,8 +130,8 @@ def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
         "SELECT count(*) FROM funded_interval WHERE billing_account_id = %s", (pavel["id"],)
     ).fetchone()[0]
     assert intervals >= 3, intervals  # the purchase and renewals, one after running out
-    # Vera ran out: her product is suspended and the renewal waits for a top-up
-    vera = next(a for a in accounts if a["name"] == "Vera Lebedeva main")
+    # Linda ran out: her product is suspended and the renewal waits for a top-up
+    vera = next(a for a in accounts if a["name"] == "Linda Harris main")
     assert db_conn.execute(
         "SELECT status FROM product WHERE billing_account_id = %s", (vera["id"],)
     ).fetchall() == [("suspended",)]
@@ -139,6 +139,33 @@ def test_seed_builds_the_demo_and_is_idempotent(api, db_conn):
         "SELECT count(*) FROM prepaid_command WHERE state = 'pending' AND billing_account_id = %s",
         (vera["id"],),
     ).fetchone() == (1,)
+
+    # US names; an organization's account is "<name> corporate"
+    assert "Acme Corporation corporate" in {a["name"] for a in accounts}
+
+    # a numbered mobile specification, 20 numbers, and every mobile product carries one
+    specs = {s["name"]: s for s in api.get(f"{CATALOG}/productSpecification").json()}
+    numbered = specs[seeding.MOBILE_SPEC]
+    assert [r["id"] for r in numbered["resourceSpecification"]] == ["msisdn"]
+    numbers = all_of(api, "/tmf-api/resourceInventory/v5/resource")
+    assert sorted(n["value"] for n in numbers) == [str(12025550100 + i) for i in range(20)]
+    mobile = {
+        o["id"]
+        for o in api.get(f"{CATALOG}/productOffering").json()
+        if o["name"].startswith("Mobile")
+    }
+    mobile_products = [  # a terminated product has released its number
+        p for p in products if p["productOffering"]["id"] in mobile and p["status"] != "terminated"
+    ]
+    assert mobile_products and all(len(p["realizingResource"]) == 1 for p in mobile_products)
+
+    # categories Mobile / Home Internet / TV hold every offering; catalogs Consumer / Business
+    categories = {c["name"]: c for c in api.get(f"{CATALOG}/category").json()}
+    assert sorted(categories) == ["Home Internet", "Mobile", "TV"]
+    listed = {o["id"] for c in categories.values() for o in c["productOffering"]}
+    assert listed == {o["id"] for o in api.get(f"{CATALOG}/productOffering").json()}
+    catalogs = {c["name"]: c for c in api.get(f"{CATALOG}/productCatalog").json()}
+    assert sorted(catalogs) == ["Business catalog", "Consumer catalog"]
 
     # a second run is a no-op
     assert seeding.seed(api, api.clock, TODAY) is False

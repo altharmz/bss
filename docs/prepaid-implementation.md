@@ -1,22 +1,16 @@
 # Prepaid implementation plan
 
-Status: **design complete**, 2026-10-20. The human authorized remaining choices
-according to TMF and authorized committing/pushing design only. This document and
-[the scope plan](prepaid-plan.md) are the development hand-off; this document wins
-where it corrects the original proposal. Development begins with contract vendoring
-and executable fixtures in N1; runtime slices follow. Numbers ship independently first.
-
-N1 development: the two pinned files are now vendored unchanged, with executable
-contract fixtures, provenance checks and 36 planned/absent endpoint records. No
-prepaid runtime exists yet. N2 adds number persistence, N3 adds the inventory API,
-hubs, events and MCP tools; order integration follows in N4. See the
-[implementation record](decisions/prepaid.md#n1-pinned-contracts-and-executable-fixtures-2026-10-20).
+Built (N1-N6, P1-P7; migrations `0032`-`0047`). Together with [the scope plan](prepaid-plan.md)
+this is the design the code follows; this document wins where it corrects the plan. What
+was built, with deviations, is in [decisions/prepaid.md](decisions/prepaid.md). The
+contract pins, deviations and policies below are still binding. Numbers shipped before the
+funding core.
 
 ## Contract findings
 
 Inspected official [TMF639](https://github.com/tmforum-apis/TMF639_ResourceInventory/blob/2693a854940de3c6e15b1aade24f981d94b75d3a/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml)
 and [TMF654](https://github.com/tmforum-apis/TMF654_PrepayBalanceManagement/blob/562e655d14d796b8380b4e244a5b601f69d60b64/TMF654-PrepayBalance-v4.0.0.swagger.json)
-schemas at these pinned revisions. N1 vendors these exact files, unmodified:
+schemas at these pinned revisions. These exact files are vendored, unmodified:
 
 | Contract | Git blob SHA | SHA256 |
 |---|---|---|
@@ -115,17 +109,6 @@ a receipt asserted by an authorized operator.
 
 ## Subscriber-number slices
 
-| Slice | Reviewable result |
-|---|---|
-| N1: contracts | Vendor both unmodified files with pinned commits, blob SHAs and SHA256 sums. Extend provenance, schema helpers and operation/gap accounting for Swagger 2 TMF654 and TMF639 server variables. Preserve the existing gap lock and explicitly track unavailable operations. |
-| N2: persistence | Next unused migration: unique normalized numbers and effective-dated assignment history linked to products and order items, plus release business dates. Database constraints prevent overlapping assignments of a number and overlapping numbers for one product. Downgrade refuses retained inventory/history. Follow the schema design below; propose the migration before applying under the normal project workflow. |
-| N3: inventory | TMF639 CRUD, fields, paging, filters, PATCH formats and nested validation. Immutable number value and built-in specification; editable descriptions and lock/unlock. Delete only never-assigned numbers. Hubs, outbox events, MCP tools and contract tests. |
-| N4: orders | Built-in msisdn requirement, add/modify/release/cancel through effective-dated assignments and product lookup by realizingResource.id. Preserve existing unchecked documents on products whose specifications do not require numbers. |
-| N5: UI | Number inventory, create/search/lock, number selection in New subscriber, details and number changes through orders; pinned request tests and browser coverage. |
-| N6: release | Contract validation and release notes (operational recovery, rollback limits). Testing, commit and push follow CLAUDE.md's development cycle; no approval. Deployment only when the human asks. |
-
-Read catalog, events, frontend and MCP decision records before their slices. Never bypass guards.
-
 Future-dated postpaid orders already complete synchronously. Reserve the assignment
 interval when their order completes, before service starts. Derive current usage from
 the interval at the injected business date. A future conflicting assignment makes a
@@ -189,12 +172,7 @@ An add/modify order item's product includes:
 }
 ```
 
-N1 must turn these target examples into schema-validated fixtures before runtime work.
-
 ## Funding proofs before exposure
-
-Keep prepaid account creation unavailable until shared consumption and recovery proofs
-pass. Implement schema/core and worker together as the proposal requires.
 
 Ledger balance L = completed payments + signed adjustments + incoming transfers -
 outgoing transfers - tax-inclusive ABRs - completed cash payouts. Credit ABRs are
@@ -420,7 +398,7 @@ amounts. No public TMF654 shape gains these internal fields.
 
 ## Persistence and migration design
 
-Use additive migrations, choosing revision numbers at development time:
+Additive migrations:
 
 | Storage | Required identity and protection |
 |---|---|
@@ -441,8 +419,7 @@ tests must include populated financial history and the actual database-owner rol
 No migration disables refund immutability to make this feature work. Downgrade refuses
 number inventory/assignment or prepaid/action/source/command history that the previous
 schema cannot represent; it never drops that history automatically. Number milestone
-rollback and funding milestone rollback have separate barriers. Keep ratingType
-prepaid rejected until all money paths and recovery acceptance tests pass.
+rollback and funding milestone rollback have separate barriers.
 
 ## API examples and UI flow
 
@@ -518,38 +495,16 @@ postpaid UI flows and their uncertain-write behavior remain unchanged. Pin bodie
 headers and no-binary-float encoding in frontend/backend tests; exercise UI in both
 configured time zones. MCP keeps read/write scopes and decimal-string amounts.
 
-## Development acceptance and hand-off
+## Acceptance
 
-Implement N1..N6 first and ship numbers through the normal cycle. Then develop schema/funding and API/worker behind unavailable prepaid
-creation, followed by UI and release validation. N1 contract vendoring and fixture
-validation are implementation prerequisites, not unfinished business design.
-Update progress scope as features enter development; do not mark designed features
-implemented or regenerate deployed percentages in this documentation-only change.
-
-Required executable proofs in addition to the original acceptance list:
-
-- Exact funds/one cent short with tax, zero-price periods and every cadence, month
-  ends/leap restoration, DST, authorizations either side of midnight.
-- Worker returns on the due date versus next date, misses several intervals with
-  ample old funds, receives a top-up during recovery: only one new interval, no gap
-  charges/retroactive entitlement, unchanged postpaid historical replay.
-- Duplicate POSTs with identical/different keys/bodies, concurrent duplicate keys,
-  rollback and deletion tombstones; command retries before/after each financial write.
-- Held source versus explicit/automatic settlement, payouts, debit, opposite transfers
-  and renewals; database constraints tested at commit, plus actual deadlock races.
-- Final transfer behavior, both fee owners, receiver fee equal to principal, failure
-  after acceptance, immutable originals and exactly-once reversal of eligible actions.
-- Scheduled/future number claims, requirement changes after order history, locks and
-  quarantine configuration changes; no duplicate assignment through cancellation.
-- Mixed prepaid/postpaid financial-account reconciliation, settled offCycle documents,
-  direct-payment top-up history exactly once, unchanged daily counts/status/cutoffs.
-- Raw schema validation except the single conditional history defect; no fictitious
-  receiver data, event payloads against the declared listener schemas, gap lock updates.
-- Upgrade populated history as database owner; refusal of lossy downgrades and startup
-  protection against exposing prepaid creation before the complete core is enabled.
-
-Testing follows CLAUDE.md's development cycle: one full run by the pre-commit hook;
-anything more (negative proofs, browser tests, extra passes) only when judged useful.
-No runtime code, migrations, vendored specs or deployment are part of this design
-commit. The remaining work is implementation and its verification; there are no
-open policy choices requiring another design session.
+The executable proofs are the tests (`tests/test_prepaid_*.py`, `tests/test_number_*.py`,
+`tests/test_ui_requests.py` and the frontend suites). Their scope: exact funds and one cent
+short with tax, zero prices, every cadence, month ends, leap years, DST and midnight
+boundaries; late worker recovery buys one interval from today's authorization, never a
+gap; duplicate and concurrent submissions with the same or different keys; reserved
+sources against settlement, payouts, debits and transfers; final transfers with both fee
+owners; scheduled number claims, requirement changes after order history and quarantine
+setting changes; mixed prepaid/postpaid reconciliation; raw schema validation against the
+vendored contracts (except the one documented history exception); upgrade of populated
+history as the database owner and refusal of lossy downgrades. Recovery and rollback limits
+are in [operations.md](operations.md#prepaid-recovery-and-rollback).

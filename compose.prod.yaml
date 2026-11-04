@@ -103,7 +103,7 @@ services:
   # The MCP connector (bss_mcp/, docs/mcp.md): the same image, its own process. Reaches
   # the app over HTTP only, as bss:8080 (`app` is ambiguous on `shared`), and refuses to
   # start unless that answers as bss. Publishes nothing: the shared Caddy reaches it as
-  # bss-mcp:8080 on `shared` (docs/vps-infra-change-request.md). Tokens and OAuth clients
+  # bss-mcp:8080 on `shared` (docs/decisions/infra.md). Tokens and OAuth clients
   # live in SQLite on the mcp-data volume, not in the bss database; losing it only means
   # clients re-authorize and static tokens are issued again.
   mcp:

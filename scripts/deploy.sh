@@ -312,7 +312,7 @@ BSS_SMOKE_SECRET="${BSS_SMOKE_SECRET}" \
 
 log "MCP smoke test through Caddy (${MCP_URL})"
 ./scripts/mcp-smoke.sh "${MCP_URL}" caddy \
-  || fail "MCP smoke test failed (see above). App, UI and mcp are deployed and healthy; check the vps-infra Caddy carve-outs (docs/vps-infra-change-request.md)"
+  || fail "MCP smoke test failed (see above). App, UI and mcp are deployed and healthy; check the vps-infra Caddy carve-outs (docs/decisions/infra.md)"
 
 log "Pruning old ${IMAGE_NAME} images on ${REMOTE} (keeping ${KEEP_IMAGES}, nothing else is touched)"
 rssh "docker images '${IMAGE_NAME}' --format '{{.ID}} {{.CreatedAt}}' \

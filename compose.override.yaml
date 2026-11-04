@@ -10,6 +10,8 @@ services:
       - ./app:/app/app:ro
       - ./bss_mcp:/app/bss_mcp:ro
       - ./tests:/app/tests:ro
+      # run by tests/test_staging_data.py (never against the stand)
+      - ./ops/staging-data:/app/ops/staging-data:ro
       # read by tests/test_mcp_tools.py: the MCP tools = the API
       # operations minus scope.yaml's api exclusions (drift check)
       - ./docs/progress/scope.yaml:/app/docs/progress/scope.yaml:ro
@@ -66,6 +68,7 @@ services:
       - ./app:/app/app
       - ./bss_mcp:/app/bss_mcp
       - ./tests:/app/tests
+      - ./ops/staging-data:/app/ops/staging-data
       - ./alembic:/app/alembic
       - ./pyproject.toml:/app/pyproject.toml:ro
     network_mode: none
