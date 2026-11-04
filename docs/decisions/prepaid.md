@@ -2,7 +2,6 @@
 
 ## Slice 8: dated prepaid status changes and number-only changes (2026-10-25)
 
-Design: [next-slices-design.md](../next-slices-design.md#8-prepaid-lifecycle-parity-in-the-backend-dated-status-changes-number-changes).
 Built as designed, no migration, no contract or MCP change (`create_order` never stated a
 today-only rule).
 - **Acceptance** (`app/ordering/prepaid.py`): a prepaid `modify` item with `product.status` dated
@@ -45,8 +44,7 @@ UI: [frontend.md](frontend.md#slice-4-product-actions-and-pending-changes-2026-1
 
 ## Slice 2: transactions include balance actions (2026-10-24)
 
-Bug fix, no migration; built as designed ([next-slices-design.md](../next-slices-design.md)
-section 2). On a prepaid account the internal `transactions` list (and its count) now
+Bug fix, no migration; built as designed. On a prepaid account the internal `transactions` list (and its count) now
 includes the four ledger entries of `BALANCE_ACTION_LEDGER`: `adjustment` (completed or
 cancelled, signed, note = reason else "Adjustment"), `reversal` (note "Cancelled top-up" or
 "Cancelled adjustment"), `transferIn` ("From {sender}") and `transferOut` ("To {receiver}"),
@@ -882,8 +880,7 @@ The human requested completion of the prepaid design, choosing remaining policie
 according to TMF, then committing/pushing design changes. Development will occur in
 another session. The authoritative hand-off is:
 
-- [Final scope and acceptance criteria](../prepaid-plan.md).
-- [Implementation design, contract pins and policy decisions](../prepaid-implementation.md).
+- [The prepaid design as built: scope, contract pins and policies](../prepaid-design.md).
 
 Subscriber numbers ship independently before prepaid. The design selects TMF639
 v5.0.0 and stable TMF654 v4.0.0, including explicit contract deviations. These specs

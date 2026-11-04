@@ -3,7 +3,7 @@ import type { PrepaidCommand } from './commands';
 import { getAll, getPage, getJson } from './client';
 import { PATHS } from './bss';
 
-// The global Orders screen (docs/decisions/frontend.md, docs/next-slices-design.md section 9):
+// The global Orders screen (docs/decisions/frontend.md, docs/ui.md):
 // TMF622 reads only. The server serves orders oldest first; there is no sort parameter.
 
 export type Order = T622['schemas']['ProductOrder'];

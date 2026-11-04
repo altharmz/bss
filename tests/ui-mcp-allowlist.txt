@@ -1,7 +1,7 @@
 # MCP operations the admin UI deliberately does not call (tests/test_ui_mcp_parity.py).
 # One line per operation: `operationId: reason`. A line whose operation the UI calls
 # (or that MCP no longer has) fails the test, so the list cannot go stale.
-# Design: docs/next-slices-design.md section 24; decision: docs/decisions/harness.md.
+# Design: docs/ui.md; decision: docs/decisions/harness.md.
 
 # Orders alone create or end products (CLAUDE.md); the UI only reads the inventory.
 create_product: orders alone create products

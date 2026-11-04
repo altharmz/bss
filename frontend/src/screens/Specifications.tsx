@@ -27,7 +27,7 @@ import type { ResourceWithRetry } from '../api/useResource';
 
 // Catalog tab "Specifications": TMF620 productSpecification records, subscriber-number
 // requirement and descriptive characteristics. Billing never reads these characteristics. Design:
-// docs/next-slices-design.md section 11.
+// docs/ui.md.
 
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Name', width: '1fr' },

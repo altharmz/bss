@@ -22,7 +22,7 @@ import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
 import { PaymentRefundModal } from './AccountActions';
 
-// Payments and refunds history (docs/next-slices-design.md section 19): TMF676 reads only.
+// Payments and refunds history (docs/ui.md): TMF676 reads only.
 // The card panel lists one account's payments with a detail dialog; the global screen has
 // the Payments and Refunds tabs with a status filter, an account chip (?account=) and a
 // date range applied client side to the loaded rows.

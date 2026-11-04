@@ -166,7 +166,7 @@ a postpaid account whose loaded products, charges, transactions and bills are al
 `DELETE .../billingAccount/{id}`, then the Subscribers list; a 409 says to close it instead. The
 Edit form's **Financial account** select (`ui.subscriber.financialLink`, from
 `GET .../financialAccount?relatedParty.id=`) links or unlinks (`financialAccount` ref or `null` in
-the PATCH). Design: [next-slices-design.md](next-slices-design.md) section 16.
+the PATCH).
 
 ### Balance actions (`ui.subscriber.prepaid.history`, `ui.subscriber.prepaid.historyDetail`) - `screens/PrepaidHistory.tsx`
 
@@ -440,8 +440,7 @@ filter, `?account=<id>` chip (the card's "Orders" link `ui.subscriber.orders`). 
 subscriber (links to the card), state, item actions, requested start, created, completed or
 cancelled. A row opens the dialog: header fields, items (action, offering, product, state,
 tax-included price), `productOrderErrorMessage`, the order's `cancelProductOrder` rows, and for an
-`inProgress` order with a prepaid command a link to `/prepaid-commands?account=`. Design:
-[next-slices-design.md](next-slices-design.md) section 9.
+`inProgress` order with a prepaid command a link to `/prepaid-commands?account=`.
 
 Items read Suspend/Resume <product>, Change <product> to <offering>, Change number of <product>, Add <offering>, or End <product>. Snapshot names take precedence; only the open dialog resolves missing product names through one TMF637 GET per distinct product. Target status appears beside item state. Save details reloads the order, keeps the dialog and edit panel open, resets the saved fields and shows “Details saved” in the footer state slot (`ui.orders.detailsSaved`). Write bodies are unchanged.
 
@@ -467,8 +466,7 @@ Route `/prepaid-commands`, sidebar after Billing runs with a red badge while any
 attempts, next retry, result), 50 per page, filtered by state and by `?account=<id>` (a removable
 chip; the card's "Commands" link, `ui.subscriber.prepaid.commands`, sets it). A row opens every
 field and the `needs_topup` block (`ui.prepaidCommands.needsTopup`); **Retry** appears only for
-`failedTechnical` (POST `.../retry`, no body; a 409 is shown). Design:
-[next-slices-design.md](next-slices-design.md) section 6.
+`failedTechnical` (POST `.../retry`, no body; a 409 is shown).
 
 ### Parties (`ui.parties`, `ui.parties.individuals|organizations|customers`) - `screens/Parties.tsx`
 
@@ -496,8 +494,7 @@ settlement account; a customer with billing accounts shows **Remove billing acco
 (`ui.parties.removeAccountsFirst`, scrolls to the list) instead; the server's 409 still shows. After an uncertain result the dialog offers Refresh. API:
 `GET|POST|PATCH|DELETE .../individual|organization|customer`,
 `GET .../billingAccount?fields=name,relatedParty`, and
-`GET .../financialAccount|partyAccount|settlementAccount?fields=relatedParty`. Design:
-[next-slices-design.md](next-slices-design.md) section 15.
+`GET .../financialAccount|partyAccount|settlementAccount?fields=relatedParty`.
 
 ### Financial accounts writes (`ui.financialAccounts.new|edit|delete`) - `screens/FinancialForms.tsx`
 
@@ -509,8 +506,7 @@ credit limit and currency, state), a row
 **Edit** (merge patch of changed fields, owner editable, the server refuses while accounts link)
 and **Delete** (only when nothing is linked; confirmation). Server refusals show in the dialog;
 after an uncertain result it offers Refresh. API: `POST|PATCH|DELETE .../financialAccount`,
-`GET .../individual|organization`. Design: [next-slices-design.md](next-slices-design.md)
-section 16.
+`GET .../individual|organization`.
 
 ### Accounts: party and settlement tabs (`ui.accounts.party|settlement`) - `screens/FinancialAccounts.tsx`
 
@@ -525,8 +521,7 @@ account**, row **Edit** and **Delete** (always offered; the server's refusal sti
 is the financial-account form plus a **Financial account** select of the owner's financial accounts
 (plus None; a new owner resets it). Markers `ui.accounts.party|settlement` with `.new`, `.form`,
 `.edit`, `.delete`, `.confirmDelete`, `.financialLink`. API: `GET|POST|PATCH|DELETE
-.../partyAccount|settlementAccount`, `GET .../financialAccount?relatedParty.id=`. Design:
-[next-slices-design.md](next-slices-design.md) section 17.
+.../partyAccount|settlementAccount`, `GET .../financialAccount?relatedParty.id=`.
 
 ### Billing settings (`ui.billingSettings.cycles|formats|media`) - `screens/BillingSettings.tsx`
 
@@ -547,8 +542,7 @@ the cycle specification and bill format and checkboxes for the media, sent as on
 of `billStructure` in the billing account PATCH (media as a whole list, the built-in cycle as id
 `monthly`). Markers `ui.billingSettings.<tab>` with `.new`, `.form`, `.edit`, `.delete`,
 `.confirmDelete`. API: `GET|POST|PATCH|DELETE .../billingCycleSpecification|billFormat|
-billPresentationMedia`, `PATCH .../billingAccount/{id}`. Design:
-[next-slices-design.md](next-slices-design.md) section 18.
+billPresentationMedia`, `PATCH .../billingAccount/{id}`.
 
 ### Bills (`ui.bills`) - `screens/GlobalBills.tsx`, `screens/BillLinks.tsx`
 
@@ -567,7 +561,7 @@ on the card), whose **Related** section (`ui.bills.links`) has **Bill cycle** (`
 `ui.bills.cycleDetail`) and **Rates** (`GET appliedCustomerBillingRate?bill.id=`; a row opens
 `ui.bills.rateDetail`, the raw GET). The Bill cycles tab lists `GET billCycle` (name, billing date, payment
 due) with the same date filter and a detail dialog. API: `GET .../customerBillManagement/v5/customerBill|billCycle|
-appliedCustomerBillingRate`. Design: [next-slices-design.md](next-slices-design.md) section 20.
+appliedCustomerBillingRate`.
 
 ### Payments (`ui.payments`, `ui.subscriber.payments`) - `screens/Payments.tsx`
 
@@ -583,8 +577,7 @@ above Recorded refunds; a row opens the payment read with `GET /payment/{id}`
 (`done`, the only status), an account chip (`?account=<id>`, sent as `account.id`,
 `ui.payments.accountChip`) and From/To dates applied client side to the loaded rows (business dates).
 Subscribers link to their cards. API: `GET .../payment/v4/payment|refund?account.id=&status=` (paged
-100 at a time), `GET .../payment/{id}`. Design: [next-slices-design.md](next-slices-design.md)
-section 19.
+100 at a time), `GET .../payment/{id}`.
 
 ### Balances (`ui.balances`, `ui.balances.buckets|topups|adjustments|holds|transfers`, `ui.balances.bucketDetail`) - `screens/Balances.tsx`
 
@@ -605,8 +598,7 @@ cancelled, failed) and an account chip (`?account=<id>`, `ui.balances.accountChi
 list `topupBalance`, `adjustBalance`, `reserveBalance`, `transferBalance` (a transfer's receiver is
 named through `GET bucket/{receiverBucket}`); a row opens the kind's GET in the Balance action
 dialog of the subscriber card (`ui.subscriber.prepaid.historyDetail`), with its actions. Postpaid
-accounts have no bucket and never appear. Design: [next-slices-design.md](next-slices-design.md)
-section 22.
+accounts have no bucket and never appear.
 
 ### Integrations (`ui.integrations`, `ui.integrations.list|new|form|events|delete|confirmDelete`) and System (`ui.system`) - `screens/Integrations.tsx`
 
@@ -621,7 +613,7 @@ failed count). New subscription: API (all ten), callback URL, event checkboxes o
 `/hub`. Delete confirms, then DELETEs the hub's own path; a refusal (422 for a callback the server
 will not use) shows in the dialog. The System panel (`ui.system`, `ui.system.health|billingStatus|schema`)
 reads `/healthz` and `/billing-status` (a 503 body is shown) and links the BssBillingAccount schema
-in a new tab. Design: [next-slices-design.md](next-slices-design.md) section 23.
+in a new tab.
 
 ### Billing runs (`ui.billingRuns.list`, `ui.billingRuns.catchUp`, `ui.billingRuns.retry`, `ui.billingRuns.previous|next`) - `screens/BillingRuns.tsx`
 

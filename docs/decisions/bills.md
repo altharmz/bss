@@ -92,7 +92,7 @@ the payment-vs-payment test - the foreign key already serializes a payment with 
 
 ## UI: global bills, bill cycles and rates (slice 20, 2026-10-25)
 
-Built as designed ([next-slices-design.md](../next-slices-design.md) section 20), frontend only.
+Built as designed, frontend only.
 `screens/GlobalBills.tsx`, `screens/BillLinks.tsx` and `api/bills.ts`: the `/bills` screen
 (Billing > Bills) with Bills | Bill cycles tabs, a state filter (server), the `?account=` chip (sent
 as `billingAccount.id`) and a billing date (client side); a bill row opens the existing bill dialog

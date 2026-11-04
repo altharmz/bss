@@ -1,6 +1,6 @@
 // TMF620 importJob / exportJob: the catalog as one JSON document carried inline as a
 // `data:application/json;base64,...` URL. Both jobs finish within their request.
-// Design: docs/next-slices-design.md section 14.
+// Design: docs/ui.md.
 
 import { getAll, postJson, request } from './client';
 
