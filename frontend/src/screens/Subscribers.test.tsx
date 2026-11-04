@@ -13,6 +13,7 @@ import {
 } from '../test/fetch';
 import { expectUi } from '../test/expectUi';
 import { accountBody } from '../test/fixtures';
+import { mockWidth } from '../test/matchMedia';
 
 const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount';
 const PRODUCTS = '/tmf-api/productInventory/v5/product';
@@ -551,5 +552,75 @@ describe('new subscriber', () => {
     );
     // the party is not tried while its customer still exists
     expect(deletes(fetchMock)).toEqual([[CUSTOMER_URL, null]]);
+  });
+});
+
+describe('subscribers inspector (>= 1536 px)', () => {
+  it('navigates on a click below 1536 px and shows no inspector', async () => {
+    mockWidth(false);
+    backend(undefined, { [`GET ${ACCOUNTS}/${A1}`]: pending });
+    await open();
+    await screen.findByText('Ivan Petrov');
+    fireEvent.click(rowOf(/Ivan Petrov/) as HTMLElement);
+    expect(window.location.pathname).toBe(`/subscribers/${A1}`);
+    expect(document.querySelector('[data-ui="ui.subscribers.inspector"]')).toBeNull();
+  });
+
+  it('selects the row and shows the inspector from the loaded list, with no new request', async () => {
+    mockWidth(true);
+    const { fetchMock } = backend();
+    await open();
+    await screen.findByText('Ivan Petrov');
+    const before = fetchMock.mock.calls.length;
+    fireEvent.click(rowOf(/Ivan Petrov/) as HTMLElement);
+    expect(window.location.pathname).toBe('/subscribers');
+    expect(rowOf(/Ivan Petrov/)?.getAttribute('aria-selected')).toBe('true');
+    const inspector = expectUi('ui.subscribers.inspector');
+    expect(within(inspector).getByRole('heading', { name: 'Ivan Petrov' })).toBeTruthy();
+    expect(within(inspector).getByRole('button', { name: `Copy ${A1}` })).toBeTruthy();
+    expect(within(inspector).getByText('Active')).toBeTruthy();
+    expect(within(inspector).getByText('Postpaid')).toBeTruthy();
+    expect(within(inspector).getByText('1,250.40')).toBeTruthy();
+    expect(within(inspector).getByText('2 active')).toBeTruthy();
+    expect(fetchMock.mock.calls.length).toBe(before);
+  });
+
+  it('opens the card on Enter, a double click and Open account', async () => {
+    mockWidth(true);
+    backend(undefined, { [`GET ${ACCOUNTS}/${A1}`]: pending, [`GET ${ACCOUNTS}/${A2}`]: pending });
+    await open();
+    await screen.findByText('Ivan Petrov');
+    const ivan = rowOf(/Ivan Petrov/) as HTMLElement;
+    fireEvent.keyDown(ivan, { key: 'Enter' });
+    expect(window.location.pathname).toBe(`/subscribers/${A1}`);
+    window.history.replaceState(null, '', '/subscribers');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await screen.findByRole('heading', { name: 'Subscribers' });
+    fireEvent.doubleClick(rowOf(/Anna Smirnova/) as HTMLElement);
+    expect(window.location.pathname).toBe(`/subscribers/${A2}`);
+  });
+
+  it('opens the card from Open account', async () => {
+    mockWidth(true);
+    backend(undefined, { [`GET ${ACCOUNTS}/${A1}`]: pending });
+    await open();
+    await screen.findByText('Ivan Petrov');
+    fireEvent.click(rowOf(/Ivan Petrov/) as HTMLElement);
+    fireEvent.click(
+      within(expectUi('ui.subscribers.inspector')).getByRole('button', { name: 'Open account' }),
+    );
+    expect(window.location.pathname).toBe(`/subscribers/${A1}`);
+  });
+
+  it('closes on Escape', async () => {
+    mockWidth(true);
+    backend();
+    await open();
+    await screen.findByText('Ivan Petrov');
+    fireEvent.click(rowOf(/Ivan Petrov/) as HTMLElement);
+    expectUi('ui.subscribers.inspector');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(document.querySelector('[data-ui="ui.subscribers.inspector"]')).toBeNull();
+    expect(rowOf(/Ivan Petrov/)?.getAttribute('aria-selected')).toBeNull();
   });
 });

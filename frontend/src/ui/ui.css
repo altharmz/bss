@@ -581,6 +581,31 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--elev-dialog);
 }
+.bss-inspector {
+  position: sticky;
+  top: 0;
+  flex: 0 0 400px;
+  width: 400px;
+  align-self: flex-start;
+  max-height: 100dvh;
+  display: flex;
+}
+.bss-inspector > .bss-modal {
+  width: 100%;
+  max-width: none;
+  max-height: 100dvh;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+.bss-with-inspector {
+  display: flex;
+  align-items: flex-start;
+}
+.bss-with-inspector > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .bss-dialog-S {
   --modal-width: 400px;
 }

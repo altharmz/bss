@@ -10,6 +10,7 @@ import {
 import { App } from '../app/App';
 import { validity } from './Catalog';
 import { expectUi } from '../test/expectUi';
+import { mockWidth } from '../test/matchMedia';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
 const CAT = '/tmf-api/productCatalogManagement/v5';
@@ -1956,5 +1957,37 @@ it('preserves unedited TMF documents and unrelated resource references', () => {
       { '@type': 'ResourceSpecificationRef', id: 'other' },
       { id: 'msisdn', '@type': 'ResourceSpecificationRef' },
     ],
+  });
+});
+
+describe('catalog inspector (>= 1536 px)', () => {
+  it('shows the dialog below 1536 px', async () => {
+    mockWidth(false);
+    backend();
+    await open();
+    await waitFor(() => row('TV Basic'));
+    fireEvent.click(row('TV Basic'));
+    expectUi('ui.catalog.offeringDetail');
+    expect(document.querySelector('[data-ui="ui.catalog.inspector"]')).toBeNull();
+  });
+
+  it('shows the same detail as an inspector, with the same detail request', async () => {
+    mockWidth(true);
+    const { fetchMock } = backend();
+    await open();
+    await waitFor(() => row('TV Basic'));
+    fireEvent.click(row('TV Basic'));
+    const inspector = expectUi('ui.catalog.inspector');
+    expect(document.querySelector('[data-ui="ui.catalog.offeringDetail"]')).toBeNull();
+    expect(row('TV Basic').getAttribute('aria-selected')).toBe('true');
+    expect(
+      await within(inspector).findByText('399.00 USD / month · 2026-10-05 – open-ended'),
+    ).toBeTruthy();
+    const detailCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).endsWith(`/productOffering/${ids(3)}`),
+    );
+    expect(detailCalls).toHaveLength(1);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(document.querySelector('[data-ui="ui.catalog.inspector"]')).toBeNull();
   });
 });

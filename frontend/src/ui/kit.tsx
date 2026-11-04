@@ -264,6 +264,7 @@ export function Dialog({
   ui,
   children,
   preview = false,
+  inspector = false,
   onSubmit,
 }: {
   title: string;
@@ -274,6 +275,8 @@ export function Dialog({
   size: 'S' | 'M' | 'L';
   /** Static gallery rendering without a blocking overlay. */
   preview?: boolean;
+  /** Render in place as a 400 px side panel (at >= 1536 px) instead of over the page. */
+  inspector?: boolean;
   onClose: () => void;
   footer?: ReactNode;
   /** The dialog's data-ui marker (docs/progress/scope.yaml). */
@@ -290,16 +293,17 @@ export function Dialog({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose, preview]);
 
+  const Shell = inspector ? 'aside' : 'div';
   return (
-    <div
-      className={preview ? 'bss-dialog-preview' : 'bss-overlay'}
-      onClick={preview ? undefined : onClose}
+    <Shell
+      className={inspector ? 'bss-inspector' : preview ? 'bss-dialog-preview' : 'bss-overlay'}
+      onClick={preview || inspector ? undefined : onClose}
     >
       <div
         className={`bss-modal bss-dialog-${size}`}
         data-ui={ui}
         role="dialog"
-        aria-modal={preview ? undefined : true}
+        aria-modal={preview || inspector ? undefined : true}
         aria-label={title}
         onKeyDown={(event) => {
           if (
@@ -360,7 +364,7 @@ export function Dialog({
           {footer}
         </footer>
       </div>
-    </div>
+    </Shell>
   );
 }
 
