@@ -31,6 +31,14 @@ def test_order_refusal_codes_have_operator_explanations():
                 continue
             if isinstance(value, ast.Constant) and isinstance(value.value, str):
                 codes.add(value.value)
+    # numbers.py keeps its per-kind codes in the CODES table
+    tree = ast.parse((root / "app" / "ordering" / "numbers.py").read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "CODES":
+            codes |= {c.value for c in ast.walk(node.value) if isinstance(c, ast.Constant)} - {
+                "msisdn",
+                "imsi",
+            }
     exported = json.loads((root / "frontend/src/api/orderErrors.codes.json").read_text())
     assert codes == set(exported)
     assert len(exported) == len(set(exported))

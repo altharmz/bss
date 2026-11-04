@@ -6,7 +6,14 @@ import type { components as T637 } from '../api/generated/tmf637';
 import { getJson, explain } from '../api/client';
 import type { PendingOrder } from '../api/commands';
 import { PATHS } from '../api/bss';
-import { changeNumber, requiresNumber } from '../api/numbers';
+import {
+  changeNumber,
+  iccidOf,
+  kindOf,
+  loadNumbers,
+  requirements,
+  type ResourceKind,
+} from '../api/numbers';
 import { useResource } from '../api/useResource';
 import { Button, Dialog } from '../ui/kit';
 import { ErrorBlock } from '../ui/states';
@@ -54,38 +61,61 @@ export function NumberModal({
     getJson<T637['schemas']['Product']>(`${PATHS.products}/${productId}`, signal),
   );
   const [numberId, setNumberId] = useState('');
+  const [imsiId, setImsiId] = useState('');
+  const inventory = useResource('number-picker', loadNumbers);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const [code, setCode] = useState<string | undefined>();
   const [uncertain, setUncertain] = useState(false);
   const refs = product.status === 'ok' ? (product.data.realizingResource ?? []) : [];
+  const known = inventory.status === 'ok' ? inventory.data : [];
+  const kindOfRef = (id?: string): ResourceKind | undefined => {
+    const n = known.find((k) => k.id === id);
+    return n ? kindOf(n) : undefined;
+  };
+  const currentImsi = refs.find((r) => kindOfRef(r.id) === 'imsi');
+  const currentMsisdn = refs.find((r) => kindOfRef(r.id) !== 'imsi');
+  const simDetail = known.find((k) => k.id === currentImsi?.id);
   const specificationId =
     product.status === 'ok' ? product.data.productSpecification?.id : undefined;
   const requirement = useResource(
     `product-number-requirement:${specificationId ?? ''}`,
     (signal) =>
-      specificationId ? requiresNumber(specificationId, signal) : Promise.resolve(false),
+      specificationId
+        ? requirements(specificationId, signal)
+        : Promise.resolve({ msisdn: false, imsi: false }),
   );
-  const editable =
-    requirement.status === 'ok' &&
-    requirement.data &&
-    refs.length === 1 &&
+  const startedOk =
     product.status === 'ok' &&
     ['active', 'created', 'pendingActive', 'suspended'].includes(product.data.status ?? '');
-  async function submit() {
+  const needs = requirement.status === 'ok' ? requirement.data : { msisdn: false, imsi: false };
+  const editable =
+    needs.msisdn && startedOk && refs.length === (needs.imsi ? 2 : 1) && inventory.status === 'ok';
+  const simEditable =
+    needs.imsi && startedOk && currentImsi !== undefined && inventory.status === 'ok';
+  async function submit(change: ResourceKind) {
+    // the complete resulting set: the changed kind's new resource, the other kind unchanged
+    const ids = [
+      change === 'msisdn' ? numberId : currentMsisdn?.id,
+      needs.imsi ? (change === 'imsi' ? imsiId : currentImsi?.id) : undefined,
+    ].filter((id): id is string => Boolean(id));
     setBusy(true);
     setProblem('');
     setCode(undefined);
     try {
-      const result = await changeNumber(accountId, productId, numberId);
+      const result = await changeNumber(accountId, productId, ids);
       if (result.state === 'completed') {
         onClose();
-        onDone('Subscriber number changed through an order');
+        onDone(
+          change === 'imsi'
+            ? 'SIM changed through an order'
+            : 'Subscriber number changed through an order',
+        );
       } else if (result.state === 'inProgress') {
         onClose();
         onDone('Subscriber number change accepted, the billing worker completes it shortly', {
           id: result.id,
-          label: 'Subscriber number change',
+          label: change === 'imsi' ? 'SIM change' : 'Subscriber number change',
         });
       } else {
         const refusal = orderRefusal(result.productOrderErrorMessage ?? [], result.state);
@@ -116,9 +146,14 @@ export function NumberModal({
             <Button
               data-dialog-primary
               disabled={busy || uncertain || !numberId}
-              onClick={() => void submit()}
+              onClick={() => void submit('msisdn')}
             >
               Change number
+            </Button>
+          )}
+          {simEditable && (
+            <Button disabled={busy || uncertain || !imsiId} onClick={() => void submit('imsi')}>
+              Change SIM
             </Button>
           )}
         </Footer>
@@ -138,6 +173,7 @@ export function NumberModal({
             {refs.map((r) => r.name ?? r.id).join(', ') || 'This product has no subscriber number.'}
           </p>
         )}
+        {simDetail && iccidOf(simDetail) && <p>ICCID {iccidOf(simDetail)}</p>}
         {requirement.status === 'error' && (
           <ErrorBlock
             title="Failed to load number requirement"
@@ -145,11 +181,20 @@ export function NumberModal({
             onRetry={requirement.retry}
           />
         )}
-        {requirement.status === 'ok' && !requirement.data && (
+        {requirement.status === 'ok' && !requirement.data.msisdn && !requirement.data.imsi && (
           <p>
             This product's offering does not use subscriber numbers. Offerings whose specification
             requires a number ask for one when the product is added.
           </p>
+        )}
+        {simEditable && (
+          <>
+            <NumberPicker kind="imsi" value={imsiId} onChange={setImsiId} />
+            <p>
+              The SIM changes today through a modify order. The previous IMSI is locked, not reused.
+              No price change.
+            </p>
+          </>
         )}
         {editable && (
           <>

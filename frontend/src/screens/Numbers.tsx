@@ -4,6 +4,9 @@ import { useState } from 'react';
 import {
   createNumber,
   deleteNumber,
+  iccidOf,
+  kindOf,
+  type ResourceKind,
   loadNumber,
   loadNumbers,
   lockNumber,
@@ -32,6 +35,7 @@ import { TableHead, TableRow, type Column } from '../ui/Table';
 
 const COLUMNS: Column[] = [
   { key: 'value', label: 'Number', width: '1fr', mono: true },
+  { key: 'kind', label: 'Kind', width: '90px' },
   { key: 'allocation', label: 'Allocation', width: '150px' },
   { key: 'usage', label: 'Usage', width: '120px' },
   { key: 'admin', label: 'Administration', width: '160px' },
@@ -41,6 +45,7 @@ export function NumbersScreen() {
   useSetCrumbs([{ label: 'Numbers' }], 'numbers');
   const numbers = useResource('numbers', loadNumbers);
   const [query, setQuery] = useState('');
+  const [kind, setKind] = useState<'' | ResourceKind>('');
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<SubscriberNumber | null>(null);
   return (
@@ -50,12 +55,23 @@ export function NumbersScreen() {
         count={numbers.status === 'ok' ? numbers.data.length : undefined}
         actions={<Button onClick={() => setCreating(true)}>New number</Button>}
         filters={
-          <TextInput
-            aria-label="Search numbers"
-            placeholder="Search numbers"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <>
+            <TextInput
+              aria-label="Search numbers"
+              placeholder="Search numbers"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <SelectField
+              aria-label="Kind"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as '' | ResourceKind)}
+            >
+              <option value="">All kinds</option>
+              <option value="msisdn">MSISDN</option>
+              <option value="imsi">IMSI</option>
+            </SelectField>
+          </>
         }
       />
       <div role="table" aria-label="Numbers" className="bss-page-table">
@@ -66,8 +82,15 @@ export function NumbersScreen() {
           errorTitle="Failed to load numbers"
           empty={{ title: 'No numbers yet', text: 'Add an E.164 number to the inventory.' }}
           total={(data) => data.length}
-          rows={(data) => data.filter((n) => (n.value ?? '').includes(query.trim()))}
-          onResetFilters={() => setQuery('')}
+          rows={(data) =>
+            data.filter(
+              (n) => (n.value ?? '').includes(query.trim()) && (!kind || kindOf(n) === kind),
+            )
+          }
+          onResetFilters={() => {
+            setQuery('');
+            setKind('');
+          }}
         >
           {(rows) =>
             rows.map((n) => (
@@ -76,6 +99,7 @@ export function NumbersScreen() {
                 columns={COLUMNS}
                 cells={{
                   value: <Button onClick={() => setSelected(n)}>{n.value}</Button>,
+                  kind: <Tag>{kindOf(n) === 'imsi' ? 'IMSI' : 'MSISDN'}</Tag>,
                   allocation: n.allocationStatus && <Tag>{n.allocationStatus}</Tag>,
                   usage: n.usageState && <Tag>{n.usageState}</Tag>,
                   admin: n.administrativeState && <Tag>{n.administrativeState}</Tag>,
@@ -113,13 +137,19 @@ export function NumbersScreen() {
 
 function NewNumber({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [value, setValue] = useState('');
+  const [kind, setKind] = useState<ResourceKind>('msisdn');
+  const [iccid, setIccid] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const [uncertain, setUncertain] = useState(false);
+  const valid =
+    kind === 'imsi'
+      ? /^[0-9]{14,15}$/.test(value) && (iccid === '' || /^89[0-9]{16,18}$/.test(iccid))
+      : /^[1-9][0-9]{7,14}$/.test(value);
   async function submit() {
     setBusy(true);
     try {
-      await createNumber(value);
+      await createNumber(value, kind, iccid);
       onCreated();
     } catch (error) {
       setProblem(`${explain(error)}. Close and check inventory before submitting again.`);
@@ -140,7 +170,7 @@ function NewNumber({ onClose, onCreated }: { onClose: () => void; onCreated: () 
           <Button onClick={onClose}>Cancel</Button>
           <Button
             data-dialog-primary
-            disabled={busy || uncertain || !/^[1-9][0-9]{7,14}$/.test(value)}
+            disabled={busy || uncertain || !valid}
             onClick={() => void submit()}
           >
             Create number
@@ -148,10 +178,34 @@ function NewNumber({ onClose, onCreated }: { onClose: () => void; onCreated: () 
         </>
       }
     >
-      <Field label="Number">
+      <Field label="Kind">
+        <SelectField
+          aria-label="Kind"
+          value={kind}
+          onChange={(e) => setKind(e.target.value as ResourceKind)}
+        >
+          <option value="msisdn">MSISDN</option>
+          <option value="imsi">IMSI</option>
+        </SelectField>
+      </Field>
+      <Field label={kind === 'imsi' ? 'IMSI' : 'Number'}>
         <TextInput mono value={value} onChange={(e) => setValue(e.target.value)} />
       </Field>
-      <p className="bss-caption">E.164 digits only, 8–15 digits, without a plus sign or spaces.</p>
+      {kind === 'imsi' ? (
+        <>
+          <Field label="ICCID (optional)">
+            <TextInput mono value={iccid} onChange={(e) => setIccid(e.target.value)} />
+          </Field>
+          <p className="bss-caption">
+            IMSI: 14–15 digits. ICCID: 18–20 digits starting with 89; it cannot change once the IMSI
+            is assigned.
+          </p>
+        </>
+      ) : (
+        <p className="bss-caption">
+          E.164 digits only, 8–15 digits, without a plus sign or spaces.
+        </p>
+      )}
       {problem && <Note tone="negative">{problem}</Note>}
     </Dialog>
   );
@@ -234,6 +288,8 @@ function NumberDetail({
         <KeyValue
           items={[
             ['Name', number.name ?? '—'],
+            ['Kind', kindOf(number) === 'imsi' ? 'IMSI' : 'MSISDN'],
+            ...(iccidOf(number) ? [['ICCID', iccidOf(number) as string] as [string, string]] : []),
             ['Allocation', number.allocationStatus ?? '—'],
             ['Usage', number.usageState ?? '—'],
             ['Administration', number.administrativeState ?? '—'],
@@ -294,28 +350,34 @@ function NumberDetail({
 export function NumberPicker({
   value,
   onChange,
+  kind = 'msisdn',
 }: {
   value: string;
   onChange: (id: string) => void;
+  kind?: ResourceKind;
 }) {
   const numbers = useResource('number-picker', loadNumbers);
+  const label = kind === 'imsi' ? 'IMSI' : 'Subscriber number';
   if (numbers.status === 'error')
     return (
       <ErrorBlock title="Failed to load numbers" error={numbers.error} onRetry={numbers.retry} />
     );
   return (
-    <Field label="Subscriber number">
+    <Field label={label}>
       <SelectField
-        aria-label="Subscriber number"
+        aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={numbers.status !== 'ok'}
       >
-        <option value="">Select a number</option>
+        <option value="">{kind === 'imsi' ? 'Select an IMSI' : 'Select a number'}</option>
         {numbers.status === 'ok' &&
           numbers.data
             .filter(
-              (n) => n.administrativeState === 'unlocked' && n.allocationStatus === 'available',
+              (n) =>
+                kindOf(n) === kind &&
+                n.administrativeState === 'unlocked' &&
+                n.allocationStatus === 'available',
             )
             .map((n) => (
               <option key={n.id} value={n.id}>
