@@ -14,8 +14,8 @@ recording (over 10 minutes), so it runs only on request.
   marker (ui). `excluded` entries are ignored by the unscoped check.
 - **Implemented** is derived: db - the table exists in a throwaway database at migration
   head; api - `app.openapi()` has the operation; ui - a literal `data-ui="<id>"` (or
-  `<Modal ui="<id>">`) exists in `frontend/src` (TypeScript AST). Screens carry the marker
-  on a `.bss-screen` wrapper, dialogs via `Modal`'s `ui` prop, actions on their button.
+  `<Dialog ui="<id>">`) exists in `frontend/src` (TypeScript AST). Screens carry the marker
+  on a `.bss-screen` wrapper, dialogs via the kit `Dialog`'s `ui` prop, actions on their button.
 - **Worker** items are proven by behaviour: implemented and tested when a test marked
   `@pytest.mark.capability("<id>")` passes and none fails; an unknown id is an error.
 - **Tested, ui:** a passing vitest test saw the marker on screen (`expectUi(id)`); the reporter
