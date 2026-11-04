@@ -435,7 +435,7 @@ describe('new subscriber', () => {
     fireEvent.change(within(dialog).getByLabelText('Credit limit, USD (optional)'), {
       target: { value: '10' },
     });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Prepaid' }));
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Prepaid' }));
     expect(within(dialog).queryByLabelText('Credit limit, USD (optional)')).toBeNull();
     expect(within(dialog).queryByLabelText('Billing cycle day (1-28)')).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create subscriber' }));
@@ -459,7 +459,7 @@ describe('new subscriber', () => {
     await open();
     fireEvent.click(screen.getByRole('button', { name: 'New subscriber' }));
     const dialog = await screen.findByRole('dialog', { name: 'New subscriber' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Organization' }));
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Organization' }));
     fireEvent.change(within(dialog).getByLabelText('Organization name'), {
       target: { value: 'Vasilek LLC' },
     });

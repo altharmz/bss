@@ -38,8 +38,8 @@ import {
   Button,
   DateField,
   Dialog,
+  KeyValue,
   PageHeader,
-  Panel,
   StatusPill,
   Segmented,
   TextInput,
@@ -161,41 +161,41 @@ export function PartiesScreen() {
             </Button>
           </>
         }
+        filters={
+          <>
+            <Segmented
+              label="Party sections"
+              value={tab}
+              onChange={changeTab}
+              options={[
+                { key: 'individuals', label: 'Individuals' },
+                { key: 'organizations', label: 'Organizations' },
+                { key: 'customers', label: 'Customers' },
+              ]}
+            />
+            <TextInput
+              width={300}
+              placeholder={`Search ${tab}`}
+              aria-label={`Search ${tab}`}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            {data !== null && statuses.length > 0 && (
+              <Segmented
+                label="Status"
+                value={status}
+                onChange={setStatus}
+                options={['All', ...statuses].map((key) => ({
+                  key,
+                  label: key,
+                  count: countOf(key),
+                }))}
+              />
+            )}
+          </>
+        }
       />
-      <div className="bss-toolbar">
-        <Segmented
-          label="Party sections"
-          value={tab}
-          onChange={changeTab}
-          options={[
-            { key: 'individuals', label: 'Individuals' },
-            { key: 'organizations', label: 'Organizations' },
-            { key: 'customers', label: 'Customers' },
-          ]}
-        />
-      </div>
-      <div className="bss-toolbar">
-        <TextInput
-          width={300}
-          placeholder={`Search ${tab}`}
-          aria-label={`Search ${tab}`}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        {data !== null && statuses.length > 0 && (
-          <Segmented
-            label="Status"
-            value={status}
-            onChange={setStatus}
-            options={['All', ...statuses].map((key) => ({
-              key,
-              label: key,
-              count: countOf(key),
-            }))}
-          />
-        )}
-      </div>
-      <Panel>
+      <div role="table" aria-label="Parties" className="bss-page-table">
         <div data-ui={`ui.parties.${tab}`}>
           {customers ? (
             <CustomersList
@@ -216,7 +216,7 @@ export function PartiesScreen() {
             />
           )}
         </div>
-      </Panel>
+      </div>
       {open !== null && data !== null && (
         <RecordModal open={open} data={data} onClose={() => setOpen(null)} onDone={done} />
       )}
@@ -378,16 +378,7 @@ function RecordModal({
 }
 
 function Facts({ rows }: { rows: [string, ReactNode][] }) {
-  return (
-    <dl className="bss-facts">
-      {rows.map(([label, value]) => (
-        <div key={label}>
-          <dt>{label}</dt>
-          <dd>{value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
+  return <KeyValue items={rows} />;
 }
 
 /** Save and Delete share one busy/problem/unsure state and the dialog frame. */
@@ -451,15 +442,13 @@ function Frame(p: FrameProps) {
         </>
       }
     >
-      <div className="bss-modal-body">
-        {p.state === 'loading' && (
-          <SkeletonRows columns={[{ key: 'a', label: '', width: '1fr' }]} rows={4} />
-        )}
-        {p.state === 'error' && p.error && (
-          <ErrorBlock title="Failed to load the record" error={p.error} onRetry={p.retry} />
-        )}
-        {p.state === 'ok' && p.body}
-      </div>
+      {p.state === 'loading' && (
+        <SkeletonRows columns={[{ key: 'a', label: '', width: '1fr' }]} rows={4} />
+      )}
+      {p.state === 'error' && p.error && (
+        <ErrorBlock title="Failed to load the record" error={p.error} onRetry={p.retry} />
+      )}
+      {p.state === 'ok' && p.body}
     </Dialog>
   );
 }

@@ -29,13 +29,16 @@ import { useRefreshNav, useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
-import { formatAmount, formatInt } from '../format/money';
+import { formatInt, toCents } from '../format/money';
+import { Amount } from '../ui/Amount';
+import { Id } from '../ui/Id';
 import {
-  SelectField,
   Button,
   Dialog,
+  Field,
+  KeyValue,
   PageHeader,
-  Panel,
+  SelectField,
   StatusPill,
   Segmented,
   TextInput,
@@ -54,7 +57,7 @@ import './screens.css';
 // TMF622 reads, and (slice 10) the order dialog's writes: cancel, edit details, drafts.
 
 const COLUMNS: Column[] = [
-  { key: 'id', label: 'Order', width: '104px', mono: true },
+  { key: 'id', label: 'Order', width: '120px' },
   { key: 'account', label: 'Subscriber', width: 'minmax(0, 1fr)' },
   { key: 'state', label: 'State', width: '120px' },
   { key: 'items', label: 'Items', width: 'minmax(0, 1.4fr)' },
@@ -179,37 +182,44 @@ export function OrdersScreen() {
       : list;
   return (
     <div className="bss-screen" data-ui="ui.orders">
-      <div className="bss-title-row">
-        <PageHeader title="Orders" />
-        <span className="bss-caption">Every product order, newest first</span>
-      </div>
-      <div className="bss-toolbar">
-        <Segmented
-          label="State"
-          value={state}
-          onChange={(next) => {
-            setState(next);
-            setOffset(0);
-          }}
-          options={(['all', ...ORDER_STATES] as const).map((key) => ({
-            key,
-            label: key === 'all' ? 'All' : key,
-          }))}
-        />
-        {account !== null && (
-          <span className="bss-run-tag" data-ui="ui.orders.accountChip">
-            Account {name ?? accountLabel(account)}{' '}
-            <button
-              type="button"
-              className="bss-link"
-              aria-label="Remove the account filter"
-              onClick={dropAccount}
-            >
-              ×
-            </button>
-          </span>
-        )}
-      </div>
+      <PageHeader
+        title="Orders"
+        count={
+          list.status === 'ok'
+            ? formatInt(visibleList.status === 'ok' ? visibleList.data.total : 0)
+            : undefined
+        }
+        meta="Every product order, newest first"
+        filters={
+          <>
+            <Segmented
+              label="State"
+              value={state}
+              onChange={(next) => {
+                setState(next);
+                setOffset(0);
+              }}
+              options={(['all', ...ORDER_STATES] as const).map((key) => ({
+                key,
+                label: key === 'all' ? 'All' : key,
+              }))}
+            />
+            {account !== null && (
+              <span className="bss-run-tag" data-ui="ui.orders.accountChip">
+                Account {name ?? accountLabel(account)}{' '}
+                <button
+                  type="button"
+                  className="bss-link"
+                  aria-label="Remove the account filter"
+                  onClick={dropAccount}
+                >
+                  ×
+                </button>
+              </span>
+            )}
+          </>
+        }
+      />
       {watched !== null && (
         <OrderWatch
           watched={watched}
@@ -222,7 +232,7 @@ export function OrdersScreen() {
           }}
         />
       )}
-      <Panel>
+      <div role="table" aria-label="Orders" className="bss-page-table">
         {rowError && (
           <ErrorBlock
             title="Failed to refresh order"
@@ -262,7 +272,7 @@ export function OrdersScreen() {
                   columns={COLUMNS}
                   onClick={() => setOpen(order)}
                   cells={{
-                    id: <span title={order.id}>{shortId(order.id ?? '')}</span>,
+                    id: order.id !== undefined ? <Id prefix="ORD-" id={order.id} /> : '—',
                     account:
                       order.billingAccount?.id !== undefined ? (
                         <span className="ellipsis" onClick={(event) => event.stopPropagation()}>
@@ -279,13 +289,7 @@ export function OrdersScreen() {
                       ) : (
                         '—'
                       ),
-                    state: (
-                      <StatusPill
-                        kind="order"
-                        status={order.state ?? ''}
-                        label={order.state ?? '—'}
-                      />
-                    ),
+                    state: <StatusPill kind="order" status={order.state ?? ''} />,
                     items: (
                       <span className="ellipsis" title={itemSummary(order)}>
                         {itemSummary(order)}
@@ -300,7 +304,7 @@ export function OrdersScreen() {
               <TableFooter
                 left={`Showing ${formatInt(data.offset + 1)}–${formatInt(data.offset + rows.length)} of ${formatInt(data.total)}`}
                 right={
-                  <span className="bss-toolbar">
+                  <span className="bss-table-pager">
                     <Button
                       small
                       data-ui="ui.orders.previous"
@@ -332,7 +336,7 @@ export function OrdersScreen() {
             Previous
           </Button>
         )}
-      </Panel>
+      </div>
       {open !== null && (
         <OrderModal
           order={open}
@@ -350,12 +354,28 @@ export function OrdersScreen() {
   );
 }
 
-function priceText(item: OrderItem): string {
+function PriceCell({ item }: { item: OrderItem }) {
   const price = item.itemTotalPrice?.[0]?.price?.taxIncludedAmount;
-  return price?.value === undefined
-    ? '—'
-    : `${formatAmount(price.value)} ${price.unit ?? ''}`.trim();
+  return price?.value === undefined ? (
+    '—'
+  ) : (
+    <Amount cents={toCents(price.value)} {...(price.unit ? { currency: price.unit } : {})} />
+  );
 }
+
+const ITEM_COLUMNS: Column[] = [
+  { key: 'action', label: 'Action', width: 'minmax(0, 1.6fr)' },
+  { key: 'offering', label: 'Offering', width: 'minmax(0, 1fr)' },
+  { key: 'product', label: 'Product', width: '120px' },
+  { key: 'state', label: 'State', width: '110px' },
+  { key: 'target', label: 'Target status', width: '120px' },
+  { key: 'price', label: 'Price', width: '110px', align: 'right' },
+];
+const CANCEL_COLUMNS: Column[] = [
+  { key: 'date', label: 'Date', width: '170px', mono: true },
+  { key: 'state', label: 'State', width: '140px' },
+  { key: 'reason', label: 'Reason', width: 'minmax(0, 1fr)' },
+];
 
 type Panel = 'cancel' | 'details' | 'delete' | null;
 const PRIORITIES = ['0', '1', '2', '3', '4'];
@@ -422,17 +442,15 @@ function EditDraft({
       onClose={onClose}
       footer={<Button onClick={onClose}>Close</Button>}
     >
-      <div className="bss-modal-body">
-        {account.status === 'error' ? (
-          <ErrorBlock
-            title="Failed to load the account"
-            error={account.error}
-            onRetry={account.retry}
-          />
-        ) : (
-          <div className="bss-caption">Loading…</div>
-        )}
-      </div>
+      {account.status === 'error' ? (
+        <ErrorBlock
+          title="Failed to load the account"
+          error={account.error}
+          onRetry={account.retry}
+        />
+      ) : (
+        <div className="bss-caption">Loading…</div>
+      )}
     </Dialog>
   );
 }
@@ -580,7 +598,12 @@ export function OrderModal({
     <Dialog
       onSubmit={panel === null || panel === 'details' ? submitDialogPrimary : undefined}
       title={`Order ${shortId(orderId)}`}
-      context={<StatusPill kind="order" status={order.state ?? ''} label={order.state ?? '—'} />}
+      context={
+        <>
+          {orderId !== '' && <Id prefix="ORD-" id={orderId} />}{' '}
+          <StatusPill kind="order" status={order.state ?? ''} />
+        </>
+      }
       size="L"
       ui="ui.orders.detail"
       onClose={onClose}
@@ -651,38 +674,37 @@ export function OrderModal({
         </Footer>
       }
     >
-      <div className="bss-modal-body">
-        <dl className="bss-details">
-          <dt>Id</dt>
-          <dd className="bss-mono">{orderId}</dd>
-          <dt>Account</dt>
-          <dd>
-            {accountId !== undefined ? (
-              <>
-                <Link className="bss-link" href={hrefOf({ name: 'subscriber', accountId })}>
-                  {accountLabel(accountId)}
-                </Link>{' '}
-                {order.billingAccount?.name}
-              </>
-            ) : (
-              '—'
-            )}
-          </dd>
-          <dt>Requested start</dt>
-          <dd className="bss-mono">{day(order.requestedStartDate, context.timeZone)}</dd>
-          <dt>Created</dt>
-          <dd className="bss-mono">{when(order.creationDate)}</dd>
-          <dt>Completed</dt>
-          <dd className="bss-mono">{when(order.completionDate)}</dd>
-          <dt>Cancelled</dt>
-          <dd className="bss-mono">{when(order.cancellationDate)}</dd>
-          {order.cancellationReason !== undefined && (
-            <>
-              <dt>Cancellation reason</dt>
-              <dd>{order.cancellationReason}</dd>
-            </>
-          )}
-        </dl>
+      <>
+        <KeyValue
+          items={[
+            [
+              'Id',
+              <span key="i" className="bss-mono">
+                {orderId}
+              </span>,
+            ],
+            [
+              'Account',
+              accountId !== undefined ? (
+                <>
+                  <Link className="bss-link" href={hrefOf({ name: 'subscriber', accountId })}>
+                    {accountLabel(accountId)}
+                  </Link>{' '}
+                  {order.billingAccount?.name}
+                </>
+              ) : (
+                '—'
+              ),
+            ],
+            ['Requested start', day(order.requestedStartDate, context.timeZone)],
+            ['Created', when(order.creationDate)],
+            ['Completed', when(order.completionDate)],
+            ['Cancelled', when(order.cancellationDate)],
+            ...(order.cancellationReason !== undefined
+              ? [['Cancellation reason', order.cancellationReason] as [string, string]]
+              : []),
+          ]}
+        />
         {state === 'draft' && draft === null && (
           <div className="bss-caption" data-ui="ui.orders.draftViaApi">
             Edit this draft through the API.
@@ -690,14 +712,13 @@ export function OrderModal({
         )}
         {panel === 'cancel' && (
           <div className="bss-form">
-            <label className="bss-field">
-              Cancellation reason (optional){' '}
+            <Field label="Cancellation reason (optional)">
               <TextInput
                 aria-label="Cancellation reason"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />
-            </label>
+            </Field>
             <div>
               <Button
                 variant="danger"
@@ -716,24 +737,21 @@ export function OrderModal({
         )}
         {panel === 'details' && (
           <div className="bss-form">
-            <label className="bss-field">
-              Description{' '}
+            <Field label="Description">
               <TextInput
                 aria-label="Order description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
-            </label>
-            <label className="bss-field">
-              Category{' '}
+            </Field>
+            <Field label="Category">
               <TextInput
                 aria-label="Order category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
               />
-            </label>
-            <label className="bss-field">
-              Priority{' '}
+            </Field>
+            <Field label="Priority">
               <SelectField
                 aria-label="Order priority"
                 value={priority}
@@ -746,11 +764,11 @@ export function OrderModal({
                   </option>
                 ))}
               </SelectField>
-            </label>
+            </Field>
           </div>
         )}
         {panel === 'delete' && (
-          <div className="bss-run-note">
+          <Note tone="warning">
             Delete this {state} order for good? Nothing refers to it.{' '}
             <Button
               variant="danger"
@@ -764,22 +782,22 @@ export function OrderModal({
             >
               Delete order
             </Button>
-          </div>
+          </Note>
         )}
         {command.status === 'ok' && command.data !== null && (
-          <div className="bss-run-note" data-ui="ui.orders.command" role="status">
+          <Note tone="info" data-ui="ui.orders.command">
             The billing worker is still finishing this order.{' '}
             <Link className="bss-link" href={`/prepaid-commands?account=${accountId}`}>
               Open its command
             </Link>
-          </div>
+          </Note>
         )}
         {problem === null && (order.productOrderErrorMessage ?? []).length > 0 && (
-          <div className="bss-run-error inline" data-ui="ui.orders.errors" role="alert">
+          <Note tone="negative" data-ui="ui.orders.errors">
             {(order.productOrderErrorMessage ?? []).map((m, i) => (
               <div key={i}>{orderRefusal([m]).problem}</div>
             ))}
-          </div>
+          </Note>
         )}
         {names.status === 'error' && (
           <ErrorBlock
@@ -789,38 +807,34 @@ export function OrderModal({
           />
         )}
         <h3 className="bss-subhead">Items</h3>
-        <table className="bss-mini" data-ui="ui.orders.items">
-          <thead>
-            <tr>
-              <th>Action</th>
-              <th>Offering</th>
-              <th>Product</th>
-              <th>State</th>
-              <th>Target status</th>
-              <th>Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(order.productOrderItem ?? []).map((item, i) => (
-              <tr key={item.id ?? i}>
-                <td>{itemText(item, names.status === 'ok' ? names.data : {})}</td>
-                <td>{item.productOffering?.name ?? '—'}</td>
-                <td className="bss-mono" title={item.product?.id}>
-                  {item.product?.id !== undefined ? shortId(item.product.id) : '—'}
-                </td>
-                <td>{item.state ?? '—'}</td>
-                <td>
-                  {targetStatus(item) ? (
-                    <StatusPill kind="product" status={targetStatus(item) ?? ''} />
-                  ) : (
-                    '—'
-                  )}
-                </td>
-                <td className="bss-mono">{priceText(item)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div
+          role="table"
+          aria-label="Order items"
+          className="bss-dialog-table"
+          data-ui="ui.orders.items"
+        >
+          <TableHead columns={ITEM_COLUMNS} density="compact" />
+          {(order.productOrderItem ?? []).map((item, i) => (
+            <TableRow
+              key={item.id ?? i}
+              columns={ITEM_COLUMNS}
+              density="compact"
+              cells={{
+                action: itemText(item, names.status === 'ok' ? names.data : {}),
+                offering: item.productOffering?.name ?? '—',
+                product:
+                  item.product?.id !== undefined ? <Id prefix="PRD-" id={item.product.id} /> : '—',
+                state: item.state ? <StatusPill kind="order" status={item.state} /> : '—',
+                target: targetStatus(item) ? (
+                  <StatusPill kind="product" status={targetStatus(item) ?? ''} />
+                ) : (
+                  '—'
+                ),
+                price: <PriceCell item={item} />,
+              }}
+            />
+          ))}
+        </div>
         <h3 className="bss-subhead">Cancellations</h3>
         {cancellations.status === 'loading' && <div className="bss-caption">Loading…</div>}
         {cancellations.status === 'error' && (
@@ -837,28 +851,28 @@ export function OrderModal({
               No cancellations.
             </div>
           ) : (
-            <table className="bss-mini" data-ui="ui.orders.cancellations">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>State</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cancellations.data.map((c) => (
-                  <tr key={c.id}>
-                    <td className="bss-mono">
-                      {when(c.effectiveCancellationDate ?? c.creationDate)}
-                    </td>
-                    <td>{c.state ?? '—'}</td>
-                    <td>{c.cancellationReason ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div
+              role="table"
+              aria-label="Cancellations"
+              className="bss-dialog-table"
+              data-ui="ui.orders.cancellations"
+            >
+              <TableHead columns={CANCEL_COLUMNS} density="compact" />
+              {cancellations.data.map((c) => (
+                <TableRow
+                  key={c.id}
+                  columns={CANCEL_COLUMNS}
+                  density="compact"
+                  cells={{
+                    date: when(c.effectiveCancellationDate ?? c.creationDate),
+                    state: c.state ? <StatusPill kind="order" status={c.state} /> : '—',
+                    reason: c.cancellationReason ?? '—',
+                  }}
+                />
+              ))}
+            </div>
           ))}
-      </div>
+      </>
     </Dialog>
   );
 }
