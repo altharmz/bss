@@ -63,7 +63,7 @@ const COLUMNS: Column[] = [
   { key: 'items', label: 'Items', width: 'minmax(0, 1.4fr)' },
   { key: 'start', label: 'Start', width: '104px', mono: true },
   { key: 'created', label: 'Created', width: '104px', mono: true },
-  { key: 'ended', label: 'Completed / cancelled', width: '150px', mono: true },
+  { key: 'ended', label: 'Completed / cancelled', width: '184px', mono: true },
 ];
 
 type StateFilter = OrderState | 'all';
