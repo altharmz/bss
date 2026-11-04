@@ -217,12 +217,15 @@ deploy: ## Build locally and ship to the VPS
 check: ## Technical readiness in a validated task (full existing local checks)
 	python3 -B scripts/task_quality.py check
 
-.PHONY: format review-task check-local
+.PHONY: format review-task show-task check-local
 format: ## Format backend and frontend in a validated task
 	python3 -B scripts/task_quality.py format
 
 review-task: ## Non-destructive review of task identity and local Git safety
 	python3 -B scripts/task_quality.py review-task
+
+show-task: ## Show this task's issue (title, body, labels, comments) as JSON
+	python3 -B scripts/task_quality.py show-task
 
 check-local: check
 

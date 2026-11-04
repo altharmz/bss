@@ -26,7 +26,9 @@ class LifecycleFixture(unittest.TestCase):
     def setUp(self):
         fixtures.PrTests.setUp(self)
         ignore = self.work / ".gitignore"
-        ignore.write_text(ignore.read_text() + "__pycache__/\n")
+        ignore.write_text(
+            ignore.read_text() + "__pycache__/\nfrontend/.shots/\nfrontend/src/api/generated/\n"
+        )
         self.call(["git", "add", ".gitignore"])
         self.call(["git", "commit", "-m", "ignore generated cache"])
         self.call(["git", "push", "origin", "HEAD:refs/heads/master"])
@@ -555,6 +557,13 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
         with self.assertRaises(InvalidRuntime):
             self.finish()
         self.assertTrue(self.work.exists())
+
+    def test_make_target_output_is_removed_with_the_worktree(self):
+        for name in ("frontend/.shots/a.png", "frontend/src/api/generated/types.ts"):
+            (self.work / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.work / name).touch()
+        self.assertEqual(self.finish()["status"], "finished")
+        self.assertFalse(self.work.exists())
 
     def test_ownership_mismatch_does_not_stop_runtime(self):
         self.inventory["mismatch"] = True

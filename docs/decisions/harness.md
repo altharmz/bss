@@ -173,6 +173,23 @@ a rule only against a plain command, so a `make` call with a redirect or pipe pr
 Commits also write the primary repository's `.git`, so the executor's writable roots must
 include the primary checkout and the worker root.
 
+Decisions from the #59 session review (#144, #157):
+
+- **Bare `git add/commit/push` is blocked for Codex** by `.codex/guard.sh` (cases in
+  `.codex/guard-cases.txt`, run by `.codex/test-guard.sh` from the pre-commit hook when
+  `.codex/` or `.claude/hooks/` change). Claude's shared guard still allows them; the Make
+  targets are the supported path for both.
+- **`.codex/rules/default.rules` is tracked** and installed by copying; it allows `make`, issue
+  comments and `gh pr checks` only. The earlier user-level rules allowed bare Git writes and
+  carried one-off entries.
+- **Long targets** (commit hook 2 to 12 minutes, sync-task, test) run in a background or
+  persistent session; a killed call is checked with `make review-task` before a retry.
+- **Body files live in `/tmp`.** `finish-task` allows only known ignored output (`.task/runtime.json`,
+  build and test output of Make targets) and preserves the worktree on anything else.
+- **Subagents** work in the task worktree and are not polled in a loop. Codex records a
+  subagent thread as its own session file that also holds its parent's `session_meta`; the
+  telemetry parser identifies the session by the first one.
+
 ## UI/MCP parity check
 
 `scripts/ui_mcp_parity.py` scans `frontend/src` (no tests, no `generated/`) for every

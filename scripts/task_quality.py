@@ -225,6 +225,14 @@ def main():
     result = 1
     try:
         root, primary, task, slot, data = context()
+        if operation == "show-task":
+            # The claimed issue (acceptance criteria, comments) without a raw `gh` call.
+            number = str(int(task.split("-")[1]))
+            result = subprocess.run(  # noqa: S603
+                ["gh", "issue", "view", number, "--json", "number,title,body,labels,comments"],  # noqa: S607
+                cwd=root,
+            ).returncode
+            return result
         review(
             root,
             primary,
