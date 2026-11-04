@@ -15,7 +15,6 @@ import { explain } from '../api/client';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { clockTime, businessDate, lastDay } from '../format/dates';
-import { accountLabel } from '../format/ids';
 import { formatCents, parseAmount, positiveAmountError, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Button, Dialog, Field, MoneyField, Modal, Panel, StatusPill, TextInput } from '../ui/kit';
@@ -154,9 +153,11 @@ export function BillDialog({
       onClose={onClose}
       ui="ui.subscriber.billDetail"
       subtitle={
-        detail.status === 'ok'
-          ? `${accountLabel(detail.data.billingAccount.id)} · billed ${detail.data.billDate}`
-          : undefined
+        detail.status === 'ok' ? (
+          <>
+            <Id id={detail.data.billingAccount.id} prefix="BA-" /> · billed {detail.data.billDate}
+          </>
+        ) : undefined
       }
     >
       <div className="bss-modal-body">

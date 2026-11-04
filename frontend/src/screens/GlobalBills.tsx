@@ -10,7 +10,7 @@ import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate } from '../format/dates';
-import { accountLabel } from '../format/ids';
+import { Id } from '../ui/Id';
 import { formatInt, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { PageTitle, Panel, StatusPill, Segmented, TextInput } from '../ui/kit';
@@ -124,7 +124,7 @@ export function BillsScreen() {
         />
         {tab === 'bills' && account !== null && (
           <span className="bss-run-tag" data-ui="ui.bills.accountChip">
-            Account {name ?? accountLabel(account)}{' '}
+            Account {name ?? <Id id={account} prefix="BA-" />}{' '}
             <button
               type="button"
               className="bss-link"
@@ -171,8 +171,9 @@ export function BillsScreen() {
                                 accountId: bill.billingAccount.id,
                               })}
                             >
-                              {bill.billingAccount.name ?? accountLabel(bill.billingAccount.id)}
-                            </Link>
+                              {bill.billingAccount.name ?? 'Account'}
+                            </Link>{' '}
+                            <Id id={bill.billingAccount.id} prefix="BA-" />
                           </span>
                         ),
                         date: businessDate(bill.billDate, timeZone),

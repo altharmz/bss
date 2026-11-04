@@ -19,7 +19,7 @@ import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime } from '../format/dates';
-import { accountLabel, shortId } from '../format/ids';
+import { shortId } from '../format/ids';
 import { formatCents, formatInt } from '../format/money';
 import { Modal, PageTitle, Panel, StatusPill, Segmented, KeyValue } from '../ui/kit';
 import { Amount } from '../ui/Amount';
@@ -83,8 +83,9 @@ function AccountLink({ id, name }: { id: string; name: string | null }) {
   return (
     <span className="ellipsis" onClick={(e) => e.stopPropagation()}>
       <Link className="bss-link" href={hrefOf({ name: 'subscriber', accountId: id })}>
-        {name ?? accountLabel(id)}
-      </Link>
+        {name ?? 'Account'}
+      </Link>{' '}
+      <Id id={id} prefix="BA-" />
     </span>
   );
 }
@@ -94,7 +95,7 @@ function actionCells(action: BalanceAction, timeZone: string) {
     account: <AccountLink id={action.sender.id} name={action.sender.name} />,
     kind: actionLabel(action),
     requested: stamp(action.requestedDate, timeZone),
-    amount: formatCents(action.cents),
+    amount: <Amount cents={action.cents} signed />,
     status: <StatusPill kind="balanceAction" status={action.status} label={statusLabel(action)} />,
   };
 }
@@ -190,7 +191,7 @@ export function BalancesScreen() {
         )}
         {account !== null && (
           <span className="bss-run-tag" data-ui="ui.balances.accountChip">
-            Account {name ?? accountLabel(account)}{' '}
+            Account {name ?? <Id id={account} prefix="BA-" />}{' '}
             <button
               type="button"
               className="bss-link"

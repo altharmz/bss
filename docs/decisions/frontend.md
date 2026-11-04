@@ -770,3 +770,4 @@ Deviations:
   balance action). An uncertain result offers Refresh, as for any other write.
 - TEST-CHANGE: `App.test.tsx` expects the System section in the sidebar.
 
+Ledger v2 slice 13 (R13): Prepaid commands (dense table, `Dialog` + `KeyValue`), Bills, Global bills, Payments, Balances and Prepaid history print billing-account, command, payment, balance-action and bill-link ids as `Id` (never `accountLabel`/`shortId` text); payment and balance movements use `Amount` (payments and balance actions `signed`, refunds negative). Deviation: financial, party and settlement accounts, and buckets have no D5 prefix, so their ids stay plain text; "Built in" was already a `Tag`; the order and product ids in the command dialog are no longer links (an `Id` is a copy button).

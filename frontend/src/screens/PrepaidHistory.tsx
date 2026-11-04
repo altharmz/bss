@@ -18,6 +18,7 @@ import { useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate, clockTime, lastDay } from '../format/dates';
 import { shortId } from '../format/ids';
+import { Id } from '../ui/Id';
 import { formatCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Button, Modal, Panel, StatusPill, TextInput, useToast, KeyValue } from '../ui/kit';
@@ -236,7 +237,7 @@ export function ActionDialog({
   const rows: [string, ReactNode][] = [];
   if (detail.status === 'ok') {
     const a = detail.data;
-    rows.push(['Id', shortId(a.id)], ['Kind', a.kind], ['Status', statusLabel(a)]);
+    rows.push(['Id', <Id id={a.id} prefix="BAL-" />], ['Kind', a.kind], ['Status', statusLabel(a)]);
     rows.push(['Amount', formatCents(Math.abs(a.cents)) + (a.cents < 0 ? ' (debit)' : '')]);
     rows.push(['Requested', when(a.requestedDate, timeZone)]);
     if (a.confirmationDate) rows.push(['Confirmed', when(a.confirmationDate, timeZone)]);
