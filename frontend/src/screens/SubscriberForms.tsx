@@ -1,7 +1,7 @@
 import { DialogFooter } from '../ui/kit';
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import {
   BUILT_IN_CYCLE,
   createBillingAccount,
@@ -27,7 +27,7 @@ import { useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { accountLabel } from '../format/ids';
 import { parseAmount } from '../format/money';
-import { SelectField, Button, Checkbox, Modal, Segmented, TextInput } from '../ui/kit';
+import { Button, Checkbox, Dialog, Field, SelectField, Segmented, TextInput } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { AddProductModal } from './AddProduct';
 import { uncertain } from './submissionKey';
@@ -37,14 +37,7 @@ import { uncertain } from './submissionKey';
 // The backend validates everything again; the checks here only keep obviously wrong
 // requests from being sent.
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="bss-field">
-      <span className="label">{label}</span>
-      {children}
-    </label>
-  );
-}
+export { Field };
 
 /** A credit limit field: empty = none, else a non-negative amount (canonical string). */
 function limitOf(text: string): { ok: boolean; value: string | null } {
@@ -223,13 +216,13 @@ export function NewSubscriberModal({
     return <InitialProduct accountId={createdId} onDone={() => onCreated(createdId, name)} />;
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="New subscriber"
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.subscribers.new"
-      subtitle="A party, its customer and a billing account"
+      context="A party, its customer and a billing account"
       footer={
         <>
           {problem !== null && <StepProblem {...problem} />}
@@ -240,10 +233,17 @@ export function NewSubscriberModal({
         </>
       }
     >
-      <div className="bss-modal-body">
+      <>
         <section>
-          <Segmented label="Subscriber type" value={kind} onChange={setKind} options={KINDS} />{' '}
           <Segmented
+            as="radio"
+            label="Subscriber type"
+            value={kind}
+            onChange={setKind}
+            options={KINDS}
+          />
+          <Segmented
+            as="radio"
             label="Account mode"
             value={draft.mode}
             onChange={draft.setMode}
@@ -283,8 +283,8 @@ export function NewSubscriberModal({
             label="After creating the account, add a product. Offerings that need a subscriber number ask for one."
           />
         </section>
-      </div>
-    </Modal>
+      </>
+    </Dialog>
   );
 }
 
@@ -325,13 +325,13 @@ export function AddBillingAccountModal({
   }
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Add billing account"
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.account.new"
-      subtitle={`Customer ${customer.name}`}
+      context={`Customer ${customer.name}`}
       footer={
         <>
           {problem !== null && (
@@ -346,9 +346,10 @@ export function AddBillingAccountModal({
         </>
       }
     >
-      <div className="bss-modal-body">
+      <>
         <section>
           <Segmented
+            as="radio"
             label="Account mode"
             value={draft.mode}
             onChange={draft.setMode}
@@ -358,8 +359,8 @@ export function AddBillingAccountModal({
         <section className="bss-form">
           <AccountFields draft={draft} />
         </section>
-      </div>
-    </Modal>
+      </>
+    </Dialog>
   );
 }
 
@@ -377,14 +378,14 @@ function InitialProduct({ accountId, onDone }: { accountId: string; onDone: () =
       />
     );
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Subscriber created"
-      width={560}
+      size="M"
       onClose={onDone}
       footer={<Button onClick={onDone}>Open subscriber</Button>}
     >
-      <div className="bss-modal-body">
+      <>
         <p>The account was created. Add its initial product next.</p>
         {account.status === 'error' && (
           <ErrorBlock
@@ -393,8 +394,8 @@ function InitialProduct({ accountId, onDone }: { accountId: string; onDone: () =
             onRetry={account.retry}
           />
         )}
-      </div>
-    </Modal>
+      </>
+    </Dialog>
   );
 }
 
@@ -412,27 +413,27 @@ export function EditSubscriberModal({
 }) {
   const profile = useResource(`profile:${account.id}`, (signal) => loadProfile(account, signal));
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Edit subscriber"
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.subscriber.edit"
-      subtitle={`${account.customerName} · ${accountLabel(account.id)}`}
+      context={`${account.customerName} · ${accountLabel(account.id)}`}
     >
       {profile.status === 'loading' && (
-        <div className="bss-modal-body">
+        <>
           <SkeletonRows columns={[{ key: 'a', label: '', width: '1fr' }]} rows={5} />
-        </div>
+        </>
       )}
       {profile.status === 'error' && (
-        <div className="bss-modal-body">
+        <>
           <ErrorBlock
             title="Failed to load the subscriber"
             error={profile.error}
             onRetry={profile.retry}
           />
-        </div>
+        </>
       )}
       {profile.status === 'ok' && (
         <EditForm
@@ -442,7 +443,7 @@ export function EditSubscriberModal({
           onSaved={onSaved}
         />
       )}
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -502,7 +503,7 @@ function EditForm({
 
   return (
     <>
-      <div className="bss-modal-body">
+      <>
         <section className="bss-form">
           <div className="bss-step-head">
             {form.kind === 'Individual' ? 'Person' : 'Organization'}
@@ -692,7 +693,7 @@ function EditForm({
             Cycle specifications, formats and media are managed under Billing settings.
           </div>
         </section>
-      </div>
+      </>
       <DialogFooter>
         {problem !== null && (
           <Note tone="negative" className="footer-push">
@@ -745,13 +746,13 @@ export function DeleteSubscriberModal({
   }
 
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="Delete billing account"
-      width={480}
+      size="M"
       onClose={onClose}
       ui="ui.subscriber.deleteConfirm"
-      subtitle={`${account.customerName} · ${accountLabel(account.id)}`}
+      context={`${account.customerName} · ${accountLabel(account.id)}`}
       footer={
         <>
           {problem !== null && (
@@ -767,9 +768,9 @@ export function DeleteSubscriberModal({
         </>
       }
     >
-      <div className="bss-modal-body">
+      <>
         <p>Deletes the billing account. Its customer and party stay (delete them under Parties).</p>
-      </div>
-    </Modal>
+      </>
+    </Dialog>
   );
 }

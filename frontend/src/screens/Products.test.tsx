@@ -103,6 +103,20 @@ describe('products screen', () => {
     );
   });
 
+  it('maps product states to their pill families and shows PRD- ids', async () => {
+    backend({ [`GET ${PRODUCTS}?${PAGE}`]: () => json([first, second], { total: 2 }) });
+    open('/products');
+    await screen.findByText('Plus 20');
+    const rows = screen.getAllByRole('row');
+    const row = (name: string) => rows.find((r) => within(r).queryByText(name)) as HTMLElement;
+    expect(within(row('Basic 10')).getByText('Active').classList.contains('pill-live')).toBe(true);
+    expect(within(row('Plus 20')).getByText('Terminated').classList.contains('pill-ended')).toBe(
+      true,
+    );
+    expect(within(row('Basic 10')).getByText('PRD-')).toBeTruthy();
+    expect(within(row('Basic 10')).getByText('E0000001')).toBeTruthy();
+  });
+
   it('filters on the account chip from the URL and removes it', async () => {
     const { calls } = backend({
       [`GET ${PRODUCTS}?billingAccount.id=${A1}&${PAGE}`]: () => json([first], { total: 1 }),

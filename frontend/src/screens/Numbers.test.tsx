@@ -102,7 +102,8 @@ describe('number inventory', () => {
     });
     inventory();
     fireEvent.click(await screen.findByRole('button', { name: used.value }));
-    await screen.findByText(/Open subscriber|active/);
+    const assigned = await screen.findByText('Active');
+    expect(assigned.classList.contains('pill-live')).toBe(true);
     expect(screen.queryByText('Delete number')).toBeNull();
     fireEvent.click(within(screen.getByRole('dialog')).getByText('Close'));
     fireEvent.click(await screen.findByRole('button', { name: stock.value }));
