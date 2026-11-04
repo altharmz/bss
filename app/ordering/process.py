@@ -315,10 +315,15 @@ def _process(
         problems += [
             Problem(*p) for p in prepaid_orders.problems(conn, request, account, start, today)
         ]
-        if purchase and not problems:
+        change = all(i.action == "modify" and i.product_offering_id for i in request.items)
+        if (purchase or change) and not problems:
             try:
-                prepared = prepaid_orders.prepare(
-                    conn, request, account, quotes, start, now, future=start > today
+                prepared = (
+                    prepaid_orders.prepare(
+                        conn, request, account, quotes, start, now, future=start > today
+                    )
+                    if purchase
+                    else prepaid_orders.prepare_changes(conn, request, account, quotes, start, now)
                 )
             except InsufficientFunds as exc:
                 problems.append(Problem(None, "insufficientFunds", str(exc)))
@@ -365,7 +370,9 @@ def _process(
         elif prepaid and all(i.action == "delete" for i in request.items):
             prepaid_orders.terminate(conn, order, request, rows, command_id, start, today, now)
         elif prepaid and all(i.product_offering_id is not None for i in request.items):
-            prepaid_orders.change_offerings(conn, order, request, rows, start, today, now)
+            prepaid_orders.change_offerings(
+                conn, order, request, rows, start, today, now, command_id, prepared
+            )
         elif prepaid and prepaid_orders.number_only(request):
             _execute(conn, order, request, rows, start, today, locked, now)
         elif prepaid and start > today:
@@ -515,6 +522,15 @@ def _modify_problems(
         ]
     pending = products.pending_change(conn, product["id"], today)
     last = products.last_change(conn, product["id"])
+    if account["rating_type"] == "prepaid" and (
+        waiting := prepaid_orders.waiting_change(conn, product["id"])
+    ):
+        return [
+            (
+                "offeringChangePending",
+                f"another order already changes its offering on {waiting['change_date']}",
+            )
+        ]
     if pending is not None or (last is not None and last["change_date"] >= start):
         day = (pending or last)["change_date"]
         return [("openModifyItem", f"another order already changes its offering on {day}")]

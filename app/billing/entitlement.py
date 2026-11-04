@@ -23,7 +23,8 @@ def effective_state(product, account, grant, today):
 def latest_grant(conn, product_id):
     return fetch_one(
         conn,
-        "SELECT * FROM funded_interval WHERE product_id = %s ORDER BY upper(period) DESC LIMIT 1",
+        "SELECT * FROM funded_interval WHERE product_id = %s"
+        " ORDER BY lower(period) DESC, authorized_at DESC LIMIT 1",
         (product_id,),
     )
 

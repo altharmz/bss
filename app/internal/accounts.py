@@ -23,6 +23,7 @@ from app.billing import entitlement
 from app.billing.core import charge_taxes, compute, cycle_period, price_at, product_charge_period
 from app.billing.model import Account, BillingState, DateRange, MissingPrice, Price, Product
 from app.billing.prepaid import IntervalQuote, TaxQuote
+from app.billing.termination import credit
 from app.config import settings
 from app.internal.context import no_query
 from app.ordering.cancel import undoable_status_change
@@ -46,14 +47,17 @@ def _cadence(price: Price) -> dict[str, str]:
     return {"recurringChargePeriod": unit if length == 1 else f"{length} {unit}s"}
 
 
-def _params(request: Request, *names: str) -> dict[str, str]:
-    """Exactly these query parameters, each once; anything else is a 400."""
+def _params(request: Request, *names: str, optional: tuple[str, ...] = ()) -> dict[str, str]:
+    """These query parameters, each once, and the optional ones if given; anything else
+    is a 400."""
     for name in request.query_params:
-        if name not in names:
+        if name not in names + optional:
             raise bad_request(f"unknown query parameter {name}")
     values = {}
-    for name in names:
+    for name in names + optional:
         given = request.query_params.getlist(name)
+        if not given and name in optional:
+            continue
         if not given:
             raise bad_request(f"{name} is required")
         if len(given) > 1:
@@ -114,8 +118,9 @@ def first_charge(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> 
     orders completed before 00:00 of D - and lands on the first bill on or after that run
     date. balanceAfter is today's balance minus this one charge, nothing else.
     """
-    params = _params(request, "productOffering.id", "startDate")
+    params = _params(request, "productOffering.id", "startDate", optional=("product.id",))
     offering_id = _uuid_param("productOffering.id", params["productOffering.id"])
+    changed = _uuid_param("product.id", params["product.id"]) if "product.id" in params else None
     start = _date_param("startDate", params["startDate"])
     tz = ZoneInfo(settings.billing_tz)
     today = clock.today()
@@ -149,7 +154,7 @@ def first_charge(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> 
                     f"productOffering {offering['name']} has no recurring price in"
                     f" {account.currency} valid on {start}"
                 ) from None
-            return _prepaid_first_charge(conn, row, offering, start, price, account, today)
+            return _prepaid_first_charge(conn, row, offering, start, price, account, today, changed)
         try:
             [charge] = compute(state, start, tz).abrs
             price = price_at(product, start, state.prices, account.currency, tz)
@@ -206,6 +211,7 @@ def _prepaid_first_charge(
     price: Price,
     account: Account,
     today: date,
+    changed: UUID | None = None,
 ) -> TmfJSONResponse:
     """A prepaid purchase pays its first interval in full, tax included, from the funds
     left after holds, and the interval starts on the start date (anniversary periods:
@@ -234,6 +240,7 @@ def _prepaid_first_charge(
     shortfall = max(Decimal(0), required - available)
     currency = account.currency
     run_date = max(start, today)
+    unused = None if changed is None else _unused_credit(conn, row["id"], changed, start)
     return TmfJSONResponse(
         {
             "billingAccount": {"id": str(row["id"])},
@@ -251,14 +258,36 @@ def _prepaid_first_charge(
             "billDate": run_date,
             "next": None,
             "balance": money(snapshot.ledger, currency),
-            "balanceAfter": money(snapshot.ledger - required, currency),
+            "balanceAfter": money(snapshot.ledger - required + (unused or 0), currency),
             "creditLimit": None,
             "exceedsCreditLimit": shortfall > 0,
             "required": money(required, currency),
             "available": money(available, currency),
             "shortfall": money(shortfall, currency),
+            **({} if unused is None else {"credit": money(unused, currency)}),
         }
     )
+
+
+def _unused_credit(conn, account_id, product_id, start: date) -> Decimal:
+    """What changing this prepaid product's offering on `start` credits for the unused
+    dates of its paid interval, tax included (a termination credit's arithmetic); zero at
+    or after its paid-through date. The credit funds nothing at acceptance."""
+    product = products.get_product(conn, product_id)
+    if product is None or product["billing_account_id"] != account_id:
+        raise unprocessable(f"product {product_id} does not belong to this billing account")
+    grant = entitlement.latest_grant(conn, product_id)
+    if grant is None or not grant["period"].lower <= start < grant["period"].upper:
+        return Decimal(0)
+    found = credit(
+        billing.get_abr(conn, grant["applied_rate_id"]),
+        DateRange(grant["period"].lower, grant["period"].upper),
+        start,
+    )
+    if found is None:
+        return Decimal(0)
+    net, taxes = found
+    return -(net + sum((t.amount for t in taxes), Decimal(0)))
 
 
 def _next_charge(state: BillingState, today: date, tz: ZoneInfo) -> date | None:

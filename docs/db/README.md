@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0047**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0048**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -194,6 +194,7 @@ flowchart LR
   funded_interval -->|"billing_run_id, command_id"| billing_run
   funded_interval -->|"command_id, billing_account_id, command_kind"| prepaid_command
   funded_interval -->|"product_id, billing_account_id"| product
+  funded_interval -->|"supersedes_interval_id, product_id"| funded_interval
   funding_command_hold -->|"hold_id, billing_account_id"| funding_hold
   funding_consumption -->|"action_id, billing_account_id"| balance_action
   funding_consumption -->|"credit_bill_id, billing_account_id"| customer_bill
@@ -892,6 +893,7 @@ erDiagram
     numeric amount FK
     numeric tax_amount FK
     jsonb quote
+    uuid supersedes_interval_id FK
   }
   funding_hold_conversion {
     uuid hold_id PK,FK
@@ -1007,6 +1009,7 @@ erDiagram
   customer_bill ||--o{ bill_allocation : "customer_bill_id, billing_account_id"
   customer_bill ||--o{ customer_bill_state_change : "customer_bill_id"
   customer_bill ||--o{ funding_conversion_bill : "customer_bill_id, billing_account_id"
+  funded_interval |o--o{ funded_interval : "supersedes_interval_id, product_id"
   funding_command_hold |o--o{ balance_action : "command_id, hold_id"
   funding_command_hold ||--o{ funding_hold_conversion : "hold_id"
   funding_consumption |o--o{ funding_source : "consumption_id, billing_account_id"

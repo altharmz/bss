@@ -126,6 +126,14 @@ paths:
           in: query
           required: true
           schema: {type: string, format: date}
+        - name: product.id
+          in: query
+          required: false
+          description: >-
+            Prepaid accounts only. The product whose offering would change on startDate: the
+            answer adds credit (the unused dates of its paid interval, tax included) and
+            balanceAfter counts it.
+          schema: {type: string, format: uuid}
       responses:
         '200':
           description: OK
@@ -802,6 +810,12 @@ components:
           allOf: [{$ref: '#/components/schemas/Money'}]
         shortfall:
           description: Prepaid accounts only. What is missing to start the purchase now; zero when covered.
+          allOf: [{$ref: '#/components/schemas/Money'}]
+        credit:
+          description: >-
+            Prepaid accounts, when product.id is given. What the change credits for the unused
+            dates of the product's paid interval, tax included; not counted on to fund the
+            new interval.
           allOf: [{$ref: '#/components/schemas/Money'}]
     AccountProduct:
       type: object

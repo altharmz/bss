@@ -668,7 +668,9 @@ function PrepaidPreview({
   today: string;
   onTopUp: ((amount: string) => void) | undefined;
 }) {
-  const now = start === today;
+  // an offering change holds the new interval when the order is placed, whatever its date
+  const change = p.credit !== undefined;
+  const now = start === today || change;
   const cur = p.amount.unit;
   const required = p.required ?? p.amount;
   const shortfallCents = p.shortfall === undefined ? 0 : toCents(p.shortfall.value);
@@ -689,7 +691,7 @@ function PrepaidPreview({
           <dd>paid in full in advance, no proration</dd>
         </dl>
         <dl>
-          <dt>{now ? 'To pay now' : `To pay on ${start}`}</dt>
+          <dt>{change ? 'Held now' : now ? 'To pay now' : `To pay on ${start}`}</dt>
           <dd>
             <span className="first" data-testid="prepaid-required">
               {formatAmount(required.value)} {required.unit}
@@ -705,9 +707,17 @@ function PrepaidPreview({
               </dd>
             </>
           )}
+          {p.credit !== undefined && (
+            <>
+              <dt>Credit for unused days</dt>
+              <dd>
+                {formatAmount(p.credit.value)} {p.credit.unit}
+              </dd>
+            </>
+          )}
           {now && (
             <>
-              <dt>Ledger after</dt>
+              <dt>{change ? 'Balance after' : 'Ledger after'}</dt>
               <dd>
                 <Amount cents={toCents(p.balanceAfter.value)} currency={p.balanceAfter.unit} />
               </dd>
@@ -735,9 +745,11 @@ function PrepaidPreview({
         </Note>
       )}
       <div className="footnote">
-        {now
-          ? 'Submitting holds the full interval with its taxes; the billing worker charges it and renews at the paid-through date while funds last.'
-          : `On ${start} the billing worker takes the interval from the funds available then.`}
+        {change
+          ? `Submitting holds the new interval now; on ${start} the billing worker credits the unused days and charges it.`
+          : now
+            ? 'Submitting holds the full interval with its taxes; the billing worker charges it and renews at the paid-through date while funds last.'
+            : `On ${start} the billing worker takes the interval from the funds available then.`}
       </div>
     </div>
   );

@@ -298,8 +298,9 @@ export function ChangeOfferingDialog({
   const context = useSystemContext();
   const today = context.businessDate;
   const prepaid = account.ratingType === 'prepaid';
-  // prepaid: the change applies at the next renewal, max(paidThrough, today); postpaid: the
-  // cycle boundary by default, any date from today
+  // prepaid: any date from today to the paid-through date (default: the renewal there; a
+  // date before it credits the unused days); an expired product changes today. Postpaid:
+  // the cycle boundary by default, any date from today
   const boundary =
     product.paidThrough != null && product.paidThrough > today ? product.paidThrough : today;
   const [day, setDay] = useState(
@@ -317,7 +318,7 @@ export function ChangeOfferingDialog({
   const [unsure, setUnsure] = useState(false);
   const saving = useRef(false);
   const name = product.productOffering.name;
-  const valid = isIsoDate(day) && (prepaid || day >= today);
+  const valid = isIsoDate(day) && day >= today && (!prepaid || day <= boundary);
 
   const offerings = useResource('offerings', (signal) =>
     loadSellableOfferings(account.currency, signal),
@@ -328,7 +329,7 @@ export function ChangeOfferingDialog({
   const previewKey = offeringId !== null && valid ? `change:${offeringId}|${day}` : 'none';
   const preview = useResource<FirstCharge | null>(previewKey, (signal) =>
     offeringId !== null && valid
-      ? loadFirstCharge(account.id, offeringId, day, signal)
+      ? loadFirstCharge(account.id, offeringId, day, signal, prepaid ? product.id : undefined)
       : Promise.resolve(null),
   );
   const q = filter.trim().toLowerCase();
@@ -486,25 +487,35 @@ export function ChangeOfferingDialog({
           <TextInput
             mono
             width={180}
-            type={prepaid ? 'text' : 'date'}
+            type="date"
             aria-label="Date"
-            min={prepaid ? undefined : today}
+            min={today}
+            max={prepaid ? boundary : undefined}
             value={day}
-            readOnly={prepaid}
-            onChange={(event) => {
-              if (!prepaid) setDay(event.target.value);
-            }}
+            onChange={(event) => setDay(event.target.value)}
           />
-          {!valid && <Note tone="negative">Enter a date from {today}.</Note>}
+          {!valid && (
+            <Note tone="negative">
+              Enter a date from {today}
+              {prepaid ? ` to ${boundary}` : ''}.
+            </Note>
+          )}
           <p className="bss-secondary">
             {prepaid
-              ? `The change applies at the next renewal (${day}) and only when the balance covers the new offering's interval; until then the current offering stays.`
+              ? day === boundary
+                ? `The change applies at the next renewal (${day}) and only when the balance covers the new offering's interval; until then the current offering stays.`
+                : `The unused days of the paid interval are credited on ${day}, and the new offering's first interval is held from the balance now.`
               : `The old offering is billed until ${addDays(day, -1)}, the new one from ${day}; a charge already billed for the period is adjusted by a prorated refund.`}
           </p>
         </section>
         <section>
           <div className="bss-step-head">
-            3. {prepaid ? `Renewal on ${day}` : `New offering from ${day}`}
+            3.{' '}
+            {prepaid
+              ? day === boundary
+                ? `Renewal on ${day}`
+                : `Change on ${day}`
+              : `New offering from ${day}`}
           </div>
           <div className="bss-preview">
             {offeringId === null ? (

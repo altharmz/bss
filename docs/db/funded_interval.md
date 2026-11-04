@@ -27,6 +27,7 @@ Immutable prepaid service grants. Persistence foundation only; the future billin
 | `amount` | `numeric(12,2)` | no |  | Exact original charge before tax; immutable and matched to the ABR. |
 | `tax_amount` | `numeric(12,2)` | no |  | Exact original tax total; immutable and matched to the ABR. |
 | `quote` | `jsonb` | no |  | Immutable price/tax snapshot; the future posting caller validates its structure. |
+| `supersedes_interval_id` | `uuid` | yes |  | The earlier grant whose unused dates this mid-period offering change credited; only a grant that supersedes another may overlap it. |
 
 ## Foreign keys
 
@@ -37,6 +38,7 @@ Immutable prepaid service grants. Persistence foundation only; the future billin
 | `billing_run_id`, `command_id` | [`billing_run`](billing_run.md) (id, command_id) | `funded_interval_billing_run_id_command_id_fkey` |
 | `command_id`, `billing_account_id`, `command_kind` | [`prepaid_command`](prepaid_command.md) (id, billing_account_id, kind) | `funded_interval_command_id_billing_account_id_command_kind_fkey` |
 | `product_id`, `billing_account_id` | [`product`](product.md) (id, billing_account_id) | `funded_interval_product_id_billing_account_id_fkey` |
+| `supersedes_interval_id`, `product_id` | [`funded_interval`](funded_interval.md) (id, product_id) | `funded_interval_supersedes_fkey` |
 
 ## Constraints
 
@@ -52,12 +54,15 @@ Immutable prepaid service grants. Persistence foundation only; the future billin
 | `funded_interval_period_check` | check | `CHECK (((NOT isempty(period)) AND (lower(period) IS NOT NULL) AND (upper(period) IS NOT NULL) AND isfinite(lower(period)) AND isfinite(upper(period))))` |
 | `funded_interval_quote_check` | check | `CHECK ((jsonb_typeof(quote) = 'object'::text))` |
 | `funded_interval_rating_type_check` | check | `CHECK ((rating_type = 'prepaid'::text))` |
+| `funded_interval_supersedes_kind` | check | `CHECK (((supersedes_interval_id IS NULL) OR (command_kind = 'order'::text)))` |
+| `funded_interval_supersedes_self` | check | `CHECK ((supersedes_interval_id <> id))` |
 | `funded_interval_tax_amount_check` | check | `CHECK (((tax_amount >= (0)::numeric) AND (tax_amount <> 'NaN'::numeric)))` |
 | `funded_interval_pkey` | primary key | `PRIMARY KEY (id)` |
 | `funded_interval_applied_rate_id_key` | unique | `UNIQUE (applied_rate_id)` |
 | `funded_interval_command_id_product_id_key` | unique | `UNIQUE (command_id, product_id)` |
-| `funded_interval_product_id_anchor_date_interval_index_key` | unique | `UNIQUE (product_id, anchor_date, interval_index)` |
-| `funded_interval_product_id_period_excl` | exclusion | `EXCLUDE USING gist (product_id WITH =, period WITH &&)` |
+| `funded_interval_id_product_key` | unique | `UNIQUE (id, product_id)` |
+| `funded_interval_supersedes_key` | unique | `UNIQUE (supersedes_interval_id)` |
+| `funded_interval_product_id_period_excl` | exclusion | `EXCLUDE USING gist (product_id WITH =, period WITH &&) WHERE ((supersedes_interval_id IS NULL))` |
 
 ## Indexes
 
@@ -67,9 +72,11 @@ Immutable prepaid service grants. Persistence foundation only; the future billin
 | `funded_interval_billing_account_id_idx` | `CREATE INDEX funded_interval_billing_account_id_idx ON funded_interval USING btree (billing_account_id)` | no |
 | `funded_interval_billing_run_id_idx` | `CREATE INDEX funded_interval_billing_run_id_idx ON funded_interval USING btree (billing_run_id)` | no |
 | `funded_interval_command_id_product_id_key` | `CREATE UNIQUE INDEX funded_interval_command_id_product_id_key ON funded_interval USING btree (command_id, product_id)` | yes |
+| `funded_interval_id_product_key` | `CREATE UNIQUE INDEX funded_interval_id_product_key ON funded_interval USING btree (id, product_id)` | yes |
 | `funded_interval_pkey` | `CREATE UNIQUE INDEX funded_interval_pkey ON funded_interval USING btree (id)` | yes |
-| `funded_interval_product_id_anchor_date_interval_index_key` | `CREATE UNIQUE INDEX funded_interval_product_id_anchor_date_interval_index_key ON funded_interval USING btree (product_id, anchor_date, interval_index)` | yes |
-| `funded_interval_product_id_period_excl` | `CREATE INDEX funded_interval_product_id_period_excl ON funded_interval USING gist (product_id, period)` | yes |
+| `funded_interval_product_id_anchor_date_interval_index_key` | `CREATE UNIQUE INDEX funded_interval_product_id_anchor_date_interval_index_key ON funded_interval USING btree (product_id, anchor_date, interval_index) WHERE (supersedes_interval_id IS NULL)` | no |
+| `funded_interval_product_id_period_excl` | `CREATE INDEX funded_interval_product_id_period_excl ON funded_interval USING gist (product_id, period) WHERE (supersedes_interval_id IS NULL)` | yes |
+| `funded_interval_supersedes_key` | `CREATE UNIQUE INDEX funded_interval_supersedes_key ON funded_interval USING btree (supersedes_interval_id)` | yes |
 
 ## Triggers
 

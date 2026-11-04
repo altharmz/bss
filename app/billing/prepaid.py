@@ -99,7 +99,8 @@ def _renewal_quote(conn, cmd, account, today, tz):
     )
     latest = fetch_one(
         conn,
-        "SELECT id FROM funded_interval WHERE product_id = %s ORDER BY upper(period) DESC LIMIT 1",
+        "SELECT id FROM funded_interval WHERE product_id = %s"
+        " ORDER BY lower(period) DESC, authorized_at DESC LIMIT 1",
         (prod["id"],),
     )
     if latest["id"] != previous["id"] or previous["period"].upper != cmd["due_date"]:
@@ -332,7 +333,9 @@ def post_interval(
         return commands.complete(conn, command_id, result, now=now)["result"]
 
 
-def _post_purchase(conn, cmd, account, run, quote, period, total, original_quote, now, today):
+def _post_purchase(
+    conn, cmd, account, run, quote, period, total, original_quote, now, today, supersedes=None
+):
     coverage = Range(period.start, period.end, "[)")
     abr = billing.insert_abr(
         conn,
@@ -372,8 +375,8 @@ def _post_purchase(conn, cmd, account, run, quote, period, total, original_quote
         conn,
         "INSERT INTO funded_interval (product_id, billing_account_id, currency, command_id,"
         " command_kind, billing_run_id, applied_rate_id, authorized_at, period, anchor_date,"
-        " interval_index, amount, tax_amount, quote)"
-        " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
+        " interval_index, amount, tax_amount, quote, supersedes_interval_id)"
+        " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *",
         (
             quote.product_id,
             account.id,
@@ -389,6 +392,7 @@ def _post_purchase(conn, cmd, account, run, quote, period, total, original_quote
             quote.amount,
             total - quote.amount,
             jsonb(original_quote),
+            supersedes,
         ),
     )
     return {

@@ -1,5 +1,63 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## Mid-period offering change (2026-11-04, issue #151)
+
+A prepaid modify item with `productOffering` may now request any date `D` with
+`today <= D <= paidThrough` of the product's latest grant (P3h kept only the renewal).
+`D == paidThrough` is the P3h path, unchanged. A funding-suspended product (paid-through
+passed) changes `today` only; `D` after paid-through is `offeringChangeNotAtRenewal`
+("after the current paid-through date"). No first grant is `productNotStarted`, a set
+termination `productAlreadyEnded`. One change may wait per product: another is
+`offeringChangePending` (before the generic `openModifyItem`).
+
+**Acceptance (`today <= D < paidThrough`).** The new offering's first interval from `D`
+is quoted in full, tax-inclusive, with the account's exemptions, anchored at `D`, and the
+whole amount is held from current spendable funds, never the anticipated credit (the rule
+of multi-item purchases). A shortfall is a stored `insufficientFunds` with nothing held.
+Otherwise one `order` command due `D` carries the exact-source hold and
+`{"order_id", "offering_changes": [interval quotes]}`; the change is retained in
+`product_offering_change` and the order and item stay `inProgress`. Items of the same
+order changing at their renewal keep the P3h retained change and complete with the order.
+
+**Execution on `D` (`app/billing/offering_change.py`, one transaction).** For each
+product: (1) the old grant's unused dates `[D, paidThrough)` are credited exactly as a P3g
+termination credit (`termination.credit_grant`: net for the used dates rounded once,
+credit = that minus the charge, tax at the charge's rates, a `refund` ABR of the command
+run with a settled `offCycle` credit note, spendable after posting; `D` equal to the grant
+start credits the whole interval); (2) the hold converts and the new interval is posted
+like a purchase, as a grant that **supersedes** the old one; (3) the retained change gets
+`effect_announced_at` and TMF637 AttributeValueChange, the items and the order complete
+(TMF622 StateChange). A late worker still credits from `D`. Any failure rolls everything
+back; the hold and the pending tree stay for retry; replay posts nothing twice. A
+`realizingResource` in the same item moves the number on `D` as at a renewal.
+
+**Cancellation.** Before `D`, `cancelProductOrder` releases the hold, removes the retained
+changes and completes the command `cancelled`. On or after `D`: 409 (change the offering
+again with a new order). Upgrade and downgrade are the same flow. Postpaid is unchanged.
+
+**Schema (migration `0048`).** The issue expected no schema change; the new grant
+`[D, D + interval)` overlaps the old `[start, paidThrough)`, which three rules refused.
+`funded_interval.supersedes_interval_id` (nullable, unique, FK with the product) marks the
+grant that replaces another. The no-overlap exclusion and the
+`(product_id, anchor_date, interval_index)` uniqueness now apply to grants that supersede
+nothing, so a superseding grant overlaps (or restarts the anchor of) only what it replaces;
+the app checks that it replaces the grant covering `D`. The ABR uniqueness
+`abr_one_per_start` becomes `(product_id, charge_type, period, product_offering_id)`, since
+a change dated the old grant's first day charges the new offering from the same date.
+Known limit: changing back to the same offering for the same period on the same day
+(A to B to A on the grant's first day) is refused at posting by that index. The downgrade
+refuses while superseding grants or charges sharing a first day exist.
+
+"Latest grant" is now ordered by start then `authorized_at` (not by end), because a
+downgrade to a shorter plan ends before the grant it supersedes.
+
+**Preview and UI.** Internal `GET /billingAccount/{id}/firstCharge` takes an optional
+`product.id`; with it `credit` (tax-inclusive, zero at or after paid-through) is returned
+and `balanceAfter` is ledger minus the held amount plus the credit. The product's Change
+offering dialog on a prepaid product offers a date from today to paid-through (default
+paid-through) and shows the credit, the amount held now and the balance after. The write
+body is unchanged and pinned in `tests/test_ui_requests.py` and `SubscriberCard.test.tsx`.
+
 ## Slice 8: dated prepaid status changes and number-only changes (2026-10-25)
 
 Built as designed, no migration, no contract or MCP change (`create_order` never stated a

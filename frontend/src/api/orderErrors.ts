@@ -10,7 +10,10 @@ export const ORDER_ERRORS: Record<string, string> = {
   numberRequirementDiffers:
     'Choose an offering with the same subscriber number requirement as this product.',
   numberUnavailable: 'This subscriber number is unavailable. Choose another number.',
-  offeringChangeNotAtRenewal: 'Choose the prepaid product’s renewal date for the offering change.',
+  offeringChangeNotAtRenewal:
+    'Choose a date from today to the prepaid product’s paid-through date for the offering change.',
+  offeringChangePending:
+    'Another order already changes this prepaid offering. Undo that change first.',
   offeringNotSellable: 'This offering is no longer available for sale.',
   offeringNotValid: 'This offering is not valid on the selected date.',
   offeringUnchanged: 'The product already uses this offering on the selected date.',

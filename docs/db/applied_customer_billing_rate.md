@@ -63,7 +63,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `abr_grant_identity` | `CREATE UNIQUE INDEX abr_grant_identity ON applied_customer_billing_rate USING btree (id, product_id, billing_account_id, billing_run_id, period, currency, amount, tax_amount, charge_type)` | yes |
-| `abr_one_per_start` | `CREATE UNIQUE INDEX abr_one_per_start ON applied_customer_billing_rate USING btree (product_id, charge_type, lower(period))` | no |
+| `abr_one_per_start` | `CREATE UNIQUE INDEX abr_one_per_start ON applied_customer_billing_rate USING btree (product_id, charge_type, period, product_offering_id)` | no |
 | `applied_customer_billing_rate_balance_action_id_key` | `CREATE UNIQUE INDEX applied_customer_billing_rate_balance_action_id_key ON applied_customer_billing_rate USING btree (balance_action_id)` | yes |
 | `applied_customer_billing_rate_billing_account_id_idx` | `CREATE INDEX applied_customer_billing_rate_billing_account_id_idx ON applied_customer_billing_rate USING btree (billing_account_id)` | no |
 | `applied_customer_billing_rate_billing_run_id_idx` | `CREATE INDEX applied_customer_billing_rate_billing_run_id_idx ON applied_customer_billing_rate USING btree (billing_run_id)` | no |
