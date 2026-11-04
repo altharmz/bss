@@ -118,6 +118,11 @@ describe('parties list', () => {
     expect(link.getAttribute('href')).toBe(`/subscribers/${A1}`);
     // a person without a customer or an account is reachable too
     expect(rowOf(/Olga/)?.textContent).toContain('Initialized');
+    // party kind: initialized is Draft, validated is Live
+    const pill = (row: HTMLElement | undefined, label: string) =>
+      within(row as HTMLElement).getByText(label).classList;
+    expect(pill(rowOf(/Olga/), 'Initialized').contains('pill-draft')).toBe(true);
+    expect(pill(rowOf(/Ivan Petrov/), 'Validated').contains('pill-live')).toBe(true);
 
     tab('Organizations');
     expect(await screen.findByText('Lone Ltd')).toBeTruthy();
@@ -133,6 +138,8 @@ describe('parties list', () => {
     expectUi('ui.parties.customers');
     expect(rowOf(/Ivan Petrov/)?.textContent).toContain('Ivan Petrov');
     expect(rowOf(/Ivan Second/)?.textContent).toContain('Created');
+    // customer kind: Created is Draft
+    expect(pill(rowOf(/Ivan Second/), 'Created').contains('pill-draft')).toBe(true);
     expect(calls).toContain(`GET ${PARTY}/individual?${PAGE}`);
     expect(calls).toContain(`GET ${PARTY}/organization?${PAGE}`);
     expect(calls).toContain(`GET ${CUSTOMERS}?fields=name,status,engagedParty&${PAGE}`);
@@ -507,7 +514,7 @@ describe('billing accounts of a customer', () => {
     const dialog = await customerDialog();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add billing account' }));
     const add = await screen.findByRole('dialog', { name: 'Add billing account' });
-    fireEvent.click(within(add).getByRole('button', { name: 'Prepaid' }));
+    fireEvent.click(within(add).getByRole('radio', { name: 'Prepaid' }));
     expect(within(add).queryByLabelText('Billing cycle day (1-28)')).toBeNull();
     fireEvent.change(within(add).getByLabelText('Account name'), { target: { value: 'Wallet' } });
     fireEvent.click(within(add).getByRole('button', { name: 'Add billing account' }));

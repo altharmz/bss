@@ -424,6 +424,8 @@ Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use
 
 Ledger v2: explicit product StatusPill.
 
+R12: PageHeader with filters; `PRD-` and `ORD-` Ids; M detail Dialog with KeyValue and a compact order-items table.
+
 Route `/products` (sidebar Products). TMF637 `product` over every status: server filters status and
 `?account=` chip, client filters offering and number. Columns: product, offering, subscriber, status,
 start, end, number. A row opens the detail (`GET product/{id}`): dates, order items with a link to
@@ -434,6 +436,8 @@ Orders, the realizing resource. Read-only; orders alone change products. Slice 2
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.
 
 Ledger v2: explicit order StatusPill.
+
+R12: PageHeader with the state filter; `ORD-` Id; L detail Dialog with KeyValue, compact items (PRD- Ids, Amount prices) and cancellations tables; details and cancel forms use Field.
 
 Route `/orders`. The list is read-only, the dialog writes (slice 10, below). TMF622 `productOrder` pages of 50, newest first: read `X-Total-Count`, fetch the last 50 matching rows, reverse them, and walk backwards through earlier pages. The final page uses only the remaining rows. Existing rows stay mounted during paging; only the first load shows a skeleton. After a write only the changed order is read again (deleted rows are removed), alongside the existing navigation count refresh. State
 filter, `?account=<id>` chip (the card's "Orders" link `ui.subscriber.orders`). Columns: order id,

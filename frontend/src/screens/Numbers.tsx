@@ -14,7 +14,18 @@ import { explain } from '../api/client';
 import { useResource } from '../api/useResource';
 import { useSetCrumbs } from '../app/context';
 import { Link } from '../app/router';
-import { Button, Modal, PageTitle, Panel, TextInput, useToast } from '../ui/kit';
+import {
+  Button,
+  Dialog,
+  Field,
+  KeyValue,
+  PageHeader,
+  SelectField,
+  StatusPill,
+  Tag,
+  TextInput,
+  useToast,
+} from '../ui/kit';
 import { Footer, useWrite } from './FinancialForms';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
@@ -34,17 +45,20 @@ export function NumbersScreen() {
   const [selected, setSelected] = useState<SubscriberNumber | null>(null);
   return (
     <div className="bss-screen" data-ui="ui.numbers.list">
-      <div className="bss-title-row">
-        <PageTitle title="Numbers" />
-        <Button onClick={() => setCreating(true)}>New number</Button>
-      </div>
-      <TextInput
-        aria-label="Search numbers"
-        placeholder="Search numbers"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
+      <PageHeader
+        title="Numbers"
+        count={numbers.status === 'ok' ? numbers.data.length : undefined}
+        actions={<Button onClick={() => setCreating(true)}>New number</Button>}
+        filters={
+          <TextInput
+            aria-label="Search numbers"
+            placeholder="Search numbers"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        }
       />
-      <Panel>
+      <div role="table" aria-label="Numbers" className="bss-page-table">
         <TableHead columns={COLUMNS} />
         <ListState
           resource={numbers}
@@ -62,15 +76,15 @@ export function NumbersScreen() {
                 columns={COLUMNS}
                 cells={{
                   value: <Button onClick={() => setSelected(n)}>{n.value}</Button>,
-                  allocation: n.allocationStatus,
-                  usage: n.usageState,
-                  admin: n.administrativeState,
+                  allocation: n.allocationStatus && <Tag>{n.allocationStatus}</Tag>,
+                  usage: n.usageState && <Tag>{n.usageState}</Tag>,
+                  admin: n.administrativeState && <Tag>{n.administrativeState}</Tag>,
                 }}
               />
             ))
           }
         </ListState>
-      </Panel>
+      </div>
       {creating && (
         <NewNumber
           onClose={() => setCreating(false)}
@@ -115,10 +129,10 @@ function NewNumber({ onClose, onCreated }: { onClose: () => void; onCreated: () 
     }
   }
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title="New number"
-      width={560}
+      size="M"
       onClose={onClose}
       ui="ui.numbers.create"
       footer={
@@ -134,15 +148,12 @@ function NewNumber({ onClose, onCreated }: { onClose: () => void; onCreated: () 
         </>
       }
     >
-      <div className="bss-modal-body">
-        <label className="bss-field">
-          Number
-          <TextInput value={value} onChange={(e) => setValue(e.target.value)} />
-        </label>
-        <p>E.164 digits only, 8–15 digits, without a plus sign or spaces.</p>
-        {problem && <div role="alert">{problem}</div>}
-      </div>
-    </Modal>
+      <Field label="Number">
+        <TextInput mono value={value} onChange={(e) => setValue(e.target.value)} />
+      </Field>
+      <p className="bss-caption">E.164 digits only, 8–15 digits, without a plus sign or spaces.</p>
+      {problem && <Note tone="negative">{problem}</Note>}
+    </Dialog>
   );
 }
 
@@ -190,10 +201,10 @@ function NumberDetail({
     }
   }
   return (
-    <Modal
+    <Dialog
       onSubmit={submitDialogPrimary}
       title={number.value ?? 'Number'}
-      width={640}
+      size="M"
       onClose={onClose}
       ui="ui.numbers.detail"
       footer={
@@ -216,19 +227,23 @@ function NumberDetail({
         </Footer>
       }
     >
-      <div className="bss-modal-body">
+      <>
         {fresh.status === 'error' && (
           <ErrorBlock title="Failed to load the number" error={fresh.error} onRetry={fresh.retry} />
         )}
-        <p>
-          {number.name} · {number.allocationStatus} · {number.usageState} ·{' '}
-          {number.administrativeState}
-        </p>
+        <KeyValue
+          items={[
+            ['Name', number.name ?? '—'],
+            ['Allocation', number.allocationStatus ?? '—'],
+            ['Usage', number.usageState ?? '—'],
+            ['Administration', number.administrativeState ?? '—'],
+          ]}
+        />
         <p>Locking prevents new assignments. Accepted assignments and current service continue.</p>
         <Button disabled={busy || uncertain} onClick={() => void toggle()}>
           {number.administrativeState === 'locked' ? 'Unlock' : 'Lock'}
         </Button>
-        {problem && <div role="alert">{problem}</div>}
+        {problem && <Note tone="negative">{problem}</Note>}
         {neverAssigned && (
           <>
             <Button
@@ -258,7 +273,7 @@ function NumberDetail({
           (products.data.length ? (
             products.data.map((p) => (
               <p key={p.id}>
-                {p.name ?? p.id} · {p.status}
+                {p.name ?? p.id} <StatusPill kind="product" status={p.status ?? ''} />
                 {p.billingAccount?.id && (
                   <>
                     {' '}
@@ -270,8 +285,8 @@ function NumberDetail({
           ) : (
             <p>No current or future product assignment.</p>
           ))}
-      </div>
-    </Modal>
+      </>
+    </Dialog>
   );
 }
 
@@ -289,9 +304,8 @@ export function NumberPicker({
       <ErrorBlock title="Failed to load numbers" error={numbers.error} onRetry={numbers.retry} />
     );
   return (
-    <label className="bss-field">
-      Subscriber number
-      <select
+    <Field label="Subscriber number">
+      <SelectField
         aria-label="Subscriber number"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -308,11 +322,11 @@ export function NumberPicker({
                 {n.value}
               </option>
             ))}
-      </select>
+      </SelectField>
       <Note tone="info">
         The order checks availability for the requested dates, including future claims and
         quarantine.
       </Note>
-    </label>
+    </Field>
   );
 }

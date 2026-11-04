@@ -240,7 +240,8 @@ describe('orders list', () => {
     expect(within(row).getByRole('link', { name: 'Ivan Ivanov' }).getAttribute('href')).toBe(
       `/subscribers/${A1}`,
     );
-    expect(within(row).getByText('completed')).toBeTruthy();
+    expect(within(row).getByText('Completed').classList.contains('pill-live')).toBe(true);
+    expect(within(row).getByText('ORD-')).toBeTruthy();
     expect(within(row).getByText('Add Basic 10')).toBeTruthy();
     expect(within(row).getByText('2026-10-05')).toBeTruthy();
     expect(screen.getByText('End product D0000001')).toBeTruthy();
@@ -308,11 +309,11 @@ describe('orders list', () => {
         ),
     });
     open();
-    fireEvent.click(await screen.findByText('C0000001'));
+    fireEvent.click((await screen.findByText('C0000001')).closest('[role="row"]') as HTMLElement);
     const dialog = await screen.findByRole('dialog');
     expectUi('ui.orders.detail');
     expectUi('ui.orders.items');
-    expect(within(dialog).getByText('12.00 USD')).toBeTruthy();
+    expect(within(dialog).getByText('12.00')).toBeTruthy();
     expect(await within(dialog).findByText('Customer changed their mind')).toBeTruthy();
     expectUi('ui.orders.cancellations');
     expect(within(dialog).queryByText(/Open its command/)).toBeNull(); // not inProgress
@@ -326,7 +327,7 @@ describe('orders list', () => {
         json([{ id: O2, productOrder: { id: O2 } }], { total: 1 }),
     });
     open();
-    fireEvent.click(await screen.findByText('C0000002'));
+    fireEvent.click((await screen.findByText('C0000002')).closest('[role="row"]') as HTMLElement);
     const link = await screen.findByRole('link', { name: 'Open its command' });
     expect(link.getAttribute('href')).toBe(`/prepaid-commands?account=${A1}`);
     expectUi('ui.orders.command');
@@ -344,7 +345,7 @@ describe('orders list', () => {
       [`GET ${CANCELS}?productOrder.id=${O1}&offset=0&limit=100`]: () => json([], { total: 0 }),
     });
     open();
-    fireEvent.click(await screen.findByText('C0000001'));
+    fireEvent.click((await screen.findByText('C0000001')).closest('[role="row"]') as HTMLElement);
     expect(await screen.findByText('The offering is retired')).toBeTruthy();
   });
 });
@@ -392,7 +393,7 @@ function sent(fetchMock: ReturnType<typeof backend>['fetchMock']) {
 }
 
 async function openOrder(shortId: string) {
-  fireEvent.click(await screen.findByText(shortId));
+  fireEvent.click((await screen.findByText(shortId)).closest('[role="row"]') as HTMLElement);
   return screen.findByRole('dialog');
 }
 
