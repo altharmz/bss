@@ -106,7 +106,11 @@ describe('refunds', () => {
     render(
       <RefundModal account={account} initialLimit={10025} onClose={close} onRecorded={vi.fn()} />,
     );
-    fireEvent.change(screen.getByLabelText('Refund method'), { target: { value: 'other' } });
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Refund method' })).getByRole('button', {
+        name: 'Other',
+      }),
+    );
     const save = screen.getByRole('button', { name: 'Record refund' });
     expect((save as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('Refund method name'), { target: { value: 'Cheque' } });
@@ -203,7 +207,7 @@ describe('refunds', () => {
     expectUi('ui.subscriber.refunds');
     expect(screen.getByText('2026-10-01 00:30:00')).toBeTruthy();
     expect(screen.getByText('25.10 USD')).toBeTruthy();
-    expect(screen.getByText('card')).toBeTruthy();
+    expect(screen.getByText('Card')).toBeTruthy();
   });
 
   it('disables refunds before settlement loads or when net credit is zero', () => {

@@ -7,7 +7,7 @@ import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link } from '../app/router';
 import { businessDate } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
-import { Button, Modal, PageTitle, Panel, StatusPill, TextInput } from '../ui/kit';
+import { SelectField, Button, Modal, PageTitle, Panel, StatusPill, TextInput } from '../ui/kit';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import './screens.css';
@@ -79,7 +79,7 @@ export function ProductsScreen() {
         <span className="bss-caption">Every product, in every status</span>
       </div>
       <div className="bss-toolbar">
-        <select
+        <SelectField
           aria-label="Status"
           data-ui="ui.products.status"
           value={status}
@@ -91,7 +91,7 @@ export function ProductsScreen() {
               {s}
             </option>
           ))}
-        </select>
+        </SelectField>
         <TextInput
           aria-label="Filter by offering"
           placeholder="Offering"

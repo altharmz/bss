@@ -245,7 +245,7 @@ describe('catalog', () => {
     await open();
     expect(await screen.findByText('Catalog is empty')).toBeTruthy();
     expect(
-      screen.getByText('Create the first product offering. It starts in In Design.'),
+      screen.getByText('Create the first product offering. It starts in In design.'),
     ).toBeTruthy();
     expect(screen.getAllByRole('button', { name: '+ New offering' })).toHaveLength(2);
   });
@@ -280,7 +280,7 @@ describe('new offering', () => {
   }
   const field = (dialog: HTMLElement, label: RegExp) => within(dialog).getByLabelText(label);
   const create = (dialog: HTMLElement) =>
-    within(dialog).getByRole('button', { name: 'Create in In Design' }) as HTMLButtonElement;
+    within(dialog).getByRole('button', { name: 'Create as In design' }) as HTMLButtonElement;
 
   it('validates as the design says, and enables Create only when complete', async () => {
     backend();
@@ -353,7 +353,7 @@ describe('new offering', () => {
 
     expect(await screen.findByRole('status')).toHaveProperty(
       'textContent',
-      'Offering MOB-XL created in In Design',
+      'Offering MOB-XL created in In design',
     );
     expect(created).toBe(true);
     const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
@@ -1816,7 +1816,7 @@ describe('import and export jobs', () => {
     expect(button.disabled).toBe(true);
     const box = within(dialog).getByLabelText(/paste the document/i);
     fireEvent.change(box, { target: { value: '{oops' } });
-    expect(within(dialog).getByText('The document is not valid JSON')).toBeTruthy();
+    expect(within(dialog).getByText('Choose a file exported from a catalog export')).toBeTruthy();
     expect(button.disabled).toBe(true);
     fireEvent.change(box, { target: { value: DOC } });
     fireEvent.click(button);

@@ -1,3 +1,4 @@
+import { PAYMENT_METHOD_OPTIONS } from '../format/labels';
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useRef, useState } from 'react';
@@ -16,7 +17,16 @@ import { isIsoDate } from '../format/dates';
 import { formatCents, parseAmount, positiveAmountError, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { Id } from '../ui/Id';
-import { Button, Dialog, Field, MoneyField, Segmented, TextInput } from '../ui/kit';
+import {
+  SelectField,
+  Button,
+  Dialog,
+  Field,
+  MoneyField,
+  Segmented,
+  DateField,
+  TextInput,
+} from '../ui/kit';
 import { uncertain, useSubmissionKey } from './submissionKey';
 import { ErrorBlock } from '../ui/states';
 
@@ -27,8 +37,6 @@ import { ErrorBlock } from '../ui/states';
 // doing it twice; an edited form, a refusal or a success starts a new key.
 
 export type MoneyForm = 'topup' | 'adjust' | 'hold';
-
-const METHODS = ['bankTransfer', 'card', 'cash'];
 
 /** Reserve both outcome labels in the shared write-button grid while saving. */
 export function MoneySubmitButton({
@@ -74,7 +82,7 @@ export function PrepaidMoneyModal({
   const context = useSystemContext();
   const [amountText, setAmountText] = useState(initialAmount ?? '');
   const [direction, setDirection] = useState<'credit' | 'debit'>('credit');
-  const [method, setMethod] = useState(METHODS[0] ?? 'cash');
+  const [method, setMethod] = useState(PAYMENT_METHOD_OPTIONS[0]?.key ?? 'cash');
   const [other, setOther] = useState('');
   const [reason, setReason] = useState('');
   const [numberId, setNumberId] = useState('');
@@ -238,10 +246,7 @@ export function PrepaidMoneyModal({
                 label="Payment method"
                 value={method}
                 onChange={setMethod}
-                options={[...METHODS, 'other'].map((m) => ({
-                  key: m,
-                  label: m === 'other' ? 'Other' : m,
-                }))}
+                options={PAYMENT_METHOD_OPTIONS}
               />
             </Field>
             {method === 'other' && (
@@ -258,9 +263,7 @@ export function PrepaidMoneyModal({
         {form === 'hold' && (
           <section>
             <Field label="Holds through (optional)">
-              <TextInput
-                mono
-                width={180}
+              <DateField
                 aria-label="Hold expires on"
                 placeholder="YYYY-MM-DD"
                 value={expiresOn}
@@ -313,8 +316,7 @@ function TopupNumber({
   return (
     <div data-ui="ui.subscriber.prepaid.topup.number">
       <Field label="Number (optional)">
-        <select
-          className="bss-input"
+        <SelectField
           aria-label="Number"
           value={value}
           disabled={numbers.status !== 'ok'}
@@ -329,7 +331,7 @@ function TopupNumber({
                 {number.value}
               </option>
             ))}
-        </select>
+        </SelectField>
       </Field>
       {numbers.status === 'error' && (
         <ErrorBlock title="Failed to load numbers" error={numbers.error} onRetry={numbers.retry} />

@@ -24,6 +24,7 @@ import type { PendingOrder } from '../api/commands';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link, useRouter } from '../app/router';
+import { eventTypeLabel, plural } from '../format/labels';
 import { lastDay, nextCycleDate } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatCents, toCents } from '../format/money';
@@ -1022,7 +1023,11 @@ function SubscriberMoneyStrip({
                   value: rows === null ? '…' : (paid ?? '—'),
                   sub: (
                     <>
-                      {days === null ? null : days >= 0 ? `in ${days} days` : `${-days} days ago`}
+                      {days === null
+                        ? null
+                        : days >= 0
+                          ? `in ${plural(days, 'day')}`
+                          : `${plural(-days, 'day')} ago`}
                       <div>earliest of its products, service ends here</div>
                     </>
                   ),
@@ -1048,7 +1053,7 @@ function SubscriberMoneyStrip({
                         <>
                           renewal needs {formatCents(toCents(worst.needs_topup.required))},
                           available {formatCents(toCents(worst.needs_topup.available))}
-                          {short.length > 1 ? ` · ${short.length} products` : ''}
+                          {short.length > 1 ? ` · ${plural(short.length, 'product')}` : ''}
                         </>
                       ) : rows === null ? null : (
                         'none'
@@ -1333,7 +1338,7 @@ function History({
       <div hidden={tab !== 'charges'}>
         <TabPanel id="subscriber" value="charges">
           <section data-ui="ui.subscriber.charges">
-            <Panel title="Charge history" subtitle="AppliedCustomerBillingRate">
+            <Panel title="Charge history" subtitle={eventTypeLabel('AppliedCustomerBillingRate')}>
               <TableHead columns={CHARGE_COLUMNS} />
               <SimpleList
                 resource={charges}

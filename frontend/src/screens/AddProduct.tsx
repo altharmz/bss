@@ -383,7 +383,6 @@ export function AddProductModal({
                 help={start === today ? 'Today (business date)' : undefined}
               >
                 <DateField
-                  type="date"
                   aria-label="Start date"
                   min={today}
                   value={start}

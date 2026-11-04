@@ -118,7 +118,7 @@ export function checkDocument(text: string): string | null {
   try {
     JSON.parse(text);
   } catch {
-    return 'The document is not valid JSON';
+    return 'Choose a file exported from a catalog export';
   }
   return null;
 }

@@ -99,7 +99,7 @@ describe('payments screen', () => {
     );
     expect(within(row).getByText('+100.00')).toBeTruthy();
     expect(within(row).getByText('USD')).toBeTruthy();
-    expect(within(row).getByText('bankTransfer')).toBeTruthy();
+    expect(within(row).getByText('Bank transfer')).toBeTruthy();
     expect(within(row).getByText('INV-77')).toBeTruthy();
     expect(screen.getByText('Showing 2')).toBeTruthy();
 

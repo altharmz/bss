@@ -13,7 +13,17 @@ import {
 import { useResource } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { businessDate, clockTime } from '../format/dates';
-import { Button, Modal, PageTitle, Panel, StatusPill, TextInput, useToast } from '../ui/kit';
+import {
+  SelectField,
+  Button,
+  Checkbox,
+  Modal,
+  PageTitle,
+  Panel,
+  StatusPill,
+  TextInput,
+  useToast,
+} from '../ui/kit';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { Footer, useWrite } from './FinancialForms';
@@ -191,8 +201,7 @@ function NewSubscription({
       <div className="bss-modal-body">
         <fieldset className="bss-form bss-write-fields" disabled={write.busy}>
           <Field label="API">
-            <select
-              className="bss-input"
+            <SelectField
               value={api.id}
               onChange={(e) => {
                 setApi(HUB_APIS.find((a) => a.id === e.target.value) ?? api);
@@ -204,7 +213,7 @@ function NewSubscription({
                   {a.id} {a.name} ({a.version})
                 </option>
               ))}
-            </select>
+            </SelectField>
           </Field>
           <Field label="Callback URL">
             <TextInput
@@ -217,14 +226,13 @@ function NewSubscription({
             <legend className="label">Event types (none chosen: every event)</legend>
             <div className="event-options">
               {events.map((event) => (
-                <label className="event-option" key={event}>
-                  <input
-                    type="checkbox"
-                    checked={chosen.includes(event)}
-                    onChange={() => toggle(event)}
-                  />{' '}
-                  {event}
-                </label>
+                <Checkbox
+                  key={event}
+                  className="event-option"
+                  checked={chosen.includes(event)}
+                  onChange={() => toggle(event)}
+                  label={event}
+                />
               ))}
             </div>
           </fieldset>

@@ -21,7 +21,7 @@ import {
 import { useResource } from '../api/useResource';
 import { useSystemContext } from '../app/context';
 import { parseAmount } from '../format/money';
-import { Button, Modal, Segmented, TextInput } from '../ui/kit';
+import { SelectField, Button, Modal, Segmented, TextInput } from '../ui/kit';
 import { Combobox } from '../ui/combobox';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { Field } from './SubscriberForms';
@@ -287,8 +287,7 @@ function Body({
           {linkable && (
             <>
               <Field label="Financial account">
-                <select
-                  className="bss-input"
+                <SelectField
                   data-ui={`${MARKER[kind]}.financialLink`}
                   value={form.financialId ?? ''}
                   disabled={form.owner === null || financial.status === 'loading'}
@@ -308,7 +307,7 @@ function Body({
                       financial.status === 'ok' &&
                       financial.data.some((choice) => choice.id === form.financialId)
                     ) && <option value={form.financialId}>Current financial account</option>}
-                </select>
+                </SelectField>
               </Field>
               {financial.status === 'error' && (
                 <Note tone="negative">
