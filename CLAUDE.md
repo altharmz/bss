@@ -102,8 +102,8 @@ Unknown values stay unknown, never zero. Setup and reporting: [telemetry-usage.m
 ## Current state
 
 - **Built:** the TMF APIs with the billing worker, the MCP connector, the prepaid line,
-  subscriber numbers, every MCP operation in the UI with the UI/MCP parity check, and the
-  Ledger v2 redesign.
+  subscriber numbers, every MCP operation in the UI with the UI/MCP parity check, the GUI
+  review fixes and the Ledger v2 redesign ([release evidence](docs/ui-redesign-release.md)).
 - **Planned code work** is board issues, listed in run order in epic #43 (rules and specs: the epic
   and slice issues, [patterns.md](docs/patterns.md); the
   handoff `design-ref/design_handoff_bss_admin_v2/` is read-only). Everything else open
