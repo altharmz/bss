@@ -25,6 +25,7 @@
   "productOfOtherAccount",
   "realizingResourceDuplicate",
   "requestedStartDateInPast",
+  "serviceAddressRequired",
   "statusUnchanged",
   "terminationInPeriod"
 ]

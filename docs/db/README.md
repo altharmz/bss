@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0052**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0053**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -47,6 +47,7 @@ PostgreSQL schema at Alembic head **0052**, read from `pg_catalog` of a throwawa
 | [`funding_command_hold`](funding_command_hold.md) | billing | Retained internal command-to-hold retry identity; no public API or worker caller. |
 | [`prepaid_command`](prepaid_command.md) | billing | Durable internal prepaid command journal; no runtime dispatcher or public API yet. Request and completed result are retained. |
 | [`network_command`](network_command.md) | billing | Durable outbound provisioning command of one prepaid order item; sent by the billing worker through the network adapter, the item completes only when it is confirmed. |
+| [`tax_transaction`](tax_transaction.md) | billing | The tax engine transaction behind one prepaid charge (ABR): committed when the charge is booked, voided when the whole charge is credited. |
 | [`prepaid_funding_shortfall`](prepaid_funding_shortfall.md) | billing | Retained needs-top-up observations; current only while the command is pending. Not technical retry attempts. |
 | [`funded_interval`](funded_interval.md) | billing | Immutable prepaid service grants. Persistence foundation only; the future billing owner must atomically post and settle the charge, convert its hold and complete the command. |
 | [`funding_hold_conversion`](funding_hold_conversion.md) | billing | Retained internal command hold conversion; no runtime caller. |
@@ -122,6 +123,7 @@ flowchart LR
     funding_command_hold[funding_command_hold]
     prepaid_command[prepaid_command]
     network_command[network_command]
+    tax_transaction[tax_transaction]
     prepaid_funding_shortfall[prepaid_funding_shortfall]
     funded_interval[funded_interval]
     funding_hold_conversion[funding_hold_conversion]
@@ -262,6 +264,8 @@ flowchart LR
   refund_source -->|"funding_source_id, billing_account_id"| funding_source
   refund_source -->|"payment_id, billing_account_id"| payment
   refund_source -->|"refund_id, billing_account_id"| refund
+  tax_transaction -->|"applied_rate_id"| applied_customer_billing_rate
+  tax_transaction -->|"billing_account_id"| billing_account
   worker_request -->|"run_id"| billing_run
 ```
 
@@ -311,6 +315,7 @@ erDiagram
     text account_type
     jsonb details
     text rating_type
+    jsonb service_address
   }
   financial_account {
     uuid id PK
@@ -897,6 +902,17 @@ erDiagram
     timestamptz attempted_at
     timestamptz confirmed_at
   }
+  tax_transaction {
+    uuid id PK
+    uuid applied_rate_id FK
+    uuid billing_account_id FK
+    text quote_id
+    text state
+    jsonb address
+    jsonb lines
+    timestamptz committed_at
+    timestamptz voided_at
+  }
   prepaid_funding_shortfall {
     uuid command_id PK,FK
     timestamptz observed_at PK
@@ -1011,6 +1027,7 @@ erDiagram
   }
   applied_customer_billing_rate |o--o{ applied_customer_billing_rate : "refunds_rate_id, product_id"
   applied_customer_billing_rate ||--o{ funded_interval : "applied_rate_id, product_id, billing_account_id, billing_run_id, period, currency, amount, tax_amount, charge_type"
+  applied_customer_billing_rate ||--o{ tax_transaction : "applied_rate_id"
   balance_action |o--o{ applied_customer_billing_rate : "balance_action_id"
   balance_action ||--o{ balance_action_reversal : "action_id, billing_account_id, currency"
   balance_action ||--o{ funding_consumption : "action_id, billing_account_id"
@@ -1030,6 +1047,7 @@ erDiagram
   billing_account ||--o{ prepaid_bucket : "billing_account_id, currency, rating_type"
   billing_account ||--o{ prepaid_command : "billing_account_id"
   billing_account ||--o{ refund : "billing_account_id, currency"
+  billing_account ||--o{ tax_transaction : "billing_account_id"
   billing_run ||--o{ applied_customer_billing_rate : "billing_run_id"
   billing_run ||--o{ customer_bill : "billing_run_id"
   billing_run ||--o{ funded_interval : "billing_run_id, command_id"

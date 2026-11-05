@@ -20,8 +20,8 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from app.billing import entitlement
-from app.billing.core import charge_taxes
-from app.billing.prepaid import IntervalQuote, TaxQuote
+from app.billing.engine_tax import TaxUnavailable, quote_taxes
+from app.billing.prepaid import IntervalQuote
 from app.config import settings
 from app.events import emit
 from app.ordering import numbers
@@ -50,7 +50,7 @@ def problems(conn, request, account, start, today):
     resume (today or dated), or change a number; a non-Active account only suspends
     and terminates."""
     if all(item.action == "add" for item in request.items):
-        return []
+        return _address_problems(request, account)
     if all(item.action == "delete" for item in request.items):
         return _not_started(conn, request)
     if all(item.action == "modify" and item.product_offering_id for item in request.items):
@@ -75,6 +75,21 @@ def problems(conn, request, account, start, today):
             )
         )
     return found + _not_started(conn, request)
+
+
+def _address_problems(request, account):
+    """A prepaid line is taxed by the place of its primary use: no service address, no line."""
+    if account["service_address"] is not None or not settings.tax_require_service_address:
+        return []
+    return [
+        (
+            item.item_id,
+            "serviceAddressRequired",
+            "the billing account needs a service address (a contact of type serviceAddress)"
+            " before a prepaid line is activated",
+        )
+        for item in request.items
+    ]
 
 
 def number_only(request):
@@ -148,6 +163,17 @@ def mid_period(conn, request, start):
     ]
 
 
+def _taxes(conn, core, price, start, tz):
+    """The tax lines of a first interval, from the engine when the account has a service
+    address; an unavailable engine refuses the request (503) and nothing is held."""
+    try:
+        return quote_taxes(conn, core, core.id, price, price.amount, start, tz)
+    except TaxUnavailable as error:
+        from app.api.errors import TmfError  # lazily: app.api imports this package
+
+        raise TmfError(503, f"tax engine unavailable: {error}") from None
+
+
 def prepare_changes(conn, request, account, quotes, start, now):
     """Quote the new offering's first interval from `start` for each mid-period item and
     check the total against current spendable funds: the anticipated credit never funds it.
@@ -163,6 +189,7 @@ def prepare_changes(conn, request, account, quotes, start, now):
     out = []
     for item in items:
         price = prices[quotes[item.item_id]["id"]]
+        taxes, tax_quote_id = _taxes(conn, core, price, start, tz)
         out.append(
             IntervalQuote(
                 product_id=item.product_id,
@@ -170,10 +197,8 @@ def prepare_changes(conn, request, account, quotes, start, now):
                 price_id=price.id,
                 currency=account["currency"],
                 amount=price.amount,
-                taxes=[
-                    TaxQuote(category=t.category, rate=t.rate, amount=t.amount)
-                    for t in charge_taxes(price.amount, price, core, start, tz)
-                ],
+                taxes=taxes,
+                tax_quote_id=tax_quote_id,
                 anchor=start,
                 index=0,
                 unit=price.recurring_period,
@@ -399,18 +424,15 @@ def prepare(conn, request, account, quotes, start, now, *, future=False):
             accepted[item.item_id] = (new, None)
             continue
         price = prices[quotes[item.item_id]["id"]]
+        taxes, tax_quote_id = _taxes(conn, core, price, start, ZoneInfo(settings.billing_tz))
         quote = IntervalQuote(
             product_id=new.id,
             offering_id=item.product_offering_id,
             price_id=price.id,
             currency=account["currency"],
             amount=price.amount,
-            taxes=[
-                TaxQuote(category=t.category, rate=t.rate, amount=t.amount)
-                for t in charge_taxes(
-                    price.amount, price, core, start, ZoneInfo(settings.billing_tz)
-                )
-            ],
+            taxes=taxes,
+            tax_quote_id=tax_quote_id,
             anchor=start,
             index=0,
             unit=price.recurring_period,

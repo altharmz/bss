@@ -44,6 +44,18 @@ class Settings(BaseSettings):
         default="stub", validation_alias=AliasChoices("BSS_NETWORK_ADAPTER", "network_adapter")
     )
     network_max_attempts: int = Field(default=5, ge=1)
+    # Tax engine (docs/decisions/taxes.md). Only the stub exists; an unknown value fails
+    # startup. A prepaid line needs a service address (the tax is on its place of primary
+    # use); off, the order is accepted without one and the flat price tax applies.
+    tax_adapter: Literal["stub"] = Field(
+        default="stub", validation_alias=AliasChoices("BSS_TAX_ADAPTER", "tax_adapter")
+    )
+    tax_require_service_address: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "BSS_TAX_REQUIRE_SERVICE_ADDRESS", "tax_require_service_address"
+        ),
+    )
     # Separate credentials: smoke can only read; MCP cannot access user/session APIs.
     bss_service_secret: str = ""
     bss_smoke_secret: str = ""

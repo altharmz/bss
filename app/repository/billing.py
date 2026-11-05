@@ -500,6 +500,7 @@ def insert_abr(
             _jsonb(
                 [
                     {"taxCategory": t.category, "taxRate": t.rate, "taxAmount": t.amount}
+                    | ({"jurisdiction": t.jurisdiction} if t.jurisdiction else {})
                     for t in taxes
                 ]
             ),
@@ -518,7 +519,9 @@ def _jsonb(value: Any) -> Jsonb:
 def applied_taxes(row: Row) -> tuple[AppliedTax, ...]:
     """An ABR row's tax lines (none before 0025)."""
     return tuple(
-        AppliedTax(t["taxCategory"], Decimal(t["taxRate"]), Decimal(t["taxAmount"]))
+        AppliedTax(
+            t["taxCategory"], Decimal(t["taxRate"]), Decimal(t["taxAmount"]), t.get("jurisdiction")
+        )
         for t in row.get("applied_tax") or ()
     )
 

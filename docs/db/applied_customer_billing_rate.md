@@ -80,4 +80,4 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 
 ## Referenced by
 
-[`funded_interval`](funded_interval.md)
+[`funded_interval`](funded_interval.md), [`tax_transaction`](tax_transaction.md)

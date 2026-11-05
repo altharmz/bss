@@ -40,6 +40,7 @@ from uuid import UUID
 
 import psycopg
 from fastapi import APIRouter, Request, Response
+from psycopg.types.json import Jsonb
 from pydantic import Field
 
 from app.api import listing
@@ -84,13 +85,14 @@ from app.api.common import (
 from app.api.customer import customer_href
 from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
-from app.api.errors import bad_request, conflict, not_found, unprocessable
+from app.api.errors import bad_request, conflict, not_found, problems_error, unprocessable
 from app.api.presentation import BillStructure, structure_body
 from app.api.tmfjson import TmfJSONResponse
+from app.billing.engine_tax import service_address_of
 from app.config import settings
 from app.events import emit
 from app.repository import accounts, billing, cycles, parties, presentation
-from app.repository._sql import Row, count_references
+from app.repository._sql import Row, count_references, jsonb
 
 API = "TMF666"
 BASE = "/tmf-api/accountManagement/v5"
@@ -178,6 +180,15 @@ CYCLE_ATTRIBUTES = (
     "paymentDueDateOffset",
     *CYCLE_DOCUMENTS,
 )
+
+
+def service_address_column(contacts: Any) -> Jsonb | None:
+    """The `service_address` column for a contact document: the validated, normalized
+    contact of type serviceAddress (a 422 naming the path when it is not a US address)."""
+    address, problems = service_address_of(contacts)
+    if problems:
+        raise problems_error([(path, message, False) for path, message in problems])
+    return None if address is None else jsonb(address)
 
 
 def policy_offsets() -> dict[str, int]:
@@ -653,6 +664,7 @@ def create_account(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) ->
                 "description": data.description,
                 "account_type": data.account_type,
                 "details": merge_documents({"relatedParty": related}, documents),
+                "service_address": service_address_column(documents.get("contact")),
             },
         )
         if data.bill_structure is not None:
@@ -740,6 +752,8 @@ def patch_account(
             keep_link(conn, current["financial_account_id"], owner)
         if documents:
             changes["details"] = merge_documents(current["details"], documents)
+        if "contact" in documents:
+            changes["service_address"] = service_address_column(documents["contact"])
         row = parties.update_billing_account(conn, uid, changes)
         if mode != current["rating_type"] and mode == "prepaid":
             parties.create_bucket(conn, uid, clock.now())

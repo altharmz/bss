@@ -204,6 +204,13 @@ def install_test_user(conn):
     conn.commit()
 
 
+@pytest.fixture(autouse=True)
+def _no_service_address_gate(monkeypatch) -> None:
+    """Most tests buy prepaid lines on accounts without an address; tests/test_tax_engine.py
+    turns the gate (BSS_TAX_REQUIRE_SERVICE_ADDRESS, on by default) back on."""
+    monkeypatch.setattr(settings, "tax_require_service_address", False)
+
+
 @pytest.fixture
 def api(db_conn, migrated_db_url, monkeypatch):
     """The real app on the throwaway database with a FixedClock, behind a client that

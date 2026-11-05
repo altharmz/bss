@@ -15,14 +15,15 @@ from fastapi import APIRouter, Request
 from app.api import balance, bill, payment
 from app.api.common import money, parse_id
 from app.api.deps import ClockDep, Tx
-from app.api.errors import bad_request, not_found, unprocessable
+from app.api.errors import TmfError, bad_request, not_found, unprocessable
 from app.api.inventory import order_href, product_href
 from app.api.listing import parse_page
 from app.api.tmfjson import TmfJSONResponse
 from app.billing import entitlement
-from app.billing.core import charge_taxes, compute, cycle_period, price_at, product_charge_period
+from app.billing.core import compute, cycle_period, price_at, product_charge_period
+from app.billing.engine_tax import TaxUnavailable, quote_taxes
 from app.billing.model import Account, BillingState, DateRange, MissingPrice, Price, Product
-from app.billing.prepaid import IntervalQuote, TaxQuote
+from app.billing.prepaid import IntervalQuote
 from app.billing.termination import credit
 from app.config import settings
 from app.internal.context import no_query
@@ -220,14 +221,18 @@ def _prepaid_first_charge(
     interval. A start after today holds nothing at order time; the figures then show
     today's funds."""
     tz = ZoneInfo(settings.billing_tz)
-    taxes = charge_taxes(price.amount, price, account, start, tz)
+    try:
+        taxes, tax_quote_id = quote_taxes(conn, account, row["id"], price, price.amount, start, tz)
+    except TaxUnavailable as error:
+        raise TmfError(503, f"tax engine unavailable: {error}") from None
     quote = IntervalQuote(
         product_id=NO_PRODUCT,
         offering_id=price.offering_id,
         price_id=price.id,
         currency=account.currency,
         amount=price.amount,
-        taxes=[TaxQuote(category=t.category, rate=t.rate, amount=t.amount) for t in taxes],
+        taxes=taxes,
+        tax_quote_id=tax_quote_id,
         anchor=start,
         index=0,
         unit=price.recurring_period,
