@@ -159,6 +159,8 @@ HANDLERS = {
     "/internal/v1/prepaid/command": "app/internal/prepaid_commands.py",
     "/internal/v1/network/command": "app/internal/network_commands.py",
     "/internal/v1/sim": "app/internal/sims.py",
+    "/internal/v1/port": "app/internal/ports.py",
+    "/internal/v1/number": "app/internal/ports.py",
     "/internal/v1/payment/command": "app/internal/payments.py",
     "/internal/v1/billingAccount/{account_id}/cardTopup": "app/internal/payments.py",
     "/internal/v1/billingAccount/{account_id}/autoTopup": "app/internal/payments.py",
@@ -197,6 +199,8 @@ AREAS = {
         "subscriber_number",
         "number_assignment",
         "sim_batch",
+        "port_request",
+        "number_transfer_pin",
     ),
     "billing": (
         "billing_run",

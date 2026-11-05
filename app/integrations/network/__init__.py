@@ -11,6 +11,9 @@ from app.integrations.network.interface import (
     NetworkAdapter,
     NetworkRefused,
     NetworkTemporary,
+    NumberPoolExhausted,
+    PortOutRequest,
+    PortStatus,
 )
 
 __all__ = [
@@ -19,6 +22,9 @@ __all__ = [
     "NetworkAdapter",
     "NetworkRefused",
     "NetworkTemporary",
+    "NumberPoolExhausted",
+    "PortOutRequest",
+    "PortStatus",
     "adapter",
 ]
 

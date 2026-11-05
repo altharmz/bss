@@ -43,7 +43,16 @@ from app.events import emit
 from app.ordering import numbers as number_orders
 from app.ordering import prepaid as prepaid_orders
 from app.ordering.states import item_transition, order_transition
-from app.repository import billing, funding, network_commands, orders, parties, products, sims
+from app.repository import (
+    billing,
+    funding,
+    network_commands,
+    orders,
+    parties,
+    ports,
+    products,
+    sims,
+)
 from app.repository import prepaid_commands as commands
 from app.repository._sql import Row, fetch_one
 
@@ -294,18 +303,19 @@ def _cancel_sim_swap(conn, order, command, request, now):
     return _cancelled(conn, order, request, now)
 
 
-def _network_blocks_cancel(conn, order, command) -> None:
+def _network_blocks_cancel(conn, order, command, now) -> None:
     """A network step in flight is cancelled with the order; one the network confirmed,
     or an offering change waiting for its change_profile, is not undone."""
     if "profile_changes" in command["request"]:
         raise CancelRefused("an offering change waiting for the network cannot be cancelled")
     network_commands.cancel_open(conn, order["id"])
+    ports.cancel_for_order(conn, order["id"], now)
     if any(r["state"] == "confirmed" for r in network_commands.of_order(conn, order["id"])):
         raise CancelRefused("the network already confirmed this order: it cannot be cancelled")
 
 
 def _cancel_prepaid(conn, order, command, request, now, today):
-    _network_blocks_cancel(conn, order, command)
+    _network_blocks_cancel(conn, order, command, now)
     if "sim_swaps" in command["request"]:
         if order["state"] != "inProgress" or command["state"] == "completed":
             raise CancelRefused(

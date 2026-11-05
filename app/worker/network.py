@@ -57,7 +57,7 @@ def line_request(conn: psycopg.Connection, cmd: Row) -> dict[str, Any]:
     if cmd["product_id"] is not None:
         rows = fetch_all(
             conn,
-            "SELECT n.value, n.iccid, n.sim_type, n.resource_specification_id AS kind"
+            "SELECT n.value, n.iccid, n.sim_type, n.origin, n.resource_specification_id AS kind"
             " FROM number_assignment a JOIN subscriber_number n ON n.id = a.subscriber_number_id"
             " WHERE a.product_id = %s AND a.cancelled_at IS NULL ORDER BY a.effective_from DESC",
             (cmd["product_id"],),
@@ -76,6 +76,7 @@ def line_request(conn: psycopg.Connection, cmd: Row) -> dict[str, Any]:
         "imsi": None if imsi is None else imsi["value"],
         "iccid": None if imsi is None else imsi["iccid"],
         "simType": None if imsi is None else imsi["sim_type"],
+        "portedIn": msisdn is not None and msisdn["origin"] == "port_in",
         "profile": cmd["profile"],
         "serviceOrderItem": {
             "action": ACTION[cmd["kind"]],

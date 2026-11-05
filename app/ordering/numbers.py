@@ -4,7 +4,7 @@ from uuid import UUID
 
 from app.config import settings
 from app.events import emit
-from app.repository import catalog
+from app.repository import catalog, ports
 from app.repository import sims as sim_stock
 from app.repository._sql import fetch_all, fetch_one
 
@@ -94,6 +94,24 @@ def unavailable(conn, uid, start, end, *, exclude_product=None, kind="msisdn"):
         )
         is not None
     )
+
+
+def _port_in_reason(conn, row, item, product):
+    """Why a number brought by the customer cannot be claimed yet, or None: its port-in
+    needs to exist, and until the carrier completes it only a network line can wait for it."""
+    if row.get("origin") != "port_in":
+        return None
+    port = ports.open_for_number(conn, row["id"])
+    if port is None:
+        return "the port-in of this number was cancelled: request it again"
+    if port["state"] == "completed":
+        return None
+    from app.ordering import network as network_orders
+
+    offering = item.product_offering_id if item.action == "add" else product["product_offering_id"]
+    if network_orders.offering_profile(conn, offering) is None:
+        return "a number being ported in needs a network line offering"
+    return None
 
 
 def _uuid(reference):
@@ -192,6 +210,8 @@ def _item_problems(conn, item, product, needs, refs, locked, start, seen):
             reason = f"IMSI is {row['sim_state']}, not in stock"
         elif uid in seen or unavailable(conn, uid, start, end, kind=kind):
             reason = f"{NOUN[kind]} is assigned, reserved or quarantined"
+        elif kind == "msisdn" and (why := _port_in_reason(conn, row, item, product)):
+            reason = why
         elif product and any(
             c["effective_from"] > start and c["resource_specification_id"] == kind
             for c in claims(conn, [product["id"]])
