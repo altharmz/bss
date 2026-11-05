@@ -108,6 +108,8 @@ INTERNAL: dict[str, str] = {
     "/network/command": "NetworkCommand",
     "/network/command/{id}": "NetworkCommand",
     "/network/command/{id}/retry": "NetworkCommand",
+    "/sim/batch": "SimBatch",
+    "/sim/esim-generate": "SimBatch",
 }
 # Our own JSON Schemas for TMF extensions, served outside the TMF resource paths.
 SCHEMA_PREFIX = "/tmf-api/schema/"

@@ -14,7 +14,7 @@ Durable outbound provisioning command of one prepaid order item; sent by the bil
 | `product_order_id` | `uuid` | no |  |  |
 | `product_order_item_id` | `uuid` | no |  |  |
 | `product_id` | `uuid` | yes |  |  |
-| `kind` | `text` | no |  | activate (add), suspend, restore (resume), deactivate (terminate), change_profile (offering change). |
+| `kind` | `text` | no |  | activate (add), suspend, restore (resume), deactivate (terminate), change_profile (offering change), swap_sim (the line moves to another SIM or eSIM). |
 | `state` | `text` | no | `'pending'::text` | pending (to send, or retried after a temporary error), confirmed, refused (final: the network said no), exhausted (temporary errors used up the automatic attempts; an operator retries), cancelled (the order was cancelled first). |
 | `due_date` | `date` | no |  |  |
 | `profile` | `jsonb` | no |  | The offering's effective network profile at acceptance, sent unchanged. |
@@ -42,7 +42,7 @@ Durable outbound provisioning command of one prepaid order item; sent by the bil
 | `network_command_attempts_check` | check | `CHECK ((attempts >= 0))` |
 | `network_command_check` | check | `CHECK (((state = 'refused'::text) = (refusal_code IS NOT NULL)))` |
 | `network_command_check1` | check | `CHECK (((state = 'confirmed'::text) = (confirmed_at IS NOT NULL)))` |
-| `network_command_kind_check` | check | `CHECK ((kind = ANY (ARRAY['activate'::text, 'suspend'::text, 'restore'::text, 'deactivate'::text, 'change_profile'::text])))` |
+| `network_command_kind_check` | check | `CHECK ((kind = ANY (ARRAY['activate'::text, 'suspend'::text, 'restore'::text, 'deactivate'::text, 'change_profile'::text, 'swap_sim'::text])))` |
 | `network_command_profile_check` | check | `CHECK ((jsonb_typeof(profile) = 'object'::text))` |
 | `network_command_request_check` | check | `CHECK ((jsonb_typeof(request) = 'object'::text))` |
 | `network_command_state_check` | check | `CHECK ((state = ANY (ARRAY['pending'::text, 'confirmed'::text, 'refused'::text, 'exhausted'::text, 'cancelled'::text])))` |

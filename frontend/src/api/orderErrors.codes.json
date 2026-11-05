@@ -26,6 +26,8 @@
   "realizingResourceDuplicate",
   "requestedStartDateInPast",
   "serviceAddressRequired",
+  "simSwapAlone",
+  "simUnavailable",
   "statusUnchanged",
   "terminationInPeriod"
 ]

@@ -150,6 +150,8 @@ class ItemProduct(ProductRef):
     status: Literal["suspended", "active"] | None = None
     id: UUID | None = None
     realizing_resource: list[dict[str, Any]] | None = None
+    # an add item may choose the kind of SIM instead of naming one (docs/decisions/sim.md)
+    product_characteristic: list[dict[str, Any]] | None = None
 
 
 class OrderItemIn(ItemDocuments):  # type: ignore[misc,valid-type]
@@ -280,6 +282,17 @@ def _item_requests(items: list[OrderItemIn], sent: list[ItemSent]) -> tuple[Item
     )
 
 
+def _check_sim_type(item: OrderItemIn) -> None:
+    """productCharacteristic on an item is only the SIM kind of an add: `simType`."""
+    chosen = item.product.product_characteristic
+    if item.action != "add":
+        raise unprocessable(f"item {item.id}: productCharacteristic is writable only on add items")
+    if len(chosen) != 1 or chosen[0].get("name") != "simType":
+        raise unprocessable(f"item {item.id}: the only supported characteristic is simType")
+    if chosen[0].get("value") not in ("physical", "esim"):
+        raise unprocessable(f"item {item.id}: simType must be physical or esim")
+
+
 def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, Any]) -> ItemRequest:
     if item.action == "add":
         if item.product_offering is None:
@@ -313,10 +326,21 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
             " product.status (suspended or active), or product.realizingResource (a prepaid"
             " renewal may change productOffering and product.realizingResource together)"
         )
-    if item.product and item.product.realizing_resource is not None:
-        values, problems = specschema.check(
-            API, "Product_FVO", {"realizingResource": item.product.realizing_resource}
-        )
+    if item.product and item.product.product_characteristic is not None:
+        _check_sim_type(item)
+    if item.product and (
+        item.product.realizing_resource is not None
+        or item.product.product_characteristic is not None
+    ):
+        sent = {
+            key: value
+            for key, value in (
+                ("realizingResource", item.product.realizing_resource),
+                ("productCharacteristic", item.product.product_characteristic),
+            )
+            if value is not None
+        }
+        values, problems = specschema.check(API, "Product_FVO", sent)
         if problems:
             from app.api.errors import problems_error
 

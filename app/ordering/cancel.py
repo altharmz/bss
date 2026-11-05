@@ -43,7 +43,7 @@ from app.events import emit
 from app.ordering import numbers as number_orders
 from app.ordering import prepaid as prepaid_orders
 from app.ordering.states import item_transition, order_transition
-from app.repository import billing, funding, network_commands, orders, parties, products
+from app.repository import billing, funding, network_commands, orders, parties, products, sims
 from app.repository import prepaid_commands as commands
 from app.repository._sql import Row, fetch_one
 
@@ -284,6 +284,16 @@ def _cancel_status(conn, order, command, request, now):
     return _cancelled(conn, order, request, now)
 
 
+def _cancel_sim_swap(conn, order, command, request, now):
+    """A SIM swap the network has not confirmed: release the reserved SIMs, drop the command."""
+    for swap in command["request"]["sim_swaps"]:
+        sims.release_hold(conn, UUID(swap["subscriber_number_id"]), now)
+    for item in orders.items_of(conn, order["id"]):
+        orders.set_order_item_state(conn, item["id"], item_transition(item["state"], "cancelled"))
+    commands.complete(conn, command["id"], {"outcome": "cancelled"}, now=now)
+    return _cancelled(conn, order, request, now)
+
+
 def _network_blocks_cancel(conn, order, command) -> None:
     """A network step in flight is cancelled with the order; one the network confirmed,
     or an offering change waiting for its change_profile, is not undone."""
@@ -296,6 +306,15 @@ def _network_blocks_cancel(conn, order, command) -> None:
 
 def _cancel_prepaid(conn, order, command, request, now, today):
     _network_blocks_cancel(conn, order, command)
+    if "sim_swaps" in command["request"]:
+        if order["state"] != "inProgress" or command["state"] == "completed":
+            raise CancelRefused(
+                f"productOrder {order['id']} is {order['state']}: it cannot be cancelled"
+            )
+        parties.get_billing_account(conn, order["billing_account_id"], "update")
+        products.lock_products(conn, [i["product_id"] for i in orders.items_of(conn, order["id"])])
+        number_orders.lock(conn, [i["product_id"] for i in orders.items_of(conn, order["id"])])
+        return _cancel_sim_swap(conn, order, command, request, now)
     if "status_changes" in command["request"]:
         if order["state"] != "inProgress" or command["state"] == "completed":
             raise CancelRefused(

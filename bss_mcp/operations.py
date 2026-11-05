@@ -56,7 +56,12 @@ from app.internal.network_commands import STATES as NETWORK_STATES
 from app.internal.prepaid_commands import STATES
 
 # Not tools: the same list as docs/progress/scope.yaml `excluded` (area api).
-EXCLUDED = {("GET", "/")}
+EXCLUDED = {
+    ("GET", "/"),
+    ("GET", "/internal/v1/sim/batch"),
+    ("POST", "/internal/v1/sim/batch"),
+    ("POST", "/internal/v1/sim/esim-generate"),
+}
 # Interactive account credentials are deliberately never exposed as model tools.
 AUTH_OPERATIONS = {
     ("GET", "/internal/v1/session"),
@@ -114,7 +119,8 @@ class Op:
 
 OPERATIONS: dict[str, Op] = {
     "list_resources": Op(
-        "Subscriber numbers; filter by value, administrativeState, usageState or allocationStatus.",
+        "Subscriber numbers and SIMs (IMSI); filter by value, administrativeState, usageState,"
+        " allocationStatus, or for SIMs simState, simType and batchNumber.",
         query=LIST,
     ),
     "get_resource": Op("One subscriber number with dated allocation state.", query=FIELDS),

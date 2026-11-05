@@ -467,7 +467,7 @@ paths:
       summary: Network provisioning commands, newest first (issue 183).
       description: >-
         The commands of prepaid order items sent to the network (activate, suspend,
-        restore, deactivate, change_profile) with their internal state, attempts, last
+        restore, deactivate, change_profile, swap_sim) with their internal state, attempts, last
         error, refusal code, profile and the request as sent. Filter by order, product
         and state.
       parameters:
@@ -522,6 +522,102 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+  /sim/batch:
+    get:
+      summary: Stocked SIM and eSIM batches with their counts by state (issue 186).
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/SimBatch'}
+        '400': {$ref: '#/components/responses/Error'}
+    post:
+      summary: Stock a batch of physical SIMs or eSIM profiles, all or nothing.
+      description: >-
+        JSON {batch, simType, items: [{iccid, imsi, smdpAddress, matchingId}]} or text/csv
+        (header row iccid,imsi[,smdpAddress,matchingId]; query batch and simType). At most
+        5000 rows. 422 names the bad rows (format, a repeated ICCID or IMSI in the file,
+        eSIM columns missing or sent for a physical SIM, Ki or OPc columns, which are never
+        accepted or stored); 409 when the batch name or an ICCID/IMSI already exists.
+        Each SIM becomes a TMF639 resource (IMSI) in stock.
+      parameters:
+        - name: batch
+          in: query
+          description: CSV only.
+          schema: {type: string}
+        - name: simType
+          in: query
+          description: CSV only.
+          schema: {type: string, enum: [physical, esim]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [batch, simType, items]
+              properties:
+                batch: {type: string, pattern: '^[A-Za-z0-9._-]{1,60}$'}
+                simType: {type: string, enum: [physical, esim]}
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 5000
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [iccid, imsi]
+                    properties:
+                      iccid: {type: string}
+                      imsi: {type: string}
+                      smdpAddress: {type: string}
+                      matchingId: {type: string}
+          text/csv:
+            schema: {type: string}
+      responses:
+        '201':
+          description: Stocked
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SimBatch'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '415': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /sim/esim-generate:
+    post:
+      summary: Ask the network adapter for eSIM profiles and stock them as a batch.
+      description: >-
+        Synchronous: an operator request that changes no line. The stub generates
+        deterministic profiles; a real adapter may later make this asynchronous. 503 when
+        the network cannot generate now; 409 when the batch name or a generated identity
+        already exists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [batch, count]
+              properties:
+                batch: {type: string, pattern: '^[A-Za-z0-9._-]{1,60}$'}
+                count: {type: integer, minimum: 1, maximum: 5000}
+      responses:
+        '201':
+          description: Stocked
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SimBatch'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
     AppSession:
@@ -1177,6 +1273,25 @@ components:
             state: {type: string, enum: [pending, delivered, failed, dropped]}
             at: {type: string, format: date-time}
         failures: {type: integer, minimum: 0}
+    SimBatch:
+      type: object
+      additionalProperties: false
+      required: [name, simType, source, createdAt, total, counts]
+      properties:
+        name: {type: string}
+        simType: {type: string, enum: [physical, esim]}
+        source: {type: string, enum: [import, generated]}
+        createdAt: {type: string, format: date-time}
+        total: {type: integer, minimum: 0}
+        counts:
+          type: object
+          additionalProperties: false
+          required: [in_stock, reserved, active, retired]
+          properties:
+            in_stock: {type: integer, minimum: 0}
+            reserved: {type: integer, minimum: 0}
+            active: {type: integer, minimum: 0}
+            retired: {type: integer, minimum: 0}
     NetworkCommand:
       type: object
       additionalProperties: false
@@ -1185,7 +1300,7 @@ components:
                  confirmedAt, createdAt]
       properties:
         id: {type: string, format: uuid, description: The idempotency key sent to the network.}
-        kind: {type: string, enum: [activate, suspend, restore, deactivate, change_profile]}
+        kind: {type: string, enum: [activate, suspend, restore, deactivate, change_profile, swap_sim]}
         state:
           description: Internal state, not a TMF enum.
           type: string

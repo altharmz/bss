@@ -33,6 +33,9 @@ export const ORDER_ERRORS: Record<string, string> = {
   requestedStartDateInPast: 'Choose today or a later start date.',
   serviceAddressRequired:
     'Add the service address to the billing account before activating a prepaid line.',
+  simSwapAlone:
+    'Swap the SIM of a prepaid line in an order of its own: change only the IMSI, nothing else.',
+  simUnavailable: 'No SIM of the chosen type is in stock. Import SIMs or choose another type.',
   statusUnchanged: 'The product already has the requested status.',
   terminationInPeriod:
     'The product ends in this billing period. Undo its end or choose an earlier period.',

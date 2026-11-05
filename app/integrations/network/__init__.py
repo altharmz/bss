@@ -7,12 +7,20 @@ unknown value fails startup (app/config.py) and `adapter()`.
 from app.config import settings
 from app.integrations.network.interface import (
     COMMANDS,
+    EsimProfile,
     NetworkAdapter,
     NetworkRefused,
     NetworkTemporary,
 )
 
-__all__ = ["COMMANDS", "NetworkAdapter", "NetworkRefused", "NetworkTemporary", "adapter"]
+__all__ = [
+    "COMMANDS",
+    "EsimProfile",
+    "NetworkAdapter",
+    "NetworkRefused",
+    "NetworkTemporary",
+    "adapter",
+]
 
 _ADAPTERS: dict[str, NetworkAdapter] = {}
 
