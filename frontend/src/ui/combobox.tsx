@@ -12,6 +12,7 @@ export function Combobox({
   placeholder,
   disabled,
   ui,
+  ariaLabel,
 }: {
   options: ComboboxOption[];
   value: string;
@@ -19,6 +20,7 @@ export function Combobox({
   placeholder?: string;
   disabled?: boolean;
   ui?: string;
+  ariaLabel?: string;
 }) {
   const id = useId();
   const selected = options.find((option) => option.value === value);
@@ -51,6 +53,7 @@ export function Combobox({
         className="bss-input"
         type="text"
         role="combobox"
+        aria-label={ariaLabel}
         aria-autocomplete="list"
         aria-expanded={open}
         aria-controls={`${id}-listbox`}

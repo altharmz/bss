@@ -2,22 +2,11 @@ import { request } from '../api/client';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { expectUi } from '../test/expectUi';
-import {
-  CONTEXT,
-  json,
-  NAV_ORDERS,
-  NAV_RUNS,
-  pending,
-  stubFetch,
-  tmfError,
-  type Handler,
-} from '../test/fetch';
+import { CONTEXT, json, NAV_RUNS, pending, stubFetch, tmfError, type Handler } from '../test/fetch';
 import { RUN } from '../test/fixtures';
 import { App } from './App';
 import { parseRoute } from './router';
 
-const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount?limit=1&fields=id';
-const OFFERINGS = '/tmf-api/productCatalogManagement/v5/productOffering?limit=1&fields=id';
 const ID = '1f3a9c2b-0000-4000-8000-000000000001';
 const TMF = '/tmf-api';
 const empty = () => json([], { total: 0 });
@@ -30,15 +19,12 @@ function backend(
   latestRun: Handler = () => json([{ ...RUN, status: 'completed' }], { total: 9 }),
 ) {
   return stubFetch({
-    [NAV_ORDERS]: () => json([], { total: 77 }),
     'GET /internal/v1/session': () =>
       json({ username: 'i.petrova', role: 'admin', mustChangePassword: false }),
     'GET /internal/v1/context': context,
     [NAV_RUNS]: latestRun,
     // the billing runs screen: no runs (the screen has its own tests)
     'GET /internal/v1/billingRun?offset=0&limit=20': empty,
-    [`GET ${ACCOUNTS}`]: () => json([{ id: ID }], { total: 1284 }),
-    [`GET ${OFFERINGS}`]: () => json([], { total: 12 }),
     // the subscribers list: no accounts
     [`GET ${TMF}/accountManagement/v5/billingAccount?offset=0&limit=100`]: empty,
     [`GET ${TMF}/productInventory/v5/product?status=active&fields=billingAccount&offset=0&limit=100`]:
@@ -65,22 +51,17 @@ describe('routes', () => {
     ['POST', '/tmf-api/productOrderingManagement/v5/productOrder'],
     ['POST', '/tmf-api/productCatalogManagement/v5/productOffering'],
     ['DELETE', '/tmf-api/productCatalogManagement/v5/productOffering/o1'],
-  ])('refreshes sidebar count resources after %s %s', async (method, path) => {
+  ])('sends no sidebar count request, also after %s %s', async (method, path) => {
     const { calls, fetchMock } = backend();
     start('/subscribers');
     await screen.findByRole('navigation', { name: 'Main' });
-    await waitFor(() =>
-      expect(calls.filter((call) => call === `GET ${OFFERINGS}`)).toHaveLength(1),
-    );
     fetchMock.mockImplementationOnce(async () => json({ id: ID }, { status: 201 }));
     await act(async () => {
       await request(method, path);
     });
-    await waitFor(() => {
-      for (const resource of [`GET ${ACCOUNTS}`, `GET ${OFFERINGS}`, NAV_ORDERS]) {
-        expect(calls.filter((call) => call === resource)).toHaveLength(2);
-      }
-    });
+    await screen.findByRole('navigation', { name: 'Main' });
+    // an unstubbed request fails the test (setup.ts); the three count reads are named too
+    expect(calls.filter((call) => call.includes('limit=1&fields=id'))).toEqual([]);
   });
   it('marks the active sidebar item and puts operator identity in the footer trigger', async () => {
     backend();
@@ -162,7 +143,7 @@ describe('shell', () => {
     expect(within(bar).getByText('UTC+3')).toBeTruthy();
   });
 
-  it('has the environment tag, operator and counts, Billing runs included', async () => {
+  it('has the environment tag, operator and the items without counts', async () => {
     const { calls } = backend();
     start('/subscribers');
     const nav = await screen.findByRole('navigation', { name: 'Main' });
@@ -212,16 +193,19 @@ describe('shell', () => {
       '/integrations',
       '/users',
     ]);
-    expect(await within(nav).findByText('1,284')).toBeTruthy();
-    expect(await within(nav).findByText('12')).toBeTruthy();
-    const orders = within(nav).getByRole('link', { name: /Orders/ });
-    expect(await within(orders).findByText('77')).toBeTruthy();
+    // no item carries a count: the link text is the label alone
+    for (const label of ['Subscribers', 'Product catalog', 'Orders']) {
+      expect(within(nav).getByRole('link', { name: new RegExp(`^${label}`) }).textContent).toBe(
+        label,
+      );
+    }
     // Financial accounts is a read-only aggregate: no count, and no request for one
     const financial = within(nav).getByRole('link', { name: /^Financial accounts/ });
     expect(financial.textContent).toBe('Financial accounts');
     expect(calls.some((c) => c.includes('financialAccount'))).toBe(false);
     const runs = within(nav).getByRole('link', { name: /Billing runs/ });
-    expect(await within(runs).findByText('9')).toBeTruthy(); // X-Total-Count of the runs
+    await waitFor(() => expect(calls).toContain(NAV_RUNS));
+    expect(runs.textContent).toBe('Billing runs');
     expect(within(runs).queryByText('failed')).toBeNull();
     expect(
       within(nav)
@@ -230,7 +214,7 @@ describe('shell', () => {
     ).toBe('page');
   });
 
-  it('shows the red "failed" badge instead of the count when the latest run failed', async () => {
+  it('shows the red "failed" badge when the latest run failed', async () => {
     backend(undefined, () =>
       json([{ ...RUN, status: 'failed', failureKind: 'run' }], { total: 9 }),
     );
@@ -238,7 +222,7 @@ describe('shell', () => {
     const nav = await screen.findByRole('navigation', { name: 'Main' });
     const runs = within(nav).getByRole('link', { name: /Billing runs/ });
     expect((await within(runs).findByText('failed')).className).toBe('bss-badge badge-failed');
-    expect(within(runs).queryByText('9')).toBeNull();
+    expect(runs.textContent).toBe('Billing runsfailed');
   });
 
   it('opens Billing runs from the navigation', async () => {

@@ -499,7 +499,7 @@
   letter-spacing: var(--tracking-figure);
 }
 .bss-add-product-preview .bss-key-value {
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(88px, 38%) minmax(0, 1fr);
   column-gap: 12px;
 }
 .bss-add-product-preview .bss-key-value dt,
