@@ -1,6 +1,7 @@
 import { TableFooter, TableHead, TableRow } from '../ui/Table';
 import { EmptyBlock, ErrorBlock, NoResults, SkeletonRows } from '../ui/states';
 import { Amount } from '../ui/Amount';
+import { Combobox } from '../ui/combobox';
 import { Id, ID_PREFIXES } from '../ui/Id';
 import { STATUS_MAP, type StatusKind } from '../ui/status';
 import { useState } from 'react';
@@ -32,12 +33,20 @@ import {
 import './screens.css';
 import { Footer } from './FinancialForms';
 
+const COMBOBOX_OPTIONS = [
+  { value: 'p1', label: 'Olga Kuznetsova · person' },
+  { value: 'o1', label: 'Romashka LLC · organization' },
+  { value: 'o2', label: 'Lone Ltd · organization' },
+];
+
 /** Ledger Components artboard: live controls without screen-specific requests. */
 export function UiKitScreen() {
   const toast = useToast();
   const [tab, setTab] = useState('overview');
   const [mode, setMode] = useState('prepaid');
   const [money, setMoney] = useState('42.10');
+  const [owner, setOwner] = useState('');
+  const [chosen, setChosen] = useState('o1');
   return (
     <div className="ui-kit" data-ui="ui.kit">
       <h1>UI kit</h1>
@@ -362,6 +371,37 @@ export function UiKitScreen() {
           </Field>
           <Field label="Confirmed">
             <Checkbox />
+          </Field>
+        </div>
+      </section>
+      <section data-ui="ui.uikit.combobox">
+        <h2>Combobox</h2>
+        <div className="ui-kit-fields">
+          <Field label="Empty">
+            <Combobox
+              ariaLabel="Empty combobox"
+              placeholder="Choose a party"
+              options={COMBOBOX_OPTIONS}
+              value={owner}
+              onChange={setOwner}
+            />
+          </Field>
+          <Field label="Selected">
+            <Combobox
+              ariaLabel="Selected combobox"
+              options={COMBOBOX_OPTIONS}
+              value={chosen}
+              onChange={setChosen}
+            />
+          </Field>
+          <Field label="Disabled">
+            <Combobox
+              ariaLabel="Disabled combobox"
+              options={COMBOBOX_OPTIONS}
+              value="p1"
+              onChange={() => {}}
+              disabled
+            />
           </Field>
         </div>
       </section>

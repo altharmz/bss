@@ -57,7 +57,7 @@ shell: ## Shell inside the running app container
 psql: ## psql in the local database, through compose exec (the db port is not published)
 	./scripts/task-compose exec db sh -c 'exec psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
-mcp-smoke: ## Discovery/401/carve-out checks and prepaid operations against this task's MCP
+mcp-smoke: ## Discovery/401/carve-out checks, prepaid operations and the OAuth login (throwaway mcp user) against this task's MCP
 	./scripts/mcp-smoke.sh $$(./scripts/task-compose --url mcp) local
 	@# the prepaid part needs a write credential: a throwaway local token, revoked afterwards
 	@set -e; out="$$(mktemp)"; err="$$(mktemp)"; trap 'rm -f "$$out" "$$err"' EXIT; \
@@ -67,6 +67,21 @@ mcp-smoke: ## Discovery/401/carve-out checks and prepaid operations against this
 	status=0; MCP_SMOKE_TOKEN="$$(head -1 "$$out")" python3 scripts/mcp-prepaid-smoke.py $$(./scripts/task-compose --url mcp) || status=$$?; \
 	./scripts/task-compose run --rm -T --no-deps mcp python -m bss_mcp.tokens revoke "$$id" >/dev/null 2>&1; \
 	exit $$status
+	@# the OAuth login: throwaway mcp and user accounts with random passwords (never printed),
+	@# disabled afterwards whatever the result (users are never deleted)
+	@set -e; run="smoke-$$$$-$$(date +%s)"; \
+	mcp_pw="$$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"; \
+	ui_pw="$$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"; \
+	retire() { for who in "mcp-$$run" "ui-$$run"; do \
+	  ./scripts/task-compose run --rm -T --no-deps app python -m app.users disable "$$who" >/dev/null 2>&1 || true; done; }; \
+	trap retire EXIT; \
+	printf '%s\n' "$$mcp_pw" | ./scripts/task-compose run --rm -T --no-deps app python -m app.users create "mcp-$$run" --role mcp >/dev/null; \
+	printf '%s\n' "$$ui_pw" | ./scripts/task-compose run --rm -T --no-deps app python -m app.users create "ui-$$run" --role user >/dev/null; \
+	MCP_SMOKE_USER="mcp-$$run" MCP_SMOKE_PASSWORD="$$mcp_pw" MCP_SMOKE_UI_USER="ui-$$run" MCP_SMOKE_UI_PASSWORD="$$ui_pw" \
+	  python3 scripts/mcp-oauth-smoke.py $$(./scripts/task-compose --url mcp) local
+	@# as deploy.sh does: remove the smoke's client registrations, at least the one just made
+	@./scripts/task-compose run --rm -T --no-deps mcp python -m bss_mcp.tokens prune-smoke-clients 2>/dev/null \
+	  | grep -E '^pruned [1-9]' || { echo 'mcp-smoke: the smoke client registration was not pruned' >&2; exit 1; }
 
 mcp-token-create: ## Local MCP static token, printed once: make mcp-token-create NAME=ci SCOPE=read|write
 	@if [ -z "$(NAME)" ] || [ -z "$(SCOPE)" ]; then \
@@ -304,7 +319,8 @@ runtime-check: ## The harness script tests (scripts/test_*.py, run in parallel, 
 		scripts/test_task_collect.py \
 		scripts/test_script_quality.py \
 		scripts/test_docs_links.py \
-		scripts/test_compose_prod.py
+		scripts/test_compose_prod.py \
+		scripts/test_mcp_oauth_smoke.py
 
 .PHONY: telemetry-collect telemetry-probe telemetry-watch
 telemetry-watch: export BSS_COLLECT_TASK = $(TASK)

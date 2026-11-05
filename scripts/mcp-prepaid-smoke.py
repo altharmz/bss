@@ -5,7 +5,8 @@ Usage (make mcp-smoke does this with a throwaway write token it revokes afterwar
     MCP_SMOKE_TOKEN=... python3 scripts/mcp-prepaid-smoke.py http://localhost:8090
 
 Creates demo data in the LOCAL stack (a catalog entry, a customer, a prepaid account)
-and retires the catalog entries at the end; refuses any host but localhost, so it can never reach the deployed instance.
+and retires the catalog entries at the end; refuses any host but localhost, so it can
+never reach the deployed instance.
 """
 
 import json
@@ -21,7 +22,8 @@ BASE = (sys.argv[1] if len(sys.argv) > 1 else "").rstrip("/")
 TOKEN = os.environ.get("MCP_SMOKE_TOKEN", "")
 ids = count(1)
 # a price may not start in the past, so the plan starts at the next UTC midnight and the
-# purchase is a future-start order for noon the day after (whole business dates, any zone) (accepted now, the hold is taken now)
+# purchase is a future-start order for noon the day after (whole business dates, any
+# zone; accepted now, the hold is taken now)
 TOMORROW = (datetime.now(UTC) + timedelta(days=1)).strftime("%Y-%m-%dT00:00:00Z")
 AFTER = (datetime.now(UTC) + timedelta(days=2)).strftime("%Y-%m-%dT12:00:00Z")
 
@@ -41,7 +43,7 @@ def call(tool: str, arguments: dict) -> dict:
         "method": "tools/call",
         "params": {"name": tool, "arguments": arguments},
     }
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310 - BASE is checked to be http(s)://localhost
         f"{BASE}/mcp",
         data=json.dumps(message).encode(),
         headers={
@@ -50,7 +52,7 @@ def call(tool: str, arguments: dict) -> dict:
             "Accept": "application/json, text/event-stream",
         },
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - as above
         result = json.load(response)["result"]
     return {"isError": result["isError"], **json.loads(result["content"][0]["text"])}
 
@@ -64,11 +66,12 @@ def ok(tool: str, arguments: dict, status: int = 201) -> dict:
 
 probe = call("get_context", {})
 if probe.get("status") == 401:
-    print(
-        "mcp prepaid smoke: SKIPPED - the local app does not accept the connector (set the same"
-        " BSS_SERVICE_SECRET in .env for app and mcp, then make up)"
+    # make start-task writes BSS_SERVICE_SECRET for new tasks; older task files lack it
+    fail(
+        "the local app does not accept the connector: BSS_SERVICE_SECRET is missing from this"
+        " task's secret file. Add a line BSS_SERVICE_SECRET=<openssl rand -hex 32> to"
+        " ~/.config/bss/tasks/<task>/.env, then make up"
     )
-    sys.exit(0)
 
 spec = ok(
     "create_specification",
@@ -191,6 +194,10 @@ ok(
     {"offering_id": offering["id"], "body": {"lifecycleStatus": "Retired", "isSellable": False}},
     status=200,
 )
-ok("patch_specification", {"spec_id": spec["id"], "body": {"lifecycleStatus": "Retired"}}, status=200)
+ok(
+    "patch_specification",
+    {"spec_id": spec["id"], "body": {"lifecycleStatus": "Retired"}},
+    status=200,
+)
 print("  ok  the smoke offering and specification are Retired and not sellable")
 print("mcp prepaid smoke: all checks passed")

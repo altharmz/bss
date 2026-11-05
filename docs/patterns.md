@@ -136,7 +136,7 @@ The legacy danger-outline variant remains for the screen migrations in 2b.
 `DateField`, `MoneyField` (string value and required currency suffix) and `Checkbox` preserve native
 handlers. `TextInput` retains its `mono` and runtime `width` API.
 `Combobox` filters labelled options as the operator types, supports ArrowUp/ArrowDown, Enter and
-Escape, and exposes combobox/listbox semantics. G10 uses it for financial-account owners only.
+Escape, and exposes combobox/listbox semantics. It has an optional `ariaLabel`. Users: financial-account owners (G10) and the subscriber-number and IMSI pickers of Add product and Subscriber number (G8). Offering lists keep their filtered radio lists, which carry price columns.
 `Segmented` defaults to filter buttons (`aria-pressed`); `as="radio"` uses radiogroup/radio
 semantics. `/ui-kit` previews these primitives without screen-specific reads or writes.
 

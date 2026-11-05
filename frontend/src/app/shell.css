@@ -83,11 +83,6 @@
   color: var(--color-ink-1);
   font: var(--type-body-strong);
 }
-.bss-nav a .count {
-  margin-left: auto;
-  font: var(--type-code);
-  color: var(--color-ink-3);
-}
 .bss-nav a .bss-badge {
   margin-left: auto;
 }

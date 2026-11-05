@@ -82,7 +82,8 @@ or a user could do over `/tmf-api` what the UI denies.
   reachable without auth from any container on `shared`" for everything but
   `/healthz` and `/billing-status`.
 - **U9 Bootstrap.** `python -m app.users create <name> --role admin` (also `user` or
-  `mcp`; an `mcp` user is created without the forced change) reads the password
+  `mcp`; an `mcp` user is created without the forced change; `disable <name>`, issue
+  #174, disables as the Users screen does and keeps the last admin) reads the password
   from stdin, prints nothing secret; a make target locally and through `make remote` on
   the VPS (Makefile: harness file, the human's OK). Locally `make seed` creates no user;
   tests sign in through a fixture.

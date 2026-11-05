@@ -1795,10 +1795,9 @@ def test_prepaid_offering_change_as_the_ui_sends_it(api, db_conn):
 
 
 def test_orders_screen_reads_as_the_ui_makes_them(api):
-    """loadOrderPage() / loadCancellations() / countOrders() (api/orders.ts), pinned in
-    Orders.test.tsx: a page of 50 with the account and state filters, the one-row count
-    read from X-Total-Count, and an order's cancellations by productOrder.id. The screen
-    has no writes."""
+    """loadOrderPage() / loadCancellations() (api/orders.ts), pinned in Orders.test.tsx: a
+    page of 50 with the account and state filters and an order's cancellations by
+    productOrder.id. The screen has no writes."""
     offering = apidata.sellable_offering(api)
     account = apidata.account(api)
     api.clock.set(api.clock.now().replace(day=2))
@@ -1836,8 +1835,6 @@ def test_orders_screen_reads_as_the_ui_makes_them(api):
     product = api.get(f"/tmf-api/productInventory/v5/product/{product_id}")
     assert product.status_code == 200 and product.json()["name"]
     assert api.get(f"{ORDER}?state=rejected&offset=0&limit=50").json() == []
-    count = api.get(f"{ORDER}?limit=1&fields=id")
-    assert len(count.json()) == 1 and int(count.headers["X-Total-Count"]) >= 1
     cancels = api.get(
         "/tmf-api/productOrderingManagement/v5/cancelProductOrder"
         f"?productOrder.id={added['id']}&offset=0&limit=100"

@@ -593,6 +593,8 @@ def provision_secret(path):
     with os.fdopen(descriptor, "w") as output:
         os.fchmod(output.fileno(), 0o600)
         output.write(f"POSTGRES_PASSWORD={secrets.token_hex(32)}\n")
+        # the app and mcp share it, so the local connector authenticates (make mcp-smoke)
+        output.write(f"BSS_SERVICE_SECRET={secrets.token_hex(32)}\n")
         output.flush()
         os.fsync(output.fileno())
     return True

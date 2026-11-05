@@ -1,5 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useState } from 'react';
 import { describe, expect, it } from 'vitest';
+import { pickOption } from '../test/combobox';
 import { NumbersScreen, NumberPicker } from './Numbers';
 import { ProductNumber } from './ProductNumber';
 import { CrumbsProvider } from '../app/context';
@@ -146,9 +148,63 @@ describe('number inventory', () => {
         ),
     });
     render(<NumberPicker value="" onChange={() => {}} />);
-    expect(await screen.findByRole('option', { name: stock.value })).toBeTruthy();
+    const input = screen.getByRole('combobox', { name: 'Subscriber number' });
+    await waitFor(() => expect(input.hasAttribute('disabled')).toBe(false));
+    expect(input.getAttribute('placeholder')).toBe('Choose a number');
+    fireEvent.focus(input);
+    expect(screen.getByRole('option', { name: stock.value })).toBeTruthy();
     expect(screen.queryByRole('option', { name: '12025550124' })).toBeNull();
     expect(screen.queryByRole('option', { name: '12025550125' })).toBeNull();
+  });
+
+  it('filters by typing, moves with the arrows, picks with Enter and restores on Escape', async () => {
+    stubFetch({
+      [list]: () =>
+        json(
+          [
+            { ...stock, id: 'a', value: '12025550123', name: '12025550123' },
+            { ...stock, id: 'b', value: '12025550199', name: 'Sales line' },
+          ],
+          { total: 2 },
+        ),
+    });
+    const picked: string[] = [];
+    function Host() {
+      const [id, setId] = useState('');
+      return (
+        <NumberPicker
+          value={id}
+          onChange={(next) => {
+            picked.push(next);
+            setId(next);
+          }}
+        />
+      );
+    }
+    render(<Host />);
+    const input = screen.getByRole('combobox', { name: 'Subscriber number' });
+    await waitFor(() => expect(input.hasAttribute('disabled')).toBe(false));
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.focus(input);
+    expect(input.getAttribute('aria-expanded')).toBe('true');
+    // the name shows only when it differs from the number
+    const options = screen.getAllByRole('option');
+    expect(options.map((o) => o.textContent)).toEqual(['12025550123', '12025550199 · Sales line']);
+    expect(input.getAttribute('aria-activedescendant')).toBe(options[0]?.id);
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(input.getAttribute('aria-activedescendant')).toBe(options[1]?.id);
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(input.getAttribute('aria-activedescendant')).toBe(options[0]?.id);
+    fireEvent.change(input, { target: { value: 'sales' } });
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(picked).toEqual(['b']);
+    expect((input as HTMLInputElement).value).toBe('12025550199 · Sales line');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '0123' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect((input as HTMLInputElement).value).toBe('12025550199 · Sales line');
+    expect(picked).toEqual(['b']);
   });
 
   it('pins number selection in the add order', async () => {
@@ -217,8 +273,9 @@ describe('number inventory', () => {
     render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
     fireEvent.click(screen.getByText('Subscriber number'));
     expectUi('ui.subscriber.number');
-    await screen.findByRole('option', { name: stock.value });
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: N1 } });
+    const picker = await screen.findByRole('combobox', { name: 'Subscriber number' });
+    await waitFor(() => expect(picker.hasAttribute('disabled')).toBe(false));
+    pickOption(picker, stock.value);
     fireEvent.click(screen.getByText('Change number'));
     expect(
       await screen.findByText('This subscriber number is unavailable. Choose another number.'),
@@ -313,6 +370,7 @@ describe('number inventory', () => {
     const newSim = {
       ...stock,
       id: 'newsim',
+      name: 'IMSI 001010123456781',
       value: '001010123456781',
       resourceSpecification: { id: 'imsi', '@type': 'ResourceSpecificationRef' },
     };
@@ -332,8 +390,9 @@ describe('number inventory', () => {
     render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
     fireEvent.click(screen.getByText('Subscriber number'));
     expect(await screen.findByText('ICCID 8900000000000000009')).toBeTruthy();
-    await screen.findByRole('option', { name: newSim.value });
-    fireEvent.change(screen.getByLabelText('IMSI'), { target: { value: 'newsim' } });
+    const imsi = await screen.findByRole('combobox', { name: 'IMSI' });
+    await waitFor(() => expect(imsi.hasAttribute('disabled')).toBe(false));
+    pickOption(imsi, newSim.value);
     fireEvent.click(screen.getByText('Change SIM'));
     await screen.findByRole('button', { name: 'Subscriber number' });
     const body = JSON.parse(
