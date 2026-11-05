@@ -35,3 +35,17 @@ extension_schema: a static JSON schema; the Integrations screen links to it, whi
 list_network_commands: the UI screens are issue #205
 get_network_command: the UI screens are issue #205
 retry_network_command: the UI screens are issue #205
+
+# Saved cards, card top-ups and auto top-up (#185): the UI is issue 185b.
+list_payment_methods: the UI screens are issue 185b
+get_payment_method: the UI screens are issue 185b
+create_payment_method: the UI screens are issue 185b
+patch_payment_method: the UI screens are issue 185b
+delete_payment_method: the UI screens are issue 185b
+card_topup: the UI screens are issue 185b
+list_card_topups: the UI screens are issue 185b
+get_auto_topup: the UI screens are issue 185b
+patch_auto_topup: the UI screens are issue 185b
+list_payment_commands: the UI screens are issue 185b
+get_payment_command: the UI screens are issue 185b
+retry_payment_command: the UI screens are issue 185b

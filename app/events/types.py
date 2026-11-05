@@ -15,6 +15,7 @@ BASES: dict[str, str] = {
     "TMF637": "/tmf-api/productInventory/v5",
     "TMF666": "/tmf-api/accountManagement/v5",
     "TMF676": "/tmf-api/payment/v4",
+    "TMF670": "/tmf-api/paymentMethod/v4",
     "TMF678": "/tmf-api/customerBillManagement/v5",
     "TMF654": "/tmf-api/prepayBalanceManagement/v4",
 }
@@ -92,6 +93,16 @@ EVENT_TYPES: dict[str, frozenset[str]] = {
             "RefundStateChangeEvent",
         }
     ),
+    # TMF670 names its state event "StatusChange"; a card's status only changes by removal
+    # (a Delete event), so only Create, AttributeValueChange and Delete are sent.
+    "TMF670": frozenset(
+        {
+            "PaymentMethodAttributeValueChangeEvent",
+            "PaymentMethodCreateEvent",
+            "PaymentMethodDeleteEvent",
+            "PaymentMethodStatusChangeEvent",
+        }
+    ),
     "TMF678": frozenset(
         {
             "CustomerBillCreateEvent",
@@ -111,4 +122,4 @@ EVENT_TYPES: dict[str, frozenset[str]] = {
 
 # The v4 APIs: their hub is an EventSubscription and their events keep the v4 notification
 # structure (eventId, eventTime, eventType, event; no id, timeOccurred or @type).
-V4_APIS = frozenset({"TMF676", "TMF654"})
+V4_APIS = frozenset({"TMF676", "TMF654", "TMF670"})

@@ -37,6 +37,7 @@ SPEC_FILES = {
     "TMF654": "TMF654-PrepayBalance-v4.0.0.swagger.json",
     "TMF666": "TMF666-Account_Management-v5.0.0.oas.yaml",
     "TMF676": "TMF676-Payment-v4.0.0.swagger.json",
+    "TMF670": "TMF670-PaymentMethod-v4.0.0.swagger.json",
     "TMF678": "TMF678-CustomerBill-v5.0.0.oas.yaml",
     # ours: the internal API for the admin UI (not vendored, not TMF)
     "INTERNAL": "internal/bss-internal.oas.yaml",

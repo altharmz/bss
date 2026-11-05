@@ -522,6 +522,143 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+  /billingAccount/{id}/cardTopup:
+    post:
+      summary: Queue a card top-up of a prepaid account (issue 185).
+      description: >-
+        Queues one charge of a saved card; the API never charges and never changes the
+        balance. The billing worker submits it to the payment gateway and the balance
+        rises only when the gateway confirms (a TMF676 payment and a TMF654 top-up are
+        then recorded). 202 with the new command; 200 with the first command when the same
+        idempotencyKey is sent again with the same amount and card; 409 if they differ, the
+        account has no default card, the card expired or the account is closed.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CardTopupRequest'}
+      responses:
+        '200':
+          description: The command of the same idempotencyKey
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentCommand'}
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentCommand'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+    get:
+      summary: The card charges of one billing account, newest first.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PaymentCommand'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /billingAccount/{id}/autoTopup:
+    get:
+      summary: The account's auto top-up rule.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AutoTopup'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    patch:
+      summary: Set the account's opt-in auto top-up rule.
+      description: >-
+        Prepaid accounts only. Turning it on needs a threshold and an amount (the amount at
+        least the threshold); turning it off keeps them. Below the threshold the worker
+        charges the default card for the amount, one attempt at a time; a declined attempt
+        is not repeated until the balance or the settings change.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AutoTopupRequest'}
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AutoTopup'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /payment/command:
+    get:
+      summary: Card charges to the payment gateway, newest first (issue 185).
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - name: billingAccount.id
+          in: query
+          schema: {type: string, format: uuid}
+        - name: state
+          in: query
+          schema: {type: string, enum: [pending, sent, confirmed, declined, exhausted, cancelled]}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PaymentCommand'}
+        '400': {$ref: '#/components/responses/Error'}
+  /payment/command/{id}:
+    get:
+      summary: One card charge.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentCommand'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /payment/command/{id}/retry:
+    post:
+      summary: Return an exhausted card charge to pending.
+      description: >-
+        No body. The API never sends: the command keeps its key and request and the billing
+        worker submits it on its next tick. 202 with the command; 409 unless it is exhausted
+        (a decline is final: make a new top-up).
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentCommand'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
     AppSession:
@@ -1213,6 +1350,66 @@ components:
         refusalCode: {type: string, nullable: true}
         confirmedAt: {$ref: '#/components/schemas/NullableDateTime'}
         createdAt: {type: string, format: date-time}
+    CardTopupRequest:
+      type: object
+      additionalProperties: false
+      required: [amount, idempotencyKey]
+      properties:
+        amount: {$ref: '#/components/schemas/Money'}
+        paymentMethod:
+          type: object
+          description: "A saved card of the account; default is the account's default card."
+          required: [id]
+          properties:
+            id: {type: string, format: uuid}
+        idempotencyKey: {type: string, minLength: 1, maxLength: 64}
+    AutoTopupRequest:
+      type: object
+      additionalProperties: false
+      required: [enabled]
+      properties:
+        enabled: {type: boolean}
+        threshold: {$ref: '#/components/schemas/Money'}
+        amount: {$ref: '#/components/schemas/Money'}
+    AutoTopup:
+      type: object
+      additionalProperties: false
+      required: [enabled, threshold, amount, defaultPaymentMethod, changedAt]
+      properties:
+        enabled: {type: boolean}
+        threshold: {$ref: '#/components/schemas/NullableMoney'}
+        amount: {$ref: '#/components/schemas/NullableMoney'}
+        defaultPaymentMethod: {$ref: '#/components/schemas/NullableLink'}
+        changedAt: {$ref: '#/components/schemas/NullableDateTime'}
+    PaymentCommand:
+      type: object
+      additionalProperties: false
+      required: [id, href, kind, purpose, state, billingAccount, paymentMethod, amount,
+                 idempotencyKey, attempts, nextAttemptAt, lastError, declineReason,
+                 gatewayReference, payment, topup, createdAt, sentAt, confirmedAt]
+      properties:
+        id: {type: string, format: uuid, description: The idempotency key sent to the gateway.}
+        href: {type: string}
+        kind: {type: string, enum: [charge, refund]}
+        purpose: {type: string, enum: [topup, auto_topup]}
+        state:
+          description: Internal state, not a TMF enum.
+          type: string
+          enum: [pending, sent, confirmed, declined, exhausted, cancelled]
+        billingAccount: {$ref: '#/components/schemas/Link'}
+        paymentMethod: {$ref: '#/components/schemas/Link'}
+        amount: {$ref: '#/components/schemas/Money'}
+        idempotencyKey: {type: string, nullable: true, description: "The caller's key; null for an automatic top-up."}
+        attempts: {type: integer, minimum: 0}
+        nextAttemptAt: {$ref: '#/components/schemas/NullableDateTime'}
+        lastError: {type: string, nullable: true}
+        declineReason: {type: string, nullable: true}
+        gatewayReference: {type: string, nullable: true}
+        payment: {$ref: '#/components/schemas/NullableLink'}
+        topup: {$ref: '#/components/schemas/NullableLink'}
+        createdAt: {type: string, format: date-time}
+        sentAt: {$ref: '#/components/schemas/NullableDateTime'}
+        confirmedAt: {$ref: '#/components/schemas/NullableDateTime'}
     PrepaidCommand:
       type: object
       additionalProperties: false

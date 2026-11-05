@@ -27,6 +27,7 @@ API_NAMES = {
     "TMF639": "Resource Inventory Management",
     "TMF654": "Prepay Balance Management",
     "TMF666": "Account Management",
+    "TMF670": "Payment Method Management",
     "TMF676": "Payment Management",
     "TMF678": "Customer Bill Management",
 }
