@@ -54,9 +54,9 @@ class Bss:
         return await self.client.request(method, path, params=params, content=body, headers=headers)
 
     async def credential_check(self, username: str, password: str) -> httpx2.Response:
-        """The app's answer to "is this an active user's password?" (the OAuth login).
-        200 {username, role, credentialVersion}; 401 invalidCredentials; 403
-        passwordChangeRequired; 429 too many attempts."""
+        """The app's answer to "is this an active `mcp` user's password?" (the OAuth login).
+        200 {username, role, credentialVersion}; 401 invalidCredentials (also for an
+        `admin` or `user`); 429 too many attempts."""
         return await self.client.post(
             "/internal/v1/service/credential-check",
             json={"username": username, "password": password},

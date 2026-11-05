@@ -180,11 +180,6 @@ class Login:
                 log.warning("login: credential check failed: %r", exc)
                 audit(self.clock, event="login", principal=principal, ip=ip, outcome="bss down")
                 return self._form(request_id, client, params, "bss is not reachable.", 503)
-            if verdict.status_code == 403:  # the right password, but it must be changed first
-                audit(self.clock, event="login", principal=principal, ip=ip, outcome="must change")
-                return self._form(
-                    request_id, client, params, "Change your password in the BSS UI first.", 403
-                )
             if verdict.status_code == 429:
                 audit(self.clock, event="login", principal=principal, ip=ip, outcome=429)
                 return self._form(

@@ -34,7 +34,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["create"])
     parser.add_argument("username")
-    parser.add_argument("--role", choices=["admin", "user"], default="admin")
+    parser.add_argument("--role", choices=["admin", "user", "mcp"], default="admin")
     args = parser.parse_args()
     import re
 
@@ -49,10 +49,11 @@ def main() -> None:
     now = SystemClock().now()
     with db.connection() as conn, conn.transaction():
         lock_users(conn)
+        # an `mcp` user keeps the password set here; UI roles change it at first sign-in
         conn.execute(
-            "INSERT INTO app_user (username, role, password_hash, created_at, updated_at)"
-            " VALUES (%s,%s,%s,%s,%s)",
-            (args.username, args.role, hash_password(password), now, now),
+            "INSERT INTO app_user (username, role, password_hash, must_change_password,"
+            " created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s)",
+            (args.username, args.role, hash_password(password), args.role != "mcp", now, now),
         )
         audit(conn, args.username, "bootstrap", "create", now)
 

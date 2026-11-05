@@ -40,10 +40,11 @@ def check_principal(tx, principal: str, version: str) -> None:
         raise TmfError(403, "invalid MCP principal")
     with tx() as conn:
         row = conn.execute(
-            "SELECT credential_version, disabled FROM app_user WHERE username = %s",
+            "SELECT credential_version, disabled, role FROM app_user WHERE username = %s",
             (match.group(1),),
         ).fetchone()
-    if row is None or row[1] or row[0] != int(version):
+    # the version bump already ends a grant on a role change; the role is the second line
+    if row is None or row[1] or row[2] != "mcp" or row[0] != int(version):
         raise TmfError(401, "the credential was revoked", code="credentialRevoked")
 
 
@@ -87,8 +88,9 @@ def authenticate(request: Request, tx: Tx, clock: ClockDep) -> None:
             conn.cursor(row_factory=dict_row)
             .execute(
                 "SELECT u.*, s.token_hash FROM app_session s JOIN app_user u USING (username)"
-                " WHERE s.token_hash = %s AND NOT u.disabled AND s.expires_at > %s"
-                " AND s.last_seen_at > %s FOR UPDATE OF u, s",
+                # an `mcp` user can hold no UI session (the sign-in refuses it too)
+                " WHERE s.token_hash = %s AND NOT u.disabled AND u.role <> 'mcp'"
+                " AND s.expires_at > %s AND s.last_seen_at > %s FOR UPDATE OF u, s",
                 (digest(token), now, now - timedelta(seconds=settings.session_idle_seconds)),
             )
             .fetchone()

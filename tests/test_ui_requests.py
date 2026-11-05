@@ -224,6 +224,24 @@ def test_ui_user_management_requests(api):
             ).status_code
             == 201
         )
+        mcp_user = client.post(
+            users, json={"username": "bob-mcp", "role": "mcp", "password": "initial-password"}
+        )
+        assert mcp_user.status_code == 201
+        assert mcp_user.json()["mustChangePassword"] is False
+        assert (
+            client.post(
+                users, json={"username": "carol", "role": "user", "password": "initial-password"}
+            ).status_code
+            == 201
+        )
+        to_mcp = client.patch(
+            users + "/carol",
+            json={"role": "mcp", "password": "replacement-password"},
+            headers={"Content-Type": "application/json"},
+        )
+        assert to_mcp.status_code == 200
+        assert to_mcp.json()["role"] == "mcp"
         changed = client.patch(
             users + "/alice",
             json={"role": "admin", "disabled": True},

@@ -103,10 +103,21 @@ operator pattern without `:` -> both operator tests fail; identity check accepti
   the form's CSRF token. No `form-action` in the CSP: Chrome applies it to the redirect
   after the POST, which goes to the client.
 - **Users** (issue #146): the app's. `POST /internal/v1/service/credential-check` (service
-  credential only) answers 200 `{username, role, credentialVersion}`, 401
-  `invalidCredentials` (unknown, wrong password and disabled look the same; an unknown
-  user costs a scrypt too) or 403 `passwordChangeRequired`; it uses the app's sign-in rate
-  limiter. Grants carry the user's `credential_version` (`app_user`, migration `0048`, +1
+  credential only) answers 200 `{username, role, credentialVersion}` or 401
+  `invalidCredentials` (unknown, wrong password, disabled and a UI role look the same; an
+  unknown user costs a scrypt too); it uses the app's sign-in rate limiter.
+- **Role `mcp`** (issue #173, decided 2026-11-05 by delegation of the human): the only
+  role MCP accepts; it cannot sign in to the UI (users.md U4). `credential-check` refuses
+  `admin` and `user` with the same 401; `check_principal` also requires the role on every
+  call, a second line behind the credential version. An `mcp` user never carries
+  `must_change_password` (CHECK `app_user_mcp_password_set`), so the 403
+  `passwordChangeRequired` answer and the login page's "change your password in the BSS
+  UI" are removed: unreachable code with a database guarantee behind it. Static tokens
+  are not users and are unchanged; scopes stay the consent choice. Deployment: no role
+  migration - the migration cannot tell which `user` accounts are meant for MCP, and
+  guessing would grant or remove access silently. The #146 `user` accounts lose MCP at
+  the deploy until the human converts them (role `mcp` + new password, [docs/mcp.md](../mcp.md#production)):
+  a short planned gap on an administrative channel, safer than UI credentials on MCP. Grants carry the user's `credential_version` (`app_user`, migration `0048`, +1
   on password change, reset, role change and disable). Principals sent to the app: `mcp:<username>`
   with `X-Bss-Credential-Version`, checked on every request (401 `credentialRevoked`: the
   connector ends the grant and answers the client 401 `invalid_token`), and

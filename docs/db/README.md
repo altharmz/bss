@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0050**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0051**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -61,7 +61,7 @@ PostgreSQL schema at Alembic head **0050**, read from `pg_catalog` of a throwawa
 | [`event_subscription`](event_subscription.md) | events | TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their deliveries. |
 | [`event`](event.md) | events | TMF events some hub wanted, as sent; stored in the transaction of the change. |
 | [`event_delivery`](event_delivery.md) | events | One event to one subscription: pending until the worker delivers it or gives up. |
-| [`app_user`](app_user.md) | users | Application identity: admin or user; disabled, never deleted. |
+| [`app_user`](app_user.md) | users | Application identity: admin or user (UI), mcp (MCP login only); disabled, never deleted. |
 | [`app_session`](app_session.md) | users | Revocable sessions; SHA-256 tokens only, never raw cookies. |
 | [`app_user_audit`](app_user_audit.md) | users | Security changes only: operator, target, action and injected clock; no secrets. |
 
