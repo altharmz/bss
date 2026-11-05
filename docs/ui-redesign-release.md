@@ -9,19 +9,24 @@ the human deploys.
 
 | Check | Result |
 |---|---|
-| Commit | `7f93bfa` (R16 code commit on branch `issue-64-r16-visual-qa-e2e-release-evidence-extended`, on top of `master` `605bd83`) |
-| `make web-test`, UTC | 50 files, 832 tests passed |
-| `make web-test`, America/New_York | 50 files, 832 tests passed |
-| Backend (pre-commit hook) | 2123 passed (`pytest -n auto`, full suite, in the hook of `7f93bfa`); harness scripts: 15 suites, billing-status check 17 cases, pre-commit lock 4 cases |
-| `make web-e2e` | 9 passed, 0 failed, 0 skipped (`dialogs.spec.ts` ×2, `numbered-transfer.spec.ts`, `smoke.spec.ts` ×6) |
+| Commit | `2b6ebf6` (R16 code on branch `issue-64-r16-visual-qa-e2e-release-evidence-extended`, including `master` `2dcb36c` with G8 #51) |
+| `make web-test`, UTC | 50 files, 834 tests passed |
+| `make web-test`, America/New_York | 50 files, 834 tests passed |
+| Backend (pre-commit hook) | 2128 passed (`pytest -n auto`, full suite, in the hook of `2b6ebf6`); harness scripts: 16 suites, billing-status check 17 cases, pre-commit lock 4 cases |
+| `make web-e2e` | 9 passed, 0 failed, 0 skipped (`dialogs.spec.ts` ×2, `numbered-transfer.spec.ts`, `smoke.spec.ts` ×6), on a freshly seeded task database |
 | `make web-shots` | passed; 169 PNGs in `frontend/.shots/` (not committed) |
 
 e2e changes, all selector or fixture changes that follow the design (each has a
 `TEST-CHANGE:` line in the commit): "Financial accounts" (G7), the Top up confirm by its
 outcome label `/^Top up/` (R11), "Cash" (G14), the merged name/code catalog cell (R9),
 the paged "Showing a–b of n" history footer (G6), a double click at 1920 px where a click
-only selects (R15), and a free subscriber number for the numbered seed offering (G15). No
+only selects (R15), a free subscriber number for the numbered seed offering (G15), the
+number Combobox that replaced the select and a sidebar link without a count (G8). No
 assertion about a request, state, refusal or value was weakened.
+
+The shots and the e2e read the seeded local data and the e2e writes to it (top-ups and
+orders on the seeded prepaid account), so both were run on a fresh task database (`make
+clean`, `make up`, `make migrate`), shots first.
 
 ## 2. Shots reviewed
 
@@ -146,6 +151,7 @@ From the "Ledger v2" and "GUI review fixes" lines in
 | Slice 3b2b2b2 | `ApiError` lacks a server code, so live refusals omit it; the gallery uses one column at 1280. |
 | Slice 3b2b1 | The money strip wraps when the viewport cannot fit the artboard's equation and actions (no horizontal scroll). |
 | Slice 3b2a | The bootstrap `ErrorBlock` has no system context, so it omits its timestamp. |
+| G8 (#51) | The sidebar shows no item counts, only the failed indicators (D6 "Counts in mono"); I8 offerings is satisfied by R10's filtered radio list, not the artboard's picker. |
 | G5 (#45) | No pending-order Activate action exists, so there is no third Activate caller to gate. |
 | G4b (#23) | TMF620's discriminator omits `BooleanCharacteristicValueSpecification`; predefined boolean values are disabled with an explanation. |
 
