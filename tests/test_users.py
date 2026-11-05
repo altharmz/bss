@@ -648,3 +648,51 @@ def test_the_bootstrap_cli_creates_an_mcp_user_without_a_forced_change(api, db_c
         "SELECT role, must_change_password FROM app_user WHERE username = 'robot'"
     ).fetchone()
     assert row == ("mcp", False)
+
+
+# --- the CLI's disable, which retires the smoke users (issue #174) ---
+
+
+def cli(monkeypatch, *argv):
+    import sys
+
+    from app import users
+
+    monkeypatch.setattr(sys, "argv", ["app.users", *argv])
+    users.main()
+
+
+def test_the_cli_disables_a_user_like_the_users_screen(client, db_conn, monkeypatch):
+    assert login(client).status_code == 200
+    create(client, role="mcp")
+    at = version(db_conn)
+    assert as_mcp(client, at=at).status_code == 200
+    cli(monkeypatch, "disable", "alice")
+    db_conn.rollback()
+    row = db_conn.execute("SELECT disabled FROM app_user WHERE username = 'alice'").fetchone()
+    assert row[0] is True and version(db_conn) == at + 1
+    assert as_mcp(client, at=at + 1).status_code == 401  # its grants end
+    actions = db_conn.execute(
+        "SELECT operator, action FROM app_user_audit WHERE username = 'alice' ORDER BY occurred_at"
+    ).fetchall()
+    assert actions[-1] == ("cli", "disabled")
+
+
+def test_the_cli_disable_revokes_sessions(client, db_conn, monkeypatch):
+    assert login(client).status_code == 200
+    create(client)
+    client.cookies.clear()
+    activate(client)
+    assert client.get(SESSION).status_code == 200
+    cli(monkeypatch, "disable", "alice")
+    assert client.get(SESSION).status_code == 401
+
+
+def test_the_cli_keeps_the_last_admin_and_refuses_an_unknown_user(api, db_conn, monkeypatch):
+    with pytest.raises(SystemExit, match="last active administrator"):
+        cli(monkeypatch, "disable", "i.petrova")
+    with pytest.raises(SystemExit, match="no such user"):
+        cli(monkeypatch, "disable", "nobody")
+    db_conn.rollback()
+    row = db_conn.execute("SELECT disabled FROM app_user WHERE username = 'i.petrova'").fetchone()
+    assert row[0] is False

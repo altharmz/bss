@@ -873,9 +873,12 @@ class StartupTests(unittest.TestCase):
         secret = Path(result["secret_file"])
         self.assertEqual(secret.stat().st_mode & 0o777, 0o600)
         self.assertEqual(secret.parent.stat().st_mode & 0o777, 0o700)
-        value = secret.read_text().split("=", 1)[1].strip()
-        self.assertEqual(len(value), 64)
-        self.assertNotIn(value, json.dumps(result))
+        values = dict(line.split("=", 1) for line in secret.read_text().splitlines())
+        self.assertEqual(set(values), {"POSTGRES_PASSWORD", "BSS_SERVICE_SECRET"})
+        for value in values.values():
+            self.assertRegex(value, r"^[0-9a-f]{64}$")
+            self.assertNotIn(value, json.dumps(result))
+        self.assertNotEqual(values["POSTGRES_PASSWORD"], values["BSS_SERVICE_SECRET"])
 
     def test_failed_claim_and_status_leave_no_local_task(self):
         for failure in ("claim", "status"):

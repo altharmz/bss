@@ -30,9 +30,34 @@ def audit(conn, username, operator, action, now) -> None:
     )
 
 
+def disable(username: str, now) -> None:
+    """Disable a user as the Users screen does: sessions revoked, MCP grants ended (version
+    bump), audited; the last active administrator stays. Used to retire smoke users."""
+    with db.connection() as conn, conn.transaction():
+        lock_users(conn)
+        row = conn.execute(
+            "SELECT role, disabled FROM app_user WHERE username = %s", (username,)
+        ).fetchone()
+        if row is None:
+            sys.exit(f"no such user: {username}")
+        if row[0] == "admin" and not row[1]:
+            active = conn.execute(
+                "SELECT count(*) FROM app_user WHERE role = 'admin' AND NOT disabled"
+            ).fetchone()[0]
+            if active <= 1:
+                sys.exit("cannot disable the last active administrator")
+        conn.execute(
+            "UPDATE app_user SET disabled = true, updated_at = %s,"
+            " credential_version = credential_version + 1 WHERE username = %s",
+            (now, username),
+        )
+        conn.execute("DELETE FROM app_session WHERE username = %s", (username,))
+        audit(conn, username, "cli", "disabled", now)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["create"])
+    parser.add_argument("action", choices=["create", "disable"])
     parser.add_argument("username")
     parser.add_argument("--role", choices=["admin", "user", "mcp"], default="admin")
     args = parser.parse_args()
@@ -40,6 +65,9 @@ def main() -> None:
 
     if not re.fullmatch(r"[A-Za-z0-9._@-]{1,64}", args.username):
         parser.error("invalid username")
+    if args.action == "disable":
+        disable(args.username, SystemClock().now())
+        return
     password = (
         getpass.getpass("Password: ")
         if sys.stdin.isatty()
