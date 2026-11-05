@@ -92,6 +92,8 @@ class OrderRequest:
     order_id: UUID | None = None  # None: a new one (a client may choose it)
     draft: bool = False  # requestedInitialState draft: stored, not processed
     details: dict[str, Any] | None = None  # documents, stored as sent
+    # False: no network command is created (a port-out: the carrier moves the line itself)
+    network: bool = True
 
 
 # Actions whose item names an existing product.
@@ -372,7 +374,7 @@ def _process(
         _reject(conn, order, rows, problems, now)
     else:
         old_numbers = number_orders.before(conn, number_rows, today)
-        lines = network_orders.plan(conn, request, start) if prepaid else []
+        lines = network_orders.plan(conn, request, start) if prepaid and request.network else []
         swap = bool(lines) and all(line.kind == "swap_sim" for line in lines)
         if prepaid and purchase:
             prepaid_orders.accept(conn, order, request, rows, prepared, command_id, start, now)

@@ -62,7 +62,7 @@ def test_migrations_run_as_non_superuser_database_owner(monkeypatch):
                 " AND tableowner = current_user"
             ).fetchone()[0]
         assert owner == (name,)
-        assert tables == 64  # 63 domain tables + alembic_version
+        assert tables == 66  # 65 domain tables + alembic_version
     finally:
         with psycopg.connect(admin_url, autocommit=True) as conn:
             conn.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(ident))

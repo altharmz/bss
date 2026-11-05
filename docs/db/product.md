@@ -69,4 +69,4 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`funded_interval`](funded_interval.md), [`network_command`](network_command.md), [`number_assignment`](number_assignment.md), [`product_offering_change`](product_offering_change.md), [`product_order_item`](product_order_item.md), [`product_status_change`](product_status_change.md), [`subscriber_number`](subscriber_number.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`funded_interval`](funded_interval.md), [`network_command`](network_command.md), [`number_assignment`](number_assignment.md), [`number_transfer_pin`](number_transfer_pin.md), [`port_request`](port_request.md), [`product_offering_change`](product_offering_change.md), [`product_order_item`](product_order_item.md), [`product_status_change`](product_status_change.md), [`subscriber_number`](subscriber_number.md)

@@ -25,6 +25,7 @@ from app.repository import prepaid_commands as commands
 from app.repository._sql import fetch_all, fetch_one
 from app.repository.prepaid_commands import renewal_id
 from app.worker import network, payments
+from app.worker import ports as port_numbers
 from app.worker.process import Checkpoint, Heartbeat
 from app.worker.runs import ensure_ownership
 
@@ -152,6 +153,7 @@ def process_commands(
     now = clock.now()
     network.process_network(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
     payments.process_payments(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
+    port_numbers.process_ports(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
     balance_actions.release_all_expired(conn, now)
     candidates = fetch_all(
         conn,
