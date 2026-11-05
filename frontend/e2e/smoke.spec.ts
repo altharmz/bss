@@ -31,12 +31,12 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
     businessDate: string;
   };
   await expect(page.getByRole('heading', { name: 'Subscribers' })).toBeVisible();
-  await expect(
-    page
-      .getByRole('navigation', { name: 'Main' })
-      .getByRole('link', { name: /Subscribers/ })
-      .locator('.count'),
-  ).toHaveText(/^\d[\d,]*$/);
+  // G8 (#51): the sidebar shows no item counts
+  const subscribersLink = page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Subscribers', exact: true });
+  await expect(subscribersLink).toBeVisible();
+  await expect(subscribersLink.locator('.count')).toHaveCount(0);
   await expect(
     page
       .getByRole('navigation', { name: 'Main' })
@@ -156,12 +156,13 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
 // The requirement loads after the offering is chosen: wait until either the number field is
 // shown or Save as draft is enabled (no number needed), then pick the first free number.
 async function pickFreeNumber(dialog: Locator) {
-  const select = dialog.getByLabel('Subscriber number', { exact: true });
+  const picker = dialog.getByRole('combobox', { name: 'Subscriber number', exact: true });
   const draft = dialog.locator('[data-ui="ui.addProduct.saveDraft"]:enabled');
-  await expect(select.or(draft).first()).toBeVisible();
-  if (!(await select.isVisible())) return;
-  await expect(select).toBeEnabled();
-  await select.selectOption({ index: 1 });
+  await expect(picker.or(draft).first()).toBeVisible();
+  if (!(await picker.isVisible())) return;
+  await expect(picker).toBeEnabled();
+  await picker.click();
+  await dialog.getByRole('option').first().click();
 }
 
 test('prepaid: Robert Taylor tops up and orders, Linda Harris waits for funds, commands list', async ({

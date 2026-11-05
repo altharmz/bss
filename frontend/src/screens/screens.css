@@ -440,6 +440,8 @@
   color: var(--color-ink-3);
 }
 .bss-add-product-offering-note {
+  /* the specification gives way before the offering name does */
+  flex: 0 10000 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
