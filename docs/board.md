@@ -6,9 +6,9 @@ in [.claude/commands/continue.md](../.claude/commands/continue.md).
 
 GitHub Project **BSS** (private, owner `altharmz`, repo `altharmz/bss`). It tracks
 **issues**: bugs, human-only tasks, ideas and small tasks. The GUI review and redesign
-slices (G4b-G15, R7b-R16) are issues carrying their own spec and decisions, ordered by the
-task list of epic #43. All planned work lives in issues; `docs/` holds no backlog or
-slice tracker (design and decisions only).
+slices (G4b-G15, R7b-R16) were issues with their own spec and decisions, run in the order
+of epic #43's task list (all done; the epic closed 2026-11-05). All planned work lives in
+issues; `docs/` holds no backlog or slice tracker (design and decisions only).
 
 **IDs** (looked up 2026-10-28; `gh project field-list 1 --owner altharmz` if they change):
 
