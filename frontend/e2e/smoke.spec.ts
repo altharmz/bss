@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { identity, signIn } from './auth';
 
 // The e2e smoke over the seeded local stack (make seed): the built UI in a real browser,
@@ -40,7 +40,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   await expect(
     page
       .getByRole('navigation', { name: 'Main' })
-      .getByRole('link', { name: 'Accounts', exact: true }),
+      .getByRole('link', { name: 'Financial accounts', exact: true }),
   ).toBeVisible();
   // New subscriber opens and cancels (read-only: nothing is created)
   await page.getByRole('button', { name: 'New subscriber', exact: true }).click();
@@ -114,7 +114,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
     .getByRole('link', { name: /Product catalog/ })
     .click();
   await expect(page.getByRole('heading', { name: 'Product catalog' })).toBeVisible();
-  await expect(page.getByRole('cell', { name: 'MOB-L', exact: true })).toBeVisible();
+  await expect(page.getByRole('cell', { name: /MOB-L/ })).toBeVisible();
   await page.getByRole('button', { name: '+ New offering' }).click();
   const newOffering = page.getByRole('dialog', { name: 'New product offering' });
   await expect(newOffering.getByLabel('Recurrence')).toBeEnabled();
@@ -139,7 +139,7 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
   const latest = page.getByRole('region', { name: 'Latest run' });
   await expect(latest).toBeVisible();
   await expect(latest.getByText(/^\d{4}-\d{2}-\d{2}$/)).toBeVisible();
-  await expect(page.getByText(/^Showing \d+ of \d+$/)).toBeVisible();
+  await expect(page.getByText(/^Showing [\d,]+–[\d,]+ of [\d,]+$/)).toBeVisible();
   await page.getByRole('row').filter({ hasText: 'latest' }).click();
   const run = page.getByRole('region', { name: /^Run for \d{4}-\d{2}-\d{2}$/ });
   await expect(run.getByText(/^Showing \d+ of \d+$/)).toBeVisible();
@@ -151,6 +151,18 @@ test('subscribers, a card with its first-charge preview, the catalog', async ({ 
 
   expect(problems).toEqual([]);
 });
+
+// A numbered offering needs a subscriber number before Add is enabled (the seed is numbered).
+// The requirement loads after the offering is chosen: wait until either the number field is
+// shown or Save as draft is enabled (no number needed), then pick the first free number.
+async function pickFreeNumber(dialog: Locator) {
+  const select = dialog.getByLabel('Subscriber number', { exact: true });
+  const draft = dialog.locator('[data-ui="ui.addProduct.saveDraft"]:enabled');
+  await expect(select.or(draft).first()).toBeVisible();
+  if (!(await select.isVisible())) return;
+  await expect(select).toBeEnabled();
+  await select.selectOption({ index: 1 });
+}
 
 test('prepaid: Robert Taylor tops up and orders, Linda Harris waits for funds, commands list', async ({
   page,
@@ -183,8 +195,8 @@ test('prepaid: Robert Taylor tops up and orders, Linda Harris waits for funds, c
   await page.getByRole('button', { name: 'Top up', exact: true }).first().click();
   const topup = page.getByRole('dialog', { name: 'Top up' });
   await topup.getByLabel('Amount').fill('10.00');
-  await topup.getByRole('button', { name: 'cash', exact: true }).click();
-  await topup.getByRole('button', { name: 'Top up', exact: true }).click();
+  await topup.getByRole('button', { name: 'Cash', exact: true }).click();
+  await topup.getByRole('button', { name: /^Top up/ }).click();
   await expect(
     page.getByRole('status').filter({ hasText: /Top up: 10\.00 \w+ recorded/ }),
   ).toBeVisible();
@@ -194,6 +206,7 @@ test('prepaid: Robert Taylor tops up and orders, Linda Harris waits for funds, c
   await page.getByRole('button', { name: 'Add product', exact: true }).first().click();
   const add = page.getByRole('dialog', { name: 'Add product' });
   await add.getByRole('radio').filter({ hasText: '/ mo' }).first().click();
+  await pickFreeNumber(add);
   await expect(add.locator('[data-ui="ui.addProduct.prepaidPreview"]')).toBeVisible();
   await expect(add.getByTestId('prepaid-required')).toContainText(/\d/);
   const shortfall = add.locator('[data-ui="ui.addProduct.topUpShortfall"]');
@@ -201,16 +214,13 @@ test('prepaid: Robert Taylor tops up and orders, Linda Harris waits for funds, c
     // the order would be refused for lack of funds: top up the shortfall from here
     await shortfall.click();
     const more = page.getByRole('dialog', { name: 'Top up' });
-    await more.getByRole('button', { name: 'cash', exact: true }).click();
-    await more.getByRole('button', { name: 'Top up', exact: true }).click();
+    await more.getByRole('button', { name: 'Cash', exact: true }).click();
+    await more.getByRole('button', { name: /^Top up/ }).click();
     await expect(page.getByRole('dialog', { name: 'Top up' })).toBeHidden();
     await page.getByRole('button', { name: 'Add product', exact: true }).first().click();
-    await page
-      .getByRole('dialog', { name: 'Add product' })
-      .getByRole('radio')
-      .filter({ hasText: '/ mo' })
-      .first()
-      .click();
+    const again = page.getByRole('dialog', { name: 'Add product' });
+    await again.getByRole('radio').filter({ hasText: '/ mo' }).first().click();
+    await pickFreeNumber(again);
   }
   await page
     .getByRole('dialog', { name: 'Add product' })

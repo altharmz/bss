@@ -266,6 +266,12 @@
   gap: 16px;
   padding: 20px;
 }
+/* a write fieldset that is also the dialog body keeps the D7 20 px body padding: the
+   fieldset reset (`.bss-write-fields`, padding 0) left Subscriber number and the product
+   action dialogs with text against the dialog edge (R16) */
+.bss-write-fields.bss-modal-body {
+  padding: 20px;
+}
 .bss-step-head {
   display: flex;
   align-items: center;
@@ -420,7 +426,12 @@
   gap: 8px;
 }
 .bss-add-product-offering-copy .bss-name {
-  flex: none;
+  /* a long offering name ellipsizes instead of running into the price (R16) */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 500;
 }
 .bss-add-product-offering-copy .bss-code {
@@ -925,12 +936,19 @@
 .run-outcomes-body .cell:first-child .bss-link {
   overflow: hidden;
   text-overflow: ellipsis;
+  /* the artboard's account name: sans, weight 500, ink-1; the Id beside it stays mono (R16) */
+  font: var(--type-body-strong);
+  color: var(--color-ink-1);
 }
 .run-outcomes > section > .bss-note {
   margin-top: 10px;
 }
 
 /* --- bills: the bill dialog and Record payment --- */
+/* the Bills list's Kind ("Off-cycle") broke at its hyphen into two lines (R16) */
+[data-ui='ui.bills'] .bss-row > .cell:last-child {
+  white-space: nowrap;
+}
 .bss-line {
   display: flex;
   align-items: center;
@@ -953,6 +971,13 @@
   align-items: center;
   gap: 6px;
   cursor: pointer;
+}
+/* `.bss-form label` stacks a field's caption over its control; a checkbox's own label stays
+   one row, box then text (New category's Offerings list stacked and centred them, R16) */
+.bss-form .bss-check {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
 }
 
 /* --- subscriber forms: new subscriber, edit subscriber --- */
@@ -1409,6 +1434,9 @@
   display: block;
   color: var(--color-ink-3);
   font: var(--type-label);
+  /* the Since column is 92 px and its mono cell does not wrap: the caption takes two lines
+     ("Next charge" / the date) instead of running into Price (R16) */
+  white-space: normal;
 }
 
 .subscriber-overview-main > .bss-panel {
@@ -1429,6 +1457,7 @@
 }
 .subscriber-product-next span {
   font: var(--type-code);
+  white-space: nowrap;
 }
 
 .subscriber-orders-list {

@@ -101,8 +101,8 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
     await page.getByRole('button', { name: 'Top up', exact: true }).first().click();
     const topup = page.getByRole('dialog', { name: 'Top up' });
     await topup.getByLabel('Amount').fill('20.00');
-    await topup.getByRole('button', { name: 'cash', exact: true }).click();
-    await topup.getByRole('button', { name: 'Top up', exact: true }).click();
+    await topup.getByRole('button', { name: 'Cash', exact: true }).click();
+    await topup.getByRole('button', { name: /^Top up/ }).click();
     await expect(topup).toBeHidden();
     await page.getByRole('button', { name: 'Add product', exact: true }).first().click();
     const add = page.getByRole('dialog', { name: 'Add product' });

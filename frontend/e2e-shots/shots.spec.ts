@@ -44,12 +44,10 @@ test('capture the admin pages at both design widths', async ({ page }) => {
           .getByRole('group', { name: 'Account mode' })
           .getByRole('button', { name: name === 'card-prepaid' ? /^Prepaid/ : /^Postpaid/ })
           .click();
-        await page
-          .locator('[data-ui="ui.subscribers.list"] [role="row"].clickable')
-          .first()
-          .getByRole('cell')
-          .first()
-          .click();
+        // From 1536 px a click only selects the row and Enter opens the card (R15 inspector).
+        const row = page.locator('[data-ui="ui.subscribers.list"] [role="row"].clickable').first();
+        await row.getByRole('cell').first().click();
+        if (width >= 1536) await row.press('Enter');
         await expect(page.locator('[data-ui="ui.subscriber.card"] h1')).toBeVisible();
         await expect(page.getByTestId('skeleton')).toHaveCount(0);
         await page.waitForLoadState('networkidle');
@@ -137,6 +135,20 @@ test('capture the admin pages at both design widths', async ({ page }) => {
             fullPage: true,
           });
         }
+      }
+      if (name === 'subscribers' && width >= 1536) {
+        // R15: a click selects the row and opens the inspector beside the list.
+        await page
+          .locator('[data-ui="ui.subscribers.list"] [role="row"].clickable')
+          .first()
+          .getByRole('cell')
+          .first()
+          .click();
+        await expect(page.locator('.bss-inspector-name')).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+        await page.screenshot({ path: `/web/.shots/subscribers-inspector-${width}.png` });
+        await page.keyboard.press('Escape');
+        await expect(page.locator('.bss-inspector-name')).toHaveCount(0);
       }
       if (name === 'subscribers') {
         await page.getByRole('button', { name: 'New subscriber', exact: true }).click();
@@ -234,6 +246,7 @@ test('capture the admin pages at both design widths', async ({ page }) => {
         for (const tab of ['Specifications', 'Categories', 'Catalogs', 'Import / export']) {
           await page.getByRole('tab', { name: tab, exact: true }).click();
           await page.waitForLoadState('networkidle');
+          await expect(page.getByTestId('skeleton')).toHaveCount(0);
           expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
           await page.screenshot({
             path: `/web/.shots/catalog-${tab.toLowerCase().replaceAll(' ', '').replace('/', '-')}-${width}.png`,
