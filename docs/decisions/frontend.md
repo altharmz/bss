@@ -113,8 +113,8 @@ The other screens grew without a designer. The UI is restyled from the second ha
 It is **visual only**: API calls, bodies, routes and polling are unchanged, so
 `tests/test_ui_requests.py` is untouched.
 
-The human delegated every decision; they are in epic #43 (rules and D1-D13) until the
-redesign is done, and the ones that matter after that are:
+The human delegated every decision; they are in epic #43 (rules and D1-D13; the redesign
+is done and the epic closed 2026-11-05). The ones that still matter are:
 - **D4:** every TMF state (TMF620/622/629/632/637/654/666/676/678) and every internal
   state maps to a status family, with an explicit kind per call site.
 - **D11:** artboard content that needs data or requests the API does not offer is
@@ -124,7 +124,7 @@ redesign is done, and the ones that matter after that are:
 - **D9:** the 5 s / 3 min polling is kept.
 - **Rule 1:** no HTTP request is added or changed.
 
-Progress: the task list of epic #43. Each slice adds a line below when built. Wherever its values differ from the v1 handoff, this entry wins.
+Progress: done (epic #43's task list, closed 2026-11-05); each slice has a line below. Wherever its values differ from the v1 handoff, this entry wins.
 
 ## Next slices 1-24: designed (2026-10-24)
 
