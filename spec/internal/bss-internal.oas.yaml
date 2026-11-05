@@ -755,6 +755,201 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+  /number/pool:
+    post:
+      summary: Request numbers of an area code from the carrier (issue 189).
+      description: >-
+        Synchronous operator request through the network adapter; the numbers become
+        unlocked TMF639 subscriber numbers (origin pool). 409 when the carrier has no more
+        numbers for the area code; 503 when it cannot give numbers now. A number the BSS
+        already holds is not created twice.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [areaCode, count]
+              properties:
+                areaCode: {type: string, pattern: '^[2-9][0-9]{2}$'}
+                count: {type: integer, minimum: 1, maximum: 100}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NumberPool'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+        '503': {$ref: '#/components/responses/Error'}
+  /port:
+    get:
+      summary: Port requests, newest first (issue 189).
+      description: Port-in and port-out requests with state, reason and the linked order. Filter by direction, state and number.
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - name: direction
+          in: query
+          schema: {type: string, enum: [in, out]}
+        - name: state
+          in: query
+          schema: {type: string, enum: [submitted, pending, rejected, completed, cancelled]}
+        - name: number
+          in: query
+          schema: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PortRequest'}
+        '400': {$ref: '#/components/responses/Error'}
+  /port/in:
+    post:
+      summary: Record a port-in, the customer brings a number (issue 189).
+      description: >-
+        Creates the number in inventory (origin port_in) and a request in state submitted;
+        the API never contacts the carrier, the billing worker submits it. The activation
+        order then claims the number: the line's activation waits for the port to complete.
+        409 when the number is already in inventory (other than a port-in without an open
+        request) or already has a port-in request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [number, carrierAccountNumber, transferPin, billingZip, firstName, lastName]
+              properties:
+                number: {type: string, pattern: '^[1-9][0-9]{7,14}$'}
+                carrierAccountNumber: {type: string, maxLength: 80}
+                transferPin: {type: string, maxLength: 40}
+                billingZip: {type: string, pattern: '^[0-9]{5}(-[0-9]{4})?$'}
+                firstName: {type: string, maxLength: 80}
+                lastName: {type: string, maxLength: 80}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortRequest'}
+        '400': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /port/pin:
+    get:
+      summary: Number Transfer PINs of a line, without the PIN itself (issue 189).
+      parameters:
+        - name: product.id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/TransferPin'}
+        '400': {$ref: '#/components/responses/Error'}
+    post:
+      summary: Generate a Number Transfer PIN for a line (issue 189).
+      description: >-
+        For an active or suspended product with a current subscriber number. The PIN is in
+        the response once and is never stored or listed again; an earlier PIN of the line is
+        revoked. It is valid for BSS_NUMBER_TRANSFER_PIN_DAYS (default 7) and single use.
+        409 when the product is not such a line.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [productId]
+              properties:
+                productId: {type: string, format: uuid}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TransferPin'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /port/{id}:
+    get:
+      summary: One port request.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortRequest'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /port/{id}/resubmit:
+    post:
+      summary: Resubmit a rejected port-in with corrected data.
+      description: >-
+        The transfer PIN is required again (it is cleared once the carrier has seen it);
+        the other fields keep their value unless sent. 202: state submitted, the worker
+        sends it. 409 unless the request is a rejected port-in.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [transferPin]
+              properties:
+                transferPin: {type: string, maxLength: 40}
+                carrierAccountNumber: {type: string, maxLength: 80}
+                billingZip: {type: string, pattern: '^[0-9]{5}(-[0-9]{4})?$'}
+                firstName: {type: string, maxLength: 80}
+                lastName: {type: string, maxLength: 80}
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortRequest'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /port/{id}/cancel:
+    post:
+      summary: Cancel an open port-in.
+      description: >-
+        No body. 409 unless the request is an open port-in (submitted, pending or
+        rejected) and no order holds its number (cancel the order instead: it cancels the
+        port).
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PortRequest'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
     AppSession:
@@ -1463,6 +1658,77 @@ components:
             reserved: {type: integer, minimum: 0}
             active: {type: integer, minimum: 0}
             retired: {type: integer, minimum: 0}
+    NumberPool:
+      type: object
+      additionalProperties: false
+      required: [areaCode, requested, numbers]
+      properties:
+        areaCode: {type: string}
+        requested: {type: integer, minimum: 1}
+        numbers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, value, href]
+            properties:
+              id: {type: string, format: uuid}
+              value: {type: string}
+              href: {type: string}
+    PortRequest:
+      type: object
+      additionalProperties: false
+      required: [id, direction, state, number, areaCode, resource, carrierAccountNumber,
+                 billingZip, firstName, lastName, carrierReference, submissions, rejectionCode,
+                 rejectionReason, attempts, nextAttemptAt, lastError, product, billingAccount,
+                 productOrder, answeredAt, createdAt, updatedAt, completedAt]
+      properties:
+        id: {type: string, format: uuid}
+        direction: {type: string, enum: [in, out]}
+        state:
+          description: Internal state, not a TMF enum.
+          type: string
+          enum: [submitted, pending, rejected, completed, cancelled]
+        number: {type: string, description: E.164 digits of the number being ported.}
+        areaCode: {type: string, nullable: true}
+        resource:
+          type: object
+          nullable: true
+          description: The TMF639 resource; null for a port-out of a number the BSS does not hold.
+        carrierAccountNumber: {type: string, nullable: true}
+        billingZip: {type: string, nullable: true}
+        firstName: {type: string, nullable: true}
+        lastName: {type: string, nullable: true}
+        carrierReference: {type: string, nullable: true}
+        submissions: {type: integer, minimum: 1}
+        rejectionCode: {type: string, nullable: true}
+        rejectionReason: {type: string, nullable: true}
+        attempts: {type: integer, minimum: 0}
+        nextAttemptAt: {$ref: '#/components/schemas/NullableDateTime'}
+        lastError: {type: string, nullable: true}
+        product: {$ref: '#/components/schemas/NullableLink'}
+        billingAccount: {$ref: '#/components/schemas/NullableLink'}
+        productOrder: {$ref: '#/components/schemas/NullableLink'}
+        answeredAt: {$ref: '#/components/schemas/NullableDateTime'}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        completedAt: {$ref: '#/components/schemas/NullableDateTime'}
+    TransferPin:
+      type: object
+      additionalProperties: false
+      required: [id, state, number, product, createdAt, expiresAt, usedAt, revokedAt]
+      properties:
+        id: {type: string, format: uuid}
+        state: {type: string, enum: [active, expired, used, revoked]}
+        number: {type: string}
+        product: {$ref: '#/components/schemas/Link'}
+        createdAt: {type: string, format: date-time}
+        expiresAt: {type: string, format: date-time}
+        usedAt: {$ref: '#/components/schemas/NullableDateTime'}
+        revokedAt: {$ref: '#/components/schemas/NullableDateTime'}
+        pin:
+          type: string
+          description: The PIN, only in the response that creates it; never stored or listed.
     NetworkCommand:
       type: object
       additionalProperties: false

@@ -44,6 +44,12 @@ class Settings(BaseSettings):
         default="stub", validation_alias=AliasChoices("BSS_NETWORK_ADAPTER", "network_adapter")
     )
     network_max_attempts: int = Field(default=5, ge=1)
+    # Number Transfer PIN validity in days (docs/decisions/numbers.md); optional.
+    number_transfer_pin_days: int = Field(
+        default=7,
+        ge=1,
+        validation_alias=AliasChoices("BSS_NUMBER_TRANSFER_PIN_DAYS", "number_transfer_pin_days"),
+    )
     # Tax engine (docs/decisions/taxes.md). Only the stub exists; an unknown value fails
     # startup. A prepaid line needs a service address (the tax is on its place of primary
     # use); off, the order is accepted without one and the flat price tax applies.

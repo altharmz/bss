@@ -27,6 +27,8 @@ TMF639 LogicalResource inventory: subscriber identities, built-in msisdn (E.164 
 | `sim_batch` | `text` | yes |  | The stocked batch the SIM came in. |
 | `esim_smdp_address` | `text` | yes |  | eSIM profile: the SM-DP+ address of its activation code. Ki and OPc are never stored. |
 | `esim_matching_id` | `text` | yes |  | eSIM profile: the matching ID of its activation code; a secret, shown only while the profile is reserved or active. |
+| `origin` | `text` | no | `'manual'::text` | Where the number came from: manual (created through TMF639), pool (requested from the carrier by area code) or port_in (brought by the customer). |
+| `area_code` | `text` | yes |  | NPA the number was requested or ported with; null for manual numbers. |
 
 ## Foreign keys
 
@@ -39,10 +41,12 @@ TMF639 LogicalResource inventory: subscriber identities, built-in msisdn (E.164 
 
 | Name | Kind | Definition |
 |---|---|---|
+| `subscriber_number_area_code_check` | check | `CHECK ((area_code ~ '^[2-9][0-9]{2}$'::text))` |
 | `subscriber_number_attrs_check` | check | `CHECK ((jsonb_typeof(attrs) = 'object'::text))` |
 | `subscriber_number_esim_check` | check | `CHECK ((((sim_type = 'esim'::text) AND (esim_smdp_address IS NOT NULL) AND (esim_matching_id IS NOT NULL)) OR ((sim_type IS DISTINCT FROM 'esim'::text) AND (esim_smdp_address IS NULL) AND (esim_matching_id IS NULL))))` |
 | `subscriber_number_iccid_check` | check | `CHECK (((iccid IS NULL) OR ((resource_specification_id = 'imsi'::text) AND (iccid ~ '^89[0-9]{16,18}$'::text))))` |
 | `subscriber_number_kind_check` | check | `CHECK ((resource_specification_id = ANY (ARRAY['msisdn'::text, 'imsi'::text])))` |
+| `subscriber_number_origin_check` | check | `CHECK ((origin = ANY (ARRAY['manual'::text, 'pool'::text, 'port_in'::text])))` |
 | `subscriber_number_sim_holder_check` | check | `CHECK (((sim_state <> ALL (ARRAY['reserved'::text, 'active'::text])) OR (sim_product_id IS NOT NULL)))` |
 | `subscriber_number_sim_iccid_check` | check | `CHECK (((sim_type IS NULL) OR (iccid IS NOT NULL)))` |
 | `subscriber_number_sim_kind_check` | check | `CHECK ((((sim_type IS NULL) AND (sim_batch IS NULL)) OR (resource_specification_id = 'imsi'::text)))` |
@@ -68,4 +72,4 @@ TMF639 LogicalResource inventory: subscriber identities, built-in msisdn (E.164 
 
 ## Referenced by
 
-[`number_assignment`](number_assignment.md)
+[`number_assignment`](number_assignment.md), [`number_transfer_pin`](number_transfer_pin.md), [`port_request`](port_request.md)

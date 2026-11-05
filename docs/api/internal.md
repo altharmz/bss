@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 38
+- Operations exposed: 46
 
 
 ## Operations
@@ -31,9 +31,17 @@
 | GET | `/internal/v1/network/command` | query: `offset`, `limit`, `productOrder.id`, `product.id`, `state` | - | 200 `array of NetworkCommand` | [`app/internal/network_commands.py`](../../app/internal/network_commands.py) |
 | GET | `/internal/v1/network/command/{command_id}` | path: `command_id` | - | 200 `NetworkCommand` | [`app/internal/network_commands.py`](../../app/internal/network_commands.py) |
 | POST | `/internal/v1/network/command/{command_id}/retry` | path: `command_id`; body: `application/json` | - | 202 `NetworkCommand` | [`app/internal/network_commands.py`](../../app/internal/network_commands.py) |
+| POST | `/internal/v1/number/pool` | body: `application/json` | `object` | 201 `NumberPool` | [`app/internal/ports.py`](../../app/internal/ports.py) |
 | GET | `/internal/v1/payment/command` | query: `offset`, `limit`, `billingAccount.id`, `state` | - | 200 `array of PaymentCommand` | [`app/internal/payments.py`](../../app/internal/payments.py) |
 | GET | `/internal/v1/payment/command/{command_id}` | path: `command_id` | - | 200 `PaymentCommand` | [`app/internal/payments.py`](../../app/internal/payments.py) |
 | POST | `/internal/v1/payment/command/{command_id}/retry` | path: `command_id`; body: `application/json` | - | 202 `PaymentCommand` | [`app/internal/payments.py`](../../app/internal/payments.py) |
+| GET | `/internal/v1/port` | query: `offset`, `limit`, `direction`, `state`, `number` | - | 200 `array of PortRequest` | [`app/internal/ports.py`](../../app/internal/ports.py) |
+| POST | `/internal/v1/port/in` | body: `application/json` | `object` | 201 `PortRequest` | [`app/internal/ports.py`](../../app/internal/ports.py) |
+| GET | `/internal/v1/port/pin` | query: `product.id` (required) | - | 200 `array of TransferPin` | [`app/internal/ports.py`](../../app/internal/ports.py) |
+| POST | `/internal/v1/port/pin` | body: `application/json` | `object` | 201 `TransferPin` | [`app/internal/ports.py`](../../app/internal/ports.py) |
+| GET | `/internal/v1/port/{port_id}` | path: `port_id` | - | 200 `PortRequest` | [`app/internal/ports.py`](../../app/internal/ports.py) |
+| POST | `/internal/v1/port/{port_id}/cancel` | path: `port_id`; body: `application/json` | - | 200 `PortRequest` | [`app/internal/ports.py`](../../app/internal/ports.py) |
+| POST | `/internal/v1/port/{port_id}/resubmit` | path: `port_id`; body: `application/json` | `object` | 202 `PortRequest` | [`app/internal/ports.py`](../../app/internal/ports.py) |
 | GET | `/internal/v1/prepaid/command` | query: `offset`, `limit`, `billingAccount.id`, `state` | - | 200 `array of PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |
 | GET | `/internal/v1/prepaid/command/{command_id}` | path: `command_id` | - | 200 `PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |
 | POST | `/internal/v1/prepaid/command/{command_id}/retry` | path: `command_id`; body: `application/json` | - | 202 `PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |

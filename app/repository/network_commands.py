@@ -67,7 +67,14 @@ def due(conn: psycopg.Connection, today: date, now: datetime) -> list[Row]:
     return fetch_all(
         conn,
         "SELECT * FROM network_command WHERE state = 'pending' AND due_date <= %s"
-        " AND (next_attempt_at IS NULL OR next_attempt_at <= %s) ORDER BY due_date, created_at, id",
+        " AND (next_attempt_at IS NULL OR next_attempt_at <= %s)"
+        # an activation waits while its line's number is a port-in the carrier has not completed
+        " AND NOT (kind = 'activate' AND product_id IS NOT NULL AND EXISTS ("
+        "SELECT FROM number_assignment a JOIN subscriber_number n ON n.id = a.subscriber_number_id"
+        " WHERE a.product_id = network_command.product_id AND a.cancelled_at IS NULL"
+        " AND n.origin = 'port_in' AND NOT EXISTS (SELECT FROM port_request p"
+        " WHERE p.subscriber_number_id = n.id AND p.direction = 'in' AND p.state = 'completed')))"
+        " ORDER BY due_date, created_at, id",
         (today, now),
     )
 

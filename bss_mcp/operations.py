@@ -64,6 +64,14 @@ EXCLUDED = {
     ("GET", "/internal/v1/sim/batch"),
     ("POST", "/internal/v1/sim/batch"),
     ("POST", "/internal/v1/sim/esim-generate"),
+    ("POST", "/internal/v1/number/pool"),
+    ("GET", "/internal/v1/port"),
+    ("GET", "/internal/v1/port/{port_id}"),
+    ("POST", "/internal/v1/port/in"),
+    ("GET", "/internal/v1/port/pin"),
+    ("POST", "/internal/v1/port/pin"),
+    ("POST", "/internal/v1/port/{port_id}/resubmit"),
+    ("POST", "/internal/v1/port/{port_id}/cancel"),
 }
 # Interactive account credentials are deliberately never exposed as model tools.
 AUTH_OPERATIONS = {

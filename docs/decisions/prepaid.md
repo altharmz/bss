@@ -3,7 +3,7 @@
 ## Plans, renewal, add-ons and fees (2026-11-05, issue #187)
 
 Epic #182. The design was approved on the issue (the human's standing delegation, decided
-following TMF); the UI is issue 187b. Migration `0056`. Builds on the network adapter
+following TMF); the UI is issue 187b. Migration `0057`. Builds on the network adapter
 ([network.md](network.md)), the tax adapter ([taxes.md](taxes.md)) and the payment adapter
 ([payments.md](payments.md)).
 
@@ -74,7 +74,7 @@ suspension apply as usual; otherwise `pendingActive` until the order completes, 
 amount with tax, kind purchase/renewal/offeringChange, `fundedBy`, bill). No new TMF or MCP
 operation.
 
-**Deployment.** Migration `0056`; existing prepaid products are untouched (`grantless` false,
+**Deployment.** Migration `0057`; existing prepaid products are untouched (`grantless` false,
 their grants and paid-through dates stay; renewal by card applies from their next renewal).
 
 ## Mid-period offering change (2026-11-04, issue #151)

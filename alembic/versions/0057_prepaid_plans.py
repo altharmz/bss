@@ -9,14 +9,14 @@
   a pay-as-you-go product: active between its dates with no funded interval, never renewed).
 - `payment_command.purpose` gains `renewal`: the card charge for a renewal's shortfall.
 
-Revision ID: 0056
-Revises: 0055
+Revision ID: 0057
+Revises: 0056
 """
 
 from alembic import op
 
-revision = "0056"
-down_revision = "0055"
+revision = "0057"
+down_revision = "0056"
 branch_labels = None
 depends_on = None
 
@@ -86,7 +86,7 @@ def downgrade() -> None:
                        WHERE one_time_price_id IS NOT NULL)
                OR EXISTS (SELECT FROM product WHERE grantless)
                OR EXISTS (SELECT FROM payment_command WHERE purpose = 'renewal') THEN
-                RAISE EXCEPTION 'plan fees, add-ons and renewal charges must be retained at revision 0056';
+                RAISE EXCEPTION 'plan fees, add-ons and renewal charges must be retained at revision 0057';
             END IF;
         END $$;
         DROP INDEX payment_command_one_renewal_in_flight;
