@@ -248,6 +248,16 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* An inline span ignores overflow, so a long name + Id in a cell ran into the next column
+   (Payments, Prepaid commands, R16). As a cell's content it clips at the cell width but
+   stays as wide as its text: these spans stop click propagation, and a full-width block
+   would swallow the row click. :where() keeps the specificity low so cells that lay it out
+   as flex keep their rule. */
+:where(.bss-row > .cell) > span.ellipsis {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
 .bss-skel {
   --skeleton-width: 62%;
   display: inline-block;
@@ -597,6 +607,21 @@
   border: 1px solid var(--color-border);
   border-radius: 0;
   box-shadow: none;
+}
+/* The offering's Prices table in the 400 px inspector (R16): at the details grid's value width
+   its three no-wrap mono columns overlapped. It takes the full width under its label, drops
+   the page table's 24 px outer padding and sizes the two date columns to a date. */
+.bss-inspector .bss-details > dd:has(> [role='table'][aria-label='Prices']) {
+  grid-column: 1 / -1;
+}
+.bss-inspector [role='table'][aria-label='Prices'] > .bss-row {
+  grid-template-columns: 88px 100px minmax(0, 1fr);
+}
+.bss-inspector [role='table'][aria-label='Prices'] > .bss-row > .cell:first-child {
+  padding-left: 0;
+}
+.bss-inspector [role='table'][aria-label='Prices'] > .bss-row > .cell:last-child {
+  padding-right: 0;
 }
 .bss-with-inspector {
   display: flex;

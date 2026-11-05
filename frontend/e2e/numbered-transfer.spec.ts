@@ -89,7 +89,7 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
         },
       ],
     });
-    const number = await post('/tmf-api/resourceInventory/v5/resource', {
+    await post('/tmf-api/resourceInventory/v5/resource', {
       '@type': 'LogicalResource',
       name: `MSISDN ${value}`,
       value,
@@ -101,13 +101,16 @@ test('numbered prepaid subscribers complete a transfer by subscriber number', as
     await page.getByRole('button', { name: 'Top up', exact: true }).first().click();
     const topup = page.getByRole('dialog', { name: 'Top up' });
     await topup.getByLabel('Amount').fill('20.00');
-    await topup.getByRole('button', { name: 'cash', exact: true }).click();
-    await topup.getByRole('button', { name: 'Top up', exact: true }).click();
+    await topup.getByRole('button', { name: 'Cash', exact: true }).click();
+    await topup.getByRole('button', { name: /^Top up/ }).click();
     await expect(topup).toBeHidden();
     await page.getByRole('button', { name: 'Add product', exact: true }).first().click();
     const add = page.getByRole('dialog', { name: 'Add product' });
     await add.getByRole('radio').filter({ hasText: name }).click();
-    await add.getByLabel('Subscriber number', { exact: true }).selectOption(number.id);
+    const picker = add.getByRole('combobox', { name: 'Subscriber number', exact: true });
+    await expect(picker).toBeEnabled();
+    await picker.fill(value);
+    await add.getByRole('option', { name: value, exact: true }).click();
     const orderResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith('/productOrder') && response.request().method() === 'POST',

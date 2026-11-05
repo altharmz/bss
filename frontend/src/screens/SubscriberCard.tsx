@@ -82,14 +82,16 @@ const PRODUCT_COLUMNS: Column[] = [
   { key: 'price', label: 'Price', width: '140px', align: 'right', mono: true },
   { key: 'actions', label: 'Actions', width: '40px', kind: 'actions' },
 ];
+// A first column carries the 24 px outer padding: 108 px fits a mono date without touching
+// the next column (R16).
 const CHARGE_COLUMNS: Column[] = [
-  { key: 'date', label: 'Date', width: '92px', mono: true },
+  { key: 'date', label: 'Date', width: '108px', mono: true },
   { key: 'period', label: 'Period', width: '1fr' },
   { key: 'days', label: 'Days', width: '84px', mono: true },
   { key: 'amount', label: 'Amount', width: '110px', align: 'right', mono: true },
 ];
 const TX_COLUMNS: Column[] = [
-  { key: 'date', label: 'Date', width: '92px', mono: true },
+  { key: 'date', label: 'Date', width: '108px', mono: true },
   { key: 'type', label: 'Type', width: '1fr' },
   { key: 'amount', label: 'Amount', width: '116px', align: 'right', mono: true },
   { key: 'after', label: 'Balance after', width: '116px', align: 'right', mono: true },
