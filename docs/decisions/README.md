@@ -15,6 +15,7 @@ changing it, and record a new decision in it.
 | [billing-core.md](billing-core.md) | Billing (stage 3); Open questions (changing `billCycleDay`, suspension semantics) |
 | [charge-periods.md](charge-periods.md) | Product charge intervals and activation-date anniversaries; monthly invoices remain separate (2026-10-20) |
 | [prepaid.md](prepaid.md) | Subscriber numbers and prepaid as built; the full design is [prepaid-design.md](../prepaid-design.md) |
+| [network.md](network.md) | Network provisioning adapter (T-Mobile placeholder): commands, profile, gating, refusals (2026-11-05, issue #183) |
 | [worker.md](worker.md) | Billing worker (stage 4): slices b-h, Q1-Q14 and D-W decisions as recorded; resolved questions (stale runs, `APP_ENV`) |
 | [bills.md](bills.md) | Bill lifecycle (option C): slices 1-4, migration 0006, settlement |
 | [internal-api.md](internal-api.md) | Internal API (stage 5): endpoints, `X-Remote-User` trust |

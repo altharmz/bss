@@ -24,6 +24,7 @@ import app.api
 import app.internal
 from app.api.hub import HUB_APIS
 from app.main import app as bss_app
+from app.repository import network_commands
 from app.repository import prepaid_commands as commands
 from bss_mcp import tools
 from bss_mcp.operations import AUTH_OPERATIONS, EXCLUDED, OPERATIONS, Op
@@ -403,7 +404,7 @@ def world(api, db_conn) -> dict[str, Any]:
         now=api.clock.now(),
     )
     db_conn.commit()
-    return {
+    world = {
         "command": command,
         "bucket": prepaid_bucket,
         "topup": topup,
@@ -443,6 +444,21 @@ def world(api, db_conn) -> dict[str, Any]:
         "order": first(apidata.ORDER),
         "run": run_row(db_conn, date(2026, 12, 1)),
     }
+    order_id, item_id = db_conn.execute(
+        "SELECT product_order_id, id FROM product_order_item ORDER BY created_at LIMIT 1"
+    ).fetchone()
+    world["network_command"] = network_commands.insert(
+        db_conn,
+        order_id=order_id,
+        order_item_id=item_id,
+        product_id=None,
+        kind="activate",
+        due_date=date(2026, 12, 3),
+        profile={"voiceMinutes": 100},
+        now=api.clock.now(),
+    )
+    db_conn.commit()
+    return world
 
 
 def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -498,6 +514,8 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "bill_detail": {"bill_id": world["bill"]["id"]},
         "get_prepaid_command": {"command_id": str(world["command"]["id"])},
         "list_prepaid_commands": {"state": "pending", "limit": 1},
+        "get_network_command": {"command_id": str(world["network_command"]["id"])},
+        "list_network_commands": {"state": "pending", "limit": 1},
         "list_event_subscriptions": {"api": "TMF676", "limit": 1},
         "list_payments": {"filters": {"account.id": acc}, "limit": 1},
         "list_bills": {"filters": {"billingAccount.id": acc}},
@@ -789,6 +807,12 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
     call("retry", {"run_id": str(world["run"]["id"])}, expected=(409,))
     # a pending command is not failedTechnical: the app refuses, but the tool reached it
     call("retry_prepaid_command", {"command_id": str(world["command"]["id"])}, expected=(409,))
+    # a pending network command is not exhausted: refused (409), but the tool reached it
+    call(
+        "retry_network_command",
+        {"command_id": str(world["network_command"]["id"])},
+        expected=(409,),
+    )
     for _, short in HUB_APIS:
         hub = call(f"create_hub_{short}", {"body": {"callback": "http://listener.test/x"}})
         call(f"delete_hub_{short}", {"hub_id": hub["id"]}, expected=(204,))

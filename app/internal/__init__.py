@@ -17,6 +17,7 @@ from app.internal import (
     catalog,
     context,
     event_subscriptions,
+    network_commands,
     prepaid_commands,
     users,
 )
@@ -29,6 +30,7 @@ def install(app: FastAPI) -> None:
         catalog,
         billing_runs,
         prepaid_commands,
+        network_commands,
         bills,
         users,
         event_subscriptions,

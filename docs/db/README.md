@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0051**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0052**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -46,6 +46,7 @@ PostgreSQL schema at Alembic head **0051**, read from `pg_catalog` of a throwawa
 | [`funding_hold_source`](funding_hold_source.md) | billing | Internal source-pinned funding hold foundation; no public API. |
 | [`funding_command_hold`](funding_command_hold.md) | billing | Retained internal command-to-hold retry identity; no public API or worker caller. |
 | [`prepaid_command`](prepaid_command.md) | billing | Durable internal prepaid command journal; no runtime dispatcher or public API yet. Request and completed result are retained. |
+| [`network_command`](network_command.md) | billing | Durable outbound provisioning command of one prepaid order item; sent by the billing worker through the network adapter, the item completes only when it is confirmed. |
 | [`prepaid_funding_shortfall`](prepaid_funding_shortfall.md) | billing | Retained needs-top-up observations; current only while the command is pending. Not technical retry attempts. |
 | [`funded_interval`](funded_interval.md) | billing | Immutable prepaid service grants. Persistence foundation only; the future billing owner must atomically post and settle the charge, convert its hold and complete the command. |
 | [`funding_hold_conversion`](funding_hold_conversion.md) | billing | Retained internal command hold conversion; no runtime caller. |
@@ -120,6 +121,7 @@ flowchart LR
     funding_hold_source[funding_hold_source]
     funding_command_hold[funding_command_hold]
     prepaid_command[prepaid_command]
+    network_command[network_command]
     prepaid_funding_shortfall[prepaid_funding_shortfall]
     funded_interval[funded_interval]
     funding_hold_conversion[funding_hold_conversion]
@@ -218,6 +220,9 @@ flowchart LR
   funding_source -->|"action_id"| balance_action
   funding_source -->|"billing_account_id"| billing_account
   funding_source -->|"consumption_id, billing_account_id"| funding_consumption
+  network_command -->|"product_id"| product
+  network_command -->|"product_order_id"| product_order
+  network_command -->|"product_order_item_id"| product_order_item
   number_assignment -->|"assigned_by_item_id"| product_order_item
   number_assignment -->|"cancelled_by_item_id"| product_order_item
   number_assignment -->|"ended_by_item_id"| product_order_item
@@ -874,6 +879,24 @@ erDiagram
     jsonb result
     text error
   }
+  network_command {
+    uuid id PK
+    uuid product_order_id FK
+    uuid product_order_item_id FK
+    uuid product_id FK
+    text kind
+    text state
+    date due_date
+    jsonb profile
+    jsonb request
+    integer attempts
+    timestamptz next_attempt_at
+    text last_error
+    text refusal_code
+    timestamptz created_at
+    timestamptz attempted_at
+    timestamptz confirmed_at
+  }
   prepaid_funding_shortfall {
     uuid command_id PK,FK
     timestamptz observed_at PK
@@ -980,6 +1003,12 @@ erDiagram
   product_offering {
     uuid id PK
   }
+  product_order {
+    uuid id PK
+  }
+  product_order_item {
+    uuid id PK
+  }
   applied_customer_billing_rate |o--o{ applied_customer_billing_rate : "refunds_rate_id, product_id"
   applied_customer_billing_rate ||--o{ funded_interval : "applied_rate_id, product_id, billing_account_id, billing_run_id, period, currency, amount, tax_amount, charge_type"
   balance_action |o--o{ applied_customer_billing_rate : "balance_action_id"
@@ -1043,12 +1072,15 @@ erDiagram
   prepaid_command ||--o{ funded_interval : "command_id, billing_account_id, command_kind"
   prepaid_command ||--o{ prepaid_funding_shortfall : "command_id"
   product |o--o{ applied_customer_billing_rate : "product_id, billing_account_id"
+  product |o--o{ network_command : "product_id"
   product ||--o{ funded_interval : "product_id, billing_account_id"
   product_offering |o--o{ applied_customer_billing_rate : "product_offering_id"
+  product_order ||--o{ network_command : "product_order_id"
+  product_order_item ||--o{ network_command : "product_order_item_id"
   refund ||--o{ refund_source : "refund_id, billing_account_id"
 ```
 
-Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product`](product.md), [`product_offering`](product_offering.md).
+Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product`](product.md), [`product_offering`](product_offering.md), [`product_order`](product_order.md), [`product_order_item`](product_order_item.md).
 
 ## Billing worker (ours)
 

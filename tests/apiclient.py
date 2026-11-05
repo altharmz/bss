@@ -105,6 +105,9 @@ INTERNAL: dict[str, str] = {
     "/prepaid/command": "PrepaidCommand",
     "/prepaid/command/{id}": "PrepaidCommand",
     "/prepaid/command/{id}/retry": "PrepaidCommand",
+    "/network/command": "NetworkCommand",
+    "/network/command/{id}": "NetworkCommand",
+    "/network/command/{id}/retry": "NetworkCommand",
 }
 # Our own JSON Schemas for TMF extensions, served outside the TMF resource paths.
 SCHEMA_PREFIX = "/tmf-api/schema/"
@@ -225,6 +228,10 @@ class TmfClient:
                 spec_path = "/prepaid/command" + ("/{id}" if len(parts) > 2 else "")
                 spec_path += "".join(f"/{part}" for part in parts[3:])
                 return "INTERNAL", "prepaid", INTERNAL.get(spec_path), spec_path
+            if parts[:2] == ["network", "command"]:
+                spec_path = "/network/command" + ("/{id}" if len(parts) > 2 else "")
+                spec_path += "".join(f"/{part}" for part in parts[3:])
+                return "INTERNAL", "network", INTERNAL.get(spec_path), spec_path
             if len(parts) == 3:  # /<resource>/{id}/<view or action>
                 parts[1] = "{id}"
             elif len(parts) == 2 and "/" + "/".join(parts) not in INTERNAL:

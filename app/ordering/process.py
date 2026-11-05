@@ -43,6 +43,7 @@ import psycopg
 from app.billing.funding import InsufficientFunds
 from app.config import settings
 from app.events import emit
+from app.ordering import network as network_orders
 from app.ordering import numbers as number_orders
 from app.ordering import prepaid as prepaid_orders
 from app.ordering.states import item_transition, order_transition
@@ -365,17 +366,18 @@ def _process(
         _reject(conn, order, rows, problems, now)
     else:
         old_numbers = number_orders.before(conn, number_rows, today)
+        lines = network_orders.plan(conn, request) if prepaid else []
         if prepaid and purchase:
             prepaid_orders.accept(conn, order, request, rows, prepared, command_id, start, now)
         elif prepaid and all(i.action == "delete" for i in request.items):
             prepaid_orders.terminate(conn, order, request, rows, command_id, start, today, now)
         elif prepaid and all(i.product_offering_id is not None for i in request.items):
             prepaid_orders.change_offerings(
-                conn, order, request, rows, start, today, now, command_id, prepared
+                conn, order, request, rows, start, today, now, command_id, prepared, bool(lines)
             )
         elif prepaid and prepaid_orders.number_only(request):
             _execute(conn, order, request, rows, start, today, locked, now)
-        elif prepaid and start > today:
+        elif prepaid and (start > today or lines):
             prepaid_orders.schedule_statuses(
                 conn, order, request, rows, command_id, start, today, now
             )
@@ -383,6 +385,7 @@ def _process(
             prepaid_orders.change_statuses(conn, order, request, rows, renewals, today, now)
         else:
             _execute(conn, order, request, rows, start, today, locked, now)
+        network_orders.record(conn, order["id"], lines, start, now)
         number_orders.changed(conn, number_rows, old_numbers, now, today)
     return order["id"]
 
