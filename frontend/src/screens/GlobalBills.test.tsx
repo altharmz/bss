@@ -122,7 +122,10 @@ describe('bills screen', () => {
       selector: '[data-ui="ui.bills.accountChip"]',
     });
     await screen.findByRole('link', { name: 'Ivan Ivanov' });
-    fireEvent.click(screen.getByRole('button', { name: 'partiallyPaid' }));
+    expect(screen.getByRole('button', { name: 'Partly paid' }).getAttribute('title')).toBe(
+      'partiallyPaid',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Partly paid' }));
     await waitFor(() =>
       expect(calls).toContain(`GET ${BILL}?billingAccount.id=${A1}&state=partiallyPaid&${PAGE}`),
     );

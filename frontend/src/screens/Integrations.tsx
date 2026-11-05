@@ -1,4 +1,5 @@
 import { submitDialogPrimary } from '../ui/kit';
+import { billingStatusLabel, billingStatusValue } from '../format/labels';
 import { useState } from 'react';
 import {
   createHub,
@@ -23,6 +24,7 @@ import {
   StatusPill,
   TextInput,
   useToast,
+  KeyValue,
 } from '../ui/kit';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
@@ -327,7 +329,7 @@ function SystemPanel() {
           <ErrorBlock title="Billing status failed" error={status.error} onRetry={status.retry} />
         )}
         {status.status === 'ok' && (
-          <dl data-ui="ui.system.billingStatus">
+          <div data-ui="ui.system.billingStatus">
             <p>
               <StatusPill
                 kind="health"
@@ -335,13 +337,15 @@ function SystemPanel() {
                 label={status.data.ok ? 'OK' : `HTTP ${status.data.status}`}
               />
             </p>
-            {Object.entries(status.data.body ?? {}).map(([key, value]) => (
-              <div key={key}>
-                <dt className="system-key">{key}: </dt>
-                <dd className="system-value bss-mono">{value === null ? '—' : String(value)}</dd>
-              </div>
-            ))}
-          </dl>
+            <KeyValue
+              items={Object.entries(status.data.body ?? {}).map(([key, value]) => [
+                billingStatusLabel(key),
+                <span key={key} className="bss-mono" title={key}>
+                  {billingStatusValue(key, value)}
+                </span>,
+              ])}
+            />
+          </div>
         )}
         <p>
           <a

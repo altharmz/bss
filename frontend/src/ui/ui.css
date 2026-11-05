@@ -597,13 +597,14 @@
   flex: 0 0 400px;
   width: 400px;
   align-self: flex-start;
-  max-height: 100dvh;
+  /* below the page header the inspector's top is not the viewport's: useInspectorFit sets it */
+  max-height: calc(100dvh - var(--inspector-top, 0px));
   display: flex;
 }
 .bss-inspector > .bss-modal {
   width: 100%;
   max-width: none;
-  max-height: 100dvh;
+  max-height: calc(100dvh - var(--inspector-top, 0px));
   border: 1px solid var(--color-border);
   border-radius: 0;
   box-shadow: none;

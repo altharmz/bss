@@ -181,12 +181,15 @@ export function NumberModal({
             onRetry={requirement.retry}
           />
         )}
-        {requirement.status === 'ok' && !requirement.data.msisdn && !requirement.data.imsi && (
-          <p>
-            This product's offering does not use subscriber numbers. Offerings whose specification
-            requires a number ask for one when the product is added.
-          </p>
-        )}
+        {product.status === 'ok' &&
+          requirement.status === 'ok' &&
+          !requirement.data.msisdn &&
+          !requirement.data.imsi && (
+            <p>
+              This product's offering does not use subscriber numbers. Offerings whose specification
+              requires a number ask for one when the product is added.
+            </p>
+          )}
         {simEditable && (
           <>
             <NumberPicker kind="imsi" value={imsiId} onChange={setImsiId} />

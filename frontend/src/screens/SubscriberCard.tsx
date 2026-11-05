@@ -24,7 +24,7 @@ import type { PendingOrder } from '../api/commands';
 import { useResource, type ResourceWithRetry } from '../api/useResource';
 import { useSetCrumbs, useSystemContext } from '../app/context';
 import { hrefOf, Link, useRouter } from '../app/router';
-import { eventTypeLabel, plural } from '../format/labels';
+import { eventTypeLabel, paymentMethodLabel, plural } from '../format/labels';
 import { lastDay, nextCycleDate } from '../format/dates';
 import { accountLabel, shortId } from '../format/ids';
 import { formatCents, toCents } from '../format/money';
@@ -102,6 +102,11 @@ const KPI_SKELETON: Column[] = ['1.3fr', '.7fr', '1fr', '1fr', '1fr'].map((width
   label: '',
   width,
 }));
+
+/** A payment's note is its payment method code ("cash"): show the method label. */
+function movementNote(type: string, note: string): string {
+  return type === 'payment' ? paymentMethodLabel(note) : note;
+}
 
 const TYPE_LABEL: Record<string, string> = {
   charge: 'Charge',
@@ -614,7 +619,7 @@ function Card({
                   {transactions.data.slice(0, 8).map((movement) => (
                     <li key={`${movement.type}:${movement.id}`}>
                       <span className="subscriber-activity-description">
-                        {movement.note}{' '}
+                        {movementNote(movement.type, movement.note)}{' '}
                         <span className="subscriber-activity-type">
                           {TYPE_LABEL[movement.type] ?? movement.type}
                         </span>
@@ -1392,7 +1397,7 @@ function History({
                   type: (
                     <div>
                       {TYPE_LABEL[t.type] ?? t.type}
-                      <div className="bss-secondary">{t.note}</div>
+                      <div className="bss-secondary">{movementNote(t.type, t.note)}</div>
                     </div>
                   ),
                   amount: (

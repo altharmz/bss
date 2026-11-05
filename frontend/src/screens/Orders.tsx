@@ -1,6 +1,7 @@
 import { orderRefusal } from '../api/orderErrors';
 import { Footer } from './FinancialForms';
 import { submitDialogPrimary } from '../ui/kit';
+import { statusPresentation } from '../ui/status';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
@@ -201,7 +202,8 @@ export function OrdersScreen() {
               }}
               options={(['all', ...ORDER_STATES] as const).map((key) => ({
                 key,
-                label: key === 'all' ? 'All' : key,
+                label: key === 'all' ? 'All' : statusPresentation('order', key)[1],
+                title: key === 'all' ? undefined : key,
               }))}
             />
             {account !== null && (

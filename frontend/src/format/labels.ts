@@ -65,3 +65,28 @@ export const PAYMENT_METHOD_OPTIONS = [
   { key: 'cash', label: 'Cash' },
   { key: 'other', label: 'Other' },
 ];
+
+const BILLING_STATUS_KEYS: Record<string, string> = {
+  date: 'Business date',
+  status: 'Status',
+  ageSeconds: 'Last run',
+};
+
+/** The /billing-status keys as people read them; an unknown key stays as it is. */
+export const billingStatusLabel = (key: string) => lookup(BILLING_STATUS_KEYS, key);
+
+/** A /billing-status value: the age as "5 min ago"-style text, status codes capitalised. */
+export function billingStatusValue(key: string, value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (key === 'ageSeconds' && typeof value === 'number') {
+    const minutes = Math.floor(value / 60);
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 48) return `${hours} h ago`;
+    return `${plural(Math.floor(hours / 24), 'day')} ago`;
+  }
+  if (key === 'status' && typeof value === 'string') {
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  }
+  return String(value);
+}
