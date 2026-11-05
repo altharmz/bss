@@ -31,6 +31,8 @@ export const ORDER_ERRORS: Record<string, string> = {
   productOfOtherAccount: 'This product belongs to another billing account.',
   realizingResourceDuplicate: 'Choose at most one resource of each kind.',
   requestedStartDateInPast: 'Choose today or a later start date.',
+  serviceAddressRequired:
+    'Add the service address to the billing account before activating a prepaid line.',
   statusUnchanged: 'The product already has the requested status.',
   terminationInPeriod:
     'The product ends in this billing period. Undo its end or choose an earlier period.',

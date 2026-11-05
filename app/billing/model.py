@@ -89,6 +89,8 @@ class AppliedTax:
     category: str
     rate: Decimal
     amount: Decimal
+    # set by a tax engine (docs/decisions/taxes.md): the authority that levies the line
+    jurisdiction: str | None = None
 
 
 @dataclass(frozen=True)

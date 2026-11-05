@@ -17,7 +17,7 @@ import psycopg
 from psycopg.types.range import Range
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.billing import entitlement, settlement
+from app.billing import engine_tax, entitlement, settlement
 from app.billing.core import prorate, refund_taxes
 from app.billing.model import DateRange
 from app.events import emit
@@ -47,7 +47,7 @@ def credit(charge: dict, period: DateRange, ends: date) -> tuple[Decimal, tuple]
     net = expected - charge["amount"]
     if net == 0:
         return None
-    return net, refund_taxes(billing.applied_taxes(charge), expected)
+    return net, refund_taxes(billing.applied_taxes(charge), expected, charge["amount"])
 
 
 def post_termination(
@@ -138,6 +138,8 @@ def credit_grant(conn, account, run, grant, ends, now, today):
         product_offering_id=charge["product_offering_id"],
         taxes=taxes,
     )
+    if charge["amount"] + net == 0:  # the whole charge is credited: its engine tax is void
+        engine_tax.void(conn, charge["id"], now=now)
     # A credit note is dated when it is posted; a late worker still credits from `ends`.
     end = max(period.end, today + timedelta(days=1))
     bill = billing.insert_bill(

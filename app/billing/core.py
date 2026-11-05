@@ -469,12 +469,24 @@ def _check_charge_taxes(charge: StoredAbr, price: Price) -> None:
         )
 
 
-def refund_taxes(lines: tuple[AppliedTax, ...], expected: Decimal) -> tuple[AppliedTax, ...]:
-    """Per tax line of the charge: the tax of the expected net minus the tax charged."""
-    return tuple(
-        AppliedTax(line.category, line.rate, tax_of(expected, line.rate) - line.amount)
-        for line in lines
-    )
+def refund_taxes(
+    lines: tuple[AppliedTax, ...], expected: Decimal, charge_amount: Decimal | None = None
+) -> tuple[AppliedTax, ...]:
+    """Per tax line of the charge: the tax of the expected net minus the tax charged. A line
+    from a tax engine (it has a jurisdiction; fixed fees have no rate to apply) is reduced
+    in proportion to the net kept, `expected / charge_amount`, rounded once."""
+    out = []
+    for line in lines:
+        if line.jurisdiction is None:
+            kept = tax_of(expected, line.rate)
+        else:
+            kept = (
+                (line.amount * expected / charge_amount).quantize(CENT, rounding=ROUND_HALF_EVEN)
+                if charge_amount
+                else Decimal("0.00")
+            )
+        out.append(AppliedTax(line.category, line.rate, kept - line.amount, line.jurisdiction))
+    return tuple(out)
 
 
 def _new_abr(

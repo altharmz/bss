@@ -236,6 +236,7 @@ def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
                     "taxAmount": money(t.amount, row["currency"]),
                     "@type": "AppliedBillingTaxRate",
                 }
+                | ({"jurisdiction": t.jurisdiction} if t.jurisdiction else {})
                 for t in billing.applied_taxes(row)
             ],
             "periodCoverage": date_period(row["period"]),

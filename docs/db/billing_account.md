@@ -27,6 +27,7 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | `account_type` | `text` | yes |  | TMF666 accountType, a record only. |
 | `details` | `jsonb` | no | `'{}'::jsonb` | TMF666 descriptive attributes (contact, paymentPlan, relatedParty as sent, ...), validated against the spec; billing never reads them. |
 | `rating_type` | `text` | no | `'postpaid'::text` | TMF666 account funding mode; existing accounts remain postpaid. Prepaid creation is not yet exposed. |
+| `service_address` | `jsonb` | yes |  | The US place of primary use of the account's prepaid lines (street1, street2, city, stateOrProvince, postCode, country), taken from the account's contact of type serviceAddress; the tax engine taxes prepaid charges by it. Null: the flat price tax applies. |
 
 ## Foreign keys
 
@@ -48,6 +49,7 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | `billing_account_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `billing_account_prepaid_credit_limit` | check | `CHECK (((rating_type <> 'prepaid'::text) OR (COALESCE(credit_limit, (0)::numeric) = (0)::numeric)))` |
 | `billing_account_rating_type` | check | `CHECK ((rating_type = ANY (ARRAY['prepaid'::text, 'postpaid'::text])))` |
+| `billing_account_service_address_check` | check | `CHECK ((jsonb_typeof(service_address) = 'object'::text))` |
 | `billing_account_pkey` | primary key | `PRIMARY KEY (id)` |
 | `billing_account_id_currency_key` | unique | `UNIQUE (id, currency)` |
 | `billing_account_mode_identity` | unique | `UNIQUE (id, currency, rating_type)` |
@@ -73,4 +75,4 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 
 ## Referenced by
 
-[`account_presentation_media`](account_presentation_media.md), [`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`funded_interval`](funded_interval.md), [`funding_hold`](funding_hold.md), [`funding_source`](funding_source.md), [`payment`](payment.md), [`prepaid_bucket`](prepaid_bucket.md), [`prepaid_command`](prepaid_command.md), [`product`](product.md), [`product_order`](product_order.md), [`refund`](refund.md)
+[`account_presentation_media`](account_presentation_media.md), [`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`funded_interval`](funded_interval.md), [`funding_hold`](funding_hold.md), [`funding_source`](funding_source.md), [`payment`](payment.md), [`prepaid_bucket`](prepaid_bucket.md), [`prepaid_command`](prepaid_command.md), [`product`](product.md), [`product_order`](product_order.md), [`refund`](refund.md), [`tax_transaction`](tax_transaction.md)

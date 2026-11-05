@@ -101,6 +101,9 @@ termination always visible, no account lock, no running-run guard).
 
 ## Taxes (2026-10-18)
 
+*Prepaid charges of an account with a service address are taxed by the tax engine instead
+of the price's flat items: [taxes.md](taxes.md) (2026-11-05, #184). Postpaid is as below.*
+
 Slice 7 of ["Following TMF"](tmf-api.md#following-tmf-2026-10-17); retires D4 (taxes out
 of scope). The specs define the shape (TMF620 `TaxItem` on a price, TMF678
 `AppliedBillingTaxRate` on an ABR and `TaxItem` on a bill, TMF676 `taxAmount`, TMF666

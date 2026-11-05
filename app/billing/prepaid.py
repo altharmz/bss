@@ -17,8 +17,9 @@ import psycopg
 from psycopg.types.range import Range
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.billing import settlement
-from app.billing.core import charge_taxes, price_at, tax_of
+from app.billing import engine_tax, settlement
+from app.billing.core import price_at, tax_of
+from app.billing.engine_tax import quote_taxes
 from app.billing.model import AppliedTax, DateRange, Product
 from app.events import emit
 from app.repository import balance_actions, billing, funding, orders, presentation, products
@@ -34,6 +35,7 @@ class TaxQuote(BaseModel):
     category: str = Field(min_length=1)
     rate: Decimal = Field(ge=0, allow_inf_nan=False)
     amount: Cents
+    jurisdiction: str | None = None  # a tax engine's line (docs/decisions/taxes.md)
 
 
 class IntervalQuote(BaseModel):
@@ -48,12 +50,15 @@ class IntervalQuote(BaseModel):
     index: int = Field(ge=0, strict=True)
     unit: Literal["daily", "weekly", "monthly", "yearly"]
     length: int = Field(ge=1, le=1000, strict=True)
+    tax_quote_id: str | None = None  # the tax engine's quote, committed when this is posted
 
     @model_validator(mode="after")
     def valid_taxes(self):
-        if len({t.category for t in self.taxes}) != len(self.taxes):
+        if self.tax_quote_id is None and len({t.category for t in self.taxes}) != len(self.taxes):
             raise ValueError("duplicate tax category")
-        if any(t.amount != tax_of(self.amount, t.rate) for t in self.taxes):
+        if self.tax_quote_id is None and any(
+            t.amount != tax_of(self.amount, t.rate) for t in self.taxes
+        ):
             raise ValueError("quote tax does not match amount and rate")
         return self
 
@@ -120,6 +125,7 @@ def _renewal_quote(conn, cmd, account, today, tz):
         account.currency,
         tz,
     )
+    taxes, tax_quote_id = quote_taxes(conn, account, account.id, price, price.amount, today, tz)
     old = IntervalQuote.model_validate(previous["quote"])
     continuous = today == cmd["due_date"] and (old.unit, old.length) == (
         price.recurring_period,
@@ -131,10 +137,8 @@ def _renewal_quote(conn, cmd, account, today, tz):
         price_id=price.id,
         currency=account.currency,
         amount=price.amount,
-        taxes=[
-            TaxQuote(category=t.category, rate=t.rate, amount=t.amount)
-            for t in charge_taxes(price.amount, price, account, today, tz)
-        ],
+        taxes=taxes,
+        tax_quote_id=tax_quote_id,
         anchor=previous["anchor_date"] if continuous else today,
         index=previous["interval_index"] + 1 if continuous else 0,
         unit=price.recurring_period,
@@ -173,6 +177,7 @@ def _future_quotes(conn, request, account, today, tz, due_date):
             account.currency,
             tz,
         )
+        taxes, tax_quote_id = quote_taxes(conn, account, account.id, price, price.amount, today, tz)
         quotes.append(
             IntervalQuote(
                 product_id=product_id,
@@ -180,10 +185,8 @@ def _future_quotes(conn, request, account, today, tz, due_date):
                 price_id=price.id,
                 currency=account.currency,
                 amount=price.amount,
-                taxes=[
-                    TaxQuote(category=t.category, rate=t.rate, amount=t.amount)
-                    for t in charge_taxes(price.amount, price, account, today, tz)
-                ],
+                taxes=taxes,
+                tax_quote_id=tax_quote_id,
                 anchor=due_date,
                 index=0,
                 unit=price.recurring_period,
@@ -348,8 +351,10 @@ def _post_purchase(
         billing_run_id=run["id"],
         applied_at=now,
         product_offering_id=quote.offering_id,
-        taxes=tuple(AppliedTax(t.category, t.rate, t.amount) for t in quote.taxes),
+        taxes=tuple(AppliedTax(t.category, t.rate, t.amount, t.jurisdiction) for t in quote.taxes),
     )
+    if quote.tax_quote_id is not None:
+        engine_tax.commit(conn, abr, account.id, quote, now=now)
     bill = billing.insert_bill(
         conn,
         billing_account_id=account.id,
