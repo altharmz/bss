@@ -262,4 +262,39 @@ the plan still asked for.
   Decision: the local app never accepted the connector (compose passed no
   `BSS_SERVICE_SECRET`), so `compose.override.yaml` now passes `BSS_SERVICE_SECRET`
   (from `.env`, same value for app and mcp) to both; with it empty the prepaid part
-  prints SKIPPED and the target still passes.
+  prints SKIPPED and the target still passes. *Superseded by issue #174, below.*
+- **Authenticated OAuth smoke** (issue #174, 2026-11-05): `scripts/mcp-oauth-smoke.py`
+  logs in the way a client does - register, authorize with PKCE S256, `/login` as an
+  `mcp` user consenting to **read** only, token; `tools/list`, `get_context`, a write
+  tool refused (403), refresh, revoke (in a `finally`), the revoked token refused (401);
+  locally also an active `user` with the right password refused on `/login` (401). Python,
+  not bash: PKCE and the login form are fragile in curl. `mcp-smoke.sh` stays
+  credential-free.
+  - **Local smoke users are throwaway**, not seeded: `make mcp-smoke` creates
+    `mcp-smoke-<pid>-<time>` (role `mcp`) and `ui-smoke-...` (role `user`) with random
+    passwords through `python -m app.users create` and disables both afterwards
+    (`python -m app.users disable`, new; users are never deleted), as the prepaid part
+    does with its throwaway token. Why not the issue's "`make seed` creates it, password in
+    the task secret file": U9 in [users.md](users.md) keeps users out of the seed, and a
+    persistent local password would need a new secret key, its allowlist entry and its
+    plumbing into the container - for nothing a per-run password does not give.
+  - **No skip locally**: `make start-task` now writes a random `BSS_SERVICE_SECRET` into
+    a new task's secret file (app and mcp share it). An older task file lacks it; the
+    prepaid part then **fails** with the line to add instead of printing SKIPPED.
+  - **Production**: `deploy.sh` runs the OAuth smoke through Caddy after `mcp-smoke.sh`
+    with `MCP_SMOKE_USER` and `MCP_SMOKE_PASSWORD` from `.env.smoke` (read by the script
+    only, never printed). Without them the step prints SKIPPED and the deploy goes on.
+    The UI-user refusal is checked locally only (no UI password belongs in `.env.smoke`).
+  - **What it writes**: one client registration (`client_name` `bss-mcp-smoke`) with its
+    pending request, code and tokens, and the user's `last_login_at`. The grant is revoked;
+    the **registration stays** - the connector has no client deletion (RFC 7592 is not
+    implemented). Accepted: one registration per deploy against `MCP_MAX_CLIENTS` 1000
+    is years of deploys at the current pace; deleting smoke registrations by their
+    self-declared name, or expiring unused clients, would put a special case or a risk
+    to real clients into production code. Revisit if the count nears the cap.
+  - **The smoke credential can obtain write**: scope is the consent choice, not the role,
+    so `MCP_SMOKE_PASSWORD` could get a read+write grant. Accepted: it is an `mcp` user's
+    password like any other, kept in the gitignored, never-shipped `.env.smoke` beside
+    `BSS_SMOKE_SECRET`; the smoke consents to read only; every call is audited as
+    `mcp:<smoke user>`; the human can disable the user at any time. A per-user scope cap
+    would be a data-model change and is not justified for a demo instance.

@@ -319,6 +319,13 @@ tokens or passwords (a test checks the log for each).
   `MCP_TRUST_FORWARDED=true`. Its store
   is the volume `mcp-data` (`/data/mcp.db`).
 - The OAuth login needs at least one active app user with role `mcp`.
+- **The smoke user** (optional, for `deploy.sh`'s OAuth smoke): create an `mcp` user in
+  the UI (e.g. `mcp-smoke`, a long random password), then add two lines to the local
+  `.env.smoke`: `MCP_SMOKE_USER=<name>` and `MCP_SMOKE_PASSWORD=<password>`. Each deploy
+  then logs in as it with the read scope, calls one read tool, checks that a write tool
+  is refused, refreshes and revokes; it leaves one client registration per deploy. Without
+  the lines the step prints SKIPPED. The password can obtain write like any `mcp` user's
+  (docs/decisions/mcp.md): keep `.env.smoke` private; disable the user to stop it.
 - **Moving to role `mcp`** (the deploy that ships issue #173): from that deploy on, MCP
   refuses the `user` accounts created for #146 and ends their grants, so MCP is unavailable
   until they are converted. Right after the deploy, for each of them: UI -> Users -> Edit ->
@@ -339,7 +346,11 @@ tokens or passwords (a test checks the log for each).
   discovery, the 401 challenge, the OAuth endpoints answered by the connector - and
   `/`, `/MCP`, `/Mcp`, `/mcp/x`, `/authorize/x`, an upper-case well-known path still
   behind basic auth, and no h3 in Alt-Svc - against `MCP_URL` (default
-  `https://bss2811.duckdns.org`). It sends no credentials. Locally: `make mcp-smoke`.
+  `https://bss2811.duckdns.org`). It sends no credentials. Then
+  **`scripts/mcp-oauth-smoke.py <url> caddy`** logs in as the smoke user (above), or
+  prints SKIPPED without one. Locally, `make mcp-smoke` runs both, the prepaid tools with
+  a throwaway token, and the OAuth login as throwaway `mcp` and `user` accounts it
+  disables afterwards.
 
 ## Known demo risks
 

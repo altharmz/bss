@@ -99,6 +99,11 @@ SMOKE_ENV="${SMOKE_ENV:-.env.smoke}"
 BSS_SMOKE_SECRET="$(sed -n 's/^BSS_SMOKE_SECRET=//p' "${SMOKE_ENV}" | tail -n 1)"
 [[ -n "${BSS_SMOKE_SECRET}" ]] \
   || fail "BSS_SMOKE_SECRET is missing in ${SMOKE_ENV} (the same value as in .env.prod; see .env.example)"
+# Optional: the production `mcp` smoke user for the OAuth smoke (created by the human,
+# docs/mcp.md). Without both values that step says it was skipped; read only these two
+# lines, handed to the script in its environment, never printed.
+MCP_SMOKE_USER="$(sed -n 's/^MCP_SMOKE_USER=//p' "${SMOKE_ENV}" | tail -n 1)"
+MCP_SMOKE_PASSWORD="$(sed -n 's/^MCP_SMOKE_PASSWORD=//p' "${SMOKE_ENV}" | tail -n 1)"
 grep -q '^BSS_SERVICE_SECRET=.' .env.prod \
   || fail "BSS_SERVICE_SECRET is empty or missing in .env.prod (see .env.example)"
 grep -q '^BSS_SMOKE_SECRET=.' .env.prod \
@@ -310,6 +315,11 @@ BSS_SMOKE_SECRET="${BSS_SMOKE_SECRET}" \
 log "MCP smoke test through Caddy (${MCP_URL})"
 ./scripts/mcp-smoke.sh "${MCP_URL}" caddy \
   || fail "MCP smoke test failed (see above). App, UI and mcp are deployed and healthy; check the vps-infra Caddy carve-outs (docs/decisions/infra.md)"
+
+log "MCP OAuth login smoke through Caddy (${MCP_URL})"
+MCP_SMOKE_USER="${MCP_SMOKE_USER}" MCP_SMOKE_PASSWORD="${MCP_SMOKE_PASSWORD}" \
+  python3 scripts/mcp-oauth-smoke.py "${MCP_URL}" caddy \
+  || fail "MCP OAuth smoke failed (see above). Everything is deployed; is the smoke user in ${SMOKE_ENV} an active mcp user with that password (docs/mcp.md)?"
 
 log "Pruning old ${IMAGE_NAME} images on ${REMOTE} (keeping ${KEEP_IMAGES}, nothing else is touched)"
 rssh "docker images '${IMAGE_NAME}' --format '{{.ID}} {{.CreatedAt}}' \
