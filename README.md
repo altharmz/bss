@@ -1,6 +1,6 @@
 # bss
 
-A small **billing and subscriber management system** for a telecom-style subscription
+A **billing and subscriber management system** for a telecom-style subscription
 business, built on the **TM Forum SID** data model and the **TMF Open APIs**. It is
 demo-sized but rule-complete: every money rule is enforced in code and proven by tests.
 
