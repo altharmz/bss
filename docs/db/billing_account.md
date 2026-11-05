@@ -28,6 +28,10 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | `details` | `jsonb` | no | `'{}'::jsonb` | TMF666 descriptive attributes (contact, paymentPlan, relatedParty as sent, ...), validated against the spec; billing never reads them. |
 | `rating_type` | `text` | no | `'postpaid'::text` | TMF666 account funding mode; existing accounts remain postpaid. Prepaid creation is not yet exposed. |
 | `service_address` | `jsonb` | yes |  | The US place of primary use of the account's prepaid lines (street1, street2, city, stateOrProvince, postCode, country), taken from the account's contact of type serviceAddress; the tax engine taxes prepaid charges by it. Null: the flat price tax applies. |
+| `auto_topup_enabled` | `boolean` | no | `false` | Prepaid only, opt-in: when the spendable balance drops below the threshold, charge the default card for the set amount. |
+| `auto_topup_threshold` | `numeric(12,2)` | yes |  |  |
+| `auto_topup_amount` | `numeric(12,2)` | yes |  |  |
+| `auto_topup_changed_at` | `timestamp with time zone` | yes |  | When the auto top-up settings last changed: a declined automatic charge is not repeated until the balance or the settings change. |
 
 ## Foreign keys
 
@@ -43,6 +47,7 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | Name | Kind | Definition |
 |---|---|---|
 | `billing_account_account_type_check` | check | `CHECK ((account_type <> ''::text))` |
+| `billing_account_auto_topup_settings` | check | `CHECK (((NOT auto_topup_enabled) OR ((auto_topup_threshold > (0)::numeric) AND (auto_topup_amount >= auto_topup_threshold))))` |
 | `billing_account_bill_cycle_day_check` | check | `CHECK (((bill_cycle_day >= 1) AND (bill_cycle_day <= 28)))` |
 | `billing_account_credit_limit_not_negative` | check | `CHECK ((credit_limit >= (0)::numeric))` |
 | `billing_account_currency_check` | check | `CHECK ((currency ~ '^[A-Z]{3}$'::text))` |
@@ -75,4 +80,4 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 
 ## Referenced by
 
-[`account_presentation_media`](account_presentation_media.md), [`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`funded_interval`](funded_interval.md), [`funding_hold`](funding_hold.md), [`funding_source`](funding_source.md), [`payment`](payment.md), [`prepaid_bucket`](prepaid_bucket.md), [`prepaid_command`](prepaid_command.md), [`product`](product.md), [`product_order`](product_order.md), [`refund`](refund.md), [`tax_transaction`](tax_transaction.md)
+[`account_presentation_media`](account_presentation_media.md), [`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`funded_interval`](funded_interval.md), [`funding_hold`](funding_hold.md), [`funding_source`](funding_source.md), [`payment`](payment.md), [`payment_command`](payment_command.md), [`payment_method`](payment_method.md), [`prepaid_bucket`](prepaid_bucket.md), [`prepaid_command`](prepaid_command.md), [`product`](product.md), [`product_order`](product_order.md), [`refund`](refund.md), [`tax_transaction`](tax_transaction.md)

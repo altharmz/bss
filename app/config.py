@@ -56,6 +56,12 @@ class Settings(BaseSettings):
             "BSS_TAX_REQUIRE_SERVICE_ADDRESS", "tax_require_service_address"
         ),
     )
+    # Payment gateway (docs/decisions/payments.md). Only the stub exists; an unknown value
+    # fails startup. Temporary errors: attempts before an operator must retry.
+    payment_adapter: Literal["stub"] = Field(
+        default="stub", validation_alias=AliasChoices("BSS_PAYMENT_ADAPTER", "payment_adapter")
+    )
+    payment_max_attempts: int = Field(default=5, ge=1)
     # Separate credentials: smoke can only read; MCP cannot access user/session APIs.
     bss_service_secret: str = ""
     bss_smoke_secret: str = ""

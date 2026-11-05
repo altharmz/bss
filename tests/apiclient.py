@@ -50,6 +50,7 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
         },
     ),
     "/tmf-api/payment/v4": ("TMF676", {"payment": "Payment", "refund": "Refund"}),
+    "/tmf-api/paymentMethod/v4": ("TMF670", {"paymentMethod": "PaymentMethod"}),
     "/tmf-api/prepayBalanceManagement/v4": (
         "TMF654",
         {
@@ -79,7 +80,7 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
 }
 # every API has a hub: Hub in v5, EventSubscription in TMF676 v4
 for _base, (_spec, _resources) in APIS.items():
-    _resources["hub"] = "EventSubscription" if _spec in ("TMF676", "TMF654") else "Hub"
+    _resources["hub"] = "EventSubscription" if _spec in ("TMF676", "TMF654", "TMF670") else "Hub"
 # Our internal API (spec/internal/bss-internal.oas.yaml): spec path -> response schema
 # (of the items, for a list).
 INTERNAL_BASE = "/internal/v1"
@@ -108,6 +109,11 @@ INTERNAL: dict[str, str] = {
     "/network/command": "NetworkCommand",
     "/network/command/{id}": "NetworkCommand",
     "/network/command/{id}/retry": "NetworkCommand",
+    "/billingAccount/{id}/cardTopup": "PaymentCommand",
+    "/billingAccount/{id}/autoTopup": "AutoTopup",
+    "/payment/command": "PaymentCommand",
+    "/payment/command/{id}": "PaymentCommand",
+    "/payment/command/{id}/retry": "PaymentCommand",
 }
 # Our own JSON Schemas for TMF extensions, served outside the TMF resource paths.
 SCHEMA_PREFIX = "/tmf-api/schema/"
@@ -228,6 +234,10 @@ class TmfClient:
                 spec_path = "/prepaid/command" + ("/{id}" if len(parts) > 2 else "")
                 spec_path += "".join(f"/{part}" for part in parts[3:])
                 return "INTERNAL", "prepaid", INTERNAL.get(spec_path), spec_path
+            if parts[:2] == ["payment", "command"]:
+                spec_path = "/payment/command" + ("/{id}" if len(parts) > 2 else "")
+                spec_path += "".join(f"/{part}" for part in parts[3:])
+                return "INTERNAL", "payment", INTERNAL.get(spec_path), spec_path
             if parts[:2] == ["network", "command"]:
                 spec_path = "/network/command" + ("/{id}" if len(parts) > 2 else "")
                 spec_path += "".join(f"/{part}" for part in parts[3:])

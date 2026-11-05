@@ -17,6 +17,7 @@ changing it, and record a new decision in it.
 | [prepaid.md](prepaid.md) | Subscriber numbers and prepaid as built; the full design is [prepaid-design.md](../prepaid-design.md) |
 | [network.md](network.md) | Network provisioning adapter (T-Mobile placeholder): commands, profile, gating, refusals (2026-11-05, issue #183) |
 | [taxes.md](taxes.md) | Tax engine adapter (Avalara-style placeholder) and the service address of prepaid charges (2026-11-05, issue #184) |
+| [payments.md](payments.md) | Payment gateway adapter (Stripe-style placeholder): saved cards (TMF670), card top-ups, auto top-up (2026-11-05, issue #185) |
 | [worker.md](worker.md) | Billing worker (stage 4): slices b-h, Q1-Q14 and D-W decisions as recorded; resolved questions (stale runs, `APP_ENV`) |
 | [bills.md](bills.md) | Bill lifecycle (option C): slices 1-4, migration 0006, settlement |
 | [internal-api.md](internal-api.md) | Internal API (stage 5): endpoints, `X-Remote-User` trust |

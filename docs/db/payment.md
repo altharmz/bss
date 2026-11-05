@@ -67,4 +67,4 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 
 ## Referenced by
 
-[`balance_action`](balance_action.md), [`bill_allocation`](bill_allocation.md), [`funding_consumption`](funding_consumption.md), [`funding_hold_source`](funding_hold_source.md), [`refund`](refund.md), [`refund_source`](refund_source.md)
+[`balance_action`](balance_action.md), [`bill_allocation`](bill_allocation.md), [`funding_consumption`](funding_consumption.md), [`funding_hold_source`](funding_hold_source.md), [`payment_command`](payment_command.md), [`refund`](refund.md), [`refund_source`](refund_source.md)

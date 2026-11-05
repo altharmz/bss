@@ -93,4 +93,4 @@ TMF654 top-up, reservation, adjustment and transfer actions; balanceActionHistor
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`balance_action_reversal`](balance_action_reversal.md), [`funding_consumption`](funding_consumption.md), [`funding_source`](funding_source.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`balance_action_reversal`](balance_action_reversal.md), [`funding_consumption`](funding_consumption.md), [`funding_source`](funding_source.md), [`payment_command`](payment_command.md)

@@ -43,6 +43,7 @@ from app.api.on_demand import DemandCreate
 from app.api.ordering import CancelIn, OrderIn, OrderPatch
 from app.api.party import IndividualCreate, IndividualPatch, OrganizationCreate, OrganizationPatch
 from app.api.payment import PaymentCreate
+from app.api.payment_method import PaymentMethodCreate, PaymentMethodPatch
 from app.api.presentation import FormatCreate, FormatPatch, MediaCreate, MediaPatch
 from app.api.refunds import RefundCreate
 from app.api.reserve import ReserveCreate, ReservePatch
@@ -53,6 +54,8 @@ from app.events.types import BASES
 from app.internal.billing_runs import OUTCOMES, CatchUp
 from app.internal.catalog import PriceChange
 from app.internal.network_commands import STATES as NETWORK_STATES
+from app.internal.payments import STATES as PAYMENT_STATES
+from app.internal.payments import AutoTopup, CardTopup
 from app.internal.prepaid_commands import STATES
 
 # Not tools: the same list as docs/progress/scope.yaml `excluded` (area api).
@@ -86,6 +89,7 @@ FAMILIES = {
     "/tmf-api/customer/v5": "TMF629 Customer",
     "/tmf-api/accountManagement/v5": "TMF666 Account",
     "/tmf-api/payment/v4": "TMF676 Payment (v4)",
+    "/tmf-api/paymentMethod/v4": "TMF670 Payment Method (v4)",
     "/tmf-api/prepayBalanceManagement/v4": "TMF654 Prepay Balance (v4)",
     "/tmf-api/productInventory/v5": "TMF637 Product Inventory",
     "/tmf-api/customerBillManagement/v5": "TMF678 Customer Bill",
@@ -678,6 +682,65 @@ OPERATIONS: dict[str, Op] = {
     "retry_network_command": Op(
         "Return an exhausted network command to pending with the same key and request; the"
         " worker sends it within a minute (409 unless exhausted; a refusal is final).",
+        no_body=True,
+    ),
+    # --- TMF670 payment methods (saved cards) ---
+    "list_payment_methods": Op(
+        "Saved cards (tokenizedCard) of billing accounts: brand, last four digits, expiry,"
+        " isPreferred (the default card). The gateway token is never shown.",
+        query=LIST,
+    ),
+    "get_payment_method": Op("One saved card.", query=FIELDS),
+    "create_payment_method": Op(
+        "Save a card as a gateway token (@type tokenizedCard, account, token, brand,"
+        " lastFourDigits, expirationDate). A card number or security code is a 400; use a"
+        " stub token such as tok_test (tok_decline is declined, tok_fail errors). The first"
+        " card of an account becomes its default.",
+        body=PaymentMethodCreate,
+    ),
+    "patch_payment_method": Op(
+        "Change a card's name, description or isPreferred (the default card).",
+        body=PaymentMethodPatch,
+    ),
+    "delete_payment_method": Op(
+        "Remove a saved card (409 while a charge with it is in progress); removing the"
+        " default leaves the account without one."
+    ),
+    "card_topup": Op(
+        "Queue a card top-up of a prepaid account: amount {unit, value}, optional"
+        " paymentMethod {id} (default: the default card) and idempotencyKey. The balance"
+        " rises only after the gateway confirms (the worker sends the charge); the same key"
+        " is the same charge (200). 202 with the command.",
+        body=CardTopup,
+    ),
+    "list_card_topups": Op(
+        "The card charges of one billing account, newest first: state, decline reason,"
+        " last error, the payment and top-up recorded on confirmation.",
+        query=PAGE,
+    ),
+    "get_auto_topup": Op(
+        "The account's auto top-up rule: enabled, threshold, amount, default card."
+    ),
+    "patch_auto_topup": Op(
+        "Set the account's opt-in auto top-up rule: enabled, threshold {unit, value} and"
+        " amount {unit, value} (amount at least the threshold). Below the threshold the"
+        " default card is charged for the amount; one attempt at a time.",
+        body=AutoTopup,
+    ),
+    "list_payment_commands": Op(
+        "Card charges to the payment gateway, newest first: purpose (topup, auto_topup),"
+        " state (pending, sent, confirmed, declined, exhausted, cancelled), attempts, last"
+        " error, decline reason.",
+        query=PAGE,
+        extra={
+            "billingAccount.id": UUID_ARG,
+            "state": {"type": "string", "enum": list(PAYMENT_STATES)},
+        },
+    ),
+    "get_payment_command": Op("One card charge with its state, reason and links."),
+    "retry_payment_command": Op(
+        "Return an exhausted card charge to pending with the same key; the worker sends it"
+        " within a minute (409 unless exhausted; a decline is final).",
         no_body=True,
     ),
     "list_event_subscriptions": Op(
