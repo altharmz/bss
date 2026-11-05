@@ -458,6 +458,8 @@ def insert_abr(
     taxes: tuple[AppliedTax, ...] = (),
     product_offering_id: UUID | None = None,
     balance_action_id: UUID | None = None,
+    one_time_price_id: UUID | None = None,
+    charge_name: str | None = None,
 ) -> Row:
     """Insert an applied customer billing rate; `applied_at` (TMF678 date) is the injected
     clock of the run's attempt. Overlaps are rejected by the database (EXCLUDE
@@ -482,6 +484,9 @@ def insert_abr(
         columns["product_offering_id"] = product_offering_id
     if balance_action_id is not None:
         columns["balance_action_id"] = balance_action_id
+    if one_time_price_id is not None:  # a product fee, from 0055
+        columns["one_time_price_id"] = one_time_price_id
+        columns["charge_name"] = charge_name
     row = returning(
         conn,
         sql.SQL("INSERT INTO applied_customer_billing_rate ({}) VALUES ({}) RETURNING *").format(
@@ -840,6 +845,40 @@ def core_product(row: Row, changes: tuple[OfferingChange, ...] = ()) -> Product:
         termination_date=row["termination_date"],
         changes=changes,
     )
+
+
+def load_fee_prices(
+    conn: psycopg.Connection, offering_id: UUID, currency: str, at: datetime
+) -> list[tuple[Price, str]]:
+    """The oneTime prices of an offering in `currency` valid at `at`, with their names: the
+    fees charged with a purchase (docs/decisions/prepaid.md). Zero amounts are not fees."""
+    rows = fetch_all(
+        conn,
+        """
+        SELECT id, product_offering_id, coalesce(nullif(name, ''), 'One-time fee') AS name, amount,
+               currency, valid_for, details
+        FROM product_offering_price
+        WHERE product_offering_id = %s AND price_type = 'oneTime' AND currency = %s
+          AND amount > 0 AND valid_for @> %s::timestamptz
+        ORDER BY created_at, id
+        """,
+        (offering_id, currency, at),
+    )
+    return [
+        (
+            Price(
+                id=row["id"],
+                offering_id=row["product_offering_id"],
+                amount=row["amount"],
+                currency=row["currency"],
+                valid_from=row["valid_for"].lower,
+                valid_to=row["valid_for"].upper,
+                taxes=price_taxes(row["details"]),
+            ),
+            row["name"],
+        )
+        for row in rows
+    ]
 
 
 def load_recurring_prices(conn: psycopg.Connection, offering_ids: list[UUID]) -> tuple[Price, ...]:
@@ -1253,7 +1292,7 @@ def bill_charges(conn: psycopg.Connection, bill_id: UUID) -> list[Row]:
     return fetch_all(
         conn,
         """
-        SELECT a.*, o.id AS offering_id, o.name AS offering_name
+        SELECT a.*, o.id AS offering_id, coalesce(a.charge_name, o.name) AS offering_name
         FROM applied_customer_billing_rate a
         LEFT JOIN product_offering o ON o.id = a.product_offering_id
         WHERE a.customer_bill_id = %s
@@ -1347,7 +1386,8 @@ def page_account_charges(
     rows = fetch_all(
         conn,
         """
-        SELECT a.*, r.run_date, o.id AS offering_id, o.name AS offering_name,
+        SELECT a.*, r.run_date, o.id AS offering_id,
+               coalesce(a.charge_name, o.name) AS offering_name,
                lower(coalesce(c.period, a.period)) AS charge_start
         FROM applied_customer_billing_rate a
         LEFT JOIN applied_customer_billing_rate c ON c.id = a.refunds_rate_id
@@ -1428,7 +1468,7 @@ def page_account_transactions(
                        AS kind,
                    -(a.amount + a.tax_amount) AS amount, r.run_date AS day, 0 AS rank,
                    a.applied_at AS at,
-                   coalesce(o.name, %(fee)s) AS note, a.period
+                   coalesce(a.charge_name, o.name, %(fee)s) AS note, a.period
             FROM applied_customer_billing_rate a
             JOIN billing_run r ON r.id = a.billing_run_id
             LEFT JOIN product_offering o ON o.id = a.product_offering_id

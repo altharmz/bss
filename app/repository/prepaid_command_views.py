@@ -53,6 +53,7 @@ def _request_products(request: dict[str, Any]) -> set[str]:
     ids |= {q["product_id"] for q in request.get("intervals", [])}
     ids |= {c["product_id"] for c in request.get("status_changes", [])}
     ids |= {q["product_id"] for q in request.get("offering_changes", [])}
+    ids |= {c["product_id"] for c in request.get("charges", [])}
     if "product_id" in request:
         ids.add(request["product_id"])
     return ids

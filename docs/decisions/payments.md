@@ -96,6 +96,14 @@ index on `payment_command (billing_account_id) WHERE purpose = 'auto_topup' AND 
 balance or the settings change (a payment received after it, or a change of the rule, lets
 the next wake-up try again). No default card: nothing is made.
 
+## Renewal charges (issue #187)
+
+A third purpose, `renewal`: the card charge for a plan renewal the balance cannot pay, made
+for exactly the shortfall when the account's auto top-up setting (auto-pay) is on and it has a
+usable default card. It follows the same states, retries and confirmation (payment and TMF654
+top-up, `isAutoTopup` true) and is linked to the renewal command. See
+[prepaid.md](prepaid.md#plans-renewal-add-ons-and-fees-2026-11-05-issue-187).
+
 ## Not in this slice
 
 The admin UI (payment methods on the subscriber card, "Top up by card", auto top-up

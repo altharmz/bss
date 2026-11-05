@@ -41,13 +41,24 @@ def insert(
     client_key: str | None,
     request: dict[str, Any],
     now: datetime,
+    renewal_command_id: UUID | None = None,
 ) -> Row:
     return returning(
         conn,
         "INSERT INTO payment_command (billing_account_id, payment_method_id, purpose, amount,"
-        " currency, client_key, request, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-        " RETURNING *",
-        (account_id, method_id, purpose, amount, currency, client_key, jsonb(request), now),
+        " currency, client_key, request, created_at, renewal_command_id)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING *",
+        (
+            account_id,
+            method_id,
+            purpose,
+            amount,
+            currency,
+            client_key,
+            jsonb(request),
+            now,
+            renewal_command_id,
+        ),
     )
 
 
@@ -172,4 +183,26 @@ def auto_candidates(conn: psycopg.Connection) -> list[Row]:
         " AND NOT EXISTS (SELECT FROM payment p WHERE p.billing_account_id = a.id"
         " AND p.status = 'done' AND p.received_at > c.created_at))"
         " ORDER BY a.id",
+    )
+
+
+def renewal_candidates(conn: psycopg.Connection) -> list[Row]:
+    """The oldest pending renewal of each prepaid account with auto-pay on (the auto top-up
+    setting), whose latest recorded shortfall is open, with no renewal charge in flight and
+    none declined or exhausted since that shortfall was observed. Its `shortfall` is what
+    the card is charged for (its `required` less the spendable balance, read under the lock)."""
+    return fetch_all(
+        conn,
+        "SELECT DISTINCT ON (pc.billing_account_id) pc.id AS command_id,"
+        " a.id AS account_id, a.currency, s.required"
+        " FROM prepaid_command pc JOIN billing_account a ON a.id = pc.billing_account_id"
+        " JOIN LATERAL (SELECT * FROM prepaid_funding_shortfall WHERE command_id = pc.id"
+        "   ORDER BY observed_at DESC LIMIT 1) s ON true"
+        " WHERE pc.kind = 'renewal' AND pc.state <> 'completed' AND a.auto_topup_enabled"
+        " AND a.rating_type = 'prepaid' AND a.state = 'Active' AND s.required > s.available"
+        " AND NOT EXISTS (SELECT FROM payment_command c WHERE c.billing_account_id = a.id"
+        "   AND c.purpose = 'renewal' AND c.state IN ('pending', 'sent'))"
+        " AND NOT EXISTS (SELECT FROM payment_command c WHERE c.renewal_command_id = pc.id"
+        "   AND c.state IN ('declined', 'exhausted') AND c.created_at >= s.observed_at)"
+        " ORDER BY pc.billing_account_id, pc.due_date, pc.id",
     )

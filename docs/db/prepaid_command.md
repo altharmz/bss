@@ -63,4 +63,4 @@ Durable internal prepaid command journal; no runtime dispatcher or public API ye
 
 ## Referenced by
 
-[`balance_action`](balance_action.md), [`billing_run`](billing_run.md), [`funded_interval`](funded_interval.md), [`prepaid_funding_shortfall`](prepaid_funding_shortfall.md)
+[`balance_action`](balance_action.md), [`billing_run`](billing_run.md), [`funded_interval`](funded_interval.md), [`payment_command`](payment_command.md), [`prepaid_funding_shortfall`](prepaid_funding_shortfall.md)

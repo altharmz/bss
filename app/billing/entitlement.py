@@ -12,6 +12,11 @@ def effective_state(product, account, grant, today):
         return "suspended", "manual"
     if account["state"] != "Active":
         return "suspended", "account"
+    if product.get("grantless"):
+        # an add-on or pay-as-you-go product has no funded interval: the order that
+        # created it activates it, and it stays active until its end date
+        pending = product["status"] in {"created", "pendingActive"}
+        return ("pendingActive" if pending else "active"), None
     if grant is not None and grant["period"].lower <= today < grant["period"].upper:
         # an accepted termination keeps service until its date
         return ("active" if product["termination_date"] is None else "pendingTerminate"), None
@@ -51,7 +56,11 @@ def view(conn, product, account, today):
     return {
         "status": status,
         "authorizedAt": grant["authorized_at"] if grant else None,
-        "paidThrough": grant["period"].upper if grant else None,
+        "paidThrough": grant["period"].upper
+        if grant
+        else product.get("termination_date")
+        if product.get("grantless")
+        else None,
         "suspensionCause": cause,
         "needs_topup": None
         if shortfall is None

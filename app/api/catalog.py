@@ -84,7 +84,7 @@ from app.api.errors import (
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.core import tax_of
 from app.events import emit
-from app.network import profile
+from app.network import kind, profile
 from app.repository import catalog, classification
 from app.repository._sql import Row, count_references
 
@@ -975,6 +975,22 @@ def _network_offering(conn: psycopg.Connection, spec_id: UUID | None, details: d
     found = profile.offering_problems(None if spec is None else spec["details"], details)
     if found:
         raise bad_request("prodSpecCharValueUse: " + "; ".join(found))
+    found = kind.problems(details)
+    if found:
+        raise bad_request("productOfferingCharacteristic: " + "; ".join(found))
+
+
+def _check_kind(conn: psycopg.Connection, offering_id: UUID, price_type: str) -> None:
+    """Only a plan has a recurring price: an add-on pack and a pay-as-you-go offering do not."""
+    offering = catalog.get_product_offering(conn, offering_id)
+    if (
+        offering is not None
+        and price_type == "recurring"
+        and kind.kind_of(offering["details"]) != kind.PLAN
+    ):
+        raise unprocessable(
+            f"a {kind.kind_of(offering['details'])} offering has no recurring price"
+        )
 
 
 def _specification(conn: psycopg.Connection, reference: SpecificationRef) -> None:
@@ -1053,6 +1069,7 @@ def _attach_prices(
             with conn.transaction():
                 candidate = catalog.get_product_offering_price(conn, price_id)
                 assert candidate is not None
+                _check_kind(conn, offering_id, candidate["price_type"])
                 _check_cadence(conn, offering_id, candidate)
                 attached = catalog.attach_price(conn, price_id, offering_id)
         except pg_errors.ExclusionViolation:
@@ -1213,6 +1230,11 @@ def patch_offering(
                 changes.get("product_specification_id", current["product_specification_id"]),
                 changes.get("details", current["details"]),
             )
+            new_kind = kind.kind_of(changes.get("details", current["details"]))
+            if new_kind != kind.PLAN and any(
+                p["price_type"] == "recurring" for p in catalog.prices_of_offering(conn, uid)
+            ):
+                raise unprocessable(f"a {new_kind} offering has no recurring price")
         category_ids = None if data.category is None else _categories(conn, data.category)
         if category_ids is not None and not changes:
             # membership is part of this resource: fire its lastUpdate trigger too

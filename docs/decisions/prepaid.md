@@ -1,5 +1,82 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## Plans, renewal, add-ons and fees (2026-11-05, issue #187)
+
+Epic #182. The design was approved on the issue (the human's standing delegation, decided
+following TMF); the UI is issue 187b. Migration `0057`. Builds on the network adapter
+([network.md](network.md)), the tax adapter ([taxes.md](taxes.md)) and the payment adapter
+([payments.md](payments.md)).
+
+**Offering kind (no new column).** A TMF620 `productOfferingCharacteristic` named
+`offeringKind` with one `characteristicValueSpecification` value: `plan` (the default when
+absent), `addOn` or `payAsYouGo` (`app/network/kind.py`; any other value is a 400). Only a
+plan has a recurring price: attaching a recurring price to an add-on or pay-as-you-go
+offering, or making an offering with one of those kinds, is a 422. A plan's period is its
+recurring price's period (monthly, or `daily` with a length for a fixed number of days).
+
+**One-time fees.** A `oneTime` price of the offering, valid at midnight of the start day, in the
+account's currency and above zero, is a fee (the catalog allows one valid `oneTime` price per
+offering and currency at a time). It is quoted at acceptance with the first interval (taxed
+like any charge, the engine as `one_time`, else the price's flat tax), included in the hold
+(`IntervalQuote.fees`, `gross`), and posted by the billing owner as one `oneTime` ABR per fee
+(`one_time_price_id`, `charge_name` = the price name) on the same bill as the interval, one
+day long. The fee is not part of the funded interval (`funded_interval.amount/tax_amount` stay
+the recurring charge, which is what a termination credit refunds); renewals, offering changes
+and mid-period changes charge no fee. A future-dated purchase quotes its fee at posting. TMF678
+shows it as an `appliedBillingCharge` named after the price; the account's charges, the
+transaction ledger and the bill document use the same name. Before this migration a `oneTime`
+rate belonged only to a transfer (no product).
+
+**Renewal from the balance** is unchanged (P3e). **Renewal from the card:** auto-pay is the
+account's auto top-up setting (`auto_topup_enabled`) with a usable default card
+(payments.md). On the wake-up after a renewal's shortfall was recorded, the worker makes one
+`payment_command` of purpose `renewal` for what the renewal still lacks (its required amount
+less the spendable balance, read under the account lock), one in flight per account (partial
+unique index). When the gateway confirms, the payment and TMF654 top-up are recorded and the
+renewal posts in the same wake-up (the payment is the credit signal of the existing retry
+rule). A declined or exhausted charge is not repeated until the renewal's next shortfall
+observation (the daily rescan), so a bad card is tried once per business date. The charge is
+linked to the renewal (`renewal_command_id`); the renewal history shows `fundedBy: card`.
+**No card, no auto-pay or a card that cannot be charged:** nothing is charged; the renewal stays
+pending with its shortfall (`needs_topup`), entitlement already ends at paid-through and the
+product is `suspended` with cause `funding`. That is the hand-over to the lifecycle slice
+(#188), which adds the grace period, suspension and deactivation on top of this state.
+
+**Add-on packs.** A TMF622 order whose `add` items are add-on offerings, each with
+`product.productRelationship` `[{relationshipType: "addOn", id: <plan product>}]` (TMF622/637
+`ProductRelationship`; accepted on add items only). Rules, all TMF622 error codes on the
+order: `addOnParentRequired`, `addOnParentUnknown` (not this account's), `addOnParentNotPlan`,
+`addOnParentNotActive` (no paid period running today or the plan is suspended),
+`noOneTimePrice`, `startNotToday` (add-ons and pay-as-you-go lines start today),
+`mixedOfferingKinds` (plans, add-ons and pay-as-you-go lines are separate orders),
+`prepaidOnly`. The add-on is a product (`parent_product_id`, `grantless`) created with
+`termination_date` = the plan's paid-through date (earlier if the plan is ending), so it
+ends with the period; it has no funded interval and is never renewed; terminating the plan
+ends its add-ons (`post_termination`). The charge is its fees: held at acceptance, posted by
+the billing owner (`app/billing/one_time.py`, command request `{order_id, charges}`) after
+the network confirmed. The network gets one `change_profile` on the plan's line: the plan's
+profile plus the pack's allowance (`profile.combine`: data, cap, minutes and messages added,
+flags switched on, throttle speed kept). The line goes back to the plan's profile with the
+next period (the network applies a period's allowance per period; no revert command is sent).
+A refusal releases the hold and cancels the add-on, as any refused purchase.
+
+**Pay-as-you-go.** `offeringKind payAsYouGo`: no recurring price. The order activates the line
+(network `activate`), charges its one-time fee, and the product is `grantless`: active from its
+start, never renewed (no grant). Suspension and termination orders work on it
+(`_not_started` skips grantless products). Usage rating is #191.
+
+**Entitlement of a grantless product** (`entitlement.effective_state`): manual and account
+suspension apply as usual; otherwise `pendingActive` until the order completes, then
+`active`, and `terminated` at its termination date.
+
+**Internal API** (`GET /internal/v1/billingAccount/{id}/products`, prepaid products): `offeringKind`,
+`parentProduct`, `fundingSource` (`balance` or `balanceThenCard`) and `renewalHistory` (period,
+amount with tax, kind purchase/renewal/offeringChange, `fundedBy`, bill). No new TMF or MCP
+operation.
+
+**Deployment.** Migration `0057`; existing prepaid products are untouched (`grantless` false,
+their grants and paid-through dates stay; renewal by card applies from their next renewal).
+
 ## Mid-period offering change (2026-11-04, issue #151)
 
 A prepaid modify item with `productOffering` may now request any date `D` with

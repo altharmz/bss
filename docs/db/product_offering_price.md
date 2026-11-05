@@ -64,4 +64,4 @@ SID ProductOfferingPrice (TMF620 productOfferingPrice): a price created on its o
 
 ## Referenced by
 
-[`product_order_item`](product_order_item.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`product_order_item`](product_order_item.md)

@@ -91,3 +91,20 @@ def effective(
         if isinstance(use, dict) and use.get("name") in out and values:
             out[use["name"]] = values[0].get("value")
     return out
+
+
+ADDITIVE = ("dataAllowanceMb", "dataCapMb", "voiceMinutes", "smsCount")
+
+
+def combine(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
+    """The profile of a line with an add-on pack: the pack's allowances added to the plan's
+    (data, cap, minutes, messages), its flags switched on, the throttle speed kept."""
+    out = dict(base)
+    for name, value in extra.items():
+        if name in ADDITIVE:
+            out[name] = out.get(name, 0) + value
+        elif PROFILE.get(name) == "flag":
+            out[name] = max(out.get(name, 0), value)
+        else:
+            out.setdefault(name, value)
+    return out

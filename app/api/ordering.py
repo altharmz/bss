@@ -152,6 +152,8 @@ class ItemProduct(ProductRef):
     realizing_resource: list[dict[str, Any]] | None = None
     # an add item may choose the kind of SIM instead of naming one (docs/decisions/sim.md)
     product_characteristic: list[dict[str, Any]] | None = None
+    # an add-on pack's plan: [{relationshipType: addOn, id: <plan product>}] (add items only)
+    product_relationship: list[dict[str, Any]] | None = None
 
 
 class OrderItemIn(ItemDocuments):  # type: ignore[misc,valid-type]
@@ -328,15 +330,19 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
         )
     if item.product and item.product.product_characteristic is not None:
         _check_sim_type(item)
+    if item.product and item.product.product_relationship is not None and item.action != "add":
+        raise unprocessable("productRelationship is writable only on add items")
     if item.product and (
         item.product.realizing_resource is not None
         or item.product.product_characteristic is not None
+        or item.product.product_relationship is not None
     ):
         sent = {
             key: value
             for key, value in (
                 ("realizingResource", item.product.realizing_resource),
                 ("productCharacteristic", item.product.product_characteristic),
+                ("productRelationship", item.product.product_relationship),
             )
             if value is not None
         }
