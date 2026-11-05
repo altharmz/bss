@@ -22,6 +22,8 @@ items:
   - {id: db.prepaid_command, area: db, stage: 5, table: prepaid_command, title: "Durable prepaid command requests, results and retry state"}
   - {id: db.network_command, area: db, stage: 5, table: network_command, title: "Durable network provisioning commands of prepaid order items"}
   - {id: db.sim_batch, area: db, stage: 5, table: sim_batch, title: "Stocked SIM and eSIM batches"}
+  - {id: db.payment_method, area: db, stage: 5, table: payment_method, title: "Saved cards as gateway tokens (TMF670 tokenizedCard); the BSS never holds a card number"}
+  - {id: db.payment_command, area: db, stage: 5, table: payment_command, title: "Durable card charges to the payment gateway: the balance rises only when the gateway confirms"}
   - {id: db.tax_transaction, area: db, stage: 5, table: tax_transaction, title: "Tax engine transaction behind a prepaid charge: committed when booked, voided when credited in full"}
   - {id: db.prepaid_funding_shortfall, area: db, stage: 5, table: prepaid_funding_shortfall, title: "Retained prepaid needs-top-up decisions"}
   - {id: db.funding_hold_conversion, area: db, stage: 5, table: funding_hold_conversion, title: "Durable command hold conversion results"}
@@ -345,6 +347,20 @@ items:
   - {id: api.internal.networkCommand.list, area: api, stage: 5, method: GET, path: /internal/v1/network/command, title: "List network provisioning commands with state, attempts and refusal"}
   - {id: api.internal.networkCommand.get, area: api, stage: 5, method: GET, path: "/internal/v1/network/command/{command_id}", title: "Get a network provisioning command"}
   - {id: api.internal.networkCommand.retry, area: api, stage: 5, method: POST, path: "/internal/v1/network/command/{command_id}/retry", title: "Return an exhausted network command to pending"}
+  - {id: api.tmf670.paymentMethod.list, area: api, stage: 5, method: GET, path: /tmf-api/paymentMethod/v4/paymentMethod, title: "List saved cards"}
+  - {id: api.tmf670.paymentMethod.get, area: api, stage: 5, method: GET, path: "/tmf-api/paymentMethod/v4/paymentMethod/{method_id}", title: "Get a saved card"}
+  - {id: api.tmf670.paymentMethod.create, area: api, stage: 5, method: POST, path: /tmf-api/paymentMethod/v4/paymentMethod, title: "Save a card as a gateway token (a card number is a 400)"}
+  - {id: api.tmf670.paymentMethod.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/paymentMethod/v4/paymentMethod/{method_id}", title: "Rename a card or make it the default"}
+  - {id: api.tmf670.paymentMethod.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/paymentMethod/v4/paymentMethod/{method_id}", title: "Remove a saved card"}
+  - {id: api.tmf670.hub.create, area: api, stage: 5, method: POST, path: "/tmf-api/paymentMethod/v4/hub", title: "Subscribe to TMF670 events"}
+  - {id: api.tmf670.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/paymentMethod/v4/hub/{hub_id}", title: "Unsubscribe from TMF670 events"}
+  - {id: api.internal.cardTopup.create, area: api, stage: 5, method: POST, path: "/internal/v1/billingAccount/{account_id}/cardTopup", title: "Queue a card top-up (the balance rises only when the gateway confirms)"}
+  - {id: api.internal.cardTopup.list, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/cardTopup", title: "List an account's card charges"}
+  - {id: api.internal.autoTopup.get, area: api, stage: 5, method: GET, path: "/internal/v1/billingAccount/{account_id}/autoTopup", title: "Get an account's auto top-up rule"}
+  - {id: api.internal.autoTopup.patch, area: api, stage: 5, method: PATCH, path: "/internal/v1/billingAccount/{account_id}/autoTopup", title: "Set an account's auto top-up rule"}
+  - {id: api.internal.paymentCommand.list, area: api, stage: 5, method: GET, path: /internal/v1/payment/command, title: "List card charges with state, decline reason and attempts"}
+  - {id: api.internal.paymentCommand.get, area: api, stage: 5, method: GET, path: "/internal/v1/payment/command/{command_id}", title: "Get a card charge"}
+  - {id: api.internal.paymentCommand.retry, area: api, stage: 5, method: POST, path: "/internal/v1/payment/command/{command_id}/retry", title: "Return an exhausted card charge to pending"}
 
   # ---------------- api: service ----------------
   - {id: api.service.healthz, area: api, stage: template, method: GET, path: /healthz, title: "Liveness with a database check"}
@@ -566,6 +582,7 @@ items:
   - {id: worker.simInventory, area: worker, stage: 5, title: "Activation picks a SIM or eSIM from stock; a SIM swap moves the line to another SIM when the network confirms"}
   - {id: worker.networkProvisioning, area: worker, stage: 5, title: "Prepaid order items send their network command and complete only when the network confirms"}
   - {id: worker.taxEngine, area: worker, stage: 5, title: "Prepaid charges are taxed by the tax engine for the account's service address; an unavailable engine retries and books nothing"}
+  - {id: worker.paymentGateway, area: worker, stage: 5, title: "Card charges go to the payment gateway and the balance rises only when it confirms; automatic top-up below a threshold"}
   - {id: worker.signals, area: worker, stage: 4, title: "SIGTERM finishes the current account; SIGKILL leaves nothing half-written"}
   - {id: worker.billIssue, area: worker, stage: 5, title: "The run validates and issues the bills it writes (new -> validated -> sent; credit notes and zero bills settled)"}
   - {id: worker.billSettle, area: worker, stage: 5, title: "Every run applies unused credit to open bills, oldest first"}

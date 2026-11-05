@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0054**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0055**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -49,6 +49,8 @@ PostgreSQL schema at Alembic head **0054**, read from `pg_catalog` of a throwawa
 | [`prepaid_command`](prepaid_command.md) | billing | Durable internal prepaid command journal; no runtime dispatcher or public API yet. Request and completed result are retained. |
 | [`network_command`](network_command.md) | billing | Durable outbound provisioning command of one prepaid order item; sent by the billing worker through the network adapter, the item completes only when it is confirmed. |
 | [`tax_transaction`](tax_transaction.md) | billing | The tax engine transaction behind one prepaid charge (ABR): committed when the charge is booked, voided when the whole charge is credited. |
+| [`payment_method`](payment_method.md) | billing | A saved card as a gateway token (TMF670 tokenizedCard). The BSS never receives or stores a card number. |
+| [`payment_command`](payment_command.md) | billing | Durable outbound charge to the payment gateway: sent and retried by the billing worker, never inside a request. The balance rises only when the gateway confirms. |
 | [`prepaid_funding_shortfall`](prepaid_funding_shortfall.md) | billing | Retained needs-top-up observations; current only while the command is pending. Not technical retry attempts. |
 | [`funded_interval`](funded_interval.md) | billing | Immutable prepaid service grants. Persistence foundation only; the future billing owner must atomically post and settle the charge, convert its hold and complete the command. |
 | [`funding_hold_conversion`](funding_hold_conversion.md) | billing | Retained internal command hold conversion; no runtime caller. |
@@ -126,6 +128,8 @@ flowchart LR
     prepaid_command[prepaid_command]
     network_command[network_command]
     tax_transaction[tax_transaction]
+    payment_method[payment_method]
+    payment_command[payment_command]
     prepaid_funding_shortfall[prepaid_funding_shortfall]
     funded_interval[funded_interval]
     funding_hold_conversion[funding_hold_conversion]
@@ -238,6 +242,11 @@ flowchart LR
   party_account -->|"financial_account_id, party_id"| financial_account
   party_account -->|"party_id"| party
   payment -->|"billing_account_id"| billing_account
+  payment_command -->|"billing_account_id"| billing_account
+  payment_command -->|"payment_id"| payment
+  payment_command -->|"payment_method_id"| payment_method
+  payment_command -->|"topup_id"| balance_action
+  payment_method -->|"billing_account_id"| billing_account
   prepaid_bucket -->|"billing_account_id, rating_type"| billing_account
   prepaid_command -->|"billing_account_id"| billing_account
   prepaid_funding_shortfall -->|"command_id"| prepaid_command
@@ -320,6 +329,10 @@ erDiagram
     jsonb details
     text rating_type
     jsonb service_address
+    boolean auto_topup_enabled
+    numeric auto_topup_threshold
+    numeric auto_topup_amount
+    timestamptz auto_topup_changed_at
   }
   financial_account {
     uuid id PK
@@ -931,6 +944,43 @@ erDiagram
     timestamptz committed_at
     timestamptz voided_at
   }
+  payment_method {
+    uuid id PK
+    uuid billing_account_id FK
+    text name
+    text description
+    text brand
+    text card_type
+    text last_four
+    timestamptz expiration_date
+    text gateway_token
+    boolean is_default
+    text status
+    timestamptz created_at
+    timestamptz status_at
+  }
+  payment_command {
+    uuid id PK
+    uuid billing_account_id FK
+    uuid payment_method_id FK
+    text kind
+    text purpose
+    numeric amount
+    text currency
+    text client_key
+    text state
+    jsonb request
+    integer attempts
+    timestamptz next_attempt_at
+    text last_error
+    text decline_reason
+    text gateway_ref
+    uuid payment_id FK
+    uuid topup_id FK
+    timestamptz created_at
+    timestamptz sent_at
+    timestamptz confirmed_at
+  }
   prepaid_funding_shortfall {
     uuid command_id PK,FK
     timestamptz observed_at PK
@@ -1047,6 +1097,7 @@ erDiagram
   applied_customer_billing_rate ||--o{ funded_interval : "applied_rate_id, product_id, billing_account_id, billing_run_id, period, currency, amount, tax_amount, charge_type"
   applied_customer_billing_rate ||--o{ tax_transaction : "applied_rate_id"
   balance_action |o--o{ applied_customer_billing_rate : "balance_action_id"
+  balance_action |o--o{ payment_command : "topup_id"
   balance_action ||--o{ balance_action_reversal : "action_id, billing_account_id, currency"
   balance_action ||--o{ funding_consumption : "action_id, billing_account_id"
   balance_action ||--o{ funding_source : "action_id"
@@ -1062,6 +1113,8 @@ erDiagram
   billing_account ||--o{ funding_hold : "billing_account_id, currency"
   billing_account ||--o{ funding_source : "billing_account_id, currency"
   billing_account ||--o{ payment : "billing_account_id, currency"
+  billing_account ||--o{ payment_command : "billing_account_id"
+  billing_account ||--o{ payment_method : "billing_account_id"
   billing_account ||--o{ prepaid_bucket : "billing_account_id, currency, rating_type"
   billing_account ||--o{ prepaid_command : "billing_account_id"
   billing_account ||--o{ refund : "billing_account_id, currency"
@@ -1099,8 +1152,10 @@ erDiagram
   payment |o--o{ bill_allocation : "payment_id, billing_account_id"
   payment |o--o{ funding_consumption : "payment_id, billing_account_id"
   payment |o--o{ funding_hold_source : "payment_id, billing_account_id"
+  payment |o--o{ payment_command : "payment_id"
   payment |o--o{ refund : "payment_id, billing_account_id"
   payment |o--o{ refund_source : "payment_id, billing_account_id"
+  payment_method ||--o{ payment_command : "payment_method_id"
   prepaid_bucket |o--o{ balance_action : "receiver_bucket_id, receiver_billing_account_id, receiver_currency"
   prepaid_bucket ||--o{ balance_action : "bucket_id, billing_account_id, currency"
   prepaid_command |o--o{ balance_action : "command_id"

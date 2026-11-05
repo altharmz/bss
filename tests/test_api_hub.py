@@ -56,7 +56,7 @@ def test_create_and_delete_a_hub(api, name):
     assert created.status_code == 201, created.text
     body = created.json()
     assert body["callback"] == CALLBACK and body["query"].startswith("eventType=")
-    if name in ("TMF676", "TMF654"):  # v4 EventSubscription: no href, no @type
+    if name in ("TMF676", "TMF654", "TMF670"):  # v4 EventSubscription: no href, no @type
         assert set(body) == {"id", "callback", "query"}
     else:
         assert body["href"] == f"{base}/hub/{body['id']}" == created.headers["location"]

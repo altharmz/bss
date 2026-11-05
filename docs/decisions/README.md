@@ -18,6 +18,7 @@ changing it, and record a new decision in it.
 | [network.md](network.md) | Network provisioning adapter (T-Mobile placeholder): commands, profile, gating, refusals (2026-11-05, issue #183) |
 | [sim.md](sim.md) | SIM and eSIM inventory on the IMSI resource, activation pick, SIM swap (2026-11-05, issue #186) |
 | [taxes.md](taxes.md) | Tax engine adapter (Avalara-style placeholder) and the service address of prepaid charges (2026-11-05, issue #184) |
+| [payments.md](payments.md) | Payment gateway adapter (Stripe-style placeholder): saved cards (TMF670), card top-ups, auto top-up (2026-11-05, issue #185) |
 | [worker.md](worker.md) | Billing worker (stage 4): slices b-h, Q1-Q14 and D-W decisions as recorded; resolved questions (stale runs, `APP_ENV`) |
 | [bills.md](bills.md) | Bill lifecycle (option C): slices 1-4, migration 0006, settlement |
 | [internal-api.md](internal-api.md) | Internal API (stage 5): endpoints, `X-Remote-User` trust |

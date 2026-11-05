@@ -8,7 +8,7 @@ active prepaid line has a known SIM. Design approved by the human's standing del
 
 The IMSI `LogicalResource` of [prepaid.md](prepaid.md#imsi-issue-66) (`subscriber_number`,
 kind `imsi`, with its `iccid`) **is** the SIM: orders already claim it, release it and lock
-it, so assignment, history and TMF639 events stay as they were. Migration `0054` adds columns
+it, so assignment, history and TMF639 events stay as they were. Migration `0055` adds columns
 to it, and one table:
 
 | Column / table | Meaning |

@@ -18,6 +18,7 @@ from app.internal import (
     context,
     event_subscriptions,
     network_commands,
+    payments,
     prepaid_commands,
     sims,
     users,
@@ -33,8 +34,10 @@ def install(app: FastAPI) -> None:
         prepaid_commands,
         network_commands,
         sims,
+        payments,
         bills,
         users,
         event_subscriptions,
     ):
         app.include_router(module.router)
+    app.include_router(payments.accounts)

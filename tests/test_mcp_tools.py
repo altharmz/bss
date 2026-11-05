@@ -12,6 +12,7 @@ import json
 import pkgutil
 import textwrap
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -24,7 +25,7 @@ import app.api
 import app.internal
 from app.api.hub import HUB_APIS
 from app.main import app as bss_app
-from app.repository import network_commands
+from app.repository import network_commands, payment_commands, payment_methods
 from app.repository import prepaid_commands as commands
 from bss_mcp import tools
 from bss_mcp.operations import AUTH_OPERATIONS, EXCLUDED, OPERATIONS, Op
@@ -457,6 +458,31 @@ def world(api, db_conn) -> dict[str, Any]:
         profile={"voiceMinutes": 100},
         now=api.clock.now(),
     )
+    paying = UUID(world["topup"]["partyAccount"]["id"])
+    world["payment_method"] = payment_methods.insert(
+        db_conn,
+        account_id=paying,
+        name="Visa",
+        description=None,
+        brand="visa",
+        card_type=None,
+        last_four="4242",
+        expiration_date=None,
+        token="tok_world",
+        preferred=None,
+        now=api.clock.now(),
+    )
+    world["payment_command"] = payment_commands.insert(
+        db_conn,
+        account_id=paying,
+        method_id=world["payment_method"]["id"],
+        purpose="topup",
+        amount=Decimal("5.00"),
+        currency="USD",
+        client_key="world",
+        request={"token": "tok_world", "amount": Decimal("5.00"), "currency": "USD"},
+        now=api.clock.now(),
+    )
     db_conn.commit()
     return world
 
@@ -516,6 +542,12 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "list_prepaid_commands": {"state": "pending", "limit": 1},
         "get_network_command": {"command_id": str(world["network_command"]["id"])},
         "list_network_commands": {"state": "pending", "limit": 1},
+        "list_payment_methods": {"limit": 1},
+        "get_payment_method": {"method_id": str(world["payment_method"]["id"])},
+        "list_card_topups": {"account_id": world["topup"]["partyAccount"]["id"], "limit": 1},
+        "get_auto_topup": {"account_id": world["topup"]["partyAccount"]["id"]},
+        "list_payment_commands": {"state": "pending", "limit": 1},
+        "get_payment_command": {"command_id": str(world["payment_command"]["id"])},
         "list_event_subscriptions": {"api": "TMF676", "limit": 1},
         "list_payments": {"filters": {"account.id": acc}, "limit": 1},
         "list_bills": {"filters": {"billingAccount.id": acc}},
@@ -811,6 +843,46 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
     call(
         "retry_network_command",
         {"command_id": str(world["network_command"]["id"])},
+        expected=(409,),
+    )
+    # the card tools: save a card, rename it, queue a top-up and an auto top-up rule, remove it
+    paying = world["topup"]["partyAccount"]["id"]
+    card = call(
+        "create_payment_method",
+        {
+            "body": {
+                "@type": "tokenizedCard",
+                "name": "Spare card",
+                "account": [{"id": paying}],
+                "token": "tok_spare",
+            }
+        },
+    )
+    call("patch_payment_method", {"method_id": card["id"], "body": {"name": "Other card"}})
+    call(
+        "card_topup",
+        {
+            "account_id": paying,
+            "body": {"amount": {"unit": "USD", "value": "12.50"}, "idempotencyKey": "mcp-1"},
+        },
+        expected=(202,),
+    )
+    call(
+        "patch_auto_topup",
+        {
+            "account_id": paying,
+            "body": {
+                "enabled": True,
+                "threshold": {"unit": "USD", "value": "5.00"},
+                "amount": {"unit": "USD", "value": "20.00"},
+            },
+        },
+    )
+    call("delete_payment_method", {"method_id": card["id"]}, expected=(204,))
+    # a pending card charge is not exhausted: refused (409), but the tool reached it
+    call(
+        "retry_payment_command",
+        {"command_id": str(world["payment_command"]["id"])},
         expected=(409,),
     )
     for _, short in HUB_APIS:

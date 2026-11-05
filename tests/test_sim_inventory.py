@@ -516,7 +516,7 @@ def test_unlocking_a_retired_sim_stocks_it_again(api, db_conn, line_world):
 
 def test_the_migration_backfills_the_state_of_existing_imsi_rows(api, db_conn, line_world):
     spec = importlib.util.spec_from_file_location(
-        "migration_0054", Path("alembic/versions/0054_sim_inventory.py")
+        "migration_0055", Path("alembic/versions/0055_sim_inventory.py")
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -542,7 +542,7 @@ def test_the_migration_downgrades_and_upgrades_again(temp_db_url):
 
     cfg = Config("alembic.ini")
     command.upgrade(cfg, "head")
-    command.downgrade(cfg, "0053")
-    command.upgrade(cfg, "0054")
+    command.downgrade(cfg, "0054")
+    command.upgrade(cfg, "0055")
     with psycopg.connect(temp_db_url) as conn:
         assert conn.execute("SELECT count(*) FROM sim_batch").fetchone() == (0,)

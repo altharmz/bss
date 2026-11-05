@@ -1,13 +1,13 @@
 """SIM and eSIM inventory on the IMSI resource, batches and the swap_sim command (issue #186).
 
-Revision ID: 0054
-Revises: 0053
+Revision ID: 0055
+Revises: 0054
 """
 
 from alembic import op
 
-revision = "0054"
-down_revision = "0053"
+revision = "0055"
+down_revision = "0054"
 branch_labels = None
 depends_on = None
 

@@ -11,7 +11,7 @@ export type EventSubscription = Internal['schemas']['EventSubscription'];
 export interface HubApi {
   id: string;
   name: string;
-  /** TMF654 and TMF676 are v4: their hub is an EventSubscription, the others are v5 Hubs. */
+  /** TMF654, TMF670 and TMF676 are v4: their hub is an EventSubscription, the others are v5 Hubs. */
   version: 'v4' | 'v5';
   base: string;
 }
@@ -54,6 +54,12 @@ export const HUB_APIS: [HubApi, ...HubApi[]] = [
     name: 'Account Management',
     version: 'v5',
     base: '/tmf-api/accountManagement/v5',
+  },
+  {
+    id: 'TMF670',
+    name: 'Payment Method Management',
+    version: 'v4',
+    base: '/tmf-api/paymentMethod/v4',
   },
   { id: 'TMF676', name: 'Payment Management', version: 'v4', base: '/tmf-api/payment/v4' },
   {
@@ -177,6 +183,12 @@ export const EVENT_TYPES: Record<string, string[]> = {
     'SettlementAccountCreateEvent',
     'SettlementAccountDeleteEvent',
     'SettlementAccountStateChangeEvent',
+  ],
+  TMF670: [
+    'PaymentMethodAttributeValueChangeEvent',
+    'PaymentMethodCreateEvent',
+    'PaymentMethodDeleteEvent',
+    'PaymentMethodStatusChangeEvent',
   ],
   TMF676: [
     'PaymentAttributeValueChangeEvent',

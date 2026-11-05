@@ -187,7 +187,7 @@ def topup_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         "status": row["status"],
         "amount": quantity(row["amount"], row["currency"]),
         "usageType": "monetary",
-        "isAutoTopup": False,
+        "isAutoTopup": bool(request.get("isAutoTopup")),
         "reason": row["reason"] or row["failure_reason"],
         "description": row["description"],
         "requestedDate": utc(row["requested_at"]),
