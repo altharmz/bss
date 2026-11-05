@@ -72,13 +72,16 @@ describe('Integrations', () => {
     expect(screen.getByText('All events')).toBeTruthy();
     expect(screen.getByText('failed')).toBeTruthy();
     expect(screen.getByText('None yet')).toBeTruthy();
-    const system = await screen.findByText('2026-10-01', { selector: 'dd' });
+    const system = await screen.findByText('2026-10-01', { selector: 'dd span' });
     expect(system).toBeTruthy();
     expectUi('ui.system');
     expectUi('ui.system.health');
     expectUi('ui.system.billingStatus');
     const status = within(screen.getByText('Billing status').parentElement as HTMLElement);
-    expect(status.getByText('ageSeconds:')).toBeTruthy();
+    expect(status.getByText('Last run')).toBeTruthy();
+    expect(status.getByText('1 h ago').getAttribute('title')).toBe('ageSeconds');
+    expect(status.getByText('Business date')).toBeTruthy();
+    expect(status.queryByText('ageSeconds:')).toBeNull();
     expect(screen.getAllByText('OK')).toHaveLength(2); // health and billing status
     const link = expectUi('ui.system.schema');
     expect(link.getAttribute('href')).toBe('/tmf-api/schema/BssBillingAccount.schema.json');
@@ -97,7 +100,8 @@ describe('Integrations', () => {
     });
     open();
     await screen.findByText(/HTTP 503 \{"status":"degraded","db":"down"\}/);
-    expect(screen.getByText('stale')).toBeTruthy();
+    expect(screen.getByText('Stale')).toBeTruthy();
+    expect(screen.getByText('27 h ago')).toBeTruthy();
     expect(screen.getByText('HTTP 503')).toBeTruthy();
   });
 

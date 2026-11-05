@@ -386,13 +386,18 @@ class StartupTests(unittest.TestCase):
 
     def test_ambiguous_priorities_and_duplicate_order(self):
         for rows in [
-            [issue(labels=connection([]))],
             [issue(labels=connection([{"name": "P0"}, {"name": "P1"}]))],
             [issue(), issue()],
         ]:
             with self.subTest(rows=rows):
                 self.board(rows)
                 self.rejected("ambiguous")
+
+    def test_missing_priority_defaults_to_p3(self):
+        self.board([issue(10, "P3"), issue(11, "P3", labels=connection([])), issue(12, "P2")])
+        self.assertEqual(self.result()["issue"], 12)
+        self.board([issue(10, "P3"), issue(11, "P3", labels=connection([]))])
+        self.assertEqual(self.result()["issue"], 10)
 
     def test_ambiguous_board_view(self):
         self.board([issue()], views={"totalCount": 2, "nodes": []})

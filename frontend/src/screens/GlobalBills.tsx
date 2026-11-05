@@ -14,6 +14,7 @@ import { Id } from '../ui/Id';
 import { formatInt, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
 import { runTriggerLabel } from '../format/labels';
+import { statusPresentation } from '../ui/status';
 import { Coded, PageHeader, Panel, StatusPill, Segmented, DateField } from '../ui/kit';
 import { ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
@@ -109,7 +110,11 @@ export function BillsScreen() {
             onChange={setState}
             options={[
               { key: 'all', label: 'All' },
-              ...BILL_STATES.map((s) => ({ key: s, label: s })),
+              ...BILL_STATES.map((s) => ({
+                key: s,
+                label: statusPresentation('bill', s)[1],
+                title: s,
+              })),
             ]}
           />
         )}
