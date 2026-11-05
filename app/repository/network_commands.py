@@ -1,0 +1,164 @@
+"""Network provisioning commands of order items (docs/decisions/network.md).
+
+One command per order item. Its id is the idempotency key sent to the network, derived
+from the item and the kind, so a replay of acceptance or of a send names the same command.
+"""
+
+from datetime import date, datetime, timedelta
+from typing import Any
+from uuid import UUID, uuid5
+
+import psycopg
+
+from app.repository._sql import Row, fetch_all, fetch_one, jsonb, returning
+
+NAMESPACE = UUID("3b8d2c4e-7a15-5f06-9e31-c0a4d7b2e815")
+# Waits after the 1st, 2nd, ... temporary error; beyond the table, the last one.
+BACKOFF = (timedelta(minutes=1), timedelta(minutes=5), timedelta(minutes=15), timedelta(hours=1))
+
+
+def command_id(order_item_id: UUID, kind: str) -> UUID:
+    return uuid5(NAMESPACE, f"{order_item_id}:{kind}")
+
+
+def get(conn: psycopg.Connection, uid: UUID, *, lock: bool = False) -> Row | None:
+    query = "SELECT * FROM network_command WHERE id = %s"
+    return fetch_one(conn, query + " FOR UPDATE" if lock else query, (uid,))
+
+
+def insert(
+    conn: psycopg.Connection,
+    *,
+    order_id: UUID,
+    order_item_id: UUID,
+    product_id: UUID | None,
+    kind: str,
+    due_date: date,
+    profile: dict[str, Any],
+    now: datetime,
+) -> Row:
+    return returning(
+        conn,
+        "INSERT INTO network_command (id, product_order_id, product_order_item_id, product_id,"
+        " kind, due_date, profile, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
+        " ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id RETURNING *",
+        (
+            command_id(order_item_id, kind),
+            order_id,
+            order_item_id,
+            product_id,
+            kind,
+            due_date,
+            jsonb(profile),
+            now,
+        ),
+    )
+
+
+def of_order(conn: psycopg.Connection, order_id: UUID) -> list[Row]:
+    return fetch_all(
+        conn,
+        "SELECT * FROM network_command WHERE product_order_id = %s ORDER BY created_at, id",
+        (order_id,),
+    )
+
+
+def due(conn: psycopg.Connection, today: date, now: datetime) -> list[Row]:
+    return fetch_all(
+        conn,
+        "SELECT * FROM network_command WHERE state = 'pending' AND due_date <= %s"
+        " AND (next_attempt_at IS NULL OR next_attempt_at <= %s) ORDER BY due_date, created_at, id",
+        (today, now),
+    )
+
+
+def freeze_request(conn: psycopg.Connection, uid: UUID, request: dict[str, Any]) -> None:
+    conn.execute(
+        "UPDATE network_command SET request = %s WHERE id = %s AND request IS NULL",
+        (jsonb(request), uid),
+    )
+
+
+def confirm(conn: psycopg.Connection, uid: UUID, *, now: datetime) -> Row:
+    return returning(
+        conn,
+        "UPDATE network_command SET state = 'confirmed', confirmed_at = %s, attempted_at = %s,"
+        " attempts = attempts + 1, last_error = NULL, next_attempt_at = NULL WHERE id = %s"
+        " RETURNING *",
+        (now, now, uid),
+    )
+
+
+def refuse(conn: psycopg.Connection, uid: UUID, *, code: str, reason: str, now: datetime) -> Row:
+    return returning(
+        conn,
+        "UPDATE network_command SET state = 'refused', refusal_code = %s, last_error = %s,"
+        " attempted_at = %s, attempts = attempts + 1, next_attempt_at = NULL WHERE id = %s"
+        " RETURNING *",
+        (code, reason, now, uid),
+    )
+
+
+def temporary(
+    conn: psycopg.Connection, uid: UUID, *, error: str, max_attempts: int, now: datetime
+) -> Row:
+    """A temporary error: wait and send again, or `exhausted` once the attempts are used."""
+    row = get(conn, uid, lock=True)
+    attempts = row["attempts"] + 1
+    if attempts >= max_attempts:
+        return returning(
+            conn,
+            "UPDATE network_command SET state = 'exhausted', attempts = %s, last_error = %s,"
+            " attempted_at = %s, next_attempt_at = NULL WHERE id = %s RETURNING *",
+            (attempts, error, now, uid),
+        )
+    wait = BACKOFF[min(attempts, len(BACKOFF)) - 1]
+    return returning(
+        conn,
+        "UPDATE network_command SET attempts = %s, last_error = %s, attempted_at = %s,"
+        " next_attempt_at = %s WHERE id = %s RETURNING *",
+        (attempts, error, now, now + wait, uid),
+    )
+
+
+def retry(conn: psycopg.Connection, uid: UUID) -> Row:
+    """An exhausted command goes back to pending with its identity and request."""
+    return returning(
+        conn,
+        "UPDATE network_command SET state = 'pending', attempts = 0, next_attempt_at = NULL"
+        " WHERE id = %s AND state = 'exhausted' RETURNING *",
+        (uid,),
+    )
+
+
+def cancel_open(conn: psycopg.Connection, order_id: UUID) -> None:
+    conn.execute(
+        "UPDATE network_command SET state = 'cancelled'"
+        " WHERE product_order_id = %s AND state IN ('pending', 'exhausted')",
+        (order_id,),
+    )
+
+
+def page(
+    conn: psycopg.Connection,
+    *,
+    order_id: UUID | None,
+    product_id: UUID | None,
+    state: str | None,
+    offset: int,
+    limit: int,
+) -> tuple[list[Row], int]:
+    where = (  # noqa: S608 - fixed text, the values are parameters
+        " WHERE (%(o)s::uuid IS NULL OR product_order_id = %(o)s)"
+        " AND (%(p)s::uuid IS NULL OR product_id = %(p)s)"
+        " AND (%(s)s::text IS NULL OR state = %(s)s)"
+    )
+    args = {"o": order_id, "p": product_id, "s": state, "off": offset, "lim": limit}
+    total = fetch_one(conn, f"SELECT count(*) AS n FROM network_command{where}", args)["n"]  # noqa: S608
+    rows = fetch_all(
+        conn,
+        f"SELECT * FROM network_command{where} ORDER BY created_at DESC, id"  # noqa: S608
+        " LIMIT %(lim)s OFFSET %(off)s",
+        args,
+    )
+    return rows, total

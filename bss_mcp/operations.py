@@ -52,6 +52,7 @@ from app.api.transfer import TransferCreate, TransferPatch
 from app.events.types import BASES
 from app.internal.billing_runs import OUTCOMES, CatchUp
 from app.internal.catalog import PriceChange
+from app.internal.network_commands import STATES as NETWORK_STATES
 from app.internal.prepaid_commands import STATES
 
 # Not tools: the same list as docs/progress/scope.yaml `excluded` (area api).
@@ -660,6 +661,23 @@ OPERATIONS: dict[str, Op] = {
     "retry_prepaid_command": Op(
         "Return a failedTechnical prepaid command to pending with the same identity, request"
         " and hold; the worker attempts it within a minute (409 unless failedTechnical).",
+        no_body=True,
+    ),
+    "list_network_commands": Op(
+        "Network provisioning commands of prepaid order items, newest first: kind (activate,"
+        " suspend, restore, deactivate, change_profile), state (pending, confirmed, refused,"
+        " exhausted, cancelled), attempts, last error, refusal code, profile and request.",
+        query=PAGE,
+        extra={
+            "productOrder.id": UUID_ARG,
+            "product.id": UUID_ARG,
+            "state": {"type": "string", "enum": list(NETWORK_STATES)},
+        },
+    ),
+    "get_network_command": Op("One network provisioning command with its state and request."),
+    "retry_network_command": Op(
+        "Return an exhausted network command to pending with the same key and request; the"
+        " worker sends it within a minute (409 unless exhausted; a refusal is final).",
         no_body=True,
     ),
     "list_event_subscriptions": Op(

@@ -84,6 +84,7 @@ from app.api.errors import (
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.core import tax_of
 from app.events import emit
+from app.network import profile
 from app.repository import catalog, classification
 from app.repository._sql import Row, count_references
 
@@ -372,6 +373,7 @@ def insert_specification(
     new_id: UUID | None = None,
 ) -> Row:
     """POST's write; an import passes the source's id."""
+    _network_spec(merge_documents({}, documents))
     row = catalog.create_product_specification(
         conn,
         name=data.name,
@@ -404,6 +406,7 @@ def patch_specification(
             _check_lifecycle("specification", current["lifecycle_status"], data.lifecycle_status)
         if documents:
             changes["details"] = merge_documents(current["details"], documents)
+            _network_spec(changes["details"])
             from app.ordering.numbers import required
 
             if any(
@@ -959,6 +962,21 @@ def _ever_ordered(conn: psycopg.Connection, offering_id: UUID) -> bool:
     return any(count_references(conn, offering_id, ORDERED).values())
 
 
+def _network_spec(details: dict[str, Any]) -> None:
+    """The network profile characteristics (app/network/profile.py) take their own types."""
+    found = profile.spec_problems(details)
+    if found:
+        raise bad_request("productSpecCharacteristic: " + "; ".join(found))
+
+
+def _network_offering(conn: psycopg.Connection, spec_id: UUID | None, details: dict) -> None:
+    """A narrowed profile value must be one the specification offers."""
+    spec = None if spec_id is None else catalog.get_product_specification(conn, spec_id)
+    found = profile.offering_problems(None if spec is None else spec["details"], details)
+    if found:
+        raise bad_request("prodSpecCharValueUse: " + "; ".join(found))
+
+
 def _specification(conn: psycopg.Connection, reference: SpecificationRef) -> None:
     """An existing specification, the one referred to; taken FOR SHARE (a delete of it
     waits for this offering)."""
@@ -1113,6 +1131,11 @@ def insert_offering(
     the categories in its own step: `data.category` empty)."""
     if data.product_specification is not None:
         _specification(conn, data.product_specification)
+    _network_offering(
+        conn,
+        None if data.product_specification is None else data.product_specification.id,
+        merge_documents({}, documents),
+    )
     code = _offering_code(documents)
     if data.category:
         classification.lock(conn)  # category memberships are written under it
@@ -1184,6 +1207,12 @@ def patch_offering(
             if "externalIdentifier" in documents:
                 changes["code"] = _offering_code(details)
             changes["details"] = details
+        if documents or "product_specification" in sent:
+            _network_offering(
+                conn,
+                changes.get("product_specification_id", current["product_specification_id"]),
+                changes.get("details", current["details"]),
+            )
         category_ids = None if data.category is None else _categories(conn, data.category)
         if category_ids is not None and not changes:
             # membership is part of this resource: fire its lastUpdate trigger too

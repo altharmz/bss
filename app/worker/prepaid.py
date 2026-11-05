@@ -24,6 +24,7 @@ from app.repository import balance_actions, billing, funding
 from app.repository import prepaid_commands as commands
 from app.repository._sql import fetch_all, fetch_one
 from app.repository.prepaid_commands import renewal_id
+from app.worker import network
 from app.worker.process import Checkpoint, Heartbeat
 from app.worker.runs import ensure_ownership
 
@@ -108,6 +109,14 @@ def _renewal_blocked(conn, cmd, today) -> str | None:
     )
     if row is None:
         return None
+    if not row["ended"] and not row["blocked"]:
+        product = fetch_one(
+            conn,
+            "SELECT product_id FROM funded_interval WHERE id::text = %s",
+            (cmd["request"].get("previous_interval_id"),),
+        )
+        if product is not None and network.waiting_for_profile(conn, product["product_id"]):
+            return "blocked"  # the network has not confirmed the offering change yet
     return "ended" if row["ended"] else "blocked" if row["blocked"] else None
 
 
@@ -141,6 +150,7 @@ def process_commands(
     """
     ensure_ownership(conn)
     now = clock.now()
+    network.process_network(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
     balance_actions.release_all_expired(conn, now)
     candidates = fetch_all(
         conn,
@@ -191,8 +201,20 @@ def process_commands(
                         attempted.append(cmd["id"])
                     if blocked is not None:
                         continue
+                if current["kind"] == "order":
+                    verdict, refused = network.gate(conn, current)
+                    if verdict == "wait":
+                        continue
+                    if refused is not None:
+                        network.refuse_order(
+                            conn, current, refused, now=now, today=now.astimezone(tz).date()
+                        )
+                        attempted.append(cmd["id"])
+                        continue
                 post = (
-                    post_termination
+                    network.post_profile_change
+                    if "profile_changes" in current["request"]
+                    else post_termination
                     if "terminations" in current["request"]
                     else post_offering_change
                     if "offering_changes" in current["request"]

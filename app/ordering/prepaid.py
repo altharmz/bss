@@ -191,12 +191,16 @@ def quote_total(quotes):
     )
 
 
-def change_offerings(conn, order, request, rows, start, today, now, command_id, quoted=None):
+def change_offerings(
+    conn, order, request, rows, start, today, now, command_id, quoted=None, gated=False
+):
     """Retain each change. At a renewal only a funded renewal applies it
     (app/billing/prepaid.py) and the order completes at once. A mid-period change holds
     the quoted amount and leaves the order inProgress until its command, due `start`, is
     posted (app/billing/offering_change.py). A number change takes effect on `start`
-    regardless."""
+    regardless. A `gated` change at a renewal (a network line) also waits: a `profile_changes`
+    command due `start` completes the items once the network confirmed `change_profile`
+    (app/worker/network.py)."""
     state = order_transition(order["state"], "inProgress")
     orders.set_order_state(conn, order["id"], state)
     if quoted:
@@ -222,8 +226,22 @@ def change_offerings(conn, order, request, rows, start, today, now, command_id, 
             numbers.execute(conn, item, item.product_id, row["id"], start, now)
             if start <= today:
                 emit.product(conn, item.product_id, "AttributeValueChange", at=now, today=today)
-        if not quoted:
+        if not quoted and not gated:
             orders.set_order_item_state(conn, row["id"], item_transition(progress, "completed"))
+    if gated and not quoted:
+        commands.enqueue(
+            conn,
+            command_id,
+            order["billing_account_id"],
+            kind="order",
+            due_date=start,
+            request={
+                "order_id": str(order["id"]),
+                "profile_changes": [str(i.product_id) for i in request.items],
+            },
+            now=now,
+        )
+        return
     if quoted:
         commands.enqueue(
             conn,

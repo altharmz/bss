@@ -462,6 +462,66 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+  /network/command:
+    get:
+      summary: Network provisioning commands, newest first (issue 183).
+      description: >-
+        The commands of prepaid order items sent to the network (activate, suspend,
+        restore, deactivate, change_profile) with their internal state, attempts, last
+        error, refusal code, profile and the request as sent. Filter by order, product
+        and state.
+      parameters:
+        - {$ref: '#/components/parameters/Offset'}
+        - {$ref: '#/components/parameters/Limit'}
+        - name: productOrder.id
+          in: query
+          schema: {type: string, format: uuid}
+        - name: product.id
+          in: query
+          schema: {type: string, format: uuid}
+        - name: state
+          in: query
+          schema: {type: string, enum: [pending, confirmed, refused, exhausted, cancelled]}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/NetworkCommand'}
+        '400': {$ref: '#/components/responses/Error'}
+  /network/command/{id}:
+    get:
+      summary: One network command.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NetworkCommand'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /network/command/{id}/retry:
+    post:
+      summary: Return an exhausted network command to pending.
+      description: >-
+        No body. The API never sends: the command keeps its identity and request and the
+        billing worker sends it on its next tick. 202 with the command; 409 unless it is
+        exhausted (a refusal is final: the fix is a new order).
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '202':
+          description: Queued
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NetworkCommand'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
     AppSession:
@@ -1117,6 +1177,42 @@ components:
             state: {type: string, enum: [pending, delivered, failed, dropped]}
             at: {type: string, format: date-time}
         failures: {type: integer, minimum: 0}
+    NetworkCommand:
+      type: object
+      additionalProperties: false
+      required: [id, kind, state, productOrder, productOrderItem, product, dueDate, profile,
+                 request, attempts, attemptedAt, nextAttemptAt, lastError, refusalCode,
+                 confirmedAt, createdAt]
+      properties:
+        id: {type: string, format: uuid, description: The idempotency key sent to the network.}
+        kind: {type: string, enum: [activate, suspend, restore, deactivate, change_profile]}
+        state:
+          description: Internal state, not a TMF enum.
+          type: string
+          enum: [pending, confirmed, refused, exhausted, cancelled]
+        productOrder: {$ref: '#/components/schemas/Link'}
+        productOrderItem:
+          type: object
+          additionalProperties: false
+          required: [id]
+          properties:
+            id: {type: string, format: uuid}
+        product: {$ref: '#/components/schemas/NullableLink'}
+        dueDate: {$ref: '#/components/schemas/BusinessDate'}
+        profile:
+          type: object
+          description: The offering's effective network profile at acceptance.
+        request:
+          type: object
+          nullable: true
+          description: The request as first sent (TMF641-shaped); null before the first send.
+        attempts: {type: integer, minimum: 0}
+        attemptedAt: {$ref: '#/components/schemas/NullableDateTime'}
+        nextAttemptAt: {$ref: '#/components/schemas/NullableDateTime'}
+        lastError: {type: string, nullable: true}
+        refusalCode: {type: string, nullable: true}
+        confirmedAt: {$ref: '#/components/schemas/NullableDateTime'}
+        createdAt: {type: string, format: date-time}
     PrepaidCommand:
       type: object
       additionalProperties: false

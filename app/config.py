@@ -1,4 +1,6 @@
-from pydantic import Field
+from typing import Literal
+
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,6 +37,13 @@ class Settings(BaseSettings):
     # Behind Caddy (prod): the sign-in throttle keys on the last X-Forwarded-For entry,
     # which Caddy sets and a client cannot choose. Off: the peer address only.
     app_trust_forwarded: bool = False
+    # Network provisioning (docs/decisions/network.md). Only the stub exists; an unknown
+    # value fails startup. Temporary errors: attempts before an operator must retry, and the
+    # waits between them (minutes: 1, 5, 15, 60 ...).
+    network_adapter: Literal["stub"] = Field(
+        default="stub", validation_alias=AliasChoices("BSS_NETWORK_ADAPTER", "network_adapter")
+    )
+    network_max_attempts: int = Field(default=5, ge=1)
     # Separate credentials: smoke can only read; MCP cannot access user/session APIs.
     bss_service_secret: str = ""
     bss_smoke_secret: str = ""
