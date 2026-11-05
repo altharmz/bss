@@ -1,5 +1,6 @@
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
+import { Combobox } from '../ui/combobox';
 import { useState } from 'react';
 import {
   createNumber,
@@ -346,6 +347,13 @@ function NumberDetail({
   );
 }
 
+/** The number as the inventory shows it, plus its name when the name adds something: a
+ * generated "MSISDN <number>" name repeats the number and is left out. */
+function numberLabel(n: SubscriberNumber): string {
+  const value = n.value ?? n.id;
+  return n.name && n.name !== value && !n.name.includes(value) ? `${value} · ${n.name}` : value;
+}
+
 /** Availability here is a hint for today's inventory. The order checks the full interval. */
 export function NumberPicker({
   value,
@@ -362,29 +370,30 @@ export function NumberPicker({
     return (
       <ErrorBlock title="Failed to load numbers" error={numbers.error} onRetry={numbers.retry} />
     );
+  const options =
+    numbers.status === 'ok'
+      ? numbers.data
+          .filter(
+            (n) =>
+              kindOf(n) === kind &&
+              n.administrativeState === 'unlocked' &&
+              n.allocationStatus === 'available',
+          )
+          .map((n) => ({
+            value: n.id,
+            label: numberLabel(n),
+          }))
+      : [];
   return (
     <Field label={label}>
-      <SelectField
-        aria-label={label}
+      <Combobox
+        ariaLabel={label}
+        placeholder={kind === 'imsi' ? 'Choose an IMSI' : 'Choose a number'}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        options={options}
+        onChange={onChange}
         disabled={numbers.status !== 'ok'}
-      >
-        <option value="">{kind === 'imsi' ? 'Select an IMSI' : 'Select a number'}</option>
-        {numbers.status === 'ok' &&
-          numbers.data
-            .filter(
-              (n) =>
-                kindOf(n) === kind &&
-                n.administrativeState === 'unlocked' &&
-                n.allocationStatus === 'available',
-            )
-            .map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.value}
-              </option>
-            ))}
-      </SelectField>
+      />
       <Note tone="info">
         The order checks availability for the requested dates, including future claims and
         quarantine.

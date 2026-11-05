@@ -575,6 +575,7 @@ items:
   - {id: ui.system.schema, area: ui, stage: 5, title: "Link to the BssBillingAccount JSON Schema"}
   - {id: ui.shell.section.system, area: ui, stage: 5, title: "Sidebar System section"}
   - {id: ui.kit, area: ui, stage: 5, title: "Ledger primitive gallery with success toast and dialog write-state previews"}
+  - {id: ui.uikit.combobox, area: ui, stage: 5, title: "UI kit Combobox gallery: empty, selected and disabled"}
 
   - {id: ui.subscriber.tabs, area: ui, stage: 5, title: "Subscriber section tabs"}
   - {id: ui.subscriber.charges, area: ui, stage: 5, title: "Subscriber Charges tab history"}

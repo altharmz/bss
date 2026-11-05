@@ -1,12 +1,13 @@
 import { Footer } from './FinancialForms';
 import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { requirements } from '../api/numbers';
 import { NumberPicker } from './Numbers';
 import {
   loadFirstCharge,
   loadSellableOfferings,
+  loadSettlement,
   midnightOf,
   orderAdd,
   replaceDraft,
@@ -89,6 +90,13 @@ export function AddProductModal({
   const [numberId, setNumberId] = useState(draft?.numberId ?? '');
   const [imsiId, setImsiId] = useState(draft?.imsiId ?? '');
   const [uncertain, setUncertain] = useState(false);
+  // B22: an edited draft opens with its offering row in view, once (jsdom has no scrolling)
+  const scrolled = useRef(false);
+  const scrollToDraft = (node: HTMLDivElement | null) => {
+    if (node === null || scrolled.current) return;
+    scrolled.current = true;
+    node.scrollIntoView?.({ block: 'nearest' });
+  };
   const [previewAnswer, setPreviewAnswer] = useState<{ key: string; at: string } | null>(null);
 
   const offerings = useResource('offerings', (signal) =>
@@ -342,6 +350,9 @@ export function AddProductModal({
                   <div
                     key={offer.id}
                     className="bss-add-product-offering"
+                    ref={
+                      draft !== undefined && offer.id === draft.offeringId ? scrollToDraft : null
+                    }
                     role="radio"
                     aria-checked={offer.id === offeringId}
                     tabIndex={0}
@@ -425,6 +436,23 @@ export function AddProductModal({
       </fieldset>
     </Dialog>
   );
+}
+
+const BALANCE_AFTER = 'Balance after unbilled charges and this one';
+
+/** A postpaid account's balance with its unbilled charges and this one: the settlement
+ * reads `outstanding − unallocatedCredit = −(balance + unbilled charges)`, so the value is
+ * `(unallocatedCredit − outstanding) − charge`, in cents. The preview's own balanceAfter
+ * leaves the unbilled charges out. "—" while the settlement loads or fails. */
+function BalanceAfter({ accountId, charge }: { accountId: string; charge: FirstCharge['amount'] }) {
+  const settlement = useResource(`settlement:${accountId}`, (signal) =>
+    loadSettlement(accountId, signal),
+  );
+  if (settlement.status !== 'ok') return <>—</>;
+  const { unallocatedCredit, outstanding } = settlement.data;
+  const cents =
+    toCents(unallocatedCredit.value) - toCents(outstanding.value) - toCents(charge.value);
+  return <Amount cents={cents} currency={charge.unit} />;
 }
 
 function AddProductPreview({
@@ -537,10 +565,7 @@ function AddProductPreview({
                   ? 'no price after this period'
                   : `${formatAmount(p.next.amount.value)} ${p.next.amount.unit}`,
               ],
-              [
-                'Balance after this charge',
-                <Amount cents={toCents(p.balanceAfter.value)} currency={p.balanceAfter.unit} />,
-              ],
+              [BALANCE_AFTER, <BalanceAfter accountId={account.id} charge={p.amount} />],
             ]}
           />
           <p className="bss-add-product-preview-copy">
@@ -598,7 +623,6 @@ export function Preview({
     return <PrepaidPreview p={p} start={start} today={today} onTopUp={onTopUp} />;
   }
   const price = formatAmount(p.price.value);
-  const after = toCents(p.balanceAfter.value);
   return (
     <>
       <div className="bss-preview-grid">
@@ -635,9 +659,9 @@ export function Preview({
               ? 'no price after this period'
               : `${formatAmount(p.next.amount.value)} ${p.next.amount.unit}`}
           </dd>
-          <dt>Balance after this charge</dt>
+          <dt>{BALANCE_AFTER}</dt>
           <dd>
-            <Amount cents={after} currency={p.balanceAfter.unit} />
+            <BalanceAfter accountId={account.id} charge={p.amount} />
           </dd>
         </dl>
       </div>

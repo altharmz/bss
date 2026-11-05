@@ -38,7 +38,7 @@ Tested means a passing component test saw the marker on screen (`expectUi`, see 
 | System context | `frontend/src/app/context.tsx` | loads `GET /internal/v1/context` before any screen: no date can be shown without the business date and zone |
 | API client | `frontend/src/api/client.ts`, `bss.ts` | fetch wrapper; every failure is an `ApiError` whose message is the call ("GET /path -> 503 Service Unavailable"); `getAll` pages by 100; `useResource` = loading / error / ok + retry; `usePolled` = the same, refreshed in the background every few seconds while a predicate on the data holds (a failed refresh keeps the data and stops) |
 | Types | `frontend/scripts/gen-types.mjs` -> `src/api/generated/` (git-ignored) | generated from `spec/` (TMF620, 622, 637, 666 and the internal API) on every build, lint and test - never from FastAPI's `/openapi.json` |
-| UI kit | `/ui-kit`, `frontend/src/ui/` | Ledger v2 buttons (busy and outcome labels), Field/TextInput/SelectField/DateField/FileField/MoneyField/Checkbox (with label), filter and radio Segmented, live controls gallery including every D4 status via explicit StatusPill kinds, Tag/Flag/Badge variants, neutral-positive Amount figures and copyable Id examples; all status callers use explicit D4 kinds; default/compact/dense selected tables and loading/error/empty/no-results previews; keyboard Tabs and TabPanel, open Menu with disabled/negative items and separators, structured table range and paging previews; KeyValue definition grid, prepaid/postpaid MoneyStrip, PageHeader slots and titled/untitled Panel previews |
+| UI kit | `/ui-kit`, `frontend/src/ui/` | Ledger v2 buttons (busy and outcome labels), Field/TextInput/SelectField/DateField/FileField/MoneyField/Checkbox (with label), filter and radio Segmented, live controls gallery including every D4 status via explicit StatusPill kinds, Tag/Flag/Badge variants, neutral-positive Amount figures and copyable Id examples; all status callers use explicit D4 kinds; default/compact/dense selected tables and loading/error/empty/no-results previews; Combobox (empty, selected, disabled; `ui.uikit.combobox`), keyboard Tabs and TabPanel, open Menu with disabled/negative items and separators, structured table range and paging previews; KeyValue definition grid, prepaid/postpaid MoneyStrip, PageHeader slots and titled/untitled Panel previews |
 | Money | `frontend/src/format/money.ts` | amounts become integer cents at the edge; no float arithmetic; typed amounts are sent as the validated decimal string as an exact JSON number (`jsonWithAmount`); negatives use U+2212 |
 | Dates | `frontend/src/format/dates.ts` | business dates in BILLING_TZ via `Intl`, never the browser's zone; dates sent carry BILLING_TZ's offset *for that date* (`zonedDateTime`) |
 
@@ -63,19 +63,18 @@ so the footer uses the session login and its first two characters.
 
 The failed-run indicator uses the shared failed Badge.
 
-Sidebar with the navigation (Subscribers, Catalog, Billing runs - each with its count;
-Billing runs shows the red **failed** badge instead when the latest run failed), the
+Sidebar with the navigation (no item shows a count; Billing runs shows the red **failed**
+badge when the latest run failed, Prepaid commands while a command failed), the
 environment (`APP_ENV`) and the signed-in operator and role; top bar with breadcrumbs,
 the business date and the UTC offset. The Billing runs screen asks the sidebar to reload
-its run count and badge whenever the latest run it shows changes.
-API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the count is its
-`X-Total-Count`).
+its badge whenever the latest run it shows changes.
+API: `GET /internal/v1/context`, `GET /internal/v1/billingRun?limit=1` (the latest run's
+status).
 
 The sidebar is one `<nav aria-label="Main">` with four labelled sections
 (`ui.shell.section.customers|products|billing|system`): Customers (Subscribers, Parties), Products (Product
 catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Financial accounts,
-Bills, Payments, Balances, Billing settings, without a count or count request) and System (Integrations, and Users for an admin). The Orders count is `productOrder?limit=1&fields=id`
-(`X-Total-Count`). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
+Bills, Payments, Balances, Billing settings, without a count or count request) and System (Integrations, and Users for an admin). No item has a count or a count request (G8; it replaces epic D6's counts). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
 
 ### Sign-in, operator menu and users
 
@@ -291,9 +290,9 @@ list filter). Both lists read all pages. Markers: `ui.subscriber.recordRefund`,
 
 ### Add product (`ui.subscriber.addProduct`, `ui.addProduct.saveDraft`, `ui.addProduct.saveDraftChanges`) - `screens/AddProduct.tsx`
 
-Ledger v2 R10: an L Dialog identifies the subscriber, BA id and account mode. Its left column contains a filterable radio list of Active, sellable offerings (name, code, specification and the price valid at the selected start date's business-zone midnight), the optional number picker, start date (min = business date) and funding/credit notes. The dedicated right rail contains the **first-charge preview computed by the backend**. The footer records the business-zone response time as “Preview from the server · HH:MM:SS”; the primary is **Add {offering name}** (**Add product** before selection), with **Adding…** while busy.
+Ledger v2 R10: an L Dialog identifies the subscriber, BA id and account mode. Its left column contains a filterable radio list of Active, sellable offerings (name, code, specification and the price valid at the selected start date's business-zone midnight), the optional number pickers (a filtering Combobox of unlocked, available numbers: the number, plus its name when that adds something), start date (min = business date) and funding/credit notes. The dedicated right rail contains the **first-charge preview computed by the backend**. The footer records the business-zone response time as “Preview from the server · HH:MM:SS”; the primary is **Add {offering name}** (**Add product** before selection), with **Adding…** while busy.
 
-The postpaid preview shows amount, period, billable days of period days, price, proration, the following full period, balance after, when it is charged and billed, and a credit-limit warning that never blocks. Confirm places a TMF622 add order; a rejection shows its reasons. The copy follows the end-of-day rule: an order completed today is charged by the run of max(start, tomorrow).
+The postpaid preview shows amount, period, billable days of period days, price, proration, the following full period, **Balance after unbilled charges and this one** (the account's `settlement` read as `unallocatedCredit − outstanding`, minus this charge; "—" while it loads or fails; also in the Resume and Change offering previews), when it is charged and billed, and a credit-limit warning that never blocks. Confirm places a TMF622 add order; a rejection shows its reasons. The copy follows the end-of-day rule: an order completed today is charged by the run of max(start, tomorrow).
 
 On a **prepaid** account (`ui.addProduct.prepaidPreview`) the preview shows period, price, “paid in full in advance”, **Required now** (or **Required on {date}**), Available, Shortfall (only when > 0) and Ledger after (start today only). A shortfall with a start today adds the warning, disables the secondary Add action and makes **Top up {amount} {currency}…** (`ui.addProduct.topUpShortfall`) the primary; it closes this dialog and opens the card's Top-up form with the amount typed in. A future start only shows an information hint and leaves Add enabled because funds are checked on its start date. Save as draft stays available. Prepaid copy says Paid from the balance on <date> and omits the cycle day.
 API: `GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true`,

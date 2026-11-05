@@ -1,10 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import { loadRuns } from '../api/bss';
 import { countFailedCommands } from '../api/commands';
-import { countOrders } from '../api/orders';
-import { getPage } from '../api/client';
 import { useResource } from '../api/useResource';
-import { formatInt } from '../format/money';
 import { businessDate, utcLabel } from '../format/dates';
 import { useCrumbs, useNavVersion, type SystemContext } from './context';
 import { Link, useRouter, type Route } from './router';
@@ -14,32 +11,15 @@ import { readTheme, saveTheme, type Theme } from './theme';
 import { SignOut, useSession } from './session';
 
 // The frame around every screen: sidebar (brand, navigation, operator) and top bar
-// (breadcrumbs, business date, time zone). Billing runs shows the number of runs, or the
-// red "failed" badge instead when the latest run failed (README "Global Layout").
+// (breadcrumbs, business date, time zone). Billing runs shows a red "failed" badge when the
+// latest run failed, Prepaid commands when a command failed (no item counts, #51).
 
-const ACCOUNTS = '/tmf-api/accountManagement/v5/billingAccount';
-const OFFERINGS = '/tmf-api/productCatalogManagement/v5/productOffering';
-
-// parity: GET ${ACCOUNTS}
-// parity: GET ${OFFERINGS}
-function useCount(path: string): string {
-  const version = useNavVersion();
-  const total = useResource(`${path}:${version}`, (signal) =>
-    getPage(`${path}?limit=1&fields=id`, signal).then((page) => page.total),
-  );
-  return total.status === 'ok' ? formatInt(total.data) : '';
-}
-
-/** The number of runs and whether the latest failed: one run, newest first. Reloaded when
- * the Billing runs screen sees its latest run change (useRefreshNav). */
-function useRunsNav(): { count: string; failed: boolean } {
+/** Whether the latest run failed: one run, newest first. Reloaded when the Billing runs
+ * screen sees its latest run change (useRefreshNav). */
+function useRunsFailed(): boolean {
   const version = useNavVersion();
   const runs = useResource(`nav:runs:${version}`, (signal) => loadRuns(signal, 1));
-  if (runs.status !== 'ok') return { count: '', failed: false };
-  return {
-    count: formatInt(runs.data.total),
-    failed: runs.data.items[0]?.status === 'failed',
-  };
+  return runs.status === 'ok' && runs.data.items[0]?.status === 'failed';
 }
 
 /** Whether any prepaid command failed technically. The Prepaid commands screen asks for a
@@ -50,16 +30,9 @@ function useCommandsNav(): boolean {
   return failed.status === 'ok' && failed.data > 0;
 }
 
-function useOrderCount(): string {
-  const version = useNavVersion();
-  const total = useResource(`nav:orders:${version}`, countOrders);
-  return total.status === 'ok' ? formatInt(total.data) : '';
-}
-
 interface NavItem {
   label: string;
   href: string;
-  count: string;
   failed?: boolean;
   active: (route: Route) => boolean;
 }
@@ -82,10 +55,7 @@ function driftLabel(context: SystemContext): string | null {
 export function Sidebar({ context }: { context: SystemContext }) {
   const session = useSession();
   const { route } = useRouter();
-  const accounts = useCount(ACCOUNTS);
-  const orders = useOrderCount();
-  const offerings = useCount(OFFERINGS);
-  const runs = useRunsNav();
+  const runsFailed = useRunsFailed();
   const commandsFailed = useCommandsNav();
   // Sections follow the TMF areas: party/customer, product, billing
   const sections: { label: string; items: NavItem[] }[] = [
@@ -95,10 +65,9 @@ export function Sidebar({ context }: { context: SystemContext }) {
         {
           label: 'Subscribers',
           href: '/subscribers',
-          count: accounts,
           active: (r) => r.name === 'subscribers' || r.name === 'subscriber',
         },
-        { label: 'Parties', href: '/parties', count: '', active: (r) => r.name === 'parties' },
+        { label: 'Parties', href: '/parties', active: (r) => r.name === 'parties' },
       ],
     },
     {
@@ -107,17 +76,15 @@ export function Sidebar({ context }: { context: SystemContext }) {
         {
           label: 'Product catalog',
           href: '/catalog',
-          count: offerings,
           active: (r) => r.name === 'catalog',
         },
         {
           label: 'Products',
           href: '/products',
-          count: '',
           active: (r) => r.name === 'products',
         },
-        { label: 'Orders', href: '/orders', count: orders, active: (r) => r.name === 'orders' },
-        { label: 'Numbers', href: '/numbers', count: '', active: (r) => r.name === 'numbers' },
+        { label: 'Orders', href: '/orders', active: (r) => r.name === 'orders' },
+        { label: 'Numbers', href: '/numbers', active: (r) => r.name === 'numbers' },
       ],
     },
     {
@@ -126,45 +93,38 @@ export function Sidebar({ context }: { context: SystemContext }) {
         {
           label: 'Billing runs',
           href: '/billing-runs',
-          count: runs.count,
-          failed: runs.failed,
+          failed: runsFailed,
           active: (r) => r.name === 'billingRuns',
         },
         {
           label: 'Prepaid commands',
           href: '/prepaid-commands',
-          count: '',
           failed: commandsFailed,
           active: (r) => r.name === 'prepaidCommands',
         },
         {
           label: 'Financial accounts',
           href: '/financial-accounts',
-          count: '',
           active: (r) => r.name === 'financialAccounts',
         },
         {
           label: 'Bills',
           href: '/bills',
-          count: '',
           active: (r) => r.name === 'bills',
         },
         {
           label: 'Payments',
           href: '/payments',
-          count: '',
           active: (r) => r.name === 'payments',
         },
         {
           label: 'Balances',
           href: '/balances',
-          count: '',
           active: (r) => r.name === 'balances',
         },
         {
           label: 'Billing settings',
           href: '/billing-settings',
-          count: '',
           active: (r) => r.name === 'billingSettings',
         },
       ],
@@ -175,7 +135,6 @@ export function Sidebar({ context }: { context: SystemContext }) {
         {
           label: 'Integrations',
           href: '/integrations',
-          count: '',
           active: (r) => r.name === 'integrations',
         },
         ...(session?.role === 'admin'
@@ -183,7 +142,6 @@ export function Sidebar({ context }: { context: SystemContext }) {
               {
                 label: 'Users',
                 href: '/users',
-                count: '',
                 active: (r: Route) => r.name === 'users',
               },
             ]
@@ -212,11 +170,7 @@ export function Sidebar({ context }: { context: SystemContext }) {
                 aria-current={item.active(route) ? 'page' : undefined}
               >
                 {item.label}
-                {item.failed ? (
-                  <Badge kind="failed">failed</Badge>
-                ) : (
-                  <span className="count">{item.count}</span>
-                )}
+                {item.failed && <Badge kind="failed">failed</Badge>}
               </Link>
             ))}
           </Fragment>
