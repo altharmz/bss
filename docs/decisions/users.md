@@ -56,9 +56,17 @@ or a user could do over `/tmf-api` what the UI denies.
   every UI write.
 - **U4 Roles.** `admin`: everything, plus `/internal/v1/users*`. `user`: everything else
   (all UI operations, the TMF APIs). Guards: the last active admin cannot be disabled or
-  demoted; nobody disables themselves.
+  demoted; nobody disables themselves. **`mcp`** (issue #173, migration `0051`): the MCP
+  connector's OAuth login only - no UI sign-in (the same 401 as a wrong password, and the
+  session check refuses the role too) - and the only role MCP accepts
+  ([mcp.md](mcp.md)). Its password is the one the administrator sets: it cannot sign in
+  to make the forced change, so `must_change_password` is false on create, reset and a
+  move to `mcp`, and true on a move from `mcp` to a UI role (CHECK
+  `app_user_mcp_password_set`). A role change to or from `mcp` must carry a new password in
+  the same PATCH (422 otherwise), so one password never serves both the UI and MCP;
+  within `admin`/`user` none is needed.
 - **U5 Users API** (admin only, internal API): list; create (username, role, initial
-  password - the user must change it at first sign-in); PATCH role, disabled, reset
+  password - an `admin` or `user` must change it at first sign-in, an `mcp` user keeps it); PATCH role, disabled, reset
   password (sets must-change again). Every change audited in the event/operator style
   already used (who, when).
 - **U6 Own password.** `POST /internal/v1/session/password` (current, new). Policy: at
@@ -73,7 +81,8 @@ or a user could do over `/tmf-api` what the UI denies.
   principal header only together with it. This also closes the Open check "bss app is
   reachable without auth from any container on `shared`" for everything but
   `/healthz` and `/billing-status`.
-- **U9 Bootstrap.** `python -m app.users create <name> --role admin` reads the password
+- **U9 Bootstrap.** `python -m app.users create <name> --role admin` (also `user` or
+  `mcp`; an `mcp` user is created without the forced change) reads the password
   from stdin, prints nothing secret; a make target locally and through `make remote` on
   the VPS (Makefile: harness file, the human's OK). Locally `make seed` creates no user;
   tests sign in through a fixture.

@@ -11,10 +11,13 @@ import { TableHead, TableRow, type Column } from '../ui/Table';
 import { businessDate, clockTime } from '../format/dates';
 
 type User = components['schemas']['User'];
+type Role = User['role'];
 const PATH = '/internal/v1/users';
+// an `mcp` user logs in through the MCP connector only; admin and user through the UI only
+const crossesMcp = (from: Role, to: Role) => (from === 'mcp') !== (to === 'mcp');
 const columns: Column[] = [
   { key: 'username', label: 'Username', width: '1fr' },
-  { key: 'role', label: 'Role', width: '100px' },
+  { key: 'role', label: 'Role', width: '140px' },
   { key: 'active', label: 'Active', width: '80px' },
   { key: 'last', label: 'Last sign-in', width: '200px' },
   { key: 'actions', label: 'Actions', width: '250px' },
@@ -68,7 +71,7 @@ function UsersList() {
                 columns={columns}
                 cells={{
                   username: <span className="wrap-anywhere">{user.username}</span>,
-                  role: user.role,
+                  role: user.role === 'mcp' ? 'mcp (MCP only)' : user.role,
                   active: user.disabled ? 'No' : 'Yes',
                   last: user.lastLoginAt
                     ? `${businessDate(user.lastLoginAt, timeZone)} ${clockTime(user.lastLoginAt, timeZone)}`
@@ -130,11 +133,13 @@ function UserForm({
 }) {
   const formId = useId();
   const [username, setUsername] = useState(user?.username ?? '');
-  const [role, setRole] = useState<'admin' | 'user'>(user?.role ?? 'user');
+  const [role, setRole] = useState<Role>(user?.role ?? 'user');
   const [disabled, setDisabled] = useState(user?.disabled ?? false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  // a role change to or from mcp carries a new password: one password never serves both
+  const newPassword = kind !== 'edit' || (user !== undefined && crossesMcp(user.role, role));
   const title =
     kind === 'new' ? 'New user' : `${kind === 'edit' ? 'Edit' : 'Reset password for'} ${username}`;
   return (
@@ -163,6 +168,7 @@ function UserForm({
                   : {
                       ...(role !== user?.role ? { role } : {}),
                       ...(disabled !== user?.disabled ? { disabled } : {}),
+                      ...(newPassword ? { password } : {}),
                     };
               if (Object.keys(body).length === 0) {
                 onClose();
@@ -198,9 +204,10 @@ function UserForm({
         {kind !== 'reset' && (
           <label>
             Role
-            <SelectField value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'user')}>
+            <SelectField value={role} onChange={(e) => setRole(e.target.value as Role)}>
               <option value="user">user</option>
               <option value="admin">admin</option>
+              <option value="mcp">mcp (MCP only, no UI sign-in)</option>
             </SelectField>
           </label>
         )}
@@ -212,14 +219,17 @@ function UserForm({
             label={`Disabled${self ? ' (you cannot disable yourself)' : ''}`}
           />
         )}
-        {kind !== 'edit' && (
+        {newPassword && (
           <>
             <p>
-              At least 12 characters, different from the username. The user must change this
-              password at sign-in.
+              At least 12 characters, different from the username.{' '}
+              {role === 'mcp'
+                ? 'An MCP user keeps this password: give it to whoever connects the MCP client.'
+                : 'The user must change this password at sign-in.'}
+              {kind === 'edit' && ' A role change to or from mcp needs a new password.'}
             </p>
             <label>
-              Initial password
+              {kind === 'edit' ? 'New password' : 'Initial password'}
               <TextInput
                 required
                 type="password"

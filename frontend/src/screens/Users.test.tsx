@@ -118,6 +118,43 @@ describe('Users', () => {
       ),
     ).toEqual({ password: 'replacement-password' });
   });
+  it('creates an mcp user with the password it keeps and marks it MCP only', async () => {
+    const mcpUser = {
+      ...alice,
+      username: 'claude-desktop',
+      role: 'mcp',
+      mustChangePassword: false,
+    };
+    const { fetchMock } = start('admin', () => json([alice, mcpUser]));
+    expect(await screen.findByText('mcp (MCP only)')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'New user' }));
+    fill('Username', 'bob');
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'mcp' } });
+    expect(screen.getByText(/An MCP user keeps this password/)).toBeTruthy();
+    fill('Initial password', 'initial-password');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await screen.findByRole('button', { name: 'New user' });
+    const init = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')?.[1];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      username: 'bob',
+      role: 'mcp',
+      password: 'initial-password',
+    });
+  });
+  it('sends a new password with a role change to mcp and none within the UI roles', async () => {
+    const { fetchMock } = start();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit alice' }));
+    expect(screen.queryByLabelText('New password')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'mcp' } });
+    fill('New password', 'replacement-password');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await screen.findByRole('button', { name: 'New user' });
+    const init = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')?.[1];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      role: 'mcp',
+      password: 'replacement-password',
+    });
+  });
   it('shows empty and failing lists with Retry', async () => {
     let fail = true;
     start('admin', () => (fail ? tmfError(503, 'Service Unavailable') : json([])));

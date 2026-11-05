@@ -4,7 +4,7 @@
 
 Area: **users** ([all tables](README.md))
 
-Application identity: admin or user; disabled, never deleted.
+Application identity: admin or user (UI), mcp (MCP login only); disabled, never deleted.
 
 ## Columns
 
@@ -24,7 +24,8 @@ Application identity: admin or user; disabled, never deleted.
 
 | Name | Kind | Definition |
 |---|---|---|
-| `app_user_role_check` | check | `CHECK ((role = ANY (ARRAY['admin'::text, 'user'::text])))` |
+| `app_user_mcp_password_set` | check | `CHECK (((role <> 'mcp'::text) OR (NOT must_change_password)))` |
+| `app_user_role_check` | check | `CHECK ((role = ANY (ARRAY['admin'::text, 'user'::text, 'mcp'::text])))` |
 | `app_user_username_check` | check | `CHECK ((username ~ '^[A-Za-z0-9._@-]{1,64}$'::text))` |
 | `app_user_pkey` | primary key | `PRIMARY KEY (username)` |
 

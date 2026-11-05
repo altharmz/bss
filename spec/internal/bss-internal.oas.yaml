@@ -56,12 +56,13 @@ paths:
         '204': {description: Password changed; sign in again}
   /service/credential-check:
     post:
-      summary: MCP login backend - check a user's password (service credential only).
+      summary: MCP login backend - check an mcp user's password (service credential only).
       description: >
         Accepted only with the MCP service credential (X-Bss-Service); a session or the
-        smoke credential gets 403. 401 invalidCredentials covers an unknown user, a wrong
-        password and a disabled user alike; 403 passwordChangeRequired when the user must
-        change the password first. Rate limited like sign-in.
+        smoke credential gets 403. Only users with role mcp may log in through MCP: 401
+        invalidCredentials covers an unknown user, a wrong password, a disabled user and
+        an admin or user alike. An mcp user never has to change its password first.
+        Rate limited like sign-in.
       security:
         - ServiceCredential: []
       requestBody:
@@ -71,7 +72,7 @@ paths:
             schema: {$ref: '#/components/schemas/SignIn'}
       responses:
         '200':
-          description: The password is right for an active user
+          description: The password is right for an active mcp user
           content:
             application/json:
               schema: {$ref: '#/components/schemas/CredentialCheck'}
@@ -90,7 +91,7 @@ paths:
                 type: array
                 items: {$ref: '#/components/schemas/User'}
     post:
-      summary: Create a user with a temporary initial password (admin only).
+      summary: Create a user (admin only); admin and user change the initial password at first sign-in, an mcp user keeps it.
       requestBody:
         required: true
         content:
@@ -109,7 +110,7 @@ paths:
         required: true
         schema: {type: string}
     patch:
-      summary: Change role, disable or enable, or reset password (admin only).
+      summary: Change role, disable or enable, or reset password (admin only); a role change to or from mcp must carry a new password (422 otherwise).
       requestBody:
         required: true
         content:
@@ -506,8 +507,8 @@ components:
       additionalProperties: false
       required: [username, role, credentialVersion]
       properties:
-        username: {type: string, pattern: '^[A-Za-z0-9._18772 18772]{1,64}$'}
-        role: {type: string, enum: [admin, user]}
+        username: {type: string, pattern: '^[A-Za-z0-9._@-]{1,64}$'}
+        role: {type: string, enum: [mcp]}
         credentialVersion: {type: integer, minimum: 1}
     ChangePassword:
       type: object
@@ -522,14 +523,14 @@ components:
       required: [username, role, password]
       properties:
         username: {type: string, pattern: '^[A-Za-z0-9._@-]{1,64}$'}
-        role: {type: string, enum: [admin, user]}
+        role: {type: string, enum: [admin, user, mcp]}
         password: {type: string, minLength: 12, maxLength: 1024, writeOnly: true}
     EditUser:
       type: object
       additionalProperties: false
       minProperties: 1
       properties:
-        role: {type: string, enum: [admin, user]}
+        role: {type: string, enum: [admin, user, mcp]}
         disabled: {type: boolean}
         password: {type: string, minLength: 12, maxLength: 1024, writeOnly: true}
     Session:
@@ -546,7 +547,7 @@ components:
       required: [username, role, disabled, mustChangePassword, createdAt, updatedAt, lastLoginAt]
       properties:
         username: {type: string}
-        role: {type: string, enum: [admin, user]}
+        role: {type: string, enum: [admin, user, mcp]}
         disabled: {type: boolean}
         mustChangePassword: {type: boolean}
         createdAt: {type: string, format: date-time}

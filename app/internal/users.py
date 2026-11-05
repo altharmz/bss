@@ -40,15 +40,26 @@ class Password(Body):
     newPassword: SecretStr = Field(max_length=1024)
 
 
+Role = Literal["admin", "user", "mcp"]
+# An `mcp` user logs in through the MCP connector only; `admin` and `user` through the UI only.
+UI_ROLES = {"admin", "user"}
+
+
 class NewUser(Login):
     username: str = Field(pattern=r"^[A-Za-z0-9._@-]{1,64}$")
-    role: Literal["admin", "user"]
+    role: Role
 
 
 class EditUser(Body):
-    role: Literal["admin", "user"] | None = None
+    role: Role | None = None
     disabled: bool | None = None
     password: SecretStr | None = Field(default=None, max_length=1024)
+
+
+def must_change(role, ui_value):
+    """An `mcp` user cannot sign in to the UI to change its password: it uses the one the
+    administrator set. UI roles change an administrator's password at first sign-in."""
+    return False if role == "mcp" else ui_value
 
 
 def view(user):
@@ -117,7 +128,8 @@ def create_session(request: Request, body: JsonBody, tx: Tx, clock: ClockDep):
         valid = check_password(
             data.password.get_secret_value(), user["password_hash"] if user else None
         )
-        if not valid or user["disabled"]:
+        # an `mcp` user is refused exactly like a wrong password (after the same scrypt)
+        if not valid or user["disabled"] or user["role"] not in UI_ROLES:
             raise TmfError(401, "invalid username or password")
         token = secrets.token_urlsafe(32)
         conn.execute("DELETE FROM app_session WHERE expires_at <= %s", (now,))
@@ -225,12 +237,13 @@ def create_user(request: Request, body: JsonBody, tx: Tx, clock: ClockDep):
             user = (
                 conn.cursor(row_factory=dict_row)
                 .execute(
-                    "INSERT INTO app_user (username, role, password_hash, created_at, updated_at)"
-                    " VALUES (%s,%s,%s,%s,%s) RETURNING *",
+                    "INSERT INTO app_user (username, role, password_hash, must_change_password,"
+                    " created_at, updated_at) VALUES (%s,%s,%s,%s,%s,%s) RETURNING *",
                     (
                         data.username,
                         data.role,
                         hash_password(data.password.get_secret_value()),
+                        must_change(data.role, True),
                         clock.now(),
                         clock.now(),
                     ),
@@ -261,6 +274,9 @@ def patch_user(username: str, request: Request, body: JsonBody, tx: Tx, clock: C
         if data.disabled and username == request.state.operator:
             raise conflict("cannot disable yourself")
         role = data.role or user["role"]
+        if (role in UI_ROLES) != (user["role"] in UI_ROLES) and data.password is None:
+            # one password never serves both the UI and MCP
+            raise unprocessable("a role change to or from mcp needs a new password")
         disabled = user["disabled"] if data.disabled is None else data.disabled
         if user["role"] == "admin" and not user["disabled"] and (role != "admin" or disabled):
             if (
@@ -284,7 +300,7 @@ def patch_user(username: str, request: Request, body: JsonBody, tx: Tx, clock: C
                     role,
                     disabled,
                     stored,
-                    user["must_change_password"] or data.password is not None,
+                    must_change(role, user["must_change_password"] or data.password is not None),
                     clock.now(),
                     username,
                 ),
@@ -323,10 +339,10 @@ def credential_check(request: Request, body: JsonBody, tx: Tx, clock: ClockDep):
         valid = check_password(
             data.password.get_secret_value(), user["password_hash"] if user else None
         )
-        if not valid or user["disabled"]:
+        # only `mcp` users log in through MCP; anything else looks like a wrong password.
+        # An `mcp` user never has to change its password (app_user_mcp_password_set).
+        if not valid or user["disabled"] or user["role"] != "mcp":
             raise TmfError(401, "invalid username or password", code="invalidCredentials")
-        if user["must_change_password"]:
-            raise TmfError(403, "change your password first", code="passwordChangeRequired")
         conn.execute(
             "UPDATE app_user SET last_login_at = %s WHERE username = %s", (now, data.username)
         )

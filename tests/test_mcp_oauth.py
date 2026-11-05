@@ -27,7 +27,7 @@ def pkce() -> tuple[str, str]:
     return verifier, base64.urlsafe_b64encode(digest).decode().rstrip("=")
 
 
-def add_user(db_conn, username, password, *, must_change=False, disabled=False, role="user"):
+def add_user(db_conn, username, password, *, must_change=False, disabled=False, role="mcp"):
     from tests.timeline import NOW
 
     db_conn.execute(
@@ -523,14 +523,22 @@ def test_an_oauth_grant_acts_as_the_app_user_in_the_apps_history(oauth, db_conn)
     assert row[0] is not None
 
 
-def test_a_user_who_must_change_the_password_is_sent_to_the_ui(oauth, db_conn):
-    set_user(db_conn, "demo", "must_change_password = true")
+@pytest.mark.parametrize("role", ["admin", "user"])
+def test_a_ui_user_cannot_log_in_through_mcp_like_a_wrong_password(oauth, db_conn, role):
+    add_user(db_conn, "ui-person", PASSWORD, role=role)
     cid = client_id(oauth)
     _, challenge = pkce()
     request_id = login_link(oauth, cid, challenge)
-    response = login(oauth, request_id)
-    assert response.status_code == 403 and "Change your password in the BSS UI" in response.text
+    response = login(oauth, request_id, user="ui-person")  # the right password
+    assert response.status_code == 401 and "Wrong user name or password" in response.text
     assert "location" not in response.headers
+
+
+def test_a_role_change_away_from_mcp_ends_the_grant(oauth, db_conn):
+    issued = tokens(oauth)
+    assert oauth.call(issued["access_token"], "list_customers").status_code == 200
+    set_user(db_conn, "demo", "role = 'user'")  # no version bump: the role is the second line
+    assert oauth.call(issued["access_token"], "list_customers").status_code == 401
 
 
 def test_a_disabled_user_cannot_sign_in(oauth, db_conn):

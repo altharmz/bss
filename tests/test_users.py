@@ -397,17 +397,15 @@ def as_mcp(client, username="alice", at=1, path="/internal/v1/context"):
     return client.get(path, headers=headers)
 
 
-def test_credential_check_accepts_an_active_users_password(client, db_conn):
+def test_credential_check_accepts_an_active_mcp_users_password(client, db_conn):
     assert login(client).status_code == 200
-    create(client)
+    create(client, role="mcp")  # no forced change: it keeps the administrator's password
     client.cookies.clear()
-    activate(client)
-    client.cookies.clear()
-    response = check(client, "alice", REPLACED)
+    response = check(client, "alice", PASSWORD)
     assert response.status_code == 200, response.text
     assert response.json() == {
         "username": "alice",
-        "role": "user",
+        "role": "mcp",
         "credentialVersion": version(db_conn),
     }
     contract.assert_valid("INTERNAL", "CredentialCheck", response.json())
@@ -416,32 +414,35 @@ def test_credential_check_accepts_an_active_users_password(client, db_conn):
     assert last[0] is not None
 
 
-def test_credential_check_does_not_tell_unknown_wrong_and_disabled_apart(client):
+def test_credential_check_does_not_tell_unknown_wrong_disabled_and_ui_roles_apart(client):
     assert login(client).status_code == 200
-    create(client)
-    create(client, "bob")
-    activate(client, "bob")
-    client.cookies.clear()
-    assert login(client).status_code == 200
+    create(client, role="mcp")
+    create(client, "bob", role="mcp")
     assert client.patch(f"{USERS}/bob", json={"disabled": True}).status_code == 200
+    create(client, "carol")
+    client.cookies.clear()
+    activate(client, "carol")  # an active `user` with a password of its own
     client.cookies.clear()
     answers = [
         check(client, "nobody", PASSWORD),
         check(client, "alice", "wrong-password-123"),
-        check(client, "bob", "replacement-password"),
+        check(client, "bob", PASSWORD),
+        check(client, "i.petrova", PASSWORD),  # the right password of an admin
+        check(client, "carol", REPLACED),  # the right password of a user
     ]
     assert {a.status_code for a in answers} == {401}
     assert {a.json()["code"] for a in answers} == {"invalidCredentials"}
     assert len({a.json()["message"] for a in answers}) == 1
 
 
-def test_credential_check_refuses_a_password_that_must_change(client):
+def test_credential_check_refuses_a_ui_user_who_must_change_the_password_as_401(client):
+    # passwordChangeRequired is gone: an `mcp` user is never flagged, a UI role never passes
     assert login(client).status_code == 200
-    create(client)  # created with must_change_password
+    create(client)  # a `user`, created with must_change_password
     client.cookies.clear()
     response = check(client, "alice", PASSWORD)
-    assert response.status_code == 403
-    assert response.json()["code"] == "passwordChangeRequired"
+    assert response.status_code == 401
+    assert response.json()["code"] == "invalidCredentials"
 
 
 def test_credential_check_is_for_the_mcp_service_credential_only(client, monkeypatch):
@@ -451,9 +452,10 @@ def test_credential_check_is_for_the_mcp_service_credential_only(client, monkeyp
     smoke = {"X-Bss-Service": "test-smoke-credential"}
     assert check(client, "i.petrova", PASSWORD, smoke).status_code == 403
     assert login(client).status_code == 200  # a session, with the CSRF header the client sends
-    assert check(client, "i.petrova", PASSWORD, headers={}).status_code == 403
+    create(client, role="mcp")
+    assert check(client, "alice", PASSWORD, headers={}).status_code == 403
     client.cookies.clear()
-    assert check(client, "i.petrova", PASSWORD).status_code == 200
+    assert check(client, "alice", PASSWORD).status_code == 200
 
 
 def test_credential_check_is_rate_limited(client):
@@ -489,7 +491,7 @@ def test_the_credential_version_changes_with_each_revoking_event(client, db_conn
 
 def test_an_mcp_user_principal_needs_its_current_credential_version(client, db_conn):
     assert login(client).status_code == 200
-    create(client)
+    create(client, role="mcp")
     at = version(db_conn)
     ok = as_mcp(client, at=at)
     assert ok.status_code == 200 and ok.json()["operator"] == "mcp:alice"
@@ -522,5 +524,127 @@ def test_a_static_token_principal_is_not_checked_against_users(client):
 def test_the_longest_mcp_user_principal_is_a_valid_operator(client, db_conn):
     assert login(client).status_code == 200
     name = "u" * 64
-    create(client, name)
+    create(client, name, role="mcp")
     assert as_mcp(client, name, at=version(db_conn, name)).json()["operator"] == "mcp:" + name
+
+
+# --- role mcp: the only role for MCP connections (issue #173) ---
+
+
+def must_change(db_conn, username="alice"):
+    db_conn.rollback()
+    return db_conn.execute(
+        "SELECT must_change_password FROM app_user WHERE username = %s", (username,)
+    ).fetchone()[0]
+
+
+def test_an_mcp_user_cannot_sign_in_to_the_ui_like_a_wrong_password(client):
+    assert login(client).status_code == 200
+    create(client, role="mcp")
+    client.cookies.clear()
+    refused = login(client, "alice", PASSWORD)  # the right password
+    wrong = login(client, "alice", "wrong-password-123")
+    assert refused.status_code == wrong.status_code == 401
+    assert refused.json() == wrong.json()
+    assert "set-cookie" not in refused.headers
+
+
+def test_a_session_of_a_user_who_became_mcp_is_not_accepted(client, db_conn):
+    assert login(client).status_code == 200
+    create(client)
+    client.cookies.clear()
+    activate(client)  # alice holds a session
+    assert client.get(SESSION).status_code == 200
+    # the role changed behind the API's back (the API also deletes sessions): second line
+    db_conn.execute(
+        "UPDATE app_user SET role = 'mcp', must_change_password = false WHERE username = 'alice'"
+    )
+    db_conn.commit()
+    assert client.get(SESSION).status_code == 401
+
+
+def test_a_role_change_away_from_mcp_ends_a_live_grant(client, db_conn):
+    assert login(client).status_code == 200
+    create(client, role="mcp")
+    assert as_mcp(client, at=version(db_conn)).status_code == 200
+    changed = client.patch(f"{USERS}/alice", json={"role": "user", "password": REPLACED})
+    assert changed.status_code == 200
+    gone = as_mcp(client, at=version(db_conn))  # even with the new version: not an mcp user
+    assert gone.status_code == 401 and gone.json()["code"] == "credentialRevoked"
+
+
+def test_the_role_alone_ends_a_grant_without_a_version_change(client, db_conn):
+    assert login(client).status_code == 200
+    create(client, role="mcp")
+    at = version(db_conn)
+    db_conn.execute("UPDATE app_user SET role = 'user' WHERE username = 'alice'")
+    db_conn.commit()
+    gone = as_mcp(client, at=at)
+    assert gone.status_code == 401 and gone.json()["code"] == "credentialRevoked"
+
+
+def test_must_change_password_follows_the_role(client, db_conn):
+    assert login(client).status_code == 200
+    assert create(client, role="mcp")["mustChangePassword"] is False
+    reset = client.patch(f"{USERS}/alice", json={"password": REPLACED})
+    assert reset.status_code == 200 and reset.json()["mustChangePassword"] is False
+    to_ui = client.patch(f"{USERS}/alice", json={"role": "user", "password": PASSWORD})
+    assert to_ui.status_code == 200 and to_ui.json()["mustChangePassword"] is True
+    create(client, "bob")
+    client.cookies.clear()
+    activate(client, "bob")
+    client.cookies.clear()
+    assert login(client).status_code == 200
+    assert must_change(db_conn, "bob") is False
+    to_mcp = client.patch(f"{USERS}/bob", json={"role": "mcp", "password": PASSWORD})
+    assert to_mcp.status_code == 200 and to_mcp.json()["mustChangePassword"] is False
+    assert create(client, "carol", role="admin")["mustChangePassword"] is True
+
+
+@pytest.mark.parametrize(("start", "target"), [("user", "mcp"), ("admin", "mcp"), ("mcp", "user")])
+def test_a_role_change_across_mcp_needs_a_new_password(client, db_conn, start, target):
+    assert login(client).status_code == 200
+    create(client, role=start)
+    at = version(db_conn)
+    refused = client.patch(f"{USERS}/alice", json={"role": target})
+    assert refused.status_code == 422, refused.text
+    db_conn.rollback()
+    row = db_conn.execute("SELECT role FROM app_user WHERE username = 'alice'").fetchone()
+    assert row[0] == start and version(db_conn) == at  # nothing changed
+
+
+def test_a_role_change_within_the_ui_roles_needs_no_password(client):
+    assert login(client).status_code == 200
+    create(client)
+    assert client.patch(f"{USERS}/alice", json={"role": "admin"}).status_code == 200
+    assert client.patch(f"{USERS}/alice", json={"role": "user"}).status_code == 200
+
+
+def test_the_schema_refuses_an_mcp_user_who_must_change_the_password(client, db_conn):
+    import psycopg
+
+    assert login(client).status_code == 200
+    create(client, role="mcp")
+    db_conn.rollback()
+    with pytest.raises(psycopg.errors.CheckViolation):
+        db_conn.execute("UPDATE app_user SET must_change_password = true WHERE username = 'alice'")
+    db_conn.rollback()
+    with pytest.raises(psycopg.errors.CheckViolation):
+        db_conn.execute("UPDATE app_user SET role = 'robot' WHERE username = 'alice'")
+    db_conn.rollback()
+
+
+def test_the_bootstrap_cli_creates_an_mcp_user_without_a_forced_change(api, db_conn, monkeypatch):
+    import io
+    import sys
+
+    from app import users
+
+    monkeypatch.setattr(sys, "argv", ["app.users", "create", "robot", "--role", "mcp"])
+    monkeypatch.setattr(sys, "stdin", io.StringIO(PASSWORD + "\n"))
+    users.main()
+    db_conn.rollback()
+    row = db_conn.execute(
+        "SELECT role, must_change_password FROM app_user WHERE username = 'robot'"
+    ).fetchone()
+    assert row == ("mcp", False)
