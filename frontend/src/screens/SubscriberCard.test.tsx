@@ -12,6 +12,7 @@ import {
   type Handler,
 } from '../test/fetch';
 import { expectUi } from '../test/expectUi';
+import { pickOption } from '../test/combobox';
 import { accountBody, billBody, billsUrl, NO_SETTLEMENT } from '../test/fixtures';
 
 const A = 'aaaa1111-0000-4000-8000-0000000000a1';
@@ -719,13 +720,12 @@ describe('add product', () => {
     const dialog = await openModal();
     fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
     await within(dialog).findByTestId('first-charge');
-    await within(dialog).findByRole('option', { name: '12025550123' });
+    const picker = within(dialog).getByRole('combobox', { name: 'Subscriber number' });
+    await waitFor(() => expect(picker.hasAttribute('disabled')).toBe(false));
     expect(
       within(dialog).getByRole('button', { name: 'Add Fiber 100' }).hasAttribute('disabled'),
     ).toBe(true);
-    fireEvent.change(within(dialog).getByLabelText('Subscriber number'), {
-      target: { value: numberId },
-    });
+    pickOption(picker, '12025550123');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add Fiber 100' }));
     expect(await within(dialog).findByText('Number no longer available')).toBeTruthy();
     const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');

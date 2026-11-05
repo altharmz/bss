@@ -37,4 +37,27 @@ describe('Combobox', () => {
     fireEvent.change(input, { target: { value: 'missing' } });
     expect(screen.getByText('No matches')).toBeTruthy();
   });
+
+  it('moves aria-activedescendant with the arrows, and Escape restores the label', () => {
+    render(<Example />);
+    const input = screen.getByRole('combobox', { name: 'Owner' });
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+    expect(input.getAttribute('aria-activedescendant')).toBeNull();
+    fireEvent.focus(input);
+    expect(input.getAttribute('aria-expanded')).toBe('true');
+    const options = screen.getAllByRole('option');
+    expect(input.getAttribute('aria-activedescendant')).toBe(options[0]?.id);
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(input.getAttribute('aria-activedescendant')).toBe(options[1]?.id);
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(input.getAttribute('aria-activedescendant')).toBe(options[2]?.id);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect((input as HTMLInputElement).value).toBe('Lone Ltd · organization');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'zzz' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect((input as HTMLInputElement).value).toBe('Lone Ltd · organization');
+    expect(input.getAttribute('aria-expanded')).toBe('false');
+  });
 });

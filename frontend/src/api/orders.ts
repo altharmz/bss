@@ -71,11 +71,6 @@ export function loadCancellations(orderId: string, signal: AbortSignal) {
   return getAll<Cancellation>(`${PATHS.cancellations}?productOrder.id=${orderId}`, signal);
 }
 
-/** The order count of the sidebar item. */
-export function countOrders(signal: AbortSignal): Promise<number> {
-  return getPage<Order>(`${PATHS.orders}?limit=1&fields=id`, signal).then((page) => page.total);
-}
-
 /** The prepaid command of an in-progress order, if the account has one: the journal is
  * asked by account and matched on the command's order link. */
 export async function findOrderCommand(

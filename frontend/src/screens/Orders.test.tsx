@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { App } from '../app/App';
 import { itemText } from './Orders';
 import { expectUi } from '../test/expectUi';
-import { accountBody } from '../test/fixtures';
+import { accountBody, NO_SETTLEMENT } from '../test/fixtures';
 import { CONTEXT, json, NAV_RUNS, noRuns, stubFetch, tmfError, type Handler } from '../test/fetch';
 
 const ORDERS = '/tmf-api/productOrderingManagement/v5/productOrder';
@@ -710,6 +710,7 @@ describe('order writes', () => {
       creditLimit: null,
       exceedsCreditLimit: false,
     });
+    let settlementFails = false;
     const { fetchMock } = writes(DRAFT, {
       [`GET /tmf-api/accountManagement/v5/billingAccount/${A1}`]: () =>
         json(accountBody(A1, { id: 'cust1', name: 'Ivan Ivanov' })),
@@ -736,8 +737,19 @@ describe('order writes', () => {
         () => json(FIRST('o1', '2026-10-05')),
       [`GET /internal/v1/billingAccount/${A1}/firstCharge?productOffering.id=o2&startDate=2026-10-05`]:
         () => json(FIRST('o2', '2026-10-05')),
+      // B9: owes 30 on bills, 10 unallocated credit: (10 - 30) - 12 = -32.00
+      [`GET /internal/v1/billingAccount/${A1}/settlement`]: () =>
+        settlementFails
+          ? tmfError(500, 'settlement is down')
+          : json({
+              ...NO_SETTLEMENT,
+              outstanding: { unit: 'USD', value: 30 },
+              unallocatedCredit: { unit: 'USD', value: 10 },
+            }),
       [`PATCH ${ORDERS}/${O1}`]: () => json({ id: O1, state: 'draft' }),
     });
+    const scrolled = vi.fn();
+    Element.prototype.scrollIntoView = scrolled;
     open();
     const dialog = await openOrder('C0000001');
     expectUi('ui.orders.editDraft');
@@ -750,8 +762,19 @@ describe('order writes', () => {
       '2026-10-05',
     );
     expect(within(edit).queryByRole('button', { name: /^Add / })).toBeNull();
+    // B22: the draft's offering row scrolled into view once, not again on a re-render
+    await within(edit).findByTestId('first-charge');
+    expect(scrolled).toHaveBeenCalledTimes(1);
+    expect(scrolled).toHaveBeenCalledWith({ block: 'nearest' });
+    expect(scrolled.mock.contexts[0]).toBe(options[0]);
+    const balanceAfter = () =>
+      within(edit).getByText('Balance after unbilled charges and this one').nextElementSibling;
+    await waitFor(() => expect(balanceAfter()?.textContent).toMatch(/32\.00USD/));
+    settlementFails = true;
     fireEvent.click(options[1] as HTMLElement);
     await within(edit).findByTestId('first-charge');
+    await waitFor(() => expect(balanceAfter()?.textContent).toBe('—'));
+    expect(scrolled).toHaveBeenCalledTimes(1);
     press(edit, 'Save draft');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(sent(fetchMock)[0]?.call).toBe(`PATCH ${ORDERS}/${O1}`);
