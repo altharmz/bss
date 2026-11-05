@@ -253,7 +253,7 @@ def select_issue(items, represented):
             continue
         if any(n["state"] == "OPEN" for n in nodes(issue["closedByPullRequestsReferences"])):
             continue
-        priority = labels & {"P0", "P1", "P2", "P3"}
+        priority = labels & {"P0", "P1", "P2", "P3"} or {"P3"}
         if len(priority) != 1:
             raise StartupError(
                 f"ambiguous priority for Ready issue #{issue['number']}: need one P0–P3"

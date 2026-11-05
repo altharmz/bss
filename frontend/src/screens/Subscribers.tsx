@@ -1,3 +1,4 @@
+import { useInspectorFit } from '../ui/inspectorFit';
 import { useEffect, useRef, useState } from 'react';
 import { loadSubscribers, type Account, type AccountState, type RatingMode } from '../api/bss';
 import { useResource } from '../api/useResource';
@@ -67,10 +68,13 @@ function SubscriberInspector({
   active: number;
   onOpen: () => void;
 }) {
+  const [fitRef, fitStyle] = useInspectorFit<HTMLElement>();
   const overLimit =
     account.creditLimitCents !== null && account.balanceCents < -account.creditLimitCents;
   return (
     <aside
+      ref={fitRef}
+      style={fitStyle}
       className="bss-inspector bss-subscriber-inspector"
       data-ui="ui.subscribers.inspector"
       aria-label={`${account.customerName} account`}

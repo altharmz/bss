@@ -250,6 +250,17 @@ describe('number inventory', () => {
     expect(screen.queryByRole('button', { name: 'Change number' })).toBeNull();
   });
 
+  it('does not claim the offering has no numbers while the product is still loading', async () => {
+    stubFetch({
+      [`GET ${PATHS.products}/product`]: () => new Promise<Response>(() => {}),
+      [list]: () => json([], { total: 0 }),
+    });
+    render(<ProductNumber accountId="account" productId="product" onDone={() => {}} />);
+    fireEvent.click(screen.getByText('Subscriber number'));
+    expect(await screen.findByText('Loading number…')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText(/does not use subscriber numbers/)).toBeNull());
+  });
+
   it('changes a product number through a modify order and shows business rejection', async () => {
     const { fetchMock } = stubFetch({
       [`GET ${PATHS.products}/product`]: () =>

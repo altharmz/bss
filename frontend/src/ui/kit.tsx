@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import { statusPresentation, type StatusKind } from './status';
+import { useInspectorFit } from './inspectorFit';
 export { Menu, Tabs, TabPanel } from './navigation';
 export { Note } from './Note';
 export { KeyValue, MoneyStrip, PageHeader } from './summaries';
@@ -203,6 +204,8 @@ export function Checkbox({
 export interface SegmentOption<K extends string> {
   key: K;
   label: string;
+  /** The raw API code, kept for the tooltip when the label is a human one. */
+  title?: string | undefined;
   count?: number;
 }
 
@@ -228,6 +231,7 @@ export function Segmented<K extends string>({
           role={as === 'radio' ? 'radio' : undefined}
           aria-checked={as === 'radio' ? option.key === value : undefined}
           aria-pressed={as === 'filter' ? option.key === value : undefined}
+          title={option.title}
           onClick={() => onChange(option.key)}
         >
           {option.label}
@@ -294,8 +298,11 @@ export function Dialog({
   }, [onClose, preview]);
 
   const Shell = inspector ? 'aside' : 'div';
+  const [fitRef, fitStyle] = useInspectorFit<HTMLElement>(inspector);
   return (
     <Shell
+      ref={fitRef as never}
+      style={inspector ? fitStyle : undefined}
       className={inspector ? 'bss-inspector' : preview ? 'bss-dialog-preview' : 'bss-overlay'}
       onClick={preview || inspector ? undefined : onClose}
     >

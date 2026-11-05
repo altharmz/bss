@@ -30,7 +30,7 @@ Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
   from Inbox without the human's OK.
 - **Ready**: triaged, with a clear goal, acceptance criteria as a task-list checklist,
   labels and no open blockers. Take the next item by priority label: P0 first, then P1,
-  P2, P3. Among several with the same label, take the one highest on the board.
+  P2, P3; an issue with no priority label counts as P3. Among several with the same label, take the one highest on the board.
 - **Doing**: actively worked on. An agent may own multiple Doing items when separate
   worker slots are available. It has an `agent:<client>` owner label (or `needs-human`)
   and, for code work, a branch `issue-<n>-<slug>`.

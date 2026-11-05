@@ -292,6 +292,17 @@ describe('Ledger recent activity', () => {
     expect(rail.textContent).not.toContain('Holds change Reserved');
   });
 
+  it('shows a payment method label, not its code, in the rail and the transactions table', async () => {
+    backend({
+      [`GET ${INTERNAL}/transactions?limit=20`]: () =>
+        json([{ ...TRANSACTIONS[1], note: 'cash' }], { total: 1 }),
+    });
+    await open();
+    const rail = screen.getByRole('complementary', { name: 'Recent activity' });
+    await within(rail).findByText('Cash');
+    expect(rail.textContent).not.toContain('cash');
+  });
+
   it('shows an empty rail and explains prepaid ledger movements', async () => {
     backend(
       {

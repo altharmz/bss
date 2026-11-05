@@ -267,7 +267,10 @@ describe('orders list', () => {
     });
     await screen.findByText('C0000001');
     expect((await screen.findAllByRole('link', { name: 'Ivan Ivanov' })).length).toBe(2);
-    fireEvent.click(screen.getByRole('button', { name: 'inProgress' }));
+    expect(screen.getByRole('button', { name: 'In progress' }).getAttribute('title')).toBe(
+      'inProgress',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'In progress' }));
     await screen.findByText('Showing 1–1 of 1');
     expect(screen.queryByText('C0000001')).toBeNull();
     fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
