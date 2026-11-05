@@ -321,6 +321,13 @@ MCP_SMOKE_USER="${MCP_SMOKE_USER}" MCP_SMOKE_PASSWORD="${MCP_SMOKE_PASSWORD}" \
   python3 scripts/mcp-oauth-smoke.py "${MCP_URL}" caddy \
   || fail "MCP OAuth smoke failed (see above). Everything is deployed; is the smoke user in ${SMOKE_ENV} an active mcp user with that password (docs/mcp.md)?"
 
+# Each OAuth smoke leaves a client registration (no deletion endpoint); remove the smoke's
+# own ones without a live token, so MCP_MAX_CLIENTS never fills (docs/decisions/mcp.md).
+# Only a warning on failure: everything is deployed and checked by now.
+log "Pruning the smoke's MCP client registrations"
+rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} exec -T mcp python -m bss_mcp.tokens prune-smoke-clients" \
+  || log "WARNING: pruning the smoke client registrations failed; harmless now, see docs/mcp.md"
+
 log "Pruning old ${IMAGE_NAME} images on ${REMOTE} (keeping ${KEEP_IMAGES}, nothing else is touched)"
 rssh "docker images '${IMAGE_NAME}' --format '{{.ID}} {{.CreatedAt}}' \
   | sort -k2 -r | tail -n +$((KEEP_IMAGES + 1)) | awk '{print \$1}' \

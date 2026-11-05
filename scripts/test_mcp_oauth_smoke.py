@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -110,6 +111,14 @@ class OAuthSmokeTests(unittest.TestCase):
     def assert_no_secrets(self, result):
         for secret in (PASSWORD, UI_PASSWORD, "at-1", "rt-1", "at-2", "rt-2"):
             self.assertNotIn(secret, result.stdout + result.stderr)
+
+    def test_the_client_name_is_the_one_the_connector_prunes(self):
+        script = re.search(r'^CLIENT_NAME = "([^"]+)"', SCRIPT.read_text(), re.M)
+        tokens = SCRIPT.parent.parent / "bss_mcp/tokens.py"
+        connector = re.search(r'^SMOKE_CLIENT_NAME = "([^"]+)"', tokens.read_text(), re.M)
+        self.assertIsNotNone(script)
+        self.assertIsNotNone(connector)
+        self.assertEqual(script[1], connector[1])
 
     def test_without_a_smoke_user_it_says_skipped_and_succeeds(self):
         result = self.run_smoke("caddy")

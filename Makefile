@@ -79,6 +79,9 @@ mcp-smoke: ## Discovery/401/carve-out checks, prepaid operations and the OAuth l
 	printf '%s\n' "$$ui_pw" | ./scripts/task-compose run --rm -T --no-deps app python -m app.users create "ui-$$run" --role user >/dev/null; \
 	MCP_SMOKE_USER="mcp-$$run" MCP_SMOKE_PASSWORD="$$mcp_pw" MCP_SMOKE_UI_USER="ui-$$run" MCP_SMOKE_UI_PASSWORD="$$ui_pw" \
 	  python3 scripts/mcp-oauth-smoke.py $$(./scripts/task-compose --url mcp) local
+	@# as deploy.sh does: remove the smoke's client registrations, at least the one just made
+	@./scripts/task-compose run --rm -T --no-deps mcp python -m bss_mcp.tokens prune-smoke-clients 2>/dev/null \
+	  | grep -E '^pruned [1-9]' || { echo 'mcp-smoke: the smoke client registration was not pruned' >&2; exit 1; }
 
 mcp-token-create: ## Local MCP static token, printed once: make mcp-token-create NAME=ci SCOPE=read|write
 	@if [ -z "$(NAME)" ] || [ -z "$(SCOPE)" ]; then \

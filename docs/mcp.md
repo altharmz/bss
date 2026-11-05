@@ -254,6 +254,10 @@ make mcp-token-revoke ID=<token id>        # a static token
 make mcp-token-revoke GRANT=<grant id>     # an OAuth login: all its access and refresh tokens
 ```
 
+The OAuth smoke's client registrations (`bss-mcp-smoke`, without a live token) are pruned
+by `deploy.sh` and `make mcp-smoke`; by hand: `python -m bss_mcp.tokens prune-smoke-clients`
+in the `mcp` service. Other clients are never pruned.
+
 On the VPS (the deployed image, against the `mcp-data` volume), through `make remote`:
 
 ```
@@ -323,7 +327,7 @@ tokens or passwords (a test checks the log for each).
   the UI (e.g. `mcp-smoke`, a long random password), then add two lines to the local
   `.env.smoke`: `MCP_SMOKE_USER=<name>` and `MCP_SMOKE_PASSWORD=<password>`. Each deploy
   then logs in as it with the read scope, calls one read tool, checks that a write tool
-  is refused, refreshes and revokes; it leaves one client registration per deploy. Without
+  is refused, refreshes and revokes, and then prunes its client registration. Without
   the lines the step prints SKIPPED. The password can obtain write like any `mcp` user's
   (docs/decisions/mcp.md): keep `.env.smoke` private; disable the user to stop it.
 - **Moving to role `mcp`** (the deploy that ships issue #173): from that deploy on, MCP

@@ -321,6 +321,35 @@ class Store:
             )
         return cursor.rowcount
 
+    def prune_clients(self, client_name: str) -> int:
+        """Delete the registrations named exactly `client_name` without a live (unrevoked,
+        unexpired) token, with their rows: a parked login link or an unused code of such a
+        client dies with it ("no longer valid"). How many were deleted."""
+        now = self.clock.now()
+        with self._lock:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                ids = [
+                    row[0]
+                    for row in self._db.execute(
+                        "SELECT client_id FROM oauth_client c"
+                        " WHERE json_extract(info, '$.client_name') = ?"
+                        " AND NOT EXISTS (SELECT 1 FROM oauth_token t WHERE t.client_id ="
+                        "  c.client_id AND t.revoked_at IS NULL AND t.expires_at >= ?)",
+                        (client_name, now),
+                    )
+                ]
+                for table in ("oauth_token", "oauth_pending", "oauth_code", "oauth_client"):
+                    self._db.executemany(
+                        f"DELETE FROM {table} WHERE client_id = ?",  # noqa: S608 - fixed names
+                        [(client_id,) for client_id in ids],
+                    )
+                self._db.execute("COMMIT")
+            except BaseException:
+                self._db.execute("ROLLBACK")
+                raise
+        return len(ids)
+
     def grants(self) -> list[sqlite3.Row]:
         """Live grants (a live refresh or access token), for the token tooling."""
         with self._lock:

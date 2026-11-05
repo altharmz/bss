@@ -286,12 +286,20 @@ the plan still asked for.
     only, never printed). Without them the step prints SKIPPED and the deploy goes on.
     The UI-user refusal is checked locally only (no UI password belongs in `.env.smoke`).
   - **What it writes**: one client registration (`client_name` `bss-mcp-smoke`) with its
-    pending request, code and tokens, and the user's `last_login_at`. The grant is revoked;
-    the **registration stays** - the connector has no client deletion (RFC 7592 is not
-    implemented). Accepted: one registration per deploy against `MCP_MAX_CLIENTS` 1000
-    is years of deploys at the current pace; deleting smoke registrations by their
-    self-declared name, or expiring unused clients, would put a special case or a risk
-    to real clients into production code. Revisit if the count nears the cap.
+    pending request, code and tokens, and the user's `last_login_at`. The grant is revoked
+    in the script. There is no client deletion endpoint (RFC 7592 is not implemented), so
+    each run would leave a registration against `MCP_MAX_CLIENTS` (1000; at the cap new
+    clients cannot register). **Pruned** (the human chose this, 2026-11-05):
+    `python -m bss_mcp.tokens prune-smoke-clients` deletes registrations named exactly
+    `bss-mcp-smoke` that hold no live (unrevoked, unexpired) token, with their rows; a
+    parked login link or unused code of such a client dies with it. `deploy.sh` runs it
+    in the `mcp` container after the OAuth smoke (a failure only warns: everything is
+    deployed by then); `make mcp-smoke` runs it too and fails unless it pruned the
+    registration just made. The name is fixed in the code (`SMOKE_CLIENT_NAME`; a harness
+    test pins the script's copy), never an argument. Real clients never use it; one that
+    copies the self-declared name loses only a registration without a live grant.
+    Rejected: wiping the store (ends every connection and static token); expiring unused
+    clients (claude.ai keeps its client id, and a forgotten one may not reconnect).
   - **The smoke credential can obtain write**: scope is the consent choice, not the role,
     so `MCP_SMOKE_PASSWORD` could get a read+write grant. Accepted: it is an `mcp` user's
     password like any other, kept in the gitignored, never-shipped `.env.smoke` beside

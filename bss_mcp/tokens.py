@@ -4,6 +4,7 @@
     python -m bss_mcp.tokens list                               # static tokens + live grants
     python -m bss_mcp.tokens revoke <token id>
     python -m bss_mcp.tokens revoke-grant <grant id>
+    python -m bss_mcp.tokens prune-smoke-clients               # deploy.sh, after the smoke
 
 Run in the mcp service, which has the store's volume: `make mcp-token-*` locally,
 `make remote SERVICE=mcp CMD="python -m bss_mcp.tokens ..."` on the VPS (docs/mcp.md).
@@ -21,6 +22,11 @@ from bss_mcp.audit import audit
 from bss_mcp.clock import Clock
 from bss_mcp.config import Settings
 from bss_mcp.store import SCOPES, Store
+
+# The client_name scripts/mcp-oauth-smoke.py registers with (a test pins both). Only
+# registrations with exactly this name and no live token are pruned: a real client never
+# uses it, and one that copies it loses only a registration without a live grant.
+SMOKE_CLIENT_NAME = "bss-mcp-smoke"
 
 
 def _when(epoch: float | None) -> str:
@@ -45,6 +51,10 @@ def _parser() -> argparse.ArgumentParser:
     revoke.add_argument("id")
     revoke_grant = commands.add_parser("revoke-grant", help="revoke an OAuth grant by id")
     revoke_grant.add_argument("id")
+    commands.add_parser(
+        "prune-smoke-clients",
+        help=f"delete {SMOKE_CLIENT_NAME!r} client registrations with nothing live",
+    )
     return parser
 
 
@@ -85,6 +95,11 @@ def run(argv: list[str], store: Store, clock: Clock, out: TextIO, err: TextIO) -
             return 1
         audit(clock, event="token_revoke", outcome=args.id)
         print(f"revoked static token {args.id}", file=out)
+        return 0
+    if args.command == "prune-smoke-clients":
+        pruned = store.prune_clients(SMOKE_CLIENT_NAME)
+        audit(clock, event="client_prune", outcome=pruned)
+        print(f"pruned {pruned} smoke client registration(s)", file=out)
         return 0
     # revoke-grant
     count = store.revoke_grant(args.id)

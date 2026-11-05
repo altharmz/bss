@@ -7,7 +7,7 @@ import logging
 
 import pytest
 
-from bss_mcp.tokens import run
+from bss_mcp.tokens import SMOKE_CLIENT_NAME, run
 from tests import test_mcp_oauth as flow
 
 
@@ -101,3 +101,59 @@ def test_list_shows_live_oauth_grants_and_revoke_grant_ends_the_login(users):
     assert tool(users, "revoke-grant", grant["grant_id"])[0] == 1
     _, out, _ = tool(users, "list")
     assert grant["grant_id"] not in out
+
+
+# --- pruning the OAuth smoke's client registrations (issue #174) ---
+
+
+def smoke_client_grant(mcp, *, name=SMOKE_CLIENT_NAME) -> dict:
+    """A read grant through a client registered under `name`, as the smoke does."""
+    cid = flow.client_id(mcp, client_name=name)
+    verifier, challenge = flow.pkce()
+    request_id = flow.login_link(mcp, cid, challenge)
+    code = flow.code_from(flow.login(mcp, request_id, scope="read"))
+    response = flow.token(
+        mcp,
+        cid,
+        grant_type="authorization_code",
+        code=code,
+        code_verifier=verifier,
+        redirect_uri=flow.REDIRECT,
+    )
+    assert response.status_code == 200, response.text
+    return {"client_id": cid, **response.json()}
+
+
+def revoke(mcp, issued) -> None:
+    form = {"client_id": issued["client_id"], "token": issued["refresh_token"]}
+    assert mcp.client.post("/revoke", data=form).status_code == 200
+
+
+def test_prune_removes_only_smoke_clients_without_a_live_token(users, caplog):
+    caplog.set_level(logging.INFO, logger="bss_mcp.audit")
+    done = smoke_client_grant(users)
+    revoke(users, done)
+    live = smoke_client_grant(users)
+    real = smoke_client_grant(users, name="Claude")
+    revoke(users, real)  # a real client without a live grant keeps its registration
+    parked = flow.client_id(users, client_name=SMOKE_CLIENT_NAME)
+    _, challenge = flow.pkce()
+    link = flow.login_link(users, parked, challenge)  # a login link, never used
+
+    code, out, _ = tool(users, "prune-smoke-clients")
+    assert code == 0 and "pruned 2 smoke client registration(s)" in out
+    assert users.store.client(done["client_id"]) is None
+    assert users.store.client(parked) is None
+    assert users.store.client(live["client_id"]) is not None
+    assert users.store.client(real["client_id"]) is not None
+    assert users.rpc("tools/list", None, live["access_token"]).status_code == 200
+    assert flow.login(users, link).status_code == 400  # the link died with it
+    assert any('"client_prune"' in r.getMessage() for r in caplog.records)
+    assert tool(users, "prune-smoke-clients")[1].startswith("pruned 0 ")
+
+
+def test_prune_keeps_a_smoke_client_until_its_tokens_expire(users):
+    issued = smoke_client_grant(users)
+    users.store._db.execute("UPDATE oauth_token SET expires_at = 0")  # every token expired
+    _, out, _ = tool(users, "prune-smoke-clients")
+    assert "pruned 1 " in out and users.store.client(issued["client_id"]) is None

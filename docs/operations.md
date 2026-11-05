@@ -100,7 +100,8 @@ What `deploy.sh` does, in order:
 12. Runs the MCP discovery, authentication and OAuth smoke checks through Caddy, then the
     **OAuth login smoke** (`scripts/mcp-oauth-smoke.py`) as the `mcp` smoke user from
     `.env.smoke` (`MCP_SMOKE_USER`, `MCP_SMOKE_PASSWORD`): read scope only, one read tool,
-    a write tool refused, refresh, revoke. Without those lines it prints SKIPPED.
+    a write tool refused, refresh, revoke. Without those lines it prints SKIPPED. Then it
+    prunes the smoke's client registrations in the `mcp` container (a warning on failure).
 13. Prunes old `bss-app` images on the VPS, keeping the newest few (nothing else is
     touched).
 
