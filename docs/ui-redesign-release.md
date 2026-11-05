@@ -1,9 +1,9 @@
 # UI redesign release evidence (GUI review fixes + Ledger v2)
 
 Release record for epic #43, written by R16 (#64). It covers the GUI review fixes (G
-slices) and the Ledger v2 redesign (R slices), as built on `master`. The release checks
-for the deployed stand are #8: they fill the **Result on the stand** column below after
-the human deploys.
+slices) and the Ledger v2 redesign (R slices), as built on `master`. The planned
+release checks on the deployed stand (#8) were closed without a recorded stand run; the
+evidence is the local build, e2e and shot review below.
 
 ## 1. Build
 
@@ -160,23 +160,24 @@ none.
 
 ## 5. Release checks P1-P16 (#8)
 
-"Result on the stand" stays empty until #8 runs after the human deploys.
+#8 was closed without a recorded run on the stand, so no row has a stand result; the
+"Built" column and the local evidence in section 1 are the record.
 
-| Gap | What | Slice | Built | Result on the stand |
-|---|---|---|---|---|
-| P1 | Spec "Requires a subscriber number" (numbers end to end, with B3) | G4b (#23) | built | |
-| P2 | Parties: New individual / New organization | G10 (#55) | built | |
-| P3 | Party edit: status, contact media, birth date, identification, external reference (with I9) | G10 (#55) | built | |
-| P4 | Party dialog: New customer | G10 (#55) | built | |
-| P5 | Add billing account (customer dialog, card More actions) | G11 (#56) | built | |
-| P6 | Customer's billing accounts with Delete; Delete customer when none remain | G11 (#56) | built | |
-| P7 | New offering: description, isSellable, categories | G7 (#49) | built | |
-| P8 | Offering detail: Add price | G7 (#49) | built | |
-| P9 | Delete offering reachable (In design ⋯ menu) | G1b, G7 (#49) | built | |
-| P10 | Delete category / catalog reachable | G1b, G7 (#49) | built | |
-| P11 | Spec characteristics editor | G4b (#23) | built | |
-| P12 | Top up: optional Number (`logicalResource`) | G9 (#53) | built (number); **voucher not built**: no backend voucher management | |
-| P13 | Numbered transfer by subscriber number | G4b (#23), verified in R16 (`numbered-transfer.spec.ts` passed) | built | |
-| P14 | Balances Account totals; card accumulated balance KeyValue | G13 (#59) | built | |
-| P15 | Record refund from the Payments tab and the payment dialog | G9 (#53) | built | |
-| P16 | Record payment: External reference (`correlatorId`) and description (with I7) | G9 (#53) | built (reference, description); **value date not built**: `paymentDate` is read-only | |
+| Gap | What | Slice | Built |
+|---|---|---|---|
+| P1 | Spec "Requires a subscriber number" (numbers end to end, with B3) | G4b (#23) | built |
+| P2 | Parties: New individual / New organization | G10 (#55) | built |
+| P3 | Party edit: status, contact media, birth date, identification, external reference (with I9) | G10 (#55) | built |
+| P4 | Party dialog: New customer | G10 (#55) | built |
+| P5 | Add billing account (customer dialog, card More actions) | G11 (#56) | built |
+| P6 | Customer's billing accounts with Delete; Delete customer when none remain | G11 (#56) | built |
+| P7 | New offering: description, isSellable, categories | G7 (#49) | built |
+| P8 | Offering detail: Add price | G7 (#49) | built |
+| P9 | Delete offering reachable (In design ⋯ menu) | G1b, G7 (#49) | built |
+| P10 | Delete category / catalog reachable | G1b, G7 (#49) | built |
+| P11 | Spec characteristics editor | G4b (#23) | built |
+| P12 | Top up: optional Number (`logicalResource`) | G9 (#53) | built (number); **voucher not built**: no backend voucher management |
+| P13 | Numbered transfer by subscriber number | G4b (#23), verified in R16 (`numbered-transfer.spec.ts` passed) | built |
+| P14 | Balances Account totals; card accumulated balance KeyValue | G13 (#59) | built |
+| P15 | Record refund from the Payments tab and the payment dialog | G9 (#53) | built |
+| P16 | Record payment: External reference (`correlatorId`) and description (with I7) | G9 (#53) | built (reference, description); **value date not built**: `paymentDate` is read-only |
