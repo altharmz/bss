@@ -215,14 +215,15 @@ def rate_body(conn: psycopg.Connection, row: Row) -> dict[str, Any]:
         else {"name": billing.FEE_NAME}  # a transfer fee has no offering
     )
     assert offering is not None  # foreign key
+    name = row["charge_name"] or offering["name"]  # a product fee is shown under its price
     bill_id = row["customer_bill_id"]
     period = row["period"]
-    covered = f"{offering['name']}, {period.lower} - {period.upper - timedelta(days=1)}"
+    covered = f"{name}, {period.lower} - {period.upper - timedelta(days=1)}"
     return without_nulls(
         {
             "id": str(row["id"]),
             "href": f"{BASE}/appliedCustomerBillingRate/{row['id']}",
-            "name": offering["name"],
+            "name": name,
             "description": f"refund of {covered}" if row["charge_type"] == "refund" else covered,
             "characteristic": [],  # billing sets none
             "date": utc(row["applied_at"]),

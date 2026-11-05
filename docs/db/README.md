@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0055**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0056**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -163,6 +163,7 @@ flowchart LR
   applied_customer_billing_rate -->|"billing_account_id"| billing_account
   applied_customer_billing_rate -->|"billing_run_id"| billing_run
   applied_customer_billing_rate -->|"customer_bill_id, billing_account_id"| customer_bill
+  applied_customer_billing_rate -->|"one_time_price_id"| product_offering_price
   applied_customer_billing_rate -->|"product_id, billing_account_id"| product
   applied_customer_billing_rate -->|"product_offering_id"| product_offering
   applied_customer_billing_rate -->|"refunds_rate_id, product_id"| applied_customer_billing_rate
@@ -245,6 +246,7 @@ flowchart LR
   payment_command -->|"billing_account_id"| billing_account
   payment_command -->|"payment_id"| payment
   payment_command -->|"payment_method_id"| payment_method
+  payment_command -->|"renewal_command_id"| prepaid_command
   payment_command -->|"topup_id"| balance_action
   payment_method -->|"billing_account_id"| billing_account
   prepaid_bucket -->|"billing_account_id, rating_type"| billing_account
@@ -252,6 +254,7 @@ flowchart LR
   prepaid_funding_shortfall -->|"command_id"| prepaid_command
   product -->|"billing_account_id"| billing_account
   product -->|"created_by_item_id"| product_order_item
+  product -->|"parent_product_id, billing_account_id"| product
   product -->|"product_offering_id"| product_offering
   product -->|"terminated_by_item_id"| product_order_item
   product_offering -->|"product_specification_id"| product_specification
@@ -603,6 +606,8 @@ erDiagram
     boolean requires_msisdn
     boolean manually_suspended
     boolean requires_imsi
+    uuid parent_product_id FK
+    boolean grantless
   }
   product_offering_change {
     uuid id PK
@@ -676,6 +681,7 @@ erDiagram
     uuid id PK
   }
   billing_account ||--o{ product : "billing_account_id"
+  product |o--o{ product : "parent_product_id, billing_account_id"
   product |o--o{ subscriber_number : "sim_product_id"
   product ||--o{ number_assignment : "product_id"
   product ||--o{ product_offering_change : "product_id"
@@ -734,6 +740,8 @@ erDiagram
     numeric tax_amount
     uuid product_offering_id FK
     uuid balance_action_id FK
+    uuid one_time_price_id FK
+    text charge_name
   }
   customer_bill {
     uuid id PK
@@ -980,6 +988,7 @@ erDiagram
     timestamptz created_at
     timestamptz sent_at
     timestamptz confirmed_at
+    uuid renewal_command_id FK
   }
   prepaid_funding_shortfall {
     uuid command_id PK,FK
@@ -1081,6 +1090,9 @@ erDiagram
   billing_account {
     uuid id PK
   }
+  product_offering_price {
+    uuid id PK
+  }
   product {
     uuid id PK
   }
@@ -1160,18 +1172,20 @@ erDiagram
   prepaid_bucket ||--o{ balance_action : "bucket_id, billing_account_id, currency"
   prepaid_command |o--o{ balance_action : "command_id"
   prepaid_command |o--o{ billing_run : "command_id"
+  prepaid_command |o--o{ payment_command : "renewal_command_id"
   prepaid_command ||--o{ funded_interval : "command_id, billing_account_id, command_kind"
   prepaid_command ||--o{ prepaid_funding_shortfall : "command_id"
   product |o--o{ applied_customer_billing_rate : "product_id, billing_account_id"
   product |o--o{ network_command : "product_id"
   product ||--o{ funded_interval : "product_id, billing_account_id"
   product_offering |o--o{ applied_customer_billing_rate : "product_offering_id"
+  product_offering_price |o--o{ applied_customer_billing_rate : "one_time_price_id"
   product_order ||--o{ network_command : "product_order_id"
   product_order_item ||--o{ network_command : "product_order_item_id"
   refund ||--o{ refund_source : "refund_id, billing_account_id"
 ```
 
-Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product`](product.md), [`product_offering`](product_offering.md), [`product_order`](product_order.md), [`product_order_item`](product_order_item.md).
+Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product_offering_price`](product_offering_price.md), [`product`](product.md), [`product_offering`](product_offering.md), [`product_order`](product_order.md), [`product_order_item`](product_order_item.md).
 
 ## Billing worker (ours)
 

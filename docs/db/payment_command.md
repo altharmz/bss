@@ -30,6 +30,7 @@ Durable outbound charge to the payment gateway: sent and retried by the billing 
 | `created_at` | `timestamp with time zone` | no |  |  |
 | `sent_at` | `timestamp with time zone` | yes |  |  |
 | `confirmed_at` | `timestamp with time zone` | yes |  |  |
+| `renewal_command_id` | `uuid` | yes |  | For a renewal charge: the prepaid renewal command whose shortfall it covers. |
 
 ## Foreign keys
 
@@ -38,6 +39,7 @@ Durable outbound charge to the payment gateway: sent and retried by the billing 
 | `billing_account_id` | [`billing_account`](billing_account.md) (id) | `payment_command_billing_account_id_fkey` |
 | `payment_id` | [`payment`](payment.md) (id) | `payment_command_payment_id_fkey` |
 | `payment_method_id` | [`payment_method`](payment_method.md) (id) | `payment_command_payment_method_id_fkey` |
+| `renewal_command_id` | [`prepaid_command`](prepaid_command.md) (id) | `payment_command_renewal_command_id_fkey` |
 | `topup_id` | [`balance_action`](balance_action.md) (id) | `payment_command_topup_id_fkey` |
 
 ## Constraints
@@ -49,7 +51,7 @@ Durable outbound charge to the payment gateway: sent and retried by the billing 
 | `payment_command_check` | check | `CHECK (((state = 'declined'::text) = (decline_reason IS NOT NULL)))` |
 | `payment_command_check1` | check | `CHECK (((state = 'confirmed'::text) = (confirmed_at IS NOT NULL)))` |
 | `payment_command_kind_check` | check | `CHECK ((kind = ANY (ARRAY['charge'::text, 'refund'::text])))` |
-| `payment_command_purpose_check` | check | `CHECK ((purpose = ANY (ARRAY['topup'::text, 'auto_topup'::text])))` |
+| `payment_command_purpose_check` | check | `CHECK ((purpose = ANY (ARRAY['topup'::text, 'auto_topup'::text, 'renewal'::text])))` |
 | `payment_command_request_check` | check | `CHECK ((jsonb_typeof(request) = 'object'::text))` |
 | `payment_command_state_check` | check | `CHECK ((state = ANY (ARRAY['pending'::text, 'sent'::text, 'confirmed'::text, 'declined'::text, 'exhausted'::text, 'cancelled'::text])))` |
 | `payment_command_pkey` | primary key | `PRIMARY KEY (id)` |
@@ -61,5 +63,6 @@ Durable outbound charge to the payment gateway: sent and retried by the billing 
 | `payment_command_account_idx` | `CREATE INDEX payment_command_account_idx ON payment_command USING btree (billing_account_id, created_at)` | no |
 | `payment_command_client_key` | `CREATE UNIQUE INDEX payment_command_client_key ON payment_command USING btree (billing_account_id, client_key) WHERE (client_key IS NOT NULL)` | no |
 | `payment_command_one_auto_in_flight` | `CREATE UNIQUE INDEX payment_command_one_auto_in_flight ON payment_command USING btree (billing_account_id) WHERE ((purpose = 'auto_topup'::text) AND (state = ANY (ARRAY['pending'::text, 'sent'::text])))` | no |
+| `payment_command_one_renewal_in_flight` | `CREATE UNIQUE INDEX payment_command_one_renewal_in_flight ON payment_command USING btree (billing_account_id) WHERE ((purpose = 'renewal'::text) AND (state = ANY (ARRAY['pending'::text, 'sent'::text])))` | no |
 | `payment_command_open_idx` | `CREATE INDEX payment_command_open_idx ON payment_command USING btree (created_at, id) WHERE (state = ANY (ARRAY['pending'::text, 'sent'::text]))` | no |
 | `payment_command_pkey` | `CREATE UNIQUE INDEX payment_command_pkey ON payment_command USING btree (id)` | yes |

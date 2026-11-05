@@ -27,6 +27,8 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `requires_msisdn` | `boolean` | no | `false` | Built-in msisdn requirement at ordering; existing products remain unchecked. |
 | `manually_suspended` | `boolean` | no | `false` | Operator suspension independent of prepaid funded coverage and account state. |
 | `requires_imsi` | `boolean` | no | `false` | Built-in imsi requirement at ordering; existing products remain unchecked. |
+| `parent_product_id` | `uuid` | yes |  | An add-on pack's plan product (TMF637 productRelationship, type addOn); the add-on ends with the plan's paid period. |
+| `grantless` | `boolean` | no | `false` | Prepaid: an add-on or pay-as-you-go product. Active between its dates with no funded interval, never renewed; the order that created it completes it. |
 
 ## Foreign keys
 
@@ -34,6 +36,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 |---|---|---|
 | `billing_account_id` | [`billing_account`](billing_account.md) (id) | `product_billing_account_id_fkey` |
 | `created_by_item_id` | [`product_order_item`](product_order_item.md) (id) | `product_created_by_item_id_fkey` |
+| `parent_product_id`, `billing_account_id` | [`product`](product.md) (id, billing_account_id) | `product_parent_fkey` |
 | `product_offering_id` | [`product_offering`](product_offering.md) (id) | `product_product_offering_id_fkey` |
 | `terminated_by_item_id` | [`product_order_item`](product_order_item.md) (id) | `product_terminated_by_item_id_fkey` |
 
@@ -45,6 +48,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `product_check` | check | `CHECK ((termination_date >= start_date))` |
 | `product_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
 | `product_name_not_blank` | check | `CHECK ((name <> ''::text))` |
+| `product_parent_grantless` | check | `CHECK (((parent_product_id IS NULL) OR grantless))` |
 | `product_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
 | `product_pkey` | primary key | `PRIMARY KEY (id)` |
 | `product_created_by_item_id_key` | unique | `UNIQUE (created_by_item_id)` |
@@ -58,6 +62,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `product_billing_account_id_idx` | `CREATE INDEX product_billing_account_id_idx ON product USING btree (billing_account_id)` | no |
 | `product_created_by_item_id_key` | `CREATE UNIQUE INDEX product_created_by_item_id_key ON product USING btree (created_by_item_id)` | yes |
 | `product_id_billing_account_id_key` | `CREATE UNIQUE INDEX product_id_billing_account_id_key ON product USING btree (id, billing_account_id)` | yes |
+| `product_parent_idx` | `CREATE INDEX product_parent_idx ON product USING btree (parent_product_id) WHERE (parent_product_id IS NOT NULL)` | no |
 | `product_pkey` | `CREATE UNIQUE INDEX product_pkey ON product USING btree (id)` | yes |
 | `product_product_offering_id_idx` | `CREATE INDEX product_product_offering_id_idx ON product USING btree (product_offering_id)` | no |
 | `product_terminated_by_item_id_key` | `CREATE UNIQUE INDEX product_terminated_by_item_id_key ON product USING btree (terminated_by_item_id)` | yes |

@@ -1,11 +1,17 @@
 [
   "accountNotActive",
+  "addOnParentNotActive",
+  "addOnParentNotPlan",
+  "addOnParentRequired",
+  "addOnParentUnknown",
   "billingAccountMismatch",
   "combinedChangeUnavailable",
   "imsiNotRequired",
   "imsiRequired",
   "imsiUnavailable",
   "insufficientFunds",
+  "mixedOfferingKinds",
+  "noOneTimePrice",
   "noRecurringPrice",
   "numberNotRequired",
   "numberRequired",
@@ -19,6 +25,7 @@
   "openDeleteItem",
   "openModifyItem",
   "prepaidLifecycleUnavailable",
+  "prepaidOnly",
   "priceEnds",
   "productAlreadyEnded",
   "productNotStarted",
@@ -28,6 +35,7 @@
   "serviceAddressRequired",
   "simSwapAlone",
   "simUnavailable",
+  "startNotToday",
   "statusUnchanged",
   "terminationInPeriod"
 ]

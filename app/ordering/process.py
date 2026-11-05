@@ -43,6 +43,7 @@ import psycopg
 from app.billing.funding import InsufficientFunds
 from app.config import settings
 from app.events import emit
+from app.network import kind as offering_kind
 from app.ordering import network as network_orders
 from app.ordering import numbers as number_orders
 from app.ordering import prepaid as prepaid_orders
@@ -632,6 +633,12 @@ def _add_problems(
     problems = []
     if offering["valid_for"] is not None and at not in offering["valid_for"]:  # None: always
         problems.append(("offeringNotValid", f"productOffering is not valid on {start}"))
+    if (found := offering_kind.kind_of(offering["details"])) != offering_kind.PLAN:
+        # an add-on pack or a pay-as-you-go line has no recurring price: its fees and the
+        # plan it needs are checked by prepaid acceptance (app/ordering/prepaid.py)
+        if account["rating_type"] != "prepaid":
+            problems.append(("prepaidOnly", f"a {found} offering is for prepaid accounts"))
+        return problems
     price = catalog.price_at(
         conn,
         product_offering_id=offering["id"],

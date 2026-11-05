@@ -15,6 +15,7 @@ import psycopg
 from app.billing import entitlement, transfer_fee
 from app.billing.funding import InsufficientFunds
 from app.billing.offering_change import post_offering_change
+from app.billing.one_time import post_charges
 from app.billing.prepaid import post_interval
 from app.billing.status_change import post_status_change, renewal_ids
 from app.billing.termination import post_termination
@@ -213,7 +214,9 @@ def process_commands(
                         attempted.append(cmd["id"])
                         continue
                 post = (
-                    network.post_profile_change
+                    post_charges
+                    if "charges" in current["request"]
+                    else network.post_profile_change
                     if "profile_changes" in current["request"]
                     else network.post_sim_swap
                     if "sim_swaps" in current["request"]

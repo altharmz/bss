@@ -39,7 +39,11 @@ from app.worker.runs import ensure_ownership
 log = logging.getLogger("app.worker")
 
 OPERATOR = "system:payment-gateway"
-REASON = {"topup": "Card top-up", "auto_topup": "Automatic card top-up"}
+REASON = {
+    "topup": "Card top-up",
+    "auto_topup": "Automatic card top-up",
+    "renewal": "Card charge for a plan renewal",
+}
 
 
 def charge_request(method: Row, amount: Decimal, currency: str, purpose: str) -> dict[str, Any]:
@@ -76,6 +80,7 @@ def process_payments(
     answered_before = [row["id"] for row in commands.awaiting(conn)]
     acted: list[UUID] = []
     start_auto_topups(conn, now=now)
+    start_renewal_charges(conn, now=now)
     for due in commands.to_send(conn, now):
         if checkpoint is not None and checkpoint():
             return acted
@@ -172,7 +177,7 @@ def record_confirmed(conn: psycopg.Connection, cmd: Row, *, gateway_ref: str, no
         "usageType": "monetary",
         "bucket": {"id": str(bucket["id"])},
         "partyAccount": {"id": str(account["id"])},
-        "isAutoTopup": cmd["purpose"] == "auto_topup",
+        "isAutoTopup": cmd["purpose"] in {"auto_topup", "renewal"},
         "paymentMethod": {
             "id": str(method["id"]),
             "href": method_href(method["id"]),
@@ -232,6 +237,43 @@ def start_auto_topups(conn: psycopg.Connection, *, now: datetime) -> list[UUID]:
                             "auto_topup",
                         ),
                         now=now,
+                    )
+            except pg_errors.UniqueViolation:
+                continue  # one is already in flight
+            started.append(row["id"])
+    return started
+
+
+def start_renewal_charges(conn: psycopg.Connection, *, now: datetime) -> list[UUID]:
+    """A renewal the balance cannot pay, on an account with auto-pay and a usable default card:
+    one charge for exactly the shortfall. On confirmation the payment is recorded and the
+    renewal posts. No card (or one that cannot be charged): nothing, the renewal stays
+    pending and entitlement ends at paid-through (the lifecycle slice takes over)."""
+    started = []
+    for candidate in commands.renewal_candidates(conn):
+        with conn.transaction():
+            parties.get_billing_account(conn, candidate["account_id"], "update")
+            method = methods.default_of(conn, candidate["account_id"])
+            if usable(method, now) is not None:
+                continue
+            shortfall = (
+                candidate["required"] - funding.load(conn, candidate["account_id"]).spendable
+            )
+            if shortfall <= 0:
+                continue  # funded since: the renewal posts on its own
+            try:
+                with conn.transaction():
+                    row = commands.insert(
+                        conn,
+                        account_id=candidate["account_id"],
+                        method_id=method["id"],
+                        purpose="renewal",
+                        amount=shortfall,
+                        currency=candidate["currency"],
+                        client_key=None,
+                        request=charge_request(method, shortfall, candidate["currency"], "renewal"),
+                        now=now,
+                        renewal_command_id=candidate["command_id"],
                     )
             except pg_errors.UniqueViolation:
                 continue  # one is already in flight

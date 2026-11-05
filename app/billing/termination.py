@@ -103,6 +103,14 @@ def post_termination(
                 " WHERE id = %s",
                 (now, now, run["id"]),
             )
+        # the add-on packs of an ended plan end with it
+        conn.execute(
+            "UPDATE product SET termination_date = %s,"
+            " status = CASE WHEN %s <= %s THEN 'terminated' ELSE status END::product_status_type"
+            " WHERE parent_product_id = ANY(%s)"
+            " AND (termination_date IS NULL OR termination_date > %s)",
+            (cmd["due_date"], cmd["due_date"], today, list(request.terminations), cmd["due_date"]),
+        )
         _complete(conn, order, state, now, today)
         result = {"outcome": "terminated", "credits": credits}
         if run is not None:

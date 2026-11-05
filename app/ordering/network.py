@@ -62,6 +62,20 @@ def plan(conn, request, start) -> list[Planned]:
                     Planned(item.item_id, "swap_sim", line, item.product_id, moved["imsi"])
                 )
             continue
+        parent = add_on_parent(item)
+        if item.action == "add" and parent is not None:
+            # an add-on pack: the plan line gets the plan's profile plus the pack's allowance
+            extra = offering_profile(conn, item.product_offering_id)
+            if extra is not None:
+                base = offering_profile(
+                    conn, products.get_product(conn, parent)["product_offering_id"]
+                )
+                planned.append(
+                    Planned(
+                        item.item_id, "change_profile", profile.combine(base or {}, extra), parent
+                    )
+                )
+            continue
         if item.action == "add":
             kind, offering = "activate", item.product_offering_id
         elif item.action == "delete":
@@ -80,6 +94,19 @@ def plan(conn, request, start) -> list[Planned]:
     return planned
 
 
+def add_on_parent(item) -> UUID | None:
+    """The plan product an add item names as `productRelationship` of type addOn."""
+    relations = ((item.details or {}).get("product") or {}).get("productRelationship") or []
+    for relation in relations:
+        if relation.get("relationshipType") == "addOn":
+            found = relation.get("id")
+            try:
+                return None if found is None else UUID(str(found))
+            except ValueError:
+                return None
+    return None
+
+
 def record(conn, order_id: UUID, planned: list[Planned], start: date, now: datetime) -> None:
     """Insert the planned commands, due on the order's date (an add's product exists now)."""
     if not planned:
@@ -93,7 +120,7 @@ def record(conn, order_id: UUID, planned: list[Planned], start: date, now: datet
             conn,
             order_id=order_id,
             order_item_id=row["id"],
-            product_id=row["product_id"],
+            product_id=entry.product_id or row["product_id"],
             kind=entry.kind,
             due_date=start,
             profile=entry.profile,

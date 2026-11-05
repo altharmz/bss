@@ -326,6 +326,13 @@ the required `scripts/docs/` registry and notes edits. No commit or deployment m
   columns have no default on purpose: if the tables are not empty the migration fails
   and the deploy stops before the app starts.
 
+### Offering kind and one-time prices (issue #187)
+
+An offering's kind is a `productOfferingCharacteristic` named `offeringKind` (`plan`,
+`addOn`, `payAsYouGo`; the default is plan), validated on write (400); only a plan has a
+recurring price (422). `oneTime` prices, until now stored only, are billed with a prepaid
+purchase as fees. See [prepaid.md](prepaid.md#plans-renewal-add-ons-and-fees-2026-11-05-issue-187).
+
 ## UI: product specifications (slice 11, 2026-10-25)
 
 Built as designed, frontend only.

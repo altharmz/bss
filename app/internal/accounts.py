@@ -27,9 +27,11 @@ from app.billing.prepaid import IntervalQuote
 from app.billing.termination import credit
 from app.config import settings
 from app.internal.context import no_query
+from app.network import kind as offering_kind
 from app.ordering.cancel import undoable_status_change
 from app.repository import billing, catalog, funding, parties, products
-from app.repository._sql import Row
+from app.repository import payment_methods as payment_methods
+from app.repository._sql import Row, fetch_all
 
 BASE = "/internal/v1/billingAccount"
 router = APIRouter(prefix=BASE)
@@ -321,6 +323,41 @@ def _next_charge(state: BillingState, today: date, tz: ZoneInfo) -> date | None:
     return None
 
 
+def _renewal_history(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[UUID, list]:
+    """Each prepaid product's funded intervals, newest first: what bought or renewed it,
+    for which dates, how much and whether the card paid the shortfall."""
+    rows = fetch_all(
+        conn,
+        "SELECT f.product_id, f.authorized_at, f.period, f.amount, f.tax_amount, f.command_kind,"
+        " f.supersedes_interval_id IS NOT NULL AS superseding, a.customer_bill_id AS bill_id,"
+        " a.billing_account_id, EXISTS (SELECT FROM payment_command c WHERE c.state = 'confirmed'"
+        "  AND c.renewal_command_id = f.command_id) AS by_card, f.currency"
+        " FROM funded_interval f JOIN applied_customer_billing_rate a ON a.id = f.applied_rate_id"
+        " WHERE f.product_id = ANY(%s) ORDER BY lower(f.period) DESC, f.authorized_at DESC",
+        (product_ids,),
+    )
+    out: dict[UUID, list] = {}
+    for r in rows:
+        out.setdefault(r["product_id"], []).append(
+            {
+                "authorizedAt": r["authorized_at"],
+                "period": {"start": r["period"].lower, "end": r["period"].upper},
+                "kind": "renewal"
+                if r["command_kind"] == "renewal"
+                else "offeringChange"
+                if r["superseding"]
+                else "purchase",
+                "amount": money(r["amount"] + r["tax_amount"], r["currency"]),
+                "tax": money(r["tax_amount"], r["currency"]),
+                "fundedBy": "card" if r["by_card"] else "balance",
+                "bill": None
+                if r["bill_id"] is None
+                else {"id": str(r["bill_id"]), "href": bill.bill_href(r["bill_id"])},
+            }
+        )
+    return out
+
+
 def _pending_change(c: Row) -> dict[str, Any]:
     """One `pendingChanges` entry: a status or offering change not yet in effect."""
     out: dict[str, Any] = {
@@ -357,6 +394,16 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
         changes = billing.offering_changes(conn, [p["id"] for p in rows])
         pending = products.pending_changes(conn, [p["id"] for p in rows], today)
         undoable = {p["id"]: undoable_status_change(conn, p, today) for p in rows}
+        history = (
+            _renewal_history(conn, [p["id"] for p in rows])
+            if row["rating_type"] == "prepaid"
+            else {}
+        )
+        card = (
+            row["rating_type"] == "prepaid"
+            and row["auto_topup_enabled"]
+            and payment_methods.default_of(conn, row["id"]) is not None
+        )
         cores = {p["id"]: billing.core_product(p, changes.get(p["id"], ())) for p in rows}
         prices = billing.load_recurring_prices(
             conn, [o for p in cores.values() for o in p.offering_ids]
@@ -408,6 +455,21 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                 "undoableStatusChange": undoable[p["id"]],
                 "pendingChanges": [_pending_change(c) for c in pending.get(p["id"], [])],
                 **prepaid_views.get(p["id"], {}),
+                **(
+                    {
+                        "offeringKind": offering_kind.kind_of(p["offering_details"]),
+                        "parentProduct": None
+                        if p["parent_product_id"] is None
+                        else {
+                            "id": str(p["parent_product_id"]),
+                            "href": product_href(p["parent_product_id"]),
+                        },
+                        "fundingSource": "balanceThenCard" if card else "balance",
+                        "renewalHistory": history.get(p["id"], []),
+                    }
+                    if p["id"] in prepaid_views
+                    else {}
+                ),
             }
         )
     return _page(items, len(items))

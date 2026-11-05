@@ -15,18 +15,22 @@ command, due that day, has the billing owner credit the unused dates
 """
 
 from dataclasses import replace
+from datetime import datetime, time
 from decimal import Decimal
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from app.billing import entitlement
 from app.billing.engine_tax import TaxUnavailable, quote_taxes
-from app.billing.prepaid import IntervalQuote
+from app.billing.one_time import Charge, ChargeOrder
+from app.billing.prepaid import IntervalQuote, fee_quotes
 from app.config import settings
 from app.events import emit
+from app.network import kind as offering_kind
 from app.ordering import network, numbers
 from app.ordering.states import item_transition, order_transition
 from app.repository import balance_actions, billing, funding, orders, parties, products, sims
+from app.repository import catalog as catalog_repo
 from app.repository import prepaid_commands as commands
 from app.repository._sql import fetch_all, fetch_one
 
@@ -50,7 +54,10 @@ def problems(conn, request, account, start, today):
     resume (today or dated), or change a number; a non-Active account only suspends
     and terminates."""
     if all(item.action == "add" for item in request.items):
-        return _address_problems(request, account)
+        kinds = kinds_of(conn, request)
+        return _kind_problems(conn, request, account, kinds, start, today) or _address_problems(
+            request, account, kinds
+        )
     if all(item.action == "delete" for item in request.items):
         return _not_started(conn, request)
     if all(item.action == "modify" and item.product_offering_id for item in request.items):
@@ -77,8 +84,83 @@ def problems(conn, request, account, start, today):
     return found + _not_started(conn, request)
 
 
-def _address_problems(request, account):
-    """A prepaid line is taxed by the place of its primary use: no service address, no line."""
+def kinds_of(conn, request) -> dict[str, str]:
+    """The offering kind (plan, addOn, payAsYouGo) of each add item."""
+    out = {}
+    for item in request.items:
+        offering = catalog_repo.get_product_offering(conn, item.product_offering_id)
+        out[item.item_id] = offering_kind.kind_of(offering["details"] if offering else None)
+    return out
+
+
+def grantless(kinds: dict[str, str]) -> bool:
+    """An add-on or pay-as-you-go purchase: no funded interval, only one-time fees."""
+    return any(k != offering_kind.PLAN for k in kinds.values())
+
+
+def _kind_problems(conn, request, account, kinds, start, today):
+    """Plans, add-on packs and pay-as-you-go lines are bought in separate orders; the
+    last two start today. An add-on names a plan of the account that is paid today."""
+    if len(set(kinds.values())) > 1:
+        return [
+            (
+                None,
+                "mixedOfferingKinds",
+                "plans, add-on packs and pay-as-you-go lines are ordered separately",
+            )
+        ]
+    if not grantless(kinds):
+        return []
+    found = []
+    if start != today:
+        found.append((None, "startNotToday", "add-ons and pay-as-you-go lines start today"))
+    for item in request.items:
+        if kinds[item.item_id] == offering_kind.ADD_ON:
+            found += [
+                (item.item_id, code, text)
+                for code, text in _add_on_problems(conn, item, account, today, start)
+            ]
+    return found
+
+
+def _add_on_problems(conn, item, account, today, start):
+    parent_id = network.add_on_parent(item)
+    if parent_id is None:
+        return [
+            (
+                "addOnParentRequired",
+                "an add-on names its plan: product.productRelationship"
+                " [{relationshipType: addOn, product: {id}}]",
+            )
+        ]
+    parent = products.lock_products(conn, [parent_id]).get(parent_id)
+    if parent is None or parent["billing_account_id"] != account["id"]:
+        return [("addOnParentUnknown", "the plan product is not one of this account's")]
+    if parent["grantless"]:
+        return [("addOnParentNotPlan", "an add-on is bought for a plan product")]
+    grant = entitlement.latest_grant(conn, parent_id)
+    status = entitlement.view(conn, parent, account, today)["status"]
+    if (
+        grant is None
+        or not grant["period"].lower <= today < grant["period"].upper
+        or status not in {"active", "pendingTerminate"}
+    ):
+        return [("addOnParentNotActive", "the plan has no paid period running today")]
+    found = []
+    if not billing.load_fee_prices(
+        conn,
+        item.product_offering_id,
+        account["currency"],
+        datetime.combine(start, time.min, tzinfo=ZoneInfo(settings.billing_tz)),
+    ):
+        found.append(("noOneTimePrice", f"no one-time price in {account['currency']} on {start}"))
+    return found
+
+
+def _address_problems(request, account, kinds=None):
+    """A prepaid line is taxed by the place of its primary use: no service address, no line
+    (an add-on is bought for a line that has one)."""
+    kinds = kinds or {}
     if account["service_address"] is not None or not settings.tax_require_service_address:
         return []
     return [
@@ -89,6 +171,7 @@ def _address_problems(request, account):
             " before a prepaid line is activated",
         )
         for item in request.items
+        if kinds.get(item.item_id) != offering_kind.ADD_ON
     ]
 
 
@@ -146,6 +229,7 @@ def _not_started(conn, request):
         )
         for item in request.items
         if entitlement.latest_grant(conn, item.product_id) is None
+        and not products.get_product(conn, item.product_id)["grantless"]
     ]
 
 
@@ -197,6 +281,16 @@ def mid_period(conn, request, start):
     ]
 
 
+def _fees(conn, core, offering_id, start, tz):
+    """The one-time fees of a purchase; an unavailable tax engine refuses it (503)."""
+    try:
+        return fee_quotes(conn, core, offering_id, start, tz)
+    except TaxUnavailable as error:
+        from app.api.errors import TmfError  # lazily: app.api imports this package
+
+        raise TmfError(503, f"tax engine unavailable: {error}") from None
+
+
 def _taxes(conn, core, price, start, tz):
     """The tax lines of a first interval, from the engine when the account has a service
     address; an unavailable engine refuses the request (503) and nothing is held."""
@@ -245,9 +339,7 @@ def prepare_changes(conn, request, account, quotes, start, now):
 
 
 def quote_total(quotes):
-    return sum(
-        (q.amount + sum((t.amount for t in q.taxes), Decimal(0)) for q in quotes), Decimal(0)
-    )
+    return sum((q.gross for q in quotes), Decimal(0))
 
 
 def change_offerings(
@@ -451,9 +543,9 @@ def change_statuses(conn, order, request, rows, renewals, today, now):
         status = entitlement.view(conn, product, account, today)["status"]
         products.set_product_status(conn, item.product_id, status)
         grant = entitlement.latest_grant(conn, item.product_id)
-        renewal = commands.renewal_id(grant["id"])
         resumed = item.product_status == "active"
-        if resumed and grant["period"].upper <= today and renewal in renewals:
+        renewal = None if grant is None else commands.renewal_id(grant["id"])
+        if resumed and grant is not None and grant["period"].upper <= today and renewal in renewals:
             commands.enqueue(
                 conn,
                 renewal,
@@ -474,6 +566,8 @@ def change_statuses(conn, order, request, rows, renewals, today, now):
 def prepare(conn, request, account, quotes, start, now, *, future=False):
     """Validate immediate funds, or retain future product identities without a quote."""
     core = billing.core_account(account)
+    if grantless(kinds_of(conn, request)):
+        return _prepare_charges(conn, request, account, core, start, now)
     prices = {
         p.id: p
         for p in billing.load_recurring_prices(conn, [i.product_offering_id for i in request.items])
@@ -499,22 +593,55 @@ def prepare(conn, request, account, quotes, start, now, *, future=False):
             index=0,
             unit=price.recurring_period,
             length=price.recurring_period_length,
+            fees=_fees(conn, core, item.product_offering_id, start, ZoneInfo(settings.billing_tz)),
         )
         accepted[item.item_id] = (new, quote)
     if future:
         return accepted, None
-    total = sum(
-        (q.amount + sum((t.amount for t in q.taxes), Decimal(0)) for _, q in accepted.values()),
-        Decimal(0),
-    )
+    total = sum((q.gross for _, q in accepted.values()), Decimal(0))
     balance_actions.release_expired(conn, account["id"], now)
     funding.plan(conn, account["id"], total)
+    return accepted, total
+
+
+def _prepare_charges(conn, request, account, core, start, now):
+    """An add-on pack or a pay-as-you-go line: only its one-time fees are charged, held from
+    the spendable balance now. An add-on ends with its plan's paid period."""
+    tz = ZoneInfo(settings.billing_tz)
+    accepted = {}
+    for item in request.items:
+        new = item.new_product or products.NewProduct(details=(item.details or {}).get("product"))
+        new = replace(new, id=new.id or uuid4())
+        parent = network.add_on_parent(item)
+        ends = None
+        if parent is not None:
+            ends = entitlement.latest_grant(conn, parent)["period"].upper
+            terminating = products.get_product(conn, parent)["termination_date"]
+            ends = ends if terminating is None else min(ends, terminating)
+        accepted[item.item_id] = (
+            new,
+            Charge(
+                product_id=new.id,
+                offering_id=item.product_offering_id,
+                fees=_fees(conn, core, item.product_offering_id, start, tz),
+                parent_product_id=parent,
+                ends=ends,
+            ),
+        )
+    total = sum((q.gross for _, q in accepted.values()), Decimal(0))
+    balance_actions.release_expired(conn, account["id"], now)
+    if total > 0:
+        funding.plan(conn, account["id"], total)
     return accepted, total
 
 
 def accept(conn, order, request, rows, prepared, command_id, start, now):
     """Caller transaction retains the hold, complete item tree and command together."""
     accepted, total = prepared
+    charges = [q for _, q in accepted.values() if isinstance(q, Charge)]
+    if charges:
+        _accept_charges(conn, order, request, rows, accepted, total, command_id, start, now)
+        return
     if total is not None:
         funding.reserve_for_command(
             conn, order["billing_account_id"], total, command_id=command_id, held_at=now
@@ -552,5 +679,44 @@ def accept(conn, order, request, rows, prepared, command_id, start, now):
                 }
             ),
         },
+        now=now,
+    )
+
+
+def _accept_charges(conn, order, request, rows, accepted, total, command_id, start, now):
+    """The add-on / pay-as-you-go twin of `accept`: products without a funded interval."""
+    if total > 0:
+        funding.reserve_for_command(
+            conn, order["billing_account_id"], total, command_id=command_id, held_at=now
+        )
+    orders.set_order_state(conn, order["id"], "inProgress")
+    for item in request.items:
+        row = rows[item.item_id]
+        new, charge = accepted[item.item_id]
+        orders.set_order_item_state(conn, row["id"], "inProgress")
+        product = products.create_product(
+            conn,
+            billing_account_id=order["billing_account_id"],
+            product_offering_id=item.product_offering_id,
+            created_by_item_id=row["id"],
+            start_date=start,
+            status="pendingActive",
+            new=new,
+            parent_product_id=charge.parent_product_id,
+            grantless=True,
+            termination_date=charge.ends,
+        )
+        orders.set_order_item_product(conn, row["id"], product["id"])
+        numbers.execute(conn, item, product["id"], row["id"], start, now)
+        emit.product(conn, product["id"], "Create", at=now, today=start)
+    commands.enqueue(
+        conn,
+        command_id,
+        order["billing_account_id"],
+        kind="order",
+        due_date=start,
+        request=ChargeOrder(
+            order_id=order["id"], charges=[q for _, q in accepted.values()]
+        ).model_dump(mode="json"),
         now=now,
     )

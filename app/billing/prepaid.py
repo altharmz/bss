@@ -18,7 +18,7 @@ from psycopg.types.range import Range
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.billing import engine_tax, settlement
-from app.billing.core import price_at, tax_of
+from app.billing.core import midnight, price_at, tax_of
 from app.billing.engine_tax import quote_taxes
 from app.billing.model import AppliedTax, DateRange, Product
 from app.events import emit
@@ -38,6 +38,30 @@ class TaxQuote(BaseModel):
     jurisdiction: str | None = None  # a tax engine's line (docs/decisions/taxes.md)
 
 
+class FeeQuote(BaseModel):
+    """A one-time fee charged with a purchase: a `oneTime` price of the offering."""
+
+    model_config = ConfigDict(extra="forbid")
+    price_id: UUID
+    name: str = Field(min_length=1)
+    amount: Cents
+    taxes: list[TaxQuote]
+    tax_quote_id: str | None = None  # the tax engine's quote, committed when this is posted
+
+    @model_validator(mode="after")
+    def valid_taxes(self):
+        if self.tax_quote_id is None and (
+            len({t.category for t in self.taxes}) != len(self.taxes)
+            or any(t.amount != tax_of(self.amount, t.rate) for t in self.taxes)
+        ):
+            raise ValueError("fee tax does not match amount and rate")
+        return self
+
+    @property
+    def gross(self) -> Decimal:
+        return self.amount + sum((t.amount for t in self.taxes), Decimal(0))
+
+
 class IntervalQuote(BaseModel):
     model_config = ConfigDict(extra="forbid")
     product_id: UUID
@@ -51,6 +75,16 @@ class IntervalQuote(BaseModel):
     unit: Literal["daily", "weekly", "monthly", "yearly"]
     length: int = Field(ge=1, le=1000, strict=True)
     tax_quote_id: str | None = None  # the tax engine's quote, committed when this is posted
+    fees: list[FeeQuote] = []  # one-time fees charged with the first interval of a purchase
+
+    @property
+    def gross(self) -> Decimal:
+        """Everything the purchase charges: the interval, its taxes and the fees."""
+        return (
+            self.amount
+            + sum((t.amount for t in self.taxes), Decimal(0))
+            + sum((f.gross for f in self.fees), Decimal(0))
+        )
 
     @model_validator(mode="after")
     def valid_taxes(self):
@@ -158,6 +192,36 @@ class FutureOrder(BaseModel):
         return self
 
 
+def fee_quotes(conn, account, offering_id: UUID, day: date, tz: ZoneInfo) -> list[FeeQuote]:
+    """The one-time fees of a purchase of `offering_id` starting on `day`: each `oneTime`
+    price valid then, in the account's currency, taxed like any charge (the engine as
+    `one_time`, else the price's flat tax). Raises `TaxUnavailable` when the engine is down."""
+    out = []
+    for price, name in billing.load_fee_prices(
+        conn, offering_id, account.currency, midnight(day, tz)
+    ):
+        taxes, tax_quote_id = quote_taxes(
+            conn,
+            account,
+            account.id,
+            price,
+            price.amount,
+            day,
+            tz,
+            transaction_type="one_time",
+        )
+        out.append(
+            FeeQuote(
+                price_id=price.id,
+                name=name,
+                amount=price.amount,
+                taxes=taxes,
+                tax_quote_id=tax_quote_id,
+            )
+        )
+    return out
+
+
 def _future_quotes(conn, request, account, today, tz, due_date):
     quotes = []
     for product_id in sorted(request.products):
@@ -191,6 +255,7 @@ def _future_quotes(conn, request, account, today, tz, due_date):
                 index=0,
                 unit=price.recurring_period,
                 length=price.recurring_period_length,
+                fees=fee_quotes(conn, account, prod["product_offering_id"], today, tz),
             )
         )
     return quotes
@@ -277,7 +342,7 @@ def post_interval(
                 prod["termination_date"] is not None and prod["termination_date"] <= period.start
             ):
                 raise ValueError("product is not eligible on authorization date")
-            total = quote.amount + sum((t.amount for t in quote.taxes), Decimal(0))
+            total = quote.gross
             accepted.append((quote, period, total, original_quote))
         order = None
         if order_id is not None:
@@ -336,6 +401,36 @@ def post_interval(
         return commands.complete(conn, command_id, result, now=now)["result"]
 
 
+def post_fees(conn, account, run, product_id, offering_id, fees, now, today) -> list[UUID]:
+    """One `oneTime` ABR per fee of a purchase, for the day of its charge, under the
+    command's run; the caller attaches them to the purchase's bill. The tax engine's quote
+    of each is committed with it."""
+    ids = []
+    day = Range(today, today + timedelta(days=1), "[)")
+    for fee in fees:
+        abr = billing.insert_abr(
+            conn,
+            product_id=product_id,
+            billing_account_id=account.id,
+            charge_type="oneTime",
+            amount=fee.amount,
+            currency=account.currency,
+            period=day,
+            billing_run_id=run["id"],
+            applied_at=now,
+            product_offering_id=offering_id,
+            taxes=tuple(
+                AppliedTax(t.category, t.rate, t.amount, t.jurisdiction) for t in fee.taxes
+            ),
+            one_time_price_id=fee.price_id,
+            charge_name=fee.name,
+        )
+        if fee.tax_quote_id is not None:
+            engine_tax.commit(conn, abr, account.id, fee, now=now)
+        ids.append(abr["id"])
+    return ids
+
+
 def _post_purchase(
     conn, cmd, account, run, quote, period, total, original_quote, now, today, supersedes=None
 ):
@@ -355,6 +450,9 @@ def _post_purchase(
     )
     if quote.tax_quote_id is not None:
         engine_tax.commit(conn, abr, account.id, quote, now=now)
+    fee_abrs = post_fees(
+        conn, account, run, quote.product_id, quote.offering_id, quote.fees, now, today
+    )
     bill = billing.insert_bill(
         conn,
         billing_account_id=account.id,
@@ -367,7 +465,7 @@ def _post_purchase(
         run_type="offCycle",
     )
     billing.record_bill_issue(conn, bill["id"], now=now)
-    billing.attach_abrs_to_bill(conn, bill["id"], account.id, [abr["id"]])
+    billing.attach_abrs_to_bill(conn, bill["id"], account.id, [abr["id"], *fee_abrs])
     candidate = next(
         c for c in billing.load_issue_candidates(conn, account.id) if c.id == bill["id"]
     )
@@ -395,7 +493,7 @@ def _post_purchase(
             quote.anchor,
             quote.index,
             quote.amount,
-            total - quote.amount,
+            sum((t.amount for t in quote.taxes), Decimal(0)),  # the interval's, not the fees'
             jsonb(original_quote),
             supersedes,
         ),

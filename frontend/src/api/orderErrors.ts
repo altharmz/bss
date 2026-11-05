@@ -1,12 +1,18 @@
 /** Operator explanations for every TMF622 business refusal. Unknown codes retain the server reason. */
 export const ORDER_ERRORS: Record<string, string> = {
   accountNotActive: 'The billing account must be active for this order.',
+  addOnParentNotActive: 'The plan has no paid period running today. Renew it first.',
+  addOnParentNotPlan: 'Choose a plan product for the add-on, not another add-on.',
+  addOnParentRequired: 'Choose the plan product this add-on is for.',
+  addOnParentUnknown: "The plan product is not one of this billing account's products.",
   billingAccountMismatch: 'Choose a product from the same billing account as the order.',
   combinedChangeUnavailable: 'Change the offering and subscriber number in separate orders.',
   imsiNotRequired: 'This product does not require an IMSI.',
   imsiRequired: 'Choose exactly one IMSI.',
   imsiUnavailable: 'This IMSI is unavailable (unknown, locked or in use). Choose another.',
   insufficientFunds: 'Top up the account before placing this order.',
+  mixedOfferingKinds: 'Order plans, add-on packs and pay-as-you-go lines separately.',
+  noOneTimePrice: 'This add-on has no one-time price in the account currency on this date.',
   noRecurringPrice: 'No recurring price is available in the account currency on this date.',
   numberNotRequired: 'This product does not require a subscriber number.',
   numberRequired: 'Choose exactly one subscriber number.',
@@ -23,6 +29,7 @@ export const ORDER_ERRORS: Record<string, string> = {
   openDeleteItem: 'Another order already ends this product. Undo that order first.',
   openModifyItem: 'Another order already changes this product. Undo that change first.',
   prepaidLifecycleUnavailable: 'This combination of changes is unavailable for prepaid products.',
+  prepaidOnly: 'This offering is for prepaid accounts only.',
   priceEnds: 'The recurring price ends without a successor. Update the catalog first.',
   productAlreadyEnded:
     'The product has ended or has an end scheduled. Undo its end first if available.',
@@ -36,6 +43,7 @@ export const ORDER_ERRORS: Record<string, string> = {
   simSwapAlone:
     'Swap the SIM of a prepaid line in an order of its own: change only the IMSI, nothing else.',
   simUnavailable: 'No SIM of the chosen type is in stock. Import SIMs or choose another type.',
+  startNotToday: 'Add-ons and pay-as-you-go lines start today.',
   statusUnchanged: 'The product already has the requested status.',
   terminationInPeriod:
     'The product ends in this billing period. Undo its end or choose an earlier period.',

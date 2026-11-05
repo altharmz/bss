@@ -33,31 +33,43 @@ def create_product(
     start_date: date,
     status: str = "active",
     new: NewProduct | None = None,
+    parent_product_id: UUID | None = None,
+    grantless: bool = False,
+    termination_date: date | None = None,
 ) -> Row:
-    """Without a `name`, the product is named after its offering at creation (the
+    """An add-on (`parent_product_id`) or pay-as-you-go product (`grantless`) has no funded
+    interval; an add-on is created with its end date (the plan's paid-through date).
+    Without a `name`, the product is named after its offering at creation (the
     database's `product_default_name`); the name is its own from then on. Name and
     documents are written only when given: tests create products on schemas before
     0028."""
     new = new or NewProduct()
+    columns = {
+        "id": new.id,
+        "billing_account_id": billing_account_id,
+        "product_offering_id": product_offering_id,
+        "status": status,
+        "start_date": start_date,
+        "created_by_item_id": created_by_item_id,
+        "base_type": new.base_type,
+        "schema_location": new.schema_location,
+    }
+    if parent_product_id is not None or grantless:  # from 0055: tests insert into older schemas
+        columns["parent_product_id"] = parent_product_id
+        columns["grantless"] = grantless
+        columns["termination_date"] = termination_date
     row = returning(
         conn,
-        """
-        INSERT INTO product
-            (id, billing_account_id, product_offering_id, status, start_date,
-             created_by_item_id, base_type, schema_location)
-        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s)
-        RETURNING *
-        """,
-        (
-            new.id,
-            billing_account_id,
-            product_offering_id,
-            status,
-            start_date,
-            created_by_item_id,
-            new.base_type,
-            new.schema_location,
+        sql.SQL("INSERT INTO product ({}) VALUES ({}) RETURNING *").format(
+            sql.SQL(", ").join(map(sql.Identifier, columns)),
+            sql.SQL(", ").join(
+                sql.SQL("COALESCE(%s::uuid, gen_random_uuid())")
+                if name == "id"
+                else sql.Placeholder()
+                for name in columns
+            ),
         ),
+        tuple(columns.values()),
     )
     if new.name is None and not new.details:
         return row
@@ -292,7 +304,7 @@ def list_open_products(conn: psycopg.Connection, billing_account_id: UUID, on: d
         conn,
         """
         SELECT p.*, o.id AS offering_id, o.name AS offering_name, o.code AS offering_code,
-               s.id AS specification_id, s.name AS specification_name
+               o.details AS offering_details, s.id AS specification_id, s.name AS specification_name
         FROM product p
         JOIN product_offering o
           ON o.id = product_offering_on(p.id, greatest(p.start_date, %s::date))
