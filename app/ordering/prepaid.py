@@ -24,9 +24,9 @@ from app.billing.engine_tax import TaxUnavailable, quote_taxes
 from app.billing.prepaid import IntervalQuote
 from app.config import settings
 from app.events import emit
-from app.ordering import numbers
+from app.ordering import network, numbers
 from app.ordering.states import item_transition, order_transition
-from app.repository import balance_actions, billing, funding, orders, parties, products
+from app.repository import balance_actions, billing, funding, orders, parties, products, sims
 from app.repository import prepaid_commands as commands
 from app.repository._sql import fetch_all, fetch_one
 
@@ -90,6 +90,40 @@ def _address_problems(request, account):
         )
         for item in request.items
     ]
+
+
+def sim_swap_problems(conn, request, start):
+    """A SIM swap is an order of its own on a line: the IMSI alone changes, and no other
+    swap or activation of the line waits for the network."""
+    found = []
+    for item in request.items:
+        if item.action != "modify" or numbers.references(item) is None:
+            continue
+        product, line = network._line_profile(conn, item)
+        moved = numbers.changes(conn, item, product, start)
+        if line is None or "imsi" not in moved:
+            continue
+        if (
+            item.product_offering_id is not None
+            or item.product_status is not None
+            or len(moved) > 1
+        ):
+            found.append(
+                (
+                    item.item_id,
+                    "simSwapAlone",
+                    "swap the SIM of a prepaid line in an order of its own, changing nothing else",
+                )
+            )
+        elif sims.reserved_of(conn, product["id"]) is not None:
+            found.append(
+                (
+                    item.item_id,
+                    "imsiUnavailable",
+                    "a SIM activation or swap of this line is still waiting for the network",
+                )
+            )
+    return found
 
 
 def number_only(request):
@@ -363,6 +397,34 @@ def schedule_statuses(conn, order, request, rows, command_id, start, today, now)
                 {"product_id": str(i.product_id), "status": i.product_status} for i in request.items
             ],
         },
+        now=now,
+    )
+
+
+def schedule_sim_swaps(conn, order, request, rows, command_id, start, now, targets):
+    """Reserve the new SIM of each item and wait for the network: one `order` command due
+    on `start` moves the claims, retires the old SIM and completes the items once
+    `swap_sim` is confirmed (app/worker/network.py); a refusal only drops the reservation."""
+    orders.set_order_state(conn, order["id"], order_transition(order["state"], "inProgress"))
+    swaps = []
+    for item in request.items:
+        row = rows[item.item_id]
+        orders.set_order_item_state(conn, row["id"], item_transition(row["state"], "inProgress"))
+        sims.hold(conn, targets[item.item_id], item.product_id, "reserved", now)
+        swaps.append(
+            {
+                "item_id": str(row["id"]),
+                "product_id": str(item.product_id),
+                "subscriber_number_id": str(targets[item.item_id]),
+            }
+        )
+    commands.enqueue(
+        conn,
+        command_id,
+        order["billing_account_id"],
+        kind="order",
+        due_date=start,
+        request={"order_id": str(order["id"]), "sim_swaps": swaps},
         now=now,
     )
 

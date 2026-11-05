@@ -30,7 +30,7 @@ T-Mobile enforces caps and throttling; the BSS only sends the profile.
 `network_command` (migration 0052): one per order item, `id` = idempotency key
 (uuid5 of the item and the kind). Kinds: add -> `activate`, suspend -> `suspend`, resume ->
 `restore`, terminate -> `deactivate`, offering change -> `change_profile` (the new
-offering's profile). A number-only modify sends none. Each is due on the order's date. The
+offering's profile), IMSI change -> `swap_sim` ([sim.md](sim.md)). A number-only modify sends none. Each is due on the order's date. The
 worker (`app/worker/network.py`, called first in every prepaid dispatch) sends the due ones;
 the request (line identifiers MSISDN/IMSI/ICCID from the product's number claims, the
 profile, a TMF641-shaped `serviceOrderItem`: add / modify / delete) is built once and
@@ -85,5 +85,5 @@ The stub answers a repeated key with the first answer.
 ## Not in this slice
 
 The admin UI (network profile editor, network step and state on order and product, Retry
-button) is issue 183b; later slices add commands (SIM swap, number pool, porting, device
+button) is issue 183b; later slices add commands (SIM swap is #186, number pool, porting, device
 check, usage feed).

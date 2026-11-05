@@ -133,12 +133,14 @@ would attach the prod container to both `lab` and `shared`).
   with `out of shared memory` (its lock table). The `api` fixture's TestClient runs
   inside `with`: one event-loop thread per test instead of one per request.
 - **The local postgres runs with `fsync=off`, `full_page_writes=off`,
-  `synchronous_commit=off`** (`command:` of `db` in `compose.override.yaml`): every test
+  `synchronous_commit=off`, `max_locks_per_transaction=256`** (`command:` of `db` in `compose.override.yaml`): every test
   clones and drops a database, and with fsync on each drop waits for a server-wide
   checkpoint. Local only - production uses vps-infra's postgres and never reads
   `compose.override.yaml`, so it is unaffected. Not crash-safe: after a WSL crash (or a
   killed Docker VM) the local database may be corrupt; the recovery is `make clean`
-  (drops the local volume) and `make up`.
+  (drops the local volume) and `make up`. The lock limit (default 64) is for the test
+  templates: every xdist worker migrates its own template in one transaction and the lock
+  table is shared, so near 62 tables the parallel suite ran out of shared memory (issue #186).
 - Spec YAML is parsed with libyaml (`yaml.CSafeLoader`), not `yaml.safe_load`: same
   documents, ~6x faster, and every xdist worker parses all of `spec/` once.
 - **Dependencies are pinned, never floating** (since 2026-10-03). Direct dependencies are

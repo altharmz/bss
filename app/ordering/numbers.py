@@ -5,6 +5,7 @@ from uuid import UUID
 from app.config import settings
 from app.events import emit
 from app.repository import catalog
+from app.repository import sims as sim_stock
 from app.repository._sql import fetch_all, fetch_one
 
 KINDS = ["msisdn", "imsi"]
@@ -187,6 +188,8 @@ def _item_problems(conn, item, product, needs, refs, locked, start, seen):
         changed += 1
         if row["administrative_state"] != "unlocked":
             reason = f"{NOUN[kind]} is locked"
+        elif kind == "imsi" and row["sim_state"] != "in_stock":
+            reason = f"IMSI is {row['sim_state']}, not in stock"
         elif uid in seen or unavailable(conn, uid, start, end, kind=kind):
             reason = f"{NOUN[kind]} is assigned, reserved or quarantined"
         elif product and any(
@@ -237,8 +240,10 @@ def changed(conn, locked, old, now, today):
 def _release_imsi(conn, product_id, end, now):
     """An accepted release locks the IMSI so it is not reused unless an operator unlocks it."""
     conn.execute(
-        """UPDATE subscriber_number SET administrative_state = 'locked', updated_at = %s
-        WHERE resource_specification_id = 'imsi' AND administrative_state <> 'locked'
+        """UPDATE subscriber_number SET administrative_state = 'locked',
+        sim_state = 'retired', updated_at = %s
+        WHERE resource_specification_id = 'imsi'
+        AND (administrative_state <> 'locked' OR sim_state <> 'retired')
         AND id IN (SELECT subscriber_number_id FROM number_assignment
             WHERE product_id = %s AND cancelled_at IS NULL AND resource_specification_id = 'imsi'
             AND (released_on IS NULL OR released_on > %s))""",
@@ -313,6 +318,8 @@ def execute(conn, item, product_id, item_id, start, now):
                     now,
                 ),
             )
+            if kind == "imsi":
+                sim_stock.hold(conn, chosen[kind], product_id, "active", now)
 
 
 def cancellation_problem(conn, items):
@@ -333,6 +340,15 @@ def cancellation_problem(conn, items):
 
 def cancel(conn, items, now):
     for item in items:
+        for claim in fetch_all(
+            conn,
+            """SELECT subscriber_number_id FROM number_assignment
+            WHERE assigned_by_item_id = %s AND cancelled_at IS NULL
+            AND resource_specification_id = 'imsi'""",
+            (item["id"],),
+        ):
+            sim_stock.release_hold(conn, claim["subscriber_number_id"], now)
+    for item in items:
         conn.execute(
             """UPDATE number_assignment SET cancelled_at = %s,
             cancelled_by_item_id = %s, updated_at = %s
@@ -346,3 +362,81 @@ def cancel(conn, items, now):
             WHERE ended_by_item_id = %s AND cancelled_at IS NULL""",
             (now, item["id"]),
         )
+
+
+# --- SIM and eSIM: picking from stock, swap targets (docs/decisions/sim.md) ---
+
+
+def sim_type_of(item):
+    """The `simType` product characteristic of an add item, or None."""
+    for entry in ((item.details or {}).get("product") or {}).get("productCharacteristic") or []:
+        if entry.get("name") == "simType":
+            return entry.get("value")
+    return None
+
+
+def _kinds(conn, refs):
+    ids = [i for i in (_uuid(r) for r in refs or []) if i is not None]
+    return {
+        r["id"]: r["resource_specification_id"]
+        for r in fetch_all(
+            conn,
+            "SELECT id, resource_specification_id FROM subscriber_number WHERE id = ANY(%s)",
+            (ids,),
+        )
+    }
+
+
+def pick_sims(conn, request):
+    """Choose the SIM of each add item that names a `simType` instead of an IMSI: the
+    oldest unlocked one in stock, added to the item's realizingResource. Returns the
+    problems (an offering without an IMSI, or none in stock)."""
+    problems, taken = [], []
+    for item in request.items:
+        wanted = sim_type_of(item)
+        if wanted is None or item.action != "add":
+            continue
+        if not requirements(conn, item.product_offering_id)["imsi"]:
+            problems.append(
+                (item.item_id, "imsiNotRequired", "the product needs no IMSI, so simType is unused")
+            )
+            continue
+        refs = references(item) or []
+        if "imsi" in _kinds(conn, refs).values():
+            problems.append(
+                (
+                    item.item_id,
+                    "realizingResourceDuplicate",
+                    "name an IMSI or a simType, not both",
+                )
+            )
+            continue
+        sim = sim_stock.pick_in_stock(conn, wanted, exclude=taken)
+        if sim is None:
+            problems.append((item.item_id, "simUnavailable", f"no {wanted} SIM in stock"))
+            continue
+        taken.append(sim["id"])
+        reference = {
+            "id": str(sim["id"]),
+            "@type": "ResourceRef",
+            "@referredType": "LogicalResource",
+        }
+        product = item.details.setdefault("product", {})
+        product["realizingResource"] = [*refs, reference]
+    return problems
+
+
+def changes(conn, item, product, start):
+    """{kind: new resource id} the item's realizingResource changes on the product."""
+    refs = references(item)
+    if not refs or product is None:
+        return {}
+    current = {}
+    for c in claims(conn, [product["id"]]):
+        if start in c["valid_for"]:
+            current[c["resource_specification_id"]] = c["subscriber_number_id"]
+    found = {}
+    for uid, kind in _kinds(conn, refs).items():
+        if current.get(kind) != uid:
+            found[kind] = uid
+    return found

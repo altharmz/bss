@@ -303,13 +303,19 @@ def _process(
     # an open state, or it would collide with the open delete it is rejected for.
     quotes: dict[str, Row] = {}
     problems = _validate(conn, request, account, start, today, locked, quotes)
+    sim_problems = [Problem(*p) for p in number_orders.pick_sims(conn, request)]
     number_rows = number_orders.lock(
         conn, named, [number_orders.references(i) for i in request.items]
     )
+    unfilled = {p.item_id for p in sim_problems}
     problems += [
-        Problem(*p) for p in number_orders.validate(conn, request, locked, number_rows, start)
-    ]
+        Problem(*p)
+        for p in number_orders.validate(conn, request, locked, number_rows, start)
+        if not (p[0] in unfilled and p[1] == "imsiRequired")
+    ] + sim_problems
     prepaid = account["rating_type"] == "prepaid"
+    if prepaid and not problems:
+        problems += [Problem(*p) for p in prepaid_orders.sim_swap_problems(conn, request, start)]
     prepared = None
     purchase = all(i.action == "add" for i in request.items)
     if prepaid and not problems:
@@ -366,7 +372,8 @@ def _process(
         _reject(conn, order, rows, problems, now)
     else:
         old_numbers = number_orders.before(conn, number_rows, today)
-        lines = network_orders.plan(conn, request) if prepaid else []
+        lines = network_orders.plan(conn, request, start) if prepaid else []
+        swap = bool(lines) and all(line.kind == "swap_sim" for line in lines)
         if prepaid and purchase:
             prepaid_orders.accept(conn, order, request, rows, prepared, command_id, start, now)
         elif prepaid and all(i.action == "delete" for i in request.items):
@@ -374,6 +381,17 @@ def _process(
         elif prepaid and all(i.product_offering_id is not None for i in request.items):
             prepaid_orders.change_offerings(
                 conn, order, request, rows, start, today, now, command_id, prepared, bool(lines)
+            )
+        elif prepaid and swap and len(lines) == len(request.items):
+            prepaid_orders.schedule_sim_swaps(
+                conn,
+                order,
+                request,
+                rows,
+                command_id,
+                start,
+                now,
+                {line.item_id: line.sim_id for line in lines},
             )
         elif prepaid and prepaid_orders.number_only(request):
             _execute(conn, order, request, rows, start, today, locked, now)

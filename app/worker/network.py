@@ -22,8 +22,9 @@ from app.config import settings
 from app.events import emit
 from app.integrations.network import NetworkRefused, NetworkTemporary, adapter
 from app.ordering import numbers as number_orders
+from app.ordering.process import ItemRequest
 from app.ordering.states import item_transition, order_transition
-from app.repository import funding, orders, products
+from app.repository import funding, orders, products, sims
 from app.repository import network_commands as network
 from app.repository import prepaid_commands as commands
 from app.repository._sql import Row, fetch_all, fetch_one
@@ -38,12 +39,14 @@ ACTION = {
     "suspend": "modify",
     "restore": "modify",
     "change_profile": "modify",
+    "swap_sim": "modify",
     "deactivate": "delete",
 }
 STATE = {
     "activate": "active",
     "suspend": "suspended",
     "restore": "active",
+    "swap_sim": "active",
     "deactivate": "inactive",
 }
 
@@ -54,7 +57,7 @@ def line_request(conn: psycopg.Connection, cmd: Row) -> dict[str, Any]:
     if cmd["product_id"] is not None:
         rows = fetch_all(
             conn,
-            "SELECT n.value, n.iccid, n.resource_specification_id AS kind"
+            "SELECT n.value, n.iccid, n.sim_type, n.resource_specification_id AS kind"
             " FROM number_assignment a JOIN subscriber_number n ON n.id = a.subscriber_number_id"
             " WHERE a.product_id = %s AND a.cancelled_at IS NULL ORDER BY a.effective_from DESC",
             (cmd["product_id"],),
@@ -63,12 +66,16 @@ def line_request(conn: psycopg.Connection, cmd: Row) -> dict[str, Any]:
             ids.setdefault(row["kind"], row)
     msisdn, imsi = ids.get("msisdn"), ids.get("imsi")
     characteristics = [{"name": k, "value": v} for k, v in sorted(cmd["profile"].items())]
-    return {
+    new = None
+    if cmd["kind"] == "swap_sim":
+        new = sims.reserved_of(conn, cmd["product_id"])
+    request = {
         "externalId": str(cmd["id"]),
         "command": cmd["kind"],
         "msisdn": None if msisdn is None else msisdn["value"],
         "imsi": None if imsi is None else imsi["value"],
         "iccid": None if imsi is None else imsi["iccid"],
+        "simType": None if imsi is None else imsi["sim_type"],
         "profile": cmd["profile"],
         "serviceOrderItem": {
             "action": ACTION[cmd["kind"]],
@@ -78,6 +85,13 @@ def line_request(conn: psycopg.Connection, cmd: Row) -> dict[str, Any]:
             },
         },
     }
+    if new is not None:  # the SIM the line moves to
+        request |= {
+            "newImsi": new["value"],
+            "newIccid": new["iccid"],
+            "newSimType": new["sim_type"],
+        }
+    return request
 
 
 def process_network(
@@ -126,6 +140,8 @@ def process_network(
                 )
             else:
                 network.confirm(conn, cmd["id"], now=now)
+                if cmd["kind"] == "activate" and cmd["product_id"] is not None:
+                    sims.activate_reserved(conn, cmd["product_id"], now)
         attempted.append(cmd["id"])
         if heartbeat is not None:
             heartbeat()
@@ -190,6 +206,50 @@ def post_profile_change(
         return commands.complete(conn, command_id, {"outcome": "profileChanged"}, now=now)["result"]
 
 
+def post_sim_swap(
+    conn: psycopg.Connection, command_id: UUID, *, now: datetime, tz: ZoneInfo
+) -> dict:
+    """The network confirmed swap_sim: the claims move to the new SIM on the ordered date,
+    the old SIM is retired, the new one is active and the items and the order complete."""
+    if not holds_ownership(conn):
+        raise ValueError("prepaid posting requires billing ownership")
+    today = now.astimezone(tz).date()
+    with conn.transaction():
+        cmd = commands.ready(conn, command_id, now=now, today=today)
+        if cmd["state"] == "completed":
+            return cmd["result"]
+        order_id = UUID(cmd["request"]["order_id"])
+        orders.lock_order(conn, order_id)
+        order = orders.get_order(conn, order_id)
+        if order is None or order["state"] != "inProgress":
+            raise ValueError("sim swap command must match its pending order")
+        swaps = cmd["request"]["sim_swaps"]
+        product_ids = [UUID(s["product_id"]) for s in swaps]
+        products.lock_products(conn, product_ids)
+        refs = [[{"id": s["subscriber_number_id"]}] for s in swaps]
+        locked = number_orders.lock(conn, product_ids, refs)
+        old = number_orders.before(conn, locked, today)
+        for swap in swaps:
+            item = ItemRequest(
+                item_id=swap["item_id"],
+                action="modify",
+                product_id=UUID(swap["product_id"]),
+                details={"product": {"realizingResource": [{"id": swap["subscriber_number_id"]}]}},
+            )
+            number_orders.execute(
+                conn, item, item.product_id, UUID(swap["item_id"]), cmd["due_date"], now
+            )
+        number_orders.changed(conn, locked, old, now, today)
+        for row in order["items"]:
+            orders.set_order_item_state(conn, row["id"], item_transition(row["state"], "completed"))
+            emit.product(conn, row["product_id"], "AttributeValueChange", at=now, today=today)
+        orders.set_order_state(
+            conn, order["id"], order_transition(order["state"], "completed"), completion_date=now
+        )
+        _order_event(conn, order["id"], now)
+        return commands.complete(conn, command_id, {"outcome": "simSwapped"}, now=now)["result"]
+
+
 def refuse_order(
     conn: psycopg.Connection, cmd: Row, refused: Row, *, now: datetime, today: date
 ) -> dict:
@@ -223,6 +283,9 @@ def refuse_order(
     elif "profile_changes" in request:
         for item in items:
             products.undo_change(conn, item["id"])
+    elif "sim_swaps" in request:  # nothing moved: the reserved SIMs go back in stock
+        for swap in request["sim_swaps"]:
+            sims.release_hold(conn, UUID(swap["subscriber_number_id"]), now)
     else:  # a purchase, or a mid-period offering change holding money
         _release_hold(conn, cmd, now)
         number_orders.cancel(conn, items, now)

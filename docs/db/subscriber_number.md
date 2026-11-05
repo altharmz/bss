@@ -21,14 +21,33 @@ TMF639 LogicalResource inventory: subscriber identities, built-in msisdn (E.164 
 | `attrs` | `jsonb` | no | `'{}'::jsonb` | Schema-validated descriptive TMF639 attributes. |
 | `tmf_meta` | `jsonb` | no | `'{}'::jsonb` | TMF polymorphism metadata as sent. |
 | `iccid` | `text` | yes |  | ICCID of the SIM profile (imsi only), optional, unique; changeable only before first assignment. |
+| `sim_type` | `text` | yes |  | imsi resources only: physical SIM or eSIM profile; null for an IMSI resource created through the plain TMF639 POST (a LogicalResource without a batch). |
+| `sim_state` | `text` | no | `'in_stock'::text` | imsi resources only (msisdn rows keep the default, unused): in_stock, reserved (claimed, the network has not confirmed activation or swap), active, retired. |
+| `sim_product_id` | `uuid` | yes |  | The line (product) holding the SIM while reserved or active (kept as history once retired); a SIM is active on at most one line. |
+| `sim_batch` | `text` | yes |  | The stocked batch the SIM came in. |
+| `esim_smdp_address` | `text` | yes |  | eSIM profile: the SM-DP+ address of its activation code. Ki and OPc are never stored. |
+| `esim_matching_id` | `text` | yes |  | eSIM profile: the matching ID of its activation code; a secret, shown only while the profile is reserved or active. |
+
+## Foreign keys
+
+| Columns | References | Name |
+|---|---|---|
+| `sim_batch` | [`sim_batch`](sim_batch.md) (name) | `subscriber_number_sim_batch_fkey` |
+| `sim_product_id` | [`product`](product.md) (id) | `subscriber_number_sim_product_id_fkey` |
 
 ## Constraints
 
 | Name | Kind | Definition |
 |---|---|---|
 | `subscriber_number_attrs_check` | check | `CHECK ((jsonb_typeof(attrs) = 'object'::text))` |
+| `subscriber_number_esim_check` | check | `CHECK ((((sim_type = 'esim'::text) AND (esim_smdp_address IS NOT NULL) AND (esim_matching_id IS NOT NULL)) OR ((sim_type IS DISTINCT FROM 'esim'::text) AND (esim_smdp_address IS NULL) AND (esim_matching_id IS NULL))))` |
 | `subscriber_number_iccid_check` | check | `CHECK (((iccid IS NULL) OR ((resource_specification_id = 'imsi'::text) AND (iccid ~ '^89[0-9]{16,18}$'::text))))` |
 | `subscriber_number_kind_check` | check | `CHECK ((resource_specification_id = ANY (ARRAY['msisdn'::text, 'imsi'::text])))` |
+| `subscriber_number_sim_holder_check` | check | `CHECK (((sim_state <> ALL (ARRAY['reserved'::text, 'active'::text])) OR (sim_product_id IS NOT NULL)))` |
+| `subscriber_number_sim_iccid_check` | check | `CHECK (((sim_type IS NULL) OR (iccid IS NOT NULL)))` |
+| `subscriber_number_sim_kind_check` | check | `CHECK ((((sim_type IS NULL) AND (sim_batch IS NULL)) OR (resource_specification_id = 'imsi'::text)))` |
+| `subscriber_number_sim_state_check` | check | `CHECK ((sim_state = ANY (ARRAY['in_stock'::text, 'reserved'::text, 'active'::text, 'retired'::text])))` |
+| `subscriber_number_sim_type_check` | check | `CHECK ((sim_type = ANY (ARRAY['physical'::text, 'esim'::text])))` |
 | `subscriber_number_tmf_meta_check` | check | `CHECK ((jsonb_typeof(tmf_meta) = 'object'::text))` |
 | `subscriber_number_value_check` | check | `CHECK ((((resource_specification_id = 'msisdn'::text) AND (value ~ '^[1-9][0-9]{7,14}$'::text)) OR ((resource_specification_id = 'imsi'::text) AND (value ~ '^[0-9]{14,15}$'::text))))` |
 | `subscriber_number_pkey` | primary key | `PRIMARY KEY (id)` |
@@ -43,6 +62,9 @@ TMF639 LogicalResource inventory: subscriber identities, built-in msisdn (E.164 
 | `subscriber_number_id_kind_key` | `CREATE UNIQUE INDEX subscriber_number_id_kind_key ON subscriber_number USING btree (id, resource_specification_id)` | yes |
 | `subscriber_number_kind_value_key` | `CREATE UNIQUE INDEX subscriber_number_kind_value_key ON subscriber_number USING btree (resource_specification_id, value)` | yes |
 | `subscriber_number_pkey` | `CREATE UNIQUE INDEX subscriber_number_pkey ON subscriber_number USING btree (id)` | yes |
+| `subscriber_number_sim_active_key` | `CREATE UNIQUE INDEX subscriber_number_sim_active_key ON subscriber_number USING btree (sim_product_id) WHERE (sim_state = 'active'::text)` | no |
+| `subscriber_number_sim_reserved_key` | `CREATE UNIQUE INDEX subscriber_number_sim_reserved_key ON subscriber_number USING btree (sim_product_id) WHERE (sim_state = 'reserved'::text)` | no |
+| `subscriber_number_sim_stock_idx` | `CREATE INDEX subscriber_number_sim_stock_idx ON subscriber_number USING btree (sim_type, created_at, value) WHERE ((sim_state = 'in_stock'::text) AND (resource_specification_id = 'imsi'::text))` | no |
 
 ## Referenced by
 

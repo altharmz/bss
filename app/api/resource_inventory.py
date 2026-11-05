@@ -23,11 +23,12 @@ from app.api.common import (
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
-from app.api.errors import conflict, not_found, unprocessable
+from app.api.errors import bad_request, conflict, not_found, unprocessable
 from app.api.tmfjson import TmfJSONResponse
 from app.config import settings
 from app.events import emit
 from app.repository import numbers as repo
+from app.repository import sims
 from app.repository._sql import delete_by_id, jsonb
 
 API = "TMF639"
@@ -61,8 +62,20 @@ DOCUMENTS = (
     "endOperatingDate",
 )
 SERVER_SET = ("creationDate", "usageState", "allocationStatus", "resourceSpecification")
+# PhysicalResource attributes of a physical SIM, derived from the stock columns
+SIM_SET = ("serialNumber", "batchNumber")
+# characteristics derived from the stock columns of a typed SIM (docs/decisions/sim.md)
+SIM_DERIVED = ("simType", "simState", "smdpAddress", "matchingId", "activationCode")
 ResourceDocuments = documents_model("ResourceDocuments", API, (*DOCUMENTS, *SERVER_SET))
-ATTRIBUTES = ("name", "description", "value", "administrativeState", *SERVER_SET, *DOCUMENTS)
+ATTRIBUTES = (
+    "name",
+    "description",
+    "value",
+    "administrativeState",
+    *SERVER_SET,
+    *SIM_SET,
+    *DOCUMENTS,
+)
 
 
 class ResourceCreate(ResourceDocuments):
@@ -90,7 +103,7 @@ def resource_body(conn, row, today):
             {
                 "id": str(row["id"]),
                 "href": f"{BASE}/resource/{row['id']}",
-                "@type": "LogicalResource",
+                "@type": "PhysicalResource" if row["sim_type"] == "physical" else "LogicalResource",
                 "name": row["name"],
                 "description": row["description"],
                 "value": row["value"],
@@ -101,9 +114,42 @@ def resource_body(conn, row, today):
         )
         | row["attrs"]
         | characteristics(row)
+        | sim_attributes(row)
         | row["tmf_meta"]
         | state
     )
+
+
+def sim_attributes(row):
+    """A physical SIM is a PhysicalResource: its ICCID is the serial number."""
+    if row["sim_type"] != "physical":
+        return {}
+    return without_nulls({"serialNumber": row["iccid"], "batchNumber": row["sim_batch"]})
+
+
+def activation_code(row):
+    """The LPA activation code of an eSIM profile; None for any other resource."""
+    if row["sim_type"] != "esim":
+        return None
+    return f"LPA:1${row['esim_smdp_address']}${row['esim_matching_id']}"
+
+
+def sim_characteristics(row):
+    """simType and simState of a typed SIM; an eSIM profile's activation code only while
+    it is reserved or active (a stocked profile is a secret nobody should install)."""
+    if row["sim_type"] is None:
+        return []
+    values = {"simType": row["sim_type"], "simState": row["sim_state"]}
+    if row["sim_type"] == "esim" and row["sim_state"] in ("reserved", "active"):
+        values |= {
+            "smdpAddress": row["esim_smdp_address"],
+            "matchingId": row["esim_matching_id"],
+            "activationCode": activation_code(row),
+        }
+    return [
+        {"@type": "StringCharacteristic", "name": k, "valueType": "string", "value": v}
+        for k, v in values.items()
+    ]
 
 
 def characteristics(row):
@@ -118,6 +164,7 @@ def characteristics(row):
                 "value": row["iccid"],
             }
         )
+    stored += sim_characteristics(row)
     return {"resourceCharacteristic": stored} if stored else {}
 
 
@@ -140,6 +187,23 @@ def split_iccid(kind, documents):
     if not isinstance(iccid, str) or not ICCID.fullmatch(iccid):
         raise unprocessable("iccid must be 18..20 digits starting with 89")
     return iccid, {**documents, "resourceCharacteristic": rest or None}
+
+
+def drop_derived(row, body, documents):
+    """A typed SIM's derived characteristics may be echoed back unchanged, never edited."""
+    sent = documents.get("resourceCharacteristic")
+    if not sent or row["sim_type"] is None:
+        return documents
+    current = {c["name"]: c for c in body.get("resourceCharacteristic", [])}
+    kept = []
+    for item in sent:
+        name = item.get("name")
+        if name in SIM_DERIVED:
+            if name not in current or item.get("value") != current[name].get("value"):
+                raise unprocessable(f"the {name} characteristic is set by the server")
+        else:
+            kept.append(item)
+    return {**documents, "resourceCharacteristic": kept or None}
 
 
 def check_value(kind, value):
@@ -169,7 +233,7 @@ def metadata(data, previous=None):
 
 
 def server_values(body):
-    values = take_server_set(body, SERVER_SET)
+    values = take_server_set(body, (*SERVER_SET, *SIM_SET))
     # Check nested structure even though these fields are compared rather than stored.
     normalized, problems = specschema.check(API, "LogicalResource_FVO", values)
     return normalized, problems
@@ -184,6 +248,9 @@ def list_resources(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse
             "name": ("name", listing.as_str),
             "value": ("value", listing.as_str),
             "administrativeState": ("administrative_state", listing.as_str),
+            "simState": ("sim_state", listing.as_str),
+            "simType": ("sim_type", listing.as_str),
+            "batchNumber": ("sim_batch", listing.as_str),
             "usageState": ("usage_state", listing.as_str),
             "allocationStatus": ("allocation_status", listing.as_str),
             "resourceSpecification.id": ("resource_specification_id", listing.as_str),
@@ -269,7 +336,7 @@ def patch_resource(
     resource_id: str, body: MergePatchBody, request: Request, tx: Tx, clock: ClockDep
 ) -> TmfJSONResponse:
     fields = listing.retrieve_fields(request, ATTRIBUTES)
-    check_type(body, "LogicalResource")
+    check_type(body, "LogicalResource", "PhysicalResource")  # a physical SIM: see below
     server, problems = server_values(body)
     # TMF639's PATCH uses Resource, including LogicalResource properties.
     data, documents = parse_documented(
@@ -278,12 +345,15 @@ def patch_resource(
     with tx() as conn:
         uid = parse_id("resource", resource_id)
         row = require(conn, uid, lock=True)
+        if body.get("@type") == "PhysicalResource" and row["sim_type"] != "physical":
+            raise bad_request("@type is read-only (this resource is a LogicalResource)")
         today, now = clock.today(), clock.now()
         before = resource_body(conn, row, today)
         check_server_set(server, before)
         not_null(data, "name", "value", "administrative_state")
         if "value" in data.model_fields_set and data.value != row["value"]:
             raise conflict("number value is immutable")
+        documents = drop_derived(row, before, documents)
         iccid, documents = split_iccid(row["resource_specification_id"], documents)
         iccid_change = {}
         if iccid is not None and iccid != row["iccid"]:
@@ -307,7 +377,11 @@ def patch_resource(
             "tmf_meta": metadata(data, row["tmf_meta"]),
             "updated_at": now,
         }
-        new = resource_body(conn, repo.update(conn, uid, changes), today)
+        updated = repo.update(conn, uid, changes)
+        if data.administrative_state == "unlocked" and row["administrative_state"] == "locked":
+            sims.unlock_state(conn, uid, today, now)  # a retired SIM is stocked again
+            updated = repo.get(conn, uid)
+        new = resource_body(conn, updated, today)
         emit.changed(conn, API, "resource", old, new, at=now, state="administrativeState")
     return TmfJSONResponse(listing.select_fields(new, fields))
 

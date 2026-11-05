@@ -6,9 +6,20 @@ raises `NetworkRefused` when it refuses (final) and `NetworkTemporary` when the 
 not known or the network could not be reached (the BSS retries with the same key).
 """
 
+from dataclasses import dataclass
 from typing import Any, Protocol
 
-COMMANDS = ("activate", "suspend", "restore", "deactivate", "change_profile")
+COMMANDS = ("activate", "suspend", "restore", "deactivate", "change_profile", "swap_sim")
+
+
+@dataclass(frozen=True)
+class EsimProfile:
+    """A generated eSIM profile: identities and activation code parts. Never Ki or OPc."""
+
+    iccid: str
+    imsi: str
+    smdp_address: str
+    matching_id: str
 
 
 class NetworkRefused(Exception):
@@ -26,3 +37,8 @@ class NetworkTemporary(Exception):
 
 class NetworkAdapter(Protocol):
     def send(self, key: str, command: str, request: dict[str, Any]) -> None: ...
+
+    def generate_esim_profiles(self, batch: str, count: int) -> list[EsimProfile]:
+        """Ask the network for `count` fresh eSIM profiles (an operator request: nothing
+        of a line changes; a real adapter may later make this asynchronous)."""
+        ...

@@ -12,8 +12,9 @@ from typing import Any
 from uuid import UUID
 
 from app.network import profile
+from app.ordering import numbers
 from app.repository import catalog as catalog_repo
-from app.repository import network_commands, orders, products
+from app.repository import network_commands, orders, products, sims
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class Planned:
     kind: str
     profile: dict[str, Any]
     product_id: UUID | None
+    sim_id: UUID | None = None  # swap_sim: the SIM the line moves to
 
 
 def offering_profile(conn, offering_id: UUID | None) -> dict[str, Any] | None:
@@ -37,12 +39,29 @@ def offering_profile(conn, offering_id: UUID | None) -> dict[str, Any] | None:
     return profile.effective(spec["details"], offering["details"])
 
 
-def plan(conn, request) -> list[Planned]:
+def _line_profile(conn, item):
+    product = products.get_product(conn, item.product_id)
+    return product, offering_profile(conn, product["product_offering_id"])
+
+
+def plan(conn, request, start) -> list[Planned]:
     """The commands the order's items need: add -> activate, delete -> deactivate,
     offering change -> change_profile (the new offering's profile), status ->
-    suspend / restore. A number-only modify sends none."""
+    suspend / restore, an IMSI change -> swap_sim. A number-only modify sends none."""
     planned = []
     for item in request.items:
+        if (
+            item.action == "modify"
+            and item.product_offering_id is None
+            and (item.product_status is None and numbers.references(item) is not None)
+        ):
+            product, line = _line_profile(conn, item)
+            moved = numbers.changes(conn, item, product, start)
+            if line is not None and set(moved) == {"imsi"}:
+                planned.append(
+                    Planned(item.item_id, "swap_sim", line, item.product_id, moved["imsi"])
+                )
+            continue
         if item.action == "add":
             kind, offering = "activate", item.product_offering_id
         elif item.action == "delete":
@@ -68,6 +87,8 @@ def record(conn, order_id: UUID, planned: list[Planned], start: date, now: datet
     rows = {row["item_id"]: row for row in orders.items_of(conn, order_id)}
     for entry in planned:
         row = rows[entry.item_id]
+        if entry.kind == "activate" and row["product_id"] is not None:
+            sims.reserve_claimed(conn, row["product_id"], now)
         network_commands.insert(
             conn,
             order_id=order_id,

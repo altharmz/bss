@@ -14,7 +14,7 @@
 | POST | `/tmf-api/resourceInventory/v5/hub` | query: `fields`; body: `application/json` | `Hub_FVO` | 201 `Hub` | [`app/api/hub.py`](../../app/api/hub.py) |
 | DELETE | `/tmf-api/resourceInventory/v5/hub/{hub_id}` | path: `hub_id` | - | 204 (no body) | [`app/api/hub.py`](../../app/api/hub.py) |
 | GET | `/tmf-api/resourceInventory/v5/hub/{hub_id}` | path: `hub_id`; query: `fields` | - | 200 `Hub` | [`app/api/hub.py`](../../app/api/hub.py) |
-| GET | `/tmf-api/resourceInventory/v5/resource` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `administrativeState`, `allocationStatus`, `id`, `name`, `resourceSpecification.id`, `usageState`, `value` | - | 200 `array of Resource_RES` | [`app/api/resource_inventory.py`](../../app/api/resource_inventory.py) |
+| GET | `/tmf-api/resourceInventory/v5/resource` | query: `offset`, `limit` (max 100), `fields`; filters (equality): `administrativeState`, `allocationStatus`, `batchNumber`, `id`, `name`, `resourceSpecification.id`, `simState`, `simType`, `usageState`, `value` | - | 200 `array of Resource_RES` | [`app/api/resource_inventory.py`](../../app/api/resource_inventory.py) |
 | POST | `/tmf-api/resourceInventory/v5/resource` | query: `fields`; body: `application/json` | `Resource_FVO` | 201 `Resource_RES` | [`app/api/resource_inventory.py`](../../app/api/resource_inventory.py) |
 | DELETE | `/tmf-api/resourceInventory/v5/resource/{resource_id}` | path: `resource_id` | - | 204 (no body) | [`app/api/resource_inventory.py`](../../app/api/resource_inventory.py) |
 | GET | `/tmf-api/resourceInventory/v5/resource/{resource_id}` | path: `resource_id`; query: `fields` | - | 200 `Resource_RES` | [`app/api/resource_inventory.py`](../../app/api/resource_inventory.py) |

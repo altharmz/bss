@@ -15,12 +15,12 @@ One page per API, generated from `app.openapi()` (what the app really serves) an
 | [TMF676 Payment Management](tmf676-payment.md) | v4 | `/tmf-api/payment/v4` | 8 | [`spec/TMF676-Payment-v4.0.0.swagger.json`](../../spec/TMF676-Payment-v4.0.0.swagger.json) |
 | [TMF670 Payment Method Management](tmf670-payment-method.md) | v4 | `/tmf-api/paymentMethod/v4` | 7 | [`spec/TMF670-PaymentMethod-v4.0.0.swagger.json`](../../spec/TMF670-PaymentMethod-v4.0.0.swagger.json) |
 | [TMF678 Customer Bill Management](tmf678-customer-bill.md) | v5 | `/tmf-api/customerBillManagement/v5` | 12 | [`spec/TMF678-CustomerBill-v5.0.0.oas.yaml`](../../spec/TMF678-CustomerBill-v5.0.0.oas.yaml) |
-| [Internal API (admin UI)](internal.md) | v1 | `/internal/v1` | 35 | [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) |
+| [Internal API (admin UI)](internal.md) | v1 | `/internal/v1` | 38 | [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) |
 | [TMF639 Resource Inventory](tmf639-resource-inventory.md) | v5 | `/tmf-api/resourceInventory/v5` | 8 | [`spec/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml`](../../spec/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml) |
 | [TMF654 Prepay Balance Management](tmf654-prepay-balance.md) | v4 | `/tmf-api/prepayBalanceManagement/v4` | 28 | [`spec/TMF654-PrepayBalance-v4.0.0.swagger.json`](../../spec/TMF654-PrepayBalance-v4.0.0.swagger.json) |
 | [Service endpoints](service.md) | - | - | 3 | - |
 
-211 operations in total.
+214 operations in total.
 
 ## Conventions
 

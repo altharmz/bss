@@ -109,6 +109,8 @@ INTERNAL: dict[str, str] = {
     "/network/command": "NetworkCommand",
     "/network/command/{id}": "NetworkCommand",
     "/network/command/{id}/retry": "NetworkCommand",
+    "/sim/batch": "SimBatch",
+    "/sim/esim-generate": "SimBatch",
     "/billingAccount/{id}/cardTopup": "PaymentCommand",
     "/billingAccount/{id}/autoTopup": "AutoTopup",
     "/payment/command": "PaymentCommand",
