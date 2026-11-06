@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0058**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0059**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -64,6 +64,8 @@ PostgreSQL schema at Alembic head **0058**, read from `pg_catalog` of a throwawa
 | [`balance_action_reversal`](balance_action_reversal.md) | billing | Compensating ledger entry of a cancelled top-up or adjustment; at most one per action. |
 | [`funding_source`](funding_source.md) | billing | Credit sources beside payments and credit notes: positive adjustments, received transfers and restored debit sources. Bounded with allocations, payouts, holds and consumption. |
 | [`funding_consumption`](funding_consumption.md) | billing | Exact source amounts consumed by debits, outgoing transfer principal and credit reversals. |
+| [`usage_record`](usage_record.md) | billing | One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS used on a line, stored once per network record id and matched to the product that held the number on the event date. Not rated here (pay-as-you-go rating is a later slice). |
+| [`usage_threshold`](usage_threshold.md) | billing | An allowance threshold (80% or 100%) reached by a line in a plan period: one row is one event, once per product, period and allowance. The notifications slice reads it. |
 | [`billing_run_account`](billing_run_account.md) | worker | The outcome of one billing account in one billing run (ours): ok, failed (with the error) or blocked (waiting for an earlier failed run of that account). |
 | [`worker_request`](worker_request.md) | worker | The admin UI's queue for the billing worker (ours): catch-up and retry requests. The API only inserts; the worker picks them up oldest first. |
 | [`idempotency_key`](idempotency_key.md) | worker | Stored success response of a request carrying an Idempotency-Key, per operator, method and route. |
@@ -147,6 +149,8 @@ flowchart LR
     balance_action_reversal[balance_action_reversal]
     funding_source[funding_source]
     funding_consumption[funding_consumption]
+    usage_record[usage_record]
+    usage_threshold[usage_threshold]
   end
   subgraph area_worker["Billing worker (ours)"]
     billing_run_account[billing_run_account]
@@ -299,6 +303,10 @@ flowchart LR
   subscriber_number -->|"sim_product_id"| product
   tax_transaction -->|"applied_rate_id"| applied_customer_billing_rate
   tax_transaction -->|"billing_account_id"| billing_account
+  usage_record -->|"billing_account_id"| billing_account
+  usage_record -->|"product_id"| product
+  usage_threshold -->|"product_id"| product
+  usage_threshold -->|"usage_record_id"| usage_record
   worker_request -->|"run_id"| billing_run
 ```
 
@@ -1174,6 +1182,34 @@ erDiagram
     numeric amount
     timestamptz consumed_at
   }
+  usage_record {
+    uuid id PK
+    text network_record_id
+    text kind
+    bigint quantity
+    boolean roaming
+    boolean throttled
+    text msisdn
+    text imsi
+    timestamptz event_at
+    date event_date
+    uuid product_id FK
+    uuid billing_account_id FK
+    text status
+    text rejection_reason
+    timestamptz created_at
+  }
+  usage_threshold {
+    uuid product_id PK,FK
+    date period_start PK
+    text allowance PK
+    smallint threshold PK
+    date period_end
+    uuid usage_record_id FK
+    bigint used
+    bigint included
+    timestamptz reached_at
+  }
   billing_account {
     uuid id PK
   }
@@ -1203,6 +1239,7 @@ erDiagram
   balance_action_reversal |o--o{ funding_consumption : "reversal_action_id, billing_account_id"
   bill_allocation ||--o{ funding_conversion_source : "allocation_id"
   bill_presentation_media ||--o{ account_presentation_media : "media_id"
+  billing_account |o--o{ usage_record : "billing_account_id"
   billing_account ||--o{ account_presentation_media : "billing_account_id"
   billing_account ||--o{ applied_customer_billing_rate : "billing_account_id, currency"
   billing_account ||--o{ bill_allocation : "billing_account_id, currency"
@@ -1265,14 +1302,17 @@ erDiagram
   prepaid_command ||--o{ prepaid_funding_shortfall : "command_id"
   product |o--o{ applied_customer_billing_rate : "product_id, billing_account_id"
   product |o--o{ network_command : "product_id"
+  product |o--o{ usage_record : "product_id"
   product ||--o{ funded_interval : "product_id, billing_account_id"
   product ||--o{ prepaid_lifecycle_event : "product_id"
+  product ||--o{ usage_threshold : "product_id"
   product_offering |o--o{ applied_customer_billing_rate : "product_offering_id"
   product_offering_price |o--o{ applied_customer_billing_rate : "one_time_price_id"
   product_order |o--o{ prepaid_lifecycle_event : "product_order_id"
   product_order ||--o{ network_command : "product_order_id"
   product_order_item ||--o{ network_command : "product_order_item_id"
   refund ||--o{ refund_source : "refund_id, billing_account_id"
+  usage_record ||--o{ usage_threshold : "usage_record_id"
 ```
 
 Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`product_offering_price`](product_offering_price.md), [`product`](product.md), [`product_offering`](product_offering.md), [`product_order`](product_order.md), [`product_order_item`](product_order_item.md).

@@ -4,7 +4,7 @@
 
 Epic #182. Design approved on the issue (the human's standing delegation, decided following
 TMF; TMF has no lifecycle-policy API, so the settings are internal). The UI is issue 188b.
-Migration `0058`. This is the hand-over #187 left: a renewal nobody can pay stays pending
+Migration `0059`. This is the hand-over #187 left: a renewal nobody can pay stays pending
 and the product is funding-suspended; the lifecycle now takes it from there.
 
 **Everything derives from the first unfunded day D and the settings** (`app/billing/lifecycle.py`,

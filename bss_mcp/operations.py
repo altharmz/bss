@@ -50,6 +50,7 @@ from app.api.reserve import ReserveCreate, ReservePatch
 from app.api.resource_inventory import ResourceCreate, ResourcePatch
 from app.api.topup import TopupCreate, TopupPatch
 from app.api.transfer import TransferCreate, TransferPatch
+from app.api.usage import UsageCreate
 from app.events.types import BASES
 from app.internal.billing_runs import OUTCOMES, CatchUp
 from app.internal.catalog import PriceChange
@@ -106,6 +107,7 @@ FAMILIES = {
     "/tmf-api/payment/v4": "TMF676 Payment (v4)",
     "/tmf-api/paymentMethod/v4": "TMF670 Payment Method (v4)",
     "/tmf-api/prepayBalanceManagement/v4": "TMF654 Prepay Balance (v4)",
+    "/tmf-api/productUsageManagement/v5": "TMF635 Product Usage",
     "/tmf-api/productInventory/v5": "TMF637 Product Inventory",
     "/tmf-api/customerBillManagement/v5": "TMF678 Customer Bill",
     "/tmf-api/productOrderingManagement/v5": "TMF622 Product Ordering",
@@ -682,6 +684,27 @@ OPERATIONS: dict[str, Op] = {
         "Return a failedTechnical prepaid command to pending with the same identity, request"
         " and hold; the worker attempts it within a minute (409 unless failedTechnical).",
         no_body=True,
+    ),
+    # --- TMF635 usage ---
+    "list_usage": Op(
+        "Usage records the network reported for lines (data bytes, voice seconds, sms messages),"
+        " newest first; filter by product.id, usageType (data, voice, sms), status (notRated,"
+        " rejected) or id.",
+        query=LIST,
+    ),
+    "get_usage": Op("One usage record with its characteristics and product.", query=FIELDS),
+    "create_usage": Op(
+        "Record one usage on a product (usageSpecification id data/voice/sms, product, one"
+        " externalIdentifier = the network's record id, usageCharacteristic quantity and"
+        " optional eventTime, roaming, throttled). Idempotent by the external id.",
+        body=UsageCreate,
+    ),
+    "usage_summary": Op(
+        "A line's usage against its plan allowance for the plan period covering today (or"
+        " date): per kind used, included (add-ons included), remaining, percent, the 80/100"
+        " marks reached, and whether the line is throttled.",
+        extra={"product.id": UUID_ARG, "date": DATE_ARG},
+        required=("product.id",),
     ),
     "list_network_commands": Op(
         "Network provisioning commands of prepaid order items, newest first: kind (activate,"

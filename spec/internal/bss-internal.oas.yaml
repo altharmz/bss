@@ -823,6 +823,30 @@ paths:
         '409': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
         '503': {$ref: '#/components/responses/Error'}
+  /usage/summary:
+    get:
+      summary: Usage of a line against its plan allowance (issue 190).
+      description: >-
+        The plan period (funded interval) covering today, or `date`, with per kind used,
+        included (the profile the network was last told, add-ons included), remaining, percent
+        and the 80/100 marks reached, and whether the line is throttled. A line without a plan
+        period (not prepaid, or no grant covers the day) has period null and no allowances.
+      parameters:
+        - name: product.id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+        - name: date
+          in: query
+          schema: {type: string, format: date}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/UsageSummary'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
   /port:
     get:
       summary: Port requests, newest first (issue 189).
@@ -1744,6 +1768,49 @@ components:
               id: {type: string, format: uuid}
               value: {type: string}
               href: {type: string}
+    UsageSummary:
+      type: object
+      additionalProperties: false
+      required: [product, date, period, allowances, throttled]
+      properties:
+        product:
+          type: object
+          additionalProperties: false
+          required: [id, href]
+          properties:
+            id: {type: string, format: uuid}
+            href: {type: string}
+        date: {type: string, format: date}
+        period:
+          nullable: true
+          type: object
+          additionalProperties: false
+          required: [startDate, endDate]
+          properties:
+            startDate: {type: string, format: date}
+            endDate:
+              description: Exclusive (half-open).
+              type: string
+              format: date
+        allowances:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [kind, unit, used, included, remaining, percent, thresholds]
+            properties:
+              kind: {type: string, enum: [data, voice, sms]}
+              unit: {type: string, enum: [bytes, seconds, messages]}
+              used: {type: integer, minimum: 0}
+              included: {type: integer, minimum: 0, description: 0 means nothing included.}
+              remaining: {type: integer, minimum: 0}
+              percent: {type: integer, minimum: 0, nullable: true}
+              thresholds:
+                type: array
+                items: {type: integer, enum: [80, 100]}
+        throttled:
+          description: The network said so on the period's latest record, or data passed the cap.
+          type: boolean
     PortRequest:
       type: object
       additionalProperties: false

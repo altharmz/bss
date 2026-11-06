@@ -10,14 +10,14 @@
 - `product_status_change.cause`, `number_assignment.aging_days`,
   `billing_account.balance_zero_since`.
 
-Revision ID: 0058
-Revises: 0057
+Revision ID: 0059
+Revises: 0058
 """
 
 from alembic import op
 
-revision = "0058"
-down_revision = "0057"
+revision = "0059"
+down_revision = "0058"
 branch_labels = None
 depends_on = None
 
@@ -108,7 +108,7 @@ def downgrade() -> None:
                OR EXISTS (SELECT FROM product WHERE lifecycle_suspended)
                OR EXISTS (SELECT FROM product_status_change WHERE cause = 'lifecycle')
                OR EXISTS (SELECT FROM number_assignment WHERE aging_days > 0) THEN
-                RAISE EXCEPTION 'lifecycle events, suspensions and aging must be retained at revision 0058';
+                RAISE EXCEPTION 'lifecycle events, suspensions and aging must be retained at revision 0059';
             END IF;
         END $$;
         ALTER TABLE billing_account DROP COLUMN balance_zero_since;

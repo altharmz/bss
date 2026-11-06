@@ -27,10 +27,15 @@ def hub(api, name: str, **body) -> dict:
     return response.json()
 
 
+NO_HUB = ("TMF635",)  # its only events are the export job's: no /hub (docs/decisions/usage.md)
+
+
 def spec_events() -> dict[str, set[str]]:
     found = {}
     for path in glob.glob("spec/TMF*"):
         name = os.path.basename(path)[:6]
+        if name in NO_HUB:
+            continue
         with open(path) as f:
             spec = json.load(f) if path.endswith(".json") else yaml.safe_load(f)
         found[name] = {

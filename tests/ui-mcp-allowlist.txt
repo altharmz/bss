@@ -49,3 +49,7 @@ patch_auto_topup: the UI screens are issue 185b
 list_payment_commands: the UI screens are issue 185b
 get_payment_command: the UI screens are issue 185b
 retry_payment_command: the UI screens are issue 185b
+list_usage: the Usage tab is issue 190b (216)
+get_usage: the Usage tab is issue 190b (216)
+create_usage: a mediation device records usage; the network feed is the normal path, no UI action
+usage_summary: the Usage tab is issue 190b (216)

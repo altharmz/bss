@@ -7,6 +7,7 @@ not known or the network could not be reached (the BSS retries with the same key
 """
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Protocol
 
 COMMANDS = ("activate", "suspend", "restore", "deactivate", "change_profile", "swap_sim")
@@ -39,6 +40,22 @@ class PortOutRequest:
     reference: str
     msisdn: str
     pin: str
+
+
+@dataclass(frozen=True)
+class UsageRecord:
+    """One usage record of the network's feed. `id` is the network's own record id (the
+    BSS stores it once); `kind` is data (quantity in bytes), voice (seconds) or sms
+    (messages); the line is named by its MSISDN and/or IMSI."""
+
+    id: str
+    kind: str
+    quantity: int
+    event_at: datetime
+    msisdn: str | None = None
+    imsi: str | None = None
+    roaming: bool = False
+    throttled: bool = False
 
 
 class NumberPoolExhausted(Exception):
@@ -86,4 +103,13 @@ class NetworkAdapter(Protocol):
         self, key: str, reference: str, approved: bool, reason: str | None = None
     ) -> None:
         """Our answer to a port-out request, idempotent on `key`."""
+        ...
+
+    def usage_records(self, limit: int) -> list[UsageRecord]:
+        """Up to `limit` records of the usage feed that the BSS has not acknowledged (the
+        same record may come again until `ack_usage`; the BSS stores each id once)."""
+        ...
+
+    def ack_usage(self, ids: list[str]) -> None:
+        """The BSS has stored these records: the network need not send them again."""
         ...

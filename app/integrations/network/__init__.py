@@ -14,6 +14,7 @@ from app.integrations.network.interface import (
     NumberPoolExhausted,
     PortOutRequest,
     PortStatus,
+    UsageRecord,
 )
 
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     "NumberPoolExhausted",
     "PortOutRequest",
     "PortStatus",
+    "UsageRecord",
     "adapter",
 ]
 
