@@ -22,7 +22,7 @@ One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS
 | `event_date` | `date` | no |  | The business date (billing time zone) of event_at: the date that selects the product and the plan period. |
 | `product_id` | `uuid` | yes |  | The product holding the MSISDN (or IMSI) on event_date through number assignment history; null when no line held it. |
 | `billing_account_id` | `uuid` | yes |  |  |
-| `status` | `text` | no |  | TMF635 status: notRated (matched, rating comes later) or rejected (no line held the number). |
+| `status` | `text` | no |  | TMF635 status: notRated (matched, not rated: a plan line's included usage, or waiting for its day to close), rated (a pay-as-you-go line's usage, charged or without a usage price) or rejected (no line held the number). |
 | `rejection_reason` | `text` | yes |  | noLine when the record could not be matched. |
 | `created_at` | `timestamp with time zone` | no |  |  |
 
@@ -46,7 +46,7 @@ One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS
 | `usage_record_msisdn_check` | check | `CHECK ((msisdn ~ '^[1-9][0-9]{7,14}$'::text))` |
 | `usage_record_network_record_id_check` | check | `CHECK ((network_record_id <> ''::text))` |
 | `usage_record_quantity_check` | check | `CHECK ((quantity > 0))` |
-| `usage_record_status_check` | check | `CHECK ((status = ANY (ARRAY['notRated'::text, 'rejected'::text])))` |
+| `usage_record_status_check` | check | `CHECK ((status = ANY (ARRAY['notRated'::text, 'rated'::text, 'rejected'::text])))` |
 | `usage_record_pkey` | primary key | `PRIMARY KEY (id)` |
 | `usage_record_network_record_id_key` | unique | `UNIQUE (network_record_id)` |
 
@@ -61,4 +61,4 @@ One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS
 
 ## Referenced by
 
-[`usage_threshold`](usage_threshold.md)
+[`usage_charge`](usage_charge.md), [`usage_threshold`](usage_threshold.md)

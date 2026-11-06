@@ -18,10 +18,11 @@ popRelationship, ...) are documents: checked against the spec and stored as sent
 sent, but billing applies it: `tax_problems` holds it to billing's rules, and it is part
 of the charge (docs/decisions/billing-core.md, "Taxes").
 
-priceType is recurring, oneTime, or one of the alterations TMF620 names as examples
-(discount, allowance, penalty): those have no arithmetic in the spec, so they are records
-- stored, served, exported - and billing never applies them (docs/decisions/catalog.md,
-"Alteration price types"). Billing charges recurring prices only.
+priceType is recurring, oneTime, usage (a pay-as-you-go price per block of its unitOfMeasure,
+docs/decisions/usage.md), or one of the alterations TMF620 names as examples (discount,
+allowance, penalty): those have no arithmetic in the spec, so they are records - stored,
+served, exported - and billing never applies them (docs/decisions/catalog.md, "Alteration
+price types"). Billing charges recurring, oneTime and usage prices.
 
 DELETE removes only what nothing references (see "deletes" below and in
 app/api/classification.py).
@@ -84,7 +85,7 @@ from app.api.errors import (
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.core import tax_of
 from app.events import emit
-from app.network import kind, profile
+from app.network import kind, profile, usage_price
 from app.repository import catalog, classification
 from app.repository._sql import Row, count_references
 
@@ -438,7 +439,7 @@ def patch_specification(
 PriceDocuments = documents_model("PriceDocuments", API, PRICE_DOCUMENTS)
 
 
-PriceType = Literal["recurring", "oneTime", "discount", "allowance", "penalty"]
+PriceType = Literal["recurring", "oneTime", "usage", "discount", "allowance", "penalty"]
 
 
 def _check_charge(price_type: str, period: str | None, price: Money | None) -> None:
@@ -591,6 +592,12 @@ def insert_price(
     problems = tax_problems(documents.get("tax"), data.price)
     if problems:
         raise problems_error(problems)
+    usage_kind = usage_block = None
+    if data.price_type == "usage":
+        try:
+            usage_kind, usage_block = usage_price.parse(documents.get("unitOfMeasure"))
+        except ValueError as error:
+            raise unprocessable(str(error)) from None
     valid_for = Range(now, None, "[)") if data.valid_for is None else data.valid_for.to_range()
     if valid_for.lower < now:
         raise conflict(
@@ -609,6 +616,8 @@ def insert_price(
         valid_for=valid_for,
         details=merge_documents({}, documents),
         id=new_id,
+        usage_kind=usage_kind,
+        usage_block=usage_block,
     )
     return with_meta(conn, "product_offering_price", row, data)
 
@@ -708,6 +717,21 @@ def _charge_changes(
     return changes
 
 
+def _usage_guard(current: Row, data: PricePatch, documents: dict[str, Any]) -> None:
+    """A usage price is what rated usage was charged at: it never turns into another type
+    (or back), and its unit of measure (the rounding block) never changes."""
+    if "price_type" in data.model_fields_set and (data.price_type == "usage") != (
+        current["price_type"] == "usage"
+    ):
+        raise unprocessable("priceType cannot be changed to or from usage")
+    if (
+        current["price_type"] == "usage"
+        and "unitOfMeasure" in documents
+        and documents["unitOfMeasure"] != current["details"].get("unitOfMeasure")
+    ):
+        raise conflict("the unitOfMeasure of a usage price cannot change: attach a new price")
+
+
 def _check_cadence(conn: psycopg.Connection, offering_id: UUID, price: Row) -> None:
     if price["price_type"] != "recurring":
         return
@@ -745,6 +769,7 @@ def patch_price(
         if data.lifecycle_status is not None:
             _check_lifecycle("price", current["lifecycle_status"], data.lifecycle_status)
         old = emit.before(conn, API, "productOfferingPrice", lambda: price_body(current))
+        _usage_guard(current, data, documents)
         changes |= _charge_changes(conn, current, data, documents)
         if documents:
             changes["details"] = merge_documents(current["details"], documents)
@@ -981,16 +1006,16 @@ def _network_offering(conn: psycopg.Connection, spec_id: UUID | None, details: d
 
 
 def _check_kind(conn: psycopg.Connection, offering_id: UUID, price_type: str) -> None:
-    """Only a plan has a recurring price: an add-on pack and a pay-as-you-go offering do not."""
+    """Only a plan has a recurring price (an add-on pack and a pay-as-you-go offering do
+    not), and only a pay-as-you-go offering has a usage price (a plan's usage is included)."""
     offering = catalog.get_product_offering(conn, offering_id)
-    if (
-        offering is not None
-        and price_type == "recurring"
-        and kind.kind_of(offering["details"]) != kind.PLAN
-    ):
-        raise unprocessable(
-            f"a {kind.kind_of(offering['details'])} offering has no recurring price"
-        )
+    if offering is None:
+        return
+    offering_kind = kind.kind_of(offering["details"])
+    if price_type == "recurring" and offering_kind != kind.PLAN:
+        raise unprocessable(f"a {offering_kind} offering has no recurring price")
+    if price_type == "usage" and offering_kind != kind.PAY_AS_YOU_GO:
+        raise unprocessable(f"a {offering_kind} offering has no usage price")
 
 
 def _specification(conn: psycopg.Connection, reference: SpecificationRef) -> None:
@@ -1235,6 +1260,10 @@ def patch_offering(
                 p["price_type"] == "recurring" for p in catalog.prices_of_offering(conn, uid)
             ):
                 raise unprocessable(f"a {new_kind} offering has no recurring price")
+            if new_kind != kind.PAY_AS_YOU_GO and any(
+                p["price_type"] == "usage" for p in catalog.prices_of_offering(conn, uid)
+            ):
+                raise unprocessable(f"a {new_kind} offering has no usage price")
         category_ids = None if data.category is None else _categories(conn, data.category)
         if category_ids is not None and not changes:
             # membership is part of this resource: fire its lastUpdate trigger too

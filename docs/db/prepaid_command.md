@@ -38,7 +38,7 @@ Durable internal prepaid command journal; no runtime dispatcher or public API ye
 | `prepaid_command_check1` | check | `CHECK ((((state = 'pending'::text) AND (result IS NULL) AND (next_retry_at IS NULL) AND (error IS NULL)) OR ((state = 'completed'::text) AND (result IS NOT NULL) AND (next_retry_at IS NULL) AND (error IS NULL) AND (attempts > 0) AND (attempted_at IS NOT NULL)) OR ((state = 'failedTechnical'::text) AND (result IS NULL) AND (error IS NOT NULL) AND (attempts > 0) AND (attempted_at IS NOT NULL) AND (next_retry_at IS NOT NULL) AND (next_retry_at > attempted_at))))` |
 | `prepaid_command_check2` | check | `CHECK (((attempts = 0) = (attempted_at IS NULL)))` |
 | `prepaid_command_error_check` | check | `CHECK ((error <> ''::text))` |
-| `prepaid_command_kind_check` | check | `CHECK ((kind = ANY (ARRAY['order'::text, 'renewal'::text, 'transfer'::text])))` |
+| `prepaid_command_kind_check` | check | `CHECK ((kind = ANY (ARRAY['order'::text, 'renewal'::text, 'transfer'::text, 'usage'::text])))` |
 | `prepaid_command_request_check` | check | `CHECK ((jsonb_typeof(request) = 'object'::text))` |
 | `prepaid_command_result_check` | check | `CHECK ((jsonb_typeof(result) = 'object'::text))` |
 | `prepaid_command_state_check` | check | `CHECK ((state = ANY (ARRAY['pending'::text, 'completed'::text, 'failedTechnical'::text])))` |
@@ -63,4 +63,4 @@ Durable internal prepaid command journal; no runtime dispatcher or public API ye
 
 ## Referenced by
 
-[`balance_action`](balance_action.md), [`billing_run`](billing_run.md), [`funded_interval`](funded_interval.md), [`payment_command`](payment_command.md), [`prepaid_funding_shortfall`](prepaid_funding_shortfall.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`balance_action`](balance_action.md), [`billing_run`](billing_run.md), [`funded_interval`](funded_interval.md), [`payment_command`](payment_command.md), [`prepaid_funding_shortfall`](prepaid_funding_shortfall.md), [`usage_charge`](usage_charge.md)

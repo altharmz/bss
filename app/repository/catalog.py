@@ -111,6 +111,8 @@ def create_product_offering_price(
     lifecycle_status: str = "Active",
     details: dict[str, Any] | None = None,
     id: UUID | None = None,
+    usage_kind: str | None = None,
+    usage_block: int | None = None,
 ) -> Row:
     """`product_offering_id=None` creates an unattached price (see `attach_price`); only
     an unattached one may have no amount. `id` None: a new one (an import passes the
@@ -120,8 +122,8 @@ def create_product_offering_price(
         """
         INSERT INTO product_offering_price
             (id, product_offering_id, name, lifecycle_status, price_type, recurring_period,
-             amount, currency, valid_for, recurring_period_length)
-        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             amount, currency, valid_for, recurring_period_length, usage_kind, usage_block)
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING *
         """,
         (
@@ -135,6 +137,8 @@ def create_product_offering_price(
             currency,
             valid_for,
             recurring_period_length,
+            usage_kind,
+            usage_block,
         ),
     )
     return _with_details(conn, "product_offering_price", row, details)

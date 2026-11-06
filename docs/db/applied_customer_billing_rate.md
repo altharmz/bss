@@ -29,6 +29,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `balance_action_id` | `uuid` | yes |  | The transfer whose fee this oneTime rate is (one fee per transfer); null otherwise. |
 | `one_time_price_id` | `uuid` | yes |  | The oneTime catalog price a product fee (activation fee, add-on) charges; null for every other rate. One fee per product, price and day. |
 | `charge_name` | `text` | yes |  | The name a product fee is shown under (its price's name at the time); null for every other rate. |
+| `usage_command_id` | `uuid` | yes |  | For the charge of rated pay-as-you-go usage (a oneTime rate of a usage price, period = the event day): the rating pass (usage command) that charged it; null for every other rate. |
 
 ## Foreign keys
 
@@ -42,6 +43,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 | `product_id`, `billing_account_id` | [`product`](product.md) (id, billing_account_id) | `applied_customer_billing_rate_product_id_billing_account_i_fkey` |
 | `product_offering_id` | [`product_offering`](product_offering.md) (id) | `applied_customer_billing_rate_product_offering_id_fkey` |
 | `refunds_rate_id`, `product_id` | [`applied_customer_billing_rate`](applied_customer_billing_rate.md) (id, product_id) | `applied_customer_billing_rate_refunds_rate_id_product_id_fkey` |
+| `usage_command_id` | [`prepaid_command`](prepaid_command.md) (id) | `applied_customer_billing_rate_usage_command_id_fkey` |
 
 ## Constraints
 
@@ -66,7 +68,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
-| `abr_fee_once` | `CREATE UNIQUE INDEX abr_fee_once ON applied_customer_billing_rate USING btree (product_id, one_time_price_id, period) WHERE (one_time_price_id IS NOT NULL)` | no |
+| `abr_fee_once` | `CREATE UNIQUE INDEX abr_fee_once ON applied_customer_billing_rate USING btree (product_id, one_time_price_id, period, COALESCE(usage_command_id, '00000000-0000-0000-0000-000000000000'::uuid)) WHERE (one_time_price_id IS NOT NULL)` | no |
 | `abr_grant_identity` | `CREATE UNIQUE INDEX abr_grant_identity ON applied_customer_billing_rate USING btree (id, product_id, billing_account_id, billing_run_id, period, currency, amount, tax_amount, charge_type)` | yes |
 | `abr_one_per_start` | `CREATE UNIQUE INDEX abr_one_per_start ON applied_customer_billing_rate USING btree (product_id, charge_type, period, product_offering_id) WHERE (one_time_price_id IS NULL)` | no |
 | `applied_customer_billing_rate_balance_action_id_key` | `CREATE UNIQUE INDEX applied_customer_billing_rate_balance_action_id_key ON applied_customer_billing_rate USING btree (balance_action_id)` | yes |
@@ -85,4 +87,4 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 
 ## Referenced by
 
-[`funded_interval`](funded_interval.md), [`tax_transaction`](tax_transaction.md)
+[`funded_interval`](funded_interval.md), [`tax_transaction`](tax_transaction.md), [`usage_charge`](usage_charge.md)

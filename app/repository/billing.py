@@ -460,6 +460,7 @@ def insert_abr(
     balance_action_id: UUID | None = None,
     one_time_price_id: UUID | None = None,
     charge_name: str | None = None,
+    usage_command_id: UUID | None = None,
 ) -> Row:
     """Insert an applied customer billing rate; `applied_at` (TMF678 date) is the injected
     clock of the run's attempt. Overlaps are rejected by the database (EXCLUDE
@@ -487,6 +488,8 @@ def insert_abr(
     if one_time_price_id is not None:  # a product fee, from 0055
         columns["one_time_price_id"] = one_time_price_id
         columns["charge_name"] = charge_name
+    if usage_command_id is not None:  # rated pay-as-you-go usage, from 0059
+        columns["usage_command_id"] = usage_command_id
     row = returning(
         conn,
         sql.SQL("INSERT INTO applied_customer_billing_rate ({}) VALUES ({}) RETURNING *").format(
@@ -879,6 +882,40 @@ def load_fee_prices(
         )
         for row in rows
     ]
+
+
+def load_usage_prices(
+    conn: psycopg.Connection, offering_id: UUID, currency: str, at: datetime
+) -> dict[str, tuple[Price, str, int]]:
+    """The usage prices of an offering in `currency` valid at `at`, per kind: the price, its
+    name and its block in the record unit (docs/decisions/usage.md)."""
+    rows = fetch_all(
+        conn,
+        """
+        SELECT id, product_offering_id, coalesce(nullif(name, ''), 'Usage') AS name, amount,
+               currency, valid_for, details, usage_kind, usage_block
+        FROM product_offering_price
+        WHERE product_offering_id = %s AND price_type = 'usage' AND currency = %s
+          AND valid_for @> %s::timestamptz
+        """,
+        (offering_id, currency, at),
+    )
+    return {
+        row["usage_kind"]: (
+            Price(
+                id=row["id"],
+                offering_id=row["product_offering_id"],
+                amount=row["amount"],
+                currency=row["currency"],
+                valid_from=row["valid_for"].lower,
+                valid_to=row["valid_for"].upper,
+                taxes=price_taxes(row["details"]),
+            ),
+            row["name"],
+            row["usage_block"],
+        )
+        for row in rows
+    }
 
 
 def load_recurring_prices(conn: psycopg.Connection, offering_ids: list[UUID]) -> tuple[Price, ...]:
