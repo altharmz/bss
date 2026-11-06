@@ -84,7 +84,8 @@ recorded once by its reference and **decided in one transaction**:
   until the carrier acknowledges it (`answered_at`) the worker sends it again on every tick.
 - The BSS ends the line when it approves (the port date is today); the carrier's later completion
   is not modeled separately.
-- Unlimited PIN attempts are not limited here: lockout and SIM-swap/port-out protection are #193.
+- The carrier's wrong Number Transfer PINs are not counted. The account PIN that guards issuing one,
+  the port-out lock and the audit are in [accounts.md](accounts.md#account-security-pin-verification-locks-and-audit-issue-193-epic-182) (#193).
 
 ## Stub test values
 
@@ -99,7 +100,7 @@ the poll, so the request is `pending` first); a number ending `0001` stays pendi
 
 UI (189b, #214): port requests list with state, reason and resubmit, pool request and PIN dialogs.
 Carrier-side cancellation of a port-in, a webhook receiver for port-out, a separate port-out
-completion date, PIN lockout (#193), reserving pool numbers with a hold period.
+completion date, reserving pool numbers with a hold period.
 
 ## Tests
 

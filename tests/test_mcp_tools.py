@@ -187,6 +187,29 @@ def test_draft_can_be_edited_and_submitted_through_mcp(api, mcp):
     call("patch_order", args, 409)
 
 
+def test_the_pin_sensitive_writes_take_an_account_pin_that_becomes_the_header():
+    """A SIM swap, number change or contact change may need the customer's PIN: the writes
+    that can carry one (orders, parties, customers, billing accounts) take `account_pin`."""
+    found = generated()
+    pinned = {name for name, tool in found.items() if tool.account_pin}
+    assert pinned == {
+        "create_order",
+        "patch_order",
+        "patch_individual",
+        "patch_organization",
+        "patch_customer",
+        "patch_account",
+    }
+    for name, tool in found.items():
+        assert ("account_pin" in tool.input_schema["properties"]) == (name in pinned)
+    tool = found["patch_individual"]
+    assert tool.input_schema["properties"]["account_pin"]["pattern"] == "^[0-9]{6,8}$"
+    args = {"party_id": "p1", "body": {"givenName": "Ada"}}
+    assert tool.request(args | {"account_pin": "123456"})["headers"] == {"X-Account-Pin": "123456"}
+    assert tool.request(args)["headers"] == {}
+    assert "X-Account-Pin" in found["create_order"].description
+
+
 @pytest.mark.parametrize(
     ("change", "message"),
     [

@@ -28,6 +28,7 @@ from app.api.common import (
 from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import not_found
+from app.api.guards import authorize_contact
 from app.api.tmfjson import TmfJSONResponse
 from app.clock import Clock
 from app.events import emit
@@ -232,9 +233,12 @@ def patch_individual(
     )
     not_null(data, "given_name", "family_name")
     changes = _changes(data, ("given_name", "family_name", "status"))
+    ticket = authorize_contact(request, tx, clock.now(), "party", party_id, documents)
     with tx() as conn:
         current = _get(conn, "Individual", "individual", party_id)
         new = _patch(conn, "individual", current, changes, documents, data, clock)
+        if ticket is not None:
+            ticket.record(conn, clock.now())
     return TmfJSONResponse(listing.select_fields(new, fields))
 
 
@@ -335,9 +339,12 @@ def patch_organization(
     changes = _changes(data, ("status",))
     if "name" in data.model_fields_set:
         changes["organization_name"] = data.name
+    ticket = authorize_contact(request, tx, clock.now(), "party", party_id, documents)
     with tx() as conn:
         current = _get(conn, "Organization", "organization", party_id)
         new = _patch(conn, "organization", current, changes, documents, data, clock)
+        if ticket is not None:
+            ticket.record(conn, clock.now())
     return TmfJSONResponse(listing.select_fields(new, fields))
 
 

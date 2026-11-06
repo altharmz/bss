@@ -122,6 +122,9 @@ INTERNAL: dict[str, str] = {
     "/sim/esim-generate": "SimBatch",
     "/number/pool": "NumberPool",
     "/usage/summary": "UsageSummary",
+    "/security/pin/{id}": "AccountPin",
+    "/security/lock/{id}": "LineLock",
+    "/security/audit": "AuditEntry",
     "/notification/consent": "NotificationConsent",
     "/notification/message/{id}/resend": "ResentMessage",
     "/port": "PortRequest",
@@ -186,9 +189,18 @@ class TmfClient:
         """Send the body text verbatim - for number literals the json module would alter."""
         return self.request("POST", url, content=text, headers={"Content-Type": content_type})
 
-    def patch(self, url: str, body: Any, content_type: str = MERGE_PATCH) -> Response:
+    def patch(
+        self,
+        url: str,
+        body: Any,
+        content_type: str = MERGE_PATCH,
+        headers: dict[str, str] | None = None,
+    ) -> Response:
         return self.request(
-            "PATCH", url, content=json.dumps(body), headers={"Content-Type": content_type}
+            "PATCH",
+            url,
+            content=json.dumps(body),
+            headers={"Content-Type": content_type, **(headers or {})},
         )
 
     def patch_raw(self, url: str, text: str) -> Response:
@@ -266,6 +278,9 @@ class TmfClient:
                 spec_path = "/network/command" + ("/{id}" if len(parts) > 2 else "")
                 spec_path += "".join(f"/{part}" for part in parts[3:])
                 return "INTERNAL", "network", INTERNAL.get(spec_path), spec_path
+            if parts[0] == "security":
+                spec_path = "/security/" + parts[1] + ("/{id}" if len(parts) > 2 else "")
+                return "INTERNAL", "security", INTERNAL.get(spec_path), spec_path
             if parts[:2] == ["notification", "message"]:
                 spec_path = "/notification/message/{id}" + "".join(f"/{part}" for part in parts[3:])
                 return "INTERNAL", "notification", INTERNAL.get(spec_path), spec_path

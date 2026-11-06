@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0061**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0062**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -76,6 +76,9 @@ PostgreSQL schema at Alembic head **0061**, read from `pg_catalog` of a throwawa
 | [`event_delivery`](event_delivery.md) | events | One event to one subscription: pending until the worker delivers it or gives up. |
 | [`notification_message`](notification_message.md) | notifications | One customer message (TMF681 CommunicationMessage): what was sent, to whom, on which channel and in which state. Created once per event (dedupe_key) by the notification worker or by an operator, sent through the notify adapter. |
 | [`notification_consent`](notification_consent.md) | notifications | Append-only history of a customer's marketing consent per channel (opt-in or opt-out, with its source): the latest row wins and no row means not opted in. Transactional messages need no consent. |
+| [`customer_pin`](customer_pin.md) | security | The account PIN of a customer (CPNI verification): hashed, set or reset by an agent with a recorded reason. No API returns it. Sensitive actions on a protected customer (a live prepaid product) need it in the X-Account-Pin header. |
+| [`line_lock`](line_lock.md) | security | Optional protection of one line: while sim_swap is set a SIM swap order is refused, while port_out is set no Number Transfer PIN is issued and a carrier port-out is rejected, even with a valid PIN. No row means both off. |
+| [`account_audit`](account_audit.md) | security | Append-only log of agent actions on accounts: who, what, when, whether it was done or refused and how the customer was verified. No foreign keys: the log outlives what it describes. Never holds a PIN. |
 | [`app_user`](app_user.md) | users | Application identity: admin or user (UI), mcp (MCP login only); disabled, never deleted. |
 | [`app_session`](app_session.md) | users | Revocable sessions; SHA-256 tokens only, never raw cookies. |
 | [`app_user_audit`](app_user_audit.md) | users | Security changes only: operator, target, action and injected clock; no secrets. |
@@ -172,6 +175,11 @@ flowchart LR
     notification_message[notification_message]
     notification_consent[notification_consent]
   end
+  subgraph area_security["Account security: PIN, line locks, audit log (ours)"]
+    customer_pin[customer_pin]
+    line_lock[line_lock]
+    account_audit[account_audit]
+  end
   subgraph area_users["Application users and sessions (ours)"]
     app_user[app_user]
     app_session[app_session]
@@ -220,6 +228,7 @@ flowchart LR
   customer_bill_on_demand -->|"billing_account_id"| billing_account
   customer_bill_on_demand -->|"customer_bill_id"| customer_bill
   customer_bill_state_change -->|"customer_bill_id"| customer_bill
+  customer_pin -->|"customer_id"| customer
   event_delivery -->|"event_id"| event
   event_delivery -->|"subscription_id"| event_subscription
   financial_account -->|"party_id"| party
@@ -252,6 +261,7 @@ flowchart LR
   funding_source -->|"action_id"| balance_action
   funding_source -->|"billing_account_id"| billing_account
   funding_source -->|"consumption_id, billing_account_id"| funding_consumption
+  line_lock -->|"product_id"| product
   network_command -->|"product_id"| product
   network_command -->|"product_order_id"| product_order
   network_command -->|"product_order_item_id"| product_order_item
@@ -1533,6 +1543,54 @@ erDiagram
 ```
 
 Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`customer`](customer.md), [`product`](product.md).
+
+## Account security: PIN, line locks, audit log (ours)
+
+```mermaid
+erDiagram
+  customer_pin {
+    uuid customer_id PK,FK
+    text pin_hash
+    timestamptz set_at
+    text set_by
+    text reason
+    integer failed_attempts
+    timestamptz locked_until
+  }
+  line_lock {
+    uuid product_id PK,FK
+    boolean sim_swap
+    boolean port_out
+    timestamptz updated_at
+    text updated_by
+    text reason
+  }
+  account_audit {
+    uuid id PK
+    bigint seq
+    timestamptz at
+    text operator
+    text role
+    uuid customer_id
+    uuid billing_account_id
+    uuid product_id
+    text action
+    text outcome
+    text reason
+    text verification
+    jsonb detail
+  }
+  customer {
+    uuid id PK
+  }
+  product {
+    uuid id PK
+  }
+  customer ||--o{ customer_pin : "customer_id"
+  product ||--o{ line_lock : "product_id"
+```
+
+Tables from other areas are shown with their key only: [`customer`](customer.md), [`product`](product.md).
 
 ## Application users and sessions (ours)
 

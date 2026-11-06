@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 52
+- Operations exposed: 57
 
 
 ## Operations
@@ -51,6 +51,11 @@
 | GET | `/internal/v1/prepaid/command/{command_id}` | path: `command_id` | - | 200 `PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |
 | POST | `/internal/v1/prepaid/command/{command_id}/retry` | path: `command_id`; body: `application/json` | - | 202 `PrepaidCommand` | [`app/internal/prepaid_commands.py`](../../app/internal/prepaid_commands.py) |
 | POST | `/internal/v1/productOffering/{offering_id}/priceChange` | path: `offering_id`; body: `application/json` | `PriceChangeRequest` | 201 `PriceChange` | [`app/internal/catalog.py`](../../app/internal/catalog.py) |
+| GET | `/internal/v1/security/audit` | query: `customer.id`, `product.id`, `billingAccount.id`, `action`, `outcome`, `operator`, `offset`, `limit` | - | 200 `array of AuditEntry` | [`app/internal/security.py`](../../app/internal/security.py) |
+| GET | `/internal/v1/security/lock/{product_id}` | path: `product_id` | - | 200 `LineLock` | [`app/internal/security.py`](../../app/internal/security.py) |
+| PUT | `/internal/v1/security/lock/{product_id}` | path: `product_id` | `object` | 200 `LineLock` | [`app/internal/security.py`](../../app/internal/security.py) |
+| GET | `/internal/v1/security/pin/{customer_id}` | path: `customer_id` | - | 200 `AccountPin` | [`app/internal/security.py`](../../app/internal/security.py) |
+| PUT | `/internal/v1/security/pin/{customer_id}` | path: `customer_id` | `object` | 200 `AccountPin` | [`app/internal/security.py`](../../app/internal/security.py) |
 | POST | `/internal/v1/service/credential-check` | body: `application/json` | `SignIn` | 200 `CredentialCheck` | [`app/main.py`](../../app/main.py) |
 | DELETE | `/internal/v1/session` | - | - | 204 (no body) | [`app/internal/users.py`](../../app/internal/users.py) |
 | GET | `/internal/v1/session` | - | - | 200 `Session` | [`app/internal/users.py`](../../app/internal/users.py) |

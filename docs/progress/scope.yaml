@@ -639,6 +639,10 @@ items:
   - {id: ui.subscriber.refund.description, area: ui, stage: 5, title: "Required refund description"}
   - {id: ui.subscriber.payments.recordRefund, area: ui, stage: 5, title: "Record refund from subscriber Payments header"}
   - {id: ui.payments.detail.recordRefund, area: ui, stage: 5, title: "Record account-level refund from payment detail"}
+  - {id: db.customer_pin, area: db, stage: 5, table: customer_pin, title: "Hashed account PIN per customer with the wrong-attempt count and lockout"}
+  - {id: db.line_lock, area: db, stage: 5, table: line_lock, title: "Per-line SIM swap and port-out locks"}
+  - {id: db.account_audit, area: db, stage: 5, table: account_audit, title: "Append-only audit log of agent actions on accounts"}
+  - {id: worker.accountSecurity, area: worker, stage: 5, title: "A SIM swap, number change, Number Transfer PIN or contact change on a prepaid customer needs the account PIN, line locks refuse SIM swap and port-out, each action is audited and told to the customer"}
 
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}
@@ -660,3 +664,8 @@ excluded:
   - {id: api.internal.notification.resend, area: api, method: POST, path: "/internal/v1/notification/message/{message_id}/resend", reason: "resending a customer message is an operator UI action (192b)"}
   - {id: ui.notFound, area: ui, reason: "not-found page, not a product feature"}
   - {id: ui.users.denied, area: ui, stage: 5, title: "Users: not allowed for non-administrators"}
+  - {id: api.internal.security.pinGet, area: api, method: GET, path: "/internal/v1/security/pin/{customer_id}", reason: "the account PIN status is an operator screen (193b), not a model tool"}
+  - {id: api.internal.security.pinPut, area: api, method: PUT, path: "/internal/v1/security/pin/{customer_id}", reason: "setting or resetting a customer's PIN is an operator action: the PIN is a secret a model must not choose or see"}
+  - {id: api.internal.security.lockGet, area: api, method: GET, path: "/internal/v1/security/lock/{product_id}", reason: "line locks are an operator screen (193b)"}
+  - {id: api.internal.security.lockPut, area: api, method: PUT, path: "/internal/v1/security/lock/{product_id}", reason: "turning a SIM swap or port-out lock on or off is an operator action (193b), not a model tool"}
+  - {id: api.internal.security.audit, area: api, method: GET, path: /internal/v1/security/audit, reason: "the audit log of agent actions is an operator view (193b)"}

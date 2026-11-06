@@ -84,6 +84,26 @@ class Settings(BaseSettings):
     notify_quiet_end: str = Field(default="08:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     notify_sender_email: str = "no-reply@bss.example.test"
     notify_sender_sms: str = "18005550100"
+    # Account security (docs/decisions/accounts.md): whether sensitive actions on a protected
+    # customer (a live prepaid product) demand the account PIN (the rollout switch; locks and
+    # the audit log always apply), consecutive wrong PINs before verification locks, and for how
+    # long.
+    account_pin_required: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("BSS_ACCOUNT_PIN_REQUIRED", "account_pin_required"),
+    )
+    pin_max_attempts: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        validation_alias=AliasChoices("BSS_PIN_MAX_ATTEMPTS", "pin_max_attempts"),
+    )
+    pin_lockout_minutes: int = Field(
+        default=30,
+        ge=1,
+        le=1440,
+        validation_alias=AliasChoices("BSS_PIN_LOCKOUT_MINUTES", "pin_lockout_minutes"),
+    )
     # Separate credentials: smoke can only read; MCP cannot access user/session APIs.
     bss_service_secret: str = ""
     bss_smoke_secret: str = ""

@@ -69,8 +69,8 @@ def send(conn: psycopg.Connection, row: Row, now: datetime, tz: ZoneInfo) -> Row
     """Send one open message, unless consent or the quiet hours say not now."""
     if not service.consent_allows(conn, row):
         return repo.cancel(conn, row["id"], reason="noConsent")
-    if row["channel"] == "sms":
-        until = service.quiet_until(now, tz)
+    if row["channel"] == "sms" and not row["event_type"].startswith("security_"):
+        until = service.quiet_until(now, tz)  # a security alert is not held for the quiet hours
         if until is not None:
             return repo.defer(conn, row["id"], until=until)
     try:
