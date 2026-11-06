@@ -458,6 +458,14 @@ items:
   - {id: ui.subscriber.prepaid.hold, area: ui, stage: 5, title: "Prepaid operator hold form with optional expiry"}
   - {id: ui.subscriber.prepaid.transfer, area: ui, stage: 5, title: "Prepaid transfer by number with a finality confirmation"}
   - {id: ui.subscriber.prepaid.transferWatch, area: ui, stage: 5, title: "Accepted transfer followed until the worker completes it"}
+  - {id: ui.subscriber.paymentMethods, area: ui, stage: 5, title: "Payment methods block: saved cards, make default, remove"}
+  - {id: ui.subscriber.paymentMethods.card, area: ui, stage: 5, title: "One saved card row with its default flag"}
+  - {id: ui.subscriber.paymentMethods.add, area: ui, stage: 5, title: "Add a card with a stub token, never a card number"}
+  - {id: ui.subscriber.paymentMethods.topup, area: ui, stage: 5, title: "Top up by card with the command states, decline reason and Retry"}
+  - {id: ui.subscriber.paymentMethods.charges, area: ui, stage: 5, title: "Card charges of the account with their gateway state"}
+  - {id: ui.subscriber.autoTopup, area: ui, stage: 5, title: "Auto top-up rule summary with the no-default-card warning"}
+  - {id: ui.subscriber.autoTopup.edit, area: ui, stage: 5, title: "Edit the auto top-up rule"}
+  - {id: ui.subscriber.autoTopup.dialog, area: ui, stage: 5, title: "Auto top-up settings: enabled, threshold, amount"}
   - {id: ui.subscriber.prepaid.transfer.confirm, area: ui, stage: 5, title: "Transfer finality confirmation step"}
   - {id: ui.subscriber.prepaid.transfer.recipient, area: ui, stage: 5, title: "Transfer resolved recipient"}
   - {id: ui.subscriber.prepaid.transfer.summary, area: ui, stage: 5, title: "Transfer confirmation summary"}

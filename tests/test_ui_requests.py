@@ -2518,3 +2518,46 @@ def test_subscriber_overview_unfinished_order_reads_as_the_ui_makes_them(api):
     for ref in catalog["productOfferingPrice"]:
         rate = api.get(f"{apidata.CATALOG}/productOfferingPrice/{ref['id']}")
         assert rate.status_code == 200 and rate.json()["price"]["unit"] == "USD"
+
+
+def test_ui_card_requests(api, db_conn):
+    """Exact saved-card, card top-up and auto top-up bodies pinned in PaymentMethods.test.tsx."""
+    from tests.test_api_topup import prepaid
+
+    methods = "/tmf-api/paymentMethod/v4/paymentMethod"
+    _, account = prepaid(api, db_conn)
+    base = f"/internal/v1/billingAccount/{account['id']}"
+    created = api.post(
+        methods,
+        {
+            "@type": "tokenizedCard",
+            "name": "Work",
+            "account": [{"id": account["id"], "@referredType": "BillingAccount"}],
+            "brand": "visa",
+            "lastFourDigits": "4242",
+            "expirationDate": "2031-01-01T00:00:00Z",
+            "token": "tok_stub_0d3c5a52-1111-4222-8333-444455556666",
+        },
+    )
+    assert created.status_code == 201, created.text
+    card = created.json()
+    assert card["isPreferred"] is True
+    assert "token" not in card
+    assert api.patch(f"{methods}/{card['id']}", {"isPreferred": True}).status_code == 200
+    topup = api.post_raw(
+        f"{base}/cardTopup",
+        '{"amount":{"unit":"USD","value":25.00},'
+        f'"paymentMethod":{{"id":"{card["id"]}"}},"idempotencyKey":"ui-key-1"}}',
+    )
+    assert topup.status_code == 202, topup.text
+    assert topup.json()["state"] == "pending"
+    assert api.get(f"{base}/cardTopup?limit=10").status_code == 200
+    rule = api.patch_raw(
+        f"{base}/autoTopup",
+        '{"enabled":true,"threshold":{"unit":"USD","value":10.00},'
+        '"amount":{"unit":"USD","value":20.00}}',
+    )
+    assert rule.status_code == 200, rule.text
+    assert rule.json()["enabled"] is True
+    assert api.patch(f"{base}/autoTopup", {"enabled": False}).json()["enabled"] is False
+    assert api.delete(f"{methods}/{card['id']}").status_code == 409  # a charge is pending
