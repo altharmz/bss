@@ -12,9 +12,13 @@ PIN `000000` is rejected `pinMismatch`, billing ZIP `00000` `zipMismatch` (both 
 carrier is polled); a number ending `0001` stays pending until `complete_port_in(number)`;
 ending `0002` fails temporarily on submit until `recover(number)`. Port-out requests are put
 in with `inject_port_out`; `port_answers` keeps what we answered.
+
+Usage: nothing is generated on its own; `inject_usage` queues a record that `usage_records`
+returns until `ack_usage` (a record can be injected twice to test a resent batch).
 """
 
 import hashlib
+from datetime import datetime
 from typing import Any
 
 from app.integrations.network.interface import (
@@ -24,6 +28,7 @@ from app.integrations.network.interface import (
     NumberPoolExhausted,
     PortOutRequest,
     PortStatus,
+    UsageRecord,
 )
 
 REFUSE_SUFFIX = "0000"
@@ -44,6 +49,8 @@ class StubNetwork:
         self.port_completed: set[str] = set()
         self.port_out_queue: list[PortOutRequest] = []
         self.port_answers: dict[str, tuple[str, bool, str | None]] = {}
+        self.usage_queue: list[UsageRecord] = []
+        self.usage_acked: list[str] = []
 
     def reset(self) -> None:
         self.received.clear()
@@ -55,6 +62,31 @@ class StubNetwork:
         self.port_completed.clear()
         self.port_out_queue.clear()
         self.port_answers.clear()
+        self.usage_queue.clear()
+        self.usage_acked.clear()
+
+    def inject_usage(
+        self,
+        record_id: str,
+        kind: str,
+        quantity: int,
+        event_at: datetime,
+        *,
+        msisdn: str | None = None,
+        imsi: str | None = None,
+        roaming: bool = False,
+        throttled: bool = False,
+    ) -> None:
+        self.usage_queue.append(
+            UsageRecord(record_id, kind, quantity, event_at, msisdn, imsi, roaming, throttled)
+        )
+
+    def usage_records(self, limit: int) -> list[UsageRecord]:
+        return self.usage_queue[:limit]
+
+    def ack_usage(self, ids: list[str]) -> None:
+        self.usage_acked.extend(ids)
+        self.usage_queue = [r for r in self.usage_queue if r.id not in set(ids)]
 
     def complete_port_in(self, msisdn: str) -> None:
         self.port_completed.add(msisdn)

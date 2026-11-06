@@ -27,6 +27,7 @@ from app.api.errors import Problem
 SPEC_DIR = Path(__file__).resolve().parent.parent.parent / "spec"
 
 SPEC_FILES = {
+    "TMF635": "TMF635-Product_Usage_Management-v5.0.0.oas.yaml",
     "TMF639": "TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml",
     "TMF620": "TMF620-Product_Catalog_Management-v5.0.0.oas.yaml",
     "TMF622": "TMF622-ProductOrdering-v5.0.0.oas.yaml",

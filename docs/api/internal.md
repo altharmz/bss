@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 46
+- Operations exposed: 47
 
 
 ## Operations
@@ -54,6 +54,7 @@
 | GET | `/internal/v1/sim/batch` | - | - | 200 `array of SimBatch` | [`app/internal/sims.py`](../../app/internal/sims.py) |
 | POST | `/internal/v1/sim/batch` | query: `batch`, `simType`; body: `application/json` | `object` | 201 `SimBatch` | [`app/internal/sims.py`](../../app/internal/sims.py) |
 | POST | `/internal/v1/sim/esim-generate` | body: `application/json` | `object` | 201 `SimBatch` | [`app/internal/sims.py`](../../app/internal/sims.py) |
+| GET | `/internal/v1/usage/summary` | query: `product.id` (required), `date` | - | 200 `UsageSummary` | [`app/internal/usage.py`](../../app/internal/usage.py) |
 | GET | `/internal/v1/users` | - | - | 200 `array of User` | [`app/internal/users.py`](../../app/internal/users.py) |
 | POST | `/internal/v1/users` | body: `application/json` | `CreateUser` | 201 `User` | [`app/internal/users.py`](../../app/internal/users.py) |
 | PATCH | `/internal/v1/users/{username}` | path: `username`; body: `application/json` | `EditUser` | 200 `User` | [`app/internal/users.py`](../../app/internal/users.py) |

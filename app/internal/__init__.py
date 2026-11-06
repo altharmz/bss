@@ -22,6 +22,7 @@ from app.internal import (
     ports,
     prepaid_commands,
     sims,
+    usage,
     users,
 )
 
@@ -36,6 +37,7 @@ def install(app: FastAPI) -> None:
         network_commands,
         sims,
         ports,
+        usage,
         payments,
         bills,
         users,

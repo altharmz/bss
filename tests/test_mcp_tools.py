@@ -27,6 +27,7 @@ from app.api.hub import HUB_APIS
 from app.main import app as bss_app
 from app.repository import network_commands, payment_commands, payment_methods
 from app.repository import prepaid_commands as commands
+from app.repository import usage as usage_repo
 from bss_mcp import tools
 from bss_mcp.operations import AUTH_OPERATIONS, EXCLUDED, OPERATIONS, Op
 from bss_mcp.tools import DriftError, generate
@@ -458,6 +459,20 @@ def world(api, db_conn) -> dict[str, Any]:
         profile={"voiceMinutes": 100},
         now=api.clock.now(),
     )
+    world["usage"] = usage_repo.insert(
+        db_conn,
+        network_record_id="mcp-world-1",
+        kind="data",
+        quantity=1024,
+        roaming=False,
+        throttled=False,
+        msisdn=None,
+        imsi=None,
+        event_at=api.clock.now(),
+        event_date=api.clock.today(),
+        product=usage_repo.product_row(db_conn, UUID(world["product"]["id"])),
+        now=api.clock.now(),
+    )
     paying = UUID(world["topup"]["partyAccount"]["id"])
     world["payment_method"] = payment_methods.insert(
         db_conn,
@@ -540,6 +555,8 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "bill_detail": {"bill_id": world["bill"]["id"]},
         "get_prepaid_command": {"command_id": str(world["command"]["id"])},
         "list_prepaid_commands": {"state": "pending", "limit": 1},
+        "get_usage": {"usage_id": str(world["usage"]["id"])},
+        "usage_summary": {"product.id": world["product"]["id"]},
         "get_network_command": {"command_id": str(world["network_command"]["id"])},
         "list_network_commands": {"state": "pending", "limit": 1},
         "list_payment_methods": {"limit": 1},
@@ -845,6 +862,21 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         {"command_id": str(world["network_command"]["id"])},
         expected=(409,),
     )
+    usage = call(
+        "create_usage",
+        {
+            "body": {
+                "@type": "ProductUsage",
+                "usageSpecification": {"id": "sms"},
+                "product": {"id": world["product"]["id"]},
+                "usageCharacteristic": [
+                    {"@type": "IntegerCharacteristic", "name": "quantity", "value": 2}
+                ],
+                "externalIdentifier": [{"@type": "ExternalIdentifier", "id": "mcp-write-1"}],
+            }
+        },
+    )
+    assert usage["usageType"] == "sms"
     # the card tools: save a card, rename it, queue a top-up and an auto top-up rule, remove it
     paying = world["topup"]["partyAccount"]["id"]
     card = call(

@@ -27,6 +27,7 @@ Three checks, which prove different things:
 | `TMF622-ProductOrdering-v5.0.0.oas.yaml` | Product Ordering | 5.0.0 | [TMF622_ProductOrder](https://github.com/tmforum-apis/TMF622_ProductOrder/blob/a3825f95248eb04fb1c7e2321305bc99631168a4/TMF622-ProductOrdering-v5.0.0.oas.yaml) | `a3825f95248eb04fb1c7e2321305bc99631168a4` |
 | `TMF629-Customer_Management-v5.0.1.oas.yaml` | Customer | 5.0.1 ¹ | [TMF629_CustomerManagement](https://github.com/tmforum-apis/TMF629_CustomerManagement/blob/f60fa840989b88d27fdd0a397c7923f19c9d8168/TMF629-Customer_Management-v5.0.1.oas.yaml) | `f60fa840989b88d27fdd0a397c7923f19c9d8168` |
 | `TMF632-Party_Management-v5.0.0.oas.yaml` | Party | 5.0.0 | [TMF632_PartyManagement](https://github.com/tmforum-apis/TMF632_PartyManagement/blob/11c6a0ecf2b9a7007f43e86601b37e45d9f39b1e/TMF632-Party_Management-v5.0.0.oas.yaml) | `11c6a0ecf2b9a7007f43e86601b37e45d9f39b1e` |
+| `TMF635-Product_Usage_Management-v5.0.0.oas.yaml` | Product Usage | 5.0.0 | [TMF635_UsageManagement](https://github.com/tmforum-apis/TMF635_UsageManagement/blob/82ea3c6415351b1725b4fd94bcd80ca08425425f/TMF635-Product_Usage_Management-v5.0.0.oas.yaml) | `82ea3c6415351b1725b4fd94bcd80ca08425425f` |
 | `TMF637-ProductInventory-v5.0.0.oas.yaml` | Product Inventory | 5.0.0 | [TMF637_ProductInventory](https://github.com/tmforum-apis/TMF637_ProductInventory/blob/f598b4a02186071f2794b8f9b4f6904ef0a8aa52/TMF637-ProductInventory-v5.0.0.oas.yaml) | `f598b4a02186071f2794b8f9b4f6904ef0a8aa52` |
 | `TMF666-Account_Management-v5.0.0.oas.yaml` | Account | 5.0.0 | [TMF666_AccountManagement](https://github.com/tmforum-apis/TMF666_AccountManagement/blob/8b9c4f62cbf8c41f5b71f5836f48486a3fd856b8/TMF666-Account_Management-v5.0.0.oas.yaml) | `8b9c4f62cbf8c41f5b71f5836f48486a3fd856b8` |
 | `TMF678-CustomerBill-v5.0.0.oas.yaml` | Customer Bill | 5.0.0 | [TMF678_CustomerBill](https://github.com/tmforum-apis/TMF678_CustomerBill/blob/6d1628e7ac15f077083216f9bccd469e9f1af74f/TMF678-CustomerBill-v5.0.0.oas.yaml) | `6d1628e7ac15f077083216f9bccd469e9f1af74f` |
@@ -59,6 +60,7 @@ run `make spec-verify-upstream`.
 | `TMF622-ProductOrdering-v5.0.0.oas.yaml` | `64a933b31d8ad9ce433e174dee330e491319b2e9` |
 | `TMF629-Customer_Management-v5.0.1.oas.yaml` | `467d54a24c6f85541980daf82fbdead6ad57868e` |
 | `TMF632-Party_Management-v5.0.0.oas.yaml` | `72ae9fdab3f19beadb995f24dccf84e1b62fb784` |
+| `TMF635-Product_Usage_Management-v5.0.0.oas.yaml` | `6186bd90b5c9f2dcf2199a2f21fcf2a3a7aee71f` |
 | `TMF637-ProductInventory-v5.0.0.oas.yaml` | `637ee2e7e156adf8e640102d9bd951d229ab24e9` |
 | `TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml` | `2c34d9772bb937e4aebb59ae71d1a6825df39737` |
 | `TMF654-PrepayBalance-v4.0.0.swagger.json` | `60378955ca383e0f2e6427d57d9d9d5ed1ddb349` |
