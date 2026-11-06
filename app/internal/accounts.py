@@ -19,7 +19,7 @@ from app.api.errors import TmfError, bad_request, not_found, unprocessable
 from app.api.inventory import order_href, product_href
 from app.api.listing import parse_page
 from app.api.tmfjson import TmfJSONResponse
-from app.billing import entitlement
+from app.billing import entitlement, lifecycle
 from app.billing.core import compute, cycle_period, price_at, product_charge_period
 from app.billing.engine_tax import TaxUnavailable, quote_taxes
 from app.billing.model import Account, BillingState, DateRange, MissingPrice, Price, Product
@@ -30,6 +30,7 @@ from app.internal.context import no_query
 from app.network import kind as offering_kind
 from app.ordering.cancel import undoable_status_change
 from app.repository import billing, catalog, funding, parties, products
+from app.repository import lifecycle as lifecycle_repo
 from app.repository import payment_methods as payment_methods
 from app.repository._sql import Row, fetch_all
 
@@ -391,6 +392,14 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
             if row["rating_type"] == "prepaid"
             else {}
         )
+        lifecycles = (
+            {
+                p["id"]: lifecycle.view(conn, p, row, lifecycle_repo.settings(conn), today)
+                for p in rows
+            }
+            if row["rating_type"] == "prepaid"
+            else {}
+        )
         changes = billing.offering_changes(conn, [p["id"] for p in rows])
         pending = products.pending_changes(conn, [p["id"] for p in rows], today)
         undoable = {p["id"]: undoable_status_change(conn, p, today) for p in rows}
@@ -466,6 +475,7 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                         },
                         "fundingSource": "balanceThenCard" if card else "balance",
                         "renewalHistory": history.get(p["id"], []),
+                        "lifecycle": lifecycles[p["id"]],
                     }
                     if p["id"] in prepaid_views
                     else {}

@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0057**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0058**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -50,6 +50,8 @@ PostgreSQL schema at Alembic head **0057**, read from `pg_catalog` of a throwawa
 | [`funding_command_hold`](funding_command_hold.md) | billing | Retained internal command-to-hold retry identity; no public API or worker caller. |
 | [`prepaid_command`](prepaid_command.md) | billing | Durable internal prepaid command journal; no runtime dispatcher or public API yet. Request and completed result are retained. |
 | [`network_command`](network_command.md) | billing | Durable outbound provisioning command of one prepaid order item; sent by the billing worker through the network adapter, the item completes only when it is confirmed. |
+| [`prepaid_lifecycle_setting`](prepaid_lifecycle_setting.md) | billing | The prepaid lifecycle durations (one row). Transitions are derived from them on every worker tick, so a change applies to every transition not yet taken. |
+| [`prepaid_lifecycle_event`](prepaid_lifecycle_event.md) | billing | A lifecycle transition the worker took or tried for a product on a business date (one per product, action and date): the order it placed and whether the order engine accepted it. |
 | [`tax_transaction`](tax_transaction.md) | billing | The tax engine transaction behind one prepaid charge (ABR): committed when the charge is booked, voided when the whole charge is credited. |
 | [`payment_method`](payment_method.md) | billing | A saved card as a gateway token (TMF670 tokenizedCard). The BSS never receives or stores a card number. |
 | [`payment_command`](payment_command.md) | billing | Durable outbound charge to the payment gateway: sent and retried by the billing worker, never inside a request. The balance rises only when the gateway confirms. |
@@ -131,6 +133,8 @@ flowchart LR
     funding_command_hold[funding_command_hold]
     prepaid_command[prepaid_command]
     network_command[network_command]
+    prepaid_lifecycle_setting[prepaid_lifecycle_setting]
+    prepaid_lifecycle_event[prepaid_lifecycle_event]
     tax_transaction[tax_transaction]
     payment_method[payment_method]
     payment_command[payment_command]
@@ -262,6 +266,9 @@ flowchart LR
   prepaid_bucket -->|"billing_account_id, rating_type"| billing_account
   prepaid_command -->|"billing_account_id"| billing_account
   prepaid_funding_shortfall -->|"command_id"| prepaid_command
+  prepaid_lifecycle_event -->|"billing_account_id"| billing_account
+  prepaid_lifecycle_event -->|"product_id"| product
+  prepaid_lifecycle_event -->|"product_order_id"| product_order
   product -->|"billing_account_id"| billing_account
   product -->|"created_by_item_id"| product_order_item
   product -->|"parent_product_id, billing_account_id"| product
@@ -346,6 +353,7 @@ erDiagram
     numeric auto_topup_threshold
     numeric auto_topup_amount
     timestamptz auto_topup_changed_at
+    date balance_zero_since
   }
   financial_account {
     uuid id PK
@@ -618,6 +626,7 @@ erDiagram
     boolean requires_imsi
     uuid parent_product_id FK
     boolean grantless
+    boolean lifecycle_suspended
   }
   product_offering_change {
     uuid id PK
@@ -638,6 +647,7 @@ erDiagram
     product_status_type status
     uuid changed_by_item_id FK
     timestamptz applied_at
+    text cause
   }
   subscriber_number {
     uuid id PK
@@ -676,6 +686,7 @@ erDiagram
     timestamptz cancelled_at
     uuid cancelled_by_item_id FK
     text resource_specification_id FK
+    integer aging_days
   }
   sim_batch {
     text name PK
@@ -998,6 +1009,25 @@ erDiagram
     timestamptz attempted_at
     timestamptz confirmed_at
   }
+  prepaid_lifecycle_setting {
+    boolean id PK
+    integer grace_days
+    integer suspension_days
+    integer number_aging_days
+    integer payg_zero_balance_days
+    timestamptz updated_at
+  }
+  prepaid_lifecycle_event {
+    uuid id PK
+    uuid product_id FK
+    uuid billing_account_id FK
+    text action
+    date business_date
+    uuid product_order_id FK
+    text outcome
+    text reason
+    timestamptz created_at
+  }
   tax_transaction {
     uuid id PK
     uuid applied_rate_id FK
@@ -1186,6 +1216,7 @@ erDiagram
   billing_account ||--o{ payment_method : "billing_account_id"
   billing_account ||--o{ prepaid_bucket : "billing_account_id, currency, rating_type"
   billing_account ||--o{ prepaid_command : "billing_account_id"
+  billing_account ||--o{ prepaid_lifecycle_event : "billing_account_id"
   billing_account ||--o{ refund : "billing_account_id, currency"
   billing_account ||--o{ tax_transaction : "billing_account_id"
   billing_run ||--o{ applied_customer_billing_rate : "billing_run_id"
@@ -1235,8 +1266,10 @@ erDiagram
   product |o--o{ applied_customer_billing_rate : "product_id, billing_account_id"
   product |o--o{ network_command : "product_id"
   product ||--o{ funded_interval : "product_id, billing_account_id"
+  product ||--o{ prepaid_lifecycle_event : "product_id"
   product_offering |o--o{ applied_customer_billing_rate : "product_offering_id"
   product_offering_price |o--o{ applied_customer_billing_rate : "one_time_price_id"
+  product_order |o--o{ prepaid_lifecycle_event : "product_order_id"
   product_order ||--o{ network_command : "product_order_id"
   product_order_item ||--o{ network_command : "product_order_item_id"
   refund ||--o{ refund_source : "refund_id, billing_account_id"

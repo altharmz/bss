@@ -9,7 +9,7 @@ def effective_state(product, account, grant, today):
     if product["termination_date"] is not None and product["termination_date"] <= today:
         return "terminated", None
     if product["manually_suspended"]:
-        return "suspended", "manual"
+        return "suspended", "lifecycle" if product.get("lifecycle_suspended") else "manual"
     if account["state"] != "Active":
         return "suspended", "account"
     if product.get("grantless"):

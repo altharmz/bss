@@ -25,6 +25,7 @@ Order-owned number claims; half-open business dates, retained cancelled audit ve
 | `cancelled_at` | `timestamp with time zone` | yes |  | Cancellation instant; cancelled versions retain audit but claim no range. |
 | `cancelled_by_item_id` | `uuid` | yes |  | Order item whose cancellation voided this audit version. |
 | `resource_specification_id` | `text` | no | `'msisdn'::text` | Kind of the claimed resource; at most one live claim per product and kind. |
+| `aging_days` | `integer` | no | `0` | Aging days set when the prepaid lifecycle deactivated the line: the quarantine after released_on is the larger of this and the quarantine setting. |
 
 ## Foreign keys
 
@@ -41,6 +42,7 @@ Order-owned number claims; half-open business dates, retained cancelled audit ve
 
 | Name | Kind | Definition |
 |---|---|---|
+| `number_assignment_aging_days_check` | check | `CHECK ((aging_days >= 0))` |
 | `number_assignment_check` | check | `CHECK ((isfinite(released_on) AND (released_on >= effective_from)))` |
 | `number_assignment_check1` | check | `CHECK (((released_on IS NULL) = (ended_by_item_id IS NULL)))` |
 | `number_assignment_check2` | check | `CHECK (((cancelled_at IS NULL) = (cancelled_by_item_id IS NULL)))` |

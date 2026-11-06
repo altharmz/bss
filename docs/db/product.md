@@ -29,6 +29,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `requires_imsi` | `boolean` | no | `false` | Built-in imsi requirement at ordering; existing products remain unchecked. |
 | `parent_product_id` | `uuid` | yes |  | An add-on pack's plan product (TMF637 productRelationship, type addOn); the add-on ends with the plan's paid period. |
 | `grantless` | `boolean` | no | `false` | Prepaid: an add-on or pay-as-you-go product. Active between its dates with no funded interval, never renewed; the order that created it completes it. |
+| `lifecycle_suspended` | `boolean` | no | `false` | The status timeline's suspension was taken by the prepaid lifecycle (manually_suspended is then true as well); it does not block renewal. |
 
 ## Foreign keys
 
@@ -47,6 +48,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 | `product_base_type_check` | check | `CHECK ((length(base_type) > 0))` |
 | `product_check` | check | `CHECK ((termination_date >= start_date))` |
 | `product_details_check` | check | `CHECK ((jsonb_typeof(details) = 'object'::text))` |
+| `product_lifecycle_suspended_check` | check | `CHECK (((NOT lifecycle_suspended) OR manually_suspended))` |
 | `product_name_not_blank` | check | `CHECK ((name <> ''::text))` |
 | `product_parent_grantless` | check | `CHECK (((parent_product_id IS NULL) OR grantless))` |
 | `product_schema_location_check` | check | `CHECK ((length(schema_location) > 0))` |
@@ -74,4 +76,4 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 
 ## Referenced by
 
-[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`funded_interval`](funded_interval.md), [`network_command`](network_command.md), [`number_assignment`](number_assignment.md), [`number_transfer_pin`](number_transfer_pin.md), [`port_request`](port_request.md), [`product_offering_change`](product_offering_change.md), [`product_order_item`](product_order_item.md), [`product_status_change`](product_status_change.md), [`subscriber_number`](subscriber_number.md)
+[`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`funded_interval`](funded_interval.md), [`network_command`](network_command.md), [`number_assignment`](number_assignment.md), [`number_transfer_pin`](number_transfer_pin.md), [`port_request`](port_request.md), [`prepaid_lifecycle_event`](prepaid_lifecycle_event.md), [`product_offering_change`](product_offering_change.md), [`product_order_item`](product_order_item.md), [`product_status_change`](product_status_change.md), [`subscriber_number`](subscriber_number.md)

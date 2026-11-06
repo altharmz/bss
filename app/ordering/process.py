@@ -70,6 +70,8 @@ class ItemRequest:
     details: dict[str, Any] | None = None  # documents, stored as sent
     # a modify item's product.status (suspended / active), instead of an offering
     product_status: str | None = None
+    # the prepaid lifecycle's own suspension/resumption: renewal stays open (worker only)
+    lifecycle: bool = False
 
     @property
     def needs_active_account(self) -> bool:

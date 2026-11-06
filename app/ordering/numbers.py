@@ -5,6 +5,7 @@ from uuid import UUID
 from app.config import settings
 from app.events import emit
 from app.repository import catalog, ports
+from app.repository import lifecycle as lifecycle_repo
 from app.repository import sims as sim_stock
 from app.repository._sql import fetch_all, fetch_one
 
@@ -81,9 +82,10 @@ def unavailable(conn, uid, start, end, *, exclude_product=None, kind="msisdn"):
         WHERE subscriber_number_id = %(uid)s AND cancelled_at IS NULL
           AND NOT isempty(valid_for) AND product_id IS DISTINCT FROM %(product)s::uuid
           AND (valid_for && daterange(%(start)s, %(end)s, '[)')
-            OR (released_on <= %(start)s AND released_on + %(days)s > %(start)s)
+            OR (released_on <= %(start)s
+              AND released_on + GREATEST(%(days)s, aging_days) > %(start)s)
             OR (%(end)s::date IS NOT NULL AND effective_from >= %(end)s::date
-                AND effective_from < %(end)s::date + %(days)s)) LIMIT 1""",
+                AND effective_from < %(end)s::date + GREATEST(%(days)s, aging_days))) LIMIT 1""",
             {
                 "uid": uid,
                 "start": start,
@@ -313,11 +315,17 @@ def execute(conn, item, product_id, item_id, start, now):
         if item.action != "add":
             if kind == "imsi":
                 _release_imsi(conn, product_id, end, now)
+            # the prepaid lifecycle's deactivation ages the number (TMF639 quarantine)
+            aging = (
+                lifecycle_repo.settings(conn).number_aging_days
+                if item.lifecycle and item.action == "delete" and kind == "msisdn"
+                else 0
+            )
             conn.execute(
                 """UPDATE number_assignment SET released_on = %s, ended_by_item_id = %s,
-                updated_at = %s WHERE product_id = %s AND cancelled_at IS NULL
+                aging_days = %s, updated_at = %s WHERE product_id = %s AND cancelled_at IS NULL
                 AND resource_specification_id = %s AND (released_on IS NULL OR released_on > %s)""",
-                (end, item_id, now, product_id, kind, end),
+                (end, item_id, aging, now, product_id, kind, end),
             )
         if item.action in ("add", "modify") and kind in chosen:
             conn.execute(
@@ -378,7 +386,7 @@ def cancel(conn, items, now):
     for item in items:
         conn.execute(
             """UPDATE number_assignment SET released_on = NULL,
-            ended_by_item_id = NULL, updated_at = %s
+            ended_by_item_id = NULL, aging_days = 0, updated_at = %s
             WHERE ended_by_item_id = %s AND cancelled_at IS NULL""",
             (now, item["id"]),
         )

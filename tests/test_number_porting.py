@@ -334,6 +334,11 @@ def test_port_out_with_a_valid_pin_completes_and_ends_the_product(api, db_conn, 
     # the number is released and locked: a ported-away number is never assigned again
     resource = api.get(f"{RESOURCE}?value={value}").json()[0]
     assert resource["administrativeState"] == "locked"
+    # ... released, not aged: the lifecycle's number aging does not apply to a port-out
+    assert resource["allocationStatus"] != "quarantined"
+    assert db_conn.execute(
+        "SELECT aging_days FROM number_assignment WHERE released_on IS NOT NULL"
+    ).fetchone() == (0,)
     # the PIN is spent, and the same reference is not decided twice
     assert db_conn.execute("SELECT count(*) FROM port_request").fetchone() == (1,)
     stub.inject_port_out("OUT-1", value, pin)

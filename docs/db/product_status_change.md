@@ -18,6 +18,7 @@ TMF622 modify items with product.status: the product is suspended (or active aga
 | `status` | `product_status_type` (enum, see [README](README.md#enums)) | no |  |  |
 | `changed_by_item_id` | `uuid` | no |  | The modify item that set the change; a cancelled order deletes it. |
 | `applied_at` | `timestamp with time zone` | yes |  | When product.status was set to status (by the order, for a change today; else by the run of change_date); NULL until then. At most one pending per product. |
+| `cause` | `text` | no | `'manual'::text` | manual (an operator or client order) or lifecycle (the worker's grace/suspension policy). |
 
 ## Foreign keys
 
@@ -30,6 +31,7 @@ TMF622 modify items with product.status: the product is suspended (or active aga
 
 | Name | Kind | Definition |
 |---|---|---|
+| `product_status_change_cause_check` | check | `CHECK ((cause = ANY (ARRAY['manual'::text, 'lifecycle'::text])))` |
 | `product_status_change_status_check` | check | `CHECK ((status = ANY (ARRAY['suspended'::product_status_type, 'active'::product_status_type])))` |
 | `product_status_change_pkey` | primary key | `PRIMARY KEY (id)` |
 | `product_status_change_changed_by_item_id_key` | unique | `UNIQUE (changed_by_item_id)` |

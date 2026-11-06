@@ -64,6 +64,8 @@ EXCLUDED = {
     ("GET", "/internal/v1/sim/batch"),
     ("POST", "/internal/v1/sim/batch"),
     ("POST", "/internal/v1/sim/esim-generate"),
+    ("GET", "/internal/v1/lifecycle/settings"),
+    ("PUT", "/internal/v1/lifecycle/settings"),
     ("POST", "/internal/v1/number/pool"),
     ("GET", "/internal/v1/port"),
     ("GET", "/internal/v1/port/{port_id}"),
