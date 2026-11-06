@@ -82,7 +82,13 @@ APIS: dict[str, tuple[str, dict[str, str]]] = {
 for _base, (_spec, _resources) in APIS.items():
     _resources["hub"] = "EventSubscription" if _spec in ("TMF676", "TMF654", "TMF670") else "Hub"
 # APIs whose responses are checked but that have no /hub (and so no generic hub tests)
-NO_HUB = {"/tmf-api/productUsageManagement/v5": ("TMF635", {"productUsage": "ProductUsage"})}
+NO_HUB = {
+    "/tmf-api/productUsageManagement/v5": ("TMF635", {"productUsage": "ProductUsage"}),
+    "/tmf-api/communicationManagement/v4": (
+        "TMF681",
+        {"communicationMessage": "CommunicationMessage"},
+    ),
+}
 # Our internal API (spec/internal/bss-internal.oas.yaml): spec path -> response schema
 # (of the items, for a list).
 INTERNAL_BASE = "/internal/v1"
@@ -116,6 +122,8 @@ INTERNAL: dict[str, str] = {
     "/sim/esim-generate": "SimBatch",
     "/number/pool": "NumberPool",
     "/usage/summary": "UsageSummary",
+    "/notification/consent": "NotificationConsent",
+    "/notification/message/{id}/resend": "ResentMessage",
     "/port": "PortRequest",
     "/port/in": "PortRequest",
     "/port/pin": "TransferPin",
@@ -258,6 +266,9 @@ class TmfClient:
                 spec_path = "/network/command" + ("/{id}" if len(parts) > 2 else "")
                 spec_path += "".join(f"/{part}" for part in parts[3:])
                 return "INTERNAL", "network", INTERNAL.get(spec_path), spec_path
+            if parts[:2] == ["notification", "message"]:
+                spec_path = "/notification/message/{id}" + "".join(f"/{part}" for part in parts[3:])
+                return "INTERNAL", "notification", INTERNAL.get(spec_path), spec_path
             if len(parts) == 3:  # /<resource>/{id}/<view or action>
                 parts[1] = "{id}"
             elif len(parts) == 2 and "/" + "/".join(parts) not in INTERNAL:

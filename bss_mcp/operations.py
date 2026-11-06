@@ -36,6 +36,7 @@ from app.api.catalog import (
 )
 from app.api.catalog_jobs import ExportJobCreate, ImportJobCreate
 from app.api.classification import CatalogCreate, CatalogPatch, CategoryCreate, CategoryPatch
+from app.api.communication import MessageCreate, MessagePatch
 from app.api.customer import CustomerCreate, CustomerPatch
 from app.api.hub import HUB_APIS, HubIn
 from app.api.inventory import ProductCreate, ProductPatch
@@ -75,6 +76,9 @@ EXCLUDED = {
     ("POST", "/internal/v1/port/pin"),
     ("POST", "/internal/v1/port/{port_id}/resubmit"),
     ("POST", "/internal/v1/port/{port_id}/cancel"),
+    ("GET", "/internal/v1/notification/consent"),
+    ("POST", "/internal/v1/notification/consent"),
+    ("POST", "/internal/v1/notification/message/{message_id}/resend"),
 }
 # Interactive account credentials are deliberately never exposed as model tools.
 AUTH_OPERATIONS = {
@@ -108,6 +112,7 @@ FAMILIES = {
     "/tmf-api/paymentMethod/v4": "TMF670 Payment Method (v4)",
     "/tmf-api/prepayBalanceManagement/v4": "TMF654 Prepay Balance (v4)",
     "/tmf-api/productUsageManagement/v5": "TMF635 Product Usage",
+    "/tmf-api/communicationManagement/v4": "TMF681 Communication (v4)",
     "/tmf-api/productInventory/v5": "TMF637 Product Inventory",
     "/tmf-api/customerBillManagement/v5": "TMF678 Customer Bill",
     "/tmf-api/productOrderingManagement/v5": "TMF622 Product Ordering",
@@ -705,6 +710,31 @@ OPERATIONS: dict[str, Op] = {
         " marks reached, and whether the line is throttled.",
         extra={"product.id": UUID_ARG, "date": DATE_ARG},
         required=("product.id",),
+    ),
+    # --- TMF681 customer messages ---
+    "list_communication_messages": Op(
+        "The customer messages (SMS and email) the system sent or queued, newest first: state"
+        " (initial, inProgress, completed, cancelled, failed), the event and template in the"
+        " characteristics, receiver, attempts and last error. Filter by state, messageType (SMS,"
+        " Email), receiver.party.id (customer), billingAccount.id, product.id or id.",
+        query=LIST,
+    ),
+    "get_communication_message": Op(
+        "One customer message with its content, receiver, state and characteristics.",
+        query=FIELDS,
+    ),
+    "create_communication_message": Op(
+        "Queue a message an operator writes: messageType SMS or Email, content, subject (Email),"
+        " one receiver (phoneNumber or email, or party {id} of a Customer to use its contact"
+        " media) and a sender. characteristic category marketing needs the customer's recorded"
+        " opt-in, else the message is cancelled with noConsent. The worker sends it (quiet hours"
+        " apply to SMS).",
+        body=MessageCreate,
+    ),
+    "patch_communication_message": Op(
+        "Cancel a message that has not been sent: state cancelled (409 once it is completed,"
+        " failed or cancelled).",
+        body=MessagePatch,
     ),
     "list_network_commands": Op(
         "Network provisioning commands of prepaid order items, newest first: kind (activate,"

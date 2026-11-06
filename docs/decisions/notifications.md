@@ -1,0 +1,93 @@
+# Customer notifications: SMS and email (issue #192, epic #182)
+
+Customers are told about the events that matter for a prepaid line, through a sender adapter that
+only logs for now. Design approved by the human's standing delegation (decided following TMF:
+TMF681 Communication Management is the message log). The UI half is issue #222 (192b).
+Migration `0061`.
+
+## TMF681 (vendored v4.0.0, base `/tmf-api/communicationManagement/v4`)
+
+Implemented: `GET /communicationMessage`, `GET /communicationMessage/{id}`, `POST` (a message an
+operator writes, queued for the worker) and `PATCH` (only `state: cancelled`, of an unsent message,
+else 409). Not implemented, by decision: DELETE (405: a message is a record) and `/hub` (the spec
+declares no listener events, like TMF635). `messageType` is `SMS` or `Email`; `state` is the spec's
+enum: `initial` (queued, or waiting for the quiet hours to end), `inProgress` (a send failed, a retry
+is scheduled), `completed` (sent), `cancelled` (`stateReason`: `noConsent`, `noRecipient`,
+`operator`), `failed` (retries used up). One `receiver`, `sender` stored as sent, `characteristic`
+carries `category`, `event`, `template`, `stateReason`, `lastError`, `providerReference`,
+`resendOf`, `billingAccount`, `product`. `attachment` and `logFlag: false` are 422; `state`,
+`sendTime`, `sendTimeComplete`, `tryTimes` are read-only (400). Filters: `id`, `state`,
+`messageType`, `receiver.party.id` (customer), `billingAccount.id`, `product.id`. MCP tools:
+list, get, create, patch.
+
+## Data (migration 0061)
+
+- `notification_message`: one row per message. `dedupe_key` is the identity of the event; unique
+  with `channel`, and `notify` skips an event whose key exists on any channel, so a repeated tick,
+  or a contact added later, never sends an old event again. Operator messages and resends have no key.
+- `notification_consent`: append-only history (customer, channel, category `marketing`, opted in or
+  out, source, operator); the latest row (`recorded_at`, then `seq`) wins; no row = not opted in.
+
+## Adapter
+
+`app/integrations/notify/`: `send_sms(key, to, body)`, `send_email(key, to, subject, body)`; the key
+is the message id and a repeated key must answer the first reference. `BSS_NOTIFY_ADAPTER=log`
+(default; unknown value fails startup) records the message and accepts it; test values: an SMS to a
+number ending `0000` or an email to `fail@example.test` is refused until `recover(to)`. A real SMS
+and email provider is a later issue (#203).
+
+## Triggers
+
+`app/notify/events.py` reads durable facts (nothing hooks into the code that makes the event) in
+the worker, after the entitlement observation (`app/worker/notify.py`, in every wake-up). Facts
+older than `BSS_NOTIFY_LOOKBACK_DAYS` (2) are ignored, so deploying does not replay history; the
+state-based events describe the present (a low-balance account is told once after deploy).
+
+| Event | Fact | Once per |
+|---|---|---|
+| `low_balance` | spendable below `BSS_NOTIFY_LOW_BALANCE` (5.00) | top-up episode (latest completed top-up or payment) |
+| `plan_expiring` | paid-through within `BSS_NOTIFY_EXPIRING_DAYS` (3) | paid interval |
+| `renewal_done` / `renewal_failed` | renewal command funded / needs top-up | renewal command |
+| `grace` | unfunded, before the suspension date | first unfunded day |
+| `suspended` / `deactivated` | lifecycle order completed (network confirmed) | lifecycle event |
+| `usage_80` / `usage_100` | `usage_threshold` row | product, period, allowance, mark |
+| `card_declined` | `payment_command` declined | command |
+| `port_in_pending` / `_rejected` / `_completed` | port-in request state | request, submission, state |
+| `sim_swap` | `swap_sim` network command confirmed | command |
+
+A port-in has no customer until an order claims the number; it is told from then on. Recipients:
+the customer's (then the party's) `contactMedium` email and phone (preferred first); without a phone
+the SMS goes to the line's number (an account event: its first open line), except for a
+deactivation (the line is gone). Both channels are used when both exist; nobody reachable gives one
+`cancelled` / `noRecipient` message. English templates per event and channel are in
+`app/notify/templates.py`.
+
+## Sending, consent, quiet hours
+
+The worker sends due messages (`initial`/`inProgress`, `next_attempt_at` reached) in their own
+transactions. A failure is `inProgress` with a retry after 1, 5, 15, 60 minutes, `failed` after
+`BSS_NOTIFY_MAX_ATTEMPTS` (5) with the error kept. **Consent** is checked at creation and again at
+the send: a marketing message (only an operator can write one) without the customer's latest
+opt-in for its channel is `cancelled` / `noConsent` and never reaches the adapter; transactional
+messages need no consent. **Quiet hours** apply to SMS only: `BSS_NOTIFY_QUIET_START`/`END`
+(21:00/08:00 in the billing time zone, equal = off); an SMS created or due inside them is scheduled
+for their end. A broken detector or event is logged and skipped: billing never waits for a message.
+
+## Internal API (ours)
+
+`GET`/`POST /internal/v1/notification/consent` (customer's consent per channel and history; record
+an opt-in or opt-out) and `POST /internal/v1/notification/message/{id}/resend` (a copy of a sent,
+failed or cancelled message, `resendOf`; 409 while open or without an address). Operator screens, so
+not MCP tools (scope excluded).
+
+## Not in this slice
+
+UI (192b), a real provider, other languages, inbound STOP handling and unsubscribe links, delivery
+receipts, other settings than the environment variables above.
+
+## Tests
+
+`tests/test_notifications.py`: every trigger once (and not again), recipients and the line-number
+fallback, sender failure with backoff, `failed` and recovery, resend, consent (opt-in, opt-out,
+history), quiet hours, TMF681 conformance and refusals, adapter selection; MCP tools in
+`tests/test_mcp_tools.py`.

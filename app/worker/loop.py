@@ -12,7 +12,8 @@ was down (the 03:00 reboot, a deploy):
 4. those dates, in order, with the scheduled trigger;
 5. the UI's queued requests, then prepaid work: due renewals are produced, retained
    commands dispatched and entitlement transitions observed (app/worker/prepaid.py);
-6. the due event deliveries to hub callbacks (app/events/deliver.py), then the purge of
+6. the customer notifications (app/worker/notify.py): events found, messages sent;
+7. the due event deliveries to hub callbacks (app/events/deliver.py), then the purge of
    events delivered more than 30 days ago.
 
 A `checkpoint` (SIGTERM, liveness) is honoured between accounts and between requests;
@@ -32,6 +33,7 @@ from app.clock import Clock
 from app.events import deliver
 from app.repository import billing
 from app.worker.lifecycle import process_lifecycle
+from app.worker.notify import process_notifications
 from app.worker.plan import scheduled
 from app.worker.prepaid import observe_entitlements, process_commands, produce_renewals
 from app.worker.process import (
@@ -132,6 +134,7 @@ def tick(
             conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
         )
         observe_entitlements(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
+        process_notifications(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
         sent = deliver.process(conn, clock=clock, checkpoint=checkpoint, heartbeat=heartbeat)
         result.deliveries = len(sent.delivered) + len(sent.retrying) + len(sent.failed)
         deliver.purge(conn, clock=clock)

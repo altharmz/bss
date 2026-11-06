@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0060**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0061**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -74,6 +74,8 @@ PostgreSQL schema at Alembic head **0060**, read from `pg_catalog` of a throwawa
 | [`event_subscription`](event_subscription.md) | events | TMF hub subscriptions of every API; deleted ones are kept (deleted_at) for their deliveries. |
 | [`event`](event.md) | events | TMF events some hub wanted, as sent; stored in the transaction of the change. |
 | [`event_delivery`](event_delivery.md) | events | One event to one subscription: pending until the worker delivers it or gives up. |
+| [`notification_message`](notification_message.md) | notifications | One customer message (TMF681 CommunicationMessage): what was sent, to whom, on which channel and in which state. Created once per event (dedupe_key) by the notification worker or by an operator, sent through the notify adapter. |
+| [`notification_consent`](notification_consent.md) | notifications | Append-only history of a customer's marketing consent per channel (opt-in or opt-out, with its source): the latest row wins and no row means not opted in. Transactional messages need no consent. |
 | [`app_user`](app_user.md) | users | Application identity: admin or user (UI), mcp (MCP login only); disabled, never deleted. |
 | [`app_session`](app_session.md) | users | Revocable sessions; SHA-256 tokens only, never raw cookies. |
 | [`app_user_audit`](app_user_audit.md) | users | Security changes only: operator, target, action and injected clock; no secrets. |
@@ -166,6 +168,10 @@ flowchart LR
     event[event]
     event_delivery[event_delivery]
   end
+  subgraph area_notifications["Customer notifications (TMF681)"]
+    notification_message[notification_message]
+    notification_consent[notification_consent]
+  end
   subgraph area_users["Application users and sessions (ours)"]
     app_user[app_user]
     app_session[app_session]
@@ -249,6 +255,11 @@ flowchart LR
   network_command -->|"product_id"| product
   network_command -->|"product_order_id"| product_order
   network_command -->|"product_order_item_id"| product_order_item
+  notification_consent -->|"customer_id"| customer
+  notification_message -->|"billing_account_id"| billing_account
+  notification_message -->|"customer_id"| customer
+  notification_message -->|"product_id"| product
+  notification_message -->|"resend_of"| notification_message
   number_assignment -->|"assigned_by_item_id"| product_order_item
   number_assignment -->|"cancelled_by_item_id"| product_order_item
   number_assignment -->|"ended_by_item_id"| product_order_item
@@ -1459,6 +1470,69 @@ erDiagram
   event ||--o{ event_delivery : "event_id"
   event_subscription ||--o{ event_delivery : "subscription_id"
 ```
+
+## Customer notifications (TMF681)
+
+```mermaid
+erDiagram
+  notification_message {
+    uuid id PK
+    text event_type
+    text category
+    text channel
+    text template
+    text state
+    text state_reason
+    text receiver_name
+    text receiver_email
+    text receiver_phone
+    uuid customer_id FK
+    uuid billing_account_id FK
+    uuid product_id FK
+    text subject
+    text content
+    text description
+    text priority
+    jsonb sender
+    text dedupe_key
+    timestamptz scheduled_send_time
+    timestamptz send_time
+    timestamptz send_time_complete
+    integer try_times
+    timestamptz next_attempt_at
+    text last_error
+    text provider_ref
+    uuid resend_of FK
+    timestamptz created_at
+  }
+  notification_consent {
+    uuid id PK
+    bigint seq
+    uuid customer_id FK
+    text channel
+    text category
+    boolean opted_in
+    text source
+    text recorded_by
+    timestamptz recorded_at
+  }
+  billing_account {
+    uuid id PK
+  }
+  customer {
+    uuid id PK
+  }
+  product {
+    uuid id PK
+  }
+  billing_account |o--o{ notification_message : "billing_account_id"
+  customer |o--o{ notification_message : "customer_id"
+  customer ||--o{ notification_consent : "customer_id"
+  notification_message |o--o{ notification_message : "resend_of"
+  product |o--o{ notification_message : "product_id"
+```
+
+Tables from other areas are shown with their key only: [`billing_account`](billing_account.md), [`customer`](customer.md), [`product`](product.md).
 
 ## Application users and sessions (ours)
 
