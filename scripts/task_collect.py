@@ -235,6 +235,101 @@ def project(client, path, session, with_state=False):
     return output, ended, reason
 
 
+def activity(client, path, session):
+    """Content-free effectiveness signals: human prompt times and agent turn intervals.
+
+    A turn runs from the first record after the previous turn end to the next turn end
+    (tool runs inside a turn count as active). Only structure is inspected: record
+    types, flags and block types, never text. Subagent sessions have no human prompts.
+    """
+    agent = session.partition(":agent:")[2]
+    prompts, turns = [], []
+    start = last = None
+
+    def when(row):
+        if client == "kimi":
+            value = row.get("time")
+            return datetime.fromtimestamp(value / 1000, UTC) if isinstance(value, int) else None
+        value = row.get("timestamp")
+        return timestamp(value) if isinstance(value, str) else None
+
+    for row in records(path):
+        if row.get("incomplete_append"):
+            break
+        kind = row.get("type")
+        moment = when(row)
+        if moment is None:
+            continue
+        prompt = end = False
+        relevant = True
+        if client == "claude":
+            if row.get("isSidechain") and not agent:
+                continue
+            message = row.get("message") if isinstance(row.get("message"), dict) else {}
+            if kind == "user" and row.get("isMeta"):
+                continue  # Injected context (caveats, reminders), neither prompt nor work.
+            if kind == "user":
+                content = message.get("content")
+                tool_result = isinstance(content, list) and any(
+                    isinstance(b, dict) and b.get("type") == "tool_result" for b in content
+                )
+                prompt = not (
+                    agent or tool_result or row.get("isCompactSummary") or "toolUseResult" in row
+                )
+                end = row.get("toolEndsTurn") is True
+            elif kind == "assistant":
+                stop = message.get("stop_reason")
+                end = stop == "end_turn" or (
+                    message.get("model") == "<synthetic>" and stop is not None
+                )
+            else:
+                relevant = False
+        elif client == "codex":
+            payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+            event = payload.get("type") if kind == "event_msg" else kind
+            prompt = event == "task_started"
+            end = event in {"task_complete", "turn_complete", "turn_aborted"}
+            relevant = kind in {"event_msg", "turn_context", "response_item"}
+        else:
+            if row.get("agentId") not in {None, agent or "main"}:
+                continue
+            prompt = kind == "turn.prompt" and not agent
+            end = kind in {"agent.turn.ended", "turn.ended"}
+            relevant = kind in {
+                "turn.prompt",
+                "agent.turn.started",
+                "llm.request",
+                "usage.record",
+                "agent.turn.ended",
+                "turn.ended",
+            }
+        if not relevant:
+            continue
+        if prompt:
+            prompts.append(moment)
+        if start is None:
+            start = moment
+        last = moment
+        if end:
+            turns.append((start, moment))
+            start = None
+    if start is not None and last is not None:
+        turns.append((start, last))
+    return prompts, turns
+
+
+def window_activity(prompts, turns, start, end):
+    """Human prompts and active milliseconds inside [start, end) (end None = open)."""
+    inside = sum(1 for p in prompts if p >= start and (end is None or p < end))
+    total = 0.0
+    for begin, finish in turns:
+        lo = max(begin, start)
+        hi = finish if end is None else min(finish, end)
+        if hi > lo:
+            total += (hi - lo).total_seconds()
+    return inside, int(total * 1000)
+
+
 def locate(client, session, home=None):
     identifier(session)
     # Session IDs are filename components, never caller-supplied glob expressions.
@@ -503,11 +598,13 @@ def collect_one(row, home=None):
     )
     status, reason, samples = "unavailable", "counters_missing", []
     baseline = latest = None
+    human_prompts = active_ms = None
     try:
         if session == "unavailable":
             raise CollectionError("session_identity_missing")
         path = locate(client, session, home)
         items, ended, limitation, active = project(client, path, session, with_state=True)
+        prompt_times, turns = activity(client, path, session)
         start = timestamp(row["bound_at"])
         close = timestamp(row["closed_at"]) if row.get("closed_at") else None
         # A make command runs before its enclosing model request finishes. Wait for
@@ -534,6 +631,7 @@ def collect_one(row, home=None):
                 for k in TOKENS
             }
 
+        human_prompts, active_ms = window_activity(prompt_times, turns, start, end)
         baseline = total([i for i in items if timestamp(i["sampled_at"]) < start])
         latest = total(
             [
@@ -593,7 +691,9 @@ def collect_one(row, home=None):
         f"reason={literal(reason)},baseline_tokens="
         f"CASE WHEN baseline_tokens IS NULL OR baseline_tokens='null'::jsonb "
         f"THEN {literal(json.dumps(baseline))}::jsonb ELSE baseline_tokens END,"
-        f"latest_tokens={literal(json.dumps(latest))}::jsonb WHERE {key};"
+        f"latest_tokens={literal(json.dumps(latest))}::jsonb,"
+        f"human_prompts={'NULL' if human_prompts is None else int(human_prompts)},"
+        f"active_ms={'NULL' if active_ms is None else int(active_ms)} WHERE {key};"
     )
     sql("BEGIN;\n" + "\n".join(statements) + "\nCOMMIT;")
     return dict(
@@ -700,6 +800,24 @@ def launch_final_capture(task):
     )
 
 
+def capture_facts(task):
+    """PR size, labels and epic once the PR is merged; refresh later with telemetry-facts."""
+    try:
+        import task_facts
+
+        task_facts.capture(task)
+    except (
+        ImportError,
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        RuntimeError,
+        subprocess.SubprocessError,
+    ):
+        print("telemetry: PR facts not captured; retry make telemetry-facts", file=sys.stderr)
+
+
 def automatic(task, operation, client=None, result=0, pr_number=None):
     """Fail open but visibly; retries reread bound sources, including closed sessions."""
     try:
@@ -710,6 +828,8 @@ def automatic(task, operation, client=None, result=0, pr_number=None):
         results = collect(task, client, session, close=operation == "task-completed")
         if operation == "task-completed" and any(r["status"] == "partial" for r in results):
             launch_final_capture(task)
+        if operation == "task-completed":
+            capture_facts(task)
         if operation in {"start-task", "finish-task", "task-completed"}:
             print("telemetry collection: " + json.dumps(results, sort_keys=True), file=sys.stderr)
         if operation == "start-task" and any(

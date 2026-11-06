@@ -177,7 +177,8 @@ SELECT json_build_object(
     FROM workflow_events w LEFT JOIN agent_sessions a ON a.session_id=w.session_id) e), '[]'),
  'collections', COALESCE((SELECT json_agg(c) FROM
    (SELECT task_id,client,external_session_id,source,bound_at,closed_at,
-    checked_at,status,reason,baseline_tokens,latest_tokens FROM usage_collections) c), '[]'),
+    checked_at,status,reason,baseline_tokens,latest_tokens,binding,human_prompts,active_ms
+    FROM usage_collections) c), '[]'),
  'usage', COALESCE((SELECT json_agg(u) FROM
    (SELECT a.task_id, s.provider, s.client, s.model, s.input_tokens,
     s.cached_input_tokens, s.output_tokens, s.total_tokens, s.cache_creation_tokens,
@@ -186,6 +187,9 @@ SELECT json_build_object(
          THEN s.estimated_cost::text END AS estimated_cost, s.currency,
     s.pricing_metadata FROM usage_samples s
     JOIN agent_sessions a USING(session_id)) u), '[]'),
+ 'facts', COALESCE((SELECT json_agg(f) FROM
+   (SELECT task_id, pr_number, additions, deletions, changed_files, commits, labels, epic,
+    merged_at, followups, reverted, captured_at FROM task_facts) f), '[]'),
  'prices', COALESCE((SELECT json_agg(p) FROM
    (SELECT model, effective_from, currency, input_per_mtok::text, cache_read_per_mtok::text,
     cache_write_per_mtok::text, output_per_mtok::text, source FROM model_prices) p), '[]'));
@@ -221,6 +225,43 @@ def list_price(sample, prices):
         + Decimal(out) * Decimal(price["output_per_mtok"])
     ) / million
     return price, cost.quantize(Decimal("0.0000000001"))
+
+
+# Lifecycle targets whose nonzero exit is friction the agent had to recover from.
+FRICTION = (
+    "format",
+    "review-task",
+    "commit",
+    "push",
+    "sync-task",
+    "create-pr",
+    "merge-task",
+    "finish-task",
+    "cleanup-task",
+    "check",
+)
+
+
+def friction(events):
+    """Failed attempts per target. check-pr waiting on CI is not a failure."""
+    counts = {}
+    for e in events:
+        if e["result"] == 0:
+            continue
+        kind = e["event_type"]
+        if kind == "check-pr":
+            kind = "check-pr-ci-failed" if e.get("ci_state") == "failed" else None
+        elif kind not in FRICTION:
+            kind = None
+        if kind:
+            counts[kind] = counts.get(kind, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def summed(collections, key):
+    """Sum over windows; unknown when nothing was measured, never zero."""
+    values = [c.get(key) for c in collections if c.get(key) is not None]
+    return sum(values) if values else None
 
 
 def report(data):
@@ -301,6 +342,8 @@ def report(data):
             )
             priced += 1
         slots = sorted({e["slot"] for e in events if e.get("slot")})
+        facts = next((f for f in data.get("facts", []) if f["task_id"] == tid), None)
+        active_ms = summed(collections, "active_ms")
         dimensions = sorted({(u["provider"], u["client"], u["model"]) for u in samples}, key=str)
         tasks.append(
             {
@@ -349,6 +392,12 @@ def report(data):
                 "validation_retries": max(0, sum(e["event_type"] == "check" for e in events) - 1),
                 "ci_failed_observations": sum(e.get("ci_state") == "failed" for e in events),
                 "ci_retries": None,
+                "friction": friction(events),
+                "human_prompts": summed(collections, "human_prompts"),
+                "agent_active_seconds": None if active_ms is None else active_ms / 1000,
+                "facts": None
+                if facts is None
+                else {k: v for k, v in facts.items() if k not in {"task_id", "captured_at"}},
             }
         )
         if task["outcome"] == "completed":

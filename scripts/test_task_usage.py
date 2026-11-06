@@ -267,6 +267,83 @@ class UsageTests(unittest.TestCase):
                 self.assertFalse(t["cost_complete"])
                 self.assertTrue(t["unpriced_models"])
 
+    def test_friction_prompts_active_time_and_facts(self):
+        task = "issue-232-effect"
+
+        def event(kind, result=0, **extra):
+            return {
+                "task_id": task,
+                "event_type": kind,
+                "result": result,
+                "occurred_at": "2026-11-01T10:00:00Z",
+                **extra,
+            }
+
+        data = {
+            "tasks": [
+                {
+                    "task_id": task,
+                    "started_at": "2026-11-01T09:00:00Z",
+                    "ended_at": None,
+                    "outcome": None,
+                }
+            ],
+            "events": [
+                event("commit", 1),
+                event("commit", 1),
+                event("commit"),
+                event("create-pr", 1),
+                event("check-pr", 1, ci_state="pending"),
+                event("check-pr", 1, ci_state="failed"),
+                event("run", 1),
+            ],
+            "collections": [
+                {
+                    "task_id": task,
+                    "client": "claude",
+                    "status": "complete",
+                    "human_prompts": 3,
+                    "active_ms": 90000,
+                },
+                {
+                    "task_id": task,
+                    "client": "claude",
+                    "status": "complete",
+                    "human_prompts": 0,
+                    "active_ms": 30000,
+                },
+                {
+                    "task_id": task,
+                    "client": "claude",
+                    "status": "partial",
+                    "human_prompts": None,
+                    "active_ms": None,
+                },
+            ],
+            "usage": [],
+            "facts": [
+                {
+                    "task_id": task,
+                    "pr_number": 9,
+                    "additions": 10,
+                    "deletions": 2,
+                    "captured_at": "x",
+                }
+            ],
+        }
+        t = usage.report(data)["tasks"][0]
+        self.assertEqual(t["friction"], {"check-pr-ci-failed": 1, "commit": 2, "create-pr": 1})
+        self.assertEqual(t["human_prompts"], 3)
+        self.assertEqual(t["agent_active_seconds"], 120)
+        self.assertEqual(t["facts"], {"pr_number": 9, "additions": 10, "deletions": 2})
+        for c in data["collections"]:
+            c.update(human_prompts=None, active_ms=None)
+        data["facts"] = []
+        t = usage.report(data)["tasks"][0]
+        self.assertIsNone(t["human_prompts"])  # unknown, never zero
+        self.assertIsNone(t["agent_active_seconds"])
+        self.assertIsNone(t["facts"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

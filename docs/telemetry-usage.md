@@ -74,6 +74,27 @@ timings, and groups by provider, client, model and slot. Token totals are null w
 no samples or any sample lacks a count. Groups describe participation and must not be added
 together. Coverage cannot prove that unregistered work is absent; this is not an invoice.
 
+Effectiveness, per task:
+
+- `friction`: failed attempts per lifecycle target (`commit`, `create-pr`, `sync-task`, ...);
+  `check-pr` counts only when CI failed, not while it is pending.
+- `human_prompts`: real user prompts inside the bound windows (Claude user records that are
+  not tool results or injected context, Codex `task_started`, Kimi `turn.prompt`); a
+  subagent has none. A count only, never text.
+- `agent_active_seconds`: summed turn time inside the windows (a turn runs from its first
+  record to its turn end, tool runs included). Parallel agents add up, so it can exceed
+  wall time; `time_to_merge_seconds` is the wall time.
+- `facts`: from GitHub, captured at `task-completed` and refreshed with
+  `make telemetry-facts [TASK=]` (`scripts/task_facts.py`): PR additions, deletions, files
+  and commits, issue labels, the sub-issue parent as epic (null when an epic lists its
+  issues in its body), and later issues or PRs that reference the issue (`followups`, with
+  labels) and whether one is a revert. Numbers and labels only.
+
+`make telemetry-summary` (`JSON=1` for JSON, `scripts/task_summary.py`) prints one row per
+issue and rollups by model, client, label and epic. A `~` marks a row with incomplete
+coverage or pricing; rollups add tokens only from fully covered rows and cost only from
+fully priced ones, and show how many issues each sum covers.
+
 **Cost** is computed at report time from `model_prices`, loaded from
 `scripts/telemetry/prices.json` by `make telemetry-prices` (also on `telemetry-up` and
 `telemetry-migrate`). It is the API-equivalent list price, not what a subscription is billed.

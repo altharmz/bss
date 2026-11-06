@@ -558,6 +558,54 @@ class CollectionTests(unittest.TestCase):
         self.assertFalse(active)
         self.assertIsNone(reason)
 
+    def test_activity_counts_human_prompts_and_turn_time_without_content(self):
+        def user(second, **extra):
+            return dict(type="user", timestamp=when(second), sessionId=SID, **extra)
+
+        def assistant(second, stop):
+            return dict(
+                type="assistant",
+                timestamp=when(second),
+                sessionId=SID,
+                message=dict(id=f"m{second}", model="m", stop_reason=stop, content=PRIVATE),
+            )
+
+        rows = [
+            user(10, message=dict(content=PRIVATE)),  # human prompt: turn starts
+            assistant(12, "tool_use"),
+            user(13, message=dict(content=[dict(type="tool_result", content=PRIVATE)])),
+            assistant(20, "end_turn"),  # 10s turn
+            user(30, isMeta=True, message=dict(content=PRIVATE)),  # not a prompt
+            user(40, message=dict(content=[dict(type="text", text=PRIVATE)])),
+            assistant(45, "end_turn"),  # 5s turn
+        ]
+        path = self.source("claude", rows)
+        prompts, turns = collect.activity("claude", path, SID)
+        self.assertEqual(prompts, [timestamp(when(10)), timestamp(when(40))])
+        self.assertEqual(
+            collect.window_activity(prompts, turns, timestamp(when(0)), None), (2, 15000)
+        )
+        # Clipped to the window: [15, 42) holds 5s of turn one, 2s of turn two.
+        self.assertEqual(
+            collect.window_activity(prompts, turns, timestamp(when(15)), timestamp(when(42))),
+            (1, 7000),
+        )
+        agent_path = path.parent / SID / "subagents/agent-w.jsonl"
+        agent_path.parent.mkdir(parents=True)
+        agent_path.write_text(path.read_text())
+        agent_prompts, agent_turns = collect.activity("claude", agent_path, SID + ":agent:w")
+        self.assertEqual(agent_prompts, [])
+        self.assertEqual(len(agent_turns), 2)
+
+    def test_activity_for_codex_and_kimi(self):
+        prompts, turns = collect.activity("codex", self.source("codex"), SID)
+        self.assertEqual(prompts, [])
+        self.assertEqual(turns, [(timestamp(when(1)), timestamp(when(4)))])
+        rows = [dict(type="turn.prompt", time=1793620800000), *fixture("kimi")]
+        prompts, turns = collect.activity("kimi", self.source("kimi", rows), SID)
+        self.assertEqual(len(prompts), 1)
+        self.assertEqual(len(turns), 1)
+
     def test_first_seen_reads_the_first_dated_record(self):
         self.source("claude")
         with patch.object(Path, "home", return_value=self.home):
