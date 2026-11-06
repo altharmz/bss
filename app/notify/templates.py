@@ -118,6 +118,138 @@ TEMPLATES: dict[str, dict[str, tuple[str | None, str]]] = {
             " us at once.",
         ),
     },
+    "security_sim_swap": {
+        "sms": (
+            None,
+            "A SIM swap was requested on your line {line}. Call us at once if this was not you.",
+        ),
+        "email": (
+            "A SIM swap was requested",
+            "Hello {name},\n\nA SIM swap was requested on your line {line}. If "
+            "this was not you, contact us at once.",
+        ),
+    },
+    "security_number_change": {
+        "sms": (
+            None,
+            "The number of your line {line} was changed. Call us at once if this was not you.",
+        ),
+        "email": (
+            "Your phone number was changed",
+            "Hello {name},\n\nThe phone number of your line {line} was changed. "
+            "If this was not you, contact us at once.",
+        ),
+    },
+    "security_number_transfer_pin": {
+        "sms": (
+            None,
+            "A Number Transfer PIN was issued for your line {line}. Call us at "
+            "once if this was not you.",
+        ),
+        "email": (
+            "A Number Transfer PIN was issued",
+            "Hello {name},\n\nA Number Transfer PIN was issued for your line "
+            "{line}, which allows the number to move to another carrier. If "
+            "this was not you, contact us at once.",
+        ),
+    },
+    "security_contact_change": {
+        "sms": (
+            None,
+            "The contact details of your account were changed. Call us at once "
+            "if this was not you.",
+        ),
+        "email": (
+            "Your contact details were changed",
+            "Hello {name},\n\nThe contact details or address of your account "
+            "were changed. If this was not you, contact us at once.",
+        ),
+    },
+    "security_port_out": {
+        "sms": (
+            None,
+            "Your number {line} was ported out to another carrier. Call us at "
+            "once if this was not you.",
+        ),
+        "email": (
+            "Your number was ported out",
+            "Hello {name},\n\nYour number {line} was ported out to another "
+            "carrier and your line here has ended. If this was not you, contact "
+            "us at once.",
+        ),
+    },
+    "security_port_out_blocked": {
+        "sms": (
+            None,
+            "A request to port your number {line} out was refused by your "
+            "port-out lock. Call us at once if this was not you.",
+        ),
+        "email": (
+            "A port-out was blocked",
+            "Hello {name},\n\nA request to move your number {line} to another "
+            "carrier was refused because the line has a port-out lock. If this "
+            "was not you, contact us at once.",
+        ),
+    },
+    "security_pin_set": {
+        "sms": (
+            None,
+            "An account PIN was set on your account. Call us at once if this was not you.",
+        ),
+        "email": (
+            "An account PIN was set",
+            "Hello {name},\n\nAn account PIN was set on your account. If this "
+            "was not you, contact us at once.",
+        ),
+    },
+    "security_pin_reset": {
+        "sms": (
+            None,
+            "Your account PIN was reset. Call us at once if this was not you.",
+        ),
+        "email": (
+            "Your account PIN was reset",
+            "Hello {name},\n\nYour account PIN was reset by our staff. If this "
+            "was not you, contact us at once.",
+        ),
+    },
+    "security_lock_set": {
+        "sms": (
+            None,
+            "A SIM swap or port-out lock was turned on for your line {line}. "
+            "Call us at once if this was not you.",
+        ),
+        "email": (
+            "A line lock was turned on",
+            "Hello {name},\n\nA SIM swap or port-out lock was turned on for "
+            "your line {line}. If this was not you, contact us at once.",
+        ),
+    },
+    "security_lock_cleared": {
+        "sms": (
+            None,
+            "A SIM swap or port-out lock was cleared on your line {line}. Call "
+            "us at once if this was not you.",
+        ),
+        "email": (
+            "A line lock was cleared",
+            "Hello {name},\n\nA SIM swap or port-out lock was cleared on your "
+            "line {line}. If this was not you, contact us at once.",
+        ),
+    },
+    "security_pin_lockout": {
+        "sms": (
+            None,
+            "Several wrong account PINs were entered; PIN checks are paused. "
+            "Call us at once if this was not you.",
+        ),
+        "email": (
+            "Wrong account PINs were entered",
+            "Hello {name},\n\nSeveral wrong account PINs were entered on your "
+            "account, so PIN checks are paused for a while. If this was not "
+            "you, contact us at once.",
+        ),
+    },
 }
 
 EVENTS = tuple(TEMPLATES)

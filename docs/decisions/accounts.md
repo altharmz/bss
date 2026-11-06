@@ -250,3 +250,93 @@ list, the built-in cycle is `{id: monthly}`).
   (`FormatCreate`), not free text. The existing `editBackend` helper stubs the three new lists
   (TEST-CHANGE); the sidebar link lists in `App.test.tsx` gained `/billing-settings`.
 
+
+# Account security: PIN, verification, locks and audit (issue #193, epic #182)
+
+Changes that can take over a line need a verified customer, are logged, and the customer is told,
+as US CPNI rules and fraud practice expect. Design approved by the human's standing delegation
+(decided following TMF: TMF has no PIN, lock or audit API, so this is ours: `/internal/v1/security`
+plus the `X-Account-Pin` header on the TMF operations that are sensitive; no new spec). Prepaid
+only: postpaid keeps working as before. Migration `0062`. The UI half is issue #226 (193b).
+
+## Verification
+
+- The agent sends the customer's **account PIN** in the header `X-Account-Pin` on the sensitive
+  request (TMF or internal; the MCP tools take an optional `account_pin` argument that becomes
+  the header). Never in a body or URL. The PIN is 6 to 8 digits, stored with the same scrypt hash
+  as user passwords (`customer_pin.pin_hash`), never logged, never in an audit row or a message,
+  and **returned by no API** (the status shows only `set`, who and when, the wrong attempts and
+  the lockout end). `Actor.pin` is excluded from reprs.
+- An agent **sets or resets** it with a recorded reason (`PUT /security/pin/{customerId}`, audit
+  `pin_set` / `pin_reset`); no verification is asked, a customer who forgot it cannot give it.
+  A reset clears a lockout. The agent's own power to reset is the accepted residual risk: it is
+  audited and the customer is alerted.
+- **Protected customer**: one with a live product (not terminated, cancelled or aborted) on a
+  prepaid account. Onboarding (contact and service address before the first line) therefore
+  needs no PIN. A protected customer without a PIN is refused `pinNotSet` until one is set (the
+  rollout for existing customers); the human sets them when deploying.
+- **Lockout**: `BSS_PIN_MAX_ATTEMPTS` (5) consecutive wrong PINs lock the verification for
+  `BSS_PIN_LOCKOUT_MINUTES` (30); while locked the right PIN is refused too (`pinLocked`); a right
+  PIN resets the count. A missing PIN is not counted. The lockout writes a `pin_lockout` entry and
+  alert. `BSS_ACCOUNT_PIN_REQUIRED` (default true) is the rollout switch: false asks for no PIN
+  (verification `notRequired` in the audit), locks and the audit still apply.
+
+## Sensitive actions
+
+| Action | Where | Refused as |
+|---|---|---|
+| `sim_swap` | TMF622 modify of a prepaid line that changes the IMSI (POST, or a draft's `acknowledged`) | order `rejected` with `productOrderErrorMessage` code `pinRequired`, `pinInvalid`, `pinNotSet`, `pinLocked` or `simSwapLocked` (stored like any refusal; nothing else moves) |
+| `number_change` | TMF622 modify that changes the MSISDN of a prepaid line | the same codes |
+| `number_transfer_pin` | `POST /internal/v1/port/pin` | 403 with the code (`portOutLocked` too) |
+| `contact_change` | PATCH of `contactMedium` (Individual, Organization, Customer) or `contact` (BillingAccount) that changes it, for a protected customer; a party with several protected customers needs the PIN of any one of them | 403 with the code |
+| `port_out` | the carrier's request; an approved one is audited, one for a line with the port-out lock is rejected `portOutLocked` | rejected to the carrier |
+| `lock_cleared` | `PUT /security/lock/{productId}` clearing a lock | 403 with the code |
+
+Orders placed by the worker (lifecycle, a port-out's termination) carry no actor and are not
+agent actions. The order screen runs before validation in the order's transaction, so a refused
+attempt's audit entry and wrong-PIN count are stored with the rejected order; the 403 paths do the
+check in a transaction of their own so those survive the failed request. A PATCH that leaves the
+contact as stored needs no PIN.
+
+## Locks
+
+`line_lock` per line: `simSwap` and `portOut`. While `simSwap` is set a SIM swap order is
+rejected `simSwapLocked`; while `portOut` is set no Number Transfer PIN is issued and the carrier's
+port-out request is rejected `portOutLocked` (also with a PIN issued before the lock), **whatever
+the PIN**. Setting a lock needs no PIN; clearing one does. Default off. A reason is recorded.
+
+## Audit log (`account_audit`)
+
+Append-only (triggers refuse update, delete and truncate; no foreign keys: it outlives what it
+describes): at, operator, role, customer, account, product, `action`, `outcome` (`done` or
+`refused` with the `reason` code), `verification` (`pin`, `notRequired`, `none`) and a `detail`
+document (the order and item, the number, the attribute changed; never a secret). A PIN or lock
+change stores the agent's reason as `reason`. Every attempt writes one entry: one for each done
+action, one for each refusal. `GET /internal/v1/security/audit` is read only (filters
+`customer.id`, `product.id`, `billingAccount.id`, `action`, `outcome`, `operator`; newest first).
+
+## Alerts
+
+The notification worker's `security` detector (docs/decisions/notifications.md) reads the audit
+rows (done actions and a port-out a lock stopped) once each, dedupe key `security:<audit id>`,
+event types `security_<action>` (`security_port_out_blocked`), SMS and email. Security alerts
+ignore the SMS quiet hours. A **contact change is told to the addresses on record before the
+change** (kept in the entry's detail), so it cannot redirect its own alert. SIM-swap customers
+still get the existing `sim_swap` message when the network confirms; this one tells them at the
+request.
+
+## Not in this slice
+
+UI (193b, #226): security panel on the subscriber card, PIN field on the dialogs, audit tab. A
+verification endpoint without an action, per-operator PIN reset permissions, PINs per line, a
+lock expiry, and counting the carrier's wrong Number Transfer PINs.
+
+## Tests
+
+`tests/test_account_security.py`: PIN stored hashed and in no response, log or audit row, format
+and reason; per action (SIM swap, number change, Number Transfer PIN, contact change on a party,
+customer and billing account) refusal without, with a wrong PIN and with no PIN set, acceptance
+with the right one and exactly one audit entry; draft submission; the switch off; lockout and its
+end; locks refusing a swap, the PIN issue and a carrier port-out even with a valid PIN, clearing
+needing the PIN; the read-only filtered audit log and its triggers; one alert per done action,
+none repeated, the pre-change address for a contact change, no quiet-hours delay.

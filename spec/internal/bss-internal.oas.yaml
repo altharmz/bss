@@ -928,7 +928,15 @@ paths:
         For an active or suspended product with a current subscriber number. The PIN is in
         the response once and is never stored or listed again; an earlier PIN of the line is
         revoked. It is valid for BSS_NUMBER_TRANSFER_PIN_DAYS (default 7) and single use.
-        409 when the product is not such a line.
+        409 when the product is not such a line. On a prepaid line it needs the customer's
+        account PIN in the X-Account-Pin header and is refused (403) without a valid one
+        (`pinRequired`, `pinInvalid`, `pinNotSet`, `pinLocked`) or while the line has a port-out
+        lock (`portOutLocked`); every attempt is audited (issue 193).
+      parameters:
+        - name: X-Account-Pin
+          in: header
+          required: false
+          schema: {type: string}
       requestBody:
         required: true
         content:
@@ -946,6 +954,7 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/TransferPin'}
         '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
         '422': {$ref: '#/components/responses/Error'}
@@ -1090,6 +1099,132 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+  /security/pin/{id}:
+    get:
+      summary: A customer's account PIN status (issue 193).
+      description: >-
+        Whether the customer has an account PIN, who set it and when, the wrong attempts counted
+        and until when verification is locked. The PIN and its hash are never returned.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccountPin'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    put:
+      summary: Set or reset a customer's account PIN (issue 193).
+      description: >-
+        An agent sets the PIN (6 to 8 digits, stored hashed) or resets it, with a reason that is
+        recorded in the audit log (`pin_set`, `pin_reset`); a reset clears a lockout. The customer
+        is told through the notification sender. No verification is asked: a customer who forgot the
+        PIN cannot give it.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [pin, reason]
+              properties:
+                '@type': {type: string}
+                '@baseType': {type: string}
+                '@schemaLocation': {type: string}
+                pin: {type: string, pattern: '^[0-9]{6,8}$'}
+                reason: {type: string, minLength: 3, maxLength: 500}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AccountPin'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /security/lock/{id}:
+    get:
+      summary: The SIM swap and port-out locks of a line (issue 193).
+      description: The id is the product. No row means both locks are off.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LineLock'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    put:
+      summary: Set or clear the SIM swap and port-out locks of a line (issue 193).
+      description: >-
+        Both flags are sent (the new state). While `simSwap` is set a SIM swap order is rejected
+        (`simSwapLocked`); while `portOut` is set no Number Transfer PIN is issued and the carrier's
+        port-out request is rejected (`portOutLocked`), even with a valid PIN. Setting a lock needs
+        no PIN; clearing one needs the customer's PIN in the X-Account-Pin header (403
+        `pinRequired`, `pinInvalid`, `pinNotSet`, `pinLocked`). A reason is recorded.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+        - name: X-Account-Pin
+          in: header
+          required: false
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [simSwap, portOut, reason]
+              properties:
+                '@type': {type: string}
+                '@baseType': {type: string}
+                '@schemaLocation': {type: string}
+                simSwap: {type: boolean}
+                portOut: {type: boolean}
+                reason: {type: string, minLength: 3, maxLength: 500}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LineLock'}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /security/audit:
+    get:
+      summary: The audit log of agent actions on accounts, read only (issue 193).
+      description: >-
+        Newest first, paged. Each entry says who did what, when, whether it was done or refused
+        (and why) and how the customer was verified. Filters customer.id, product.id,
+        billingAccount.id, action, outcome, operator.
+      parameters:
+        - {name: customer.id, in: query, schema: {type: string, format: uuid}}
+        - {name: product.id, in: query, schema: {type: string, format: uuid}}
+        - {name: billingAccount.id, in: query, schema: {type: string, format: uuid}}
+        - {name: action, in: query, schema: {type: string}}
+        - {name: outcome, in: query, schema: {type: string, enum: [done, refused]}}
+        - {name: operator, in: query, schema: {type: string}}
+        - {name: offset, in: query, schema: {type: integer, minimum: 0}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 100}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AuditEntry'}
+        '400': {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
     AppSession:
@@ -1902,6 +2037,61 @@ components:
         messageType: {type: string, enum: [SMS, Email]}
         content: {type: string}
         characteristic: {type: array, items: {type: object}}
+    AccountPin:
+      type: object
+      additionalProperties: false
+      required: [customer, set, setAt, setBy, reason, failedAttempts, lockedUntil]
+      properties:
+        customer: &customerRef
+          type: object
+          additionalProperties: false
+          required: [id, href]
+          properties:
+            id: {type: string, format: uuid}
+            href: {type: string}
+        set: {type: boolean}
+        setAt: {type: string, format: date-time, nullable: true}
+        setBy: {type: string, nullable: true}
+        reason: {type: string, nullable: true}
+        failedAttempts: {type: integer, minimum: 0}
+        lockedUntil: {type: string, format: date-time, nullable: true}
+    LineLock:
+      type: object
+      additionalProperties: false
+      required: [product, simSwap, portOut, updatedAt, updatedBy, reason]
+      properties:
+        product: *customerRef
+        simSwap: {type: boolean}
+        portOut: {type: boolean}
+        updatedAt: {type: string, format: date-time, nullable: true}
+        updatedBy: {type: string, nullable: true}
+        reason: {type: string, nullable: true}
+    AuditEntry:
+      type: object
+      additionalProperties: false
+      required: [id, at, operator, role, customer, billingAccount, product, action, outcome, reason, verification, detail]
+      properties:
+        id: {type: string, format: uuid}
+        at: {type: string, format: date-time}
+        operator: {type: string}
+        role: {type: string, nullable: true}
+        customer: &optionalRef
+          nullable: true
+          type: object
+          additionalProperties: false
+          required: [id, href]
+          properties:
+            id: {type: string, format: uuid}
+            href: {type: string}
+        billingAccount: *optionalRef
+        product: *optionalRef
+        action:
+          type: string
+          enum: [sim_swap, number_change, number_transfer_pin, contact_change, port_out, pin_set, pin_reset, lock_set, lock_cleared, pin_lockout]
+        outcome: {type: string, enum: [done, refused]}
+        reason: {type: string, nullable: true}
+        verification: {type: string, enum: [pin, notRequired, none]}
+        detail: {type: object}
     UsageSummary:
       type: object
       additionalProperties: false

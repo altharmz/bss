@@ -25,6 +25,7 @@ from app.notify import recipients
 from app.notify.service import Event
 from app.repository import billing, funding
 from app.repository import lifecycle as lifecycle_repo
+from app.repository import security as security_repo
 from app.repository._sql import Row, fetch_all, fetch_one
 
 ALLOWANCE = {"data": "data allowance", "voice": "voice minutes", "sms": "text messages"}
@@ -58,6 +59,7 @@ def detectors(
         ("card_declines", lambda conn: _card_declines(conn, since)),
         ("ports", lambda conn: _ports(conn, since)),
         ("sim_swaps", lambda conn: _sim_swaps(conn, since)),
+        ("security", lambda conn: _security(conn, since)),
     ]
 
 
@@ -358,3 +360,41 @@ def _sim_swaps(conn: psycopg.Connection, since: datetime) -> list[Event]:
         )
         for row in rows
     ]
+
+
+def _security(conn: psycopg.Connection, since: datetime) -> list[Event]:
+    """Every sensitive action that was done (and a port-out a lock stopped) is told to the
+    customer, once per audit entry. A contact change goes to the addresses on record before
+    the change (kept in the entry), so it cannot redirect its own alert."""
+    events = []
+    for row in security_repo.audit_since(conn, since):
+        kind = row["action"]
+        if kind == "port_out" and row["outcome"] == "refused":
+            kind = "port_out_blocked"
+        customer_id = row["customer_id"]
+        contact = None if customer_id is None else recipients.for_customer(conn, customer_id)
+        before = (row["detail"] or {}).get("alertTo") or {}
+        if contact is not None and (before.get("phones") or before.get("emails")):
+            contact = recipients.Contact(
+                contact.customer_id,
+                contact.name,
+                before.get("emails", []),
+                before.get("phones", []),
+            )
+        account_id = row["billing_account_id"] or (
+            None if customer_id is None else security_repo.first_account(conn, customer_id)
+        )
+        if contact is None and account_id is None:
+            continue
+        events.append(
+            Event(
+                f"security_{kind}",
+                f"security:{row['id']}",
+                account_id,
+                row["product_id"],
+                {"line": line(conn, row["product_id"])},
+                contact=contact,
+                urgent=True,
+            )
+        )
+    return events

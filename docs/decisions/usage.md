@@ -62,7 +62,8 @@ TMF635.
 
 ## Not in this slice
 
-UI (#216), notifications on thresholds (#192), TMF635 export jobs and hub.
+UI (#216), TMF635 export jobs and hub. The threshold notifications (#192) are done: see
+[notifications.md](notifications.md).
 
 # Pay-as-you-go rating (issue #191, epic #182)
 

@@ -76,6 +76,11 @@ EXCLUDED = {
     ("POST", "/internal/v1/port/pin"),
     ("POST", "/internal/v1/port/{port_id}/resubmit"),
     ("POST", "/internal/v1/port/{port_id}/cancel"),
+    ("GET", "/internal/v1/security/pin/{customer_id}"),
+    ("PUT", "/internal/v1/security/pin/{customer_id}"),
+    ("GET", "/internal/v1/security/lock/{product_id}"),
+    ("PUT", "/internal/v1/security/lock/{product_id}"),
+    ("GET", "/internal/v1/security/audit"),
     ("GET", "/internal/v1/notification/consent"),
     ("POST", "/internal/v1/notification/consent"),
     ("POST", "/internal/v1/notification/message/{message_id}/resend"),
@@ -136,6 +141,8 @@ class Op:
     filters: dict[str, Any] = field(default_factory=dict)
     # a POST whose handler replays a stored success for the same Idempotency-Key header
     idempotent: bool = False
+    # a write the app may refuse without the customer's account PIN (the X-Account-Pin header)
+    account_pin: bool = False
 
 
 OPERATIONS: dict[str, Op] = {
@@ -362,6 +369,7 @@ OPERATIONS: dict[str, Op] = {
     "patch_individual": Op(
         "Change an individual's attributes; an attribute sent replaces it whole, null removes it.",
         body=IndividualPatch,
+        account_pin=True,
     ),
     "delete_individual": Op(
         "Delete an individual nothing refers to: 409 while a customer engages it or it owns"
@@ -379,6 +387,7 @@ OPERATIONS: dict[str, Op] = {
         "Change an organization's attributes; an attribute sent replaces it whole, null"
         " removes it.",
         body=OrganizationPatch,
+        account_pin=True,
     ),
     "delete_organization": Op(
         "Delete an organization nothing refers to: 409 while a customer engages it or it"
@@ -397,6 +406,7 @@ OPERATIONS: dict[str, Op] = {
         "Change a customer's name, status or other attributes; engagedParty only while"
         " the customer has no billing account; account is the billing accounts' list.",
         body=CustomerPatch,
+        account_pin=True,
     ),
     "delete_customer": Op("Delete a customer without billing accounts (409 otherwise)."),
     # --- TMF666 account ---
@@ -453,6 +463,7 @@ OPERATIONS: dict[str, Op] = {
         " relatedParty (the customer only while the account has no history: 409);"
         " currency and billCycleDay are fixed.",
         body=AccountPatch,
+        account_pin=True,
     ),
     "delete_account": Op(
         "Delete a billing account without history: 409 once anything was ordered, charged,"
@@ -594,12 +605,14 @@ OPERATIONS: dict[str, Op] = {
         " 4xx and stores nothing.",
         body=OrderIn,
         idempotent=True,
+        account_pin=True,
     ),
     "patch_order": Op(
         "Change what describes an order: description, category, priority (0 highest ..4),"
         " externalId; null removes. A draft also accepts items, account and start date;"
         " state acknowledged submits it. After processing, placed-with attributes cannot change.",
         body=OrderPatch,
+        account_pin=True,
         body_extra={
             "state": {
                 "anyOf": [{"type": "string", "enum": ["acknowledged"]}, {"type": "null"}],

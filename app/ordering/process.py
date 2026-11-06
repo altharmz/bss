@@ -47,9 +47,11 @@ from app.network import kind as offering_kind
 from app.ordering import network as network_orders
 from app.ordering import numbers as number_orders
 from app.ordering import prepaid as prepaid_orders
+from app.ordering import security as security_orders
 from app.ordering.states import item_transition, order_transition
 from app.repository import billing, catalog, orders, parties, prepaid_commands, products
 from app.repository._sql import Row
+from app.security.guard import Actor
 
 # Product statuses after which a product can no longer be deleted.
 ENDED = frozenset({"terminated", "cancelled", "aborted"})
@@ -97,6 +99,9 @@ class OrderRequest:
     details: dict[str, Any] | None = None  # documents, stored as sent
     # False: no network command is created (a port-out: the carrier moves the line itself)
     network: bool = True
+    # The agent who placed it and the PIN they sent (app/ordering/security.py); None: not an
+    # agent action (the worker, a carrier's port-out).
+    actor: Actor | None = None
 
 
 # Actions whose item names an existing product.
@@ -307,7 +312,9 @@ def _process(
     # Validate before anything is inserted: a rejected delete item must never be stored in
     # an open state, or it would collide with the open delete it is rejected for.
     quotes: dict[str, Row] = {}
-    problems = _validate(conn, request, account, start, today, locked, quotes)
+    secured, accepted = security_orders.screen(conn, request, account, locked, start, now)
+    problems = [Problem(*p) for p in secured]
+    problems += _validate(conn, request, account, start, today, locked, quotes)
     sim_problems = [Problem(*p) for p in number_orders.pick_sims(conn, request)]
     number_rows = number_orders.lock(
         conn, named, [number_orders.references(i) for i in request.items]
@@ -410,6 +417,7 @@ def _process(
             _execute(conn, order, request, rows, start, today, locked, now)
         network_orders.record(conn, order["id"], lines, start, now)
         number_orders.changed(conn, number_rows, old_numbers, now, today)
+        security_orders.record(conn, request, accepted, order["id"], now)
     return order["id"]
 
 

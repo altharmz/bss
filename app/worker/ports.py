@@ -20,7 +20,7 @@ from app.integrations.network import NetworkRefused, NetworkTemporary, PortOutRe
 from app.ordering import numbers as number_orders
 from app.ordering.process import ItemRequest, OrderRequest, place_order
 from app.repository import network_commands as network
-from app.repository import orders, ports, products
+from app.repository import orders, ports, products, security
 from app.repository._sql import Row, fetch_one
 from app.worker.process import Checkpoint, Heartbeat
 from app.worker.runs import ensure_ownership
@@ -29,10 +29,11 @@ log = logging.getLogger("app.worker")
 
 
 class _Refused(Exception):
-    def __init__(self, code: str, reason: str):
+    def __init__(self, code: str, reason: str, product: Row | None = None):
         super().__init__(reason)
         self.code = code
         self.reason = reason
+        self.product = product  # the line, when the refusal is about a protected one
 
 
 def process_ports(
@@ -179,6 +180,8 @@ def _decide(conn, request: PortOutRequest, now: datetime, today: date):
         or product["termination_date"] is not None
     ):
         raise _Refused("lineNotActive", "the number is not on an active line")
+    if (lock := security.lock_of(conn, product["id"])) is not None and lock["port_out"]:
+        raise _Refused("portOutLocked", "the line has a port-out lock", product)
     pin, outcome = ports.match_pin(conn, product["id"], number["id"], request.pin)
     if pin is None:
         raise _Refused("pinInvalid", "the Number Transfer PIN does not match")
@@ -227,6 +230,8 @@ def register_port_out(
         except _Rollback as rolled:
             raise _Refused("terminationRefused", str(rolled)) from None
     except _Refused as refused:
+        if refused.product is not None:
+            _audit(conn, refused.product, "refused", now, row, reason=refused.code)
         return ports.decide_out(
             conn,
             row["id"],
@@ -240,8 +245,28 @@ def register_port_out(
         "UPDATE port_request SET product_id = %s, billing_account_id = %s WHERE id = %s",
         (product["id"], product["billing_account_id"], row["id"]),
     )
+    _audit(conn, product, "done", now, row)
     return ports.decide_out(
         conn, row["id"], approved=True, code=None, reason=None, order_id=order_id, now=now
+    )
+
+
+def _audit(conn, product: Row, outcome: str, now: datetime, row: Row, reason=None) -> None:
+    """The carrier's port-out request, done or stopped by a lock, in the account audit log."""
+    owner = security.customer_of_product(conn, product["id"])
+    security.record(
+        conn,
+        now=now,
+        operator="carrier",
+        role=None,
+        action="port_out",
+        outcome=outcome,
+        verification="none",
+        reason=reason,
+        customer_id=None if owner is None else owner["customer_id"],
+        billing_account_id=product["billing_account_id"],
+        product_id=product["id"],
+        detail={"portRequest": str(row["id"]), "number": row["number_value"]},
     )
 
 
