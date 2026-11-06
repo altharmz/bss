@@ -3,6 +3,7 @@
 
 import contextlib
 import io
+import json
 import os
 import subprocess
 import tempfile
@@ -20,9 +21,7 @@ class TelemetryTests(unittest.TestCase):
             self.assertIn("'" + operation + "'", statement)
             self.assertNotIn("commit_hash", statement)
             with self.assertRaises(ValueError):
-                telemetry.event_sql(
-                    "issue-95-example", operation, 0, 1, {}, commit_hash="a" * 40
-                )
+                telemetry.event_sql("issue-95-example", operation, 0, 1, {}, commit_hash="a" * 40)
 
     def test_commit_and_push_metadata_is_bounded(self):
         for operation in ("commit", "push"):
@@ -127,9 +126,7 @@ class TelemetryTests(unittest.TestCase):
                 self.assertIn('"slot":"worker2"', statement)
         for client in ("Kimi", "../kimi", "kimi_client"):
             with self.subTest(client=client), self.assertRaises(ValueError):
-                telemetry.event_sql(
-                    "issue-100-example", "start-task", 0, None, {}, client=client
-                )
+                telemetry.event_sql("issue-100-example", "start-task", 0, None, {}, client=client)
         with self.assertRaises(ValueError):
             telemetry.event_sql("issue-100-example", "up", 0, None, {}, client="kimi")
 
@@ -161,6 +158,32 @@ class TelemetryTests(unittest.TestCase):
             run.return_value.returncode = 0
             telemetry.sql("SELECT 1;")
         run.assert_called_once()
+
+    def test_prices_are_validated_and_upserted(self):
+        price = {
+            "model": "claude-opus-5-5",
+            "effective_from": "2026-10-06",
+            "currency": "USD",
+            "input_per_mtok": "4.00",
+            "cache_read_per_mtok": "0.20",
+            "cache_write_per_mtok": "5.00",
+            "output_per_mtok": "20.00",
+            "source": "test",
+        }
+        statement = telemetry.prices_sql({"prices": [price]})
+        self.assertIn("ON CONFLICT (model, effective_from) DO UPDATE", statement)
+        self.assertIn("'2026-10-06'::date", statement)
+        for bad in (
+            {"input_per_mtok": "4.0; DROP TABLE tasks"},
+            {"input_per_mtok": 4.0},
+            {"model": "x'y"},
+            {"currency": "usd"},
+            {"extra": "1"},
+        ):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                telemetry.prices_sql({"prices": [{**price, **bad}]})
+        shipped = json.loads((telemetry.ROOT / "scripts/telemetry/prices.json").read_text())
+        self.assertTrue(telemetry.prices_sql(shipped))
 
 
 if __name__ == "__main__":

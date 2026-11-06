@@ -1,0 +1,8 @@
+{
+  "note": "List prices per million tokens, API-equivalent; a subscription is not billed per token. Cache write = 5-minute TTL (1.25x input). Unlisted models stay unpriced (null cost), never guessed.",
+  "prices": [
+    {"model": "claude-fable-5-1", "effective_from": "2026-10-06", "currency": "USD", "input_per_mtok": "10.00", "cache_read_per_mtok": "0.25", "cache_write_per_mtok": "12.50", "output_per_mtok": "50.00", "source": "Anthropic model table, cached 2026-10-06"},
+    {"model": "claude-opus-5-5", "effective_from": "2026-10-06", "currency": "USD", "input_per_mtok": "4.00", "cache_read_per_mtok": "0.20", "cache_write_per_mtok": "5.00", "output_per_mtok": "20.00", "source": "Anthropic model table, cached 2026-10-06"},
+    {"model": "claude-sonnet-5-5", "effective_from": "2026-10-06", "currency": "USD", "input_per_mtok": "2.00", "cache_read_per_mtok": "0.20", "cache_write_per_mtok": "2.50", "output_per_mtok": "10.00", "source": "Anthropic model table, cached 2026-10-06"}
+  ]
+}

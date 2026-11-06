@@ -15,6 +15,9 @@ from decimal import Decimal, InvalidOperation
 from task_telemetry import literal, sql
 
 TOKENS = ("input_tokens", "cached_input_tokens", "output_tokens", "total_tokens")
+# Optional counters: unknown on legacy rows and for clients without the concept, so they
+# never make the inclusive totals unknown. input_tokens includes cache reads and writes.
+OPTIONAL = ("cache_creation_tokens",)
 IDENTITY = ("sample_id", "provider", "client", "model", "session_id", "source")
 REQUIRED = {
     "version",
@@ -50,7 +53,7 @@ def identifier(value, nullable=False):
 def validate(sample):
     if not isinstance(sample, dict) or not REQUIRED <= sample.keys():
         raise ValueError("missing usage fields")
-    if sample.keys() - REQUIRED - set(TOKENS) - {"model"}:
+    if sample.keys() - REQUIRED - set(TOKENS) - set(OPTIONAL) - {"model"}:
         raise ValueError("unknown usage fields")
     if type(sample["version"]) is not int or sample["version"] != 1:
         raise ValueError("unsupported usage version")
@@ -67,7 +70,7 @@ def validate(sample):
     if not isinstance(sample["kind"], str) or sample["kind"] not in {"delta", "unavailable"}:
         raise ValueError("only nonoverlapping deltas or unavailable usage are supported")
     result = dict(sample)
-    for key in TOKENS:
+    for key in TOKENS + OPTIONAL:
         value = sample.get(key)
         if value is not None and (type(value) is not int or not 0 <= value <= 2**63 - 1):
             raise ValueError("invalid token count")
@@ -78,6 +81,9 @@ def validate(sample):
     inp, cached, out, total = (result[key] for key in TOKENS)
     if inp is not None and cached is not None and cached > inp:
         raise ValueError("cached input exceeds inclusive input")
+    written = result["cache_creation_tokens"]
+    if inp is not None and written is not None and (cached or 0) + written > inp:
+        raise ValueError("cache reads and writes exceed inclusive input")
     if total is not None and (
         (inp is not None and total < inp)
         or (out is not None and total < out)
@@ -102,22 +108,38 @@ def usage_sql(raw):
         "model": sample["model"],
         "external_session_id": sample["session_id"],
         "sampled_at": sample["sampled_at"],
-        **{key: sample[key] for key in TOKENS},
+        **{key: sample[key] for key in TOKENS + OPTIONAL},
     }
 
     def value(key, item):
         if item is None:
             return "NULL"
-        if key in TOKENS:
+        if key in TOKENS + OPTIONAL:
             return str(item)
         if key == "sampled_at":
             return literal(item) + "::timestamptz"
         return literal(item)
 
-    equal = " AND ".join(
-        f"{key} IS NOT DISTINCT FROM {value(key, item)}" for key, item in values.items()
+    # A machine sample belongs to one task: its identity is the source record, not the
+    # task. The first stored copy wins; a later window that overlaps it skips the row.
+    identity_sql = (
+        f"source={literal(sample['source'])} "
+        f"AND external_session_id={literal(sample['session_id'])} "
+        f"AND sample_key={literal(sample['sample_id'])}"
     )
-    # A changed payload with an existing identity is an error, never an overwrite.
+    same = " AND ".join(
+        f"{key} IS NOT DISTINCT FROM {value(key, values[key])}"
+        for key in ("kind", "provider", "client", "model", *TOKENS)
+    )
+    written = sample["cache_creation_tokens"]
+    # A changed payload with an existing identity is an error, never an overwrite. The one
+    # exception fills a counter that was unknown (legacy rows) with the source's value.
+    backfill = (
+        f"UPDATE usage_samples SET cache_creation_tokens={written} WHERE {identity_sql} "
+        f"AND cache_creation_tokens IS NULL AND {same};\n"
+        if written is not None
+        else ""
+    )
     # Serialize imports so concurrent retries cannot silently win a conflict.
     return (
         "BEGIN; SELECT pg_advisory_xact_lock(82002);\n"
@@ -133,8 +155,14 @@ def usage_sql(raw):
         "ON CONFLICT DO NOTHING;\n"
         f"INSERT INTO usage_samples({', '.join(values)}) VALUES "
         f"({', '.join(value(k, v) for k, v in values.items())}) ON CONFLICT DO NOTHING;\n"
-        "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM usage_samples WHERE " + equal + ") THEN "
-        "RAISE EXCEPTION 'conflicting usage sample'; END IF; END $$; COMMIT;"
+        + backfill
+        + "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM usage_samples WHERE "
+        + identity_sql
+        + " AND "
+        + same
+        + " AND cache_creation_tokens IS NOT DISTINCT FROM "
+        + value("cache_creation_tokens", written)
+        + ") THEN RAISE EXCEPTION 'conflicting usage sample'; END IF; END $$; COMMIT;"
     )
 
 
@@ -152,12 +180,47 @@ SELECT json_build_object(
     checked_at,status,reason,baseline_tokens,latest_tokens FROM usage_collections) c), '[]'),
  'usage', COALESCE((SELECT json_agg(u) FROM
    (SELECT a.task_id, s.provider, s.client, s.model, s.input_tokens,
-    s.cached_input_tokens, s.output_tokens, s.total_tokens,
+    s.cached_input_tokens, s.output_tokens, s.total_tokens, s.cache_creation_tokens,
+    s.sampled_at, s.external_session_id,
     CASE WHEN s.sample_key IS NOT NULL AND s.pricing_metadata IS NOT NULL
          THEN s.estimated_cost::text END AS estimated_cost, s.currency,
     s.pricing_metadata FROM usage_samples s
-    JOIN agent_sessions a USING(session_id)) u), '[]'));
+    JOIN agent_sessions a USING(session_id)) u), '[]'),
+ 'prices', COALESCE((SELECT json_agg(p) FROM
+   (SELECT model, effective_from, currency, input_per_mtok::text, cache_read_per_mtok::text,
+    cache_write_per_mtok::text, output_per_mtok::text, source FROM model_prices) p), '[]'));
 """
+
+
+def list_price(sample, prices):
+    """API-equivalent list price of one sample, or None when anything is unknown.
+
+    input_tokens is inclusive: uncached = input - cache reads - cache writes. A sample
+    without a known cache-write count (legacy rows) is unpriced rather than guessed.
+    """
+    when = sample.get("sampled_at")
+    counts = [sample.get(k) for k in ("input_tokens", "cached_input_tokens", "output_tokens")]
+    written = sample.get("cache_creation_tokens")
+    if sample.get("client") == "codex" and written is None:
+        written = 0  # Codex reports no cache writes; OpenAI does not bill them separately.
+    if when is None or written is None or any(c is None for c in counts):
+        return None
+    day = timestamp(when).date().isoformat()
+    matching = [
+        p for p in prices if p["model"] == sample.get("model") and p["effective_from"] <= day
+    ]
+    if not matching:
+        return None
+    price = max(matching, key=lambda p: p["effective_from"])
+    inp, read, out = counts
+    million = Decimal(1_000_000)
+    cost = (
+        Decimal(inp - read - written) * Decimal(price["input_per_mtok"])
+        + Decimal(read) * Decimal(price["cache_read_per_mtok"])
+        + Decimal(written) * Decimal(price["cache_write_per_mtok"])
+        + Decimal(out) * Decimal(price["output_per_mtok"])
+    ) / million
+    return price, cost.quantize(Decimal("0.0000000001"))
 
 
 def report(data):
@@ -216,10 +279,27 @@ def report(data):
             for key in TOKENS
         }
         costs = {}
+        provenance = set()
+        unpriced_models = set()
+        priced = 0
         for u in samples:
-            if u["estimated_cost"] is not None and u["currency"] is not None:
+            if u.get("estimated_cost") is not None and u.get("currency") is not None:
                 c = u["currency"]
                 costs[c] = costs.get(c, Decimal(0)) + Decimal(u["estimated_cost"])
+                priced += 1
+                continue
+            listed = list_price(u, data.get("prices", []))
+            if listed is None:
+                unpriced_models.add(str(u.get("model")))
+                continue
+            price, cost = listed
+            costs[price["currency"]] = costs.get(price["currency"], Decimal(0)) + cost
+            provenance.add(
+                json.dumps(
+                    {k: price[k] for k in ("model", "effective_from", "source")}, sort_keys=True
+                )
+            )
+            priced += 1
         slots = sorted({e["slot"] for e in events if e.get("slot")})
         dimensions = sorted({(u["provider"], u["client"], u["model"]) for u in samples}, key=str)
         tasks.append(
@@ -246,17 +326,16 @@ def report(data):
                 "pricing_provenance": [
                     json.loads(p)
                     for p in sorted(
-                        {
+                        provenance
+                        | {
                             json.dumps(u["pricing_metadata"], sort_keys=True)
                             for u in samples
                             if u.get("pricing_metadata")
                         }
                     )
                 ],
-                "cost_complete": bool(samples)
-                and all(
-                    u["estimated_cost"] is not None and u["currency"] is not None for u in samples
-                ),
+                "cost_complete": bool(samples) and priced == len(samples),
+                "unpriced_models": sorted(unpriced_models),
                 "time_to_pr_seconds": elapsed(
                     lambda e: e["event_type"] == "create-pr" and e["result"] == 0
                 ),

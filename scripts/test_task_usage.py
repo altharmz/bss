@@ -210,6 +210,63 @@ class UsageTests(unittest.TestCase):
         self.assertFalse(t["cost_complete"])
         self.assertEqual(t["known_cost_by_currency"]["USD"], "0.0021000000")
 
+    def test_list_price_cost_is_exact_and_unknowns_stay_unpriced(self):
+        task = "issue-232-cost"
+        price = {
+            "model": "claude-opus-5-5",
+            "effective_from": "2026-10-06",
+            "currency": "USD",
+            "input_per_mtok": "4.0000",
+            "cache_read_per_mtok": "0.2000",
+            "cache_write_per_mtok": "5.0000",
+            "output_per_mtok": "20.0000",
+            "source": "test",
+        }
+        row = {
+            "task_id": task,
+            "provider": "anthropic",
+            "client": "claude",
+            "model": "claude-opus-5-5",
+            "sampled_at": "2026-11-01T10:00:00Z",
+            # 1M inclusive input: 600k reads, 100k writes, 300k uncached; 10k output.
+            "input_tokens": 1_000_000,
+            "cached_input_tokens": 600_000,
+            "cache_creation_tokens": 100_000,
+            "output_tokens": 10_000,
+            "total_tokens": 1_010_000,
+            "estimated_cost": None,
+            "currency": None,
+        }
+        data = {
+            "tasks": [
+                {
+                    "task_id": task,
+                    "started_at": "2026-11-01T09:00:00Z",
+                    "ended_at": None,
+                    "outcome": None,
+                }
+            ],
+            "events": [],
+            "usage": [row],
+            "prices": [price],
+        }
+        t = usage.report(data)["tasks"][0]
+        # 0.3*4 + 0.6*0.2 + 0.1*5 + 0.01*20 = 1.2 + 0.12 + 0.5 + 0.2
+        self.assertEqual(t["known_cost_by_currency"], {"USD": "2.0200000000"})
+        self.assertTrue(t["cost_complete"])
+        self.assertEqual(t["pricing_provenance"][0]["source"], "test")
+        for change in (
+            {"cache_creation_tokens": None},
+            {"model": "unpriced-model"},
+            {"sampled_at": "2026-10-01T10:00:00Z"},
+        ):
+            with self.subTest(change=change):
+                data["usage"] = [{**row, **change}]
+                t = usage.report(data)["tasks"][0]
+                self.assertEqual(t["known_cost_by_currency"], {})
+                self.assertFalse(t["cost_complete"])
+                self.assertTrue(t["unpriced_models"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

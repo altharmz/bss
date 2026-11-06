@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import task_collect as collect
-from task_usage import report
+from task_usage import report, timestamp
 
 TASK = "issue-124-usage"
 SID = "00000000-0000-0000-0000-000000000001"
@@ -451,6 +451,118 @@ class CollectionTests(unittest.TestCase):
         task = report(data)["tasks"][0]
         self.assertFalse(task["collection_complete"])
         self.assertTrue(task["missing_startup"])
+
+    def test_subagent_make_binds_its_own_agent_session(self):
+        with patch.object(collect, "claude_session", return_value=SID):
+            environ = {"BSS_TASK_OWNER": "claude", "BSS_TELEMETRY_AGENT": "a4fbc098e052c5224"}
+            self.assertEqual(collect.current(environ), ("claude", SID + ":agent:a4fbc098e052c5224"))
+            self.assertEqual(collect.current({"BSS_TASK_OWNER": "claude"}), ("claude", SID))
+            # Anything but a plain agent id is ignored, never spliced into a path.
+            bad = {"BSS_TASK_OWNER": "claude", "BSS_TELEMETRY_AGENT": "../x"}
+            self.assertEqual(collect.current(bad), ("claude", SID))
+
+    def test_parallel_subagents_are_charged_only_to_their_own_issue(self):
+        # An orchestrator bound to TASK owns three children: one it spawned for this
+        # issue, one that ran make start-task for another issue, one spawned earlier.
+        parent = dict(
+            task_id=TASK,
+            client="claude",
+            external_session_id=SID,
+            bound_at=when(10),
+            closed_at=None,
+            next_bound_at=when(40),
+        )
+        mine, theirs, earlier = (SID + ":agent:" + n for n in ("mine", "theirs", "earlier"))
+        starts = {mine: when(20), theirs: when(21), earlier: when(5)}
+        rows = [parent]
+        with (
+            patch.object(collect, "sql", return_value="[]"),
+            patch.object(collect, "collection_rows", side_effect=lambda task: list(rows)),
+            patch.object(
+                collect,
+                "delegates",
+                side_effect=lambda r: [mine, theirs, earlier] if r is parent else [],
+            ),
+            patch.object(collect, "explicitly_bound", return_value={theirs}),
+            patch.object(collect, "first_seen", side_effect=lambda c, s: timestamp(starts[s])),
+            patch.object(collect, "bind") as bind,
+            patch.object(collect, "collect_one", return_value={}),
+        ):
+            collect.collect(TASK)
+        bound = [c.args[2] for c in bind.call_args_list]
+        self.assertEqual(bound, [mine])
+        self.assertEqual(bind.call_args.kwargs["binding"], "delegated")
+
+    def test_spawn_window_is_half_open_and_requires_a_start(self):
+        row = dict(bound_at=when(10), closed_at=when(30), next_bound_at=None)
+        self.assertTrue(collect.spawned_within(row, timestamp(when(10))))
+        self.assertFalse(collect.spawned_within(row, timestamp(when(30))))
+        self.assertFalse(collect.spawned_within(row, timestamp(when(9))))
+        self.assertFalse(collect.spawned_within(row, None))
+        self.assertTrue(collect.spawned_within({**row, "closed_at": None}, timestamp(when(59))))
+
+    def test_explicit_binding_upgrades_delegated_and_only_explicit_closes_others(self):
+        with patch.object(collect, "sql") as sql:
+            collect.bind(TASK, "claude", SID, binding="delegated")
+        delegated = sql.call_args.args[0]
+        self.assertIn("'delegated'", delegated)
+        self.assertIn("AND 'delegated'='explicit'", delegated)
+        with patch.object(collect, "sql") as sql:
+            collect.bind(TASK, "claude", SID)
+        explicit = sql.call_args.args[0]
+        self.assertIn("DO UPDATE SET binding='explicit'", explicit)
+        with self.assertRaises(ValueError):
+            collect.bind(TASK, "claude", SID, binding="guessed")
+
+    def test_reset_removes_only_this_tasks_projection(self):
+        with patch.object(collect, "sql") as sql:
+            collect.reset(TASK)
+        statement = sql.call_args.args[0]
+        self.assertIn(f"task_id='{TASK}'", statement)
+        self.assertIn(f"LIKE '{TASK}:usage:%'", statement)
+        self.assertNotIn("DELETE FROM tasks", statement)
+        self.assertNotIn("workflow_events", statement)
+        with self.assertRaises(ValueError):
+            collect.reset("issue-1-x'; DROP TABLE tasks; --")
+
+    def test_claude_cache_writes_are_kept_apart_from_reads(self):
+        path = self.source("claude")
+        samples, _, _ = collect.project("claude", path, SID)
+        self.assertEqual({s["cache_creation_tokens"] for s in samples}, {20})
+        for s in samples:
+            self.assertLessEqual(
+                s["cached_input_tokens"] + s["cache_creation_tokens"], s["input_tokens"]
+            )
+
+    def test_synthetic_messages_and_tool_ended_turns(self):
+        rows = fixture("claude")[:2]
+        rows.append(
+            dict(
+                type="assistant",
+                timestamp=when(2),
+                sessionId=SID,
+                message=dict(
+                    id="local-1",
+                    model="<synthetic>",
+                    stop_reason="stop_sequence",
+                    usage=dict(input_tokens=0, output_tokens=0),
+                ),
+            )
+        )
+        rows.append(dict(type="user", timestamp=when(3), toolEndsTurn=True, content=PRIVATE))
+        samples, ended, reason, active = collect.project(
+            "claude", self.source("claude", rows), SID, with_state=True
+        )
+        self.assertEqual([s["sample_id"] for s in samples], ["msg-1"])
+        self.assertEqual(ended, [when(2), when(3)])
+        self.assertFalse(active)
+        self.assertIsNone(reason)
+
+    def test_first_seen_reads_the_first_dated_record(self):
+        self.source("claude")
+        with patch.object(Path, "home", return_value=self.home):
+            self.assertEqual(collect.first_seen("claude", SID), timestamp(when(1)))
+            self.assertIsNone(collect.first_seen("claude", SID + ":agent:none"))
 
 
 if __name__ == "__main__":

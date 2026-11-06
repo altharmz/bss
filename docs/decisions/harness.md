@@ -73,6 +73,14 @@ hook `format.sh` runs ruff (Python) or prettier (frontend) on every edited file 
 task's containers; it strips imports that are not used yet. `.codex/patch-guard.sh` applies
 the same file denies to Codex's `apply_patch`.
 
+The second PreToolUse hook, `agent-telemetry.py`, gives usage telemetry the subagent
+identity ([telemetry-usage.md](../telemetry-usage.md#collecting-usage)). It rewrites a
+subagent's `make X` into `make BSS_TELEMETRY_AGENT=<id> X` through `updatedInput`, without
+a permission decision. An environment prefix would break the `Bash(make:*)` allow rule
+(only a fixed list of variables is stripped for matching); a make variable after `make`
+keeps it, and make exports command-line variables to recipes. Quoted text and heredoc
+bodies are never touched; the main thread (no `agent_id`) is never rewritten.
+
 ## GitHub board automation
 
 The BSS project's own workflows (auto-add, item closed, pull request merged, ...) add
