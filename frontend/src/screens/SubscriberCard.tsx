@@ -56,6 +56,7 @@ import {
   ProductChangeDialog,
   type ProductAction,
 } from './ProductActions';
+import { PaymentMethodsPanel } from './PaymentMethods';
 import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
 import { FailedCommands, OrderWatch } from './PrepaidOrderWatch';
 import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
@@ -513,6 +514,7 @@ function Card({
             settlement={settlement.status === 'ok' ? settlement.data : null}
             onChanged={reload}
           />
+          <PaymentMethodsPanel account={account} version={version} onChanged={reload} />
         </>,
       )}
       {pane(

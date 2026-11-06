@@ -36,6 +36,23 @@ export function tmfError(status: number, reason: string): Response {
   );
 }
 
+// The subscriber card's Payment methods panel (issue 185b) loads the saved cards and the
+// auto top-up rule on every render; a test that is not about them gets an empty answer.
+function paymentPanelDefault(key: string): Handler | undefined {
+  if (key.startsWith('GET /tmf-api/paymentMethod/v4/paymentMethod?account.id='))
+    return () => json([], { total: 0 });
+  if (/^GET \/internal\/v1\/billingAccount\/[^/]+\/autoTopup$/.test(key))
+    return () =>
+      json({
+        enabled: false,
+        threshold: null,
+        amount: null,
+        defaultPaymentMethod: null,
+        changedAt: null,
+      });
+  return undefined;
+}
+
 export function stubFetch(routes: Record<string, Handler>) {
   const calls: string[] = [];
   routes = { [NAV_COMMANDS]: noCommands, ...routes };
@@ -43,7 +60,7 @@ export function stubFetch(routes: Record<string, Handler>) {
     const url = typeof input === 'string' ? input : input.toString();
     const key = `${init?.method ?? 'GET'} ${url}`;
     calls.push(key);
-    const handler = routes[key];
+    const handler = routes[key] ?? paymentPanelDefault(key);
     if (!handler) {
       unexpected.push(key);
       throw new Error(`unexpected request in test: ${key}`);
