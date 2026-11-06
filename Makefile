@@ -317,6 +317,9 @@ runtime-check: ## The harness script tests (scripts/test_*.py, run in parallel, 
 		scripts/test_task_telemetry.py \
 		scripts/test_task_usage.py \
 		scripts/test_task_collect.py \
+		scripts/test_agent_telemetry_hook.py \
+		scripts/test_task_facts.py \
+		scripts/test_task_summary.py \
 		scripts/test_script_quality.py \
 		scripts/test_docs_links.py \
 		scripts/test_compose_prod.py \
@@ -336,14 +339,22 @@ telemetry-collect: export BSS_COLLECT_TASK = $(TASK)
 telemetry-collect: export BSS_COLLECT_CLIENT = $(CLIENT)
 telemetry-collect: export BSS_COLLECT_SESSION = $(SESSION_ID)
 telemetry-collect: export BSS_COLLECT_CLOSE = $(CLOSE)
-telemetry-collect: ## Collect bound machine usage (optional TASK= CLIENT= SESSION_ID= CLOSE=1)
+telemetry-collect: export BSS_COLLECT_RESET = $(RESET)
+telemetry-collect: ## Collect bound machine usage (optional TASK= CLIENT= SESSION_ID= CLOSE=1; RESET=1 re-attributes TASK from sources)
 	python3 -B scripts/task_collect.py
 
-.PHONY: telemetry-report
+.PHONY: telemetry-report telemetry-summary telemetry-facts
 telemetry-report: ## Report task usage, priced subtotals and observed lifecycle metrics as JSON
 	python3 -B scripts/task_usage.py report
 
-.PHONY: telemetry-up telemetry-down telemetry-migrate telemetry-health telemetry-test
+telemetry-summary: ## One row per issue (tokens, cost, active/wall time, prompts, friction, PR size) and rollups (JSON=1 for JSON)
+	python3 -B scripts/task_summary.py $(if $(filter 1,$(JSON)),--json,)
+
+telemetry-facts: export BSS_FACTS_TASK = $(TASK)
+telemetry-facts: ## Capture or refresh GitHub facts (PR size, labels, epic, follow-ups) for merged tasks (optional TASK=)
+	python3 -B scripts/task_facts.py $(if $(TASK),--task "$$BSS_FACTS_TASK",)
+
+.PHONY: telemetry-up telemetry-down telemetry-migrate telemetry-health telemetry-test telemetry-prices
 telemetry-test: ## Test the running telemetry schema (all test data rolled back)
 	python3 -B scripts/test_telemetry_database.py
 
@@ -355,6 +366,9 @@ telemetry-down: ## Stop shared telemetry storage, preserving its volume
 
 telemetry-migrate: ## Apply versioned telemetry schema migrations
 	python3 -B scripts/task_telemetry.py migrate
+
+telemetry-prices: ## Load the hand-maintained model list prices (scripts/telemetry/prices.json)
+	python3 -B scripts/task_telemetry.py prices
 
 telemetry-health: ## Check shared telemetry database and schema
 	python3 -B scripts/task_telemetry.py health

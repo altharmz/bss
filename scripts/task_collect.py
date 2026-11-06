@@ -133,7 +133,13 @@ def project(client, path, session, with_state=False):
             )
         elif client == "claude":
             if kind == "user":
-                active = True
+                # A subagent's last turn can end on a tool result (its final answer tool)
+                # rather than an end_turn message; Claude marks that record.
+                if row.get("toolEndsTurn") is True and isinstance(row.get("timestamp"), str):
+                    ended.append(row["timestamp"])
+                    active = False
+                else:
+                    active = True
             if kind != "assistant":
                 continue
             if row.get("isSidechain") and ":agent:" not in session:
@@ -146,6 +152,13 @@ def project(client, path, session, with_state=False):
             raw = message.get("usage")
             mid = message.get("id")
             if not mid or not isinstance(raw, dict):
+                continue
+            # Locally generated messages (errors, interruptions) made no API request; a
+            # final one still ends the turn.
+            if message.get("model") == "<synthetic>":
+                if message.get("stop_reason") is not None:
+                    ended.append(row["timestamp"])
+                    active = False
                 continue
             # Only finalized API messages; intermediate streaming usage is mutable.
             if message.get("stop_reason") is None:
@@ -163,6 +176,7 @@ def project(client, path, session, with_state=False):
                 sampled_at=row["timestamp"],
                 input_tokens=inp,
                 cached_input_tokens=count(raw.get("cache_read_input_tokens")),
+                cache_creation_tokens=count(raw.get("cache_creation_input_tokens")),
                 output_tokens=out,
                 total_tokens=add(inp, out),
             )
@@ -209,6 +223,7 @@ def project(client, path, session, with_state=False):
                     sampled_at=datetime.fromtimestamp(row["time"] / 1000, UTC).isoformat(),
                     input_tokens=inp,
                     cached_input_tokens=count(raw.get("inputCacheRead")),
+                    cache_creation_tokens=count(raw.get("inputCacheCreation")),
                     output_tokens=out,
                     total_tokens=add(inp, out),
                 )
@@ -218,6 +233,101 @@ def project(client, path, session, with_state=False):
     if with_state:
         return output, ended, reason, active
     return output, ended, reason
+
+
+def activity(client, path, session):
+    """Content-free effectiveness signals: human prompt times and agent turn intervals.
+
+    A turn runs from the first record after the previous turn end to the next turn end
+    (tool runs inside a turn count as active). Only structure is inspected: record
+    types, flags and block types, never text. Subagent sessions have no human prompts.
+    """
+    agent = session.partition(":agent:")[2]
+    prompts, turns = [], []
+    start = last = None
+
+    def when(row):
+        if client == "kimi":
+            value = row.get("time")
+            return datetime.fromtimestamp(value / 1000, UTC) if isinstance(value, int) else None
+        value = row.get("timestamp")
+        return timestamp(value) if isinstance(value, str) else None
+
+    for row in records(path):
+        if row.get("incomplete_append"):
+            break
+        kind = row.get("type")
+        moment = when(row)
+        if moment is None:
+            continue
+        prompt = end = False
+        relevant = True
+        if client == "claude":
+            if row.get("isSidechain") and not agent:
+                continue
+            message = row.get("message") if isinstance(row.get("message"), dict) else {}
+            if kind == "user" and row.get("isMeta"):
+                continue  # Injected context (caveats, reminders), neither prompt nor work.
+            if kind == "user":
+                content = message.get("content")
+                tool_result = isinstance(content, list) and any(
+                    isinstance(b, dict) and b.get("type") == "tool_result" for b in content
+                )
+                prompt = not (
+                    agent or tool_result or row.get("isCompactSummary") or "toolUseResult" in row
+                )
+                end = row.get("toolEndsTurn") is True
+            elif kind == "assistant":
+                stop = message.get("stop_reason")
+                end = stop == "end_turn" or (
+                    message.get("model") == "<synthetic>" and stop is not None
+                )
+            else:
+                relevant = False
+        elif client == "codex":
+            payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+            event = payload.get("type") if kind == "event_msg" else kind
+            prompt = event == "task_started"
+            end = event in {"task_complete", "turn_complete", "turn_aborted"}
+            relevant = kind in {"event_msg", "turn_context", "response_item"}
+        else:
+            if row.get("agentId") not in {None, agent or "main"}:
+                continue
+            prompt = kind == "turn.prompt" and not agent
+            end = kind in {"agent.turn.ended", "turn.ended"}
+            relevant = kind in {
+                "turn.prompt",
+                "agent.turn.started",
+                "llm.request",
+                "usage.record",
+                "agent.turn.ended",
+                "turn.ended",
+            }
+        if not relevant:
+            continue
+        if prompt:
+            prompts.append(moment)
+        if start is None:
+            start = moment
+        last = moment
+        if end:
+            turns.append((start, moment))
+            start = None
+    if start is not None and last is not None:
+        turns.append((start, last))
+    return prompts, turns
+
+
+def window_activity(prompts, turns, start, end):
+    """Human prompts and active milliseconds inside [start, end) (end None = open)."""
+    inside = sum(1 for p in prompts if p >= start and (end is None or p < end))
+    total = 0.0
+    for begin, finish in turns:
+        lo = max(begin, start)
+        hi = finish if end is None else min(finish, end)
+        if hi > lo:
+            total += (hi - lo).total_seconds()
+    return inside, int(total * 1000)
 
 
 def locate(client, session, home=None):
@@ -273,6 +383,11 @@ def current(environ):
     )
     if not session and client == "claude":
         session = claude_session()
+        # A subagent's make call carries its agent id (.claude/hooks/agent-telemetry.py):
+        # bind the agent's own source, never the orchestrating parent session.
+        agent = environ.get("BSS_TELEMETRY_AGENT")
+        if session and agent and re.fullmatch(r"[a-z0-9]{1,64}", agent):
+            session = f"{session}:agent:{agent}"
     if not session and client == "kimi":
         session = kimi_session()
     if session:
@@ -344,8 +459,15 @@ def claude_session():
     return None
 
 
-def bind(task, client, session, bound_at=None):
-    """The first binding wins. Rebinding a session closes its previous issue window."""
+def bind(task, client, session, bound_at=None, binding="explicit"):
+    """The first binding wins. Rebinding a session closes its previous issue window.
+
+    'explicit': the session itself ran a lifecycle target (or an operator named it).
+    'delegated': a child discovered inside a bound parent's window. An explicit binding
+    upgrades a delegated one, never the reverse.
+    """
+    if binding not in {"explicit", "delegated"}:
+        raise ValueError("invalid binding kind")
     identifier(task)
     task_match = re.fullmatch(r"issue-([1-9][0-9]*)-[a-z0-9-]+", task)
     if not task_match or len(task) > 80:
@@ -374,9 +496,12 @@ def bind(task, client, session, bound_at=None):
         INSERT INTO tasks(task_id,issue_number,branch)
          VALUES({t},{int(task_match[1])},{t}) ON CONFLICT DO NOTHING;
         UPDATE usage_collections SET closed_at = COALESCE(closed_at, now())
-         WHERE client={c} AND external_session_id={s} AND task_id<>{t};
-        INSERT INTO usage_collections(task_id,client,external_session_id,source,bound_at)
-         VALUES({t},{c},{s},{source},{boundary}) ON CONFLICT DO NOTHING; COMMIT;""")
+         WHERE client={c} AND external_session_id={s} AND task_id<>{t}
+         AND {literal(binding)}='explicit';
+        INSERT INTO usage_collections(task_id,client,external_session_id,source,bound_at,binding)
+         VALUES({t},{c},{s},{source},{boundary},{literal(binding)})
+         ON CONFLICT (task_id,client,external_session_id) DO UPDATE SET binding='explicit'
+         WHERE {literal(binding)}='explicit'; COMMIT;""")
 
 
 def delegates(row):
@@ -414,6 +539,45 @@ def delegates(row):
     return found
 
 
+def first_seen(client, session):
+    """Timestamp of the source's first dated record: when a delegated session started."""
+    try:
+        for row in records(locate(client, session)):
+            if client == "kimi" and isinstance(row.get("time"), int):
+                return datetime.fromtimestamp(row["time"] / 1000, UTC)
+            if client != "kimi" and isinstance(row.get("timestamp"), str):
+                return timestamp(row["timestamp"])
+    except (CollectionError, OSError, ValueError, TypeError, OverflowError):
+        return None
+    return None
+
+
+def explicitly_bound(client, children):
+    """Children that ran a lifecycle target themselves belong only to their own task."""
+    if not children:
+        return set()
+    names = ",".join(literal(c) for c in children)
+    return set(
+        json.loads(
+            sql(
+                "SELECT COALESCE(json_agg(DISTINCT external_session_id),'[]') "
+                f"FROM usage_collections WHERE client={literal(client)} "
+                f"AND binding='explicit' AND external_session_id IN ({names});"
+            )
+        )
+    )
+
+
+def spawned_within(row, started):
+    """A delegate belongs to a parent window only when it started inside that window."""
+    if started is None:
+        return False
+    if started < timestamp(row["bound_at"]):
+        return False
+    ends = [timestamp(row[k]) for k in ("closed_at", "next_bound_at") if row.get(k)]
+    return not ends or started < min(ends)
+
+
 def collection_rows(task):
     identifier(task)
     return json.loads(
@@ -434,11 +598,13 @@ def collect_one(row, home=None):
     )
     status, reason, samples = "unavailable", "counters_missing", []
     baseline = latest = None
+    human_prompts = active_ms = None
     try:
         if session == "unavailable":
             raise CollectionError("session_identity_missing")
         path = locate(client, session, home)
         items, ended, limitation, active = project(client, path, session, with_state=True)
+        prompt_times, turns = activity(client, path, session)
         start = timestamp(row["bound_at"])
         close = timestamp(row["closed_at"]) if row.get("closed_at") else None
         # A make command runs before its enclosing model request finishes. Wait for
@@ -465,6 +631,7 @@ def collect_one(row, home=None):
                 for k in TOKENS
             }
 
+        human_prompts, active_ms = window_activity(prompt_times, turns, start, end)
         baseline = total([i for i in items if timestamp(i["sampled_at"]) < start])
         latest = total(
             [
@@ -524,7 +691,9 @@ def collect_one(row, home=None):
         f"reason={literal(reason)},baseline_tokens="
         f"CASE WHEN baseline_tokens IS NULL OR baseline_tokens='null'::jsonb "
         f"THEN {literal(json.dumps(baseline))}::jsonb ELSE baseline_tokens END,"
-        f"latest_tokens={literal(json.dumps(latest))}::jsonb WHERE {key};"
+        f"latest_tokens={literal(json.dumps(latest))}::jsonb,"
+        f"human_prompts={'NULL' if human_prompts is None else int(human_prompts)},"
+        f"active_ms={'NULL' if active_ms is None else int(active_ms)} WHERE {key};"
     )
     sql("BEGIN;\n" + "\n".join(statements) + "\nCOMMIT;")
     return dict(
@@ -550,14 +719,19 @@ def collect(task, client=None, session=None, close=False):
     for missing in set(expected) - existing:
         if missing in CLIENTS:
             bind(task, missing, "unavailable")
-    # Recursively include nested delegates. Parent binding times constrain their
-    # sources too; no client/provider/model identity is derived from a worker slot.
+    # Recursively include nested delegates spawned inside the parent's window, unless
+    # they bound a task themselves: an orchestrator running several issues in parallel
+    # owns many children, and time slicing alone would charge them to the wrong issue.
     rows = collection_rows(task)
     known = {(r["client"], r["external_session_id"]) for r in rows}
     for row in rows:
-        for child in delegates(row):
+        children = [c for c in delegates(row) if (row["client"], c) not in known]
+        owned = explicitly_bound(row["client"], children)
+        for child in children:
+            if child in owned or not spawned_within(row, first_seen(row["client"], child)):
+                continue
             if (row["client"], child) not in known:
-                bind(task, row["client"], child, row["bound_at"])
+                bind(task, row["client"], child, row["bound_at"], binding="delegated")
                 known.add((row["client"], child))
                 rows.extend(
                     r
@@ -570,6 +744,24 @@ def collect(task, client=None, session=None, close=False):
             f"WHERE task_id={literal(task)};"
         )
     return [collect_one(row) for row in collection_rows(task)]
+
+
+def reset(task):
+    """Forget a task's bindings and samples so they can be re-attributed from sources.
+
+    Sources stay on disk; only this task's projection is removed. Used when a task's
+    attribution was wrong (for example, before subagents bound their own issue).
+    """
+    identifier(task)
+    t = literal(task)
+    sql(
+        "BEGIN; SELECT pg_advisory_xact_lock(82003);\n"
+        "DELETE FROM usage_samples WHERE session_id IN (SELECT session_id FROM agent_sessions "
+        f"WHERE task_id={t} AND session_id LIKE {literal(task + ':usage:%')});\n"
+        f"DELETE FROM agent_sessions WHERE task_id={t} "
+        f"AND session_id LIKE {literal(task + ':usage:%')};\n"
+        f"DELETE FROM usage_collections WHERE task_id={t};\nCOMMIT;"
+    )
 
 
 def watch(task, attempts=60, pause=2):
@@ -608,6 +800,24 @@ def launch_final_capture(task):
     )
 
 
+def capture_facts(task):
+    """PR size, labels and epic once the PR is merged; refresh later with telemetry-facts."""
+    try:
+        import task_facts
+
+        task_facts.capture(task)
+    except (
+        ImportError,
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        RuntimeError,
+        subprocess.SubprocessError,
+    ):
+        print("telemetry: PR facts not captured; retry make telemetry-facts", file=sys.stderr)
+
+
 def automatic(task, operation, client=None, result=0, pr_number=None):
     """Fail open but visibly; retries reread bound sources, including closed sessions."""
     try:
@@ -618,6 +828,8 @@ def automatic(task, operation, client=None, result=0, pr_number=None):
         results = collect(task, client, session, close=operation == "task-completed")
         if operation == "task-completed" and any(r["status"] == "partial" for r in results):
             launch_final_capture(task)
+        if operation == "task-completed":
+            capture_facts(task)
         if operation in {"start-task", "finish-task", "task-completed"}:
             print("telemetry collection: " + json.dumps(results, sort_keys=True), file=sys.stderr)
         if operation == "start-task" and any(
@@ -691,6 +903,10 @@ def main():
         if args.watch:
             print(json.dumps({"collections": watch(task)}, sort_keys=True))
             return 0
+        if os.environ.get("BSS_COLLECT_RESET") == "1":
+            if not args.task:
+                raise ValueError("reset requires an explicit task")
+            reset(task)
         result = collect(task, client, session, close=os.environ.get("BSS_COLLECT_CLOSE") == "1")
         print(json.dumps({"collections": result}, sort_keys=True))
         return int(not result or any(r["status"] == "unavailable" for r in result))

@@ -19,9 +19,16 @@ make telemetry-down      # stop, keep the volume
 make telemetry-test      # schema test in a rolled-back transaction
 ```
 
+Only a real checkout writes: scripts refuse storage when `compose.telemetry.yaml` is missing
+(a disposable test repository) or `BSS_TELEMETRY_DISABLED=1` (set by `make runtime-check`
+for every suite). Before this guard, harness tests wrote rows for fixture tasks; migration
+`004_test_rows.sql` removed them.
+
 Tables: `tasks` (issue branch, start/end/outcome), `agent_sessions`, `workflow_events`
-(operation, result, duration, bounded metadata) and `usage_samples` (token counts; cost
-columns exist but nothing fills them automatically). Rows are kept indefinitely.
+(operation, result, duration, bounded metadata), `usage_samples` (token counts; one machine
+sample belongs to at most one task), `usage_collections` (one bound window per task and
+session, `binding` explicit or delegated), `model_prices` and `task_facts`. Rows are kept
+indefinitely.
 
 ## Collecting usage
 
@@ -36,15 +43,28 @@ startup, `BSS_TELEMETRY_SESSION_ID=<uuid> make start-task BSS_TASK_OWNER=kimi`).
 | Claude | `~/.claude/projects/*/<session>.jsonl` (`message.usage`) | process registry or `CLAUDE_SESSION_ID` |
 | Kimi Code | `~/.kimi-code/sessions/*/session_<id>/agents/main/wire.jsonl` | session-lock registry or `KIMI_SESSION_ID` |
 
-Delegated sessions are followed where the client records the parent relationship; an
-unrelated source is never attributed by recency or slot. A rebinding closes the previous
-window, so one event never belongs to two issues. `finish-task` closes all windows and
+**Subagents bind their own issue.** For Claude, the PreToolUse hook
+`.claude/hooks/agent-telemetry.py` sees `agent_id` (present only on a subagent's tool call)
+and inserts `BSS_TELEMETRY_AGENT=<id>` after each `make` that starts a command segment
+(never inside quotes or a heredoc). `make start-task` run by a subagent therefore binds
+`<session>:agent:<id>`, not the orchestrating parent. Codex subagents have their own thread
+id already.
+
+A delegated child (found through the parent relationship the client records) is added to
+the parent's task only when it started inside the parent's window and never bound a task
+itself; an orchestrator running several issues in parallel would otherwise charge every
+child to whichever issue it bound last. An unrelated source is never attributed by recency
+or slot. An explicit rebinding closes the previous window; a sample already stored for one
+task is skipped by any other. `finish-task` closes all windows and
 starts a bounded two-minute final-tail collector. A missing final counter leaves the
 collection `partial / final_counter_pending`.
 
 Other commands: `make telemetry-watch TASK=<task>` (retry the final tail),
 `make telemetry-probe CLIENT= SESSION_ID=` (validate a source without attributing it) and
 `CLOSE=1` on `telemetry-collect` to end all sessions of a task finished outside the lifecycle.
+`RESET=1` (with `TASK=`, usually with `CLIENT= SESSION_ID=`) drops that task's bindings and
+samples and re-attributes it from the source files, which are never changed. The prepaid
+epic (#183-#194) was re-attributed this way, one subagent per issue.
 
 ## Reporting
 
@@ -53,3 +73,33 @@ Other commands: `make telemetry-watch TASK=<task>` (retry the final tail),
 timings, and groups by provider, client, model and slot. Token totals are null when there are
 no samples or any sample lacks a count. Groups describe participation and must not be added
 together. Coverage cannot prove that unregistered work is absent; this is not an invoice.
+
+Effectiveness, per task:
+
+- `friction`: failed attempts per lifecycle target (`commit`, `create-pr`, `sync-task`, ...);
+  `check-pr` counts only when CI failed, not while it is pending.
+- `human_prompts`: real user prompts inside the bound windows (Claude user records that are
+  not tool results or injected context, Codex `task_started`, Kimi `turn.prompt`); a
+  subagent has none. A count only, never text.
+- `agent_active_seconds`: summed turn time inside the windows (a turn runs from its first
+  record to its turn end, tool runs included). Parallel agents add up, so it can exceed
+  wall time; `time_to_merge_seconds` is the wall time.
+- `facts`: from GitHub, captured at `task-completed` and refreshed with
+  `make telemetry-facts [TASK=]` (`scripts/task_facts.py`): PR additions, deletions, files
+  and commits, issue labels, the sub-issue parent as epic (null when an epic lists its
+  issues in its body), and later issues or PRs that reference the issue (`followups`, with
+  labels) and whether one is a revert. Numbers and labels only.
+
+`make telemetry-summary` (`JSON=1` for JSON, `scripts/task_summary.py`) prints one row per
+issue and rollups by model, client, label and epic. A `~` marks a row with incomplete
+coverage or pricing; rollups add tokens only from fully covered rows and cost only from
+fully priced ones, and show how many issues each sum covers.
+
+**Cost** is computed at report time from `model_prices`, loaded from
+`scripts/telemetry/prices.json` by `make telemetry-prices` (also on `telemetry-up` and
+`telemetry-migrate`). It is the API-equivalent list price, not what a subscription is billed.
+`input_tokens` is inclusive, so uncached input = input - cache reads - cache writes; cache
+writes (`cache_creation_tokens`) are priced separately. A sample with an unknown model,
+date or cache-write count is unpriced: `cost_complete` is false and `unpriced_models` names
+it. Codex reports no cache writes and counts them as zero; Codex and Kimi models have no
+prices yet.

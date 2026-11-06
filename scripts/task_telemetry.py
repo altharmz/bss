@@ -57,7 +57,20 @@ OPERATIONS = frozenset(
 )
 
 
+def storage_allowed():
+    """Only a real checkout reaches shared storage; harness tests never do.
+
+    Docker resolves the fixed project name even when the compose file is missing, so a
+    script copied into a disposable test repository would otherwise write real rows.
+    """
+    if os.environ.get("BSS_TELEMETRY_DISABLED") == "1":
+        return False
+    return (ROOT / "compose.telemetry.yaml").is_file()
+
+
 def compose(*args):
+    if not storage_allowed():
+        raise RuntimeError("telemetry storage disabled")
     # No inherited Docker/Compose selectors, dotenv discovery or credentials.
     env = {key: os.environ[key] for key in ("PATH", "HOME") if key in os.environ}
     return subprocess.run(  # noqa: S603 - fixed executable and argv, no shell
@@ -83,6 +96,8 @@ def compose(*args):
 
 
 def sql(statement):
+    if not storage_allowed():
+        raise RuntimeError("telemetry storage disabled")
     env = {key: os.environ[key] for key in ("PATH", "HOME") if key in os.environ}
     result = subprocess.run(  # noqa: S603 - SQL on stdin, never shell interpolation
         [
@@ -284,9 +299,62 @@ def record(
         )
 
 
+PRICE_FIELDS = ("input_per_mtok", "cache_read_per_mtok", "cache_write_per_mtok", "output_per_mtok")
+
+
+def prices_sql(document):
+    """Upsert the hand-maintained list prices; every value is validated first."""
+    rows = []
+    for price in document["prices"]:
+        if set(price) != {"model", "effective_from", "currency", "source", *PRICE_FIELDS}:
+            raise ValueError("invalid price fields")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:/@+-]{0,159}", price["model"]):
+            raise ValueError("invalid price model")
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", price["effective_from"]):
+            raise ValueError("invalid price date")
+        if not re.fullmatch(r"[A-Z]{3}", price["currency"]):
+            raise ValueError("invalid price currency")
+        if not isinstance(price["source"], str) or not 0 < len(price["source"]) <= 200:
+            raise ValueError("invalid price source")
+        for field in PRICE_FIELDS:
+            if not isinstance(price[field], str) or not re.fullmatch(
+                r"\d{1,8}(\.\d{1,4})?", price[field]
+            ):
+                raise ValueError("invalid price amount")
+        rows.append(
+            "("
+            + ",".join(
+                [
+                    literal(price["model"]),
+                    literal(price["effective_from"]) + "::date",
+                    literal(price["currency"]),
+                    *(price[f] for f in PRICE_FIELDS),
+                    literal(price["source"]),
+                ]
+            )
+            + ")"
+        )
+    if not rows:
+        return ""
+    updates = ", ".join(f"{c}=EXCLUDED.{c}" for c in ("currency", *PRICE_FIELDS, "source"))
+    return (
+        "INSERT INTO model_prices(model, effective_from, currency, "
+        + ", ".join(PRICE_FIELDS)
+        + ", source) VALUES "
+        + ", ".join(rows)
+        + f" ON CONFLICT (model, effective_from) DO UPDATE SET {updates};"
+    )
+
+
+def load_prices():
+    statement = prices_sql(json.loads((ROOT / "scripts/telemetry/prices.json").read_text()))
+    if statement:
+        sql(statement)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["up", "down", "migrate", "health"])
+    parser.add_argument("action", choices=["up", "down", "migrate", "health", "prices"])
     args = parser.parse_args()
     try:
         if args.action in {"up", "down"}:
@@ -296,9 +364,11 @@ def main():
         if args.action in {"up", "migrate"}:
             for migration in sorted((ROOT / "scripts/telemetry").glob("*.sql")):
                 sql(migration.read_text())
+        if args.action in {"up", "migrate", "prices"}:
+            load_prices()
         if args.action == "health":
-            sql("SELECT 1 / count(*) FROM schema_versions WHERE version = 3;")
-    except (OSError, RuntimeError, subprocess.SubprocessError):
+            sql("SELECT 1 / count(*) FROM schema_versions WHERE version = 5;")
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
         print(
             "telemetry: management failed; check local Docker and telemetry schema", file=sys.stderr
         )

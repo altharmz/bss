@@ -95,7 +95,41 @@ def main():
             RAISE EXCEPTION 'collection replay, coverage or finish persistence regression';
         END IF;
         END $$;""")
-    for changed_sample in (sample(task_id=task, output_tokens=51, total_tokens=1051),):
+    # One machine sample belongs to one task: a second task's overlapping window skips it.
+    other_task = f"issue-232-other-{uuid.uuid4().hex}"
+    statements.append(
+        event_sql(other_task, "run", 0, 1, {}).removeprefix("BEGIN;").removesuffix("COMMIT;")
+    )
+    statements.append(
+        usage_sql(sample(task_id=other_task)).removeprefix("BEGIN;").removesuffix("COMMIT;")
+    )
+    # A legacy row with an unknown cache-write count is filled from the source, once.
+    legacy_task = f"issue-232-legacy-{uuid.uuid4().hex}"
+    statements.append(
+        event_sql(legacy_task, "run", 0, 1, {}).removeprefix("BEGIN;").removesuffix("COMMIT;")
+    )
+    legacy = sample(task_id=legacy_task, session_id="legacy-session")
+    statements.append(usage_sql(legacy).removeprefix("BEGIN;").removesuffix("COMMIT;"))
+    statements.append(
+        usage_sql({**legacy, "cache_creation_tokens": 7})
+        .removeprefix("BEGIN;")
+        .removesuffix("COMMIT;")
+    )
+    statements.append(f"""DO $$ BEGIN
+        IF EXISTS (SELECT 1 FROM agent_sessions a JOIN usage_samples u USING(session_id)
+                   WHERE a.task_id='{other_task}') THEN
+            RAISE EXCEPTION 'one sample was stored under two tasks';
+        END IF;
+        IF (SELECT cache_creation_tokens FROM usage_samples
+            WHERE external_session_id='legacy-session') IS DISTINCT FROM 7 THEN
+            RAISE EXCEPTION 'unknown cache-write count was not filled';
+        END IF;
+        END $$;""")
+    changed_write = {**legacy, "cache_creation_tokens": 8}
+    for changed_sample in (
+        sample(task_id=task, output_tokens=51, total_tokens=1051),
+        changed_write,
+    ):
         conflict = usage_sql(changed_sample).removeprefix("BEGIN;").removesuffix("COMMIT;")
         statements.append(
             "DO $conflict$ BEGIN BEGIN EXECUTE " + literal(conflict) + "; "

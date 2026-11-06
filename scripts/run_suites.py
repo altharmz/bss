@@ -20,7 +20,8 @@ def run_suite(path):
         capture_output=True,
         text=True,
         check=False,
-        env={**os.environ, "GIT_PAGER": "cat"},
+        # Harness tests must never write to the shared telemetry database.
+        env={**os.environ, "GIT_PAGER": "cat", "BSS_TELEMETRY_DISABLED": "1"},
     )
     return path, result.returncode, result.stdout + result.stderr, time.monotonic() - started
 

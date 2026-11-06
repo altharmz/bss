@@ -210,6 +210,140 @@ class UsageTests(unittest.TestCase):
         self.assertFalse(t["cost_complete"])
         self.assertEqual(t["known_cost_by_currency"]["USD"], "0.0021000000")
 
+    def test_list_price_cost_is_exact_and_unknowns_stay_unpriced(self):
+        task = "issue-232-cost"
+        price = {
+            "model": "claude-opus-5-5",
+            "effective_from": "2026-10-06",
+            "currency": "USD",
+            "input_per_mtok": "4.0000",
+            "cache_read_per_mtok": "0.2000",
+            "cache_write_per_mtok": "5.0000",
+            "output_per_mtok": "20.0000",
+            "source": "test",
+        }
+        row = {
+            "task_id": task,
+            "provider": "anthropic",
+            "client": "claude",
+            "model": "claude-opus-5-5",
+            "sampled_at": "2026-11-01T10:00:00Z",
+            # 1M inclusive input: 600k reads, 100k writes, 300k uncached; 10k output.
+            "input_tokens": 1_000_000,
+            "cached_input_tokens": 600_000,
+            "cache_creation_tokens": 100_000,
+            "output_tokens": 10_000,
+            "total_tokens": 1_010_000,
+            "estimated_cost": None,
+            "currency": None,
+        }
+        data = {
+            "tasks": [
+                {
+                    "task_id": task,
+                    "started_at": "2026-11-01T09:00:00Z",
+                    "ended_at": None,
+                    "outcome": None,
+                }
+            ],
+            "events": [],
+            "usage": [row],
+            "prices": [price],
+        }
+        t = usage.report(data)["tasks"][0]
+        # 0.3*4 + 0.6*0.2 + 0.1*5 + 0.01*20 = 1.2 + 0.12 + 0.5 + 0.2
+        self.assertEqual(t["known_cost_by_currency"], {"USD": "2.0200000000"})
+        self.assertTrue(t["cost_complete"])
+        self.assertEqual(t["pricing_provenance"][0]["source"], "test")
+        for change in (
+            {"cache_creation_tokens": None},
+            {"model": "unpriced-model"},
+            {"sampled_at": "2026-10-01T10:00:00Z"},
+        ):
+            with self.subTest(change=change):
+                data["usage"] = [{**row, **change}]
+                t = usage.report(data)["tasks"][0]
+                self.assertEqual(t["known_cost_by_currency"], {})
+                self.assertFalse(t["cost_complete"])
+                self.assertTrue(t["unpriced_models"])
+
+    def test_friction_prompts_active_time_and_facts(self):
+        task = "issue-232-effect"
+
+        def event(kind, result=0, **extra):
+            return {
+                "task_id": task,
+                "event_type": kind,
+                "result": result,
+                "occurred_at": "2026-11-01T10:00:00Z",
+                **extra,
+            }
+
+        data = {
+            "tasks": [
+                {
+                    "task_id": task,
+                    "started_at": "2026-11-01T09:00:00Z",
+                    "ended_at": None,
+                    "outcome": None,
+                }
+            ],
+            "events": [
+                event("commit", 1),
+                event("commit", 1),
+                event("commit"),
+                event("create-pr", 1),
+                event("check-pr", 1, ci_state="pending"),
+                event("check-pr", 1, ci_state="failed"),
+                event("run", 1),
+            ],
+            "collections": [
+                {
+                    "task_id": task,
+                    "client": "claude",
+                    "status": "complete",
+                    "human_prompts": 3,
+                    "active_ms": 90000,
+                },
+                {
+                    "task_id": task,
+                    "client": "claude",
+                    "status": "complete",
+                    "human_prompts": 0,
+                    "active_ms": 30000,
+                },
+                {
+                    "task_id": task,
+                    "client": "claude",
+                    "status": "partial",
+                    "human_prompts": None,
+                    "active_ms": None,
+                },
+            ],
+            "usage": [],
+            "facts": [
+                {
+                    "task_id": task,
+                    "pr_number": 9,
+                    "additions": 10,
+                    "deletions": 2,
+                    "captured_at": "x",
+                }
+            ],
+        }
+        t = usage.report(data)["tasks"][0]
+        self.assertEqual(t["friction"], {"check-pr-ci-failed": 1, "commit": 2, "create-pr": 1})
+        self.assertEqual(t["human_prompts"], 3)
+        self.assertEqual(t["agent_active_seconds"], 120)
+        self.assertEqual(t["facts"], {"pr_number": 9, "additions": 10, "deletions": 2})
+        for c in data["collections"]:
+            c.update(human_prompts=None, active_ms=None)
+        data["facts"] = []
+        t = usage.report(data)["tasks"][0]
+        self.assertIsNone(t["human_prompts"])  # unknown, never zero
+        self.assertIsNone(t["agent_active_seconds"])
+        self.assertIsNone(t["facts"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
