@@ -53,3 +53,7 @@ list_usage: the Usage tab is issue 190b (216)
 get_usage: the Usage tab is issue 190b (216)
 create_usage: a mediation device records usage; the network feed is the normal path, no UI action
 usage_summary: the Usage tab is issue 190b (216)
+list_communication_messages: the Messages tab is issue 192b (222)
+get_communication_message: the Messages tab is issue 192b (222)
+create_communication_message: an operator-written message; the UI action is issue 192b (222)
+patch_communication_message: cancelling an unsent message; the UI action is issue 192b (222)

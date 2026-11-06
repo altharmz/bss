@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import AliasChoices, Field
@@ -68,6 +69,21 @@ class Settings(BaseSettings):
         default="stub", validation_alias=AliasChoices("BSS_PAYMENT_ADAPTER", "payment_adapter")
     )
     payment_max_attempts: int = Field(default=5, ge=1)
+    # Customer notifications (docs/decisions/notifications.md). Only the `log` sender exists;
+    # an unknown value fails startup. Send attempts before a message is `failed`; how far back
+    # the detectors look for events (so a deploy does not replay history); the low-balance and
+    # plan-expiry thresholds; SMS quiet hours in BILLING_TZ (HH:MM); the sender addresses.
+    notify_adapter: Literal["log"] = Field(
+        default="log", validation_alias=AliasChoices("BSS_NOTIFY_ADAPTER", "notify_adapter")
+    )
+    notify_max_attempts: int = Field(default=5, ge=1)
+    notify_lookback_days: int = Field(default=2, ge=1, le=30)
+    notify_low_balance: Decimal = Field(default=Decimal("5.00"), ge=0)
+    notify_expiring_days: int = Field(default=3, ge=1, le=60)
+    notify_quiet_start: str = Field(default="21:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    notify_quiet_end: str = Field(default="08:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    notify_sender_email: str = "no-reply@bss.example.test"
+    notify_sender_sms: str = "18005550100"
     # Separate credentials: smoke can only read; MCP cannot access user/session APIs.
     bss_service_secret: str = ""
     bss_smoke_secret: str = ""

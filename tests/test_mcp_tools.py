@@ -26,6 +26,7 @@ import app.internal
 from app.api.hub import HUB_APIS
 from app.main import app as bss_app
 from app.repository import network_commands, payment_commands, payment_methods
+from app.repository import notifications as notification_repo
 from app.repository import prepaid_commands as commands
 from app.repository import usage as usage_repo
 from bss_mcp import tools
@@ -473,6 +474,24 @@ def world(api, db_conn) -> dict[str, Any]:
         product=usage_repo.product_row(db_conn, UUID(world["product"]["id"])),
         now=api.clock.now(),
     )
+    world["message"] = notification_repo.insert(
+        db_conn,
+        event_type="operator",
+        category="transactional",
+        channel="sms",
+        template="operator",
+        state="initial",
+        state_reason=None,
+        receiver_name=None,
+        receiver_email=None,
+        receiver_phone="12125550123",
+        customer_id=None,
+        billing_account_id=None,
+        product_id=None,
+        subject=None,
+        content="hello",
+        now=api.clock.now(),
+    )
     paying = UUID(world["topup"]["partyAccount"]["id"])
     world["payment_method"] = payment_methods.insert(
         db_conn,
@@ -557,6 +576,8 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "list_prepaid_commands": {"state": "pending", "limit": 1},
         "get_usage": {"usage_id": str(world["usage"]["id"])},
         "usage_summary": {"product.id": world["product"]["id"]},
+        "get_communication_message": {"message_id": str(world["message"]["id"])},
+        "list_communication_messages": {"limit": 1},
         "get_network_command": {"command_id": str(world["network_command"]["id"])},
         "list_network_commands": {"state": "pending", "limit": 1},
         "list_payment_methods": {"limit": 1},
@@ -877,6 +898,24 @@ def test_every_write_tool_reaches_the_app(api, mcp, world):
         },
     )
     assert usage["usageType"] == "sms"
+    message = call(
+        "create_communication_message",
+        {
+            "body": {
+                "@type": "CommunicationMessage",
+                "messageType": "SMS",
+                "content": "hi",
+                "receiver": [{"phoneNumber": "12125550124"}],
+                "sender": {"name": "mcp"},
+            }
+        },
+    )
+    assert message["state"] == "initial"
+    cancelled = call(
+        "patch_communication_message",
+        {"message_id": message["id"], "body": {"state": "cancelled"}},
+    )
+    assert cancelled["state"] == "cancelled"
     # the card tools: save a card, rename it, queue a top-up and an auto top-up rule, remove it
     paying = world["topup"]["partyAccount"]["id"]
     card = call(

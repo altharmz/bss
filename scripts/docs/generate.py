@@ -125,6 +125,13 @@ APIS = (
         "TMF635",
         "v5",
     ),
+    Api(
+        "tmf681-communication",
+        "TMF681 Communication Management",
+        "/tmf-api/communicationManagement/v4",
+        "TMF681",
+        "v4",
+    ),
     Api("service", "Service endpoints", "", None, "-"),
 )
 
@@ -171,6 +178,8 @@ HANDLERS = {
     "/internal/v1/port": "app/internal/ports.py",
     "/internal/v1/number": "app/internal/ports.py",
     "/internal/v1/usage": "app/internal/usage.py",
+    "/tmf-api/communicationManagement/v4": "app/api/communication.py",
+    "/internal/v1/notification": "app/internal/notifications.py",
     "/internal/v1/payment/command": "app/internal/payments.py",
     "/internal/v1/billingAccount/{account_id}/cardTopup": "app/internal/payments.py",
     "/internal/v1/billingAccount/{account_id}/autoTopup": "app/internal/payments.py",
@@ -253,6 +262,7 @@ AREAS = {
     ),
     "worker": ("billing_run_account", "worker_request", "idempotency_key"),
     "events": ("event_subscription", "event", "event_delivery"),
+    "notifications": ("notification_message", "notification_consent"),
     "users": ("app_user", "app_session", "app_user_audit"),
 }
 AREA_TITLES = {
@@ -263,6 +273,7 @@ AREA_TITLES = {
     "billing": "Billing and payments (TMF678, TMF676)",
     "worker": "Billing worker (ours)",
     "events": "Event notifications (TMF hubs)",
+    "notifications": "Customer notifications (TMF681)",
     "users": "Application users and sessions (ours)",
 }
 SKIP_TABLES = {"alembic_version"}

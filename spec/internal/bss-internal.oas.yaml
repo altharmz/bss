@@ -1013,6 +1013,83 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+  /notification/consent:
+    get:
+      summary: A customer's marketing consent and its history (issue 192).
+      description: >-
+        The current marketing consent per channel (null: never recorded, which means not opted
+        in) and the append-only history, newest first. Transactional messages need no consent.
+      parameters:
+        - name: customer.id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationConsent'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+    post:
+      summary: Record an opt-in or opt-out of marketing messages (issue 192).
+      description: >-
+        Appends one consent row; the latest row of a channel wins. A marketing SMS or email is
+        sent only while the customer's latest row for its channel is an opt-in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [customer, channel, optedIn, source]
+              properties:
+                '@type': {type: string}
+                '@baseType': {type: string}
+                '@schemaLocation': {type: string}
+                customer:
+                  type: object
+                  required: [id]
+                  properties:
+                    id: {type: string, format: uuid}
+                    href: {type: string}
+                    name: {type: string}
+                    '@type': {type: string}
+                    '@referredType': {type: string}
+                    '@baseType': {type: string}
+                    '@schemaLocation': {type: string}
+                channel: {type: string, enum: [sms, email]}
+                optedIn: {type: boolean}
+                source: {type: string, minLength: 1, maxLength: 200}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/NotificationConsent'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
+  /notification/message/{id}/resend:
+    post:
+      summary: Send a message again (issue 192).
+      description: >-
+        No body. Queues a copy (TMF681 resendOf characteristic) of a message that is sent,
+        failed or cancelled; the worker sends it. 409 while the message is still open or when it
+        had no receiver address. Consent and quiet hours apply to the copy again.
+      parameters:
+        - {$ref: '#/components/parameters/Id'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ResentMessage'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+        '409': {$ref: '#/components/responses/Error'}
 components:
   securitySchemes:
     AppSession:
@@ -1768,6 +1845,63 @@ components:
               id: {type: string, format: uuid}
               value: {type: string}
               href: {type: string}
+    NotificationConsent:
+      type: object
+      additionalProperties: false
+      required: [customer, marketing, history]
+      properties:
+        customer:
+          type: object
+          additionalProperties: false
+          required: [id, href]
+          properties:
+            id: {type: string, format: uuid}
+            href: {type: string}
+        marketing:
+          type: object
+          additionalProperties: false
+          required: [sms, email]
+          properties:
+            sms: &consentOrNull
+              nullable: true
+              type: object
+              additionalProperties: false
+              required: [id, channel, category, optedIn, source, recordedBy, recordedAt]
+              properties:
+                id: {type: string, format: uuid}
+                channel: {type: string, enum: [sms, email]}
+                category: {type: string, enum: [marketing]}
+                optedIn: {type: boolean}
+                source: {type: string}
+                recordedBy: {type: string}
+                recordedAt: {type: string, format: date-time}
+            email: *consentOrNull
+        history:
+          type: array
+          items: {$ref: '#/components/schemas/ConsentEntry'}
+    ConsentEntry:
+      type: object
+      additionalProperties: false
+      required: [id, channel, category, optedIn, source, recordedBy, recordedAt]
+      properties:
+        id: {type: string, format: uuid}
+        channel: {type: string, enum: [sms, email]}
+        category: {type: string, enum: [marketing]}
+        optedIn: {type: boolean}
+        source: {type: string}
+        recordedBy: {type: string}
+        recordedAt: {type: string, format: date-time}
+    ResentMessage:
+      description: The queued copy, as TMF681 shows a CommunicationMessage.
+      type: object
+      required: [id, href, state, messageType, content, characteristic]
+      properties:
+        id: {type: string, format: uuid}
+        href: {type: string}
+        state: {type: string, enum: [initial, inProgress, completed, cancelled, failed]}
+        messageType: {type: string, enum: [SMS, Email]}
+        content: {type: string}
+        characteristic: {type: array, items: {type: object}}
     UsageSummary:
       type: object
       additionalProperties: false

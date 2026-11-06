@@ -27,7 +27,7 @@ def hub(api, name: str, **body) -> dict:
     return response.json()
 
 
-NO_HUB = ("TMF635",)  # its only events are the export job's: no /hub (docs/decisions/usage.md)
+NO_HUB = ("TMF635", "TMF681")  # no listener events: no /hub (usage.md, notifications.md)
 
 
 def spec_events() -> dict[str, set[str]]:

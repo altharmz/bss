@@ -16,6 +16,7 @@ from app.api import (
     catalog,
     catalog_jobs,
     classification,
+    communication,
     customer,
     errors,
     history,
@@ -62,6 +63,7 @@ def install(app: FastAPI) -> None:
         transfer,
         history,
         usage,
+        communication,
     ):
         app.include_router(module.router)
     app.include_router(account.schema_router)
