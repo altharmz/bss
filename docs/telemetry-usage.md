@@ -19,6 +19,11 @@ make telemetry-down      # stop, keep the volume
 make telemetry-test      # schema test in a rolled-back transaction
 ```
 
+Only a real checkout writes: scripts refuse storage when `compose.telemetry.yaml` is missing
+(a disposable test repository) or `BSS_TELEMETRY_DISABLED=1` (set by `make runtime-check`
+for every suite). Before this guard, harness tests wrote rows for fixture tasks; migration
+`004_test_rows.sql` removed them.
+
 Tables: `tasks` (issue branch, start/end/outcome), `agent_sessions`, `workflow_events`
 (operation, result, duration, bounded metadata) and `usage_samples` (token counts; cost
 columns exist but nothing fills them automatically). Rows are kept indefinitely.

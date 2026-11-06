@@ -41,6 +41,10 @@ class WorkflowLifecycleTests(unittest.TestCase):
         # Format's language tools are simulated, leaving quality orchestration real.
         with (f.primary / "Makefile").open("a") as out:
             out.write("\nfmt web-fmt:\n\t@true\n")
+        # This fixture captures telemetry through a fake docker, so it opts back in:
+        # a checkout with the compose file and no disable switch reaches "storage".
+        shutil.copy2(SCRIPTS.parent / "compose.telemetry.yaml", f.primary)
+        f.env.pop("BSS_TELEMETRY_DISABLED", None)
         f.git("add", ".")
         f.git("commit", "-qm", "lifecycle fixture")
         f.git("push", "-q", "origin", "master")

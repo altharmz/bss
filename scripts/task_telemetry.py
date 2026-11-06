@@ -57,7 +57,20 @@ OPERATIONS = frozenset(
 )
 
 
+def storage_allowed():
+    """Only a real checkout reaches shared storage; harness tests never do.
+
+    Docker resolves the fixed project name even when the compose file is missing, so a
+    script copied into a disposable test repository would otherwise write real rows.
+    """
+    if os.environ.get("BSS_TELEMETRY_DISABLED") == "1":
+        return False
+    return (ROOT / "compose.telemetry.yaml").is_file()
+
+
 def compose(*args):
+    if not storage_allowed():
+        raise RuntimeError("telemetry storage disabled")
     # No inherited Docker/Compose selectors, dotenv discovery or credentials.
     env = {key: os.environ[key] for key in ("PATH", "HOME") if key in os.environ}
     return subprocess.run(  # noqa: S603 - fixed executable and argv, no shell
@@ -83,6 +96,8 @@ def compose(*args):
 
 
 def sql(statement):
+    if not storage_allowed():
+        raise RuntimeError("telemetry storage disabled")
     env = {key: os.environ[key] for key in ("PATH", "HOME") if key in os.environ}
     result = subprocess.run(  # noqa: S603 - SQL on stdin, never shell interpolation
         [
@@ -297,7 +312,7 @@ def main():
             for migration in sorted((ROOT / "scripts/telemetry").glob("*.sql")):
                 sql(migration.read_text())
         if args.action == "health":
-            sql("SELECT 1 / count(*) FROM schema_versions WHERE version = 3;")
+            sql("SELECT 1 / count(*) FROM schema_versions WHERE version = 4;")
     except (OSError, RuntimeError, subprocess.SubprocessError):
         print(
             "telemetry: management failed; check local Docker and telemetry schema", file=sys.stderr

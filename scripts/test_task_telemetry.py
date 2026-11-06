@@ -3,8 +3,11 @@
 
 import contextlib
 import io
+import os
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import task_telemetry as telemetry
@@ -80,6 +83,7 @@ class TelemetryTests(unittest.TestCase):
         ):
             with (
                 patch.object(telemetry, "sql", side_effect=error),
+                patch.object(telemetry, "storage_allowed", return_value=True),
                 contextlib.redirect_stderr(io.StringIO()) as output,
             ):
                 telemetry.record("issue-82-example", "down", 9, 1)
@@ -87,7 +91,10 @@ class TelemetryTests(unittest.TestCase):
             self.assertNotIn("secret", output.getvalue())
 
     def test_sql_transport_is_bounded_and_not_a_shell(self):
-        with patch.object(telemetry.subprocess, "run") as run:
+        with (
+            patch.object(telemetry.subprocess, "run") as run,
+            patch.object(telemetry, "storage_allowed", return_value=True),
+        ):
             run.return_value.returncode = 0
             telemetry.sql("SELECT 1;")
         args, kwargs = run.call_args
@@ -125,6 +132,35 @@ class TelemetryTests(unittest.TestCase):
                 )
         with self.assertRaises(ValueError):
             telemetry.event_sql("issue-100-example", "up", 0, None, {}, client="kimi")
+
+    def test_test_repositories_never_reach_shared_storage(self):
+        # A copied script sees no compose.telemetry.yaml; Docker would still resolve
+        # the fixed project name, so the guard must refuse before any subprocess.
+        with tempfile.TemporaryDirectory() as base:
+            for root, environ in (
+                (Path(base), {}),
+                (telemetry.ROOT, {"BSS_TELEMETRY_DISABLED": "1"}),
+            ):
+                with (
+                    patch.object(telemetry, "ROOT", root),
+                    patch.dict(os.environ, environ),
+                    patch.object(telemetry.subprocess, "run") as run,
+                ):
+                    if "BSS_TELEMETRY_DISABLED" not in environ:
+                        os.environ.pop("BSS_TELEMETRY_DISABLED", None)
+                    with self.assertRaises(RuntimeError):
+                        telemetry.sql("SELECT 1;")
+                    with self.assertRaises(RuntimeError):
+                        telemetry.compose("ps")
+                    telemetry.record("issue-82-example", "down", 0, 1)
+                run.assert_not_called()
+
+    def test_real_checkout_reaches_storage(self):
+        with patch.dict(os.environ, {}), patch.object(telemetry.subprocess, "run") as run:
+            os.environ.pop("BSS_TELEMETRY_DISABLED", None)
+            run.return_value.returncode = 0
+            telemetry.sql("SELECT 1;")
+        run.assert_called_once()
 
 
 if __name__ == "__main__":
