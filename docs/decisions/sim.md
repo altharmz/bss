@@ -95,8 +95,11 @@ Refused at acceptance: a swap that also changes the offering, the status or the 
 
 ## Not in this slice
 
-UI (186b, #209): stock screen with filters, CSV import and eSIM generation, activation
-code as text and QR, simType choice and swap action. The retired SIM's later reuse stays an
+The UI (186b, #209) is built: `/sims` (filters, CSV import, eSIM generation, detail with the
+activation code as text and QR), the simType choice in Add product and the swap in the product's
+Subscriber number dialog; see [ui.md](../ui.md). The QR is drawn in the browser with
+`qrcode-generator` 1.4.4 (pinned, no dependencies, no install scripts); the code is never sent
+anywhere. The retired SIM's later reuse stays an
 operator unlock. A real carrier SIM or eSIM (SM-DP+) integration is a later issue (#203).
 
 ## Tests

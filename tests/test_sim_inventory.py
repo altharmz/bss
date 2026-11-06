@@ -546,3 +546,37 @@ def test_the_migration_downgrades_and_upgrades_again(temp_db_url):
     command.upgrade(cfg, "0055")
     with psycopg.connect(temp_db_url) as conn:
         assert conn.execute("SELECT count(*) FROM sim_batch").fetchone() == (0,)
+
+
+# --- the requests the admin UI sends (sims.ts, bss.ts; pinned in Sims.test.tsx) ---
+
+
+def test_ui_sim_requests_replayed(api, db_conn, line_world):
+    csv = "iccid,imsi\n8900000000000000001,001010000000001\n8900000000000000002,001010000000002\n"
+    imported = api.post_raw(f"{BATCH}?batch=U1&simType=physical", csv, content_type="text/csv")
+    assert imported.status_code == 201, imported.text
+    assert api.post(GENERATE, {"batch": "UG", "count": 2}).status_code == 201
+    listed = api.get(
+        f"{RESOURCE}?resourceSpecification.id=imsi&simState=in_stock&simType=physical"
+        "&batchNumber=U1&offset=0&limit=100"
+    )
+    assert listed.status_code == 200 and len(listed.json()) == 2
+    assert sorted(b["name"] for b in api.get(BATCH).json()) == ["U1", "UG"]
+    # the add item Add product sends for "Any eSIM": the characteristic carries a valueType
+    item = apidata.add_item(line_world.off, "1")
+    item["product"] = {
+        "@type": "ProductRefOrValue",
+        "realizingResource": refs(number(api, value="79991234511")["id"]),
+        "productCharacteristic": [
+            {
+                "@type": "StringCharacteristic",
+                "name": "simType",
+                "valueType": "string",
+                "value": "esim",
+            }
+        ],
+    }
+    order = api.post(ORDER, apidata.order_body(line_world.acc, item))
+    assert order.status_code == 201, order.text
+    first = min(g["value"] for g in resources(api, batchNumber="UG", simType="esim"))
+    assert sim_row(db_conn, first)[0] == "reserved"

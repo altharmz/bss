@@ -14,6 +14,7 @@ import {
   shownPrice,
   type Account,
   type FirstCharge,
+  type SimType,
 } from '../api/bss';
 import { ApiError, explain, newIdempotencyKey } from '../api/client';
 import { useResource } from '../api/useResource';
@@ -23,7 +24,7 @@ import { addDays, clockTime, isIsoDate, lastDay } from '../format/dates';
 import { accountLabel } from '../format/ids';
 import { formatAmount, formatCents, toCents } from '../format/money';
 import { Amount } from '../ui/Amount';
-import { Button, DateField, Dialog, Field, TextInput, useToast } from '../ui/kit';
+import { Button, DateField, Dialog, Field, SelectField, TextInput, useToast } from '../ui/kit';
 import { ErrorBlock, SkeletonRows } from '../ui/states';
 import { KeyValue } from '../ui/summaries';
 import type { PendingOrder } from '../api/commands';
@@ -53,6 +54,7 @@ export interface DraftToEdit {
   start: string | null; // business date; null = none requested yet
   numberId: string;
   imsiId?: string;
+  simType?: SimType;
 }
 
 export function AddProductModal({
@@ -89,6 +91,8 @@ export function AddProductModal({
   const [code, setCode] = useState<string | undefined>();
   const [numberId, setNumberId] = useState(draft?.numberId ?? '');
   const [imsiId, setImsiId] = useState(draft?.imsiId ?? '');
+  // '' = a specific SIM from the picker; else the server picks one of that type from stock
+  const [simChoice, setSimChoice] = useState<'' | SimType>(draft?.simType ?? '');
   const [uncertain, setUncertain] = useState(false);
   // B22: an edited draft opens with its offering row in view, once (jsdom has no scrolling)
   const scrolled = useRef(false);
@@ -134,9 +138,13 @@ export function AddProductModal({
   const needsNumber = requirement.status === 'ok' && requirement.data.msisdn;
   const needsImsi = requirement.status === 'ok' && requirement.data.imsi;
   // one reference per required kind
-  const resources = [needsNumber && numberId, needsImsi && imsiId].filter(Boolean) as string[];
+  const simType = needsImsi && simChoice !== '' ? simChoice : undefined;
+  const resources = [needsNumber && numberId, needsImsi && !simType && imsiId].filter(
+    Boolean,
+  ) as string[];
   const chosenResources = resources.length === 0 ? undefined : resources;
-  const complete = (!needsNumber || numberId !== '') && (!needsImsi || imsiId !== '');
+  const complete =
+    (!needsNumber || numberId !== '') && (!needsImsi || simType !== undefined || imsiId !== '');
   const shortNow =
     account.ratingType === 'prepaid' &&
     start === today &&
@@ -160,6 +168,7 @@ export function AddProductModal({
           context.timeZone,
           chosenResources,
           draft.itemId,
+          simType,
         );
         if (result.state === 'rejected') {
           setProblem([result.refusal.problem]);
@@ -175,6 +184,7 @@ export function AddProductModal({
           context.timeZone,
           chosenResources,
           newIdempotencyKey(),
+          simType,
         );
         if (result.state === 'rejected') {
           setProblem([result.refusal.problem]);
@@ -216,6 +226,8 @@ export function AddProductModal({
         start,
         context.timeZone,
         chosenResources,
+        undefined,
+        simType,
       );
       if (result.state === 'completed') {
         onOrdered(
@@ -391,7 +403,22 @@ export function AddProductModal({
             )}
             <div className="bss-add-product-schedule">
               {needsNumber && <NumberPicker value={numberId} onChange={setNumberId} />}
-              {needsImsi && <NumberPicker kind="imsi" value={imsiId} onChange={setImsiId} />}
+              {needsImsi && (
+                <Field label="SIM">
+                  <SelectField
+                    aria-label="SIM"
+                    value={simChoice}
+                    onChange={(e) => setSimChoice(e.target.value as '' | SimType)}
+                  >
+                    <option value="">A specific SIM in stock</option>
+                    <option value="physical">Any physical SIM in stock</option>
+                    <option value="esim">Any eSIM in stock</option>
+                  </SelectField>
+                </Field>
+              )}
+              {needsImsi && simChoice === '' && (
+                <NumberPicker kind="imsi" value={imsiId} onChange={setImsiId} />
+              )}
               <Field
                 label="Start date"
                 help={start === today ? 'Today (business date)' : undefined}

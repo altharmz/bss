@@ -21,6 +21,7 @@ export type Route =
   | { name: 'password' }
   | { name: 'users' }
   | { name: 'numbers' }
+  | { name: 'sims' }
   | { name: 'subscribers' }
   | { name: 'subscriber'; accountId: string }
   | { name: 'catalog' }
@@ -46,6 +47,7 @@ export function parseRoute(path: string): Route {
   if (path === '/users') return { name: 'users' };
   if (path === '/integrations' || path === '/integrations/') return { name: 'integrations' };
   if (path === '/numbers' || path === '/numbers/') return { name: 'numbers' };
+  if (path === '/sims' || path === '/sims/') return { name: 'sims' };
   if (path === '/subscribers' || path === '/subscribers/') return { name: 'subscribers' };
   const card = SUBSCRIBER.exec(path);
   if (card?.[1]) return { name: 'subscriber', accountId: card[1].toLowerCase() };
@@ -83,6 +85,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/integrations';
     case 'numbers':
       return '/numbers';
+    case 'sims':
+      return '/sims';
     case 'subscribers':
       return '/subscribers';
     case 'subscriber':
