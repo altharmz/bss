@@ -1,5 +1,50 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## Prepaid MVNO on T-Mobile: scope and integration pattern (2026-11-05, epic #182)
+
+Scoped with the human on 2026-11-05; the slices #183-#194 record their own designs in the
+area files ([network](network.md), [taxes](taxes.md), [payments](payments.md), [sim](sim.md),
+[numbers](numbers.md), [usage](usage.md), [notifications](notifications.md),
+[accounts](accounts.md#account-security-pin-verification-locks-and-audit-issue-193-epic-182)
+and the sections below). The epic closed on 2026-11-06 with the backend built; the admin UI
+halves (#205-#226) stayed open as their own issues.
+
+- **Direct T-Mobile connection**, no MVNE. Network provisioning is a placeholder that assumes
+  the network answers correctly.
+- **Prepaid is the focus**, plan-based (bought up front, renewed from the balance or a saved
+  card) and pay-as-you-go (usage rated against the money balance). Postpaid keeps working
+  but is not extended.
+- **Caps and throttling are enforced by T-Mobile.** The BSS sends the plan's network profile
+  and receives usage records; there is no real-time online charging in the BSS.
+- **No vouchers or PIN cards**, no retail top-up networks. **Self-care is set aside**: the
+  scope is the BSS, the admin UI and the APIs.
+- **End of plan without funds:** grace, suspension, deactivation, then the number is aged
+  and returns to the pool; the durations are settings (#188, below).
+- **TMF where it covers the area** (spec vendored into `spec/`, pinned in `SHA256SUMS`):
+  TMF635, TMF639, TMF654, TMF670, TMF681. An internal API where it does not (porting,
+  lifecycle settings, the tax and gateway adapters).
+
+**Placeholder pattern for every external system** (T-Mobile, tax engine, payment gateway,
+SMS/email):
+
+- One package per system under `app/integrations/<name>/` with a typed interface and a stub.
+  `BSS_<NAME>_ADAPTER` selects it at startup (default `stub`, `log` for notify); an unknown
+  value fails startup.
+- A call that changes something outside the BSS is a durable outbound command (state,
+  idempotency key, attempts, last error) sent and retried by the worker, never inside a
+  request transaction. Results come back asynchronously and are recorded; the stub confirms
+  on the next worker wake-up.
+- The stub is deterministic and has documented failing test values (an MSISDN, a card
+  token), so the failure paths are tested.
+- A real integration is its own issue (#203); its credentials are created by the human and
+  live in `.env.prod`, never in the repository.
+
+**Out of scope** (ideas kept as issues): vouchers and PIN cards; self-care and online signup
+(#195); real-time online charging; extending postpaid (#202); real T-Mobile, tax, payment and
+messaging connections (#203); family plans (#196), wholesale reconciliation (#197),
+reporting (#198), care cases (#199), international and roaming add-ons (#200), E911
+address (#201).
+
 ## Line lifecycle: grace, suspension, deactivation and number aging (2026-11-06, issue #188)
 
 Epic #182. Design approved on the issue (the human's standing delegation, decided following

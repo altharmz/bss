@@ -45,9 +45,20 @@ described in [charge-periods.md](decisions/charge-periods.md); monthly invoices;
 taxes, offering changes, order cancellation, product suspension/resumption, event
 notifications, refunds, payments, balance, and a daily worker with catch-up/retry.
 
-Out of scope: external payment processing, external bill delivery and changing an
-account's bill cycle day. One-time and alteration prices can be recorded but do not
-produce standalone billing charges. Suspension does not change date-based billing.
+Prepaid MVNO on a direct T-Mobile connection (epic #182,
+[decision](decisions/prepaid.md#prepaid-mvno-on-t-mobile-scope-and-integration-pattern-2026-11-05-epic-182)):
+plan-based prepaid with renewal from the balance or a saved card, add-ons and one-time
+fees; pay-as-you-go rating; the line lifecycle (grace, suspension, deactivation, number
+aging); SIM and eSIM inventory and swap; number pools, port-in and port-out; usage records
+and allowances; customer notifications; account PIN, verification and line locks; device
+IMEI checks. Network provisioning, taxes, card payments and SMS/email go through
+placeholder adapters (`app/integrations/`). Caps and throttling are enforced by the network.
+
+Out of scope: real T-Mobile, tax engine, payment gateway and SMS/email connections;
+vouchers and PIN cards; self-care; real-time online charging; extending postpaid (dunning,
+external bill delivery); changing an account's bill cycle day. On postpaid, one-time and
+alteration prices can be recorded but do not produce standalone billing charges.
+Suspension does not change postpaid date-based billing.
 
 ## Implemented APIs
 
@@ -61,6 +72,11 @@ produce standalone billing charges. Suspension does not change date-based billin
 | TMF666 Account | 5.0.0 | `/tmf-api/accountManagement/v5` | `spec/TMF666-Account_Management-v5.0.0.oas.yaml` |
 | TMF676 Payment | **4.0.0** (no v5 exists) | `/tmf-api/payment/v4` | `spec/TMF676-Payment-v4.0.0.swagger.json` |
 | TMF678 Customer Bill | 5.0.0 | `/tmf-api/customerBillManagement/v5` | `spec/TMF678-CustomerBill-v5.0.0.oas.yaml` |
+| TMF635 Product Usage | 5.0.0 | `/tmf-api/productUsageManagement/v5` | `spec/TMF635-Product_Usage_Management-v5.0.0.oas.yaml` |
+| TMF639 Resource Inventory | 5.0.0 | `/tmf-api/resourceInventory/v5` | `spec/TMF639-Resource_Inventory_Management-v5.0.0.oas.yaml` |
+| TMF654 Prepay Balance | 4.0.0 | `/tmf-api/prepayBalanceManagement/v4` | `spec/TMF654-PrepayBalance-v4.0.0.swagger.json` |
+| TMF670 Payment Method | 4.0.0 | `/tmf-api/paymentMethod/v4` | `spec/TMF670-PaymentMethod-v4.0.0.swagger.json` |
+| TMF681 Communication | 4.0.0 | `/tmf-api/communicationManagement/v4` | `spec/TMF681-Communication-v4.0.0.swagger.json` |
 | Internal (ours, for the UI) | v1 | `/internal/v1` | `spec/internal/bss-internal.oas.yaml` |
 
 The specs are vendored unmodified, pinned by upstream commit and blob SHA
