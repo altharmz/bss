@@ -1,0 +1,416 @@
+"""Usage records (TMF635) and allowance tracking for prepaid lines (issue #190)."""
+# ruff: noqa: F811
+
+from datetime import datetime, time, timedelta
+
+import pytest
+
+from app.config import settings
+from tests import apidata, contract, timeline
+from tests.apidata import ORDER
+from tests.test_api_resource_inventory import number
+from tests.test_network_provisioning import (  # noqa: F401 - fixtures
+    state,
+    stub,
+    world,
+)
+from tests.test_number_orders import refs
+from tests.test_prepaid_offering_changes import switch
+from tests.test_prepaid_renewal_producer import tick
+
+USAGE = "/tmf-api/productUsageManagement/v5/productUsage"
+SUMMARY = "/internal/v1/usage/summary"
+MIB = 1024 * 1024
+MSISDN = "79991234500"
+
+
+def when(api, days=0, hour=12):
+    return timeline.midnight(api.clock.today() + timedelta(days=days)) + timedelta(hours=hour)
+
+
+def line_on(api, db_conn, offering, acc, value=MSISDN):
+    item = apidata.add_item(offering, "1")
+    item["product"] = {
+        "@type": "ProductRefOrValue",
+        "realizingResource": refs(number(api, value=value)["id"]),
+    }
+    response = api.post(ORDER, apidata.order_body(acc, item))
+    assert response.status_code == 201, response.text
+    tick(db_conn, api.clock.now())
+    assert state(api, response.json()) == "completed"
+    product = db_conn.execute(
+        "SELECT a.product_id FROM number_assignment a JOIN subscriber_number n"
+        " ON n.id = a.subscriber_number_id WHERE n.value = %s",
+        (value,),
+    ).fetchone()
+    return {"id": str(product[0])}
+
+
+def record_id(kind, quantity, index, event_at, extra):
+    return (
+        f"rec-{extra.get('msisdn') or extra.get('imsi')}-{kind}-{quantity}-{index}-{event_at:%d%H}"
+    )
+
+
+def feed(stub, db_conn, api, *records):
+    for index, (kind, quantity, event_at, extra) in enumerate(records):
+        stub.inject_usage(
+            record_id(kind, quantity, index, event_at, extra), kind, quantity, event_at, **extra
+        )
+    tick(db_conn, api.clock.now())
+
+
+def records(api, product):
+    return api.get(f"{USAGE}?product.id={product['id']}&limit=100").json()
+
+
+def summary(api, product, **query):
+    url = f"{SUMMARY}?product.id={product['id']}" + "".join(f"&{k}={v}" for k, v in query.items())
+    response = api.get(url)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def allowance(body, kind):
+    return next(a for a in body["allowances"] if a["kind"] == kind)
+
+
+@pytest.mark.capability("worker.usageFeed")
+def test_a_feed_batch_stores_records_once_even_when_resent(api, db_conn, world, stub):
+    product = line_on(api, db_conn, world.off, world.acc)
+    batch = [
+        ("data", 10 * MIB, when(api), {"msisdn": MSISDN}),
+        ("voice", 120, when(api, hour=13), {"msisdn": MSISDN, "roaming": True}),
+        ("sms", 1, when(api, hour=14), {"msisdn": MSISDN}),
+    ]
+    feed(stub, db_conn, api, *batch)
+    assert len(records(api, product)) == 3
+    assert stub.usage_queue == [] and len(stub.usage_acked) == 3  # acknowledged after the commit
+    # the network sends the same batch again (an acknowledgement was lost)
+    stub.usage_acked.clear()
+    for index, (kind, quantity, event_at, extra) in enumerate(batch):
+        stub.inject_usage(
+            record_id(kind, quantity, index, event_at, extra), kind, quantity, event_at, **extra
+        )
+    tick(db_conn, api.clock.now())
+    assert len(records(api, product)) == 3
+    assert db_conn.execute("SELECT count(*) FROM usage_record").fetchone() == (3,)
+    assert len(stub.usage_acked) == 3
+    voice = next(r for r in records(api, product) if r["usageType"] == "voice")
+    names = {c["name"]: c["value"] for c in voice["usageCharacteristic"]}
+    assert names["quantity"] == 120 and names["unit"] == "seconds" and names["roaming"] is True
+    assert voice["status"] == "notRated" and voice["product"]["id"] == product["id"]
+    assert voice["externalIdentifier"][0]["owner"] == "network"
+
+
+@pytest.mark.capability("worker.usageFeed")
+def test_records_map_to_the_product_that_held_the_number_across_a_number_change(
+    api, db_conn, world, stub
+):
+    product = line_on(api, db_conn, world.off, world.acc)
+    new = number(api, value="79991234511")
+    change = api.clock.today() + timedelta(days=5)
+    switch_number = apidata.order_body(
+        world.acc,
+        {
+            "id": "1",
+            "action": "modify",
+            "product": {
+                "id": product["id"],
+                "@type": "ProductRefOrValue",
+                "realizingResource": refs(new["id"]),
+            },
+        },
+        requestedStartDate=timeline.midnight(change).isoformat(),
+    )
+    assert api.post(ORDER, switch_number).status_code == 201
+    feed(
+        stub,
+        db_conn,
+        api,
+        ("data", MIB, when(api, 1), {"msisdn": MSISDN}),  # old number, before the change
+        ("data", 2 * MIB, when(api, 6), {"msisdn": "79991234511"}),  # new number, after it
+        ("data", 4 * MIB, when(api, 6, 13), {"msisdn": MSISDN}),  # old number, after it: no line
+        ("data", 8 * MIB, when(api, 1, 13), {"msisdn": "79991234511"}),  # new, before: no line
+    )
+    mine = {r["usageCharacteristic"][0]["value"] for r in records(api, product)}
+    assert mine == {MIB, 2 * MIB}
+    rejected = api.get(f"{USAGE}?status=rejected").json()
+    assert sorted(r["usageCharacteristic"][0]["value"] for r in rejected) == [4 * MIB, 8 * MIB]
+    assert all("product" not in r for r in rejected)
+    reasons = {
+        c["value"]
+        for r in rejected
+        for c in r["usageCharacteristic"]
+        if c["name"] == "rejectionReason"
+    }
+    assert reasons == {"noLine"}
+    total = summary(api, product, date=(api.clock.today() + timedelta(days=6)).isoformat())
+    assert allowance(total, "data")["used"] == 3 * MIB  # the rejected ones count for nobody
+
+
+@pytest.mark.capability("worker.usageFeed")
+def test_the_imsi_names_the_line_when_there_is_no_msisdn(api, db_conn, world, stub):
+    product = line_on(api, db_conn, world.off, world.acc)
+    sim = api.post(
+        "/tmf-api/resourceInventory/v5/resource",
+        {
+            "@type": "LogicalResource",
+            "name": "imsi",
+            "value": "001010000000001",
+            "resourceSpecification": {"id": "imsi", "@type": "ResourceSpecificationRef"},
+        },
+    )
+    assert sim.status_code == 201, sim.text
+    feed(stub, db_conn, api, ("sms", 3, when(api), {"imsi": "001010000000001"}))
+    assert len(records(api, product)) == 0  # an unassigned IMSI is nobody's
+    assert len(api.get(f"{USAGE}?status=rejected").json()) == 1
+
+
+@pytest.mark.capability("worker.usageFeed")
+def test_period_totals_and_remaining_allowance_include_an_add_on(api, db_conn, world, stub):
+    # the line starts on the small plan; the bigger profile reaches the network as a
+    # change_profile, exactly as an add-on pack's raised allowance will
+    product = line_on(api, db_conn, world.cheaper, world.acc)
+    feed(stub, db_conn, api, ("data", 600 * MIB, when(api), {"msisdn": MSISDN}))
+    before = summary(api, product)
+    assert before["period"]["startDate"] == api.clock.today().isoformat()
+    data = allowance(before, "data")
+    assert data["used"] == 600 * MIB and data["included"] == 1000 * MIB
+    assert data["remaining"] == 400 * MIB and data["percent"] == 60
+    assert allowance(before, "voice")["included"] == 60 * 60
+    assert before["throttled"] is False
+
+    order = switch(api, world.acc, product, world.off, api.clock.today())
+    tick(db_conn, api.clock.now())
+    assert state(api, order) == "completed"
+    after = summary(api, product)
+    data = allowance(after, "data")
+    assert data["used"] == 600 * MIB and data["included"] == 5000 * MIB  # the raised allowance
+    assert data["remaining"] == 4400 * MIB and data["percent"] == 12
+    assert allowance(after, "voice")["included"] == 300 * 60
+    assert allowance(after, "sms")["included"] == 100
+
+
+@pytest.mark.capability("worker.usageFeed")
+def test_the_80_and_100_percent_events_fire_once_per_period(api, db_conn, world, stub):
+    product = line_on(api, db_conn, world.off, world.acc)  # 5000 MB, 300 min, 100 sms
+
+    def marks():
+        return db_conn.execute(
+            "SELECT allowance, threshold FROM usage_threshold ORDER BY allowance, threshold"
+        ).fetchall()
+
+    feed(stub, db_conn, api, ("data", 3000 * MIB, when(api), {"msisdn": MSISDN}))
+    assert marks() == []
+    feed(stub, db_conn, api, ("data", 1000 * MIB, when(api, hour=13), {"msisdn": MSISDN}))
+    assert marks() == [("data", 80)]  # 4000 of 5000
+    feed(stub, db_conn, api, ("data", 100 * MIB, when(api, hour=14), {"msisdn": MSISDN}))
+    assert marks() == [("data", 80)]  # not again
+    feed(stub, db_conn, api, ("data", 900 * MIB, when(api, hour=15), {"msisdn": MSISDN}))
+    assert marks() == [("data", 80), ("data", 100)]
+    feed(stub, db_conn, api, ("data", 50 * MIB, when(api, hour=16), {"msisdn": MSISDN}))
+    assert marks() == [("data", 80), ("data", 100)]  # over the allowance: still once
+    # one record can pass both marks, and each kind has its own
+    feed(stub, db_conn, api, ("sms", 100, when(api), {"msisdn": MSISDN}))
+    assert marks() == [("data", 80), ("data", 100), ("sms", 80), ("sms", 100)]
+    assert allowance(summary(api, product), "sms")["thresholds"] == [80, 100]
+    assert allowance(summary(api, product), "voice")["thresholds"] == []
+    first_period = summary(api, product)["period"]
+
+    # the next plan period starts again from zero: the marks fire again, once
+    due = timeline.TODAY  # replaced below by the grant's end
+    due = db_conn.execute("SELECT upper(period) FROM funded_interval").fetchone()[0]
+    tick(db_conn, datetime.combine(due, time(0, 5), timeline.TZ))
+    renewed = db_conn.execute("SELECT count(*) FROM funded_interval").fetchone()[0]
+    assert renewed == 2
+    second = api.clock.today() + timedelta(days=45)
+    stub.inject_usage("p2-1", "data", 4100 * MIB, when(api, 45), msisdn=MSISDN)
+    stub.inject_usage("p2-2", "data", 100 * MIB, when(api, 45, 13), msisdn=MSISDN)
+    tick(db_conn, api.clock.now())
+    again = summary(api, product, date=second.isoformat())
+    assert again["period"]["startDate"] != first_period["startDate"]
+    assert allowance(again, "data")["used"] == 4200 * MIB
+    assert allowance(again, "data")["thresholds"] == [80]
+    assert db_conn.execute(
+        "SELECT count(*) FROM usage_threshold WHERE allowance = 'data'"
+    ).fetchone() == (3,)
+
+
+@pytest.mark.capability("worker.usageFeed")
+def test_throttled_when_the_network_reports_it_or_data_passes_the_cap(api, db_conn, world, stub):
+    reported = line_on(api, db_conn, world.off, world.acc)
+    feed(stub, db_conn, api, ("data", MIB, when(api), {"msisdn": MSISDN}))
+    assert summary(api, reported)["throttled"] is False
+    feed(
+        stub, db_conn, api, ("data", MIB, when(api, hour=13), {"msisdn": MSISDN, "throttled": True})
+    )
+    assert summary(api, reported)["throttled"] is True  # the network said so
+
+    # no flag from the network, but the cap (5000 MB here) is passed
+    other = line_on(api, db_conn, world.off, world.acc, value="79991234522")
+    feed(stub, db_conn, api, ("data", 4999 * MIB, when(api), {"msisdn": "79991234522"}))
+    assert summary(api, other)["throttled"] is False
+    feed(stub, db_conn, api, ("data", MIB, when(api, hour=13), {"msisdn": "79991234522"}))
+    assert summary(api, other)["throttled"] is True
+
+
+def test_a_product_without_a_plan_period_has_usage_but_no_allowance(api, db_conn, world, stub):
+    product = line_on(api, db_conn, world.off, world.acc)
+    body = summary(api, product, date=(api.clock.today() - timedelta(days=30)).isoformat())
+    assert body["period"] is None and body["allowances"] == [] and body["throttled"] is False
+    assert api.get(f"{SUMMARY}?product.id=00000000-0000-4000-8000-000000000000").status_code == 404
+    assert api.get(SUMMARY).status_code == 400
+    assert api.get(f"{SUMMARY}?product.id={product['id']}&x=1").status_code == 400
+    assert api.get(f"{SUMMARY}?product.id=nope").status_code == 400
+
+
+# --- TMF635 ---
+
+
+def create_body(product, record_id="mediation-1", **over):
+    body = {
+        "@type": "ProductUsage",
+        "usageSpecification": {"id": "data", "@type": "ProductUsageSpecificationRef"},
+        "product": {"id": product["id"], "@type": "ProductRef", "@referredType": "Product"},
+        "usageCharacteristic": [
+            {
+                "@type": "IntegerCharacteristic",
+                "name": "quantity",
+                "valueType": "integer",
+                "value": 2048,
+            },
+            {
+                "@type": "BooleanCharacteristic",
+                "name": "roaming",
+                "valueType": "boolean",
+                "value": True,
+            },
+        ],
+        "externalIdentifier": [
+            {"@type": "ExternalIdentifier", "owner": "mediation", "id": record_id}
+        ],
+    }
+    return body | over
+
+
+def test_tmf635_reads_validate_against_the_vendored_spec(api, db_conn, world, stub):
+    product = line_on(api, db_conn, world.off, world.acc)
+    feed(
+        stub,
+        db_conn,
+        api,
+        ("data", MIB, when(api), {"msisdn": MSISDN, "roaming": True}),
+        ("voice", 61, when(api, hour=13), {"msisdn": MSISDN}),
+        ("sms", 1, when(api, hour=14), {"msisdn": "79990000000"}),  # nobody's: rejected
+    )
+    listed = api.get(f"{USAGE}?limit=100")
+    assert listed.status_code == 200 and listed.headers["X-Total-Count"] == "3"
+    body = listed.json()
+    assert len(body) == 3
+    for item in body:
+        contract.assert_valid("TMF635", "ProductUsage", item)
+        one = api.get(item["href"])
+        assert one.status_code == 200 and one.json() == item
+    assert [r["usageType"] for r in api.get(f"{USAGE}?usageType=voice").json()] == ["voice"]
+    assert len(api.get(f"{USAGE}?product.id={product['id']}").json()) == 2
+    assert api.get(f"{USAGE}?status=rejected").headers["X-Total-Count"] == "1"
+    assert api.get(f"{USAGE}?limit=1&offset=1").headers["X-Result-Count"] == "1"
+    selected = api.get(f"{USAGE}/{body[0]['id']}?fields=status").json()
+    assert set(selected) == {"id", "href", "@type", "status"}
+    assert api.get(f"{USAGE}?bogus=1").status_code == 400
+    assert api.get(f"{USAGE}/00000000-0000-4000-8000-000000000000").status_code == 404
+    assert api.get(f"{USAGE}/nope").status_code == 404
+
+
+def test_tmf635_post_records_one_usage_idempotently(api, db_conn, world, stub):
+    product = line_on(api, db_conn, world.off, world.acc)
+    body = create_body(product)
+    contract.assert_valid("TMF635", "ProductUsage_FVO", body)
+    created = api.post(USAGE, body)
+    assert created.status_code == 201, created.text
+    usage = created.json()
+    contract.assert_valid("TMF635", "ProductUsage", usage)
+    assert created.headers["Location"] == usage["href"]
+    names = {c["name"]: c["value"] for c in usage["usageCharacteristic"]}
+    assert names["quantity"] == 2048 and names["roaming"] is True and names["unit"] == "bytes"
+    assert usage["externalIdentifier"][0]["id"] == "mediation-1"
+    # the same external id again: the stored usage, nothing new
+    again = api.post(USAGE, body)
+    assert again.status_code == 201 and again.json() == usage
+    assert db_conn.execute("SELECT count(*) FROM usage_record").fetchone() == (1,)
+    # the same id for another kind is a conflict
+    assert (
+        api.post(USAGE, create_body(product, usageSpecification={"id": "sms"})).status_code == 409
+    )
+    # a posted usage counts toward the period like a fed one
+    posted = api.post(
+        USAGE,
+        create_body(
+            product,
+            "mediation-2",
+            usageCharacteristic=[
+                {
+                    "@type": "IntegerCharacteristic",
+                    "name": "quantity",
+                    "valueType": "integer",
+                    "value": 4000 * MIB,
+                }
+            ],
+        ),
+    )
+    assert posted.status_code == 201, posted.text
+    assert allowance(summary(api, product), "data")["thresholds"] == [80]
+
+
+@pytest.mark.parametrize(
+    "change,status",
+    [
+        ({"usageSpecification": {"id": "fax"}}, 422),
+        ({"usageType": "voice"}, 422),
+        ({"externalIdentifier": []}, 422),
+        ({"usageCharacteristic": []}, 422),
+        (
+            {
+                "usageCharacteristic": [
+                    {"@type": "IntegerCharacteristic", "name": "quantity", "value": 0}
+                ]
+            },
+            422,
+        ),
+        (
+            {
+                "usageCharacteristic": [
+                    {"@type": "StringCharacteristic", "name": "colour", "value": "x"}
+                ]
+            },
+            422,
+        ),
+        ({"serviceUsage": [{"id": "x"}]}, 422),
+        ({"product": {"id": "00000000-0000-4000-8000-000000000000"}}, 422),
+        ({"unknown": 1}, 400),
+        ({"id": "00000000-0000-4000-8000-000000000001"}, 400),
+        ({"@type": "Other"}, 400),
+    ],
+)
+def test_tmf635_post_refusals(api, db_conn, world, stub, change, status):
+    product = line_on(api, db_conn, world.off, world.acc)
+    body = create_body(product) | change
+    response = api.post(USAGE, body)
+    assert response.status_code == status, response.text
+    assert db_conn.execute("SELECT count(*) FROM usage_record").fetchone() == (0,)
+
+
+def test_a_usage_is_a_fact_patch_and_delete_are_405(api, db_conn, world, stub):
+    product = line_on(api, db_conn, world.off, world.acc)
+    usage = api.post(USAGE, create_body(product)).json()
+    assert api.patch(usage["href"], {"status": "rated"}).status_code == 405
+    assert api.delete(usage["href"]).status_code == 405
+    assert api.get(usage["href"]).json()["status"] == "notRated"
+
+
+def test_the_tmf635_server_path_is_the_specs(api):
+    assert contract.spec("TMF635")["servers"][0]["url"].endswith(
+        "/tmf-api/productUsageManagement/v5/"
+    )
+    assert settings.billing_tz  # the event date is the business date in this zone

@@ -23,6 +23,13 @@ items:
   - {id: db.network_command, area: db, stage: 5, table: network_command, title: "Durable network provisioning commands of prepaid order items"}
   - {id: db.port_request, area: db, stage: 5, table: port_request, title: "Port-in and port-out requests with their state, rejection reason and carrier reference"}
   - {id: db.number_transfer_pin, area: db, stage: 5, table: number_transfer_pin, title: "Time-limited single-use Number Transfer PINs (hashed) validated at port-out"}
+  - {id: db.usage_record, area: db, stage: 5, table: usage_record, title: "Usage records from the network feed (TMF635 ProductUsage), stored once per network record id"}
+  - {id: db.usage_threshold, area: db, stage: 5, table: usage_threshold, title: "80% and 100% allowance thresholds reached per product, period and kind: one row is one event"}
+  - {id: api.tmf635.productUsage.list, area: api, stage: 5, method: GET, path: "/tmf-api/productUsageManagement/v5/productUsage", title: "TMF635 GET /productUsage"}
+  - {id: api.tmf635.productUsage.create, area: api, stage: 5, method: POST, path: "/tmf-api/productUsageManagement/v5/productUsage", title: "TMF635 POST /productUsage"}
+  - {id: api.tmf635.productUsage.get, area: api, stage: 5, method: GET, path: "/tmf-api/productUsageManagement/v5/productUsage/{usage_id}", title: "TMF635 GET /productUsage/{id}"}
+  - {id: api.internal.usage.summary, area: api, stage: 5, method: GET, path: /internal/v1/usage/summary, title: "Usage against the plan allowance of a line"}
+  - {id: worker.usageFeed, area: worker, stage: 5, title: "Store the network usage feed once per record, match it to lines and note allowance thresholds"}
   - {id: db.sim_batch, area: db, stage: 5, table: sim_batch, title: "Stocked SIM and eSIM batches"}
   - {id: db.payment_method, area: db, stage: 5, table: payment_method, title: "Saved cards as gateway tokens (TMF670 tokenizedCard); the BSS never holds a card number"}
   - {id: db.payment_command, area: db, stage: 5, table: payment_command, title: "Durable card charges to the payment gateway: the balance rises only when the gateway confirms"}

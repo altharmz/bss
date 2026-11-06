@@ -118,6 +118,13 @@ APIS = (
         "TMF654",
         "v4",
     ),
+    Api(
+        "tmf635-product-usage",
+        "TMF635 Product Usage Management",
+        "/tmf-api/productUsageManagement/v5",
+        "TMF635",
+        "v5",
+    ),
     Api("service", "Service endpoints", "", None, "-"),
 )
 
@@ -137,6 +144,7 @@ HANDLERS = {
     "/tmf-api/resourceInventory/v5/hub": "app/api/hub.py",
     "/tmf-api/prepayBalanceManagement/v4/hub": "app/api/hub.py",
     "/tmf-api/prepayBalanceManagement/v4": "app/api/balance.py",
+    "/tmf-api/productUsageManagement/v5": "app/api/usage.py",
     "/tmf-api/resourceInventory/v5": "app/api/resource_inventory.py",
     "/tmf-api/productCatalogManagement/v5/category": "app/api/classification.py",
     "/tmf-api/productCatalogManagement/v5/productCatalog": "app/api/classification.py",
@@ -161,6 +169,7 @@ HANDLERS = {
     "/internal/v1/sim": "app/internal/sims.py",
     "/internal/v1/port": "app/internal/ports.py",
     "/internal/v1/number": "app/internal/ports.py",
+    "/internal/v1/usage": "app/internal/usage.py",
     "/internal/v1/payment/command": "app/internal/payments.py",
     "/internal/v1/billingAccount/{account_id}/cardTopup": "app/internal/payments.py",
     "/internal/v1/billingAccount/{account_id}/autoTopup": "app/internal/payments.py",
@@ -234,6 +243,8 @@ AREAS = {
         "balance_action_reversal",
         "funding_source",
         "funding_consumption",
+        "usage_record",
+        "usage_threshold",
     ),
     "worker": ("billing_run_account", "worker_request", "idempotency_key"),
     "events": ("event_subscription", "event", "event_delivery"),
