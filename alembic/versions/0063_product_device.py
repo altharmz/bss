@@ -1,13 +1,13 @@
 """The device (IMEI) of a prepaid line, with its history (issue #194).
 
-Revision ID: 0062
-Revises: 0061
+Revision ID: 0063
+Revises: 0062
 """
 
 from alembic import op
 
-revision = "0062"
-down_revision = "0061"
+revision = "0063"
+down_revision = "0062"
 branch_labels = None
 depends_on = None
 
@@ -70,7 +70,7 @@ def downgrade() -> None:
                     AND state <> 'rejected' AND product_offering_id IS NULL
                     AND product_status IS NULL
                     AND details->'product' ? 'productCharacteristic') THEN
-                RAISE EXCEPTION 'device changes must be retained at revision 0062';
+                RAISE EXCEPTION 'device changes must be retained at revision 0063';
             END IF;
         END $$;
         ALTER TABLE product_order_item

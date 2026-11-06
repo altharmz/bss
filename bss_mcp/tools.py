@@ -64,6 +64,17 @@ IDEMPOTENCY_ARG: dict[str, Any] = {
 }
 
 
+ACCOUNT_PIN_ARG: dict[str, Any] = {
+    "type": "string",
+    "pattern": r"^[0-9]{6,8}$",
+    "description": (
+        "The customer's account PIN (the X-Account-Pin header), asked by a SIM swap, a number"
+        " change or a contact or address change on a customer with a live prepaid line: without"
+        " a valid one the app refuses it (pinRequired, pinInvalid, pinNotSet, pinLocked)."
+    ),
+}
+
+
 class DriftError(RuntimeError):
     """The registry and the app's operations disagree: the service does not start."""
 
@@ -79,6 +90,7 @@ class Tool:
     required_query: tuple[str, ...] = ()
     body_extra: dict[str, Any] = field(default_factory=dict)
     idempotent: bool = False
+    account_pin: bool = False
     input_schema: dict[str, Any] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -91,6 +103,8 @@ class Tool:
         required += self.required_query
         if self.idempotent:
             properties["idempotency_key"] = IDEMPOTENCY_ARG
+        if self.account_pin:
+            properties["account_pin"] = ACCOUNT_PIN_ARG
         if self.body is not None:
             properties["body"] = schema.model_schema(self.body)
             properties["body"]["properties"].update(self.body_extra)
@@ -127,6 +141,8 @@ class Tool:
         headers = {}
         if self.idempotent and "idempotency_key" in arguments:
             headers["Idempotency-Key"] = str(arguments["idempotency_key"])
+        if self.account_pin and "account_pin" in arguments:
+            headers["X-Account-Pin"] = str(arguments["account_pin"])
         return {
             "method": self.method,
             "path": path,
@@ -270,6 +286,11 @@ async def generate(app: Any) -> dict[str, Tool]:
                 " Takes an optional idempotency_key (the Idempotency-Key header): retry with the"
                 " same key after a timeout and the first answer is replayed, nothing repeats."
             )
+        if op.account_pin:
+            description += (
+                " Takes an optional account_pin (the customer's account PIN, X-Account-Pin"
+                " header) for a SIM swap, number change or contact or address change."
+            )
         if o["method"] != "GET":
             description += " Changes data (write scope)."
         if op.body is not None and "decimal" in json.dumps(schema.model_schema(op.body)):
@@ -284,5 +305,6 @@ async def generate(app: Any) -> dict[str, Tool]:
             required_query=op.required,
             body_extra=op.body_extra,
             idempotent=op.idempotent,
+            account_pin=op.account_pin,
         )
     return tools

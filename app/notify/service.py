@@ -28,6 +28,10 @@ class Event:
     product_id: UUID | None
     params: dict[str, Any] = field(default_factory=dict)
     sms_to_line: bool = True  # False: the line is gone, SMS only to a phone contact
+    # Who to tell, when it is not the account's customer as it is now (a contact change tells
+    # the addresses on record before the change).
+    contact: recipients.Contact | None = None
+    urgent: bool = False  # a security alert: an SMS does not wait for the end of quiet hours
 
 
 def _clock(value: str) -> time:
@@ -62,7 +66,9 @@ def consent_allows(conn: psycopg.Connection, row: Row) -> bool:
 
 def notify(conn: psycopg.Connection, event: Event, *, now: datetime, tz: ZoneInfo) -> list[Row]:
     """The messages made for an event (none when it was already notified)."""
-    contact = recipients.for_account(conn, event.account_id) if event.account_id else None
+    contact = event.contact
+    if contact is None and event.account_id:
+        contact = recipients.for_account(conn, event.account_id)
     if contact is None or repo.event_exists(conn, event.key):
         return []  # an event is told once, on whichever channels could be reached then
     phones = list(contact.phones)
@@ -71,6 +77,8 @@ def notify(conn: psycopg.Connection, event: Event, *, now: datetime, tz: ZoneInf
             recipients.line_number(conn, event.product_id)
             if event.product_id is not None
             else recipients.account_line_number(conn, event.account_id)
+            if event.account_id is not None
+            else None
         )
         phones = [number] if number else []
     params = {"name": contact.name, **event.params}
@@ -103,7 +111,9 @@ def notify(conn: psycopg.Connection, event: Event, *, now: datetime, tz: ZoneInf
             content=body,
             now=now,
             dedupe_key=event.key,
-            scheduled_send_time=quiet_until(now, tz) if channel == "sms" else None,
+            scheduled_send_time=(
+                quiet_until(now, tz) if channel == "sms" and not event.urgent else None
+            ),
         )
         if row is not None:
             made.append(row)

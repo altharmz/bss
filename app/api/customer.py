@@ -32,6 +32,7 @@ from app.api.common import (
 from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
+from app.api.guards import authorize_contact
 from app.api.party import party_href, party_name
 from app.api.tmfjson import TmfJSONResponse
 from app.events import emit
@@ -188,6 +189,7 @@ def patch_customer(
     server_set = take_server_set(body, SERVER_SET)
     data, documents = parse_documented(CustomerPatch, body, DOCUMENTS, API, "Customer_MVO")
     not_null(data, "name", "status", "engaged_party")
+    ticket = authorize_contact(request, tx, clock.now(), "customer", customer_id, documents)
     with tx() as conn:
         uid = parse_id("customer", customer_id)
         # FOR UPDATE: a billing account created meanwhile (it takes the customer FOR KEY
@@ -215,6 +217,8 @@ def patch_customer(
         row = parties.update_customer(conn, uid, changes)
         patched = customer_body(conn, with_meta(conn, "customer", row, data))
         emit.changed(conn, API, "customer", old, patched, at=clock.now(), state="status")
+        if ticket is not None:
+            ticket.record(conn, clock.now())
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 

@@ -94,11 +94,11 @@ approved by the human's standing delegation (decided following TMF). The UI half
 - **TMF637 mapping.** The IMEI is a `productCharacteristic` named `imei` (`StringCharacteristic`).
   Orders alone write it: an **add** item carries it next to `simType`; a **device change** is a
   `modify` item whose only content is the `imei` characteristic (no offering, status or
-  realizingResource, `deviceChangeAlone`; migration 0062 widens the item check constraint for it).
+  realizingResource, `deviceChangeAlone`; migration 0063 widens the item check constraint for it).
   It completes at acceptance, sends no network command and ignores the requested start date. The
   product shows the current `imei`, `deviceCompatibility` (`compatible` | `unknown`) and, for a
   warning, `deviceReasons`: derived from `product_device`, never from what an order sent.
-- **History.** `product_device` (migration 0062): one row per device a line has had (IMEI,
+- **History.** `product_device` (migration 0063): one row per device a line has had (IMEI,
   compatibility, reasons, `checked_at`, `started_at`, `ended_at`, the order items that recorded and
   ended it). One open row per product (unique partial index); a change closes the open row and
   inserts the next, so the old device is kept. `GET /internal/v1/device?product.id=` lists it

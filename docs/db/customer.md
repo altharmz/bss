@@ -48,4 +48,4 @@ SID Customer (TMF629 customer): the role a party plays towards us. The party is 
 
 ## Referenced by
 
-[`billing_account`](billing_account.md), [`notification_consent`](notification_consent.md), [`notification_message`](notification_message.md)
+[`billing_account`](billing_account.md), [`customer_pin`](customer_pin.md), [`notification_consent`](notification_consent.md), [`notification_message`](notification_message.md)

@@ -72,7 +72,8 @@ date}|null}` (null for an operator-suspended line and for add-ons) and `suspensi
 `lifecycle`. No MCP tool (the settings are an operator screen: scope.yaml excluded).
 
 **Not in this slice:** the UI (188b: state and next transition on the product card, the
-settings page), customer notifications of each phase (#192), carrier-side number release.
+settings page), carrier-side number release. The customer notifications of each phase are done
+(#192, [notifications.md](notifications.md)).
 
 **Tests:** `tests/test_prepaid_lifecycle.py` (dates and pure schedule; unfunded renewal through
 grace, suspension and deactivation with the commands the network got; top-up in grace and in

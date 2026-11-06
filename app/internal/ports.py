@@ -21,6 +21,7 @@ from app.api.account import account_href
 from app.api.common import TmfModel, parse, parse_id, utc
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import TmfError, bad_request, conflict, not_found, unprocessable
+from app.api.guards import actor_of
 from app.api.inventory import order_href, product_href
 from app.api.listing import parse_page
 from app.api.resource_inventory import API as RESOURCE_API
@@ -33,8 +34,9 @@ from app.integrations.network import NetworkTemporary, NumberPoolExhausted, adap
 from app.internal.context import no_query
 from app.repository import numbers as number_repo
 from app.repository import ports as repo
-from app.repository import products
+from app.repository import products, security
 from app.repository._sql import Row, fetch_one
+from app.security import guard
 
 PORT_BASE = "/internal/v1/port"
 router = APIRouter(prefix="/internal/v1")
@@ -217,18 +219,52 @@ def create_pin(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> Tmf
     no_query(request)
     data = parse(PinRequest, body)
     now = clock.now()
+    actor = actor_of(request)
+    denial = None
     with tx() as conn:
         product, number = _line(conn, data.product_id, clock.today())
-        pin = f"{secrets.randbelow(10**6):06d}"
-        row = repo.insert_pin(
-            conn,
-            pin_id=uuid4(),
-            number_id=number["id"],
-            product_id=product["id"],
-            pin=pin,
-            now=now,
-            expires_at=now + timedelta(days=settings.number_transfer_pin_days),
-        )
+        owner = security.customer_of_product(conn, product["id"])
+        assert owner is not None
+        try:
+            mode = "none"  # postpaid keeps working as before
+            if owner["rating_type"] == "prepaid":
+                mode = guard.gate(
+                    conn,
+                    actor,
+                    now,
+                    action="number_transfer_pin",
+                    customer_ids=[owner["customer_id"]],
+                    product_id=product["id"],
+                    account_id=owner["billing_account_id"],
+                    lock="port_out",
+                    detail={"number": number["value"]},
+                )
+        except guard.Refusal as refusal:
+            denial = refusal  # raised after the commit: the audit entry and the count stay
+        else:
+            pin = f"{secrets.randbelow(10**6):06d}"
+            row = repo.insert_pin(
+                conn,
+                pin_id=uuid4(),
+                number_id=number["id"],
+                product_id=product["id"],
+                pin=pin,
+                now=now,
+                expires_at=now + timedelta(days=settings.number_transfer_pin_days),
+            )
+            guard.done(
+                conn,
+                actor,
+                now,
+                action="number_transfer_pin",
+                verification=mode,
+                customer_id=owner["customer_id"],
+                product_id=product["id"],
+                account_id=owner["billing_account_id"],
+                detail={"number": number["value"], "numberTransferPin": str(row["id"])},
+            )
+    if denial is not None:
+        raise denial.error()
     return TmfJSONResponse(pin_body(row, number["value"], now) | {"pin": pin}, status_code=201)
 
 

@@ -86,6 +86,7 @@ from app.api.customer import customer_href
 from app.api.deletes import delete_row, refuse_if_referenced
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import bad_request, conflict, not_found, problems_error, unprocessable
+from app.api.guards import authorize_contact
 from app.api.presentation import BillStructure, structure_body
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.engine_tax import service_address_of
@@ -698,6 +699,7 @@ def patch_account(
         AccountPatch, body, DOCUMENTS, API, "BillingAccount_MVO", found
     )
     not_null(data, "name", "state", "bill_structure", "related_party", "rating_type")
+    ticket = authorize_contact(request, tx, clock.now(), "account", account_id, documents)
     with tx() as conn:
         uid = parse_id("billingAccount", account_id)
         # FOR UPDATE, as billing locks it: a concurrent delete either went first (404)
@@ -762,6 +764,8 @@ def patch_account(
             row = parties.get_billing_account(conn, uid)
         patched = account_body(conn, row)
         emit.changed(conn, API, "billingAccount", old, patched, at=clock.now(), state="state")
+        if ticket is not None:
+            ticket.record(conn, clock.now())
     return TmfJSONResponse(listing.select_fields(patched, fields))
 
 

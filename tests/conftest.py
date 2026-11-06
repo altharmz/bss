@@ -211,6 +211,14 @@ def _no_service_address_gate(monkeypatch) -> None:
     monkeypatch.setattr(settings, "tax_require_service_address", False)
 
 
+@pytest.fixture(autouse=True)
+def _no_account_pin_gate(monkeypatch) -> None:
+    """Most tests swap SIMs, change numbers and edit contacts without a PIN;
+    tests/test_account_security.py turns the gate (BSS_ACCOUNT_PIN_REQUIRED, on by default)
+    back on."""
+    monkeypatch.setattr(settings, "account_pin_required", False)
+
+
 @pytest.fixture
 def api(db_conn, migrated_db_url, monkeypatch):
     """The real app on the throwaway database with a FixedClock, behind a client that

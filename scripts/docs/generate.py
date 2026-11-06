@@ -181,6 +181,7 @@ HANDLERS = {
     "/internal/v1/usage": "app/internal/usage.py",
     "/tmf-api/communicationManagement/v4": "app/api/communication.py",
     "/internal/v1/notification": "app/internal/notifications.py",
+    "/internal/v1/security": "app/internal/security.py",
     "/internal/v1/payment/command": "app/internal/payments.py",
     "/internal/v1/billingAccount/{account_id}/cardTopup": "app/internal/payments.py",
     "/internal/v1/billingAccount/{account_id}/autoTopup": "app/internal/payments.py",
@@ -265,6 +266,7 @@ AREAS = {
     "worker": ("billing_run_account", "worker_request", "idempotency_key"),
     "events": ("event_subscription", "event", "event_delivery"),
     "notifications": ("notification_message", "notification_consent"),
+    "security": ("customer_pin", "line_lock", "account_audit"),
     "users": ("app_user", "app_session", "app_user_audit"),
 }
 AREA_TITLES = {
@@ -276,6 +278,7 @@ AREA_TITLES = {
     "worker": "Billing worker (ours)",
     "events": "Event notifications (TMF hubs)",
     "notifications": "Customer notifications (TMF681)",
+    "security": "Account security: PIN, line locks, audit log (ours)",
     "users": "Application users and sessions (ours)",
 }
 SKIP_TABLES = {"alembic_version"}

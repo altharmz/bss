@@ -14,7 +14,7 @@ and nothing is stored, so every stored cancellation is `done`.
 """
 
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
@@ -54,6 +54,7 @@ from app.api.common import (
 )
 from app.api.deps import ClockDep, JsonBody, MergePatchBody, Tx
 from app.api.errors import Problem, bad_request, conflict, not_found, unprocessable
+from app.api.guards import actor_of
 from app.api.inventory import ORDERING_BASE as BASE
 from app.api.inventory import order_href, product_href
 from app.api.prices import monthly_price, tax_on, total_rate
@@ -696,6 +697,7 @@ def create_order(body: JsonBody, request: Request, tx: Tx, clock: ClockDep) -> T
         order_id=uid,
         draft=data.requested_initial_state == "draft",
         details=merge_documents({}, documents) or None,
+        actor=actor_of(request),
     )
     key = request.headers.get("idempotency-key")
     if key is not None:
@@ -781,7 +783,7 @@ def patch_order(
                     "state is set by processing: a draft is submitted with acknowledged,"
                     " an order is cancelled with cancelProductOrder"
                 )
-            _submit(conn, uid, now=clock.now(), today=clock.today())
+            _submit(conn, uid, now=clock.now(), today=clock.today(), actor=actor_of(request))
         row = orders.get_order(conn, uid)
         patched = order_body(conn, with_meta(conn, "product_order", row, data))
         if draft and placed:
@@ -819,11 +821,12 @@ def _replace_draft(
         raise unprocessable(str(exc)) from None
 
 
-def _submit(conn: psycopg.Connection, uid: Any, *, now: Any, today: Any) -> None:
+def _submit(conn: psycopg.Connection, uid: Any, *, now: Any, today: Any, actor: Any) -> None:
     row = orders.get_order(conn, uid)
     assert row is not None  # locked
     try:
-        process.submit_draft(conn, uid, _stored_request(conn, row), now=now, today=today)
+        held = replace(_stored_request(conn, row), actor=actor)
+        process.submit_draft(conn, uid, held, now=now, today=today)
     except OrderRefused as exc:
         raise unprocessable(str(exc)) from None
 
