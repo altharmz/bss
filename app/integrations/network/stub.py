@@ -13,6 +13,11 @@ carrier is polled); a number ending `0001` stays pending until `complete_port_in
 ending `0002` fails temporarily on submit until `recover(number)`. Port-out requests are put
 in with `inject_port_out`; `port_answers` keeps what we answered.
 
+Devices: `check_device` answers by the IMEI's first eight digits (the TAC): `35000000` to
+`35999999` compatible, `99000000` to `99000099` incompatible (reasons: band 71 missing, the
+device is carrier locked, no VoLTE), `98000000` to `98999999` fails temporarily (the BSS
+records unknown), anything else unknown.
+
 Usage: nothing is generated on its own; `inject_usage` queues a record that `usage_records`
 returns until `ack_usage` (a record can be injected twice to test a resent batch).
 """
@@ -22,6 +27,7 @@ from datetime import datetime
 from typing import Any
 
 from app.integrations.network.interface import (
+    DeviceCheck,
     EsimProfile,
     NetworkRefused,
     NetworkTemporary,
@@ -36,6 +42,11 @@ TEMPORARY_SUFFIX = "0001"
 PORT_PENDING_SUFFIX = "0001"
 PORT_TEMPORARY_SUFFIX = "0002"
 POOL_SIZE = 100
+INCOMPATIBLE_REASONS = (
+    "the device does not support band 71 (600 MHz)",
+    "the device is locked to another carrier",
+    "the device does not support VoLTE",
+)
 
 
 class StubNetwork:
@@ -80,6 +91,16 @@ class StubNetwork:
         self.usage_queue.append(
             UsageRecord(record_id, kind, quantity, event_at, msisdn, imsi, roaming, throttled)
         )
+
+    def check_device(self, imei: str) -> DeviceCheck:
+        tac = int(imei[:8])
+        if 99000000 <= tac <= 99000099:
+            return DeviceCheck("incompatible", INCOMPATIBLE_REASONS)
+        if 98000000 <= tac <= 98999999:
+            raise NetworkTemporary(f"stub: the device database is unavailable for {imei[:8]}")
+        if 35000000 <= tac <= 35999999:
+            return DeviceCheck("compatible")
+        return DeviceCheck("unknown", ("the device model is not in the network's database",))
 
     def usage_records(self, limit: int) -> list[UsageRecord]:
         return self.usage_queue[:limit]

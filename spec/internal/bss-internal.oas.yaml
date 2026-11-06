@@ -501,6 +501,49 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/LifecycleSettings'}
         '400': {$ref: '#/components/responses/Error'}
+  /device:
+    get:
+      summary: The devices of a prepaid line, newest first (issue 194).
+      description: >-
+        One row per IMEI the line has had: the network's compatibility answer when the order
+        recorded it (compatible, or unknown with the reasons) and the times. The row without
+        endedAt is the current device. An incompatible device is refused by the order and
+        never stored.
+      parameters:
+        - name: product.id
+          in: query
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ProductDevice'}
+        '400': {$ref: '#/components/responses/Error'}
+        '404': {$ref: '#/components/responses/Error'}
+  /device/check:
+    get:
+      summary: Ask the network whether a device works (issue 194).
+      description: >-
+        Stores nothing. result is compatible, incompatible or unknown (also when the network
+        did not answer), with the network's reasons. 422 for an IMEI that is not 15 digits
+        with a correct Luhn check digit.
+      parameters:
+        - name: imei
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeviceCheck'}
+        '400': {$ref: '#/components/responses/Error'}
+        '422': {$ref: '#/components/responses/Error'}
   /network/command:
     get:
       summary: Network provisioning commands, newest first (issue 183).
@@ -2217,6 +2260,34 @@ components:
         pin:
           type: string
           description: The PIN, only in the response that creates it; never stored or listed.
+    ProductDevice:
+      type: object
+      additionalProperties: false
+      required: [id, product, imei, compatibility, reasons, checkedAt, startedAt, endedAt,
+                 recordedByItem]
+      properties:
+        id: {type: string, format: uuid}
+        product: {$ref: '#/components/schemas/Link'}
+        imei: {type: string, pattern: '^[0-9]{15}$'}
+        compatibility: {type: string, enum: [compatible, unknown]}
+        reasons: {type: array, items: {type: string}}
+        checkedAt: {type: string, format: date-time}
+        startedAt: {type: string, format: date-time}
+        endedAt: {$ref: '#/components/schemas/NullableDateTime'}
+        recordedByItem:
+          type: object
+          additionalProperties: false
+          required: [id]
+          properties:
+            id: {type: string, format: uuid}
+    DeviceCheck:
+      type: object
+      additionalProperties: false
+      required: [imei, result, reasons]
+      properties:
+        imei: {type: string, pattern: '^[0-9]{15}$'}
+        result: {type: string, enum: [compatible, incompatible, unknown]}
+        reasons: {type: array, items: {type: string}}
     NetworkCommand:
       type: object
       additionalProperties: false

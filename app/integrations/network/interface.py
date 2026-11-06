@@ -58,6 +58,15 @@ class UsageRecord:
     throttled: bool = False
 
 
+@dataclass(frozen=True)
+class DeviceCheck:
+    """The network's verdict on a device: `compatible`, `incompatible` or `unknown`, with
+    the reasons (bands, lock, VoLTE) as short sentences."""
+
+    result: str
+    reasons: tuple[str, ...] = ()
+
+
 class NumberPoolExhausted(Exception):
     """The carrier has no more numbers for the area code."""
 
@@ -103,6 +112,12 @@ class NetworkAdapter(Protocol):
         self, key: str, reference: str, approved: bool, reason: str | None = None
     ) -> None:
         """Our answer to a port-out request, idempotent on `key`."""
+        ...
+
+    def check_device(self, imei: str) -> DeviceCheck:
+        """Whether the device works on the network. A read-only question: it may be asked
+        again. Raises `NetworkTemporary` when the network cannot answer (the BSS treats
+        that as `unknown`)."""
         ...
 
     def usage_records(self, limit: int) -> list[UsageRecord]:

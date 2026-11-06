@@ -57,8 +57,9 @@ from app.billing.core import cycle_period, product_charge_period
 from app.billing.model import MissingPrice
 from app.config import settings
 from app.events import emit
+from app.network import device
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
-from app.repository import billing, catalog, orders, parties, products
+from app.repository import billing, catalog, devices, orders, parties, products
 from app.repository._sql import Row
 
 API = "TMF637"
@@ -123,6 +124,23 @@ def _related_order_item(conn: psycopg.Connection, item_id: UUID) -> dict[str, An
         "@type": "RelatedOrderItem",
         "@referredType": "ProductOrder",
     }
+
+
+def _with_device(details: dict[str, Any], current: Row | None) -> dict[str, Any]:
+    """The line's device as characteristics derived from product_device (never from what
+    an order sent): imei, deviceCompatibility and, for a warning, deviceReasons."""
+    derived = (device.CHARACTERISTIC, device.COMPATIBILITY, device.REASONS)
+    kept = [c for c in details.get("productCharacteristic") or [] if c.get("name") not in derived]
+    if current is not None:
+        values = [
+            (device.CHARACTERISTIC, current["imei"]),
+            (device.COMPATIBILITY, current["compatibility"]),
+            *([(device.REASONS, "; ".join(current["reasons"]))] if current["reasons"] else []),
+        ]
+        kept += [{"name": n, "value": v, "@type": "StringCharacteristic"} for n, v in values]
+    if kept:
+        return {**details, "productCharacteristic": kept}
+    return {k: v for k, v in details.items() if k != "productCharacteristic"}
 
 
 def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, Any]:
@@ -211,7 +229,7 @@ def product_body(conn: psycopg.Connection, row: Row, today: date) -> dict[str, A
                     unit_of_measure=price["details"].get("unitOfMeasure"),
                 )
             ]
-    details = dict(row["details"])
+    details = _with_device(dict(row["details"]), devices.current(conn, row["id"]))
     if row.get("requires_msisdn") or row.get("requires_imsi"):
         claims = conn.execute(
             """SELECT subscriber_number_id FROM number_assignment

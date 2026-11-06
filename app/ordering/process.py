@@ -32,7 +32,7 @@ order with none of them is refused. Items that name another account are rejected
 (`billingAccountMismatch`, `productOfOtherAccount`), as before.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, time
 from typing import Any
 from uuid import UUID, uuid4
@@ -44,6 +44,7 @@ from app.billing.funding import InsufficientFunds
 from app.config import settings
 from app.events import emit
 from app.network import kind as offering_kind
+from app.ordering import devices as device_orders
 from app.ordering import network as network_orders
 from app.ordering import numbers as number_orders
 from app.ordering import prepaid as prepaid_orders
@@ -74,6 +75,8 @@ class ItemRequest:
     product_status: str | None = None
     # the prepaid lifecycle's own suspension/resumption: renewal stays open (worker only)
     lifecycle: bool = False
+    # the network's verdict on the item's IMEI (ordering/devices.py), filled by validation
+    device_check: dict[str, Any] = field(default_factory=dict, compare=False)
 
     @property
     def needs_active_account(self) -> bool:
@@ -316,6 +319,10 @@ def _process(
     problems = [Problem(*p) for p in secured]
     problems += _validate(conn, request, account, start, today, locked, quotes)
     sim_problems = [Problem(*p) for p in number_orders.pick_sims(conn, request)]
+    if not problems:
+        problems += [
+            Problem(*p) for p in device_orders.problems(conn, request, account, locked, now)
+        ]
     number_rows = number_orders.lock(
         conn, named, [number_orders.references(i) for i in request.items]
     )
@@ -458,6 +465,8 @@ def _item_problems(
         return [("billingAccountMismatch", "the item's billingAccount differs from the order's")]
     if item.action == "modify" and item.product_status is not None:
         return _status_problems(conn, item, account, start, locked)
+    if device_orders.device_only(item):
+        return _device_problems(item, account, start, locked)
     if item.action == "modify":
         if (
             item.product_offering_id is not None
@@ -499,6 +508,20 @@ def _unchanged_problems(
         return [("productOfOtherAccount", "the product belongs to another billing account")]
     if product["status"] in ENDED:
         return [("productAlreadyEnded", f"the product is already {product['status']}")]
+    return []
+
+
+def _device_problems(
+    item: ItemRequest, account: Row, start: date, locked: dict[UUID, Row]
+) -> list[tuple[str, str]]:
+    """A device change names a started product of the order's account that has not ended."""
+    product = locked[item.product_id]
+    if product["billing_account_id"] != account["id"]:
+        return [("productOfOtherAccount", "the product belongs to another billing account")]
+    if product["status"] in ENDED or (
+        product["termination_date"] is not None and start >= product["termination_date"]
+    ):
+        return [("productAlreadyEnded", "the product has ended")]
     return []
 
 
@@ -796,6 +819,7 @@ def _execute(
             )
             orders.set_order_item_product(conn, row["id"], product["id"])
             number_orders.execute(conn, item, product["id"], row["id"], start, now)
+            device_orders.execute(conn, item, product["id"], row["id"], now)
             emit.product(conn, product["id"], "Create", at=now, today=today)
         elif item.action == "noChange":
             pass  # nothing to do: the product stays as it is
@@ -823,7 +847,8 @@ def _execute(
                     announced_at=now if start <= today else None,
                 )
             number_orders.execute(conn, item, item.product_id, row["id"], start, now)
-            if start <= today:
+            device_orders.execute(conn, item, item.product_id, row["id"], now)
+            if start <= today or device_orders.device_only(item):
                 emit.product(conn, item.product_id, "AttributeValueChange", at=now, today=today)
         else:
             product = locked[item.product_id]

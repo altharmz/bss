@@ -42,6 +42,9 @@ items:
   - {id: api.tmf681.communicationMessage.get, area: api, stage: 5, method: GET, path: "/tmf-api/communicationManagement/v4/communicationMessage/{message_id}", title: "TMF681 GET /communicationMessage/{id}"}
   - {id: api.tmf681.communicationMessage.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/communicationManagement/v4/communicationMessage/{message_id}", title: "TMF681 PATCH /communicationMessage/{id} (cancel an unsent message)"}
   - {id: worker.notifications, area: worker, stage: 5, title: "Detect prepaid events and send one customer SMS or email per event through the notify adapter, with consent, quiet hours and retries"}
+  - {id: db.product_device, area: db, stage: 5, table: product_device, title: "The devices (IMEI) of a prepaid line with the network's compatibility answer; the open row is the current device"}
+  - {id: api.internal.device.list, area: api, stage: 5, method: GET, path: /internal/v1/device, title: "Device history of a prepaid line"}
+  - {id: api.internal.device.check, area: api, stage: 5, method: GET, path: /internal/v1/device/check, title: "Ask the network whether a device (IMEI) works"}
   - {id: db.sim_batch, area: db, stage: 5, table: sim_batch, title: "Stocked SIM and eSIM batches"}
   - {id: db.payment_method, area: db, stage: 5, table: payment_method, title: "Saved cards as gateway tokens (TMF670 tokenizedCard); the BSS never holds a card number"}
   - {id: db.payment_command, area: db, stage: 5, table: payment_command, title: "Durable card charges to the payment gateway: the balance rises only when the gateway confirms"}

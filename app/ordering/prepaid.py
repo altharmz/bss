@@ -27,7 +27,7 @@ from app.billing.prepaid import IntervalQuote, fee_quotes
 from app.config import settings
 from app.events import emit
 from app.network import kind as offering_kind
-from app.ordering import network, numbers
+from app.ordering import devices, network, numbers
 from app.ordering.states import item_transition, order_transition
 from app.repository import balance_actions, billing, funding, orders, parties, products, sims
 from app.repository import catalog as catalog_repo
@@ -210,12 +210,13 @@ def sim_swap_problems(conn, request, start):
 
 
 def number_only(request):
-    """Every item is a modify of the subscriber number alone (no offering, no status)."""
+    """Every item is a modify of the subscriber number or of the device alone (no offering,
+    no status)."""
     return all(
         item.action == "modify"
         and item.product_offering_id is None
         and item.product_status is None
-        and numbers.references(item) is not None
+        and (numbers.references(item) is not None or devices.device_only(item))
         for item in request.items
     )
 
@@ -665,6 +666,7 @@ def accept(conn, order, request, rows, prepared, command_id, start, now):
         )
         orders.set_order_item_product(conn, row["id"], product["id"])
         numbers.execute(conn, item, product["id"], row["id"], start, now)
+        devices.execute(conn, item, product["id"], row["id"], now)
         emit.product(conn, product["id"], "Create", at=now, today=start)
     commands.enqueue(
         conn,
@@ -711,6 +713,7 @@ def _accept_charges(conn, order, request, rows, accepted, total, command_id, sta
         )
         orders.set_order_item_product(conn, row["id"], product["id"])
         numbers.execute(conn, item, product["id"], row["id"], start, now)
+        devices.execute(conn, item, product["id"], row["id"], now)
         emit.product(conn, product["id"], "Create", at=now, today=start)
     commands.enqueue(
         conn,

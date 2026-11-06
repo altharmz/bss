@@ -61,6 +61,7 @@ from app.api.prices import monthly_price, tax_on, total_rate
 from app.api.tmfjson import TmfJSONResponse
 from app.billing.model import Tax
 from app.events import emit
+from app.network import device
 from app.ordering import cancel as cancellation
 from app.ordering import process
 from app.ordering.process import ItemRequest, OrderRefused, OrderRequest, place_order
@@ -285,15 +286,49 @@ def _item_requests(items: list[OrderItemIn], sent: list[ItemSent]) -> tuple[Item
     )
 
 
-def _check_sim_type(item: OrderItemIn) -> None:
-    """productCharacteristic on an item is only the SIM kind of an add: `simType`."""
+def _check_characteristics(item: OrderItemIn) -> None:
+    """productCharacteristic on an item: the SIM kind of an add (`simType`) and the device
+    (`imei`) of an add or of a modify that changes nothing else."""
     chosen = item.product.product_characteristic
-    if item.action != "add":
-        raise unprocessable(f"item {item.id}: productCharacteristic is writable only on add items")
-    if len(chosen) != 1 or chosen[0].get("name") != "simType":
-        raise unprocessable(f"item {item.id}: the only supported characteristic is simType")
-    if chosen[0].get("value") not in ("physical", "esim"):
-        raise unprocessable(f"item {item.id}: simType must be physical or esim")
+    names = [entry.get("name") for entry in chosen]
+    if not chosen or any(name not in ("simType", "imei") for name in names):
+        raise unprocessable(
+            f"item {item.id}: the only supported characteristics are simType and imei"
+        )
+    if len(set(names)) != len(names):
+        raise unprocessable(f"item {item.id}: each characteristic may be sent once")
+    for entry in chosen:
+        if entry["name"] == "simType":
+            if item.action != "add":
+                raise unprocessable(f"item {item.id}: simType is writable only on add items")
+            if entry.get("value") not in ("physical", "esim"):
+                raise unprocessable(f"item {item.id}: simType must be physical or esim")
+        else:
+            if item.action not in ("add", "modify"):
+                raise unprocessable(f"item {item.id}: imei is writable only on add or modify items")
+            if (why := device.problem(entry.get("value"))) is not None:
+                raise unprocessable(f"item {item.id}: invalid imei: {why}")
+    if item.action == "modify" and (
+        item.product_offering is not None
+        or item.product.status is not None
+        or item.product.realizing_resource is not None
+        or names != ["imei"]
+    ):
+        raise unprocessable(
+            f"item {item.id}: a device change (imei) is a modify item of its own, changing"
+            " nothing else"
+        )
+
+
+def _is_device_change(item: OrderItemIn) -> bool:
+    return (
+        item.action == "modify"
+        and item.product is not None
+        and item.product_offering is None
+        and item.product.status is None
+        and item.product.realizing_resource is None
+        and any(e.get("name") == "imei" for e in item.product.product_characteristic or [])
+    )
 
 
 def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, Any]) -> ItemRequest:
@@ -318,6 +353,9 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
             )
         if item.product.realizing_resource is not None:
             raise unprocessable("realizingResource is writable only on add or modify items")
+    elif _is_device_change(item):
+        if item.product.id is None:
+            raise unprocessable(f"item {item.id}: a modify item needs product")
     elif (
         item.product is None
         or item.product.id is None
@@ -330,7 +368,7 @@ def _item_request(item: OrderItemIn, parent: str | None, documents: dict[str, An
             " renewal may change productOffering and product.realizingResource together)"
         )
     if item.product and item.product.product_characteristic is not None:
-        _check_sim_type(item)
+        _check_characteristics(item)
     if item.product and item.product.product_relationship is not None and item.action != "add":
         raise unprocessable("productRelationship is writable only on add items")
     if item.product and (
