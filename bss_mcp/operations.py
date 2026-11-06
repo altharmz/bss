@@ -736,6 +736,20 @@ OPERATIONS: dict[str, Op] = {
         " failed or cancelled).",
         body=MessagePatch,
     ),
+    "list_devices": Op(
+        "The devices (IMEI) a prepaid line has had, newest first: the network's compatibility"
+        " answer (compatible, unknown) with its reasons and the times; the row without endedAt"
+        " is the current device. A device is recorded by an order item with an imei"
+        " characteristic (activation, or a modify item of its own).",
+        extra={"product.id": UUID_ARG},
+        required=("product.id",),
+    ),
+    "check_device": Op(
+        "Ask the network whether a device (15-digit IMEI, Luhn-checked) works on it:"
+        " compatible, incompatible or unknown, with the reasons. Stores nothing.",
+        extra={"imei": {"type": "string", "pattern": "^[0-9]{15}$"}},
+        required=("imei",),
+    ),
     "list_network_commands": Op(
         "Network provisioning commands of prepaid order items, newest first: kind (activate,"
         " suspend, restore, deactivate, change_profile), state (pending, confirmed, refused,"

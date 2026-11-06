@@ -115,6 +115,8 @@ INTERNAL: dict[str, str] = {
     "/prepaid/command/{id}": "PrepaidCommand",
     "/prepaid/command/{id}/retry": "PrepaidCommand",
     "/lifecycle/settings": "LifecycleSettings",
+    "/device": "ProductDevice",
+    "/device/check": "DeviceCheck",
     "/network/command": "NetworkCommand",
     "/network/command/{id}": "NetworkCommand",
     "/network/command/{id}/retry": "NetworkCommand",

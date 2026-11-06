@@ -82,8 +82,42 @@ The line's MSISDN ending `0000`: refused. Ending `0001`: temporary error until
 `adapter().recover(msisdn)`. `adapter().refuse_kinds` refuses a command kind for every line.
 The stub answers a repeated key with the first answer.
 
+## Device (issue #194)
+
+Activation records the device and refuses one that does not work on the network. Design
+approved by the human's standing delegation (decided following TMF). The UI half is issue 194b
+(#225).
+
+- **IMEI** = 15 digits with a Luhn check digit (`app/network/device.py`). An invalid value is a
+  422 at the API (`invalidImei` in the order engine). It is **optional**: orders without one behave
+  as before; a device is accepted only on a prepaid network line (`deviceNotApplicable`).
+- **TMF637 mapping.** The IMEI is a `productCharacteristic` named `imei` (`StringCharacteristic`).
+  Orders alone write it: an **add** item carries it next to `simType`; a **device change** is a
+  `modify` item whose only content is the `imei` characteristic (no offering, status or
+  realizingResource, `deviceChangeAlone`; migration 0062 widens the item check constraint for it).
+  It completes at acceptance, sends no network command and ignores the requested start date. The
+  product shows the current `imei`, `deviceCompatibility` (`compatible` | `unknown`) and, for a
+  warning, `deviceReasons`: derived from `product_device`, never from what an order sent.
+- **History.** `product_device` (migration 0062): one row per device a line has had (IMEI,
+  compatibility, reasons, `checked_at`, `started_at`, `ended_at`, the order items that recorded and
+  ended it). One open row per product (unique partial index); a change closes the open row and
+  inserts the next, so the old device is kept. `GET /internal/v1/device?product.id=` lists it
+  (newest first); also the MCP tool `list_devices`.
+- **Network adapter** `check_device(imei) -> DeviceCheck(result, reasons)` on the interface:
+  `compatible`, `incompatible` or `unknown`, with reasons (bands, lock, VoLTE). It is a read-only
+  question asked while the order is validated (not a durable command: nothing changes outside the
+  BSS). `NetworkTemporary` counts as `unknown`. **Incompatible** rejects the order with
+  `deviceIncompatible` and the reasons; nothing is created or sent. **Unknown** is allowed and
+  stored as a warning (also echoed on the order item as `deviceCompatibility` / `deviceReasons`).
+  `GET /internal/v1/device/check?imei=` (and MCP `check_device`) asks without storing.
+- **Stub fixture:** TAC (first 8 digits) `35000000`-`35999999` compatible, `99000000`-`99000099`
+  incompatible (band 71, carrier lock, VoLTE), `98000000`-`98999999` temporary error (recorded
+  unknown), anything else unknown.
+- **Not in this slice:** the UI (194b); a mandatory IMEI at activation (a later setting if wanted);
+  a real device database (#203).
+
 ## Not in this slice
 
 The admin UI (network profile editor, network step and state on order and product, Retry
-button) is issue 183b; later slices add commands (SIM swap is #186, number pool, porting, device
-check, usage feed).
+button) is issue 183b; later slices add commands (SIM swap is #186, number pool, porting, usage feed; the
+device check is a query, below).

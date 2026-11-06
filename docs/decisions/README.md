@@ -15,7 +15,7 @@ changing it, and record a new decision in it.
 | [billing-core.md](billing-core.md) | Billing (stage 3); Open questions (changing `billCycleDay`, suspension semantics) |
 | [charge-periods.md](charge-periods.md) | Product charge intervals and activation-date anniversaries; monthly invoices remain separate (2026-10-20) |
 | [prepaid.md](prepaid.md) | Subscriber numbers and prepaid as built; the full design is [prepaid-design.md](../prepaid-design.md) |
-| [network.md](network.md) | Network provisioning adapter (T-Mobile placeholder): commands, profile, gating, refusals (2026-11-05, issue #183) |
+| [network.md](network.md) | Network provisioning adapter (T-Mobile placeholder): commands, profile, gating, refusals (2026-11-05, issue #183); device IMEI and compatibility check (issue #194) |
 | [sim.md](sim.md) | SIM and eSIM inventory on the IMSI resource, activation pick, SIM swap (2026-11-05, issue #186) |
 | [numbers.md](numbers.md) | Carrier number pools, port-in and port-out, Number Transfer PIN (2026-11-06, issue #189) |
 | [usage.md](usage.md) | Usage records (TMF635), the network usage feed, allowance tracking and 80/100% thresholds (2026-11-06, issue #190) |

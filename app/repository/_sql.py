@@ -16,6 +16,11 @@ def jsonb(value: dict[str, Any]) -> Jsonb:
     return Jsonb(value, dumps=tmfjson.dumps)
 
 
+def jsonb_list(value: list[Any]) -> Jsonb:
+    """A JSON array for a jsonb column."""
+    return Jsonb(value)
+
+
 # Filter values for select_page: `column IS NULL` / `column IS NOT NULL`.
 IS_NULL = object()
 NOT_NULL = object()

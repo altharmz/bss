@@ -7,6 +7,7 @@ unknown value fails startup (app/config.py) and `adapter()`.
 from app.config import settings
 from app.integrations.network.interface import (
     COMMANDS,
+    DeviceCheck,
     EsimProfile,
     NetworkAdapter,
     NetworkRefused,
@@ -19,6 +20,7 @@ from app.integrations.network.interface import (
 
 __all__ = [
     "COMMANDS",
+    "DeviceCheck",
     "EsimProfile",
     "NetworkAdapter",
     "NetworkRefused",

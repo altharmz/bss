@@ -576,6 +576,8 @@ def get_arguments(world: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "list_prepaid_commands": {"state": "pending", "limit": 1},
         "get_usage": {"usage_id": str(world["usage"]["id"])},
         "usage_summary": {"product.id": world["product"]["id"]},
+        "list_devices": {"product.id": world["product"]["id"]},
+        "check_device": {"imei": "356938035643809"},
         "get_communication_message": {"message_id": str(world["message"]["id"])},
         "list_communication_messages": {"limit": 1},
         "get_network_command": {"command_id": str(world["network_command"]["id"])},
