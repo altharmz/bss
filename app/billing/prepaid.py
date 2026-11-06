@@ -332,7 +332,7 @@ def post_interval(
                 raise ValueError("quote product does not belong to account")
             if (
                 (prod["status"] == "suspended" and not renewal)
-                or prod["manually_suspended"]
+                or (prod["manually_suspended"] and not prod["lifecycle_suspended"])
                 or prod["status"] in {"terminated", "cancelled", "aborted"}
             ):
                 raise ValueError("product lifecycle prevents authorization")

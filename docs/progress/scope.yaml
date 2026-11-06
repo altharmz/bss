@@ -21,6 +21,8 @@ items:
   - {id: db.funding_command_hold, area: db, stage: 5, table: funding_command_hold, title: "Retained command ownership and hold retry identity"}
   - {id: db.prepaid_command, area: db, stage: 5, table: prepaid_command, title: "Durable prepaid command requests, results and retry state"}
   - {id: db.network_command, area: db, stage: 5, table: network_command, title: "Durable network provisioning commands of prepaid order items"}
+  - {id: db.prepaid_lifecycle_setting, area: db, stage: 5, table: prepaid_lifecycle_setting, title: "The prepaid lifecycle durations: grace, suspension, number aging and the pay-as-you-go zero-balance trigger"}
+  - {id: db.prepaid_lifecycle_event, area: db, stage: 5, table: prepaid_lifecycle_event, title: "The lifecycle transitions the worker took or tried per product and business date"}
   - {id: db.port_request, area: db, stage: 5, table: port_request, title: "Port-in and port-out requests with their state, rejection reason and carrier reference"}
   - {id: db.number_transfer_pin, area: db, stage: 5, table: number_transfer_pin, title: "Time-limited single-use Number Transfer PINs (hashed) validated at port-out"}
   - {id: db.usage_record, area: db, stage: 5, table: usage_record, title: "Usage records from the network feed (TMF635 ProductUsage), stored once per network record id"}
@@ -589,6 +591,7 @@ items:
   - {id: worker.statusFlips, area: worker, stage: 4, title: "Status flips (created -> active, pendingTerminate -> terminated) by run date"}
   - {id: worker.scheduler, area: worker, stage: 4, title: "Scheduler and --once: dates due at BILLING_RUN_AT, automatic catch-up of today and yesterday"}
   - {id: worker.numberPorting, area: worker, stage: 5, title: "Port-in requests are submitted and followed with the carrier and hold the line's activation until completed; a reported port-out is validated against the Number Transfer PIN, ends the product through an order and locks the number"}
+  - {id: worker.prepaidLifecycle, area: worker, stage: 5, title: "An unfunded prepaid line follows grace, suspension and deactivation by business date through internal orders; a top-up brings it back; the deactivated number is aged"}
   - {id: worker.simInventory, area: worker, stage: 5, title: "Activation picks a SIM or eSIM from stock; a SIM swap moves the line to another SIM when the network confirms"}
   - {id: worker.networkProvisioning, area: worker, stage: 5, title: "Prepaid order items send their network command and complete only when the network confirms"}
   - {id: worker.taxEngine, area: worker, stage: 5, title: "Prepaid charges are taxed by the tax engine for the account's service address; an unavailable engine retries and books nothing"}
@@ -632,6 +635,8 @@ excluded:
   - {id: api.internal.sim.batches, area: api, method: GET, path: /internal/v1/sim/batch, reason: "SIM stock batches are an operator UI view (186b); MCP reads the SIMs through TMF639 list_resources"}
   - {id: api.internal.sim.import, area: api, method: POST, path: /internal/v1/sim/batch, reason: "bulk SIM and CSV import is an operator UI action with up to 5000 rows, not a model tool"}
   - {id: api.internal.sim.generate, area: api, method: POST, path: /internal/v1/sim/esim-generate, reason: "eSIM profile generation is an operator UI action, not a model tool"}
+  - {id: api.internal.lifecycle.settings.get, area: api, method: GET, path: /internal/v1/lifecycle/settings, reason: "the lifecycle durations are an operator settings screen (188b), not a model tool"}
+  - {id: api.internal.lifecycle.settings.put, area: api, method: PUT, path: /internal/v1/lifecycle/settings, reason: "changing the lifecycle durations is an operator settings action (188b), not a model tool"}
   - {id: api.internal.number.pool, area: api, method: POST, path: /internal/v1/number/pool, reason: "requesting numbers from the carrier is an operator UI action (189b), not a model tool"}
   - {id: api.internal.port.list, area: api, method: GET, path: /internal/v1/port, reason: "port requests are an operator UI view (189b); the MCP connector does not handle porting"}
   - {id: api.internal.port.get, area: api, method: GET, path: "/internal/v1/port/{port_id}", reason: "port requests are an operator UI view (189b)"}

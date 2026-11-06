@@ -32,6 +32,7 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 | `auto_topup_threshold` | `numeric(12,2)` | yes |  |  |
 | `auto_topup_amount` | `numeric(12,2)` | yes |  |  |
 | `auto_topup_changed_at` | `timestamp with time zone` | yes |  | When the auto top-up settings last changed: a declined automatic charge is not repeated until the balance or the settings change. |
+| `balance_zero_since` | `date` | yes |  | First business date of the current run of a zero spendable balance on a prepaid account with a pay-as-you-go line; the worker keeps it, null when the balance is above zero. |
 
 ## Foreign keys
 
@@ -80,4 +81,4 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 
 ## Referenced by
 
-[`account_presentation_media`](account_presentation_media.md), [`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`funded_interval`](funded_interval.md), [`funding_hold`](funding_hold.md), [`funding_source`](funding_source.md), [`payment`](payment.md), [`payment_command`](payment_command.md), [`payment_method`](payment_method.md), [`port_request`](port_request.md), [`prepaid_bucket`](prepaid_bucket.md), [`prepaid_command`](prepaid_command.md), [`product`](product.md), [`product_order`](product_order.md), [`refund`](refund.md), [`tax_transaction`](tax_transaction.md), [`usage_record`](usage_record.md)
+[`account_presentation_media`](account_presentation_media.md), [`applied_customer_billing_rate`](applied_customer_billing_rate.md), [`bill_allocation`](bill_allocation.md), [`billing_run_account`](billing_run_account.md), [`customer_bill`](customer_bill.md), [`customer_bill_on_demand`](customer_bill_on_demand.md), [`funded_interval`](funded_interval.md), [`funding_hold`](funding_hold.md), [`funding_source`](funding_source.md), [`payment`](payment.md), [`payment_command`](payment_command.md), [`payment_method`](payment_method.md), [`port_request`](port_request.md), [`prepaid_bucket`](prepaid_bucket.md), [`prepaid_command`](prepaid_command.md), [`prepaid_lifecycle_event`](prepaid_lifecycle_event.md), [`product`](product.md), [`product_order`](product_order.md), [`refund`](refund.md), [`tax_transaction`](tax_transaction.md), [`usage_record`](usage_record.md)

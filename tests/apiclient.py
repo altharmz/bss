@@ -108,6 +108,7 @@ INTERNAL: dict[str, str] = {
     "/prepaid/command": "PrepaidCommand",
     "/prepaid/command/{id}": "PrepaidCommand",
     "/prepaid/command/{id}/retry": "PrepaidCommand",
+    "/lifecycle/settings": "LifecycleSettings",
     "/network/command": "NetworkCommand",
     "/network/command/{id}": "NetworkCommand",
     "/network/command/{id}/retry": "NetworkCommand",
@@ -166,6 +167,9 @@ class TmfClient:
 
     def post(self, url: str, body: Any, **kwargs: Any) -> Response:
         return self.request("POST", url, json=body, **kwargs)
+
+    def put(self, url: str, body: Any, **kwargs: Any) -> Response:
+        return self.request("PUT", url, json=body, **kwargs)
 
     def delete(self, url: str) -> Response:
         return self.request("DELETE", url)

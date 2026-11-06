@@ -40,7 +40,8 @@ _DUE_RENEWALS = (
     " FROM funded_interval ORDER BY product_id, lower(period) DESC, authorized_at DESC) g"
     " JOIN product p ON p.id = g.product_id JOIN billing_account a ON a.id = g.billing_account_id"
     " WHERE g.due <= %(today)s AND a.rating_type = 'prepaid' AND a.state = 'Active'"
-    " AND NOT p.manually_suspended AND p.status NOT IN ('terminated', 'cancelled', 'aborted')"
+    " AND NOT (p.manually_suspended AND NOT p.lifecycle_suspended)"
+    " AND p.status NOT IN ('terminated', 'cancelled', 'aborted')"
     " AND (p.termination_date IS NULL OR p.termination_date > %(today)s)"
     " AND NOT EXISTS (SELECT FROM prepaid_command c WHERE c.kind = 'renewal'"
     " AND c.request->>'previous_interval_id' = g.id::text)"
@@ -104,7 +105,7 @@ def _renewal_blocked(conn, cmd, today) -> str | None:
         conn,
         "SELECT p.status IN ('terminated', 'cancelled', 'aborted')"
         " OR p.termination_date <= %s AS ended,"
-        " a.state <> 'Active' OR p.manually_suspended AS blocked"
+        " a.state <> 'Active' OR (p.manually_suspended AND NOT p.lifecycle_suspended) AS blocked"
         " FROM funded_interval f JOIN product p ON p.id = f.product_id"
         " JOIN billing_account a ON a.id = f.billing_account_id WHERE f.id::text = %s",
         (today, cmd["request"].get("previous_interval_id")),

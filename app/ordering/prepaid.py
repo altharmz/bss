@@ -448,13 +448,14 @@ def restore_status(conn, product_id, account, today):
     before = products.get_product(conn, product_id)["status"]
     latest = fetch_one(
         conn,
-        "SELECT status FROM product_status_change WHERE product_id = %s"
+        "SELECT status, cause FROM product_status_change WHERE product_id = %s"
         " AND applied_at IS NOT NULL ORDER BY change_date DESC LIMIT 1",
         (product_id,),
     )
+    suspended = latest is not None and latest["status"] == "suspended"
     conn.execute(
-        "UPDATE product SET manually_suspended = %s WHERE id = %s",
-        (latest is not None and latest["status"] == "suspended", product_id),
+        "UPDATE product SET manually_suspended = %s, lifecycle_suspended = %s WHERE id = %s",
+        (suspended, suspended and latest["cause"] == "lifecycle", product_id),
     )
     product = products.get_product(conn, product_id)
     status = entitlement.view(conn, product, account, today)["status"]
@@ -476,6 +477,7 @@ def schedule_statuses(conn, order, request, rows, command_id, start, today, now)
             change_date=start,
             status=item.product_status,
             changed_by_item_id=row["id"],
+            cause="lifecycle" if item.lifecycle else "manual",
         )
     commands.enqueue(
         conn,
@@ -538,6 +540,7 @@ def change_statuses(conn, order, request, rows, renewals, today, now):
             status=item.product_status,
             changed_by_item_id=row["id"],
             applied_at=now,
+            cause="lifecycle" if item.lifecycle else "manual",
         )
         product = products.get_product(conn, item.product_id)
         status = entitlement.view(conn, product, account, today)["status"]

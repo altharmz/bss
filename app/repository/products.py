@@ -481,24 +481,27 @@ def change_status(
     status: str,
     changed_by_item_id: UUID,
     applied_at: datetime | None = None,
+    cause: str = "manual",
 ) -> Row:
-    """The product is `status` (suspended or active) from `change_date` on.
+    """The product is `status` (suspended or active) from `change_date` on. `cause`: an
+    operator's order (`manual`) or the prepaid lifecycle's (`lifecycle`: renewal stays open).
     `applied_at`: the change takes effect now - the product's status is set here; else
     the worker's run of `change_date` sets it (`apply_status_changes`)."""
     change = returning(
         conn,
         """
         INSERT INTO product_status_change
-            (product_id, change_date, status, changed_by_item_id, applied_at)
-        VALUES (%s, %s, %s, %s, %s) RETURNING *
+            (product_id, change_date, status, changed_by_item_id, applied_at, cause)
+        VALUES (%s, %s, %s, %s, %s, %s) RETURNING *
         """,
-        (product_id, change_date, status, changed_by_item_id, applied_at),
+        (product_id, change_date, status, changed_by_item_id, applied_at, cause),
     )
     if applied_at is not None:
         conn.execute(
-            "UPDATE product p SET manually_suspended = %s FROM billing_account a"
+            "UPDATE product p SET manually_suspended = %s, lifecycle_suspended = %s"
+            " FROM billing_account a"
             " WHERE a.id = p.billing_account_id AND a.rating_type = 'prepaid' AND p.id = %s",
-            (status == "suspended", product_id),
+            (status == "suspended", status == "suspended" and cause == "lifecycle", product_id),
         )
         set_product_status(conn, product_id, status)
     return change
@@ -516,8 +519,12 @@ def apply_prepaid_status_change(
         (applied_at, changed_by_item_id),
     )
     conn.execute(
-        "UPDATE product SET manually_suspended = %s WHERE id = %s",
-        (change["status"] == "suspended", change["product_id"]),
+        "UPDATE product SET manually_suspended = %s, lifecycle_suspended = %s WHERE id = %s",
+        (
+            change["status"] == "suspended",
+            change["status"] == "suspended" and change["cause"] == "lifecycle",
+            change["product_id"],
+        ),
     )
     return change
 

@@ -31,6 +31,7 @@ import psycopg
 from app.clock import Clock
 from app.events import deliver
 from app.repository import billing
+from app.worker.lifecycle import process_lifecycle
 from app.worker.plan import scheduled
 from app.worker.prepaid import observe_entitlements, process_commands, produce_renewals
 from app.worker.process import (
@@ -126,6 +127,7 @@ def tick(
         result.prepaid_renewals = produce_renewals(
             conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
         )
+        process_lifecycle(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
         result.prepaid_commands = process_commands(
             conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
         )

@@ -462,6 +462,45 @@ paths:
         '400': {$ref: '#/components/responses/Error'}
         '404': {$ref: '#/components/responses/Error'}
         '409': {$ref: '#/components/responses/Error'}
+  /lifecycle/settings:
+    get:
+      summary: The prepaid lifecycle durations (issue 188).
+      description: >-
+        Grace, suspension and number-aging days and the pay-as-you-go zero-balance trigger.
+        Defaults (3, 30, 90, 7) apply from the migration; `updatedAt` is null until an
+        operator changes them.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LifecycleSettings'}
+        '400': {$ref: '#/components/responses/Error'}
+    put:
+      summary: Change the prepaid lifecycle durations.
+      description: >-
+        Any of the four durations, at least one; the others keep their value. The worker
+        derives every transition from them on each tick, so a change applies to every
+        transition not yet taken; transitions already taken stand.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                graceDays: {type: integer, minimum: 0, maximum: 365}
+                suspensionDays: {type: integer, minimum: 0, maximum: 3650}
+                numberAgingDays: {type: integer, minimum: 0, maximum: 3650}
+                paygZeroBalanceDays: {type: integer, minimum: 0, maximum: 365}
+      responses:
+        '200':
+          description: The settings now in force
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LifecycleSettings'}
+        '400': {$ref: '#/components/responses/Error'}
   /network/command:
     get:
       summary: Network provisioning commands, newest first (issue 183).
@@ -1362,6 +1401,16 @@ components:
             dates of the product's paid interval, tax included; not counted on to fund the
             new interval.
           allOf: [{$ref: '#/components/schemas/Money'}]
+    LifecycleSettings:
+      type: object
+      additionalProperties: false
+      required: [graceDays, suspensionDays, numberAgingDays, paygZeroBalanceDays, updatedAt]
+      properties:
+        graceDays: {type: integer, minimum: 0, maximum: 365}
+        suspensionDays: {type: integer, minimum: 0, maximum: 3650}
+        numberAgingDays: {type: integer, minimum: 0, maximum: 3650}
+        paygZeroBalanceDays: {type: integer, minimum: 0, maximum: 365}
+        updatedAt: {type: string, format: date-time, nullable: true}
     AccountProduct:
       type: object
       additionalProperties: false
@@ -1390,7 +1439,7 @@ components:
         price: {$ref: '#/components/schemas/NullableMoney'}
         authorizedAt: {type: string, format: date-time, nullable: true}
         paidThrough: {$ref: '#/components/schemas/NullableBusinessDate'}
-        suspensionCause: {type: string, nullable: true, enum: [manual, account, funding, null]}
+        suspensionCause: {type: string, nullable: true, enum: [manual, account, funding, lifecycle, null]}
         needs_topup:
           type: object
           nullable: true
@@ -1448,6 +1497,26 @@ components:
             the default card for the shortfall (auto-pay on and a default card saved).
           type: string
           enum: [balance, balanceThenCard]
+        lifecycle:
+          description: >-
+            Prepaid plans and pay-as-you-go lines (null for an operator-suspended line, which
+            the lifecycle leaves alone). `grace`: unfunded, service still on; `suspended`:
+            suspended on the network by the lifecycle. `nextTransition` is the next one not
+            yet taken, derived from the settings (null while funded).
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [state, nextTransition]
+          properties:
+            state: {type: string, enum: [active, grace, suspended]}
+            nextTransition:
+              type: object
+              nullable: true
+              additionalProperties: false
+              required: [action, date]
+              properties:
+                action: {type: string, enum: [suspend, deactivate]}
+                date: {$ref: '#/components/schemas/BusinessDate'}
         renewalHistory:
           description: Prepaid accounts only. The product's funded intervals, newest first.
           type: array

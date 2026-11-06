@@ -1,5 +1,86 @@
 # Subscriber numbers and prepaid: finalized design (2026-10-20)
 
+## Line lifecycle: grace, suspension, deactivation and number aging (2026-11-06, issue #188)
+
+Epic #182. Design approved on the issue (the human's standing delegation, decided following
+TMF; TMF has no lifecycle-policy API, so the settings are internal). The UI is issue 188b.
+Migration `0059`. This is the hand-over #187 left: a renewal nobody can pay stays pending
+and the product is funding-suspended; the lifecycle now takes it from there.
+
+**Everything derives from the first unfunded day D and the settings** (`app/billing/lifecycle.py`,
+no stored state machine), so a settings change applies to every transition not yet taken and
+transitions already taken stand:
+
+| Phase | Dates | Service | Taken as |
+|---|---|---|---|
+| grace | D .. D+grace-1 | on, nothing is sent | nothing (the product already shows `suspended`, cause `funding`: no paid interval) |
+| suspension | D+grace .. D+grace+suspension-1 | suspended on the network | internal order, modify `product.status=suspended` -> network `suspend` |
+| deactivation | D+grace+suspension | ended | internal order, delete item dated today -> network `deactivate`; the number is aged |
+
+For a **plan** D is the end of the latest funded interval when it is not after today. For a
+**pay-as-you-go** line D is `balance_zero_since` + `payg_zero_balance_days`; the worker keeps
+`billing_account.balance_zero_since` (the first business date of the current run of a zero
+spendable balance, cleared when the balance is above zero). Add-ons are not lifecycle subjects:
+they end with their plan.
+
+**Settings** (`prepaid_lifecycle_setting`, one row; `GET`/`PUT /internal/v1/lifecycle/settings`,
+each field optional on PUT): `graceDays` 3 (0..365), `suspensionDays` 30 (0..3650),
+`numberAgingDays` 90 (0..3650), `paygZeroBalanceDays` 7 (0..365). The defaults apply from the
+migration. The number-aging value is snapshotted into the claim when the line is deactivated.
+
+**The worker pass** (`app/worker/lifecycle.py`, every tick after the renewals are produced and
+before commands are dispatched): per prepaid Active account, under its lock, per open
+non-add-on product: skip an operator's suspension (`manually_suspended` without
+`lifecycle_suspended`: an operator pause is never ended by the policy), skip a product with a
+status change pending or an open delete item (an order in flight), then take one transition:
+`suspend` (unfunded, today >= D+grace, not suspended), `deactivate` (unfunded, today >=
+D+grace+suspension; also straight from grace if the dates are already past), `resume`
+(lifecycle-suspended and funded again). Each is a TMF622 order through `place_order` (an
+`ItemRequest(lifecycle=True)`), so orders alone change products, the network adapter sends
+`suspend`/`restore`/`deactivate` and the item completes when the network confirms. One
+attempt per product, action and business date (`prepaid_lifecycle_event`, UNIQUE): a refused
+or rejected order is tried again the next business date, never on every tick.
+
+**A lifecycle suspension does not block renewal.** `product_status_change.cause` is `manual`
+(default) or `lifecycle`; `product.lifecycle_suspended` is a subset of `manually_suspended`
+(a CHECK), set and cleared with it. The renewal producer, the renewal blocker and renewal
+posting treat only `manually_suspended AND NOT lifecycle_suspended` as a block. So the pending
+renewal keeps being retried on every credit signal and the card auto-pay rule (#187) keeps
+charging once per business date during grace and suspension; when the renewal posts, the
+next tick places the `resume` order (network `restore`). Entitlement shows `suspended` with
+cause `lifecycle` until the network has restored the line, then `active`. A top-up during grace
+only renews (nothing was suspended, nothing is sent).
+
+**One status change per product and day** stays the rule: a resume that finds the suspension
+dated today is itself dated the next business date (a top-up on the day of the suspension
+restores the line the following day). An operator who resumes a lifecycle suspension by hand
+without funds is re-suspended by the worker (it is still unfunded and past its grace); the
+remedy is a top-up. Manual suspend/resume orders and everything else about them are unchanged.
+
+**Number aging reuses the TMF639 quarantine state** (`allocationStatus: quarantined`, derived
+from the claim: `released_on` + days). A claim now has `aging_days` (0 by default, set when the
+line's deactivation order releases its MSISDN claim); the effective quarantine is
+`max(MSISDN_QUARANTINE_DAYS, aging_days)` in the number state, the inventory listing and the
+assignment check, so the number is not assignable before the aging ends and is on that date,
+with no worker step. A cancelled deactivation (refused by the network) restores the claim and
+resets `aging_days`. A **port-out is released and locked, not aged**: it ends the product
+through its own order, not the lifecycle.
+
+**Internal API.** `GET /internal/v1/billingAccount/{id}/products` (prepaid products) gains
+`lifecycle` `{state: active|grace|suspended, nextTransition: {action: suspend|deactivate,
+date}|null}` (null for an operator-suspended line and for add-ons) and `suspensionCause` may be
+`lifecycle`. No MCP tool (the settings are an operator screen: scope.yaml excluded).
+
+**Not in this slice:** the UI (188b: state and next transition on the product card, the
+settings page), customer notifications of each phase (#192), carrier-side number release.
+
+**Tests:** `tests/test_prepaid_lifecycle.py` (dates and pure schedule; unfunded renewal through
+grace, suspension and deactivation with the commands the network got; top-up in grace and in
+suspension; card payment in suspension; same-day suspension and top-up; number aging before
+and after the end; settings API and settings changes on transitions not yet taken; refused
+suspension retried next date; operator suspension untouched; pay-as-you-go), plus the
+port-out assertion in `tests/test_number_porting.py`.
+
 ## Plans, renewal, add-ons and fees (2026-11-05, issue #187)
 
 Epic #182. The design was approved on the issue (the human's standing delegation, decided
@@ -40,7 +121,8 @@ linked to the renewal (`renewal_command_id`); the renewal history shows `fundedB
 **No card, no auto-pay or a card that cannot be charged:** nothing is charged; the renewal stays
 pending with its shortfall (`needs_topup`), entitlement already ends at paid-through and the
 product is `suspended` with cause `funding`. That is the hand-over to the lifecycle slice
-(#188), which adds the grace period, suspension and deactivation on top of this state.
+(#188, [below](#line-lifecycle-grace-suspension-deactivation-and-number-aging-2026-11-06-issue-188)),
+which adds the grace period, suspension and deactivation on top of this state.
 
 **Add-on packs.** A TMF622 order whose `add` items are add-on offerings, each with
 `product.productRelationship` `[{relationshipType: "addOn", id: <plan product>}]` (TMF622/637

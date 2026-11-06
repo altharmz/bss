@@ -17,8 +17,8 @@ def states(conn, uid, today, quarantine_days):
           coalesce(bool_or(effective_from > %(today)s::date AND NOT isempty(valid_for)),
                    false) AS reserved,
           coalesce(bool_or(released_on <= %(today)s::date
-            AND released_on + %(days)s > %(today)s::date AND NOT isempty(valid_for)),
-                   false) AS quarantined
+            AND released_on + GREATEST(%(days)s, aging_days) > %(today)s::date
+            AND NOT isempty(valid_for)), false) AS quarantined
         FROM number_assignment
         WHERE subscriber_number_id = %(uid)s AND cancelled_at IS NULL""",
         {"uid": uid, "today": today, "days": quarantine_days},
@@ -59,7 +59,7 @@ def page(conn, where, offset, limit, today, quarantine_days):
         FROM subscriber_number n LEFT JOIN LATERAL (
           SELECT bool_or(valid_for @> %s::date) AS busy,
             bool_or(effective_from > %s::date AND NOT isempty(valid_for)) AS reserved,
-            bool_or(released_on <= %s::date AND released_on + %s > %s::date
+            bool_or(released_on <= %s::date AND released_on + GREATEST(%s, aging_days) > %s::date
                     AND NOT isempty(valid_for)) AS quarantined
           FROM number_assignment WHERE subscriber_number_id = n.id AND cancelled_at IS NULL
         ) a ON true
