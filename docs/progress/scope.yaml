@@ -414,6 +414,14 @@ items:
   - {id: ui.numbers.list, area: ui, stage: 5, title: "Subscriber-number inventory and search"}
   - {id: ui.numbers.create, area: ui, stage: 5, title: "Create an inventory number"}
   - {id: ui.numbers.detail, area: ui, stage: 5, title: "Number details, assignments and lock/unlock"}
+  - {id: ui.sims.list, area: ui, stage: 5, title: "SIM and eSIM stock with state, type and batch filters"}
+  - {id: ui.sims.import, area: ui, stage: 5, title: "Import a SIM batch from CSV"}
+  - {id: ui.sims.importDialog, area: ui, stage: 5, title: "SIM CSV import dialog"}
+  - {id: ui.sims.generate, area: ui, stage: 5, title: "Generate eSIM profiles"}
+  - {id: ui.sims.generateDialog, area: ui, stage: 5, title: "eSIM generation dialog"}
+  - {id: ui.sims.detail, area: ui, stage: 5, title: "SIM details, assignment and eSIM activation code with QR"}
+  - {id: ui.sims.activationCode, area: ui, stage: 5, title: "eSIM activation code as text and QR"}
+  - {id: ui.sims.qr, area: ui, stage: 5, title: "Activation code QR image"}
   - {id: ui.subscriber.number, area: ui, stage: 5, title: "Product number and order-based number change"}
   - {id: ui.subscribers.new, area: ui, stage: 5, title: "New subscriber: party, customer, billing account"}
   - {id: ui.subscribers.contactMedia, area: ui, stage: 5, title: "New subscriber: optional email and phone contact media"}

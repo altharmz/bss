@@ -18,6 +18,8 @@ import { useResource } from '../api/useResource';
 import { Button, Dialog } from '../ui/kit';
 import { ErrorBlock } from '../ui/states';
 import { NumberPicker } from './Numbers';
+import { SimActivationCode } from './SimActivationCode';
+import { simState, simType } from '../api/sims';
 
 export function ProductNumber({
   accountId,
@@ -113,10 +115,15 @@ export function NumberModal({
         );
       } else if (result.state === 'inProgress') {
         onClose();
-        onDone('Subscriber number change accepted, the billing worker completes it shortly', {
-          id: result.id,
-          label: change === 'imsi' ? 'SIM change' : 'Subscriber number change',
-        });
+        onDone(
+          change === 'imsi'
+            ? 'SIM swap accepted: the network confirms it, then the billing worker completes it'
+            : 'Subscriber number change accepted, the billing worker completes it shortly',
+          {
+            id: result.id,
+            label: change === 'imsi' ? 'SIM swap' : 'Subscriber number change',
+          },
+        );
       } else {
         const refusal = orderRefusal(result.productOrderErrorMessage ?? [], result.state);
         setProblem(refusal.problem);
@@ -173,7 +180,14 @@ export function NumberModal({
             {refs.map((r) => r.name ?? r.id).join(', ') || 'This product has no subscriber number.'}
           </p>
         )}
-        {simDetail && iccidOf(simDetail) && <p>ICCID {iccidOf(simDetail)}</p>}
+        {simDetail && iccidOf(simDetail) && (
+          <p>
+            ICCID {iccidOf(simDetail)}
+            {simType(simDetail) === 'esim' ? ' · eSIM' : ''}
+            {simState(simDetail) ? ` · ${simState(simDetail)?.replace('_', ' ')}` : ''}
+          </p>
+        )}
+        {simDetail && <SimActivationCode sim={{ ...simDetail, id: simDetail.id }} />}
         {requirement.status === 'error' && (
           <ErrorBlock
             title="Failed to load number requirement"
@@ -194,8 +208,9 @@ export function NumberModal({
           <>
             <NumberPicker kind="imsi" value={imsiId} onChange={setImsiId} />
             <p>
-              The SIM changes today through a modify order. The previous IMSI is locked, not reused.
-              No price change.
+              The SIM is swapped through a modify order that waits for the network to confirm. Until
+              then the line keeps its current SIM; if the network refuses, nothing changes. The
+              previous SIM is retired, not reused. No price change.
             </p>
           </>
         )}

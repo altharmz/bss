@@ -31,6 +31,7 @@ import { SessionGate } from './session';
 import { UsersScreen } from '../screens/Users';
 import { IntegrationsScreen } from '../screens/Integrations';
 import { NumbersScreen } from '../screens/Numbers';
+import { SimsScreen } from '../screens/Sims';
 
 const CONTEXT = '/internal/v1/context';
 
@@ -41,6 +42,8 @@ function Screen() {
       return <UiKitScreen />;
     case 'numbers':
       return <NumbersScreen />;
+    case 'sims':
+      return <SimsScreen />;
     case 'users':
       return <UsersScreen />;
     case 'integrations':

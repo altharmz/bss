@@ -689,6 +689,19 @@ this product step after creating the account. A product's Subscriber number dial
 shows the effective number and submits changes through a modify order. The picker
 shows currently available unlocked stock; the server checks dates and quarantine.
 
+SIMs (issue #209, [sim.md](decisions/sim.md)): `/sims` lists the IMSI resources through TMF639
+with filters by state, type and batch (`simState`, `simType`, `batchNumber`), **Import CSV**
+(`POST /internal/v1/sim/batch`, `text/csv`, batch and type in the query; refusals keep the
+dialog open with the server's row list) and **Generate eSIMs** (`POST /internal/v1/sim/esim-generate`).
+A SIM's detail shows its assigned product and, for an eSIM that is reserved or active, the
+activation code as text and a QR (`qrcode-generator`, encoded in the browser; a stocked profile
+never shows it, the server withholds it). The same block shows in a product's Subscriber
+number dialog. Add product offers **A specific SIM in stock** (the IMSI picker),
+**Any physical SIM** or **Any eSIM**, which sends the `simType` product characteristic instead
+of an IMSI. **Change SIM** is the swap: the order waits for the network, the order watch
+follows it, and a refusal changes nothing. The three stock operations are not MCP tools
+(`scope.yaml`), so no parity entry is needed.
+
 `make web-test`: vitest, run twice - in UTC and with `TZ=America/New_York` - so every
 request body is proven independent of the browser's zone. `make web-lint`: tsc, eslint,
 prettier. `make web-e2e`: Playwright against the built UI and the seeded local stack,
