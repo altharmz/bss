@@ -248,6 +248,8 @@ AREAS = {
         "funding_consumption",
         "usage_record",
         "usage_threshold",
+        "usage_charge",
+        "usage_bar",
     ),
     "worker": ("billing_run_account", "worker_request", "idempotency_key"),
     "events": ("event_subscription", "event", "event_delivery"),

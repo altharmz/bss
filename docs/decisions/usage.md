@@ -2,7 +2,8 @@
 
 Usage from the network is stored per line and compared with the plan's allowance, so agents
 see usage and the system can react to thresholds. Caps and throttling stay on the network;
-the BSS rates nothing here (pay-as-you-go rating is #191). Design approved by the human's
+the plan allowance rating of this slice is none (included usage); pay-as-you-go rating is
+the second half of this file (#191). Design approved by the human's
 standing delegation (decided following TMF). The UI half is issue #216 (190b).
 
 ## TMF635 (vendored v5.0.0, base `/tmf-api/productUsageManagement/v5`)
@@ -13,7 +14,7 @@ declares no 200). Not implemented, by decision: PATCH and DELETE (405: a usage i
 network reported), `exportJob` and `/hub` (the spec's only events are the export job's;
 ProductUsage has none), TMF767 usage specifications (`usageSpecification.id` is a fixed kind:
 `data`, `voice`, `sms`). `serviceUsage`, `relatedParty`, `usageProductPrice` are 422 on POST.
-Status: `notRated` (matched; rating is #191) or `rejected` (`noLine`). Tests validate against
+Status: `notRated` (matched), `rated` (a pay-as-you-go line's, below) or `rejected` (`noLine`). Tests validate against
 the vendored schemas (`tests/apiclient.py` `NO_HUB`).
 
 ## Data (migration 0058)
@@ -61,4 +62,82 @@ TMF635.
 
 ## Not in this slice
 
-UI (#216), rating (#191), notifications on thresholds (#192), TMF635 export jobs and hub.
+UI (#216), notifications on thresholds (#192), TMF635 export jobs and hub.
+
+# Pay-as-you-go rating (issue #191, epic #182)
+
+Pay-as-you-go lines pay for usage from the money balance, rated from the usage records, and
+are barred on the network when the balance runs out. Plan lines ignore usage prices (included
+usage only), and their records stay `notRated`. Design approved by the human's standing
+delegation (decided following TMF, the issue comment). The UI half is issue #220 (191b).
+Migration `0060`; no new setting.
+
+## Usage prices (TMF620)
+
+`priceType: usage` (TMF635 names it among the price types: "recurring, one time and usage") on
+a `payAsYouGo` offering only; on a plan or add-on offering it is a 422, and an offering with
+usage prices cannot change its kind. The price is that of **one block** of the TMF620
+`unitOfMeasure` Quantity `{amount, units}`, required (422): the unit gives the kind and the
+**rounding unit** (data `KB` `MB` `GB`, voice `second` `minute`, sms `message`; the block is a whole number of
+bytes, seconds or messages). So `0.10 USD` per `{amount: 1, units: MB}` charges data in whole
+MB. Stored as `usage_kind` and `usage_block` beside the document (migration 0060); the
+no-overlap rule is per offering, kind and currency, so data, voice and SMS prices coexist.
+The type and the unit never change by PATCH (422 / 409: attach a new price). Prices are
+`numeric(12,2)`, so the cheapest block is 0.01.
+
+## Rating (the design gate: a daily aggregate)
+
+`app/billing/usage_rating.py`, run each worker tick by `app/worker/rating.py`. Only **closed
+days** (event date before today in `BILLING_TZ`) are rated, so a day is never rounded twice. The
+unrated records of a pay-as-you-go line (product `grantless`, no plan parent, offering kind
+`payAsYouGo` on the event date) are grouped by line, event date and kind, **summed, rounded up
+once to whole blocks** and charged `blocks x price`, the price being the offering's usage price
+valid at midnight of the event date in the account's currency. A group without a usage price
+(or at price 0) is rated with no charge. A late record of an already rated day is a group of
+its own in the next pass (known limit: its rounding is separate). Not real-time: the balance
+moves, and the line is barred, after the day closes.
+
+Each group is one `oneTime` ABR (TMF678 `appliedBillingCharge`, `charge_name` = the price's name,
+`one_time_price_id` = the usage price, period = the event day), taxed through the tax adapter
+as `usage` (committed in the same transaction with its `tax_transaction`; without a service
+address the price's flat tax), all of a pass on one **off-cycle bill** (the fee pattern),
+issued and settled against the account's unused payments at once (`settle_account`). The
+ledger is payments less ABRs, so the charge draws the balance down by itself.
+
+A pass is a retained `prepaid_command` of kind `usage` (id = uuid5 of its first record) with its
+own run, posted under the account lock in one transaction: all of it or nothing (a tax engine
+outage leaves the records unrated; the next tick retries). `usage_charge` (primary key = the
+record) is the once-only guard and links record, pass, price and ABR; the pass revalidates the
+records as unrated under the lock, so the feed resending, TMF635 POST replaying or the worker
+running twice never charges twice. A record becomes TMF635 `rated`, with
+`usageProductPrice` (the price of one block without tax, `dutyFreeAmount`, its unit).
+
+## Negative balance and top-ups
+
+What the balance cannot pay stays an **open bill**: the next payment settles the account's open
+bills oldest first before anything else (`settle_account`, called by every payment path), so
+the debt is recovered from the top-up and the balance after it is the top-up less the debt.
+The balance may therefore be negative (internal `balance`, TMF654 `remainingValue`).
+
+## Barring
+
+Each tick (`app/billing/usage_bar.py`), after rating, every active pay-as-you-go line of a
+prepaid account is compared with the account's spendable balance (ledger less holds): at zero or
+below and not barred, a `suspend`; above zero and barred (and not suspended by an operator), a
+`restore`. The commands are `usage_bar` rows (one per command, numbered per product; the latest
+is the line's state), sent through the network adapter with the id as idempotency key and the
+retry backoff of the order commands (never exhausted: temporary errors retry every hour at
+most). A refusal is final and recorded (`refused`, nothing is repeated); a line that ended before
+its command was sent has it `cancelled`. Own table, so order commands, the order gate and the
+lifecycle slice (#188) stay untouched. A balance that a top-up leaves at zero or below keeps the
+line barred. Internal `GET /internal/v1/usage/summary` carries `payAsYouGo` for such a line
+(balance, `barred`, the last command's state, unrated records); null for any other line.
+
+## Deviations and limits
+
+- Rating waits for the day to close (daily aggregate), so zero-balance barring lags usage by up
+  to a day, as the issue allows ("not real-time").
+- Money moves through bills settled from payments; an adjustment or incoming transfer credit
+  lowers the balance the same way but leaves the bill open until a payment arrives (the ledger
+  is right either way).
+- TMF635 PATCH, export jobs and hub stay out (usage.md above).

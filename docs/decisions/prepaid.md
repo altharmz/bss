@@ -145,7 +145,7 @@ A refusal releases the hold and cancels the add-on, as any refused purchase.
 **Pay-as-you-go.** `offeringKind payAsYouGo`: no recurring price. The order activates the line
 (network `activate`), charges its one-time fee, and the product is `grantless`: active from its
 start, never renewed (no grant). Suspension and termination orders work on it
-(`_not_started` skips grantless products). Usage rating is #191.
+(`_not_started` skips grantless products). Usage rating and barring at zero balance: [usage.md](usage.md#pay-as-you-go-rating-issue-191-epic-182).
 
 **Entitlement of a grantless product** (`entitlement.effective_state`): manual and account
 suspension apply as usual; otherwise `pendingActive` until the order completes, then

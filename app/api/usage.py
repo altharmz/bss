@@ -2,9 +2,9 @@
 
 GET list and retrieve, and POST (a mediation device recording one usage on a named product;
 idempotent by its externalIdentifier). A usage is a fact the network reported: PATCH and
-DELETE are 405, rating is a later slice, `exportJob` and `/hub` are not implemented (the
-spec's only events are the export job's). The network's own feed reaches the same records
-through the billing worker (app/worker/usage.py).
+DELETE are 405, rating of a pay-as-you-go line is the worker's (docs/decisions/usage.md),
+`exportJob` and `/hub` are not implemented (the spec's only events are the export job's).
+The network's own feed reaches the same records through the billing worker (app/worker/usage.py).
 """
 
 from datetime import datetime
@@ -21,6 +21,7 @@ from app.api.common import (
     check_type,
     created,
     documents_model,
+    money,
     parse_documented,
     parse_id,
     ref,
@@ -30,6 +31,7 @@ from app.api.common import (
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import conflict, not_found, unprocessable
 from app.api.inventory import product_href
+from app.api.prices import unit_text
 from app.api.tmfjson import TmfJSONResponse
 from app.network import usage as rules
 from app.repository import usage as repo
@@ -85,6 +87,40 @@ def characteristic(kind: str, name: str, value: Any) -> dict[str, Any]:
     } | {"value": value}
 
 
+CATALOG = "/tmf-api/productCatalogManagement/v5"
+
+
+def _applied_price(conn, row: Row) -> list[dict[str, Any]] | None:
+    """`usageProductPrice` of a rated record: the usage price it was rated at (the price of
+    one block, without tax: `dutyFreeAmount`), with the blocks charged for its group."""
+    if row["status"] != "rated":
+        return None
+    charge = repo.charges_of(conn, row["id"])
+    if charge is None or charge["price_id"] is None:
+        return []
+    unit = charge["price_details"].get("unitOfMeasure") or {}
+    return [
+        {
+            "@type": "ProductPrice",
+            "name": charge["price_name"],
+            "description": f"{charge['blocks']} block(s) of {unit_text(unit)} for the day's "
+            f"{row['kind']} of the line",
+            "priceType": "usage",
+            "unitOfMeasure": unit_text(unit),
+            "price": {
+                "@type": "Price",
+                "dutyFreeAmount": money(charge["price_amount"], charge["price_currency"]),
+            },
+            "productOfferingPrice": ref(
+                "ProductOfferingPrice",
+                f"{CATALOG}/productOfferingPrice/{charge['price_id']}",
+                charge["price_id"],
+                charge["price_name"],
+            ),
+        }
+    ]
+
+
 def usage_body(conn, row: Row) -> dict[str, Any]:
     product = (
         fetch_one(conn, "SELECT id, name FROM product WHERE id = %s", (row["product_id"],))
@@ -110,6 +146,7 @@ def usage_body(conn, row: Row) -> dict[str, Any]:
             "id": str(row["id"]),
             "href": usage_href(row["id"]),
             "@type": "ProductUsage",
+            "usageProductPrice": _applied_price(conn, row),
             "creationDate": utc(row["created_at"]),
             "lastUpdate": utc(row["created_at"]),
             "status": row["status"],

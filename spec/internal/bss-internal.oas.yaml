@@ -1771,7 +1771,7 @@ components:
     UsageSummary:
       type: object
       additionalProperties: false
-      required: [product, date, period, allowances, throttled]
+      required: [product, date, period, allowances, throttled, payAsYouGo]
       properties:
         product:
           type: object
@@ -1811,6 +1811,34 @@ components:
         throttled:
           description: The network said so on the period's latest record, or data passed the cap.
           type: boolean
+        payAsYouGo:
+          description: >-
+            Set for a pay-as-you-go line (issue 191), null for any other. The balance is the
+            account's spendable money (ledger less holds; negative after late usage). `barred`
+            is the state the balance asked of the network: `suspend` at zero or below,
+            `restore` after a top-up.
+          nullable: true
+          type: object
+          additionalProperties: false
+          required: [balance, barred, barring, unratedRecords]
+          properties:
+            balance: {$ref: '#/components/schemas/Money'}
+            barred: {type: boolean}
+            barring:
+              description: The line's latest barring command, null when none was ever made.
+              nullable: true
+              type: object
+              additionalProperties: false
+              required: [command, state, lastError, createdAt]
+              properties:
+                command: {type: string, enum: [suspend, restore]}
+                state: {type: string, enum: [pending, confirmed, refused]}
+                lastError: {type: string, nullable: true}
+                createdAt: {type: string, format: date-time}
+            unratedRecords:
+              description: Records not rated yet (their day is not closed, or the line is a plan line).
+              type: integer
+              minimum: 0
     PortRequest:
       type: object
       additionalProperties: false

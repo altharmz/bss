@@ -21,6 +21,12 @@ Like `oneTime`, an alteration has no `recurringChargePeriodType` (422). Migratio
 `0028` adds the three values to `price_type` (rolling back refuses while such a price
 exists). Test: `tests/test_api_last_gaps.py`.
 
+### Usage prices (2026-11-06, issue #191)
+
+`priceType: usage` is a price per block of its `unitOfMeasure` on a pay-as-you-go offering,
+rated by the usage worker: see [usage.md](usage.md#pay-as-you-go-rating-issue-191-epic-182).
+Unlike the alteration types it is **billed**.
+
 ### Catalog attributes (2026-10-18)
 
 Slice 6 of "Following TMF" ([tmf-api.md](tmf-api.md#following-tmf-2026-10-17)), the plan

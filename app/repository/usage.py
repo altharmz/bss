@@ -216,3 +216,76 @@ def page(
         [*params, offset, limit],
     )
     return rows, total["n"]
+
+
+# --- rating of pay-as-you-go usage (docs/decisions/usage.md, "Rating") ---
+
+
+def rating_accounts(conn: psycopg.Connection, today: date) -> list[UUID]:
+    """Accounts with usage of a pay-as-you-go line on a closed day that is not rated yet."""
+    rows = fetch_all(
+        conn,
+        "SELECT DISTINCT u.billing_account_id FROM usage_record u"
+        " JOIN product p ON p.id = u.product_id"
+        " JOIN billing_account a ON a.id = u.billing_account_id"
+        " WHERE u.status = 'notRated' AND u.event_date < %s AND p.grantless"
+        " AND p.parent_product_id IS NULL AND a.rating_type = 'prepaid'"
+        " ORDER BY u.billing_account_id",
+        (today,),
+    )
+    return [row["billing_account_id"] for row in rows]
+
+
+def unrated(conn: psycopg.Connection, account_id: UUID, today: date, limit: int) -> list[Row]:
+    """The account's unrated records of pay-as-you-go lines on closed days, oldest first."""
+    return fetch_all(
+        conn,
+        "SELECT u.* FROM usage_record u JOIN product p ON p.id = u.product_id"
+        " WHERE u.billing_account_id = %s AND u.status = 'notRated' AND u.event_date < %s"
+        " AND p.grantless AND p.parent_product_id IS NULL"
+        " AND NOT EXISTS (SELECT FROM usage_charge c WHERE c.usage_record_id = u.id)"
+        " ORDER BY u.event_date, u.event_at, u.id LIMIT %s FOR UPDATE OF u",
+        (account_id, today, limit),
+    )
+
+
+def insert_charge(
+    conn: psycopg.Connection,
+    *,
+    record_id: UUID,
+    command_id: UUID,
+    account_id: UUID,
+    product_id: UUID,
+    price_id: UUID | None,
+    abr_id: UUID | None,
+    blocks: int | None,
+    now: datetime,
+) -> None:
+    """Mark the record rated, once: the primary key refuses a second charge."""
+    conn.execute(
+        "INSERT INTO usage_charge (usage_record_id, command_id, billing_account_id, product_id,"
+        " price_id, abr_id, blocks, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+        (record_id, command_id, account_id, product_id, price_id, abr_id, blocks, now),
+    )
+    conn.execute("UPDATE usage_record SET status = 'rated' WHERE id = %s", (record_id,))
+
+
+def charges_of(conn: psycopg.Connection, record_id: UUID) -> Row | None:
+    """How a rated record was charged: the price applied and its ABR."""
+    return fetch_one(
+        conn,
+        "SELECT c.*, p.name AS price_name, p.amount AS price_amount, p.currency AS price_currency,"
+        " p.usage_block, p.details AS price_details FROM usage_charge c"
+        " LEFT JOIN product_offering_price p ON p.id = c.price_id WHERE c.usage_record_id = %s",
+        (record_id,),
+    )
+
+
+def unrated_count(conn: psycopg.Connection, product_id: UUID) -> int:
+    row = fetch_one(
+        conn,
+        "SELECT count(*) AS n FROM usage_record WHERE product_id = %s AND status = 'notRated'",
+        (product_id,),
+    )
+    assert row is not None
+    return row["n"]
