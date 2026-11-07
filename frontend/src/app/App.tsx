@@ -32,6 +32,7 @@ import { UsersScreen } from '../screens/Users';
 import { IntegrationsScreen } from '../screens/Integrations';
 import { NumbersScreen } from '../screens/Numbers';
 import { SimsScreen } from '../screens/Sims';
+import { PortRequestsScreen } from '../screens/PortRequests';
 
 const CONTEXT = '/internal/v1/context';
 
@@ -44,6 +45,8 @@ function Screen() {
       return <NumbersScreen />;
     case 'sims':
       return <SimsScreen />;
+    case 'ports':
+      return <PortRequestsScreen />;
     case 'users':
       return <UsersScreen />;
     case 'integrations':

@@ -748,6 +748,72 @@ describe('add product', () => {
     });
   });
 
+  it('ports a number in: creates the port request, then orders with the number it made (once)', async () => {
+    const portedId = '10000000-0000-4000-8000-000000000009';
+    let orders = 0;
+    const { fetchMock } = backend({
+      ...catalog,
+      'GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true&offset=0&limit=100':
+        () =>
+          json(
+            OFFERINGS.map((o) => ({
+              ...o,
+              productSpecification: { ...o.productSpecification, id: 'number-spec' },
+            })),
+            { total: 2 },
+          ),
+      'GET /tmf-api/productCatalogManagement/v5/productSpecification/number-spec': () =>
+        json({ resourceSpecification: [{ id: 'msisdn' }] }),
+      'GET /tmf-api/resourceInventory/v5/resource?offset=0&limit=100': () => json([], { total: 0 }),
+      [preview('2026-10-01')]: () => json(FIRST_CHARGE),
+      'POST /internal/v1/port/in': () =>
+        json({ id: 'port1', resource: { id: portedId }, state: 'submitted' }, { status: 201 }),
+      [`POST ${ORDERS}`]: () => {
+        orders += 1;
+        return orders === 1
+          ? json({ state: 'rejected', productOrderErrorMessage: [{ reason: 'Try again' }] })
+          : json({ id: 'o1', state: 'completed' });
+      },
+    });
+    const dialog = await openModal();
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[1] as HTMLElement);
+    await within(dialog).findByTestId('first-charge');
+    fireEvent.change(await within(dialog).findByLabelText('Number source'), {
+      target: { value: 'port' },
+    });
+    const add = within(dialog).getByRole('button', { name: 'Add Fiber 100' });
+    expect(add.hasAttribute('disabled')).toBe(true);
+    const type = (label: string, value: string) =>
+      fireEvent.change(within(dialog).getByLabelText(label), { target: { value } });
+    type('Number to port', '15551234567');
+    type('Carrier account number', 'ACC-9');
+    type('Number Transfer PIN', '123456');
+    type('Billing ZIP', '12345');
+    type('First name', 'Ada');
+    type('Last name', 'Lovelace');
+    fireEvent.click(add);
+    expect(await within(dialog).findByText('Try again')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Fiber 100' }));
+    await waitFor(() => expect(orders).toBe(2));
+    const ports = fetchMock.mock.calls.filter(([url]) => url === '/internal/v1/port/in');
+    expect(ports).toHaveLength(1);
+    expect(JSON.parse(String(ports[0]?.[1]?.body))).toEqual({
+      number: '15551234567',
+      carrierAccountNumber: 'ACC-9',
+      transferPin: '123456',
+      billingZip: '12345',
+      firstName: 'Ada',
+      lastName: 'Lovelace',
+    });
+    const post = fetchMock.mock.calls.find(([url]) => url === ORDERS);
+    expect(JSON.parse(String(post?.[1]?.body)).productOrderItem[0].product).toEqual({
+      '@type': 'ProductRefOrValue',
+      realizingResource: [
+        { id: portedId, '@type': 'ResourceRef', '@referredType': 'LogicalResource' },
+      ],
+    });
+  });
+
   it('saves the choice as a draft: requestedInitialState draft under an Idempotency-Key, a toast links to Orders', async () => {
     let saved = false;
     const { fetchMock } = backend({
@@ -3202,6 +3268,7 @@ describe('product actions', () => {
     openMenu(active);
     expect(items(active)).toEqual([
       'Subscriber number',
+      'Number Transfer PIN…',
       'Deactivate',
       'Suspend…',
       'Change offering…',
@@ -3217,6 +3284,7 @@ describe('product actions', () => {
     openMenu(suspended);
     expect(items(suspended)).toEqual([
       'Subscriber number',
+      'Number Transfer PIN…',
       'Deactivate',
       'Resume…',
       'Change offering…',
@@ -3230,6 +3298,7 @@ describe('product actions', () => {
     openMenu(pending);
     expect(items(pending)).toEqual([
       'Subscriber number',
+      'Number Transfer PIN…',
       'Deactivate',
       'Change offering…',
       'End on a date…',
@@ -3272,6 +3341,7 @@ describe('product actions', () => {
     openMenu(funding);
     expect(items(funding)).toEqual([
       'Subscriber number',
+      'Number Transfer PIN…',
       'Top up',
       'Deactivate',
       'Change offering…',
@@ -3281,6 +3351,7 @@ describe('product actions', () => {
     openMenu(productRow('Fiber 100'));
     expect(items(productRow('Fiber 100'))).toEqual([
       'Subscriber number',
+      'Number Transfer PIN…',
       'Deactivate',
       'Change offering…',
       'End on a date…',
@@ -3288,6 +3359,7 @@ describe('product actions', () => {
     openMenu(productRow('Manual 1'));
     expect(items(productRow('Manual 1'))).toEqual([
       'Subscriber number',
+      'Number Transfer PIN…',
       'Deactivate',
       'Resume…',
       'Change offering…',

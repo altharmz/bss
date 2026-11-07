@@ -76,4 +76,9 @@ describe('pages', () => {
     expect(await getAll(`${PATH}?state=Active`)).toEqual(rows);
     expect(calls).toHaveLength(2);
   });
+
+  it('getAll joins the paging to a path that ends in a bare question mark', async () => {
+    stubFetch({ [`GET ${PATH}?offset=0&limit=100`]: () => json([{ id: 1 }], { total: 1 }) });
+    expect(await getAll(`${PATH}?`)).toEqual([{ id: 1 }]);
+  });
 });

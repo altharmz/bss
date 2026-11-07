@@ -414,6 +414,14 @@ items:
   - {id: ui.numbers.list, area: ui, stage: 5, title: "Subscriber-number inventory and search"}
   - {id: ui.numbers.create, area: ui, stage: 5, title: "Create an inventory number"}
   - {id: ui.numbers.detail, area: ui, stage: 5, title: "Number details, assignments and lock/unlock"}
+  - {id: ui.numbers.pool, area: ui, stage: 5, title: "Request numbers from the carrier pool by area code"}
+  - {id: ui.numbers.poolDialog, area: ui, stage: 5, title: "Number pool request dialog"}
+  - {id: ui.ports.list, area: ui, stage: 5, title: "Port requests with direction, state, number and reason filters"}
+  - {id: ui.ports.detail, area: ui, stage: 5, title: "Port request detail"}
+  - {id: ui.ports.resubmit, area: ui, stage: 5, title: "Correct a rejected port-in and resubmit it with the PIN again"}
+  - {id: ui.ports.cancel, area: ui, stage: 5, title: "Cancel an open port-in"}
+  - {id: ui.subscriber.transferPinItem, area: ui, stage: 5, title: "Number Transfer PIN menu item on an active or suspended product"}
+  - {id: ui.subscriber.transferPin, area: ui, stage: 5, title: "Number Transfer PIN dialog: shown once with expiry, copyable"}
   - {id: ui.sims.list, area: ui, stage: 5, title: "SIM and eSIM stock with state, type and batch filters"}
   - {id: ui.sims.import, area: ui, stage: 5, title: "Import a SIM batch from CSV"}
   - {id: ui.sims.importDialog, area: ui, stage: 5, title: "SIM CSV import dialog"}

@@ -5,7 +5,7 @@ leave with it (port-out). Design approved by the human's standing delegation (de
 following TMF; TMF has no porting, pool or PIN API, so all of it is the internal API under
 `/internal/v1`). The carrier is a placeholder: `BSS_NETWORK_ADAPTER=stub` (default,
 [network.md](network.md)); the interface and the stub are in `app/integrations/network/`.
-The UI half is issue #214 (189b). The numbers themselves stay TMF639 resources
+The UI half (issue #214, 189b) is in [ui.md](../ui.md). The numbers themselves stay TMF639 resources
 ([prepaid.md](prepaid.md#n3-subscriber-number-inventory-api-2026-10-20)); the API never
 contacts the carrier, the billing worker does (`app/worker/ports.py`, called in every
 prepaid dispatch after the network commands and the payments).
@@ -98,7 +98,6 @@ the poll, so the request is `pending` first); a number ending `0001` stays pendi
 
 ## Not in this slice
 
-UI (189b, #214): port requests list with state, reason and resubmit, pool request and PIN dialogs.
 Carrier-side cancellation of a port-in, a webhook receiver for port-out, a separate port-out
 completion date, reserving pool numbers with a hold period.
 

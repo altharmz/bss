@@ -689,6 +689,23 @@ this product step after creating the account. A product's Subscriber number dial
 shows the effective number and submits changes through a modify order. The picker
 shows currently available unlocked stock; the server checks dates and quarantine.
 
+Numbers and porting (issue #214, [numbers.md](decisions/numbers.md)): **Request numbers** on
+`/numbers` asks the carrier for 1 to 100 numbers of an area code (`POST /internal/v1/number/pool`;
+the carrier running out is a 409 shown in the dialog). `/ports` lists the port requests
+(`GET /internal/v1/port`, filtered on the server by direction, state and number) with state and the
+carrier's reason; the detail offers **Correct and resubmit** for a rejected port-in (the losing
+carrier's Number Transfer PIN is asked again, only the changed fields are sent) and **Cancel
+port-in** for an open one (the server refuses while an order holds the number). A product's
+**Number Transfer PIN…** item (active or suspended products) generates a PIN
+(`POST /internal/v1/port/pin`): shown once with its expiry and a Copy button, never shown again;
+the optional Account PIN field goes out as the `X-Account-Pin` header only, and a prepaid line's
+403 (`pinRequired`, `pinInvalid`, `portOutLocked`...) is shown as the server's text. Add product,
+for an offering that needs a number, offers **Port in the subscriber's number**: it creates the port
+request (`POST /internal/v1/port/in`), then orders with the number it made; a retried order reuses
+that request. A port-in cannot be saved as a draft (the request is created when the order is
+placed). Requests are pinned in `PortRequests.test.tsx` and `SubscriberCard.test.tsx` and replayed
+in `tests/test_number_porting.py`.
+
 SIMs (issue #209, [sim.md](decisions/sim.md)): `/sims` lists the IMSI resources through TMF639
 with filters by state, type and batch (`simState`, `simType`, `batchNumber`), **Import CSV**
 (`POST /internal/v1/sim/batch`, `text/csv`, batch and type in the query; refusals keep the

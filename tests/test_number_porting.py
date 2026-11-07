@@ -429,3 +429,38 @@ def test_an_unanswered_port_out_is_answered_again_until_the_carrier_takes_it(
     (out,) = api.get(f"{PORT}?direction=out").json()
     assert out["answeredAt"] is not None and len(calls) == 2
     assert calls[0][0] == calls[1][0]  # the same idempotency key
+
+
+# --- the requests the admin UI sends (ports.ts, AddProduct.tsx; PortRequests.test.tsx) ---
+
+
+@pytest.mark.capability("worker.numberPorting")
+def test_ui_port_requests_replayed(api, db_conn, world, stub):
+    # Add product's port-in step: the request first, then an order with the number it made
+    port = port_in(api, transferPin="000000")
+    order = buy_number(api, world, port["resource"]["id"])
+    assert order["state"] == "inProgress"
+    run_ticks(api, db_conn, 3)
+    # the list the screen loads, filters in the order it sends them, and the detail
+    listed = api.get(
+        f"{PORT}?direction=in&state=rejected&number={NUMBER}&offset=0&limit=100"
+    ).json()
+    assert [p["id"] for p in listed] == [port["id"]]
+    assert api.get(f"{PORT}/{port['id']}").json()["rejectionCode"] == "pinMismatch"
+    # cancel sends `{}`; an order holds the number, so the server's text is shown in the dialog
+    held = api.post(f"{PORT}/{port['id']}/cancel", {})
+    assert held.status_code == 409, held.text
+    # resubmit sends only the PIN and the fields the operator changed
+    fixed = api.post(
+        f"{PORT}/{port['id']}/resubmit", {"transferPin": "654321", "billingZip": "10002"}
+    )
+    assert fixed.status_code == 202 and fixed.json()["billingZip"] == "10002"
+    # the pool dialog and the PIN dialog
+    pool = api.post(POOL, {"areaCode": "415", "count": 3})
+    assert pool.status_code == 201 and len(pool.json()["numbers"]) == 3
+    run_ticks(api, db_conn, 4)
+    product = db_conn.execute("SELECT id FROM product").fetchone()[0]
+    pin = api.post(PIN, {"productId": str(product)})
+    assert pin.status_code == 201 and len(pin.json()["pin"]) == 6
+    pins = api.get(f"{PIN}?product.id={product}&offset=0&limit=100")
+    assert pins.status_code == 200 and [p["id"] for p in pins.json()] == [pin.json()["id"]]
