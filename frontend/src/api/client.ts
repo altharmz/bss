@@ -212,7 +212,8 @@ export async function getPage<T>(path: string, signal?: AbortSignal): Promise<Pa
 const MAX_PAGES = 100;
 export async function getAll<T>(path: string, signal?: AbortSignal): Promise<T[]> {
   const items: T[] = [];
-  const join = path.includes('?') ? '&' : '?';
+  // a path may end in a bare `?` (an empty filter query): nothing to join then
+  const join = path.endsWith('?') ? '' : path.includes('?') ? '&' : '?';
   for (let page = 0; page < MAX_PAGES; page++) {
     const result = await getPage<T>(`${path}${join}offset=${items.length}&limit=100`, signal);
     items.push(...result.items);

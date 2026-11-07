@@ -47,6 +47,7 @@ import { ErrorBlock, ListState, SkeletonRows } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 import { AddProductModal } from './AddProduct';
 import { NumberModal } from './ProductNumber';
+import { TransferPinDialog } from './TransferPin';
 import { BillDialog, RecordPaymentModal, useBills } from './Bills';
 import { ActionDialog, BalanceActions } from './PrepaidHistory';
 import {
@@ -245,6 +246,7 @@ function Card({
   const [addOnFor, setAddOnFor] = useState<AccountProduct | null>(null);
   const [balanceAction, setBalanceAction] = useState<string | null>(null);
   const [numberProduct, setNumberProduct] = useState<string | null>(null);
+  const [pinProduct, setPinProduct] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState(false);
   const [money, setMoney] = useState<MoneyForm | null>(null);
@@ -565,6 +567,7 @@ function Card({
                       account={account}
                       product={product}
                       onNumber={() => setNumberProduct(product.id)}
+                      onTransferPin={() => setPinProduct(product.id)}
                       onBuyAddOn={() => setAddOnFor(product)}
                       onPick={(change, immediate) =>
                         setProductDialog({ product, change, immediate })
@@ -733,6 +736,9 @@ function Card({
             reload();
           }}
         />
+      )}
+      {pinProduct !== null && (
+        <TransferPinDialog productId={pinProduct} onClose={() => setPinProduct(null)} />
       )}
       {paying && bills.status === 'ok' && (
         <RecordPaymentModal
@@ -1166,6 +1172,7 @@ function ProductRow({
   onTopUp,
   onPick,
   onNumber,
+  onTransferPin,
   onBuyAddOn,
 }: {
   account: Account;
@@ -1174,6 +1181,7 @@ function ProductRow({
   onTopUp: (amount: string) => void;
   onPick: (change: ProductAction, immediate: boolean) => void;
   onNumber: () => void;
+  onTransferPin: () => void;
   onBuyAddOn: () => void;
 }) {
   const context = useSystemContext();
@@ -1284,6 +1292,15 @@ function ProductRow({
               onPick={(change) => onPick(change, false)}
               extra={[
                 { label: 'Subscriber number', onClick: onNumber },
+                ...(product.status === 'active' || product.status === 'suspended'
+                  ? [
+                      {
+                        label: 'Number Transfer PIN…',
+                        ui: 'ui.subscriber.transferPinItem',
+                        onClick: onTransferPin,
+                      },
+                    ]
+                  : []),
                 ...(canBuyAddOn(product, context.businessDate)
                   ? [
                       {

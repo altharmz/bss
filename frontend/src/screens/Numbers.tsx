@@ -31,6 +31,7 @@ import {
   useToast,
 } from '../ui/kit';
 import { Footer, useWrite } from './FinancialForms';
+import { PoolDialog } from './PoolDialog';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableHead, TableRow, type Column } from '../ui/Table';
 
@@ -48,13 +49,21 @@ export function NumbersScreen() {
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState<'' | ResourceKind>('');
   const [creating, setCreating] = useState(false);
+  const [pooling, setPooling] = useState(false);
   const [selected, setSelected] = useState<SubscriberNumber | null>(null);
   return (
     <div className="bss-screen" data-ui="ui.numbers.list">
       <PageHeader
         title="Numbers"
         count={numbers.status === 'ok' ? numbers.data.length : undefined}
-        actions={<Button onClick={() => setCreating(true)}>New number</Button>}
+        actions={
+          <>
+            <Button data-ui="ui.numbers.pool" onClick={() => setPooling(true)}>
+              Request numbers
+            </Button>
+            <Button onClick={() => setCreating(true)}>New number</Button>
+          </>
+        }
         filters={
           <>
             <TextInput
@@ -110,6 +119,15 @@ export function NumbersScreen() {
           }
         </ListState>
       </div>
+      {pooling && (
+        <PoolDialog
+          onClose={() => setPooling(false)}
+          onDone={() => {
+            setPooling(false);
+            numbers.retry();
+          }}
+        />
+      )}
       {creating && (
         <NewNumber
           onClose={() => setCreating(false)}

@@ -3,6 +3,7 @@ import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useRef, useState } from 'react';
 import { requirements } from '../api/numbers';
+import { createPortIn, type PortInData } from '../api/ports';
 import { NumberPicker } from './Numbers';
 import {
   loadFirstCharge,
@@ -94,6 +95,26 @@ export function AddProductModal({
   // '' = a specific SIM from the picker; else the server picks one of that type from stock
   const [simChoice, setSimChoice] = useState<'' | SimType>(draft?.simType ?? '');
   const [uncertain, setUncertain] = useState(false);
+  // port-in: the customer brings a number. The port request is created first, then the order
+  // takes the number it made; the request id is kept so a retried order does not create it twice
+  const [porting, setPorting] = useState(false);
+  const [port, setPort] = useState<PortInData>({
+    number: '',
+    carrierAccountNumber: '',
+    transferPin: '',
+    billingZip: '',
+    firstName: '',
+    lastName: '',
+  });
+  const [portedId, setPortedId] = useState<{ number: string; id: string } | null>(null);
+  const setPortField = (key: keyof PortInData, value: string) =>
+    setPort((p) => ({ ...p, [key]: value }));
+  const portComplete =
+    /^[1-9][0-9]{7,14}$/.test(port.number.trim()) &&
+    /^[0-9]{5}(-[0-9]{4})?$/.test(port.billingZip.trim()) &&
+    [port.carrierAccountNumber, port.transferPin, port.firstName, port.lastName].every(
+      (v) => v.trim() !== '',
+    );
   // B22: an edited draft opens with its offering row in view, once (jsdom has no scrolling)
   const scrolled = useRef(false);
   const scrollToDraft = (node: HTMLDivElement | null) => {
@@ -139,12 +160,14 @@ export function AddProductModal({
   const needsImsi = requirement.status === 'ok' && requirement.data.imsi;
   // one reference per required kind
   const simType = needsImsi && simChoice !== '' ? simChoice : undefined;
-  const resources = [needsNumber && numberId, needsImsi && !simType && imsiId].filter(
+  const portingNumber = needsNumber && porting;
+  const resources = [needsNumber && !porting && numberId, needsImsi && !simType && imsiId].filter(
     Boolean,
   ) as string[];
   const chosenResources = resources.length === 0 ? undefined : resources;
   const complete =
-    (!needsNumber || numberId !== '') && (!needsImsi || simType !== undefined || imsiId !== '');
+    (!needsNumber || (porting ? portComplete : numberId !== '')) &&
+    (!needsImsi || simType !== undefined || imsiId !== '');
   const shortNow =
     account.ratingType === 'prepaid' &&
     start === today &&
@@ -152,7 +175,9 @@ export function AddProductModal({
     toCents(first.shortfall.value) > 0;
   const ready = !shortNow && first !== null && requirement.status === 'ok' && complete;
 
-  const draftReady = chosen !== undefined && startValid && requirement.status === 'ok' && complete;
+  // a draft keeps no port request: the request is created when the order is placed
+  const draftReady =
+    chosen !== undefined && startValid && requirement.status === 'ok' && complete && !portingNumber;
 
   async function saveDraft() {
     if (offeringId === null || chosen === undefined) return;
@@ -220,12 +245,31 @@ export function AddProductModal({
     setProblem([]);
     setCode(undefined);
     try {
+      let ordered = chosenResources;
+      if (portingNumber) {
+        const value = port.number.trim();
+        let id = portedId?.number === value ? portedId.id : undefined;
+        if (id === undefined) {
+          const created = await createPortIn({
+            number: value,
+            carrierAccountNumber: port.carrierAccountNumber.trim(),
+            transferPin: port.transferPin.trim(),
+            billingZip: port.billingZip.trim(),
+            firstName: port.firstName.trim(),
+            lastName: port.lastName.trim(),
+          });
+          if (!created.resource) throw new Error('The API sent a port request without a number');
+          id = created.resource.id;
+          setPortedId({ number: value, id });
+        }
+        ordered = [id, ...(chosenResources ?? [])];
+      }
       const result = await orderAdd(
         account.id,
         offeringId,
         start,
         context.timeZone,
-        chosenResources,
+        ordered,
         undefined,
         simType,
       );
@@ -402,7 +446,20 @@ export function AddProductModal({
               />
             )}
             <div className="bss-add-product-schedule">
-              {needsNumber && <NumberPicker value={numberId} onChange={setNumberId} />}
+              {needsNumber && (
+                <Field label="Number">
+                  <SelectField
+                    aria-label="Number source"
+                    value={porting ? 'port' : 'inventory'}
+                    onChange={(e) => setPorting(e.target.value === 'port')}
+                  >
+                    <option value="inventory">A number from the inventory</option>
+                    <option value="port">Port in the subscriber&apos;s number</option>
+                  </SelectField>
+                </Field>
+              )}
+              {needsNumber && !porting && <NumberPicker value={numberId} onChange={setNumberId} />}
+              {portingNumber && <PortInFields port={port} onChange={setPortField} />}
               {needsImsi && (
                 <Field label="SIM">
                   <SelectField
@@ -806,5 +863,60 @@ function PrepaidPreview({
             : `On ${start} the billing worker takes the interval from the funds available then.`}
       </div>
     </div>
+  );
+}
+
+/** The losing carrier's details for a port-in. The PIN is the carrier's, not ours: it is sent
+ * once and the server drops it when the carrier has accepted the request. */
+function PortInFields({
+  port,
+  onChange,
+}: {
+  port: PortInData;
+  onChange: (key: keyof PortInData, value: string) => void;
+}) {
+  return (
+    <>
+      <Field label="Number to port">
+        <TextInput
+          mono
+          aria-label="Number to port"
+          placeholder="15551234567"
+          value={port.number}
+          onChange={(e) => onChange('number', e.target.value)}
+        />
+      </Field>
+      <Field label="Carrier account number">
+        <TextInput
+          value={port.carrierAccountNumber}
+          onChange={(e) => onChange('carrierAccountNumber', e.target.value)}
+        />
+      </Field>
+      <Field label="Number Transfer PIN">
+        <TextInput
+          mono
+          autoComplete="off"
+          value={port.transferPin}
+          onChange={(e) => onChange('transferPin', e.target.value)}
+        />
+      </Field>
+      <Field label="Billing ZIP">
+        <TextInput
+          mono
+          value={port.billingZip}
+          onChange={(e) => onChange('billingZip', e.target.value)}
+        />
+      </Field>
+      <Field label="First name">
+        <TextInput value={port.firstName} onChange={(e) => onChange('firstName', e.target.value)} />
+      </Field>
+      <Field label="Last name">
+        <TextInput value={port.lastName} onChange={(e) => onChange('lastName', e.target.value)} />
+      </Field>
+      <Note tone="info">
+        The port request is sent to the carrier by the billing worker; the line is created and
+        charged when the port completes. Saving a draft is not available for a port-in.
+      </Note>
+    </>
   );
 }

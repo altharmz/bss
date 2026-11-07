@@ -86,6 +86,7 @@ export function Sidebar({ context }: { context: SystemContext }) {
         { label: 'Orders', href: '/orders', active: (r) => r.name === 'orders' },
         { label: 'Numbers', href: '/numbers', active: (r) => r.name === 'numbers' },
         { label: 'SIMs', href: '/sims', active: (r) => r.name === 'sims' },
+        { label: 'Port requests', href: '/ports', active: (r) => r.name === 'ports' },
       ],
     },
     {
