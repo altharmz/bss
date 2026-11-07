@@ -4535,3 +4535,192 @@ describe('prepaid Resume funding gate', () => {
     expect((within(form).getByLabelText('Amount') as HTMLInputElement).value).toBe('580.00');
   });
 });
+
+describe('prepaid plans (#212)', () => {
+  const ADDON = 'o0000009-0000-4000-8000-000000000009';
+  const BUCKETS = `GET /tmf-api/prepayBalanceManagement/v4/bucket?partyAccount.id=${A}&offset=0&limit=100`;
+  const FAILED = `GET /internal/v1/prepaid/command?billingAccount.id=${A}&state=failedTechnical&offset=0&limit=100`;
+  const PREPAID = accountBody(
+    A,
+    { id: C, name: 'Olga Kuznetsova' },
+    { ratingType: 'prepaid', accountBalance: [{ amount: usd(120), '@type': 'AccountBalance' }] },
+  );
+  const plan = product(P1, {
+    offeringKind: 'plan',
+    fundingSource: 'balanceThenCard',
+    parentProduct: null,
+    paidThrough: '2026-10-20',
+    nextChargeDate: '2026-10-20',
+    renewalHistory: [
+      {
+        authorizedAt: '2026-09-20T09:00:00Z',
+        period: { start: '2026-09-20', end: '2026-10-20' },
+        kind: 'renewal',
+        amount: usd(12),
+        tax: usd(2),
+        fundedBy: 'card',
+        bill: { id: 'b0000001-0000-4000-8000-000000000001' },
+      },
+    ],
+  });
+  const pack = product(P2, {
+    offeringKind: 'addOn',
+    fundingSource: 'balance',
+    parentProduct: { id: 'abcd1234-0000-4000-8000-0000000000ff', href: '/p' },
+    terminationDate: '2026-10-20',
+    price: null,
+    nextChargeDate: null,
+    productOffering: { id: ADDON, name: 'Extra 2 GB', code: null },
+  });
+  const quote = {
+    billingAccount: { id: A },
+    productOffering: { id: ADDON, name: 'Extra 2 GB' },
+    startDate: '2026-10-01',
+    period: { start: '2026-10-01', end: '2026-10-02' },
+    cyclePeriod: { start: '2026-10-01', end: '2026-10-02' },
+    billableDays: 1,
+    periodDays: 1,
+    prorated: false,
+    price: usd(0),
+    amount: usd(4.8),
+    chargeRunDate: '2026-10-01',
+    billDate: '2026-10-01',
+    next: null,
+    balance: usd(3),
+    balanceAfter: usd(-1.8),
+    creditLimit: null,
+    exceedsCreditLimit: true,
+    required: usd(4.8),
+    available: usd(3),
+    shortfall: usd(1.8),
+    fees: [{ name: 'Extra 2 GB', amount: usd(4), tax: usd(0.8), gross: usd(4.8) }],
+  };
+  const routes = (extra: Record<string, Handler> = {}) =>
+    backend(
+      {
+        [BUCKETS]: () =>
+          json(
+            [
+              {
+                id: BUCKET,
+                remainingValue: { amount: 120, units: 'USD' },
+                reservedValue: { amount: 0, units: 'USD' },
+              },
+            ],
+            { total: 1 },
+          ),
+        [FAILED]: () => json([], { total: 0 }),
+        [`GET ${INTERNAL}/products`]: () => json([plan, pack], { total: 2 }),
+        'GET /tmf-api/productCatalogManagement/v5/productOffering?lifecycleStatus=Active&isSellable=true&offset=0&limit=100':
+          () =>
+            json(
+              [
+                { id: O1, name: 'Plan 10', '@type': 'ProductOffering' },
+                {
+                  id: ADDON,
+                  name: 'Extra 2 GB',
+                  productOfferingCharacteristic: [
+                    {
+                      name: 'offeringKind',
+                      characteristicValueSpecification: [{ value: 'addOn' }],
+                    },
+                  ],
+                  '@type': 'ProductOffering',
+                },
+              ],
+              { total: 2 },
+            ),
+        ...extra,
+      },
+      PREPAID,
+    );
+
+  it('shows the kind, funding source, add-on parent and end date, and the renewal history', async () => {
+    routes();
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    expect(
+      within(row).getByText(/Plan · Renews from the balance, then the default card/),
+    ).toBeTruthy();
+    expect(within(row).getByText(/on 2026-10-20/)).toBeTruthy();
+    const addOn = productRow('Extra 2 GB');
+    expect(within(addOn).getByText(/Add-on · plan PRD-ABCD1234 · ends 2026-10-20/)).toBeTruthy();
+    fireEvent.click(within(row).getByRole('button', { name: /renewal history \(1\)/ }));
+    const table = within(row).getByRole('table', { name: 'Renewal history' });
+    expect(table.textContent).toContain('2026-09-20 – 2026-10-20');
+    expect(table.textContent).toContain('Card');
+    expect(table.textContent).toContain('12.00 USD');
+  });
+
+  it('offers Buy add-on on a plan only, quotes the fee and orders the add item', async () => {
+    const { fetchMock } = routes({
+      [`GET ${INTERNAL}/firstCharge?productOffering.id=${ADDON}&startDate=2026-10-01`]: () =>
+        json(quote),
+      [`POST ${ORDERS}`]: () =>
+        json({ id: 'o1', state: 'completed', '@type': 'ProductOrder' }, { status: 201 }),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    expect(productAction(row, 'Buy add-on…')).toBe(expectUi('ui.subscriber.buyAddOnItem'));
+    const packRow = productRow('Extra 2 GB');
+    fireEvent.click(within(packRow).getByRole('button', { name: 'Actions ▾' }));
+    expect(
+      within(productMenu(packRow)).queryByRole('menuitem', { name: 'Buy add-on…' }),
+    ).toBeNull();
+    fireEvent.click(productAction(row, 'Buy add-on…'));
+    const dialog = await screen.findByRole('dialog', { name: /Buy add-on/ });
+    // only the add-on offering is listed, not the plan
+    const radios = await within(dialog).findAllByRole('radio');
+    expect(radios).toHaveLength(1);
+    fireEvent.click(radios[0] as HTMLElement);
+    expect((await within(dialog).findByTestId('addon-required')).textContent).toContain('4.80 USD');
+    expect(within(dialog).getByText(/4\.00 \+ tax 0\.80 = 4\.80 USD/)).toBeTruthy();
+    expect(within(dialog).getByText(/Insufficient funds: top up at least 1\.80/)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Buy add-on' }));
+    await screen.findByRole('status');
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({
+      '@type': 'ProductOrder',
+      billingAccount: { id: A, '@type': 'BillingAccountRef' },
+      productOrderItem: [
+        {
+          '@type': 'ProductOrderItem',
+          id: '1',
+          action: 'add',
+          productOffering: { id: ADDON, '@type': 'ProductOfferingRef' },
+          product: {
+            '@type': 'ProductRefOrValue',
+            productRelationship: [
+              { '@type': 'ProductRelationship', relationshipType: 'addOn', id: P1 },
+            ],
+          },
+        },
+      ],
+    });
+  });
+
+  it('shows the readable reason when the server rejects the add-on', async () => {
+    routes({
+      [`GET ${INTERNAL}/firstCharge?productOffering.id=${ADDON}&startDate=2026-10-01`]: () =>
+        json(quote),
+      [`POST ${ORDERS}`]: () =>
+        json(
+          {
+            id: 'o1',
+            state: 'rejected',
+            productOrderErrorMessage: [{ code: 'addOnParentNotActive', reason: 'raw' }],
+            '@type': 'ProductOrder',
+          },
+          { status: 201 },
+        ),
+    });
+    await open();
+    const row = await waitFor(() => productRow('Mobile L'));
+    fireEvent.click(productAction(row, 'Buy add-on…'));
+    const dialog = await screen.findByRole('dialog', { name: /Buy add-on/ });
+    fireEvent.click((await within(dialog).findAllByRole('radio'))[0] as HTMLElement);
+    await within(dialog).findByTestId('addon-required');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Buy add-on' }));
+    expect(await within(dialog).findByText(/no paid period running today/)).toBeTruthy();
+  });
+});

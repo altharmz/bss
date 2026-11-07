@@ -91,6 +91,8 @@ function backend(routes: Record<string, Handler> = {}, offerings: unknown[] = OF
     [`GET ${CAT}/category?offset=0&limit=100`]: () => json([], { total: 0 }),
     [`GET ${CAT}/productOfferingPrice?priceType=recurring&offset=0&limit=100`]: () =>
       json(PRICES, { total: PRICES.length }),
+    [`GET ${CAT}/productOfferingPrice?priceType=oneTime&offset=0&limit=100`]: () =>
+      json([], { total: 0 }),
     // the detail dialog loads the offering itself
     ...Object.fromEntries(
       (offerings as { id: string }[]).map((o) => [
@@ -1186,6 +1188,75 @@ describe('offering detail, edit and delete', () => {
       category: [
         { id: 'c1', '@type': 'CategoryRef' },
         { id: 'c2', '@type': 'CategoryRef' },
+      ],
+    });
+  });
+
+  it('shows the offering kind and the one-time prices of the offering', async () => {
+    tvBackend({
+      [`GET ${CAT}/productOffering/${ids(3)}`]: () =>
+        json({
+          ...DETAIL,
+          productOfferingCharacteristic: [
+            { name: 'offeringKind', characteristicValueSpecification: [{ value: 'addOn' }] },
+          ],
+          productOfferingPrice: [{ id: 'fee1' }],
+        }),
+      [`GET ${CAT}/productOfferingPrice?priceType=oneTime&offset=0&limit=100`]: () =>
+        json(
+          [
+            {
+              id: 'fee1',
+              name: 'Activation fee',
+              priceType: 'oneTime',
+              price: { unit: 'USD', value: 5 },
+              validFor: { startDateTime: '2026-10-01T00:00:00+03:00' },
+            },
+          ],
+          { total: 1 },
+        ),
+    });
+    const dialog = await details('TV Basic');
+    expect(within(dialog).getByText('Add-on')).toBe(expectUi('ui.catalog.kind'));
+    const fees = await waitFor(() => expectUi('ui.catalog.oneTimePrices'));
+    expect(fees.textContent).toContain('5.00 USD');
+  });
+
+  it('sets the offering kind as the offeringKind characteristic, keeping the others', async () => {
+    const { fetchMock } = tvBackend({
+      [`GET ${CAT}/productOffering/${ids(3)}`]: () =>
+        json({
+          ...DETAIL,
+          productOfferingCharacteristic: [{ name: 'colour', '@type': 'Other' }],
+        }),
+      [`PATCH ${CAT}/productOffering/${ids(3)}`]: () => json({ id: ids(3) }),
+    });
+    const dialog = await details('TV Basic');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Offering actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit offering' }));
+    const edit = screen.getByRole('dialog', { name: 'Edit TV Basic' });
+    const kind = within(edit).getByLabelText(/^Offering kind/);
+    expect(kind).toBe(expectUi('ui.catalog.offeringKind'));
+    expect((kind as HTMLSelectElement).value).toBe('plan');
+    fireEvent.change(kind, { target: { value: 'addOn' } });
+    fireEvent.click(within(edit).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    expect(JSON.parse(bodyOf(fetchMock, 'PATCH'))).toEqual({
+      productOfferingCharacteristic: [
+        { name: 'colour', '@type': 'Other' },
+        {
+          '@type': 'CharacteristicSpecification',
+          name: 'offeringKind',
+          valueType: 'string',
+          characteristicValueSpecification: [
+            {
+              '@type': 'StringCharacteristicValueSpecification',
+              valueType: 'string',
+              isDefault: true,
+              value: 'addOn',
+            },
+          ],
+        },
       ],
     });
   });

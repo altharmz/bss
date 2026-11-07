@@ -586,3 +586,44 @@ def test_the_offering_kind_is_validated_and_only_a_plan_has_a_recurring_price(ap
         plain.json()["href"], {"productOfferingCharacteristic": [kind_characteristic("payAsYouGo")]}
     )
     assert switched.status_code == 422
+
+
+# --- the quote before ordering (issue #212) ---
+
+
+def quote(api, world, offering_):
+    return api.get(
+        f"{ACCOUNTS}/{world.acc['id']}/firstCharge"
+        f"?productOffering.id={offering_['id']}&startDate={api.clock.now().date()}"
+    )
+
+
+def amount(money):
+    return D(str(money["value"]))
+
+
+def test_the_plan_quote_includes_its_fee_in_what_is_held(api, db_conn, build):
+    world = build("30")
+    response = quote(api, world, world.plan)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    # 10 + 20% for the month, 5 + 20% for the fee
+    assert amount(body["required"]) == D("18") and amount(body["shortfall"]) == 0
+    [fee] = body["fees"]
+    assert fee["name"] == "Activation fee"
+    assert [amount(fee[k]) for k in ("amount", "tax", "gross")] == [D("5"), D("1"), D("6")]
+    assert amount(body["price"]) == D("10")
+
+
+def test_an_add_on_quote_is_its_fees_alone(api, db_conn, build):
+    world = build("3")
+    body = quote(api, world, world.addon).json()
+    assert amount(body["required"]) == D("4.8") and amount(body["shortfall"]) == D("1.8")
+    assert [f["name"] for f in body["fees"]] == ["Extra 2 GB"]
+    assert amount(body["price"]) == 0 and body["billableDays"] == 1
+
+
+def test_a_non_plan_offering_without_a_fee_has_no_quote(api, db_conn, build):
+    world = build("30")
+    bare = offering(api, "Bare pack", [], kind="addOn")
+    assert quote(api, world, bare).status_code == 422

@@ -767,12 +767,59 @@ export function loadFirstCharge(
 type OfferingBody = T620['schemas']['ProductOffering'];
 type PriceBody = T620['schemas']['ProductOfferingPrice'];
 
+/** The kind of a prepaid offering: a TMF620 productOfferingCharacteristic `offeringKind`
+ * (docs/decisions/prepaid.md); a plan when the characteristic is absent. */
+export type OfferingKind = 'plan' | 'addOn' | 'payAsYouGo';
+export const OFFERING_KINDS: OfferingKind[] = ['plan', 'addOn', 'payAsYouGo'];
+export const KIND_LABEL: Record<OfferingKind, string> = {
+  plan: 'Plan',
+  addOn: 'Add-on',
+  payAsYouGo: 'Pay as you go',
+};
+const KIND_NAME = 'offeringKind';
+
+type Characteristic = { name?: string; [key: string]: unknown };
+
+export function kindOf(body: { productOfferingCharacteristic?: unknown }): OfferingKind {
+  const list = (body.productOfferingCharacteristic ?? []) as {
+    name?: string;
+    characteristicValueSpecification?: { value?: unknown }[];
+  }[];
+  const value = list.find((c) => c.name === KIND_NAME)?.characteristicValueSpecification?.[0]
+    ?.value;
+  return OFFERING_KINDS.find((k) => k === value) ?? 'plan';
+}
+
+/** The characteristics of an offering after its kind is set to `kind`: every other entry as
+ * loaded; a plan is the default and carries no entry. */
+export function withKind(others: Characteristic[], kind: OfferingKind): Characteristic[] {
+  const rest = others.filter((c) => c.name !== KIND_NAME);
+  if (kind === 'plan') return rest;
+  return [
+    ...rest,
+    {
+      '@type': 'CharacteristicSpecification',
+      name: KIND_NAME,
+      valueType: 'string',
+      characteristicValueSpecification: [
+        {
+          '@type': 'StringCharacteristicValueSpecification',
+          valueType: 'string',
+          isDefault: true,
+          value: kind,
+        },
+      ],
+    },
+  ];
+}
+
 export interface Offering {
   id: string;
   specificationId?: string | undefined;
   name: string;
   code: string | null;
   specification: string;
+  kind: OfferingKind;
   prices: CatalogPrice[]; // display only; the charge itself comes from the preview
 }
 
@@ -821,11 +868,36 @@ export async function loadSellableOfferings(
     code: offeringCode(offering),
     specification: offering.productSpecification?.name ?? '',
     specificationId: offering.productSpecification?.id,
+    kind: kindOf(offering),
     prices: (offering.productOfferingPrice ?? []).flatMap((ref) => {
       const price = ref.id === undefined ? undefined : byId.get(ref.id);
       return price === undefined || price.price?.unit !== currency ? [] : [toCatalogPrice(price)];
     }),
   }));
+}
+
+/** The sellable add-on offerings (kind addOn), for Buy add-on. They have no recurring
+ * price; the quote with its fees comes from the preview. */
+export async function loadAddOnOfferings(signal: AbortSignal): Promise<Offering[]> {
+  const offerings = await getAll<OfferingBody>(
+    `${PATHS.offerings}?lifecycleStatus=Active&isSellable=true`,
+    signal,
+  );
+  return offerings.flatMap((offering) =>
+    kindOf(offering) !== 'addOn'
+      ? []
+      : [
+          {
+            id: need(offering.id, 'offering id'),
+            name: need(offering.name, 'offering name'),
+            code: offeringCode(offering),
+            specification: offering.productSpecification?.name ?? '',
+            specificationId: offering.productSpecification?.id,
+            kind: 'addOn' as const,
+            prices: [],
+          },
+        ],
+  );
 }
 
 // --- the catalog (TMF620) ---
@@ -1093,6 +1165,8 @@ export interface OfferingDetail {
   specification: { id: string; name: string } | null;
   categories: { id: string; name: string }[];
   priceRefs: { id: string; name: string }[]; // every attached price, of any type
+  kind: OfferingKind;
+  characteristics: Characteristic[]; // every productOfferingCharacteristic, as loaded
 }
 
 export async function loadOfferingDetail(id: string, signal: AbortSignal): Promise<OfferingDetail> {
@@ -1115,7 +1189,19 @@ export async function loadOfferingDetail(id: string, signal: AbortSignal): Promi
     priceRefs: (body.productOfferingPrice ?? []).flatMap((p) =>
       p.id === undefined ? [] : [{ id: p.id, name: p.name ?? p.id }],
     ),
+    kind: kindOf(body),
+    characteristics: (body.productOfferingCharacteristic ?? []) as Characteristic[],
   };
+}
+
+/** The one-time prices (activation fees) among an offering's attached prices. */
+export async function loadOneTimePrices(
+  priceIds: string[],
+  signal: AbortSignal,
+): Promise<CatalogPrice[]> {
+  if (priceIds.length === 0) return [];
+  const prices = await getAll<PriceBody>(`${PATHS.prices}?priceType=oneTime`, signal);
+  return prices.filter((p) => p.id !== undefined && priceIds.includes(p.id)).map(toCatalogPrice);
 }
 
 export interface CategoryChoice {
@@ -1137,6 +1223,7 @@ export interface OfferingEditFields {
   code: string;
   specificationId: string;
   categoryIds: string[];
+  kind: OfferingKind;
 }
 
 /** The last valid day of an exclusive end instant, as a business date. */
@@ -1154,6 +1241,7 @@ export function offeringEditFields(o: OfferingDetail, timeZone: string): Offerin
     code: o.code ?? '',
     specificationId: o.specification?.id ?? '',
     categoryIds: o.categories.map((c) => c.id),
+    kind: o.kind,
   };
 }
 
@@ -1210,6 +1298,8 @@ export function offeringChanges(
     };
   if ([...form.categoryIds].sort().join() !== [...was.categoryIds].sort().join())
     changes.category = form.categoryIds.map((id) => ({ id, '@type': 'CategoryRef' }));
+  if (form.kind !== was.kind)
+    changes.productOfferingCharacteristic = withKind(before.characteristics, form.kind);
   return Object.keys(changes).length === 0 ? null : changes;
 }
 
@@ -1520,6 +1610,37 @@ export async function orderAdd(
     },
     draftKey !== undefined ? { 'Idempotency-Key': draftKey } : {},
   );
+  return outcome(order);
+}
+
+/** Buy an add-on for a plan product (TMF622 add item with a `productRelationship` of type
+ * addOn). Add-ons start today; the server decides every rule and answers with its codes. */
+export async function orderAddOn(
+  accountId: string,
+  offeringId: string,
+  planProductId: string,
+  day: string,
+  timeZone: string,
+): Promise<OrderOutcome> {
+  const order = await postJson<OrderBody>(PATHS.orders, {
+    '@type': 'ProductOrder',
+    billingAccount: { id: accountId, '@type': 'BillingAccountRef' },
+    requestedStartDate: requestedDate(day, timeZone),
+    productOrderItem: [
+      {
+        '@type': 'ProductOrderItem',
+        id: '1',
+        action: 'add',
+        productOffering: { id: offeringId, '@type': 'ProductOfferingRef' },
+        product: {
+          '@type': 'ProductRefOrValue',
+          productRelationship: [
+            { '@type': 'ProductRelationship', relationshipType: 'addOn', id: planProductId },
+          ],
+        },
+      },
+    ],
+  });
   return outcome(order);
 }
 

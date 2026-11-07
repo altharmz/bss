@@ -202,6 +202,18 @@ suspension apply as usual; otherwise `pendingActive` until the order completes, 
 amount with tax, kind purchase/renewal/offeringChange, `fundedBy`, bill). No new TMF or MCP
 operation.
 
+**The admin UI (2026-11-07, issue #212).** The subscriber's product row shows the offering kind,
+the funding source and, for an add-on, its plan and end date; a toggle opens the renewal
+history. *Buy add-on…* is offered on an active plan with a paid period running and places the
+TMF622 add order above (start today); a refusal shows the mapped order error. The catalog edit
+sets the kind (a plan carries no characteristic; the other characteristics are kept as
+loaded) and the offering detail lists the one-time prices. **`firstCharge` change (additive):**
+for a prepaid account it lists the one-time `fees` (name, amount, tax, gross), and `required`
+and `shortfall` include them, as the hold does; an add-on or pay-as-you-go offering has no
+recurring price, so its quote is its fees alone (price zero, a one-day period, a 422 when it
+has no fee either). Pay-as-you-go lines and the add-on offerings are not offered in Add
+product: a pay-as-you-go purchase UI is not part of this slice.
+
 **Deployment.** Migration `0057`; existing prepaid products are untouched (`grantless` false,
 their grants and paid-through dates stay; renewal by card applies from their next renewal).
 
