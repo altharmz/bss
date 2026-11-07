@@ -45,6 +45,8 @@ services:
       # Caddy replaces X-Forwarded-For with the address it sees: the sign-in throttle keys
       # on its last entry, else the peer (loopback, the tunnel: trusted hosts anyway)
       APP_TRUST_FORWARDED: "true"
+      BSS_METRICS_TOKEN: ${BSS_METRICS_TOKEN:-}
+      BSS_BUILD: ${TAG:-dev}
     networks:
       bss-edge:
         # Every app on the host calls its service `app`, so that name is ambiguous.
@@ -82,6 +84,7 @@ services:
       LOG_LEVEL: info
       DATABASE_URL: postgresql://bss:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/bss
       BILL_PAYMENT_TERM_DAYS: "30"
+      BSS_BUILD: ${TAG:-dev}
     # Replaces the image's /healthz probe: the worker touches /tmp/worker-alive on every
     # wake-up (60 s) and after every account, retries included. Older than 3 minutes (or
     # missing) = unhealthy, which includes a database it cannot reach. No interpreter:
@@ -139,6 +142,8 @@ services:
       MCP_STORE: /data/mcp.db
       # behind Caddy: the client IP is the last X-Forwarded-For entry (Caddy sets it)
       MCP_TRUST_FORWARDED: "true"
+      BSS_METRICS_TOKEN: ${BSS_METRICS_TOKEN:-}
+      BSS_BUILD: ${TAG:-dev}
       # same value as the app's: without it every tool call is a 401
       BSS_SERVICE_SECRET: ${BSS_SERVICE_SECRET:?BSS_SERVICE_SECRET is required - see .env.example}
     volumes:

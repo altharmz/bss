@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     # needs an explicit "test"). compose sets it everywhere: dev locally, staging on the VPS.
     app_env: str = "prod"
     log_level: str = "info"
+    # GET /metrics (app/metrics.py): empty = off (404), else the bearer token the scraper sends.
+    # The same value for the app and mcp. BSS_BUILD is the image tag, shown as bss_build_info.
+    bss_metrics_token: str = ""
+    build: str = Field(default="dev", validation_alias=AliasChoices("BSS_BUILD", "build"))
     database_url: str = "postgresql://app:app@db:5432/app"
     # Seconds per connection attempt, and the longest a request waits for a pooled
     # connection. 3 s turned a short database stall into 500s, so 10 s (docs/decisions/infra.md).

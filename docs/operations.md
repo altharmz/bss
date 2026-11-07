@@ -159,6 +159,7 @@ monitoring, if any, belongs to vps-infra.
 |---|---|---|
 | `GET /healthz` | app, unauthenticated | 200 when the app can reach the database, else 503 |
 | `GET /billing-status` | app, unauthenticated | billing freshness: 200 `ok`/`running`, 503 `stale`/`failed`/`running`(overdue)/`none` ([billing-worker.md](billing-worker.md#billing-status)) |
+| `GET /metrics` | app and mcp, bearer token | Prometheus text format; 404 until `BSS_METRICS_TOKEN` is set. HTTP rate/latency by route template, queue depth and age, billing freshness, product counts (database series cached 30 s, `bss_db_up 0` when the read fails). Worker health shows through the queue and billing series |
 | app healthcheck | `Dockerfile` | bash `/dev/tcp` probe of `/healthz` every 60 s |
 | worker healthcheck | `compose.prod.yaml` | `/tmp/worker-alive` younger than 180 s |
 | logs | `make logs` (local), json-file with rotation on the VPS | 500s are logged with their traceback |

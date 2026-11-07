@@ -3,7 +3,7 @@ import logging
 from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
-from app import api, db, internal, status
+from app import api, db, internal, metrics, status
 from app.auth import authenticate
 from app.config import settings
 
@@ -25,6 +25,9 @@ app = FastAPI(
 api.install(app)
 internal.install(app)
 app.include_router(status.router)
+app.include_router(metrics.router)
+app.add_middleware(metrics.HttpMetricsMiddleware)
+metrics.set_build_info()
 
 
 @app.get("/")

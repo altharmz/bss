@@ -48,8 +48,25 @@ def check_principal(tx, principal: str, version: str) -> None:
         raise TmfError(401, "the credential was revoked", code="credentialRevoked")
 
 
+METRICS_PATH = "/metrics"
+
+
+def check_metrics_token(request: Request) -> None:
+    """GET /metrics (app/metrics.py): off without BSS_METRICS_TOKEN, else a bearer token.
+    No session and no CSRF header: the scraper has neither."""
+    token = settings.bss_metrics_token
+    if not token:
+        raise TmfError(404, "metrics are disabled")
+    scheme, _, value = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(value.strip(), token):
+        raise TmfError(401, "unauthorized")
+
+
 def authenticate(request: Request, tx: Tx, clock: ClockDep) -> None:
     if (request.method, request.url.path) in OPEN:
+        return
+    if (request.method, request.url.path) == ("GET", METRICS_PATH):
+        check_metrics_token(request)
         return
     path = request.url.path
     supplied = request.headers.get("x-bss-service", "")
