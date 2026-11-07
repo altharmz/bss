@@ -124,7 +124,7 @@ class StartupTests(unittest.TestCase):
             "  'blockedBy': {'totalCount': 0, 'nodes': []},\n"
             "  'linkedBranches': {'totalCount': 0, 'nodes': []},\n"
             "  'closedByPullRequestsReferences': {'totalCount': 0, 'nodes': []}}}\n"
-            " if os.environ.get('BSS_TEST_FAIL') == 'noadd':\n"
+            " if os.environ.get('BSS_TEST_FAIL') in ('noadd', 'midpage'):\n"
             "  with open(board_path + '.hidden', 'w') as output: json.dump(row, output)\n"
             "  print(f'https://github.com/altharmz/bss/issues/{number}')\n"
             "  sys.exit(0)\n"
@@ -191,6 +191,15 @@ class StartupTests(unittest.TestCase):
             "cursor = next((a for a in args if a.startswith('cursor=')), None)\n"
             "index = int(cursor.rsplit('-', 1)[1]) if cursor else 0\n"
             "key = 'BSS_TEST_BOARD' if 'items(first:' in document else 'BSS_TEST_PRS'\n"
+            "hidden = board_path + '.hidden'\n"
+            "midpage = os.environ.get('BSS_TEST_FAIL') == 'midpage' and os.path.exists(hidden)\n"
+            "if midpage and key == 'BSS_TEST_BOARD' and cursor:\n"
+            " # the board automation adds the issue between page 1 and page 2 of one read\n"
+            " with open(hidden) as source: row = json.load(source)\n"
+            " os.remove(hidden)\n"
+            " board[-1]['node']['items']['nodes'].append(row)\n"
+            " for page in board: page['node']['items']['totalCount'] += 1\n"
+            " with open(board_path, 'w') as output: json.dump(board, output)\n"
             "with open(os.environ[key]) as source: data = json.load(source)\n"
             "print(json.dumps({'data': data[index]}))\n"
         )
@@ -782,6 +791,30 @@ class StartupTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("adding it directly", result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual((data["issue"], data["status"]), (82, "Ready"))
+        item = self.remote_item()
+        self.assertEqual(item["content"]["number"], 82)
+        self.assertEqual(task.status(item), "Ready")
+
+    def test_new_priority_task_survives_the_board_automation_landing_mid_read(self):
+        # Two board pages; the automation adds the new issue between them, so one poll
+        # sees the item count change. That is the awaited event, not a failure (#242).
+        self.board([issue(81), issue(80, "P3")], split=1)
+        self.env.update(BSS_TEST_FAIL="midpage", BSS_BOARD_ADD_WAIT="2")
+        result = self.call(
+            [
+                "make",
+                "--no-print-directory",
+                "new-priority-task",
+                "TITLE=Mid-read automation",
+                "BODY=Goal",
+                "JSON=1",
+            ],
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("adding it directly", result.stderr)
         data = json.loads(result.stdout)
         self.assertEqual((data["issue"], data["status"]), (82, "Ready"))
         item = self.remote_item()

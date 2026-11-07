@@ -90,6 +90,10 @@ class StartupError(Exception):
     pass
 
 
+class PaginationChanged(StartupError):
+    """The board's item count changed between two pages of one read."""
+
+
 def run(*args, cwd=None, check=True):
     env = {
         key: value
@@ -195,7 +199,7 @@ def pages(document, connection, **variables):
         if expected is None:
             expected = page["totalCount"]
         if page["totalCount"] != expected:
-            raise StartupError("GitHub state changed during pagination; retry")
+            raise PaginationChanged("GitHub state changed during pagination; retry")
         rows.extend(page["nodes"])
         if not page["pageInfo"]["hasNextPage"]:
             if len(rows) != expected:
@@ -341,6 +345,20 @@ def snapshot():
     return pages(BOARD_QUERY, board_page, project=PROJECT)
 
 
+def settled_snapshot(tries=3):
+    """A board read for checking our own just-made change, not for selecting work: a
+    concurrent addition (e.g. a late board automation) is retried, not fatal. Task
+    selection keeps snapshot(), which refuses a board that changes while it reads."""
+    for attempt in range(tries):
+        try:
+            return snapshot()
+        except PaginationChanged:
+            if attempt == tries - 1:
+                raise
+            time.sleep(float(os.environ.get("BSS_GH_RETRY_PAUSE", "2")))
+    raise AssertionError("unreachable")
+
+
 def ownership(item):
     return {n["name"] for n in nodes(item["content"]["labels"])}
 
@@ -374,7 +392,12 @@ def board_item(number):
 def wait_for_board_item(number, seconds):
     """Poll for the issue's board item; the project's own automation adds it, usually in seconds."""
     for attempt in range(int(seconds) + 1):
-        created = board_item(number)
+        try:
+            created = board_item(number)
+        except PaginationChanged:
+            # The board has more than one page, and the automation this loop waits for
+            # added the item between two of them: the item is arriving, poll again.
+            created = None
         if created is not None:
             return created
         if attempt < int(seconds):
@@ -425,7 +448,7 @@ def prioritize(number, url, title):
             project=PROJECT,
             item=created["id"],
         )
-        items = snapshot()
+        items = settled_snapshot()
         if (
             not items
             or items[0]["id"] != created["id"]
