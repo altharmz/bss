@@ -312,6 +312,11 @@ One JSON line per tool call (logger `bss_mcp.audit`, the container's log): `time
 log). **Never** bodies, arguments, codes,
 tokens or passwords (a test checks the log for each).
 
+`GET /metrics` (Prometheus text format; 404 until `BSS_METRICS_TOKEN` is set, then a bearer
+token) counts the same events: tool calls by tool and outcome, their duration by outcome,
+and the OAuth events by result. It is fed from the audit function, so the two agree.
+See [ops/monitoring/README.md](../ops/monitoring/README.md).
+
 ## Production
 
 - **Service** `mcp` in `compose.prod.yaml`: the app's image, `uvicorn bss_mcp.main:app`,

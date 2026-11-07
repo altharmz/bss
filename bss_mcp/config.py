@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     # service is called `app`); locally `http://app:8080`.
     bss_api_url: str = "http://app:8080"
     bss_service_secret: str = ""
+    # GET /metrics (bss_mcp/metrics.py): empty = off (404), else the bearer token the scraper
+    # sends - the app's BSS_METRICS_TOKEN, the same value. BSS_BUILD is the image tag.
+    bss_metrics_token: str = ""
+    bss_build: str = "dev"
     # How clients reach this service (no trailing slash); the OAuth issuer and the
     # protected resource (`<url>/mcp`) are built from it.
     mcp_public_url: str = "http://localhost:8090"
