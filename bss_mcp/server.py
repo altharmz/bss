@@ -19,6 +19,7 @@ Request path for /mcp, outermost first:
 import json
 import logging
 import math
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -40,7 +41,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from bss_mcp import schema
+from bss_mcp import metrics, schema
 from bss_mcp.audit import audit
 from bss_mcp.auth import WRITE, TokenVerifier, caller
 from bss_mcp.bss import Bss
@@ -251,6 +252,7 @@ def build_app(
     transport to the in-process app, and may pass their own tools."""
     clock = clock or Clock()
     store = store or Store(settings.mcp_store, clock)
+    metrics.set_build_info(settings.bss_build)
     # filled at startup (lifespan) from the app's operations, unless a test passes its own;
     # Guard and the handlers hold this same dict
     given_tools = tools is not None
@@ -278,8 +280,17 @@ def build_app(
         assert token is not None and token.subject is not None
         principal = token.subject
 
+        started = time.perf_counter()  # a duration, not the wall clock
+
         def done(outcome: str | int) -> None:
-            audit(clock, event="tool_call", principal=principal, tool=params.name, outcome=outcome)
+            audit(
+                clock,
+                event="tool_call",
+                principal=principal,
+                tool=params.name,
+                outcome=outcome,
+                seconds=time.perf_counter() - started,
+            )
 
         tool = tools.get(params.name)
         if tool is None:
@@ -381,6 +392,7 @@ def build_app(
     return Starlette(
         routes=[
             Route("/healthz", healthz, methods=["GET"]),
+            Route("/metrics", metrics.endpoint(settings), methods=["GET"]),
             Route("/mcp", mcp_endpoint),
             *oauth_routes(provider, login),
         ],

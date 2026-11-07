@@ -14,3 +14,5 @@ mcp==2.3.0
 # The vendored TMF specs, read at runtime by app/api/specschema.py (libyaml's CSafeLoader;
 # already in constraints.txt through mcp).
 PyYAML==6.0.3
+# Prometheus text exposition for GET /metrics (app/metrics.py, bss_mcp); no dependencies.
+prometheus-client==0.26.0

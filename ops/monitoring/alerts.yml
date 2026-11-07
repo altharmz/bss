@@ -1,0 +1,63 @@
+groups:
+  - name: bss
+    rules:
+      - alert: BssAppDown
+        expr: up{job="bss-app"} == 0
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: The bss app has not answered a scrape for 5 minutes.
+
+      - alert: BssDbDown
+        expr: bss_db_up == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: The bss app cannot read its database.
+
+      - alert: BssHigh5xxRate
+        expr: |
+          sum(rate(bss_http_requests_total{status=~"5.."}[10m]))
+            / sum(rate(bss_http_requests_total[10m])) > 0.05
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: More than 5% of HTTP requests answered 5xx over 10 minutes.
+
+      - alert: BssSlowRequests
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(bss_http_request_duration_seconds_bucket[10m]))) > 2
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: The 95th percentile request latency is above 2 s over 10 minutes.
+
+      - alert: BssBillingRunStale
+        expr: bss_billing_last_run_age_seconds > 26 * 3600
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: The latest billing run finished more than 26 hours ago.
+
+      - alert: BssQueueStuck
+        expr: bss_queue_oldest_pending_age_seconds > 3600
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "The queue {{ $labels.queue }} has had a pending row for over an hour."
+
+      - alert: BssQueueFailed
+        expr: bss_queue_failed > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "The queue {{ $labels.queue }} has rows that need an operator."
+
+      - alert: BssMcpErrors
+        expr: |
+          sum(rate(bss_mcp_tool_calls_total{outcome=~"server_error|timeout"}[15m])) > 0
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: MCP tool calls are ending in server errors or timeouts.

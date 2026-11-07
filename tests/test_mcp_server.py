@@ -302,3 +302,56 @@ def test_token_names_are_unique(mcp_settings):
 @pytest.mark.smoke
 def test_healthz(mcp):
     assert mcp.client.get("/healthz").json() == {"status": "ok"}
+
+
+# --- metrics (issue #240) ---
+
+METRICS_TOKEN = "scrape-token-for-tests"
+
+
+def metric(text: str, name: str, **labels) -> float:
+    for line in text.splitlines():
+        if line.startswith(name + "{") and all(f'{k}="{v}"' in line for k, v in labels.items()):
+            return float(line.rsplit(" ", 1)[1])
+    return 0.0
+
+
+@pytest.fixture
+def scraped(mcp, mcp_settings):
+    mcp_settings.bss_metrics_token = METRICS_TOKEN
+    return lambda: (
+        mcp.client.get("/metrics", headers={"Authorization": f"Bearer {METRICS_TOKEN}"}).text
+    )
+
+
+def test_metrics_is_404_without_a_token_and_401_with_a_wrong_one(mcp, mcp_settings):
+    assert mcp.client.get("/metrics").status_code == 404
+    mcp_settings.bss_metrics_token = METRICS_TOKEN
+    assert mcp.client.get("/metrics").status_code == 401
+    wrong = mcp.client.get("/metrics", headers={"Authorization": "Bearer nope"})
+    assert wrong.status_code == 401
+    ok = mcp.client.get("/metrics", headers={"Authorization": f"Bearer {METRICS_TOKEN}"})
+    assert ok.status_code == 200
+    assert ok.headers["content-type"].startswith("text/plain; version=0.0.4")
+    assert "bss_build_info" in ok.text
+
+
+def test_a_tool_call_and_a_refused_write_are_counted(mcp, scraped):
+    before = scraped()
+    reader = mcp.token("reader", "read")
+    is_error, _ = mcp.result(reader, "list_customers", {"limit": 1})
+    assert not is_error
+    assert mcp.call(reader, "create_individual", {"body": GIVEN}).status_code == 403
+    after = scraped()
+    ok = {"tool": "list_customers", "outcome": "ok"}
+    assert metric(after, "bss_mcp_tool_calls_total", **ok) == (
+        metric(before, "bss_mcp_tool_calls_total", **ok) + 1
+    )
+    refused = {"tool": "create_individual", "outcome": "forbidden"}
+    assert metric(after, "bss_mcp_tool_calls_total", **refused) == (
+        metric(before, "bss_mcp_tool_calls_total", **refused) + 1
+    )
+    assert metric(after, "bss_mcp_tool_call_duration_seconds_count", outcome="ok") > 0
+    assert "list_customers" not in "".join(
+        line for line in after.splitlines() if "duration_seconds" in line
+    )

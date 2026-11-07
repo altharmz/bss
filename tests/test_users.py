@@ -58,6 +58,19 @@ def test_every_route_inherits_authentication():
     }
 
 
+def test_metrics_is_token_protected_not_open(client, monkeypatch):
+    # never in OPEN: authenticate() answers it with the bearer-token rule, not a session
+    assert ("GET", "/metrics") not in OPEN
+    assert client.get("/metrics").status_code == 404  # disabled by default
+    monkeypatch.setattr(settings, "bss_metrics_token", "t0ken")
+    assert client.get("/metrics").status_code == 401
+    assert client.get("/metrics", headers={"Authorization": "Bearer t0ken"}).status_code == 200
+    # a session cookie does not open it
+    login(client)
+    assert client.get("/metrics").status_code == 401
+    assert client.post("/metrics").status_code in {401, 405}
+
+
 def test_new_routes_also_inherit_authentication(client):
     before = len(app.routes)
     try:

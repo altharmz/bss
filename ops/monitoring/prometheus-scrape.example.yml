@@ -1,0 +1,26 @@
+# Scrape jobs for the bss app and the MCP connector. Merge into prometheus.yml (or the
+# Alloy / VictoriaMetrics equivalent) and adjust the targets to the host that serves them.
+# 60 s: the VPS has one vCPU, and the database series are cached for 30 s anyway.
+# The token file holds BSS_METRICS_TOKEN (one line, no newline needed).
+scrape_configs:
+  - job_name: bss-app
+    scheme: https
+    metrics_path: /metrics
+    scrape_interval: 60s
+    authorization:
+      credentials_file: /etc/prometheus/bss-metrics-token
+    static_configs:
+      - targets: ["bss.example.org"]
+
+  - job_name: bss-mcp
+    scheme: https
+    # the Caddy route rewrites /mcp-metrics to the connector's /metrics (see README.md)
+    metrics_path: /mcp-metrics
+    scrape_interval: 60s
+    authorization:
+      credentials_file: /etc/prometheus/bss-metrics-token
+    static_configs:
+      - targets: ["bss.example.org"]
+
+rule_files:
+  - alerts.yml

@@ -367,3 +367,34 @@ via a temp file and `mv`. `make deployed` prints it and `git log <commit>..HEAD`
 never write it: Claude's Edit deny rule, `.codex/patch-guard.sh` and a guard.sh rule
 against shell writes (cases in `guard-cases.txt`). The VPS's `~/bss/DEPLOYED` stays the
 authority; `.deployed` is the workstation's copy of the last deploy made from it.
+
+## Metrics (2026-11-07)
+
+Issue #240. An external monitor (Prometheus, Grafana Cloud, VictoriaMetrics, Datadog's
+OpenMetrics check) scrapes `GET /metrics` on the app and on mcp; the kit is in
+[`ops/monitoring/`](../../ops/monitoring/README.md).
+
+- **Library:** `prometheus-client`, pinned like every dependency; one non-default registry per
+  service plus the process and platform collectors.
+- **Endpoint and access:** not in the OpenAPI schema (so no MCP tool, no `docs/api`, no scope
+  item). Off (404) unless `BSS_METRICS_TOKEN` is set, the same value on app and mcp; then a
+  bearer token compared with `hmac.compare_digest`, else 401. The app's check lives in
+  `authenticate` (`app/auth.py`), so the route-protection test covers it; `/metrics` is not in
+  `OPEN`.
+- **HTTP series (app):** one pure ASGI middleware; labels are the method, the matched route
+  template (`unmatched` otherwise) and the status - never an id, a raw path or an amount.
+  `/metrics` and `/healthz` are excluded. The duration uses `time.perf_counter()`: a
+  monotonic duration is not a read of the wall clock.
+- **Database series (app):** a custom collector reads queue depth and age, billing freshness
+  (`app/status.py`'s logic) and product counts in one read-only transaction with a 2 s
+  statement timeout, cached for 30 s with `app/clock.py`. On any error only `bss_db_up 0` is
+  exported: never stale values. The queue-to-status mapping is one dict in `app/metrics.py`.
+  `bss_prepaid_lines` is not exported: no prepaid lifecycle state comes from one indexed query.
+- **Worker:** no endpoint (no HTTP server there); its health shows in the queue and billing
+  series. No pushgateway.
+- **MCP series:** fed from `bss_mcp.audit.audit`, so the audit log and the counters agree. The
+  duration histogram has no tool label; OAuth results are a bounded set.
+- **Build:** compose passes `BSS_BUILD: ${TAG:-dev}` to app, worker and mcp; `scripts/deploy.sh`
+  is unchanged.
+- **Exposure on the VPS is the human's step:** the Caddy route in vps-infra, the token in
+  `.env.prod`, the scraper.
