@@ -57,6 +57,7 @@ import {
   type ProductAction,
 } from './ProductActions';
 import { PaymentMethodsPanel } from './PaymentMethods';
+import { BuyAddOnDialog, canBuyAddOn, PlanFacts, RenewalHistory } from './PrepaidPlans';
 import { PrepaidMoneyModal, type MoneyForm } from './PrepaidMoney';
 import { FailedCommands, OrderWatch } from './PrepaidOrderWatch';
 import { PrepaidTransferModal, TransferWatch } from './PrepaidTransfer';
@@ -241,6 +242,7 @@ function Card({
     change: ProductAction;
     immediate: boolean;
   } | null>(null);
+  const [addOnFor, setAddOnFor] = useState<AccountProduct | null>(null);
   const [balanceAction, setBalanceAction] = useState<string | null>(null);
   const [numberProduct, setNumberProduct] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -563,6 +565,7 @@ function Card({
                       account={account}
                       product={product}
                       onNumber={() => setNumberProduct(product.id)}
+                      onBuyAddOn={() => setAddOnFor(product)}
                       onPick={(change, immediate) =>
                         setProductDialog({ product, change, immediate })
                       }
@@ -815,6 +818,25 @@ function Card({
         />
       )}
 
+      {addOnFor !== null && (
+        <BuyAddOnDialog
+          account={account}
+          product={addOnFor}
+          onTopUp={(amount) => {
+            setAddOnFor(null);
+            setMoneyAmount(amount);
+            setMoney('topup');
+          }}
+          onClose={() => setAddOnFor(null)}
+          onRefresh={reload}
+          onDone={(message, accepted) => {
+            setAddOnFor(null);
+            toast(message);
+            if (accepted?.id) onWatch(watch('order', accepted.id, accepted.label));
+            reload();
+          }}
+        />
+      )}
       {productDialog !== null && productDialog.change === 'offering' && (
         <ChangeOfferingDialog
           account={account}
@@ -1144,6 +1166,7 @@ function ProductRow({
   onTopUp,
   onPick,
   onNumber,
+  onBuyAddOn,
 }: {
   account: Account;
   product: AccountProduct;
@@ -1151,6 +1174,7 @@ function ProductRow({
   onTopUp: (amount: string) => void;
   onPick: (change: ProductAction, immediate: boolean) => void;
   onNumber: () => void;
+  onBuyAddOn: () => void;
 }) {
   const context = useSystemContext();
   const [busy, setBusy] = useState(false);
@@ -1207,12 +1231,14 @@ function ProductRow({
             <div>
               <span className="bss-name">{name}</span>
               <div className="bss-code">{code}</div>
+              <PlanFacts product={product} />
               {fundingWait !== null && (
                 <div className="bss-secondary">
                   Waiting for funds: short {formatCents(toCents(fundingWait.shortfall))}
                 </div>
               )}
               {problem !== null && <Note tone="negative">{problem}</Note>}
+              <RenewalHistory product={product} />
             </div>
           ),
           number: <span className="bss-dash">—</span>,
@@ -1258,6 +1284,15 @@ function ProductRow({
               onPick={(change) => onPick(change, false)}
               extra={[
                 { label: 'Subscriber number', onClick: onNumber },
+                ...(canBuyAddOn(product, context.businessDate)
+                  ? [
+                      {
+                        label: 'Buy add-on…',
+                        ui: 'ui.subscriber.buyAddOnItem',
+                        onClick: onBuyAddOn,
+                      },
+                    ]
+                  : []),
                 ...(fundingWait !== null
                   ? [
                       {

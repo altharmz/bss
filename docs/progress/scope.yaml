@@ -445,6 +445,12 @@ items:
   - {id: ui.subscriber.productChange, area: ui, stage: 5, title: "Product change dialog (suspend, resume, end)"}
   - {id: ui.subscriber.pendingChange, area: ui, stage: 5, title: "Pending change line on a product"}
   - {id: ui.subscriber.changeOffering, area: ui, stage: 5, title: "Change offering menu item"}
+  - {id: ui.subscriber.planFacts, area: ui, stage: 5, title: "Prepaid product row: offering kind, how it renews, an add-on's plan and end date"}
+  - {id: ui.subscriber.renewalHistory, area: ui, stage: 5, title: "Renewal history of a prepaid product: period, amount, tax, funding and bill"}
+  - {id: ui.subscriber.buyAddOnItem, area: ui, stage: 5, title: "Buy add-on menu item on a plan product"}
+  - {id: ui.subscriber.buyAddOn, area: ui, stage: 5, title: "Buy add-on dialog: add-on offerings and the TMF622 add order with an addOn relationship"}
+  - {id: ui.subscriber.buyAddOn.quote, area: ui, stage: 5, title: "Add-on price with taxes and fees from the first-charge quote"}
+  - {id: ui.subscriber.buyAddOn.topUp, area: ui, stage: 5, title: "Top up the add-on shortfall"}
   - {id: ui.subscriber.offeringChange, area: ui, stage: 5, title: "Change offering dialog (both modes)"}
   - {id: ui.subscriber.undoChange, area: ui, stage: 5, title: "Undo a pending change (cancel its order)"}
   - {id: ui.subscriber.topUpProduct, area: ui, stage: 5, title: "Top up from a funding-suspended product"}
@@ -518,6 +524,9 @@ items:
   - {id: ui.catalog.offeringDetail, area: ui, stage: 5, title: "Offering detail dialog"}
   - {id: ui.catalog.lifecycle, area: ui, stage: 5, title: "Offering lifecycle step (Activate / Retire)"}
   - {id: ui.catalog.addPrice, area: ui, stage: 5, title: "Add a one-time or monthly recurring price"}
+  - {id: ui.catalog.offeringKind, area: ui, stage: 5, title: "Set the offering kind: plan, add-on or pay as you go"}
+  - {id: ui.catalog.kind, area: ui, stage: 5, title: "Offering kind in the offering detail"}
+  - {id: ui.catalog.oneTimePrices, area: ui, stage: 5, title: "One-time prices (activation fee) in the offering detail"}
   - {id: ui.catalog.changePrice, area: ui, stage: 5, title: "Change price of a live offering"}
   - {id: ui.catalog.editOffering, area: ui, stage: 5, title: "Edit an offering (fields, code, specification, categories)"}
   - {id: ui.catalog.deleteOffering, area: ui, stage: 5, title: "Delete an offering with no prices"}

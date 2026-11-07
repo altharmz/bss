@@ -8,7 +8,9 @@ import {
   deleteOffering,
   lastValidDate,
   loadCategories,
+  KIND_LABEL,
   loadOfferingDetail,
+  loadOneTimePrices,
   hasOpenPrice,
   loadCatalog,
   NEXT_LIFECYCLE,
@@ -640,6 +642,8 @@ export function OfferingModal({
               <>
                 <dt>Description</dt>
                 <dd>{detail.data.description ?? <span className="bss-dash">—</span>}</dd>
+                <dt>Offering kind</dt>
+                <dd data-ui="ui.catalog.kind">{KIND_LABEL[detail.data.kind]}</dd>
                 <dt>Sellable</dt>
                 <dd>{detail.data.isSellable ? 'yes' : 'no'}</dd>
                 <dt>Categories</dt>
@@ -703,6 +707,7 @@ export function OfferingModal({
               )}
             </dd>
           </dl>
+          {detail.status === 'ok' && <OneTimePrices detail={detail.data} />}
           {detail.status === 'ok' && (
             <Button small onClick={() => setAddingPrice(true)}>
               Add price…
@@ -732,6 +737,30 @@ export function OfferingModal({
         <PriceModal priceId={price} onClose={() => setPrice(null)} onChanged={onChanged} />
       )}
     </>
+  );
+}
+
+/** The offering's one-time prices (an activation fee, an add-on's price): what a purchase
+ * charges once, with its taxes, besides any recurring price. */
+function OneTimePrices({ detail }: { detail: OfferingDetail }) {
+  const context = useSystemContext();
+  const ids = detail.priceRefs.map((p) => p.id);
+  const fees = useResource(`one-time:${detail.id}:${ids.join(',')}`, (signal) =>
+    loadOneTimePrices(ids, signal),
+  );
+  if (fees.status !== 'ok' || fees.data.length === 0) return null;
+  return (
+    <dl className="bss-details" data-ui="ui.catalog.oneTimePrices">
+      <dt>One-time prices</dt>
+      <dd>
+        {fees.data.map((p) => (
+          <div key={p.id} className="num">
+            {formatCents(p.cents)} {p.currency} · from {businessDate(p.from, context.timeZone)}
+            {p.to === null ? '' : ` to ${lastValidDay(p.to, context.timeZone)}`}
+          </div>
+        ))}
+      </dd>
+    </dl>
   );
 }
 

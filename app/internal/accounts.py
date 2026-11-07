@@ -23,7 +23,7 @@ from app.billing import entitlement, lifecycle
 from app.billing.core import compute, cycle_period, price_at, product_charge_period
 from app.billing.engine_tax import TaxUnavailable, quote_taxes
 from app.billing.model import Account, BillingState, DateRange, MissingPrice, Price, Product
-from app.billing.prepaid import IntervalQuote
+from app.billing.prepaid import IntervalQuote, fee_quotes
 from app.billing.termination import credit
 from app.config import settings
 from app.internal.context import no_query
@@ -154,6 +154,8 @@ def first_charge(account_id: str, request: Request, tx: Tx, clock: ClockDep) -> 
             try:
                 price = price_at(product, start, state.prices, account.currency, tz)
             except MissingPrice:
+                if offering_kind.kind_of(offering["details"]) != offering_kind.PLAN:
+                    return _fees_first_charge(conn, row, offering, start, account, today)
                 raise unprocessable(
                     f"productOffering {offering['name']} has no recurring price in"
                     f" {account.currency} valid on {start}"
@@ -249,6 +251,9 @@ def _prepaid_first_charge(
     currency = account.currency
     run_date = max(start, today)
     unused = None if changed is None else _unused_credit(conn, row["id"], changed, start)
+    fees = _quote_fees(conn, account, offering["id"], start, tz) if changed is None else []
+    required += sum((f.gross for f in fees), Decimal(0))
+    shortfall = max(Decimal(0), required - available)
     return TmfJSONResponse(
         {
             "billingAccount": {"id": str(row["id"])},
@@ -273,6 +278,72 @@ def _prepaid_first_charge(
             "available": money(available, currency),
             "shortfall": money(shortfall, currency),
             **({} if unused is None else {"credit": money(unused, currency)}),
+            **({"fees": _fee_lines(fees, currency)} if fees else {}),
+        }
+    )
+
+
+def _quote_fees(conn, account: Account, offering_id: UUID, start: date, tz: ZoneInfo):
+    try:
+        return fee_quotes(conn, account, offering_id, start, tz)
+    except TaxUnavailable as error:
+        raise TmfError(503, f"tax engine unavailable: {error}") from None
+
+
+def _fee_lines(fees, currency: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": f.name,
+            "amount": money(f.amount, currency),
+            "tax": money(f.gross - f.amount, currency),
+            "gross": money(f.gross, currency),
+        }
+        for f in fees
+    ]
+
+
+def _fees_first_charge(
+    conn, row: Row, offering: Row, start: date, account: Account, today: date
+) -> TmfJSONResponse:
+    """An add-on or pay-as-you-go offering has no recurring price: its purchase charges its
+    one-time fees, held now (they start today). The one-day period is the fee's own."""
+    tz = ZoneInfo(settings.billing_tz)
+    fees = _quote_fees(conn, account, offering["id"], start, tz)
+    if not fees:
+        raise unprocessable(
+            f"productOffering {offering['name']} has no one-time price in"
+            f" {account.currency} valid on {start}"
+        )
+    required = sum((f.gross for f in fees), Decimal(0))
+    snapshot = funding.load(conn, row["id"])
+    available = max(Decimal(0), snapshot.spendable)
+    shortfall = max(Decimal(0), required - available)
+    currency = account.currency
+    period = DateRange(start, start + timedelta(days=1))
+    run_date = max(start, today)
+    return TmfJSONResponse(
+        {
+            "billingAccount": {"id": str(row["id"])},
+            "productOffering": {"id": str(offering["id"]), "name": offering["name"]},
+            "startDate": start,
+            "period": _range(period),
+            "cyclePeriod": _range(period),
+            "billableDays": 1,
+            "periodDays": 1,
+            "prorated": False,
+            "price": money(Decimal(0), currency),
+            "amount": money(required, currency),
+            "chargeRunDate": run_date,
+            "billDate": run_date,
+            "next": None,
+            "balance": money(snapshot.ledger, currency),
+            "balanceAfter": money(snapshot.ledger - required, currency),
+            "creditLimit": None,
+            "exceedsCreditLimit": shortfall > 0,
+            "required": money(required, currency),
+            "available": money(available, currency),
+            "shortfall": money(shortfall, currency),
+            "fees": _fee_lines(fees, currency),
         }
     )
 

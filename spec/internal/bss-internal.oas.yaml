@@ -1656,6 +1656,22 @@ components:
             dates of the product's paid interval, tax included; not counted on to fund the
             new interval.
           allOf: [{$ref: '#/components/schemas/Money'}]
+        fees:
+          description: >-
+            Prepaid accounts only; absent without fees. The one-time fees charged with the
+            purchase (a `oneTime` price valid on the start date), taxed like any charge and
+            included in `required` and `amount`. An add-on or pay-as-you-go offering has no
+            recurring price: its quote is these fees alone, with price zero and a one-day period.
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, amount, tax, gross]
+            properties:
+              name: {type: string}
+              amount: {allOf: [{$ref: '#/components/schemas/Money'}], description: Before tax.}
+              tax: {$ref: '#/components/schemas/Money'}
+              gross: {allOf: [{$ref: '#/components/schemas/Money'}], description: Tax included.}
     LifecycleSettings:
       type: object
       additionalProperties: false

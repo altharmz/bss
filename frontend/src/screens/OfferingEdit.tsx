@@ -4,6 +4,8 @@ import { useState } from 'react';
 import {
   deletePrice,
   endPrice,
+  KIND_LABEL,
+  OFFERING_KINDS,
   loadCategories,
   loadPriceDetail,
   offeringChanges,
@@ -13,6 +15,7 @@ import {
   priceChanges,
   type OfferingDetail,
   type OfferingEditFields,
+  type OfferingKind,
   type PriceDetail,
   type PriceEditFields,
   type Specification,
@@ -141,6 +144,24 @@ export function OfferingEditModal({
           </SelectField>
           <span className="bss-secondary">
             The server refuses it once the offering was ordered.
+          </span>
+        </label>
+        <label>
+          Offering kind
+          <SelectField
+            data-ui="ui.catalog.offeringKind"
+            value={form.kind}
+            onChange={(e) => set('kind', e.target.value as OfferingKind)}
+          >
+            {OFFERING_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {KIND_LABEL[k]}
+              </option>
+            ))}
+          </SelectField>
+          <span className="bss-secondary">
+            Only a plan has a recurring price; an add-on or a pay-as-you-go line is charged its
+            one-time price.
           </span>
         </label>
         <Checkbox
