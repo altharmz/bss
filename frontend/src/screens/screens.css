@@ -1713,3 +1713,49 @@
 .bss-inspector-figure {
   font: var(--type-figure);
 }
+
+/* --- usage tab (docs/decisions/usage.md) --- */
+.usage-allowance {
+  padding: var(--space-md) 0;
+}
+.usage-allowance-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+.usage-bar {
+  position: relative;
+  height: 8px;
+  margin: var(--space-sm) 0;
+  background: var(--color-bg-sunken);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.usage-bar-fill {
+  width: var(--usage-fill, 0%);
+  height: 100%;
+  background: var(--color-primary);
+}
+.usage-bar-fill.warn {
+  background: var(--color-warning);
+}
+.usage-bar-fill.full {
+  background: var(--color-negative);
+}
+.usage-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--color-ink-3);
+}
+.usage-mark-80 {
+  left: 80%;
+}
+.usage-marks,
+.usage-flags,
+.usage-record-flags {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}

@@ -167,6 +167,10 @@ Edit form's **Financial account** select (`ui.subscriber.financialLink`, from
 `GET .../financialAccount?relatedParty.id=`) links or unlinks (`financialAccount` ref or `null` in
 the PATCH).
 
+### Usage tab (`ui.subscriber.usage`) - `screens/UsageTab.tsx`
+
+Prepaid-only tab, before Balance actions, on the subscriber card (`#usage`). It is mounted only while shown, so the card makes no usage request until it is opened. Lines are the account's plan and pay-as-you-go products (a select when there are several). Allowance panel from `GET /internal/v1/usage/summary?product.id=`: the period (end excluded), one bar per kind (data, voice, SMS) with used / included / remaining and the server's percent, a tick at 80%, the `80% reached` and `100% reached` badges from `thresholds`, a Throttled badge, and for a pay-as-you-go line the balance, unrated records and a Barred badge; a kind with nothing included shows only used. Nothing is computed in the UI. Records panel from TMF635 `GET /productUsage?product.id=` (newest first, 25 per page, Previous/Next by `X-Total-Count`): time in the business zone, kind, quantity, Roaming and Throttled tags. The summary and the records fail and retry independently. Read-only: no write request.
+
 ### Balance actions (`ui.subscriber.prepaid.history`, `ui.subscriber.prepaid.historyDetail`) - `screens/PrepaidHistory.tsx`
 
 The prepaid tab also shows Account total (`ui.subscriber.prepaid.accountTotal`): a KeyValue
