@@ -1696,6 +1696,167 @@ describe('prepaid card', () => {
   });
 });
 
+describe('usage tab', () => {
+  const SUMMARY = `GET /internal/v1/usage/summary?product.id=${P1}`;
+  const RECORDS = `GET /tmf-api/productUsageManagement/v5/productUsage?product.id=${P1}&offset=0&limit=25`;
+  const PREPAID = accountBody(
+    A,
+    { id: C, name: 'Olga Kuznetsova' },
+    {
+      ratingType: 'prepaid',
+      accountBalance: [
+        { balanceType: 'currentBalance', amount: usd(120), '@type': 'AccountBalance' },
+      ],
+    },
+  );
+  const MIB = 1024 ** 2;
+  const plan = product(P1, {
+    offeringKind: 'plan',
+    paidThrough: '2026-10-20',
+    suspensionCause: null,
+    needs_topup: null,
+  });
+  const summary = (over: Record<string, unknown> = {}) => ({
+    product: { id: P1, href: '' },
+    date: '2026-10-01',
+    period: { startDate: '2026-09-20', endDate: '2026-10-20' },
+    allowances: [
+      {
+        kind: 'data',
+        unit: 'bytes',
+        used: 850 * MIB,
+        included: 1000 * MIB,
+        remaining: 150 * MIB,
+        percent: 85,
+        thresholds: [80],
+      },
+      {
+        kind: 'voice',
+        unit: 'seconds',
+        used: 600,
+        included: 6000,
+        remaining: 5400,
+        percent: 10,
+        thresholds: [],
+      },
+      {
+        kind: 'sms',
+        unit: 'messages',
+        used: 3,
+        included: 0,
+        remaining: 0,
+        percent: null,
+        thresholds: [],
+      },
+    ],
+    throttled: true,
+    payAsYouGo: null,
+    ...over,
+  });
+  const record = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    status: 'notRated',
+    usageType: 'data',
+    usageCharacteristic: [
+      { name: 'quantity', value: 5 * MIB },
+      { name: 'unit', value: 'bytes' },
+      { name: 'eventTime', value: '2026-10-01T06:00:00Z' },
+      { name: 'roaming', value: true },
+      { name: 'throttled', value: false },
+    ],
+    ...over,
+  });
+  const lazy = (routes: Record<string, Handler>) =>
+    backend(
+      {
+        [`GET ${INTERNAL}/products`]: () => json([plan], { total: 1 }),
+        [`GET /tmf-api/prepayBalanceManagement/v4/bucket?partyAccount.id=${A}&offset=0&limit=100`]:
+          () => json([], { total: 0 }),
+        ...routes,
+      },
+      PREPAID,
+    );
+
+  it('shows allowance bars with used, included, remaining and the marks', async () => {
+    lazy({
+      [SUMMARY]: () => json(summary()),
+      [RECORDS]: () => json([record('u1')], { total: 1 }),
+    });
+    await open('#usage');
+    const data = await waitFor(() => expectUi('ui.subscriber.usage.data'));
+    expect(data.textContent).toContain('850.0 MB of 1000.0 MB');
+    expect(data.textContent).toContain('150.0 MB left');
+    expect(data.textContent).toContain('80% reached');
+    expect(within(data).getByRole('progressbar').getAttribute('aria-valuenow')).toBe('85');
+    expect(expectUi('ui.subscriber.usage.voice').textContent).toContain('10 min 0 s of 100 min');
+    expect(expectUi('ui.subscriber.usage.sms').textContent).toContain('nothing included');
+    expect(within(expectUi('ui.subscriber.usage.throttled')).getByText('Throttled')).toBeTruthy();
+    expect(screen.getByText('2026-09-20 – 2026-10-20 (end excluded)')).toBeTruthy();
+  });
+
+  it('lists the records with roaming and pages them', async () => {
+    const second = `GET /tmf-api/productUsageManagement/v5/productUsage?product.id=${P1}&offset=25&limit=25`;
+    lazy({
+      [SUMMARY]: () => json(summary({ throttled: false })),
+      [RECORDS]: () => json([record('u1')], { total: 26 }),
+      [second]: () => json([record('u2', { usageType: 'sms' })], { total: 26 }),
+    });
+    await open('#usage');
+    expect(await screen.findByText('Roaming')).toBeTruthy();
+    expect(screen.getByText('2026-10-01 09:00:00')).toBeTruthy();
+    expect(screen.getByText('5.0 MB')).toBeTruthy();
+    expect(screen.queryByText('Throttled', { selector: '.bss-badge' })).toBeNull();
+    fireEvent.click(expectUi('ui.subscriber.usage.next'));
+    expect(await screen.findByText('Showing 26–26 of 26')).toBeTruthy();
+    expect(expectUi('ui.subscriber.usage.next').hasAttribute('disabled')).toBe(true);
+  });
+
+  it('asks nothing of usage until the tab is opened', async () => {
+    const { fetchMock } = lazy({
+      [SUMMARY]: () => json(summary()),
+      [RECORDS]: () => json([], { total: 0 }),
+    });
+    await open();
+    await within(expectUi('ui.subscriber.moneyStrip')).findByText('Ledger');
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('usage'))).toBe(false);
+  });
+
+  it('reports a failing summary with a retry, records unaffected', async () => {
+    let fail = true;
+    lazy({
+      [SUMMARY]: () => (fail ? tmfError(503, 'Unavailable') : json(summary())),
+      [RECORDS]: () => json([record('u1')], { total: 1 }),
+    });
+    await open('#usage');
+    expect(await screen.findByText('Failed to load the usage summary')).toBeTruthy();
+    expect(await screen.findByText('Roaming')).toBeTruthy();
+    fail = false;
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    expect(await screen.findByText(/150.0 MB left/)).toBeTruthy();
+  });
+
+  it('shows the pay-as-you-go balance and a barred line', async () => {
+    lazy({
+      [SUMMARY]: () =>
+        json(
+          summary({
+            payAsYouGo: {
+              balance: { unit: 'USD', value: -2.5 },
+              barred: true,
+              barring: null,
+              unratedRecords: 4,
+            },
+          }),
+        ),
+      [RECORDS]: () => json([], { total: 0 }),
+    });
+    await open('#usage');
+    expect(await screen.findByText('Barred')).toBeTruthy();
+    expect(screen.getByText('-2.5 USD')).toBeTruthy();
+    expect(await screen.findByText('No usage')).toBeTruthy();
+  });
+});
+
 describe('prepaid money forms', () => {
   const PREPAY = '/tmf-api/prepayBalanceManagement/v4';
   const BUCKETS = `GET ${PREPAY}/bucket?partyAccount.id=${A}&offset=0&limit=100`;

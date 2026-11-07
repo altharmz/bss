@@ -71,6 +71,7 @@ import {
   EditSubscriberModal,
 } from './SubscriberForms';
 import { SubscriberOrders } from './SubscriberOrders';
+import { UsageTab } from './UsageTab';
 import './screens.css';
 
 // Screen 2. Everything about one billing account. Products change only through TMF622
@@ -327,6 +328,7 @@ function Card({
     { key: 'transactions', label: 'Transactions', badge: loadedCount(transactions) },
     ...(account.ratingType === 'prepaid'
       ? [
+          { key: 'usage', label: 'Usage' },
           { key: 'balance', label: 'Balance actions' },
           {
             key: 'commands',
@@ -702,6 +704,23 @@ function Card({
           <RefundsPanel accountId={account.id} version={version} onCount={setRefundCount} />
         </>,
       )}
+      {account.ratingType === 'prepaid' &&
+        pane(
+          'usage',
+          // mounted only while shown: no usage request until the tab is opened
+          tab === 'usage' &&
+            (products.status === 'ok' ? (
+              <UsageTab products={products.data} version={version} />
+            ) : products.status === 'error' ? (
+              <ErrorBlock
+                title="Failed to load products"
+                error={products.error}
+                onRetry={products.retry}
+              />
+            ) : (
+              <SkeletonRows columns={PRODUCT_COLUMNS} rows={2} />
+            )),
+        )}
       {account.ratingType === 'prepaid' &&
         pane(
           'balance',

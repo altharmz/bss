@@ -39,10 +39,8 @@ retry_network_command: the UI screens are issue #205
 get_payment_method: the card list carries every field the UI shows; there is no card detail screen
 get_payment_command: the dialog reads the account's charges (list_card_topups); no single-charge screen
 list_payment_commands: the dialog reads one account's charges (list_card_topups); no cross-account list
-list_usage: the Usage tab is issue 190b (216)
 get_usage: the Usage tab is issue 190b (216)
 create_usage: a mediation device records usage; the network feed is the normal path, no UI action
-usage_summary: the Usage tab is issue 190b (216)
 list_communication_messages: the Messages tab is issue 192b (222)
 get_communication_message: the Messages tab is issue 192b (222)
 create_communication_message: an operator-written message; the UI action is issue 192b (222)

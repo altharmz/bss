@@ -455,6 +455,7 @@ items:
   - {id: ui.subscriber.changeOffering, area: ui, stage: 5, title: "Change offering menu item"}
   - {id: ui.subscriber.planFacts, area: ui, stage: 5, title: "Prepaid product row: offering kind, how it renews, an add-on's plan and end date"}
   - {id: ui.subscriber.renewalHistory, area: ui, stage: 5, title: "Renewal history of a prepaid product: period, amount, tax, funding and bill"}
+  - {id: ui.subscriber.usage, area: ui, stage: 5, title: "Usage tab of a prepaid subscriber: period allowance bars per kind (used, included, remaining, 80% and 100% marks), throttled and barred badges, pay-as-you-go balance, paged TMF635 usage records with roaming and throttled flags"}
   - {id: ui.subscriber.buyAddOnItem, area: ui, stage: 5, title: "Buy add-on menu item on a plan product"}
   - {id: ui.subscriber.buyAddOn, area: ui, stage: 5, title: "Buy add-on dialog: add-on offerings and the TMF622 add order with an addOn relationship"}
   - {id: ui.subscriber.buyAddOn.quote, area: ui, stage: 5, title: "Add-on price with taxes and fees from the first-charge quote"}
