@@ -18,16 +18,19 @@ OUT="$(mktemp)"
 HEADERS="$(mktemp)"
 trap 'rm -f "${OUT}" "${HEADERS}"' EXIT
 
+# shellcheck source=scripts/smoke-retry.sh
+source "$(dirname "$0")/smoke-retry.sh"
+
 fail() { printf '\033[1;31mMCP SMOKE FAILED:\033[0m %s\n' "$*" >&2; exit 1; }
 ok() { printf '  ok  %s\n' "$*"; }
 
 # call <method> <path> [content type] [body] -> status code; body in $OUT, headers in $HEADERS
 call() {
   local method="$1" path="$2" type="${3:-}" body="${4:-}"
-  local args=(-sS --max-time 15 -o "${OUT}" -D "${HEADERS}" -w '%{http_code}' -X "${method}")
+  local args=(-sS --max-time 15 -o "${OUT}" -D "${HEADERS}" -w '%{http_code} %{time_pretransfer}' -X "${method}")
   [[ -n "${type}" ]] && args+=(-H "Content-Type: ${type}" -H "Accept: application/json, text/event-stream")
   [[ -n "${body}" ]] && args+=(--data "${body}")
-  curl "${args[@]}" "${BASE}${path}" || echo "000"
+  smoke_retry "${method}" "${path}" curl "${args[@]}" "${BASE}${path}"
 }
 header() { grep -i "^$1:" "${HEADERS}" | head -1 | cut -d: -f2- | tr -d '\r' | sed 's/^ *//'; }
 json() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "${OUT}" "$1" 2>/dev/null; }

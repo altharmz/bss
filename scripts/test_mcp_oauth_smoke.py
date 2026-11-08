@@ -1,5 +1,8 @@
 """mcp-oauth-smoke.py against a stub connector: the skip, the checks, the clean-up, no secrets."""
 
+import contextlib
+import importlib.util
+import io
 import json
 import os
 import re
@@ -7,6 +10,7 @@ import subprocess
 import sys
 import threading
 import unittest
+import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -158,6 +162,90 @@ class OAuthSmokeTests(unittest.TestCase):
         caddy = self.run_smoke("caddy", **self.users(ui=False))
         self.assertEqual(caddy.returncode, 0, caddy.stderr)
         self.assertIn("UI-user refusal not checked here", caddy.stdout)
+
+
+def load_smoke():
+    """The script as a module (its name has dashes), with no retry delay."""
+    spec = importlib.util.spec_from_file_location("mcp_oauth_smoke", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.RETRY_DELAY = 0
+    return module
+
+
+class Answer:
+    status, headers = 200, {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def read(self):
+        return b"{}"
+
+
+class Opener:
+    """Raises each queued error once, then answers 200; counts the attempts."""
+
+    def __init__(self, *errors):
+        self.errors, self.calls = list(errors), 0
+
+    def open(self, request, timeout):
+        self.calls += 1
+        if self.errors:
+            raise self.errors.pop(0)
+        return Answer()
+
+
+HANDSHAKE = urllib.error.URLError(TimeoutError("_ssl.c:1063: The handshake operation timed out"))
+READ_TIMEOUT = urllib.error.URLError(TimeoutError("timed out"))
+
+
+class RetryTests(unittest.TestCase):
+    """#257: one stalled connection must not fail the smoke, a sent POST is never repeated."""
+
+    def send(self, method, *errors):
+        smoke = load_smoke()
+        smoke.OPENER = Opener(*errors)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            try:
+                result = smoke.send(method, "https://example.invalid/revoke", form={"a": "b"})
+            except SystemExit as exit_:
+                result = exit_
+        return result, smoke.OPENER.calls, err.getvalue()
+
+    def test_a_post_whose_tls_handshake_timed_out_is_retried(self):
+        result, calls, log = self.send("POST", HANDSHAKE)
+        self.assertEqual((result[0], calls), (200, 2))
+        self.assertIn("retry POST /revoke: no answer", log)
+        self.assertIn("attempt 2 of 3", log)
+
+    def test_a_refused_connection_and_a_failed_proxy_tunnel_are_retried(self):
+        refused = urllib.error.URLError(ConnectionRefusedError(111, "Connection refused"))
+        tunnel = urllib.error.URLError(OSError("Tunnel connection failed: 502 Bad Gateway"))
+        result, calls, _ = self.send("POST", refused, tunnel)
+        self.assertEqual((result[0], calls), (200, 3))
+
+    def test_a_post_that_may_have_been_sent_is_not_repeated(self):
+        result, calls, log = self.send("POST", READ_TIMEOUT)
+        self.assertIsInstance(result, SystemExit)
+        self.assertIn("POST /revoke did not answer: timed out", str(result.code))
+        self.assertEqual((calls, log), (1, ""))
+
+    def test_a_get_is_retried_on_any_missing_answer_and_gives_up_after_three(self):
+        result, calls, _ = self.send("GET", READ_TIMEOUT, READ_TIMEOUT)
+        self.assertEqual((result[0], calls), (200, 3))
+        result, calls, _ = self.send("GET", READ_TIMEOUT, READ_TIMEOUT, READ_TIMEOUT)
+        self.assertIsInstance(result, SystemExit)
+        self.assertEqual(calls, 3)
+
+    def test_an_http_error_status_is_returned_not_retried(self):
+        error = urllib.error.HTTPError("u", 503, "x", {}, io.BytesIO(b"down"))
+        result, calls, _ = self.send("GET", error)
+        self.assertEqual((result[0], result[2], calls), (503, "down", 1))
 
 
 if __name__ == "__main__":

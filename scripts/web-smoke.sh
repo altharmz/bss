@@ -16,6 +16,9 @@ OUT="$(mktemp)"
 HEADERS="$(mktemp)"
 trap 'rm -f "${OUT}" "${HEADERS}"' EXIT
 
+# shellcheck source=scripts/smoke-retry.sh
+source "$(dirname "$0")/smoke-retry.sh"
+
 fail() { printf '\033[1;31mWEB SMOKE FAILED:\033[0m %s\n' "$*" >&2; exit 1; }
 ok() { printf '  ok  %s\n' "$*"; }
 
@@ -27,7 +30,7 @@ silent
 show-error
 output = \"${OUT}\"
 dump-header = \"${HEADERS}\"
-write-out = \"%{http_code}\"
+write-out = \"%{http_code} %{time_pretransfer}\"
 request = \"${method}\""
   if [[ "${who}" == auth ]]; then
     config+=$'\n'"header = \"X-Bss-Service: ${BSS_SMOKE_SECRET}\""
@@ -35,7 +38,9 @@ request = \"${method}\""
   if [[ "${method}" != GET ]]; then
     config+=$'\n'"header = \"Content-Type: application/json\""$'\n'"data = \"{}\""
   fi
-  curl -K <(printf '%s\n' "${config}") "${BASE}${path}" || echo "000"
+  # a fresh config descriptor for each attempt (smoke-retry.sh)
+  get_once() { curl -K <(printf '%s\n' "${config}") "${BASE}${path}"; }
+  smoke_retry "${method}" "${path}" get_once
 }
 header() { grep -i "^$1:" "${HEADERS}" | head -1 | cut -d: -f2- | tr -d '\r' | sed 's/^ *//'; }
 is_json() { python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "${OUT}" 2>/dev/null; }
