@@ -157,7 +157,10 @@ would attach the prod container to both `lab` and `shared`).
   the `==` pin (or add the dependency), install it in a throwaway container, regenerate
   the constraints file from that container's `pip freeze` deliberately, review the diff
   of the constraints file, rebuild, `make lint && make test` - one commit. Never loosen a
-  pin to `>=`. Do not `pip install` inside a running container.
+  pin to `>=`. Do not `pip install` inside a running container. A Dependabot security
+  PR is a trigger for this procedure, never a shortcut past it: it bumps only
+  `requirements*.txt`, so it is redone in a task branch ([harness.md](harness.md),
+  "Supply-chain scanning").
 - **No pip in the runtime venv** (decided 2026-11-08, #263). The `runtime-venv` stage
   uninstalls pip from the builder's `/opt/venv` before the runtime stage copies it:
   production never runs pip, and pip vendors its own certifi, msgpack and urllib3 (and
