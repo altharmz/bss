@@ -448,8 +448,17 @@ VPS) keeps the last two releases and goes back one by itself. Operator view:
 - **`make rollback`** = `deploy.sh --rollback`: no build, ship or clean-tree check;
   `.env.smoke` is still required for the smokes. `DRY_RUN=1` prints the plan and changes
   nothing.
-- **Drill:** `BSS_DEPLOY_DRILL=fail-after-health` forces a failure right after the health
-  gate; it exists only for the human's live drill on the VPS.
+- **Drill:** `BSS_DEPLOY_DRILL` (a migration failure or overrun, a really unhealthy release,
+  a failure after each gate, failing cleanup) and `BSS_ROLLBACK_DRILL=slow-downgrade` make
+  every rollback path happen on the real VPS ([operations.md](../operations.md#rollback)).
+  **Why** (2026-11-08, #254): the human wants every scenario verified live, not only by the
+  fake-binary tests. The migration drill acts in `alembic/env.py` after the migrations ran
+  but inside their transaction, so it proves the one-transaction claim; the unhealthy drill
+  reaches the app as `BSS_HEALTH_DRILL` through compose interpolation on `up` only, so a
+  rollback target never inherits it; a failure point fires only while the deploy is armed,
+  so the rollback's own smokes never trip it. Drill-only migration `0064` (table
+  `rollback_drill`, refusing downgrade while it has rows) gives the drill a schema
+  downgrade; `0065` drops it afterwards.
 - **Tests:** `scripts/test_deploy_rollback.py` runs the real script with fake `ssh`,
   `rsync`, `docker`, `timeout` and `curl` that log their argv and answer from a rules file,
   and asserts on the order of the remote commands (in `make runtime-check`).

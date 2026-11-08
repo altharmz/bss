@@ -47,6 +47,9 @@ services:
       APP_TRUST_FORWARDED: "true"
       BSS_METRICS_TOKEN: ${BSS_METRICS_TOKEN:-}
       BSS_BUILD: ${TAG:-dev}
+      # Rollback drill only: scripts/deploy.sh sets it for the `up` of a release under
+      # BSS_DEPLOY_DRILL=unhealthy, so its /healthz answers 503 (docs/operations.md "Rollback")
+      BSS_HEALTH_DRILL: ${BSS_HEALTH_DRILL:-}
     networks:
       bss-edge:
         # Every app on the host calls its service `app`, so that name is ambiguous.

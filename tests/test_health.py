@@ -28,3 +28,16 @@ def test_healthz_degraded_when_db_down():
         resp = client.get("/healthz")
     assert resp.status_code == 503
     assert resp.json()["db"] == "down"
+
+
+def test_healthz_fails_under_the_rollback_drill():
+    """BSS_HEALTH_DRILL=unhealthy (deploy.sh's BSS_DEPLOY_DRILL=unhealthy) answers 503
+    without asking the database, so the drill's release really fails the health gate."""
+    with (
+        patch("app.main.settings.bss_health_drill", "unhealthy"),
+        patch("app.db.ping", return_value=True) as ping,
+    ):
+        resp = client.get("/healthz")
+    assert resp.status_code == 503
+    assert resp.json() == {"status": "degraded", "drill": "unhealthy"}
+    ping.assert_not_called()

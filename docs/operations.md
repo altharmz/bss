@@ -170,10 +170,19 @@ pre-deploy vps-infra dump (vps-infra's tooling, not this repo) and roll back by 
 `alembic_rev`, "schema downgrade: yes|no", the compose files and the UI files that would
 change, and changes nothing.
 
-**Drill:** `BSS_DEPLOY_DRILL=fail-after-health make deploy` makes a deploy fail right after
-the health gate ("drill: forced failure after the health gate"), so the automatic
-rollback can be rehearsed on the VPS. It is printed loudly at the start and exists for
-the human's drill only. The full drill runbook is issue #239.
+**Drill switches** (for the human-approved live drill only; printed loudly at the start,
+inert unless set). `BSS_DEPLOY_DRILL=<mode> make deploy`:
+
+| Mode | Effect |
+|---|---|
+| `fail-migration`, `slow-migration` | the migrations fail, or overrun the 120 s deadline, inside their transaction (`alembic/env.py`): nothing may change |
+| `unhealthy` | the new release starts with `BSS_HEALTH_DRILL=unhealthy`, its `/healthz` answers 503, the health gate fails and the deploy rolls back |
+| `fail-after-<point>` | fails right after that step and rolls back; points: `health`, `deployed`, `healthz`, `billing-status`, `web-sync`, `web-smoke`, `mcp-smoke`, `oauth-smoke` |
+| `warn-prune` | the three cleanup steps fail; they only warn and the deploy still passes |
+
+`BSS_ROLLBACK_DRILL=slow-downgrade make rollback` makes the schema downgrade overrun its
+deadline: the rollback must refuse and leave the current release running. Runbooks:
+issue #239 (no schema change) and #254 (every scenario, with the drill migration `0064`).
 
 ## Prepaid: recovery and rollback
 

@@ -376,7 +376,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 78  # 77 domain tables + alembic_version
+    assert tables == 79  # 78 domain tables + alembic_version
 
 
 def test_0027_offering_changes(temp_db_url):
@@ -1089,3 +1089,51 @@ def test_0026_order_details_drafts_and_nested_items(temp_db_url):
     with psycopg.connect(temp_db_url) as conn:
         assert conn.execute("SELECT count(*) FROM product_order").fetchone() == (1,)
     command.upgrade(cfg, "head")
+
+
+def _revision_and_drill_table(url):
+    with psycopg.connect(url) as conn:
+        rev = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+        table = conn.execute("SELECT to_regclass('rollback_drill') IS NOT NULL").fetchone()[0]
+    return rev, table
+
+
+def test_0064_drill_table_refuses_downgrade_while_it_has_rows(temp_db_url):
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0064")
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute("INSERT INTO rollback_drill (note) VALUES ('drill')")
+    with pytest.raises(Exception, match="rollback_drill has rows"):
+        command.downgrade(cfg, "0063")
+    assert _revision_and_drill_table(temp_db_url) == ("0064", True)
+    with psycopg.connect(temp_db_url) as conn:
+        conn.execute("DELETE FROM rollback_drill")
+    command.downgrade(cfg, "0063")
+    assert _revision_and_drill_table(temp_db_url) == ("0063", False)
+
+
+@pytest.mark.parametrize("mode", ["fail", "slow"])
+def test_migration_drill_rolls_back_an_upgrade_and_a_downgrade(temp_db_url, monkeypatch, mode):
+    """BSS_MIGRATION_DRILL (alembic/env.py, set by deploy.sh only for the rollback drill)
+    fails after the migrations ran, inside their one transaction: nothing changes."""
+    slept = []
+    monkeypatch.setattr("time.sleep", slept.append)
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0063")
+    monkeypatch.setenv("BSS_MIGRATION_DRILL", mode)
+    with pytest.raises(RuntimeError, match=f"BSS_MIGRATION_DRILL={mode}"):
+        command.upgrade(cfg, "head")
+    assert _revision_and_drill_table(temp_db_url) == ("0063", False)
+    monkeypatch.delenv("BSS_MIGRATION_DRILL")
+    command.upgrade(cfg, "head")
+    monkeypatch.setenv("BSS_MIGRATION_DRILL", mode)
+    with pytest.raises(RuntimeError, match=f"BSS_MIGRATION_DRILL={mode}"):
+        command.downgrade(cfg, "0063")
+    assert _revision_and_drill_table(temp_db_url) == ("0064", True)
+    assert slept == ([600, 600] if mode == "slow" else [])
+
+
+def test_migration_drill_rejects_an_unknown_mode(temp_db_url, monkeypatch):
+    monkeypatch.setenv("BSS_MIGRATION_DRILL", "sometimes")
+    with pytest.raises(RuntimeError, match="unknown BSS_MIGRATION_DRILL"):
+        command.upgrade(Config("alembic.ini"), "0001")
