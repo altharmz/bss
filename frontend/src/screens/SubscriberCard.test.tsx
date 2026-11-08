@@ -650,6 +650,28 @@ describe('subscriber card', () => {
     expect(within(tx).getByText('Bank card')).toBeTruthy();
   });
 
+  it('shows the usage-price name in rated charges and transactions', async () => {
+    backend({
+      [`GET ${INTERNAL}/charges?limit=20`]: () =>
+        json(
+          [
+            {
+              ...CHARGES[1],
+              productOffering: { id: O1, name: 'Metered data usage' },
+            },
+          ],
+          { total: 1 },
+        ),
+      [`GET ${INTERNAL}/transactions?limit=20`]: () =>
+        json([{ ...TRANSACTIONS[2], note: 'Metered data usage' }], { total: 1 }),
+    });
+    await open();
+    expect(await within(panel('Charge history')).findByText('Metered data usage')).toBeTruthy();
+    expect(
+      await within(panel('Transaction history')).findByText('Metered data usage'),
+    ).toBeTruthy();
+  });
+
   it('shows a failing panel without taking the card down', async () => {
     backend({ [`GET ${INTERNAL}/charges?limit=20`]: () => tmfError(500, 'Internal Server Error') });
     await open();
@@ -1809,6 +1831,41 @@ describe('usage tab', () => {
     fireEvent.click(expectUi('ui.subscriber.usage.next'));
     expect(await screen.findByText('Showing 26–26 of 26')).toBeTruthy();
     expect(expectUi('ui.subscriber.usage.next').hasAttribute('disabled')).toBe(true);
+  });
+
+  it('shows the rating status and the applied price only on a rated record', async () => {
+    lazy({
+      [SUMMARY]: () => json(summary({ throttled: false })),
+      [RECORDS]: () =>
+        json(
+          [
+            record('u1', {
+              status: 'rated',
+              usageProductPrice: [
+                {
+                  name: 'Metered data usage',
+                  unitOfMeasure: '1 MB',
+                  price: { dutyFreeAmount: usd(0.25) },
+                },
+              ],
+            }),
+            record('u2'),
+          ],
+          { total: 2 },
+        ),
+    });
+    await open('#usage');
+    const applied = await waitFor(() => expectUi('ui.subscriber.usage.appliedPrice'));
+    expect(within(applied).getByText('0.25')).toBeTruthy();
+    expect(within(applied).getByText('USD')).toBeTruthy();
+    expect(within(applied).getByText('Metered data usage · per 1 MB')).toBeTruthy();
+    const rated = screen.getByText('Rated').closest('[role="row"]') as HTMLElement;
+    expect(rated.querySelector('[data-ui="ui.subscriber.usage.status"]')?.textContent).toBe(
+      'Rated',
+    );
+    const unrated = screen.getByText('Not rated').closest('[role="row"]') as HTMLElement;
+    expect(within(unrated).getByText('—')).toBeTruthy();
+    expect(unrated.querySelector('[data-ui="ui.subscriber.usage.appliedPrice"]')).toBeNull();
   });
 
   it('asks nothing of usage until the tab is opened', async () => {

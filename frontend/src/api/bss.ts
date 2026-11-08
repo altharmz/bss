@@ -834,12 +834,37 @@ export function chargeInterval(type = 'monthly', length = 1): string {
   return length === 1 ? name : `${length} ${name}s`;
 }
 
+export const USAGE_UNITS = ['KB', 'MB', 'GB', 'second', 'minute', 'message'] as const;
+export type UsageUnit = (typeof USAGE_UNITS)[number];
+export const USAGE_UNIT_KIND: Record<UsageUnit, 'data' | 'voice' | 'sms'> = {
+  KB: 'data',
+  MB: 'data',
+  GB: 'data',
+  second: 'voice',
+  minute: 'voice',
+  message: 'sms',
+};
+const USAGE_BLOCK_SIZE: Record<UsageUnit, number> = {
+  KB: 1024,
+  MB: 1024 ** 2,
+  GB: 1024 ** 3,
+  second: 1,
+  minute: 60,
+  message: 1,
+};
+
+export function validUsageBlock(amount: number, units: UsageUnit): boolean {
+  const block = amount * USAGE_BLOCK_SIZE[units];
+  return Number.isFinite(amount) && amount > 0 && Number.isInteger(block);
+}
+
 function toCatalogPrice(price: PriceBody): CatalogPrice {
   return {
     id: need(price.id, 'price id'),
     cents: toCents(need(price.price?.value, 'price value')),
     currency: need(price.price?.unit, 'price unit'),
     interval: chargeInterval(price.recurringChargePeriodType, price.recurringChargePeriodLength),
+    unitOfMeasure: price.unitOfMeasure ?? null,
     from: need(price.validFor?.startDateTime, 'price validFor.startDateTime'),
     to: price.validFor?.endDateTime ?? null,
   };
@@ -910,6 +935,7 @@ export interface CatalogPrice {
   cents: number;
   currency: string;
   interval?: string;
+  unitOfMeasure: PriceBody['unitOfMeasure'] | null;
   from: string; // instant
   to: string | null; // instant, exclusive; null = open-ended
 }
@@ -1079,23 +1105,32 @@ export async function createOffering(form: NewOffering, timeZone: string): Promi
 export interface NewPrice {
   offeringId: string;
   offeringName: string;
-  priceType: 'oneTime' | 'recurring';
+  priceType: 'oneTime' | 'recurring' | 'usage';
   amount: string;
   currency: string;
   validFrom: string;
   existingPriceIds: string[];
+  unitOfMeasure?: { amount: number; units: UsageUnit };
 }
 
 export async function addPrice(form: NewPrice, timeZone: string): Promise<void> {
+  const usage = form.priceType === 'usage' ? need(form.unitOfMeasure, 'usage unit') : undefined;
+  const suffix =
+    form.priceType === 'recurring'
+      ? 'monthly'
+      : usage === undefined
+        ? 'oneTime'
+        : `${USAGE_UNIT_KIND[usage.units]} usage`;
   const price = await postJson<PriceBody>(
     PATHS.prices,
     jsonWithAmount(
       {
         '@type': 'ProductOfferingPrice',
-        name: `${form.offeringName} ${form.priceType === 'recurring' ? 'monthly' : 'oneTime'}`,
+        name: `${form.offeringName} ${suffix}`,
         lifecycleStatus: 'Active',
         priceType: form.priceType,
         ...(form.priceType === 'recurring' ? { recurringChargePeriodType: 'monthly' } : {}),
+        ...(usage === undefined ? {} : { unitOfMeasure: usage }),
         price: { unit: form.currency, value: AMOUNT },
         validFor: { startDateTime: midnightOf(form.validFrom, timeZone) },
       },
@@ -1194,14 +1229,24 @@ export async function loadOfferingDetail(id: string, signal: AbortSignal): Promi
   };
 }
 
-/** The one-time prices (activation fees) among an offering's attached prices. */
-export async function loadOneTimePrices(
+async function loadAttachedPrices(
   priceIds: string[],
+  priceType: 'oneTime' | 'usage',
   signal: AbortSignal,
 ): Promise<CatalogPrice[]> {
   if (priceIds.length === 0) return [];
-  const prices = await getAll<PriceBody>(`${PATHS.prices}?priceType=oneTime`, signal);
+  const prices = await getAll<PriceBody>(`${PATHS.prices}?priceType=${priceType}`, signal);
   return prices.filter((p) => p.id !== undefined && priceIds.includes(p.id)).map(toCatalogPrice);
+}
+
+/** The one-time prices (activation fees) among an offering's attached prices. */
+export function loadOneTimePrices(priceIds: string[], signal: AbortSignal) {
+  return loadAttachedPrices(priceIds, 'oneTime', signal);
+}
+
+/** The usage prices among a pay-as-you-go offering's attached prices. */
+export function loadUsagePrices(priceIds: string[], signal: AbortSignal) {
+  return loadAttachedPrices(priceIds, 'usage', signal);
 }
 
 export interface CategoryChoice {
@@ -1319,6 +1364,7 @@ export interface PriceDetail {
   cents: number | null;
   currency: string | null;
   interval: string;
+  unitOfMeasure: PriceBody['unitOfMeasure'] | null;
   validFrom: string | null; // instant
   validTo: string | null; // instant, exclusive
 }
@@ -1333,6 +1379,7 @@ export async function loadPriceDetail(id: string, signal: AbortSignal): Promise<
     cents: p.price?.value === undefined ? null : toCents(p.price.value),
     currency: p.price?.unit ?? null,
     interval: chargeInterval(p.recurringChargePeriodType, p.recurringChargePeriodLength),
+    unitOfMeasure: p.unitOfMeasure ?? null,
     validFrom: p.validFor?.startDateTime ?? null,
     validTo: p.validFor?.endDateTime ?? null,
   };
