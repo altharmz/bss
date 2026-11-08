@@ -458,7 +458,8 @@ VPS) keeps the last two releases and goes back one by itself. Operator view:
   rollback target never inherits it; a failure point fires only while the deploy is armed,
   so the rollback's own smokes never trip it. Drill-only migration `0064` (table
   `rollback_drill`, refusing downgrade while it has rows) gives the drill a schema
-  downgrade; `0065` drops it afterwards.
+  downgrade; `0065` dropped it once the drill passed (2026-11-08, #259). A later drill
+  that needs a schema downgrade adds a new drill-only migration the same way.
 - **Tests:** `scripts/test_deploy_rollback.py` runs the real script with fake `ssh`,
   `rsync`, `docker`, `timeout` and `curl` that log their argv and answer from a rules file,
   and asserts on the order of the remote commands (in `make runtime-check`).
