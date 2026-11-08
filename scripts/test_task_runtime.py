@@ -231,6 +231,33 @@ class RuntimeTests(unittest.TestCase):
             ],
         )
 
+    def test_deploy_web_install_from_primary(self):
+        result = self.wrapper("--deploy-web-install", cwd=self.primary)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = json.loads(result.stdout)
+        self.assertEqual(output["cwd"], str(self.primary))
+        self.assertEqual(output["values"]["COMPOSE_PROJECT_NAME"], "bss")
+        self.assertEqual(
+            output["args"][-6:],
+            ["run", "--rm", "--no-deps", "web", "sh", "scripts/install-deps.sh"],
+        )
+        self.assertIn("/dev/null", output["args"])
+
+    def test_deploy_web_install_takes_no_arguments(self):
+        self.rejected(
+            self.wrapper("--deploy-web-install", "extra", cwd=self.primary), "takes no arguments"
+        )
+
+    def test_deploy_web_install_rejects_linked_worktree(self):
+        self.rejected(self.wrapper("--deploy-web-install"), "only from the primary checkout")
+
+    def test_deploy_web_install_rejects_inherited_overrides(self):
+        for key in ("COMPOSE_FILE", "DOCKER_HOST", "POSTGRES_PASSWORD"):
+            with self.subTest(key=key):
+                self.env[key] = "fixture-secret-never-output"
+                self.rejected(self.wrapper("--deploy-web-install", cwd=self.primary), key)
+                del self.env[key]
+
     def test_deploy_web_build_requires_one_tag(self):
         for args in [(), ("",), ("one", "two")]:
             with self.subTest(args=args):
@@ -257,7 +284,12 @@ class RuntimeTests(unittest.TestCase):
         self.rejected(self.wrapper("ps"), "development secret file is missing")
 
     def test_required_development_password(self):
-        for contents in ("", "BSS_SERVICE_SECRET=\n", "POSTGRES_PASSWORD=\n", 'POSTGRES_PASSWORD=""\n'):
+        for contents in (
+            "",
+            "BSS_SERVICE_SECRET=\n",
+            "POSTGRES_PASSWORD=\n",
+            'POSTGRES_PASSWORD=""\n',
+        ):
             self.secret.write_text(contents)
             self.rejected(self.wrapper("--check"), "POSTGRES_PASSWORD is required")
 

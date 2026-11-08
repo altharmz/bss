@@ -20,7 +20,9 @@ import hashlib
 import json
 import os
 import secrets
+import socket
 import sys
+import time
 import urllib.error
 import urllib.request
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -45,6 +47,24 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 OPENER = urllib.request.build_opener(NoRedirect)
 
+# A request that got no answer is tried again (ATTEMPTS in all, RETRY_DELAY seconds apart)
+# only when that is safe: a GET, or one that never reached the server - the connection, the
+# proxy tunnel or the TLS handshake failed. A POST that may have been sent (the code
+# exchange, the refresh rotation) is never repeated, and an HTTP status never retried.
+# Why (#257): the public endpoint has stalled single TLS handshakes during deploys.
+ATTEMPTS = int(os.environ.get("SMOKE_ATTEMPTS", "3"))
+RETRY_DELAY = float(os.environ.get("SMOKE_RETRY_DELAY", "3"))
+
+
+def never_sent(reason: object) -> bool:
+    """True when the request cannot have reached the server."""
+    text = str(reason).lower()
+    return (
+        isinstance(reason, ConnectionRefusedError | socket.gaierror)
+        or "handshake" in text
+        or "tunnel connection failed" in text
+    )
+
 
 def send(method: str, url: str, *, form=None, body=None, token=None):
     """-> (status, headers, text); never raises on an HTTP status."""
@@ -60,13 +80,24 @@ def send(method: str, url: str, *, form=None, body=None, token=None):
         headers["Authorization"] = f"Bearer {token}"
     # main() admits only http(s):// base URLs
     request = urllib.request.Request(url, data=data, headers=headers, method=method)  # noqa: S310
-    try:
-        with OPENER.open(request, timeout=30) as response:
-            return response.status, response.headers, response.read().decode()
-    except urllib.error.HTTPError as error:
-        return error.code, error.headers, error.read().decode()
-    except urllib.error.URLError as error:
-        fail(f"{method} {urlsplit(url).path} did not answer: {error.reason}")
+    path = urlsplit(url).path
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            with OPENER.open(request, timeout=30) as response:
+                return response.status, response.headers, response.read().decode()
+        except urllib.error.HTTPError as error:
+            return error.code, error.headers, error.read().decode()
+        except urllib.error.URLError as error:
+            if attempt < ATTEMPTS and (method == "GET" or never_sent(error.reason)):
+                print(
+                    f"  retry {method} {path}: no answer ({error.reason}),"
+                    f" attempt {attempt + 1} of {ATTEMPTS} in {RETRY_DELAY:g}s",
+                    file=sys.stderr,
+                )
+                time.sleep(RETRY_DELAY)
+                continue
+            fail(f"{method} {path} did not answer: {error.reason}")
+    return None  # not reached: the last attempt returns or fails
 
 
 def pkce() -> tuple[str, str]:

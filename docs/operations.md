@@ -25,6 +25,7 @@ targets; do not invent commands** (CLAUDE.md, "Commands").
 | `make docs` / `make docs-check` | regenerate [api/](api/README.md) and [db/](db/README.md) / fail if the committed ones differ |
 | `make clean` | stop the stack **and drop the local database volume** |
 | `make web-install` | the only step that downloads npm packages (`npm ci`, exactly the lockfile) |
+| `make deploy-web-install` | the same `npm ci`, **primary checkout only** (`web-install` is refused there): run it when `make deploy` fails its UI build with "run make deploy-web-install" after `package-lock.json` changed |
 | `make web-dev` / `web-build` / `web-lint` / `web-test` / `web-types` / `web-fmt` / `web-e2e` | the UI, always in the `web` / `web-offline` containers; offline targets fail with "run make web-install" if node_modules does not match the lockfile |
 | `make hooks` | install the shared pre-commit and pre-push hook dispatchers |
 | `make spec-verify-upstream` | re-fetch the spec blob SHAs from GitHub and compare with `spec/README.md` (network) |
@@ -78,11 +79,22 @@ What `deploy.sh` does, in order:
 5. **Builds the runtime image locally** - never on the VPS - and ships it with `docker
    save | gzip | ssh docker load`, skipped when the server already has an image with the
    same fingerprint (layers + config).
-6. Syncs the compose files and `.env.prod` (as `~/bss/.env`).
-7. **Runs the migrations** with the new image before the app serves traffic (with a
-   deadline).
-8. `up` - waits until **`app`, `worker` and `mcp` are healthy** (90 s).
-9. Atomically writes the full Git commit to `~/bss/DEPLOYED`, reads it back and
+6. On the first deploy after releases were introduced (no `~/bss/CURRENT` yet) it records
+   the running release as one (**bootstrap**: tag from the running app container, compose
+   files and `web/` from `~/bss`, commit from `DEPLOYED`, `alembic current`) and makes it
+   `CURRENT`. With nothing running it says no rollback is possible for this deploy.
+7. Syncs the compose files and `.env.prod` (as `~/bss/.env`), and stores the release in
+   `~/bss/releases/<tag>/`: compose files, the exact UI files (`web/`) and `release.env`
+   (`tag`, `commit`, `alembic_rev` = the newest migration of the commit, `deployed_at`).
+8. **Runs the migrations** with the new image before the app serves traffic (with a
+   deadline). A failure up to here changes nothing that serves: the old containers keep
+   running and the schema is unchanged (all pending migrations run in one transaction,
+   `alembic/env.py`); the message says "nothing changed on the server; `<tag>` is still
+   serving".
+9. `up` of the new release (its compose files from `releases/<tag>/`) - **the point of no
+   return**: any failure from here on rolls back automatically ([Rollback](#rollback)).
+   Waits until **`app`, `worker` and `mcp` are healthy** (240 s).
+10. Atomically writes the full Git commit to `~/bss/DEPLOYED`, reads it back and
    requires an exact match. The smoke output prints the commit and image tag. The same
    commit goes to the workstation's `.deployed` (gitignored) with tag, subject, last
    migration, UTC time and `checks=running`; after the last step `checks=passed`.
@@ -90,29 +102,90 @@ What `deploy.sh` does, in order:
    Smoke on the VPS: `/healthz` and `/billing-status` (200 must say `ok` or
    `running`; 503 one of `stale|failed|running|none`; `scripts/billing-status-check.sh`,
    shared with `make smoke`).
-10. Rsyncs the built UI **into** `~/bss/web` (hashed assets, then `index.html`, then a
-    `--delete` pass; the directory is never replaced, so Caddy's bind mount keeps it).
-11. **Web smoke** through Caddy (`scripts/web-smoke.sh`; Caddy asks for no login, the app
+11. Syncs the UI **into** `~/bss/web` from `releases/<tag>/web/`, on the server (hashed
+    assets, then `index.html`, then a `--delete` pass; the directory is never replaced,
+    so Caddy's bind mount keeps it, and it always equals a stored release).
+12. **Web smoke** through Caddy (`scripts/web-smoke.sh`; Caddy asks for no login, the app
     is the boundary): this build's `index.html`, a deep link and a hashed asset without
     credentials, `/internal/v1/context` 401 JSON from the app without them, with the
     read-only smoke secret 200 JSON with `operator` = `smoke`, a TMF list with
     `X-Total-Count`, `POST` -> 403 from the app, `/healthz` open.
-12. Runs the MCP discovery, authentication and OAuth smoke checks through Caddy, then the
+13. Runs the MCP discovery, authentication and OAuth smoke checks through Caddy, then the
     **OAuth login smoke** (`scripts/mcp-oauth-smoke.py`) as the `mcp` smoke user from
     `.env.smoke` (`MCP_SMOKE_USER`, `MCP_SMOKE_PASSWORD`): read scope only, one read tool,
-    a write tool refused, refresh, revoke. Without those lines it prints SKIPPED. Then it
-    prunes the smoke's client registrations in the `mcp` container (a warning on failure).
-13. Prunes old `bss-app` images on the VPS, keeping the newest few (nothing else is
-    touched).
+    a write tool refused, refresh, revoke. Without those lines it prints SKIPPED.
+    The web, MCP and OAuth smokes retry a request that got no answer (3 attempts, 3 s
+    apart, each retry logged) when that is safe - a GET, or a request that never reached
+    the server; a wrong answer fails at once ([decisions/infra.md](decisions/infra.md#smoke-retries-2026-11-08)).
+14. Every gate passed: the pointers move - `PREVIOUS` = the old `CURRENT`, `CURRENT` = this
+    tag (a re-deploy of `CURRENT` leaves `PREVIOUS` alone). Then it prunes the smoke's MCP
+    client registrations (a warning on failure), old `bss-app` images (the 3 newest, and
+    never `CURRENT` or `PREVIOUS`; nothing else is touched) and every `releases/` directory
+    but `CURRENT`'s and `PREVIOUS`'s. Pruning failures are warnings and never roll back.
 
-A deploy is **not fully reversible once a migration shipped**: rolling the image back does
-not roll the schema back (`alembic downgrade` by hand). `DEPLOYED` records the backend
-that reached service health, even if a later API/web/MCP smoke fails; it does not
-certify the entire release gate; `.deployed` with `checks=running` after a deploy
-means a later smoke failed.
+A deploy is **reversible unless a schema downgrade refuses** because it would lose data
+written since the deploy ([Rollback](#rollback)). `DEPLOYED` records the backend that
+runs; `.deployed` with `checks=running` after a deploy means the script was interrupted
+after the health gate.
 Production config, limits and the constraints of the VPS (VPN ports, no prune, nothing
 published on 0.0.0.0): see [decisions/infra.md](decisions/infra.md). Never run `docker build`
 on the VPS.
+
+## Rollback
+
+`scripts/deploy.sh` keeps the last two releases on the VPS: `~/bss/releases/<tag>/` for
+`CURRENT` and `PREVIOUS` (`~/bss/CURRENT`, `~/bss/PREVIOUS`, one tag each) and their
+`bss-app` images. Secrets are not part of a release: there is one `~/bss/.env`. Decisions:
+[decisions/infra.md](decisions/infra.md#automated-rollback-2026-11-08).
+
+**Automatic.** A failure after `up` of a new release (health gate, `DEPLOYED`, `/healthz`,
+`/billing-status`, UI sync, web, MCP or MCP OAuth smoke) rolls back to the release that
+served before, then `make deploy` still exits 1 with "DEPLOY FAILED, ROLLED BACK to `<tag>`
+(`<commit>`); the failure was: ...". **Manual:** `make rollback` goes from `CURRENT` to
+`PREVIOUS` and exits 0. Both run the same steps:
+
+1. Refuse with "cannot roll back: no previous release on the server - deploy instead" when
+   there is no previous tag, or its `releases/` entry or image is missing.
+2. Stop `app worker mcp` of the release being left.
+3. If the two `alembic_rev` differ: `alembic downgrade <previous rev>` **in the image of the
+   release being left** (only it contains the downgrade scripts), with the migration
+   deadline.
+4. Copy the previous release's compose files to `~/bss`, `up` it, wait for health.
+5. Sync its `web/` into `~/bss/web` on the server (same three passes as a deploy).
+6. Write `DEPLOYED`, `CURRENT=<previous>`, delete `PREVIOUS`.
+7. Smoke it: deployed commit, `/healthz`, `/billing-status`, web smoke with the previous
+   build, MCP smoke (no OAuth smoke).
+8. `.deployed`: the previous commit and tag, `checks=rolled-back`,
+   `rolled_back_from=<tag>`; `make deployed` prints "rolled back from ...".
+
+**One step only.** After a rollback there is no `PREVIOUS`: a second `make rollback` fails
+with "no previous release - deploy instead". Rollback never restores a database dump.
+
+**Refused downgrade.** A lossy downgrade refuses once the data it would drop exists (e.g.
+`0030`, the prepaid `0034`-`0047`, [below](#prepaid-recovery-and-rollback)). Then nothing
+is forced: the release being left is brought back up and the script stops with "ROLLBACK
+REFUSED: the schema downgrade to `<rev>` failed ... `<tag>` is running again. Restoring
+needs a vps-infra dump". What the human does then: fix forward (a new commit, `make
+deploy`), or - only if the data written since the deploy may be lost - restore the
+pre-deploy vps-infra dump (vps-infra's tooling, not this repo) and roll back by hand.
+
+**Plan first:** `make rollback DRY_RUN=1` prints the current and previous tag, commit and
+`alembic_rev`, "schema downgrade: yes|no", the compose files and the UI files that would
+change, and changes nothing.
+
+**Drill switches** (for the human-approved live drill only; printed loudly at the start,
+inert unless set). `BSS_DEPLOY_DRILL=<mode> make deploy`:
+
+| Mode | Effect |
+|---|---|
+| `fail-migration`, `slow-migration` | the migrations fail, or overrun the 120 s deadline, inside their transaction (`alembic/env.py`): nothing may change |
+| `unhealthy` | the new release starts with `BSS_HEALTH_DRILL=unhealthy`, its `/healthz` answers 503, the health gate fails and the deploy rolls back |
+| `fail-after-<point>` | fails right after that step and rolls back; points: `health`, `deployed`, `healthz`, `billing-status`, `web-sync`, `web-smoke`, `mcp-smoke`, `oauth-smoke` |
+| `warn-prune` | the three cleanup steps fail; they only warn and the deploy still passes |
+
+`BSS_ROLLBACK_DRILL=slow-downgrade make rollback` makes the schema downgrade overrun its
+deadline: the rollback must refuse and leave the current release running. Runbooks:
+issue #239 (no schema change) and #254 (every scenario, with the drill migration `0064`).
 
 ## Prepaid: recovery and rollback
 
@@ -122,9 +195,10 @@ bucket (so the first prepaid account created on a deployed instance ends clean
 downgrade past `0033`); the later ones refuse retained holds, commands, command runs,
 funded intervals and service grants, shortfall observations, manual suspensions,
 balance actions, journal keys and transfer-fee charges. Do not delete history to make
-a downgrade pass. Rolling the image back never rolls the schema back: an older image
-over a newer schema is a manual, reviewed decision, and with prepaid history the
-supported recovery is forward (a fixed image), not `alembic downgrade`.
+a downgrade pass. A [rollback](#rollback) downgrades the schema together with the image
+and stops with "ROLLBACK REFUSED" when one of these refuses; an older image over a newer
+schema is never started. With prepaid history the supported recovery is forward (a fixed
+image).
 
 **Stuck or failed commands** (read-only first; the UI shows the same on the account):
 
@@ -150,7 +224,12 @@ supported recovery is forward (a fixed image), not `alembic downgrade`.
 **Not part of this repository.** vps-infra dumps every database on the host, this one
 included, by cron; bss has no backup or restore tooling ([decisions/infra.md](decisions/infra.md#shared-infrastructure-vps-infra), "Shared
 infrastructure"). Make sure a fresh dump exists before any migration that alters or
-removes data. A restore drill from a cron-made dump is an open check (issue #9). There is **no `/backup-status` endpoint** in bss; backup
+removes data. Restore drill passed on 2026-11-08 (issue #9) with the cron dump
+`20261108-021501` (alembic `0060`): restored locally in 4.8 s, then into the live `bss`
+database in 5.1 s; `alembic upgrade head` brought it to `0063` with the same tables and enums
+as production, and a fresh pre-drill dump put today's data back (about 12 min downtime). To
+repeat it: stop app, worker and mcp, take a fresh dump, drop and recreate `bss`, restore,
+upgrade, restore the fresh dump, start. There is **no `/backup-status` endpoint** in bss; backup
 monitoring, if any, belongs to vps-infra.
 
 ## Monitoring
@@ -168,6 +247,25 @@ Docker healthchecks are **informational only**: nothing restarts or replaces an
 `unhealthy` container (`restart: unless-stopped` reacts to exits). Real alerting is the
 external monitor polling `/healthz` and `/billing-status` (configured outside this
 repository).
+
+### Security scan
+
+`.github/workflows/security.yml` scans the Python packages, the UI packages and the runtime
+image every night at 01:45 UTC ([decisions/harness.md](decisions/harness.md#supply-chain-scanning-2026-11-08)).
+When a run is red:
+
+1. Read the failing job's log. The gate prints one line per blocking finding
+   (`package version id severity fix-versions`) and any ignore-file problem: an expired
+   review-by, a date more than 60 days ahead, or a malformed line. Trivy prints a table.
+2. **Fix it:** change the pin deliberately ([decisions/infra.md](decisions/infra.md), "Dependencies are
+   pinned"), or bump the base image digest for an OS package. Open an issue for the fix.
+3. **Or accept it for now:** add `<id> <review-by> <reason>` to
+   `ops/security/audit-ignore.txt` (pip, npm), or a `# reason` line plus `<id> exp:<date>` to
+   `.trivyignore` (image). The date is at most 60 days ahead, and the reason names the issue
+   that tracks the fix. An expired entry turns the run red again, which forces a new review.
+
+Exit code 2 from the gate means the tool's JSON changed shape or the tool crashed. Fix the
+gate or the tool pin; don't accept anything in that case.
 
 ## The agent harness
 

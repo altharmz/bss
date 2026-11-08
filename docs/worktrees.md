@@ -21,6 +21,7 @@ standalone command, with its required variables.
 | Create an approved P0 issue in Ready | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (`BODY_FILE=/abs/path` for long text; `ISSUE=<n>` finishes a preserved one) | primary |
 | Resume / hand off a session | `make telemetry-collect` | task |
 | Install UI dependencies (first time) | `make web-install` | task |
+| Refresh the primary checkout's UI dependencies for `make deploy` (the human) | `make deploy-web-install` | primary |
 | Format backend and UI | `make format` | task |
 | Review task state | `make review-task` | task |
 | Show the claimed issue (body, comments) | `make show-task` | task |

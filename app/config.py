@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     # needs an explicit "test"). compose sets it everywhere: dev locally, staging on the VPS.
     app_env: str = "prod"
     log_level: str = "info"
+    # Rollback drill only (docs/operations.md "Rollback"): "unhealthy" makes /healthz answer
+    # 503, so the release scripts/deploy.sh starts under BSS_DEPLOY_DRILL=unhealthy really
+    # fails the health gate. Empty everywhere else.
+    bss_health_drill: Literal["", "unhealthy"] = ""
     # GET /metrics (app/metrics.py): empty = off (404), else the bearer token the scraper sends.
     # The same value for the app and mcp. BSS_BUILD is the image tag, shown as bss_build_info.
     bss_metrics_token: str = ""

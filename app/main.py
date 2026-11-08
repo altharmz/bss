@@ -41,7 +41,10 @@ def healthz() -> JSONResponse:
 
     Docker's HEALTHCHECK and scripts/deploy.sh both gate on this endpoint, so keep it
     cheap and keep it honest: a 200 here must mean the service can actually serve.
+    The rollback drill's BSS_HEALTH_DRILL=unhealthy (app/config.py) answers 503.
     """
+    if settings.bss_health_drill == "unhealthy":
+        return JSONResponse(status_code=503, content={"status": "degraded", "drill": "unhealthy"})
     try:
         db.ping()
     except Exception as exc:  # noqa: BLE001 - the reason belongs in the response body

@@ -295,7 +295,8 @@ The Caddy side is vps-infra's. What bss relies on (applied; vps-infra owns the c
 - **`deploy.sh`** builds the UI locally before any network step (the primary-only
   `./scripts/task-compose --deploy-web-build <tag>` uses the offline container with fixed,
   nonsecret settings and stamps `index.html`'s `bss-build` marker; normal development builds
-  remain task-only) and refuses to start without
+  remain task-only; `./scripts/task-compose --deploy-web-install`, `make deploy-web-install`,
+  runs `npm ci` there when the lockfile changed) and refuses to start without
   the web smoke's credential in **`.env.smoke`** - a local-only file, gitignored and never
   shipped. `.env.prod` is copied to the VPS as `~/bss/.env` (compose reads it only to fill
   `${...}`; the container gets just the variables listed under `environment:`, there is
@@ -398,3 +399,87 @@ OpenMetrics check) scrapes `GET /metrics` on the app and on mcp; the kit is in
   is unchanged.
 - **Exposure on the VPS is the human's step:** the Caddy route in vps-infra, the token in
   `.env.prod`, the scraper.
+
+## Automated rollback (2026-11-08)
+
+Issue #238. Before it a failed deploy left the new release in place and the server kept no
+old UI or compose files. Now `scripts/deploy.sh` (still the only script that changes the
+VPS) keeps the last two releases and goes back one by itself. Operator view:
+[operations.md](../operations.md#rollback).
+
+- **A release** is its image tag (short commit). `~/bss/releases/<tag>/` holds
+  `compose.yaml`, `compose.prod.yaml`, `web/` (the UI files shipped) and `release.env`
+  (`tag`, `commit`, `alembic_rev` = the `revision` of the newest file in `alembic/versions/`
+  at that commit, `deployed_at`). `.env` is not copied: one `~/bss/.env`, and compose
+  ignores variables an older release does not use. **Why:** there is no registry; the
+  image is `docker load`ed, so the server itself must keep what an old release needs.
+- **Pointers** `~/bss/CURRENT` and `~/bss/PREVIOUS` (one tag each, temp file + `mv`). They
+  move only after a deploy's last smoke; re-deploying `CURRENT` keeps `PREVIOUS`.
+- **Retention:** the directories and images of `CURRENT` and `PREVIOUS` (plus the one being
+  deployed). The image prune keeps the 3 newest and never removes either pointer's image;
+  it removes by `repo:tag` (dangling ones by ID).
+- **Point of no return** is `compose up -d` of the new release (`ROLLBACK_ARMED`). Any
+  `fail` after it rolls back, once (`fail` clears the flag first). Before it nothing that
+  serves has changed: alembic runs all pending migrations in one transaction
+  (`alembic/env.py`), so a failed upgrade leaves the schema as it was. Warnings (the smoke
+  client prune, image and release pruning) never roll back.
+- **Target:** an automatic rollback returns to `CURRENT` (still the old release, since the
+  pointers have not moved), or to `PREVIOUS` when the deploy was a re-deploy of `CURRENT`;
+  `make rollback` goes from `CURRENT` to `PREVIOUS`. Either way `CURRENT` becomes the target
+  and `PREVIOUS` is deleted: **one step only**, a second rollback says "deploy instead".
+- **Schema:** when the two `alembic_rev` differ, `alembic downgrade <target rev>` runs in
+  the image being left - only it contains the downgrade scripts - with the 120 s deadline
+  and the one-off cleanup of the upgrade. A refusal is never forced: that release is
+  brought back up and the script stops with "ROLLBACK REFUSED". **Why:** lossy downgrades
+  refuse on purpose ([operations.md](../operations.md#prepaid-recovery-and-rollback)), and
+  this repo has no restore tooling (vps-infra owns the dumps).
+- **UI:** `~/bss/web` is synced on the server from `releases/<tag>/web/` with the deploy's
+  three passes (assets, `index.html`, `--delete`) and remote `rsync -a`; the deploy ships
+  the UI to its release directory first, so `web/` always equals a stored release. The
+  bind-mounted directory is still never replaced.
+- **Smokes after a rollback:** deployed commit, `/healthz`, `/billing-status`, web smoke
+  with the restored build, MCP smoke; not the OAuth smoke (the slowest; the MCP smoke
+  already proves the service). `.deployed` gets `checks=rolled-back` and
+  `rolled_back_from=<tag>`.
+- **Bootstrap:** without `CURRENT` but with a running app container, the first deploy
+  records the running release (`docker inspect` tag, compose files and `web/` from `~/bss`,
+  commit from `DEPLOYED`, `alembic current`) before shipping anything, and makes it
+  `CURRENT`. Without one there is nothing to roll back to, and the log says so.
+- **`make rollback`** = `deploy.sh --rollback`: no build, ship or clean-tree check;
+  `.env.smoke` is still required for the smokes. `DRY_RUN=1` prints the plan and changes
+  nothing.
+- **Drill:** `BSS_DEPLOY_DRILL` (a migration failure or overrun, a really unhealthy release,
+  a failure after each gate, failing cleanup) and `BSS_ROLLBACK_DRILL=slow-downgrade` make
+  every rollback path happen on the real VPS ([operations.md](../operations.md#rollback)).
+  **Why** (2026-11-08, #254): the human wants every scenario verified live, not only by the
+  fake-binary tests. The migration drill acts in `alembic/env.py` after the migrations ran
+  but inside their transaction, so it proves the one-transaction claim; the unhealthy drill
+  reaches the app as `BSS_HEALTH_DRILL` through compose interpolation on `up` only, so a
+  rollback target never inherits it; a failure point fires only while the deploy is armed,
+  so the rollback's own smokes never trip it. Drill-only migration `0064` (table
+  `rollback_drill`, refusing downgrade while it has rows) gives the drill a schema
+  downgrade; `0065` dropped it once the drill passed (2026-11-08, #259). A later drill
+  that needs a schema downgrade adds a new drill-only migration the same way.
+- **Tests:** `scripts/test_deploy_rollback.py` runs the real script with fake `ssh`,
+  `rsync`, `docker`, `timeout` and `curl` that log their argv and answer from a rules file,
+  and asserts on the order of the remote commands (in `make runtime-check`).
+
+## Smoke retries (2026-11-08)
+
+Issue #257. In the live rollback drill (#254) 3 of about 15 deploys rolled back a healthy
+release because one request of a public smoke hung - a TCP or proxy connect timing out
+after 15 s, once a TLS handshake - while every other request passed and the same checks
+passed a minute later. The SSH-run smokes never failed; the workstation reaches the public
+URLs through a local HTTP(S) proxy. A rollback for a single stalled connection costs more
+than it protects.
+
+- `scripts/smoke-retry.sh` (sourced by `web-smoke.sh` and `mcp-smoke.sh`) and `send()` in
+  `mcp-oauth-smoke.py` try a request again - 3 attempts, 3 s apart, each retry logged -
+  only when it got **no answer** and repeating it is **safe**: a GET, or a request that
+  provably never reached the server (curl `time_pretransfer` 0; in Python a refused
+  connection, a failed proxy tunnel or a TLS handshake error).
+- **Never retried:** an HTTP status (a wrong answer fails at once), and a POST that may
+  have been sent - the OAuth code exchange and the refresh rotation are single-use, so a
+  repeat could only fail differently or hide a double effect.
+- **Tests:** `scripts/test_smoke_retry.py` (the helper, with a fake request) and
+  `RetryTests` in `scripts/test_mcp_oauth_smoke.py`.
