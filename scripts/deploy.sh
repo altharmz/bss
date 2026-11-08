@@ -110,13 +110,58 @@ open_master() {
     || fail "SSH master connection to ${REMOTE} did not come up"
 }
 
-case "${BSS_DEPLOY_DRILL:-}" in
-  "") ;;
-  fail-after-health)
-    [[ "${MODE}" == deploy ]] || fail "BSS_DEPLOY_DRILL applies to a deploy, not to --rollback"
-    printf '\033[1;33m!!! BSS_DEPLOY_DRILL=fail-after-health: this deploy WILL FAIL right after the health gate and roll back (docs/operations.md "Rollback")\033[0m\n' ;;
-  *) fail "unknown BSS_DEPLOY_DRILL=${BSS_DEPLOY_DRILL} (the only value is fail-after-health)" ;;
-esac
+# Rollback drills (docs/operations.md "Rollback"): inert unless set, for the live drill the
+# human approves. BSS_DEPLOY_DRILL makes a deploy fail at one chosen point (or a cleanup
+# step warn); BSS_ROLLBACK_DRILL makes a manual rollback's schema downgrade overrun.
+DEPLOY_DRILL="${BSS_DEPLOY_DRILL:-}"
+ROLLBACK_DRILL="${BSS_ROLLBACK_DRILL:-}"
+# `compose run -e` for the migration one-off (alembic/env.py), `up` environment for the app
+MIGRATE_DRILL_ENV=""
+DOWNGRADE_DRILL_ENV=""
+UP_DRILL_ENV=""
+FAIL_POINTS="health deployed healthz billing-status web-sync web-smoke mcp-smoke oauth-smoke"
+drill_banner() { printf '\033[1;33m!!! %s (docs/operations.md "Rollback")\033[0m\n' "$*"; }
+if [[ -n "${DEPLOY_DRILL}" ]]; then
+  [[ "${MODE}" == deploy ]] || fail "BSS_DEPLOY_DRILL applies to a deploy, not to --rollback"
+  case "${DEPLOY_DRILL}" in
+    fail-migration)
+      MIGRATE_DRILL_ENV="-e BSS_MIGRATION_DRILL=fail"
+      drill_banner "BSS_DEPLOY_DRILL=fail-migration: the migrations of this deploy WILL FAIL inside their transaction; nothing may change on the server" ;;
+    slow-migration)
+      MIGRATE_DRILL_ENV="-e BSS_MIGRATION_DRILL=slow"
+      drill_banner "BSS_DEPLOY_DRILL=slow-migration: the migrations of this deploy WILL OVERRUN the ${MIGRATE_TIMEOUT}s deadline; nothing may change on the server" ;;
+    unhealthy)
+      UP_DRILL_ENV="BSS_HEALTH_DRILL=unhealthy"
+      drill_banner "BSS_DEPLOY_DRILL=unhealthy: the new release's /healthz WILL answer 503, the health gate fails and the deploy rolls back" ;;
+    fail-after-*)
+      [[ " ${FAIL_POINTS} " == *" ${DEPLOY_DRILL#fail-after-} "* ]] \
+        || fail "unknown BSS_DEPLOY_DRILL=${DEPLOY_DRILL} (fail-after-<point>, points: ${FAIL_POINTS})"
+      drill_banner "BSS_DEPLOY_DRILL=${DEPLOY_DRILL}: this deploy WILL FAIL right after that step and roll back" ;;
+    warn-prune)
+      drill_banner "BSS_DEPLOY_DRILL=warn-prune: the cleanup steps WILL FAIL; they only warn, the deploy must still pass" ;;
+    *) fail "unknown BSS_DEPLOY_DRILL=${DEPLOY_DRILL} (fail-migration, slow-migration, unhealthy, fail-after-<point>, warn-prune)" ;;
+  esac
+fi
+if [[ -n "${ROLLBACK_DRILL}" ]]; then
+  [[ "${MODE}" == rollback ]] || fail "BSS_ROLLBACK_DRILL applies to --rollback, not to a deploy"
+  [[ "${ROLLBACK_DRILL}" == slow-downgrade ]] \
+    || fail "unknown BSS_ROLLBACK_DRILL=${ROLLBACK_DRILL} (the only value is slow-downgrade)"
+  DOWNGRADE_DRILL_ENV="-e BSS_MIGRATION_DRILL=slow"
+  drill_banner "BSS_ROLLBACK_DRILL=slow-downgrade: the schema downgrade WILL OVERRUN the ${MIGRATE_TIMEOUT}s deadline; the rollback must refuse and leave the current release running"
+fi
+
+# A deploy drill's failure point: fails only while the deploy is armed, so the smokes of a
+# rollback (which reuse the same functions) never trip it.
+drill_point() { # <point> <what just passed>
+  (( ROLLBACK_ARMED )) && [[ "${DEPLOY_DRILL}" == "fail-after-$1" ]] || return 0
+  fail "drill: forced failure after $2 (BSS_DEPLOY_DRILL=fail-after-$1)"
+}
+# warn-prune: each cleanup step fails before doing anything (its caller only warns).
+drill_warn() {
+  [[ "${DEPLOY_DRILL}" == warn-prune ]] || return 0
+  printf '    drill: forcing this cleanup step to fail (BSS_DEPLOY_DRILL=warn-prune)\n'
+  return 1
+}
 
 # A rollback ships nothing, so it needs neither .env.prod nor a clean tree.
 if [[ "${MODE}" == deploy ]]; then
@@ -197,11 +242,13 @@ remote_logs() { # <tag>
   rcompose "$1" logs --tail=100 >&2 || true
 }
 
-# Start a stored release: its compose files back into ~/bss, then up.
-activate_release() { # <tag>
+# Start a stored release: its compose files back into ~/bss, then up. The optional
+# environment (VAR=value) reaches compose's interpolation - only the unhealthy drill uses it.
+activate_release() { # <tag> [environment]
   rssh "cd ${REMOTE_DIR} && cp releases/$1/compose.yaml releases/$1/compose.prod.yaml ." \
     || fail "cannot copy the compose files of ~/${REMOTE_DIR}/releases/$1"
-  rcompose "$1" up -d --remove-orphans || fail "compose up -d of ${IMAGE_NAME}:$1 failed"
+  rssh "cd ${REMOTE_DIR} && ${2:+$2 }IMAGE_NAME=${IMAGE_NAME} TAG=$1 ${COMPOSE[*]} up -d --remove-orphans" \
+    || fail "compose up -d of ${IMAGE_NAME}:$1 failed"
 }
 
 # All three must go healthy: the app (/healthz), the billing worker (its liveness file,
@@ -246,6 +293,7 @@ check_deployed() { # <commit> <tag>
   [[ "${deployed_commit}" == "$1" ]] \
     || fail "deployed commit record does not match $1"
   printf '    Deployed commit: %s (image %s:%s)\n' "${deployed_commit}" "${IMAGE_NAME}" "$2"
+  drill_point deployed "the deployed-commit check"
 }
 
 # /healthz and /billing-status on the VPS itself.
@@ -255,6 +303,7 @@ smoke_backend() { # <tag>
   rssh "curl -fsS --max-time 5 http://127.0.0.1:18081/healthz" \
     || { remote_logs "$1"; fail "smoke test failed"; }
   printf '\n'
+  drill_point healthz "/healthz"
 
   # The billing freshness signal answers with a known status. 503 is valid (no run yet, a
   # stale or failed run) - the deploy only proves the endpoint and the worker's table work;
@@ -267,6 +316,7 @@ smoke_backend() { # <tag>
   # took over), 503 stale/failed/running/none; shared with smoke.sh.
   ./scripts/billing-status-check.sh "${billing##* }" <<<"${billing% *}" \
     || fail "/billing-status answered with an unknown status: ${billing}"
+  drill_point billing-status "/billing-status"
 }
 
 # Through Caddy: the UI of this build, the MCP connector and (unless --no-oauth) its login.
@@ -275,16 +325,19 @@ smoke_edge() { # <tag> [--no-oauth]
   BSS_SMOKE_SECRET="${BSS_SMOKE_SECRET}" \
     ./scripts/web-smoke.sh "${WEB_URL}" "$1" \
     || fail "web smoke test failed (see above). The app itself is deployed and healthy; check the vps-infra Caddy routes and the files in ~/${REMOTE_DIR}/web"
+  drill_point web-smoke "the web smoke"
 
   log "MCP smoke test through Caddy (${MCP_URL})"
   ./scripts/mcp-smoke.sh "${MCP_URL}" caddy \
     || fail "MCP smoke test failed (see above). App, UI and mcp are deployed and healthy; check the vps-infra Caddy carve-outs (docs/decisions/infra.md)"
+  drill_point mcp-smoke "the MCP smoke"
 
   [[ "${2:-}" == --no-oauth ]] && return 0
   log "MCP OAuth login smoke through Caddy (${MCP_URL})"
   MCP_SMOKE_USER="${MCP_SMOKE_USER}" MCP_SMOKE_PASSWORD="${MCP_SMOKE_PASSWORD}" \
     python3 scripts/mcp-oauth-smoke.py "${MCP_URL}" caddy \
     || fail "MCP OAuth smoke failed (see above). Everything is deployed; is the smoke user in ${SMOKE_ENV} an active mcp user with that password (docs/mcp.md)?"
+  drill_point oauth-smoke "the MCP OAuth smoke"
 }
 
 # Every smoke of a running release, in deploy order (the UI must already be in ~/bss/web).
@@ -479,7 +532,7 @@ rollback_to_previous() { # auto|manual
     log "Downgrading the schema ${failed_rev} -> ${target_rev} in ${IMAGE_NAME}:${failed} (timeout ${MIGRATE_TIMEOUT}s)"
     rc=0
     timeout "${MIGRATE_TIMEOUT}" ssh "${SSH_OPTS[@]}" "${REMOTE}" "cd ${REMOTE_DIR} && \
-      IMAGE_NAME=${IMAGE_NAME} TAG=${failed} ${COMPOSE[*]} run --rm --no-deps app alembic downgrade ${target_rev}" \
+      IMAGE_NAME=${IMAGE_NAME} TAG=${failed} ${COMPOSE[*]} run --rm --no-deps ${DOWNGRADE_DRILL_ENV:+${DOWNGRADE_DRILL_ENV} }app alembic downgrade ${target_rev}" \
       || rc=$?
     if (( rc != 0 )); then
       (( rc != 124 )) || remove_oneoffs
@@ -604,7 +657,7 @@ record_release "${TAG}" "${DEPLOY_COMMIT}" "${NEW_REV}"
 log "Running database migrations (timeout ${MIGRATE_TIMEOUT}s)"
 migrate_rc=0
 timeout "${MIGRATE_TIMEOUT}" ssh "${SSH_OPTS[@]}" "${REMOTE}" "cd ${REMOTE_DIR} && \
-  IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} run --rm --no-deps app alembic upgrade head" \
+  IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} run --rm --no-deps ${MIGRATE_DRILL_ENV:+${MIGRATE_DRILL_ENV} }app alembic upgrade head" \
   || migrate_rc=$?
 if (( migrate_rc == 124 )); then
   remove_oneoffs
@@ -620,12 +673,11 @@ fi
 log "Starting the app"
 SERVER_NOTE=""
 ROLLBACK_ARMED=1
-activate_release "${TAG}"
+activate_release "${TAG}" "${UP_DRILL_ENV}"
 
 log "Waiting for the app, worker and mcp containers to become healthy"
 wait_healthy "${TAG}" || fail "containers did not become healthy (${HEALTH_STATUS})"
-[[ "${BSS_DEPLOY_DRILL:-}" != fail-after-health ]] \
-  || fail "drill: forced failure after the health gate (BSS_DEPLOY_DRILL=fail-after-health)"
+drill_point health "the health gate"
 
 log "Recording the running commit in ~/${REMOTE_DIR}/DEPLOYED"
 record_deployed "${DEPLOY_COMMIT}"
@@ -640,6 +692,7 @@ smoke_backend "${TAG}"
 # release's stored copy (sync_web), so ~/bss/web always equals a stored release.
 log "Shipping the admin UI into ~/${REMOTE_DIR}/web (synced into the directory, never replaced)"
 sync_web "${TAG}"
+drill_point web-sync "the UI sync"
 
 smoke_edge "${TAG}"
 
@@ -659,13 +712,13 @@ log "Releases: CURRENT=${TAG}, PREVIOUS=${NEW_PREVIOUS:-none}"
 # own ones without a live token, so MCP_MAX_CLIENTS never fills (docs/decisions/mcp.md).
 # Only a warning on failure: everything is deployed and checked by now.
 log "Pruning the smoke's MCP client registrations"
-rcompose "${TAG}" exec -T mcp python -m bss_mcp.tokens prune-smoke-clients \
+{ drill_warn && rcompose "${TAG}" exec -T mcp python -m bss_mcp.tokens prune-smoke-clients; } \
   || log "WARNING: pruning the smoke client registrations failed; harmless now, see docs/mcp.md"
 
 log "Pruning old ${IMAGE_NAME} images on ${REMOTE} (keeping ${KEEP_IMAGES} and CURRENT/PREVIOUS, nothing else is touched)"
-prune_images "${TAG}" "${NEW_PREVIOUS}" || log "WARNING: pruning old images failed; harmless now"
+{ drill_warn && prune_images "${TAG}" "${NEW_PREVIOUS}"; } || log "WARNING: pruning old images failed; harmless now"
 log "Pruning release directories other than CURRENT and PREVIOUS"
-prune_releases "${TAG}" "${NEW_PREVIOUS}" || log "WARNING: pruning ~/${REMOTE_DIR}/releases failed; harmless now"
+{ drill_warn && prune_releases "${TAG}" "${NEW_PREVIOUS}"; } || log "WARNING: pruning ~/${REMOTE_DIR}/releases failed; harmless now"
 
 write_local_record passed
 

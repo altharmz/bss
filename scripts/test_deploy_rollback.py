@@ -453,5 +453,152 @@ class Retention(DeployHarness):
         self.assertNotIn("PREVIOUS.tmp", moved)
 
 
+# BSS_DEPLOY_DRILL / BSS_ROLLBACK_DRILL: the switches of the live rollback drill (#254).
+FAIL_POINTS = [
+    "health",
+    "deployed",
+    "healthz",
+    "billing-status",
+    "web-sync",
+    "web-smoke",
+    "mcp-smoke",
+    "oauth-smoke",
+]
+REMOVE_ONEOFFS = r"label=com\.docker\.compose\.oneoff=True.*docker rm -f"
+
+
+class Drills(DeployHarness):
+    assertRolledBackToPrev = AutomaticRollback.assertRolledBackToPrev
+
+    def reset_counters(self):
+        for counter in self.tmp.glob("rules.*"):
+            counter.unlink()
+
+    def test_no_drill_passes_no_drill_environment(self):
+        rules = self.deployed_rules(self.base_rules())
+        self.assertEqual(self.run_deploy(rules), 0, self.out)
+        self.assertNotCalled(r"BSS_MIGRATION_DRILL|BSS_HEALTH_DRILL")
+        self.assertCalled(r"run --rm --no-deps app alembic upgrade head")
+        self.assertNotIn("!!!", self.out)
+
+    def test_fail_migration_changes_nothing(self):
+        rules = [(r"alembic upgrade head", 1, "drill: forced migration failure")]
+        rules += self.base_rules()
+        code = self.run_deploy(rules, env={"BSS_DEPLOY_DRILL": "fail-migration"})
+        self.assertEqual(code, 1, self.out)
+        self.assertIn("BSS_DEPLOY_DRILL=fail-migration", self.out)
+        self.assertCalled(r"run --rm --no-deps -e BSS_MIGRATION_DRILL=fail app alembic upgrade head")
+        self.assertNotCalled(r" up -d|stop app worker mcp|alembic downgrade")
+        self.assertNotCalled(r"> CURRENT\.tmp|> PREVIOUS\.tmp|rm -f PREVIOUS")
+        self.assertIn(f"nothing changed on the server; {PREV} is still serving", self.out)
+
+    def test_slow_migration_times_out_removes_the_oneoff_and_changes_nothing(self):
+        rules = [(r"alembic upgrade head", 124, "")] + self.base_rules()
+        code = self.run_deploy(rules, env={"BSS_DEPLOY_DRILL": "slow-migration"})
+        self.assertEqual(code, 1, self.out)
+        up = self.assertCalled(r"run --rm --no-deps -e BSS_MIGRATION_DRILL=slow app alembic upgrade")
+        self.assertCalled(REMOVE_ONEOFFS, up)
+        self.assertNotCalled(r" up -d|stop app worker mcp|> CURRENT\.tmp")
+        self.assertIn("did not finish within 120s", self.out)
+        self.assertIn(f"{PREV} is still serving", self.out)
+
+    def test_unhealthy_starts_the_new_release_with_the_health_drill_and_rolls_back(self):
+        rules = NEW_UNHEALTHY + [(r"cat bss/DEPLOYED", 0, f"{PREV}full")] + self.base_rules()
+        code = self.run_deploy(rules, env={"BSS_DEPLOY_DRILL": "unhealthy"})
+        self.assertEqual(code, 1, self.out)
+        self.assertCalled(rf"&& BSS_HEALTH_DRILL=unhealthy IMAGE_NAME=bss-app TAG={NEW} .* up -d")
+        self.assertRolledBackToPrev()
+        prev_up = self.calls[self.assertCalled(UP_PREV)]
+        self.assertNotIn("BSS_HEALTH_DRILL", prev_up)
+        self.assertIn("containers did not become healthy", self.out)
+
+    def test_every_fail_after_point_rolls_back_at_that_point(self):
+        for point in FAIL_POINTS:
+            with self.subTest(point=point):
+                self.reset_counters()
+                # DEPLOYED reads back the new commit, then (after the rollback) the previous one;
+                # a failure at the health gate comes before the deploy's own read
+                deployed = f"{PREV}full" if point == "health" else f"{self.commit()} ||| {PREV}full"
+                rules = [(r"cat bss/DEPLOYED", 0, deployed)] + self.base_rules()
+                code = self.run_deploy(rules, env={"BSS_DEPLOY_DRILL": f"fail-after-{point}"})
+                self.assertEqual(code, 1, self.out)
+                self.assertIn(f"drill: forced failure after", self.out)
+                self.assertIn(f"(BSS_DEPLOY_DRILL=fail-after-{point})", self.out)
+                self.assertRolledBackToPrev()
+                # the rollback's own smokes reuse the functions with the drill points
+                self.assertCalled(rf"web-smoke\.sh .* {PREV}$", self.index(UP_PREV))
+
+    def test_fail_points_stop_at_the_right_step(self):
+        cases = {
+            # point: (a call that must have happened for NEW, the next one that must not)
+            "health": (UP_NEW, r"> DEPLOYED\.tmp"),
+            "healthz": (r"curl -fsS --max-time 5 http://127\.0\.0\.1:18081/healthz", r"billing-status"),
+            "web-sync": (rf"rsync -a --delete releases/{NEW}/web/ web/", rf"web-smoke\.sh .* {NEW}$"),
+            "web-smoke": (rf"web-smoke\.sh .* {NEW}$", r"mcp-smoke\.sh"),
+            "mcp-smoke": (r"mcp-smoke\.sh", r"mcp-oauth-smoke\.py"),
+            "oauth-smoke": (r"mcp-oauth-smoke\.py", r"> PREVIOUS\.tmp"),
+        }
+        for point, (done, not_yet) in cases.items():
+            with self.subTest(point=point):
+                self.reset_counters()
+                deployed = f"{PREV}full" if point == "health" else f"{self.commit()} ||| {PREV}full"
+                rules = [(r"cat bss/DEPLOYED", 0, deployed)] + self.base_rules()
+                self.run_deploy(rules, env={"BSS_DEPLOY_DRILL": f"fail-after-{point}"})
+                stop = self.assertCalled(rf"TAG={NEW} .* stop app worker mcp")
+                self.assertLess(self.assertCalled(done), stop)
+                self.assertNotIn(
+                    True, [bool(re.search(not_yet, c)) for c in self.calls[:stop]], not_yet
+                )
+
+    def test_warn_prune_only_warns(self):
+        rules = self.deployed_rules(self.base_rules())
+        code = self.run_deploy(rules, env={"BSS_DEPLOY_DRILL": "warn-prune"})
+        self.assertEqual(code, 0, self.out)
+        self.assertEqual(self.out.count("WARNING: pruning"), 3, self.out)
+        self.assertNotCalled(r"prune-smoke-clients|docker images|docker rmi|ls bss/releases|rm -rf")
+        moved = self.calls[self.assertCalled(r"> CURRENT\.tmp")]
+        self.assertIn(f"'{PREV}' > PREVIOUS.tmp", moved)
+        self.assertIn("checks=passed", (self.repo / ".deployed").read_text())
+        self.assertNotIn("ROLLED BACK", self.out)
+
+    def test_drill_values_are_checked_before_anything_runs(self):
+        cases = [
+            ({"BSS_DEPLOY_DRILL": "nonsense"}, (), "unknown BSS_DEPLOY_DRILL=nonsense"),
+            ({"BSS_DEPLOY_DRILL": "fail-after-lunch"}, (), "unknown BSS_DEPLOY_DRILL=fail-after-lunch"),
+            ({"BSS_DEPLOY_DRILL": "unhealthy"}, ("--rollback",), "applies to a deploy"),
+            ({"BSS_ROLLBACK_DRILL": "slow-downgrade"}, (), "applies to --rollback"),
+            ({"BSS_ROLLBACK_DRILL": "nonsense"}, ("--rollback",), "unknown BSS_ROLLBACK_DRILL"),
+        ]
+        for env, args, message in cases:
+            with self.subTest(env=env, args=args):
+                self.assertEqual(self.run_deploy(self.base_rules(), *args, env=env), 1, self.out)
+                self.assertIn(message, self.out)
+                self.assertFalse([c for c in self.calls if c.startswith(("ssh", "rsync", "docker"))])
+
+
+class RollbackDrill(DeployHarness):
+    def test_slow_downgrade_refuses_and_keeps_the_current_release(self):
+        rules = [(r"alembic downgrade", 124, ""), (r"cat bss/DEPLOYED", 0, f"{OLD}full")]
+        rules += self.base_rules(cur_rev="0041", prev_rev="0040")
+        code = self.run_deploy(rules, "--rollback", env={"BSS_ROLLBACK_DRILL": "slow-downgrade"})
+        self.assertEqual(code, 1, self.out)
+        self.assertIn("BSS_ROLLBACK_DRILL=slow-downgrade", self.out)
+        down = self.assertCalled(
+            rf"TAG={PREV} .* run --rm --no-deps -e BSS_MIGRATION_DRILL=slow app alembic downgrade 0040"
+        )
+        self.assertCalled(REMOVE_ONEOFFS, down)
+        self.assertCalled(rf"TAG={PREV} .* up -d", down)
+        self.assertNotCalled(rf"TAG={OLD} .* up -d")
+        self.assertNotCalled(r"> CURRENT\.tmp|rm -f PREVIOUS")
+        self.assertIn("ROLLBACK REFUSED", self.out)
+
+    def test_manual_rollback_without_the_drill_passes_no_drill_environment(self):
+        rules = [(r"cat bss/DEPLOYED", 0, f"{OLD}full")]
+        rules += self.base_rules(cur_rev="0041", prev_rev="0040")
+        self.assertEqual(self.run_deploy(rules, "--rollback"), 0, self.out)
+        self.assertCalled(r"run --rm --no-deps app alembic downgrade 0040")
+        self.assertNotCalled(r"BSS_MIGRATION_DRILL")
+
+
 if __name__ == "__main__":
     unittest.main()

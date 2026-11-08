@@ -263,7 +263,8 @@ AREAS = {
         "usage_charge",
         "usage_bar",
     ),
-    "worker": ("billing_run_account", "worker_request", "idempotency_key"),
+    # rollback_drill: drill-only (#254), dropped by 0065
+    "worker": ("billing_run_account", "worker_request", "idempotency_key", "rollback_drill"),
     "events": ("event_subscription", "event", "event_delivery"),
     "notifications": ("notification_message", "notification_consent"),
     "security": ("customer_pin", "line_lock", "account_audit"),
