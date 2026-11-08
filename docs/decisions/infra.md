@@ -399,3 +399,57 @@ OpenMetrics check) scrapes `GET /metrics` on the app and on mcp; the kit is in
   is unchanged.
 - **Exposure on the VPS is the human's step:** the Caddy route in vps-infra, the token in
   `.env.prod`, the scraper.
+
+## Automated rollback (2026-11-08)
+
+Issue #238. Before it a failed deploy left the new release in place and the server kept no
+old UI or compose files. Now `scripts/deploy.sh` (still the only script that changes the
+VPS) keeps the last two releases and goes back one by itself. Operator view:
+[operations.md](../operations.md#rollback).
+
+- **A release** is its image tag (short commit). `~/bss/releases/<tag>/` holds
+  `compose.yaml`, `compose.prod.yaml`, `web/` (the UI files shipped) and `release.env`
+  (`tag`, `commit`, `alembic_rev` = the `revision` of the newest file in `alembic/versions/`
+  at that commit, `deployed_at`). `.env` is not copied: one `~/bss/.env`, and compose
+  ignores variables an older release does not use. **Why:** there is no registry; the
+  image is `docker load`ed, so the server itself must keep what an old release needs.
+- **Pointers** `~/bss/CURRENT` and `~/bss/PREVIOUS` (one tag each, temp file + `mv`). They
+  move only after a deploy's last smoke; re-deploying `CURRENT` keeps `PREVIOUS`.
+- **Retention:** the directories and images of `CURRENT` and `PREVIOUS` (plus the one being
+  deployed). The image prune keeps the 3 newest and never removes either pointer's image;
+  it removes by `repo:tag` (dangling ones by ID).
+- **Point of no return** is `compose up -d` of the new release (`ROLLBACK_ARMED`). Any
+  `fail` after it rolls back, once (`fail` clears the flag first). Before it nothing that
+  serves has changed: alembic runs all pending migrations in one transaction
+  (`alembic/env.py`), so a failed upgrade leaves the schema as it was. Warnings (the smoke
+  client prune, image and release pruning) never roll back.
+- **Target:** an automatic rollback returns to `CURRENT` (still the old release, since the
+  pointers have not moved), or to `PREVIOUS` when the deploy was a re-deploy of `CURRENT`;
+  `make rollback` goes from `CURRENT` to `PREVIOUS`. Either way `CURRENT` becomes the target
+  and `PREVIOUS` is deleted: **one step only**, a second rollback says "deploy instead".
+- **Schema:** when the two `alembic_rev` differ, `alembic downgrade <target rev>` runs in
+  the image being left - only it contains the downgrade scripts - with the 120 s deadline
+  and the one-off cleanup of the upgrade. A refusal is never forced: that release is
+  brought back up and the script stops with "ROLLBACK REFUSED". **Why:** lossy downgrades
+  refuse on purpose ([operations.md](../operations.md#prepaid-recovery-and-rollback)), and
+  this repo has no restore tooling (vps-infra owns the dumps).
+- **UI:** `~/bss/web` is synced on the server from `releases/<tag>/web/` with the deploy's
+  three passes (assets, `index.html`, `--delete`) and remote `rsync -a`; the deploy ships
+  the UI to its release directory first, so `web/` always equals a stored release. The
+  bind-mounted directory is still never replaced.
+- **Smokes after a rollback:** deployed commit, `/healthz`, `/billing-status`, web smoke
+  with the restored build, MCP smoke; not the OAuth smoke (the slowest; the MCP smoke
+  already proves the service). `.deployed` gets `checks=rolled-back` and
+  `rolled_back_from=<tag>`.
+- **Bootstrap:** without `CURRENT` but with a running app container, the first deploy
+  records the running release (`docker inspect` tag, compose files and `web/` from `~/bss`,
+  commit from `DEPLOYED`, `alembic current`) before shipping anything, and makes it
+  `CURRENT`. Without one there is nothing to roll back to, and the log says so.
+- **`make rollback`** = `deploy.sh --rollback`: no build, ship or clean-tree check;
+  `.env.smoke` is still required for the smokes. `DRY_RUN=1` prints the plan and changes
+  nothing.
+- **Drill:** `BSS_DEPLOY_DRILL=fail-after-health` forces a failure right after the health
+  gate; it exists only for the human's live drill on the VPS.
+- **Tests:** `scripts/test_deploy_rollback.py` runs the real script with fake `ssh`,
+  `rsync`, `docker`, `timeout` and `curl` that log their argv and answer from a rules file,
+  and asserts on the order of the remote commands (in `make runtime-check`).
