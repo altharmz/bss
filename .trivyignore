@@ -1,0 +1,4 @@
+# Accepted Trivy findings in the runtime image (.github/workflows/security.yml, #241).
+# Each entry: a "# <reason>" line, then "<vulnerability id> exp:YYYY-MM-DD", at most 60 days
+# ahead. Trivy reports an entry again after its expiry date.
+# Decision: docs/decisions/harness.md, "Supply-chain scanning".

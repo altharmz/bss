@@ -335,7 +335,8 @@ runtime-check: ## The harness script tests (scripts/test_*.py, run in parallel, 
 		scripts/test_docs_links.py \
 		scripts/test_compose_prod.py \
 		scripts/test_deploy_rollback.py \
-		scripts/test_mcp_oauth_smoke.py
+		scripts/test_mcp_oauth_smoke.py \
+		scripts/test_audit_gate.py
 
 .PHONY: telemetry-collect telemetry-probe telemetry-watch
 telemetry-watch: export BSS_COLLECT_TASK = $(TASK)

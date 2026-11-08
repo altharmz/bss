@@ -1,0 +1,9 @@
+# Accepted pip-audit and npm audit findings, read by scripts/audit_gate.py (#241).
+# One entry per line:  <advisory id> <review-by YYYY-MM-DD> <reason>
+# The id is the advisory id the gate prints, or one of its aliases (GHSA, CVE).
+# The gate fails on an unlisted finding at or above its threshold, on an entry whose
+# review-by date has passed, on a review-by more than 60 days ahead, and on a malformed
+# line. Renew an entry only after reviewing it again.
+# Decision: docs/decisions/harness.md, "Supply-chain scanning".
+PYSEC-2026-4320 2026-12-08 baseline, see #263 (certifi, fixed in 2026.10.18)
+CVE-2026-114603 2026-12-08 baseline, see #263 (opentelemetry-api, fixed in 1.45.1)
