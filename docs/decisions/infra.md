@@ -15,7 +15,10 @@ app + alembic ~120 kB. Nothing beyond the venv and app code is in it; inside the
 like `node:22-alpine` in compose.override.yaml). The floating tag moved once under us and
 turned a cached build into an 11-minute rebuild (apt 414 s, pip 221 s). Pinned at
 `dddfd7e07f9d` on 2026-10-03: the base `9424b9b` was deployed with (its 4 base layers
-match the deployed image's first 4). Bump it on purpose, as its own commit, for a
+match the deployed image's first 4). **Bumped to `5e2bdb1b0d54` on 2026-11-08** (#263;
+Python 3.12.16, image built 2026-11-05): fixes Trivy's apt/libapt-pkg7.0 and libpcre2-8-0
+findings. zlib1g is still `+b1` there, so its two CVEs stay in `.trivyignore`, renewed to
+2027-01-07; the next bump should clear them. Bump it on purpose, as its own commit, for a
 security fix or a new 3.12 patch release:
 
 1. `docker buildx imagetools inspect python:3.12-slim` - the top `Digest:` is the index.
