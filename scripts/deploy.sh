@@ -129,6 +129,128 @@ ship_web() { # <destination> [rsync options]
     "${RSYNC[@]}" "$@" --delete frontend/dist/ "${dest}/web/"
 }
 
+# compose on the VPS for one release: rcompose <tag> <compose arguments...>
+rcompose() {
+  local tag="$1"
+  shift
+  rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${tag} ${COMPOSE[*]} $*"
+}
+remote_logs() { # <tag>
+  printf '\n--- remote logs (last 100 lines) ---\n' >&2
+  rcompose "$1" logs --tail=100 >&2 || true
+}
+
+# Start a release with the compose files in ~/bss.
+activate_release() { # <tag>
+  rcompose "$1" up -d --remove-orphans || fail "compose up -d of ${IMAGE_NAME}:$1 failed"
+}
+
+# All three must go healthy: the app (/healthz), the billing worker (its liveness file,
+# touched after its first wake-up) and mcp. One unhealthy service ends the wait at once.
+# 240 s = the longest start period in compose.prod.yaml (app, 180 s) + one 60 s probe
+# interval: a container ready just after its start period is seen only at the next probe.
+# Returns 1 (after printing the remote logs) unless all three are healthy; HEALTH_STATUS
+# names the last status of each.
+HEALTH_STATUS=""
+wait_healthy() { # <tag>
+  local tag="$1" deadline svc cid
+  local -A status=([app]="" [worker]="" [mcp]="")
+  deadline=$(( SECONDS + 240 ))
+  while (( SECONDS < deadline )); do
+    for svc in app worker mcp; do
+      [[ "${status[${svc}]}" == "healthy" ]] && continue
+      cid="$(rcompose "${tag}" ps -q "${svc}" || true)"
+      if [[ -n "${cid}" ]]; then
+        status[${svc}]="$(rssh "docker inspect -f '{{.State.Health.Status}}' ${cid}" 2>/dev/null || echo unknown)"
+      fi
+    done
+    [[ "${status[app]}" == "healthy" && "${status[worker]}" == "healthy" && "${status[mcp]}" == "healthy" ]] && break
+    [[ "${status[app]}" == "unhealthy" || "${status[worker]}" == "unhealthy" || "${status[mcp]}" == "unhealthy" ]] && break
+    sleep 3
+  done
+  HEALTH_STATUS="last status: app ${status[app]:-none}, worker ${status[worker]:-none}, mcp ${status[mcp]:-none}"
+  if [[ "${status[app]}" != "healthy" || "${status[worker]}" != "healthy" || "${status[mcp]}" != "healthy" ]]; then
+    remote_logs "${tag}"
+    return 1
+  fi
+}
+
+record_deployed() { # <commit>
+  rssh "cd ${REMOTE_DIR} && printf '%s\\n' '$1' > DEPLOYED.tmp && mv DEPLOYED.tmp DEPLOYED" \
+    || fail "cannot write ~/${REMOTE_DIR}/DEPLOYED"
+}
+
+check_deployed() { # <commit> <tag>
+  local deployed_commit
+  log "Remote smoke test: deployed commit"
+  deployed_commit="$(rssh "cat ${REMOTE_DIR}/DEPLOYED")" || deployed_commit=""
+  [[ "${deployed_commit}" == "$1" ]] \
+    || fail "deployed commit record does not match $1"
+  printf '    Deployed commit: %s (image %s:%s)\n' "${deployed_commit}" "${IMAGE_NAME}" "$2"
+}
+
+# /healthz and /billing-status on the VPS itself.
+smoke_backend() { # <tag>
+  local billing
+  log "Remote smoke test"
+  rssh "curl -fsS --max-time 5 http://127.0.0.1:18081/healthz" \
+    || { remote_logs "$1"; fail "smoke test failed"; }
+  printf '\n'
+
+  # The billing freshness signal answers with a known status. 503 is valid (no run yet, a
+  # stale or failed run) - the deploy only proves the endpoint and the worker's table work;
+  # freshness is the external monitor's job. The body is date, status and age only.
+  log "Remote smoke test: /billing-status"
+  billing="$(rssh "curl -sS --max-time 5 -w ' %{http_code}' http://127.0.0.1:18081/billing-status")" \
+    || fail "cannot reach /billing-status on ${REMOTE}"
+  printf '    %s\n' "${billing}"
+  # 200 ok or running (a run in progress - e.g. the one this deploy's worker restart just
+  # took over), 503 stale/failed/running/none; shared with smoke.sh.
+  ./scripts/billing-status-check.sh "${billing##* }" <<<"${billing% *}" \
+    || fail "/billing-status answered with an unknown status: ${billing}"
+}
+
+# Through Caddy: the UI of this build, the MCP connector and (unless --no-oauth) its login.
+smoke_edge() { # <tag> [--no-oauth]
+  log "Web smoke test through Caddy (${WEB_URL})"
+  BSS_SMOKE_SECRET="${BSS_SMOKE_SECRET}" \
+    ./scripts/web-smoke.sh "${WEB_URL}" "$1" \
+    || fail "web smoke test failed (see above). The app itself is deployed and healthy; check the vps-infra Caddy routes and the files in ~/${REMOTE_DIR}/web"
+
+  log "MCP smoke test through Caddy (${MCP_URL})"
+  ./scripts/mcp-smoke.sh "${MCP_URL}" caddy \
+    || fail "MCP smoke test failed (see above). App, UI and mcp are deployed and healthy; check the vps-infra Caddy carve-outs (docs/decisions/infra.md)"
+
+  [[ "${2:-}" == --no-oauth ]] && return 0
+  log "MCP OAuth login smoke through Caddy (${MCP_URL})"
+  MCP_SMOKE_USER="${MCP_SMOKE_USER}" MCP_SMOKE_PASSWORD="${MCP_SMOKE_PASSWORD}" \
+    python3 scripts/mcp-oauth-smoke.py "${MCP_URL}" caddy \
+    || fail "MCP OAuth smoke failed (see above). Everything is deployed; is the smoke user in ${SMOKE_ENV} an active mcp user with that password (docs/mcp.md)?"
+}
+
+# Every smoke of a running release, in deploy order (the UI must already be in ~/bss/web).
+run_smokes() { # <tag> <commit> [--no-oauth]
+  check_deployed "$2" "$1"
+  smoke_backend "$1"
+  smoke_edge "$1" "${3:-}"
+}
+
+# The workstation's copy of the record (gitignored; `make deployed` shows it). Only this
+# script writes it: agents never record a deployment by hand (docs/decisions/harness.md).
+# Written when the VPS runs the new backend, with checks=running; the end of the script
+# sets checks=passed. checks=running afterwards means a later smoke failed.
+DEPLOYED_FILE=.deployed
+write_local_record() { # <checks>
+  {
+    printf 'commit=%s\n' "${DEPLOY_COMMIT}"
+    printf 'tag=%s\n' "${TAG}"
+    printf 'subject=%s\n' "$(git log -1 --format=%s "${DEPLOY_COMMIT}")"
+    printf 'migration=%s\n' "$(git ls-tree --name-only "${DEPLOY_COMMIT}" alembic/versions/ | grep -E '/[0-9]+_[^/]*\.py$' | sort | tail -n 1 | xargs -r basename)"
+    printf 'deployed_at=%s\n' "${DEPLOYED_AT}"
+    printf 'checks=%s\n' "$1"
+  } > "${DEPLOYED_FILE}.tmp" && mv "${DEPLOYED_FILE}.tmp" "${DEPLOYED_FILE}"
+}
+
 # The admin UI is built locally too, before anything touches the network, with the commit
 # as its bss-build marker - the web smoke test reads it back through Caddy.
 log "Building the admin UI (frontend/dist, build ${TAG})"
@@ -224,78 +346,19 @@ elif (( migrate_rc != 0 )); then
 fi
 
 log "Starting the app"
-rssh "cd ${REMOTE_DIR} && \
-  IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} up -d --remove-orphans"
+activate_release "${TAG}"
 
-# All three must go healthy: the app (/healthz), the billing worker (its liveness file,
-# touched after its first wake-up) and mcp. One unhealthy service ends the wait at once.
-# 240 s = the longest start period in compose.prod.yaml (app, 180 s) + one 60 s probe
-# interval: a container ready just after its start period is seen only at the next probe.
 log "Waiting for the app, worker and mcp containers to become healthy"
-deadline=$(( SECONDS + 240 ))
-declare -A status=([app]="" [worker]="" [mcp]="")
-while (( SECONDS < deadline )); do
-  for svc in app worker mcp; do
-    [[ "${status[${svc}]}" == "healthy" ]] && continue
-    cid="$(rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} ps -q ${svc}" || true)"
-    if [[ -n "${cid}" ]]; then
-      status[${svc}]="$(rssh "docker inspect -f '{{.State.Health.Status}}' ${cid}" 2>/dev/null || echo unknown)"
-    fi
-  done
-  [[ "${status[app]}" == "healthy" && "${status[worker]}" == "healthy" && "${status[mcp]}" == "healthy" ]] && break
-  [[ "${status[app]}" == "unhealthy" || "${status[worker]}" == "unhealthy" || "${status[mcp]}" == "unhealthy" ]] && break
-  sleep 3
-done
-
-if [[ "${status[app]}" != "healthy" || "${status[worker]}" != "healthy" || "${status[mcp]}" != "healthy" ]]; then
-  printf '\n--- remote logs (last 100 lines) ---\n' >&2
-  rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2 || true
-  fail "containers did not become healthy (last status: app ${status[app]:-none}, worker ${status[worker]:-none}, mcp ${status[mcp]:-none})"
-fi
+wait_healthy "${TAG}" || fail "containers did not become healthy (${HEALTH_STATUS})"
 
 log "Recording the running commit in ~/${REMOTE_DIR}/DEPLOYED"
-rssh "cd ${REMOTE_DIR} && printf '%s\\n' '${DEPLOY_COMMIT}' > DEPLOYED.tmp && mv DEPLOYED.tmp DEPLOYED"
+record_deployed "${DEPLOY_COMMIT}"
+check_deployed "${DEPLOY_COMMIT}" "${TAG}"
 
-log "Remote smoke test: deployed commit"
-deployed_commit="$(rssh "cat ${REMOTE_DIR}/DEPLOYED")"
-[[ "${deployed_commit}" == "${DEPLOY_COMMIT}" ]] \
-  || fail "deployed commit record does not match ${DEPLOY_COMMIT}"
-printf '    Deployed commit: %s (image %s:%s)\n' "${deployed_commit}" "${IMAGE_NAME}" "${TAG}"
-
-# The workstation's copy of the record (gitignored; `make deployed` shows it). Only this
-# script writes it: agents never record a deployment by hand (docs/decisions/harness.md).
-# Written now, when the VPS runs the new backend, with checks=running; the end of the
-# script sets checks=passed. checks=running afterwards means a later smoke failed.
-DEPLOYED_FILE=.deployed
-write_local_record() {
-  {
-    printf 'commit=%s\n' "${DEPLOY_COMMIT}"
-    printf 'tag=%s\n' "${TAG}"
-    printf 'subject=%s\n' "$(git log -1 --format=%s "${DEPLOY_COMMIT}")"
-    printf 'migration=%s\n' "$(git ls-tree --name-only "${DEPLOY_COMMIT}" alembic/versions/ | grep -E '/[0-9]+_[^/]*\.py$' | sort | tail -n 1 | xargs -r basename)"
-    printf 'deployed_at=%s\n' "${DEPLOYED_AT}"
-    printf 'checks=%s\n' "$1"
-  } > "${DEPLOYED_FILE}.tmp" && mv "${DEPLOYED_FILE}.tmp" "${DEPLOYED_FILE}"
-}
 DEPLOYED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 write_local_record running
 
-log "Remote smoke test"
-rssh "curl -fsS --max-time 5 http://127.0.0.1:18081/healthz" \
-  || { rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} logs --tail=100" >&2; fail "smoke test failed"; }
-printf '\n'
-
-# The billing freshness signal answers with a known status. 503 is valid (no run yet, a
-# stale or failed run) - the deploy only proves the endpoint and the worker's table work;
-# freshness is the external monitor's job. The body is date, status and age only.
-log "Remote smoke test: /billing-status"
-billing="$(rssh "curl -sS --max-time 5 -w ' %{http_code}' http://127.0.0.1:18081/billing-status")" \
-  || fail "cannot reach /billing-status on ${REMOTE}"
-printf '    %s\n' "${billing}"
-# 200 ok or running (a run in progress - e.g. the one this deploy's worker restart just
-# took over), 503 stale/failed/running/none; shared with smoke.sh.
-./scripts/billing-status-check.sh "${billing##* }" <<<"${billing% *}" \
-  || fail "/billing-status answered with an unknown status: ${billing}"
+smoke_backend "${TAG}"
 
 # The UI goes live only after the app that serves its API is up. The shared Caddy
 # bind-mounts ~/bss/web (vps-infra), and a bind mount holds the directory's inode: the
@@ -307,25 +370,13 @@ log "Shipping the admin UI into ~/${REMOTE_DIR}/web (synced into the directory, 
 rssh "mkdir -p ${REMOTE_DIR}/web"
 ship_web "${REMOTE}:${REMOTE_DIR}"
 
-log "Web smoke test through Caddy (${WEB_URL})"
-BSS_SMOKE_SECRET="${BSS_SMOKE_SECRET}" \
-  ./scripts/web-smoke.sh "${WEB_URL}" "${TAG}" \
-  || fail "web smoke test failed (see above). The app itself is deployed and healthy; check the vps-infra Caddy routes and the files in ~/${REMOTE_DIR}/web"
-
-log "MCP smoke test through Caddy (${MCP_URL})"
-./scripts/mcp-smoke.sh "${MCP_URL}" caddy \
-  || fail "MCP smoke test failed (see above). App, UI and mcp are deployed and healthy; check the vps-infra Caddy carve-outs (docs/decisions/infra.md)"
-
-log "MCP OAuth login smoke through Caddy (${MCP_URL})"
-MCP_SMOKE_USER="${MCP_SMOKE_USER}" MCP_SMOKE_PASSWORD="${MCP_SMOKE_PASSWORD}" \
-  python3 scripts/mcp-oauth-smoke.py "${MCP_URL}" caddy \
-  || fail "MCP OAuth smoke failed (see above). Everything is deployed; is the smoke user in ${SMOKE_ENV} an active mcp user with that password (docs/mcp.md)?"
+smoke_edge "${TAG}"
 
 # Each OAuth smoke leaves a client registration (no deletion endpoint); remove the smoke's
 # own ones without a live token, so MCP_MAX_CLIENTS never fills (docs/decisions/mcp.md).
 # Only a warning on failure: everything is deployed and checked by now.
 log "Pruning the smoke's MCP client registrations"
-rssh "cd ${REMOTE_DIR} && IMAGE_NAME=${IMAGE_NAME} TAG=${TAG} ${COMPOSE[*]} exec -T mcp python -m bss_mcp.tokens prune-smoke-clients" \
+rcompose "${TAG}" exec -T mcp python -m bss_mcp.tokens prune-smoke-clients \
   || log "WARNING: pruning the smoke client registrations failed; harmless now, see docs/mcp.md"
 
 log "Pruning old ${IMAGE_NAME} images on ${REMOTE} (keeping ${KEEP_IMAGES}, nothing else is touched)"
