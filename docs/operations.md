@@ -212,10 +212,12 @@ image).
 **Not part of this repository.** vps-infra dumps every database on the host, this one
 included, by cron; bss has no backup or restore tooling ([decisions/infra.md](decisions/infra.md#shared-infrastructure-vps-infra), "Shared
 infrastructure"). Make sure a fresh dump exists before any migration that alters or
-removes data. Restore drill passed on 2026-11-08 (issue #9): newest dump `20261108-021501`,
-restored locally in 4.8 s with no warnings, enum types matched production; the dump is at
-alembic `0060` and lacks the six tables of migrations 0061-0063, deployed after it, otherwise
-tables matched. There is **no `/backup-status` endpoint** in bss; backup
+removes data. Restore drill passed on 2026-11-08 (issue #9) with the cron dump
+`20261108-021501` (alembic `0060`): restored locally in 4.8 s, then into the live `bss`
+database in 5.1 s; `alembic upgrade head` brought it to `0063` with the same tables and enums
+as production, and a fresh pre-drill dump put today's data back (about 12 min downtime). To
+repeat it: stop app, worker and mcp, take a fresh dump, drop and recreate `bss`, restore,
+upgrade, restore the fresh dump, start. There is **no `/backup-status` endpoint** in bss; backup
 monitoring, if any, belongs to vps-infra.
 
 ## Monitoring
