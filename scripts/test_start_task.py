@@ -370,6 +370,68 @@ class StartupTests(unittest.TestCase):
         )
         self.assertEqual(self.result()["issue"], 95)
 
+    def test_requested_issue_requires_matching_explicit_approval_before_startup(self):
+        for args in (
+            ("ISSUE=81",),
+            ("ISSUE=81", "HUMAN_APPROVAL=82"),
+            ("ISSUE=81", "HUMAN_APPROVAL=1"),
+            ("HUMAN_APPROVAL=81",),
+            ("ISSUE=0", "HUMAN_APPROVAL=0"),
+            ("ISSUE=-1", "HUMAN_APPROVAL=-1"),
+            ("ISSUE=abc", "HUMAN_APPROVAL=abc"),
+        ):
+            with self.subTest(args=args):
+                result = self.cli("JSON=1", *args)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
+                self.assertFalse(Path(self.env["BSS_TEST_CALLS"]).exists())
+                self.assertFalse(self.destination().exists())
+
+    def test_approved_issue_overrides_order_without_changing_other_items(self):
+        self.board([issue(95, "P0"), issue(81, "P2")])
+        result = self.cli("JSON=1", "ISSUE=81", "HUMAN_APPROVAL=81")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data["issue"], 81)
+        self.assertEqual(data["human_approval"], 81)
+        rows = json.loads(Path(self.env["BSS_TEST_BOARD"]).read_text())
+        items = rows[0]["node"]["items"]["nodes"]
+        self.assertEqual(items[0], issue(95, "P0"))
+        self.assertEqual(items[1]["fieldValueByName"]["name"], "Doing")
+        self.assertEqual(
+            items[1]["content"]["labels"],
+            connection([{"name": "P2"}, {"name": "agent:codex"}]),
+        )
+
+    def test_requested_ineligible_issue_never_falls_back_to_another_ready_issue(self):
+        cases = [
+            None,
+            issue(81, state="CLOSED"),
+            issue(81, labels=connection([{"name": "blocked"}])),
+            issue(81, labels=connection([{"name": "needs-human"}])),
+            issue(81, labels=connection([{"name": "agent:claude"}])),
+            issue(81, blockedBy=connection([{"state": "OPEN"}])),
+            issue(81, linkedBranches=connection([{"ref": {"name": "other"}}])),
+            issue(81, closedByPullRequestsReferences=connection([{"state": "OPEN"}])),
+        ]
+        for status in ("Inbox", "Doing", "Waiting", "Done"):
+            row = issue(81)
+            row["fieldValueByName"]["name"] = status
+            cases.append(row)
+        for row in cases:
+            with self.subTest(row=row):
+                self.board([issue(95, "P0"), *([row] if row else [])])
+                result = self.cli("JSON=1", "ISSUE=81", "HUMAN_APPROVAL=81")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("requested issue #81 is not an eligible Ready issue", result.stderr)
+                self.assertFalse(self.destination().exists())
+        self.board([issue(95, "P0"), issue(81)])
+        self.git("branch", "issue-81-existing")
+        result = self.cli("JSON=1", "ISSUE=81", "HUMAN_APPROVAL=81")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no fallback selected", result.stderr)
+        self.assertFalse(self.destination().exists())
+
     def test_closed_blocked_owned_non_ready_and_open_relationships_are_excluded(self):
         cases = [
             issue(1, "P0", state="CLOSED"),
@@ -439,8 +501,8 @@ class StartupTests(unittest.TestCase):
     def test_branch_appearing_after_selection_is_not_deleted(self):
         choose = task.select_issue
 
-        def concurrent_branch(items, represented):
-            selected = choose(items, represented)
+        def concurrent_branch(items, represented, requested=None):
+            selected = choose(items, represented, requested)
             self.git("branch", task.branch_name(selected["number"], selected["title"]))
             return selected
 
@@ -939,8 +1001,8 @@ class StartupTests(unittest.TestCase):
     def test_claim_race_after_selection(self):
         choose = task.select_issue
 
-        def race(items, represented):
-            result = choose(items, represented)
+        def race(items, represented, requested=None):
+            result = choose(items, represented, requested)
             self.board([issue(labels=connection([{"name": "P2"}, {"name": "agent:claude"}]))])
             return result
 

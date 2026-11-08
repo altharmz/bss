@@ -26,7 +26,8 @@ HTML prototype and README); where the build differs from the design, the decisio
 recorded in [decisions/frontend.md](decisions/frontend.md), "Frontend (stage 5)
 decisions", and summarised below.
 
-Progress comes from `data-ui` markers in `frontend/src`: see [PROGRESS.md](PROGRESS.md).
+Progress comes from `data-ui` markers in `frontend/src`: run `make progress`
+for `.progress/PROGRESS.md` (local report, not committed).
 Tested means a passing component test saw the marker on screen (`expectUi`, see "Tests").
 
 ## Architecture

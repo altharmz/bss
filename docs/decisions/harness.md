@@ -5,6 +5,26 @@ Principle: every regular operation is a `make` target; agents are told to use th
 to `master`; deploying is the human's (`make deploy`, [infra.md](infra.md)). Per-issue
 history is in `git log` and the closed issues.
 
+## Human-approved task selection
+
+`make start-task BSS_TASK_OWNER=<client>` selects by priority and board order by default.
+The human can instead approve a specific issue in the current conversation; pass
+`ISSUE=<n> HUMAN_APPROVAL=<n>` to select it. A missing or mismatched marker fails before
+repository setup. The marker records the caller's assertion, not proof of conversation
+approval, so agents must never invent approval. The override changes selection only:
+the issue must pass every normal eligibility and claim-race check, with no fallback to
+another issue and no priority or board-order edits.
+
+## Documentation: no hand-written counts
+
+Markdown must not state undated current-state counts or ratios of tools, operations,
+tests, items, APIs or endpoints. Link to the generated source or name the command that
+prints the current inventory instead. Allowed: generated `docs/api/` and `docs/db/`,
+explicitly dated history, counts in code that a test checks (such as
+`bss_mcp/server.py`'s `INSTRUCTIONS`), and `docs/archive/` (history, left untouched).
+A committed snapshot goes stale as features ship. This rule is reviewed manually;
+no automated regex check is added because dates, versions and money cause false positives.
+
 ## Development cycle and gates
 
 One local test run per cycle: develop -> `make commit` (the pre-commit hook is the run) ->
@@ -33,7 +53,7 @@ in the invoking worktree):
   must resolve, and the `make` targets and `scripts/` files named in code in the
   agent-facing docs must exist (`scripts/docs_links.py`; it runs before the Markdown-only
   exit, so documentation-only commits are checked too);
-- `make runtime-check` (the harness script tests: 11 suites run in parallel by
+- `make runtime-check` (the harness script tests, run in parallel by
   `scripts/run_suites.py`, about 70-100 s; they took 3 min 2 s when run one after another)
   and the guard cases, only when `scripts/`, `Makefile` or `.claude/` change (the guard
   cases only for `.claude/`);

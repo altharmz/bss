@@ -6,7 +6,8 @@ accounts, and carries out the operator's catch-up and retry requests. Code:
 `app/worker/`; design: [archive/stage4-design.md](archive/stage4-design.md) (the decisions Q1-Q14 and
 D-W*). Every capability below is a `worker.*` item of
 [progress/scope.yaml](progress/scope.yaml), proven by tests marked
-`@pytest.mark.capability(...)` - 10/10 in [PROGRESS.md](PROGRESS.md).
+`@pytest.mark.capability(...)`. Run `make progress` for `.progress/PROGRESS.md`
+(local report, not committed).
 
 In production it is the `worker` service of `compose.prod.yaml` (same image as the app,
 `python -m app.worker`). Locally there is no long-running worker: `make worker-once` runs

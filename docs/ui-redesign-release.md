@@ -1,6 +1,6 @@
 # UI redesign release evidence (GUI review fixes + Ledger v2)
 
-Release record for epic #43, written by R16 (#64). It covers the GUI review fixes (G
+Release record dated 2026-11-05 for epic #43, written by R16 (#64). It covers the GUI review fixes (G
 slices) and the Ledger v2 redesign (R slices), as built on `master`. The planned
 release checks on the deployed stand (#8) were closed without a recorded stand run; the
 evidence is the local build, e2e and shot review below.
