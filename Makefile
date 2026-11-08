@@ -12,7 +12,7 @@ TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)
 # Hypothesis examples per property test (tests/conftest.py): dev = 50, ci = 200 (verify).
 HYPOTHESIS_PROFILE ?= dev
 
-.PHONY: help up down restart logs ps shell test test-smoke test-changed lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e web-shots docs docs-check mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke
+.PHONY: help up down restart logs ps shell test test-smoke test-changed lint fmt smoke deploy check verify tunnel ssh clean migrate worker-once remote hooks spec-verify-upstream seed web-install deploy-web-install web-dev web-build web-lint web-test web-types web-fmt web-e2e web-shots docs docs-check mcp-smoke mcp-token-create mcp-tokens mcp-token-revoke
 
 help: ## Show this help
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -163,6 +163,11 @@ WEB_DEPS := sh scripts/check-deps.sh
 
 web-install: ## Install the UI's npm dependencies exactly as locked (npm ci; the only step with network)
 	./scripts/task-compose run --rm --no-deps web sh scripts/install-deps.sh
+
+# Run from the PRIMARY checkout (administration-only: web-install is refused there). deploy.sh
+# builds the UI there and only checks node_modules against the lockfile; this refreshes it.
+deploy-web-install: ## Primary checkout only: npm ci for the deploy's UI build, after package-lock.json changed
+	./scripts/task-compose --deploy-web-install
 
 web-dev: ## UI dev server on the task WEB_PORT (starts the local stack; proxies /tmf-api and /internal)
 	./scripts/task-compose run --rm --service-ports web sh -c '$(WEB_DEPS) && npm run dev'
