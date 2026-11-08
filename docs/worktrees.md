@@ -17,6 +17,7 @@ standalone command, with its required variables.
 | Step | Command | Where |
 |---|---|---|
 | Start and claim a task | `make start-task BSS_TASK_OWNER=<client>` | primary |
+| Start a specific Ready issue, with explicit human approval | `make start-task BSS_TASK_OWNER=<client> ISSUE=<n> HUMAN_APPROVAL=<n>` | primary |
 | Create an approved P0 issue in Ready | `make new-priority-task TITLE="..." BODY="..." [LABELS="a,b"]` (`BODY_FILE=/abs/path` for long text; `ISSUE=<n>` finishes a preserved one) | primary |
 | Resume / hand off a session | `make telemetry-collect` | task |
 | Install UI dependencies (first time) | `make web-install` | task |
@@ -40,6 +41,16 @@ standalone command, with its required variables.
    issue to Doing, creates the branch and worktree and records the session. Use exactly the
    returned issue, branch, slot and worktree; do not inspect the board or claim items first.
    If it fails or finds nothing, stop and report.
+
+   **Human-approved issue selection:** when the human explicitly requests a particular
+   issue, use `make start-task BSS_TASK_OWNER=<client> ISSUE=<n> HUMAN_APPROVAL=<n>`.
+   The approval must name that issue in the current conversation; an agent must never
+   supply the marker on its own initiative. The matching marker records the caller's
+   assertion of approval; the script cannot verify the conversation. Without `ISSUE`,
+   selection still follows priority and board order. With it, only that issue is
+   considered: it must still be open, Ready, unclaimed, unblocked, without an existing
+   task branch/worktree or open PR, and not `needs-human`. An ineligible or missing issue
+   fails without selecting a different one. This does not change priorities or board order.
 2. **Work** in the returned worktree. `make format` skips the UI formatter when the branch has
    no changes under `frontend/` or `spec/`; run `make web-install` once before it formats UI
    files. After another task merged, `make sync-task` merges `master` into the branch.
@@ -127,6 +138,8 @@ of or diverging from `origin/master` (no stash, reset or rebase). Tracked secret
 refused.
 
 Selection follows [board.md](board.md): open Ready issues, P0 before P3, then board order.
+`ISSUE=<n> HUMAN_APPROVAL=<n>` restricts selection to a human-approved issue while retaining
+all eligibility checks; a missing or mismatched approval is refused before startup.
 `blocked`, `needs-human`, any `agent:` label and open GitHub blockers exclude an issue, as do
 existing task branches, worktrees, linked branches and open PRs. The helper claims by adding
 the owner label, verifies, moves Ready to Doing and verifies again. GitHub has no atomic

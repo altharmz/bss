@@ -121,15 +121,13 @@ separates user and password), so **an operator with `:` always comes from MCP**
 ## Tools
 
 **One tool per API operation**: every operation of `app.openapi()` except those
-`docs/progress/scope.yaml` excludes (today only `GET /`, the template's status root),
-and interactive authentication/user-management operations - 153
-tools, 69 of them read-only (the TMF APIs, the internal API, `/healthz`,
-`/billing-status`). The tool's name is the operationId, which is the handler's function
-name (`create_payment`, `list_bills`, `catch_up`, ...). GET tools are annotated
-`readOnlyHint`, the others `destructiveHint`. If your client lists fewer tools, search
-by API family: TMF620 catalog, TMF632 party, TMF629 customer, TMF666 accounts,
-TMF676 payments, TMF637 inventory, TMF639 subscriber numbers, TMF678 bills,
-TMF622 orders, or internal operations.
+`docs/progress/scope.yaml` excludes and the interactive authentication/user-management
+operations. The tool's name is the operationId, which is the handler's function name
+(`create_payment`, `list_bills`, `catch_up`, ...). GET tools are annotated `readOnlyHint`
+and are the only tools a read-scope token sees; the others are `destructiveHint` and need
+the write scope. The client's `tools/list` is the authoritative list. If your client lists
+fewer tools, search by API family; the families are the APIs in
+[docs/api/README.md](api/README.md).
 
 They are **generated at startup** (`bss_mcp/tools.py`) from `app.openapi()` and a small
 registry (`bss_mcp/operations.py`) that adds what the OpenAPI document does not carry:

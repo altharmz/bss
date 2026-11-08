@@ -52,8 +52,8 @@ Findings that shape the code:
 
 - TMF639's server variable defaults to `https://serverRoot/resourceInventory/v5`; the base
   path is `/tmf-api/resourceInventory/v5` (the base-path probe resolves the variable
-  default). TMF654's base is `/tmf-api/prepayBalanceManagement/v4`; it has 28 operations
-  (six reads, twenty action operations, two hub operations) plus twelve listeners.
+  default). TMF654's base is `/tmf-api/prepayBalanceManagement/v4`; its served operations
+  are listed in the generated [API reference](api/README.md).
 - Assigned numbers are `busy`: the spec defines `active` as having spare capacity for more
   users. `allocationStatus` is a free string, which allows `quarantined`.
 - Quantity (`amount`, `units`) carries action amounts and bucket figures; transfer cost is

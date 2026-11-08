@@ -61,7 +61,12 @@ Labels: `ops` `vps` `harness` `docs` `gui` `bug` `idea` `blocked` `vpn-adjacent`
 
 Changing an existing issue's P0–P3 priority or its manual board order requires explicit
 human approval in the conversation for the issue and intended change. A request to
-implement work does not itself approve moving it ahead of other issues. Preserve one
+implement work does not itself approve changing priority labels or manual board order.
+An explicit human request to work on a specific issue authorizes selecting that issue
+with `make start-task BSS_TASK_OWNER=<client> ISSUE=<n> HUMAN_APPROVAL=<n>`; the matching
+approval marker must refer to that request in the current conversation. It bypasses
+selection order only and leaves priority labels, board order and every eligibility check
+unchanged (see [worktrees.md](worktrees.md#normal-agent-workflow)). Preserve one
 priority label per issue and leave other agents' owned work untouched.
 
 Use `gh issue edit <n> --remove-label <old> --add-label <new>` for an approved priority

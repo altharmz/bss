@@ -21,7 +21,7 @@ targets; do not invent commands** (CLAUDE.md, "Commands").
 | `make test` | `pytest -n auto` in the app container |
 | `make lint` / `make fmt` | ruff check + format check / auto-format (the writable `tools` service) |
 | `make smoke` | `scripts/smoke.sh` against the published app port: `/healthz`, `/`, `/billing-status` |
-| `make progress` | regenerate [PROGRESS.md](PROGRESS.md) from [progress/scope.yaml](progress/scope.yaml) and the code |
+| `make progress` | write `.progress/PROGRESS.md` and `.progress/status.json` locally (not committed) from [progress/scope.yaml](progress/scope.yaml) and the code |
 | `make docs` / `make docs-check` | regenerate [api/](api/README.md) and [db/](db/README.md) / fail if the committed ones differ |
 | `make clean` | stop the stack **and drop the local database volume** |
 | `make web-install` | the only step that downloads npm packages (`npm ci`, exactly the lockfile) |
