@@ -3,7 +3,7 @@
 # ---------- base ----------
 # Pinned by digest (the multi-arch index): a moved tag must never rebuild the image by
 # surprise. Bump deliberately - see docs/decisions/infra.md, "Base image".
-FROM python:3.12-slim@sha256:dddfd7e07f9d15aeeca61529320492139d21cac7f0070c00609243e51e4e0016 AS base
+FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -21,6 +21,13 @@ RUN python -m venv /opt/venv
 # docs/decisions/infra.md, "Dependencies are pinned".
 COPY requirements.txt constraints.txt ./
 RUN pip install pip==26.2.1 && pip install -r requirements.txt -c constraints.txt
+
+# ---------- runtime-venv ----------
+# The builder's venv without pip: production never runs pip, and pip vendors its own
+# certifi, msgpack, urllib3 and a setuptools listing that Trivy reports (#263). Uninstalled
+# in a stage of its own, so no runtime layer ever holds pip. The dev image keeps pip.
+FROM builder AS runtime-venv
+RUN python -m pip uninstall -y pip
 
 # ---------- dev ----------
 # Used only by compose.override.yaml. Adds test/lint tooling; source is bind-mounted.
@@ -41,7 +48,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload
 
 # ---------- runtime ----------
 FROM base AS runtime
-COPY --from=builder /opt/venv /opt/venv
+COPY --from=runtime-venv /opt/venv /opt/venv
 RUN useradd --uid 1000 --create-home appuser && install -d -o appuser -g appuser /data
 COPY --chown=appuser:appuser app ./app
 COPY --chown=appuser:appuser bss_mcp ./bss_mcp
