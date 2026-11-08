@@ -1,4 +1,5 @@
 import type { components as Internal } from './generated/internal';
+import { toCents } from '../format/money';
 import { getJson, getPage } from './client';
 
 // Usage of a prepaid line (docs/decisions/usage.md): the period summary is ours
@@ -21,11 +22,18 @@ interface Characteristic {
   value?: unknown;
 }
 
+interface AppliedPriceBody {
+  name?: string;
+  unitOfMeasure?: string;
+  price?: { dutyFreeAmount?: { value?: number; unit?: string } };
+}
+
 interface UsageBody {
   id?: string;
   status?: string;
   usageType?: string;
   usageCharacteristic?: Characteristic[];
+  usageProductPrice?: AppliedPriceBody[];
 }
 
 /** One network record as the table shows it. */
@@ -38,10 +46,30 @@ export interface UsageRecord {
   roaming: boolean;
   throttled: boolean;
   status: string;
+  appliedPrice: { name: string; unit: string; cents: number; currency: string } | null;
 }
 
 function pick(body: UsageBody, name: string): unknown {
   return body.usageCharacteristic?.find((c) => c.name === name)?.value;
+}
+
+function appliedPrice(body: UsageBody): UsageRecord['appliedPrice'] {
+  const price = body.usageProductPrice?.[0];
+  if (price === undefined) return null;
+  const amount = price.price?.dutyFreeAmount;
+  if (
+    typeof price.name !== 'string' ||
+    typeof amount?.value !== 'number' ||
+    typeof amount.unit !== 'string'
+  ) {
+    throw new Error('the API sent an incomplete applied usage price');
+  }
+  return {
+    name: price.name,
+    unit: price.unitOfMeasure ?? '',
+    cents: toCents(amount.value),
+    currency: amount.unit,
+  };
 }
 
 export function toRecord(body: UsageBody): UsageRecord {
@@ -62,6 +90,7 @@ export function toRecord(body: UsageBody): UsageRecord {
     roaming: pick(body, 'roaming') === true,
     throttled: pick(body, 'throttled') === true,
     status: body.status ?? '',
+    appliedPrice: appliedPrice(body),
   };
 }
 

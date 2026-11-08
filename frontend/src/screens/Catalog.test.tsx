@@ -440,6 +440,31 @@ describe('catalog sellability', () => {
 });
 
 describe('add price', () => {
+  const PAYG = {
+    ...OFFERINGS[0],
+    id: ids(5),
+    name: 'Metered',
+    externalIdentifier: code('METERED'),
+    productOfferingPrice: [{ id: 'pru' }],
+    productOfferingCharacteristic: [
+      {
+        name: 'offeringKind',
+        characteristicValueSpecification: [{ value: 'payAsYouGo' }],
+      },
+    ],
+  };
+  const usagePrices = (prices: unknown[] = []) => ({
+    [`GET ${CAT}/productOfferingPrice?priceType=usage&offset=0&limit=100`]: () =>
+      json(prices, { total: prices.length }),
+  });
+  async function paygDetails(routes: Record<string, Handler>, prices: unknown[] = []) {
+    const stub = backend({ ...usagePrices(prices), ...routes }, [PAYG]);
+    await open();
+    await waitFor(() => row('Metered'));
+    fireEvent.click(row('Metered'));
+    return { ...stub, detail: screen.getByRole('dialog', { name: 'Metered' }) };
+  }
+
   it.each([
     ['oneTime', 'One time', 'oneTime', {}],
     ['recurring', 'Monthly recurring', 'monthly', { recurringChargePeriodType: 'monthly' }],
@@ -490,6 +515,152 @@ describe('add price', () => {
       });
     },
   );
+
+  const USAGE_PRICE = {
+    id: 'pru',
+    name: 'Metered voice usage',
+    description: 'Calls rounded to ten minutes',
+    priceType: 'usage',
+    unitOfMeasure: { amount: 10, units: 'minute' },
+    price: usd(0.25),
+    validFor: { startDateTime: '2026-06-01T21:00:00Z' },
+  };
+
+  it('adds a usage price with its block and preserves every attached price', async () => {
+    const { fetchMock, detail } = await paygDetails({
+      [`POST ${CAT}/productOfferingPrice`]: () => json({ id: 'new-price' }, { status: 201 }),
+      [`PATCH ${CAT}/productOffering/${ids(5)}`]: () => json({ id: ids(5) }),
+    });
+    fireEvent.click(await within(detail).findByRole('button', { name: 'Add price…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add price · Metered' });
+    expect(within(dialog).queryByRole('option', { name: 'Monthly recurring' })).toBeNull();
+    fireEvent.change(within(dialog).getByLabelText('Charge type'), {
+      target: { value: 'usage' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Rounding unit'), {
+      target: { value: 'minute' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Block amount'), { target: { value: '10' } });
+    fireEvent.change(within(dialog).getByLabelText('Price per block, USD'), {
+      target: { value: '0.25' },
+    });
+    const add = within(dialog).getByRole('button', { name: 'Add price' }) as HTMLButtonElement;
+    await waitFor(() => expect(add.disabled).toBe(false));
+    fireEvent.click(add);
+    expect(await screen.findByRole('status')).toHaveProperty(
+      'textContent',
+      'Price added to Metered',
+    );
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(String(post?.[1]?.body)).toContain('"price":{"unit":"USD","value":0.25}');
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({
+      '@type': 'ProductOfferingPrice',
+      name: 'Metered voice usage',
+      lifecycleStatus: 'Active',
+      priceType: 'usage',
+      unitOfMeasure: { amount: 10, units: 'minute' },
+      price: { unit: 'USD', value: 0.25 },
+      validFor: { startDateTime: '2026-10-01T00:00:00+03:00' },
+    });
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({
+      productOfferingPrice: [
+        { id: 'pru', '@type': 'ProductOfferingPriceRef' },
+        { id: 'new-price', '@type': 'ProductOfferingPriceRef' },
+      ],
+    });
+  });
+
+  it('rejects a partial second and an overlapping kind and currency', async () => {
+    const { detail } = await paygDetails({}, [
+      { ...USAGE_PRICE, unitOfMeasure: { amount: 1, units: 'message' } },
+    ]);
+    fireEvent.click(await within(detail).findByRole('button', { name: 'Add price…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add price · Metered' });
+    fireEvent.change(within(dialog).getByLabelText('Charge type'), {
+      target: { value: 'usage' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Rounding unit'), {
+      target: { value: 'second' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Block amount'), { target: { value: '0.5' } });
+    fireEvent.change(within(dialog).getByLabelText('Price per block, USD'), {
+      target: { value: '1' },
+    });
+    expect(await within(dialog).findByRole('alert')).toHaveProperty(
+      'textContent',
+      'Block amount must be positive and a whole number of bytes, seconds or messages',
+    );
+    expect(
+      (within(dialog).getByRole('button', { name: 'Add price' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText('Rounding unit'), {
+      target: { value: 'message' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Block amount'), { target: { value: '1' } });
+    expect(await within(dialog).findByRole('alert')).toHaveProperty(
+      'textContent',
+      'A sms price in USD already covers 2026-10-01',
+    );
+    expect(
+      (within(dialog).getByRole('button', { name: 'Add price' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('lists a usage price and edits only its name, description and amount', async () => {
+    const { fetchMock, detail } = await paygDetails(
+      {
+        [`GET ${CAT}/productOfferingPrice/pru`]: () => json(USAGE_PRICE),
+        [`PATCH ${CAT}/productOfferingPrice/pru`]: () => json(USAGE_PRICE),
+      },
+      [USAGE_PRICE],
+    );
+    expect(await within(detail).findByText('Usage prices')).toBeTruthy();
+    expectUi('ui.catalog.usagePrices');
+    fireEvent.click(within(detail).getByRole('button', { name: 'Open price 0.25 minute' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Metered voice usage' });
+    expect(within(dialog).getByText('0.25 USD / 10 minute')).toBeTruthy();
+    expect(expectUi('ui.catalog.usageUnit').textContent).toBe('10 minute');
+    fireEvent.change(within(dialog).getByLabelText(/^Name/), {
+      target: { value: 'Metered voice 2' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Description'), {
+      target: { value: 'New rounding description' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/^Price per block, USD/), {
+      target: { value: '0.5' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(String(patch?.[1]?.body)).toBe(
+      '{"name":"Metered voice 2","description":"New rounding description","price":{"unit":"USD","value":0.50}}',
+    );
+  });
+
+  it('offers neither usage nor recurring prices on an add-on', async () => {
+    const addOn = {
+      ...PAYG,
+      productOfferingCharacteristic: [
+        {
+          name: 'offeringKind',
+          characteristicValueSpecification: [{ value: 'addOn' }],
+        },
+      ],
+    };
+    const { fetchMock } = backend({}, [addOn]);
+    await open();
+    await waitFor(() => row('Metered'));
+    fireEvent.click(row('Metered'));
+    const detail = screen.getByRole('dialog', { name: 'Metered' });
+    fireEvent.click(await within(detail).findByRole('button', { name: 'Add price…' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add price · Metered' });
+    expect(within(dialog).getByLabelText('Charge type').querySelectorAll('option')).toHaveLength(1);
+    expect(within(dialog).getByRole('option', { name: 'One time' })).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('priceType=usage'))).toBe(
+      false,
+    );
+  });
 });
 
 describe('lifecycle', () => {

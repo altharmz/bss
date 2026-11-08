@@ -160,8 +160,8 @@ export function OfferingEditModal({
             ))}
           </SelectField>
           <span className="bss-secondary">
-            Only a plan has a recurring price; an add-on or a pay-as-you-go line is charged its
-            one-time price.
+            Only a plan has a recurring price. A pay-as-you-go line uses usage prices; an add-on
+            uses its one-time price.
           </span>
         </label>
         <Checkbox
@@ -358,8 +358,18 @@ function PriceBody({
           <dt>Charge</dt>
           <dd className="num">
             {price.cents === null ? '—' : formatCents(price.cents)} {price.currency ?? ''} /{' '}
-            {price.interval}
+            {price.priceType === 'usage'
+              ? `${price.unitOfMeasure?.amount ?? 1} ${price.unitOfMeasure?.units ?? ''}`
+              : price.interval}
           </dd>
+          {price.priceType === 'usage' && (
+            <>
+              <dt>Rounding unit</dt>
+              <dd className="num" data-ui="ui.catalog.usageUnit">
+                {price.unitOfMeasure?.amount ?? 1} {price.unitOfMeasure?.units ?? ''}
+              </dd>
+            </>
+          )}
           <dt>Validity</dt>
           <dd className="num">
             {price.validFrom === null
@@ -383,7 +393,7 @@ function PriceBody({
           />
         </label>
         <label>
-          Price, {price.currency ?? ''}
+          {price.priceType === 'usage' ? 'Price per block' : 'Price'}, {price.currency ?? ''}
           <TextInput
             mono
             inputMode="decimal"

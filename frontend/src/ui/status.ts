@@ -117,6 +117,11 @@ export const STATUS_MAP = {
     ok: ['live', 'OK'],
     error: ['failed', 'Error'],
   },
+  usage: {
+    notRated: ['queued', 'Not rated'],
+    rated: ['live', 'Rated'],
+    rejected: ['failed', 'Rejected'],
+  },
 } as const;
 
 export type StatusKind = keyof typeof STATUS_MAP;

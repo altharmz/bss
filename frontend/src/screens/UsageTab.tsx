@@ -13,7 +13,8 @@ import { useSystemContext } from '../app/context';
 import { businessDate, clockTime } from '../format/dates';
 import { shortId } from '../format/ids';
 import { formatInt } from '../format/money';
-import { Badge, Button, KeyValue, Panel, SelectField, Tag } from '../ui/kit';
+import { Amount } from '../ui/Amount';
+import { Badge, Button, KeyValue, Panel, SelectField, StatusPill, Tag } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { ErrorBlock, ListState } from '../ui/states';
 import { TableFooter, TableHead, TableRow, type Column } from '../ui/Table';
@@ -27,6 +28,8 @@ const RECORD_COLUMNS: Column[] = [
   { key: 'time', label: 'Time', width: '172px', mono: true },
   { key: 'kind', label: 'Kind', width: '90px' },
   { key: 'quantity', label: 'Quantity', width: '1fr', align: 'right', mono: true },
+  { key: 'status', label: 'Status', width: '110px' },
+  { key: 'price', label: 'Applied price', width: '220px', align: 'right', mono: true },
   { key: 'flags', label: 'Flags', width: '180px' },
 ];
 
@@ -154,6 +157,22 @@ function Records({ product, timeZone }: { product: string; timeZone: string }) {
                   time: `${businessDate(r.time, timeZone)} ${clockTime(r.time, timeZone)}`,
                   kind: KIND[r.kind] ?? r.kind,
                   quantity: formatQuantity(r.quantity, r.unit),
+                  status: (
+                    <span data-ui="ui.subscriber.usage.status">
+                      <StatusPill kind="usage" status={r.status} />
+                    </span>
+                  ),
+                  price:
+                    r.appliedPrice === null ? (
+                      <span className="bss-dash">—</span>
+                    ) : (
+                      <div data-ui="ui.subscriber.usage.appliedPrice">
+                        <Amount cents={r.appliedPrice.cents} currency={r.appliedPrice.currency} />
+                        <div className="bss-secondary">
+                          {r.appliedPrice.name} · per {r.appliedPrice.unit}
+                        </div>
+                      </div>
+                    ),
                   flags: (
                     <span className="usage-record-flags">
                       {r.roaming && <Tag>Roaming</Tag>}
