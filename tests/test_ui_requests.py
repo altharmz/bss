@@ -29,6 +29,20 @@ OFFSET = "+03:00"
 RUNS = "/internal/v1/billingRun"
 
 
+def test_ui_lifecycle_settings(api):
+    """Exact partial PUT pinned by BillingSettings.test.tsx, including zero and max."""
+    path = "/internal/v1/lifecycle/settings"
+    before = api.get(path).json()
+    response = api.put(path, {"graceDays": 0, "suspensionDays": 3650})
+    assert response.status_code == 200
+    saved = api.get(path).json()
+    assert saved["graceDays"] == 0
+    assert saved["suspensionDays"] == 3650
+    assert saved["numberAgingDays"] == before["numberAgingDays"]
+    assert saved["paygZeroBalanceDays"] == before["paygZeroBalanceDays"]
+    assert saved["updatedAt"] is not None
+
+
 def test_ui_number_inventory_and_orders(api):
     """Exact inventory/add/modify bodies pinned in Numbers.test.tsx."""
     url = "/tmf-api/resourceInventory/v5/resource"

@@ -621,6 +621,15 @@ Index: [README.md](README.md). Screen-level detail:
 "Offering code: `externalIdentifier` (above)" refers to the TMF620 mapping in
 [catalog.md](catalog.md#tmf620-mapping).
 
+## Prepaid lifecycle UI (2026-11-08, issue #218)
+
+Built the product row's server-provided lifecycle state and next transition, including
+the lifecycle suspension cause. Billing settings gains a Prepaid lifecycle tab with
+GET/partial PUT of the four durations. It reuses the shared edit dialog and write handling:
+integer bounds, changed fields only, retained refusal values, and Refresh after uncertainty.
+No backend or policy changes. Component tests cover projections and settings, and
+`tests/test_ui_requests.py` replays the exact partial PUT including zero and the upper bound.
+
 ## Frontend conventions
 
 The admin UI (stage 5) lives in `frontend/`: Vite + React + TypeScript, built to static
