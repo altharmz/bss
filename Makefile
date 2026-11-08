@@ -22,7 +22,9 @@ export BSS_SLOT := $(SLOT)
 endif
 
 .PHONY: start-task new-priority-task release-slot
-start-task: ## Prepare the next Ready issue in an automatically selected worker slot (JSON=1 for agents)
+start-task: export BSS_START_ISSUE := $(ISSUE)
+start-task: export BSS_START_APPROVAL := $(HUMAN_APPROVAL)
+start-task: ## Prepare the next Ready issue; optional ISSUE=<id> HUMAN_APPROVAL=<same-id> only with explicit human approval (JSON=1 for agents)
 	@python3 -B scripts/start_task.py $(if $(filter 1,$(JSON)),--json,)
 
 new-priority-task: export BSS_NEW_TASK_TITLE := $(TITLE)
@@ -280,12 +282,12 @@ remote: ## Run a one-off command against the deployed image on the VPS: make rem
 	fi
 	ssh $(SSH_OPTS) $(REMOTE) "cd $(REMOTE_DIR) && IMAGE_NAME=$(IMAGE_NAME) TAG=$(TAG) $(COMPOSE_PROD) run --rm --no-deps $(SERVICE) $(CMD)"
 
-progress: ## Regenerate docs/PROGRESS.md + docs/progress/status.json (scope.yaml vs the code)
+progress: ## Write .progress/PROGRESS.md + status.json (scope.yaml vs the code; reruns the full suite, over 10 min)
 	@mkdir -p .progress
 	./scripts/task-compose run --rm -T app python -m tests.progress_collect < docs/progress/scope.yaml > .progress/backend.json
 	./scripts/task-compose run --rm --no-deps -T web-offline sh -c '$(WEB_DEPS) && node scripts/ui-markers.mjs' > .progress/ui.json
 	./scripts/task-compose run --rm --no-deps -T web-offline sh -c '$(WEB_DEPS) && npm run types >&2 && UI_TESTED_OUT=/tmp/ui-tested.json npx vitest run >&2 && cat /tmp/ui-tested.json' > .progress/ui-tested.json
-	python3 scripts/progress/generate.py
+	@python3 scripts/progress/generate.py; result=$$?; echo "Progress report: .progress/PROGRESS.md (.progress/status.json)"; exit $$result
 
 docs: ## Regenerate docs/api/ and docs/db/ (app.openapi() vs spec/, pg_catalog at migration head)
 	@mkdir -p .docs
@@ -322,6 +324,7 @@ runtime-check: ## The harness script tests (scripts/test_*.py, run in parallel, 
 		scripts/test_task_summary.py \
 		scripts/test_script_quality.py \
 		scripts/test_docs_links.py \
+		scripts/test_progress_generate.py \
 		scripts/test_compose_prod.py \
 		scripts/test_mcp_oauth_smoke.py
 

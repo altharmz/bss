@@ -4,9 +4,11 @@ Index: [README.md](README.md).
 
 ## Progress tracker
 
-`make progress` writes `docs/PROGRESS.md` and `docs/progress/status.json`: per area (db, api,
+`make progress` writes `.progress/PROGRESS.md` and `.progress/status.json` locally
+(not committed): per area (db, api,
 ui, worker) the share of items implemented and tested. It reruns the whole suite with
-recording (over 10 minutes), so it runs only on request.
+recording (over 10 minutes), so it runs only on request. A committed snapshot goes stale;
+see the [documentation count rule](harness.md#documentation-no-hand-written-counts).
 
 - **Scope:** `docs/progress/scope.yaml`, hand-maintained and editable within feature work.
   Each item has id, area, stage, title and the key the code is matched on: `table` (db),

@@ -233,13 +233,15 @@ def issue_of(branch):
     return int(match[1]) if match else None
 
 
-def select_issue(items, represented):
+def select_issue(items, represented, requested=None):
     choices, seen = [], set()
     for position, item in enumerate(items):
         if item["id"] in seen:
             raise StartupError("ambiguous board order: duplicate project item")
         seen.add(item["id"])
         issue = item.get("content") or {}
+        if requested is not None and issue.get("number") != requested:
+            continue
         if (
             (item.get("fieldValueByName") or {}).get("name") != "Ready"
             or issue.get("state") != "OPEN"
@@ -264,10 +266,37 @@ def select_issue(items, represented):
             )
         choices.append((int(next(iter(priority))[1]), position, dict(issue, item_id=item["id"])))
     if not choices:
+        if requested is not None:
+            raise StartupError(
+                f"requested issue #{requested} is not an eligible Ready issue "
+                "(blocked, claimed, branches/worktrees/PRs excluded); no fallback selected"
+            )
         raise StartupError(
             "no eligible Ready issue (blocked, claimed, branches/worktrees/PRs excluded)"
         )
     return min(choices, key=lambda choice: choice[:2])[2]
+
+
+def requested_issue():
+    """A human-approved selection overrides order, never eligibility or board priority.
+
+    The matching approval records the operator's assertion, not proof of conversation
+    approval. Agents must obtain explicit approval for this issue before passing it.
+    """
+    number = os.environ.get("BSS_START_ISSUE", "")
+    approval = os.environ.get("BSS_START_APPROVAL", "")
+    if not number:
+        if approval:
+            raise StartupError("HUMAN_APPROVAL requires ISSUE=<id> for start-task")
+        return None
+    if not re.fullmatch(r"[1-9][0-9]*", number):
+        raise StartupError("ISSUE must be a positive issue number")
+    if approval != number:
+        raise StartupError(
+            f"ISSUE={number} requires explicit human approval in the conversation; "
+            f"after approval pass HUMAN_APPROVAL={number}"
+        )
+    return int(number)
 
 
 def task_owner():
@@ -845,6 +874,7 @@ def select_slot(root, common, stack):
 
 
 def start(on_ready=None):
+    requested = requested_issue()
     root, common = primary()
     agent = agent_label()
     descriptor = os.open(common / "start-task.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -882,7 +912,7 @@ def start(on_ready=None):
         prs = pages(PR_QUERY, lambda response: response["repository"]["pullRequests"])
         represented.update(issue_of(pr["headRefName"]) for pr in prs)
         items = snapshot()
-        issue = select_issue(items, represented)
+        issue = select_issue(items, represented, requested)
         branch = branch_name(issue["number"], issue["title"])
         destination = slot / "repo"
         if destination.exists() or destination.is_symlink() or destination in dict(trees):
@@ -916,6 +946,9 @@ def start(on_ready=None):
                 agent=agent,
                 status="Doing",
             )
+            if requested is not None:
+                result["requested_issue"] = requested
+                result["human_approval"] = requested
             claim = Claim(issue, agent)
             owned_slot = claim_slot(slot, branch) if slot else None
             try:

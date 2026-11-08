@@ -1,4 +1,4 @@
-# Implementation scope for the progress tracker (make progress -> docs/PROGRESS.md).
+# Implementation scope for the progress tracker (make progress -> .progress/PROGRESS.md, local and not committed).
 # Hand-maintained; editable within authorized feature work. Preserve existing scope.
 #
 # items:     everything planned. id = <area>.<name>; stage = the project stage that plans it
@@ -69,38 +69,33 @@ items:
   - {id: api.tmf639.resource.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/resourceInventory/v5/resource/{resource_id}", title: "TMF639 PATCH /resource/{id}"}
   - {id: api.tmf639.resource.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/resourceInventory/v5/resource/{resource_id}", title: "TMF639 DELETE /resource/{id}"}
   - {id: api.tmf654.bucket.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/bucket", title: "TMF654 GET /bucket"}
-  - {id: api.tmf654.bucket.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/bucket/{id}", title: "TMF654 GET /bucket/{id}"}
+  - {id: api.tmf654.bucket.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/bucket/{bucket_id}", title: "TMF654 GET /bucket/{id}"}
   - {id: api.tmf654.topupBalance.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/topupBalance", title: "TMF654 GET /topupBalance"}
   - {id: api.tmf654.topupBalance.create, area: api, stage: 5, method: POST, path: "/tmf-api/prepayBalanceManagement/v4/topupBalance", title: "TMF654 POST /topupBalance"}
-  - {id: api.tmf654.topupBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/topupBalance/{id}", title: "TMF654 PATCH /topupBalance/{id}"}
-  - {id: api.tmf654.topupBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/topupBalance/{id}", title: "TMF654 GET /topupBalance/{id}"}
-  - {id: api.tmf654.topupBalance.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/topupBalance/{id}", title: "TMF654 DELETE /topupBalance/{id}"}
+  - {id: api.tmf654.topupBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/topupBalance/{topup_id}", title: "TMF654 PATCH /topupBalance/{id}"}
+  - {id: api.tmf654.topupBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/topupBalance/{topup_id}", title: "TMF654 GET /topupBalance/{id}"}
+  - {id: api.tmf654.topupBalance.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/topupBalance/{topup_id}", title: "TMF654 DELETE /topupBalance/{id}"}
   - {id: api.tmf654.adjustBalance.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/adjustBalance", title: "TMF654 GET /adjustBalance"}
   - {id: api.tmf654.adjustBalance.create, area: api, stage: 5, method: POST, path: "/tmf-api/prepayBalanceManagement/v4/adjustBalance", title: "TMF654 POST /adjustBalance"}
-  - {id: api.tmf654.adjustBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/adjustBalance/{id}", title: "TMF654 PATCH /adjustBalance/{id}"}
-  - {id: api.tmf654.adjustBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/adjustBalance/{id}", title: "TMF654 GET /adjustBalance/{id}"}
-  - {id: api.tmf654.adjustBalance.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/adjustBalance/{id}", title: "TMF654 DELETE /adjustBalance/{id}"}
+  - {id: api.tmf654.adjustBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/adjustBalance/{adjust_id}", title: "TMF654 PATCH /adjustBalance/{id}"}
+  - {id: api.tmf654.adjustBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/adjustBalance/{adjust_id}", title: "TMF654 GET /adjustBalance/{id}"}
+  - {id: api.tmf654.adjustBalance.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/adjustBalance/{adjust_id}", title: "TMF654 DELETE /adjustBalance/{id}"}
   - {id: api.tmf654.reserveBalance.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance", title: "TMF654 GET /reserveBalance"}
   - {id: api.tmf654.reserveBalance.create, area: api, stage: 5, method: POST, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance", title: "TMF654 POST /reserveBalance"}
-  - {id: api.tmf654.reserveBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{id}", title: "TMF654 PATCH /reserveBalance/{id}"}
-  - {id: api.tmf654.reserveBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{id}", title: "TMF654 GET /reserveBalance/{id}"}
-  - {id: api.tmf654.reserveBalance.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{id}", title: "TMF654 DELETE /reserveBalance/{id}"}
+  - {id: api.tmf654.reserveBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{reserve_id}", title: "TMF654 PATCH /reserveBalance/{id}"}
+  - {id: api.tmf654.reserveBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{reserve_id}", title: "TMF654 GET /reserveBalance/{id}"}
+  - {id: api.tmf654.reserveBalance.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{reserve_id}", title: "TMF654 DELETE /reserveBalance/{id}"}
   - {id: api.tmf654.transferBalance.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/transferBalance", title: "TMF654 GET /transferBalance"}
   - {id: api.tmf654.transferBalance.create, area: api, stage: 5, method: POST, path: "/tmf-api/prepayBalanceManagement/v4/transferBalance", title: "TMF654 POST /transferBalance"}
-  - {id: api.tmf654.transferBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/transferBalance/{id}", title: "TMF654 PATCH /transferBalance/{id}"}
-  - {id: api.tmf654.transferBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/transferBalance/{id}", title: "TMF654 GET /transferBalance/{id}"}
-  - {id: api.tmf654.transferBalance.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/transferBalance/{id}", title: "TMF654 DELETE /transferBalance/{id}"}
-  - {id: api.tmf654.reserveBalance.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance", title: "TMF654 GET /reserveBalance"}
-  - {id: api.tmf654.reserveBalance.create, area: api, stage: 5, method: POST, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance", title: "TMF654 POST /reserveBalance"}
-  - {id: api.tmf654.reserveBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{id}", title: "TMF654 PATCH /reserveBalance/{id}"}
-  - {id: api.tmf654.reserveBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{id}", title: "TMF654 GET /reserveBalance/{id}"}
-  - {id: api.tmf654.reserveBalance.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/reserveBalance/{id}", title: "TMF654 DELETE /reserveBalance/{id}"}
+  - {id: api.tmf654.transferBalance.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/prepayBalanceManagement/v4/transferBalance/{transfer_id}", title: "TMF654 PATCH /transferBalance/{id}"}
+  - {id: api.tmf654.transferBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/transferBalance/{transfer_id}", title: "TMF654 GET /transferBalance/{id}"}
+  - {id: api.tmf654.transferBalance.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/transferBalance/{transfer_id}", title: "TMF654 DELETE /transferBalance/{id}"}
   - {id: api.tmf654.accumulatedBalance.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/accumulatedBalance", title: "TMF654 GET /accumulatedBalance"}
-  - {id: api.tmf654.accumulatedBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/accumulatedBalance/{id}", title: "TMF654 GET /accumulatedBalance/{id}"}
+  - {id: api.tmf654.accumulatedBalance.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/accumulatedBalance/{balance_id}", title: "TMF654 GET /accumulatedBalance/{id}"}
   - {id: api.tmf654.balanceActionHistory.list, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/balanceActionHistory", title: "TMF654 GET /balanceActionHistory"}
-  - {id: api.tmf654.balanceActionHistory.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/balanceActionHistory/{id}", title: "TMF654 GET /balanceActionHistory/{id}"}
+  - {id: api.tmf654.balanceActionHistory.get, area: api, stage: 5, method: GET, path: "/tmf-api/prepayBalanceManagement/v4/balanceActionHistory/{history_id}", title: "TMF654 GET /balanceActionHistory/{id}"}
   - {id: api.tmf654.hub.create, area: api, stage: 5, method: POST, path: "/tmf-api/prepayBalanceManagement/v4/hub", title: "TMF654 POST /hub"}
-  - {id: api.tmf654.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/hub/{id}", title: "TMF654 DELETE /hub/{id}"}
+  - {id: api.tmf654.hub.delete, area: api, stage: 5, method: DELETE, path: "/tmf-api/prepayBalanceManagement/v4/hub/{hub_id}", title: "TMF654 DELETE /hub/{id}"}
   - {id: db.app_user, area: db, stage: 5, table: app_user, title: "Application users and roles"}
   - {id: db.app_session, area: db, stage: 5, table: app_session, title: "Revocable application sessions"}
   - {id: db.app_user_audit, area: db, stage: 5, table: app_user_audit, title: "User management audit"}
@@ -681,6 +676,25 @@ items:
   - {id: db.account_audit, area: db, stage: 5, table: account_audit, title: "Append-only audit log of agent actions on accounts"}
   - {id: worker.accountSecurity, area: worker, stage: 5, title: "A SIM swap, number change, Number Transfer PIN or contact change on a prepaid customer needs the account PIN, line locks refuse SIM swap and port-out, each action is audited and told to the customer"}
 
+  - {id: ui.numbers.deleteConfirm, area: ui, stage: 5, title: "Delete subscriber number confirmation"}
+  - {id: ui.orders.next, area: ui, stage: 5, title: "Orders: next page of older orders"}
+  - {id: ui.orders.previous, area: ui, stage: 5, title: "Orders: previous page of newer orders"}
+  - {id: ui.orders.noCancellations, area: ui, stage: 5, title: "Order detail: no cancellation requests"}
+  - {id: ui.prepaidCommands.next, area: ui, stage: 5, title: "Prepaid commands: next page"}
+  - {id: ui.prepaidCommands.previous, area: ui, stage: 5, title: "Prepaid commands: previous page"}
+  - {id: ui.subscriber.usage.barred, area: ui, stage: 5, title: "Usage allowance: service barred"}
+  - {id: ui.subscriber.usage.throttled, area: ui, stage: 5, title: "Usage allowance: service throttled"}
+  - {id: ui.subscriber.usage.next, area: ui, stage: 5, title: "Subscriber usage: next page"}
+  - {id: ui.subscriber.usage.previous, area: ui, stage: 5, title: "Subscriber usage: previous page"}
+  - {id: ui.subscribers.inspector, area: ui, stage: 5, title: "Subscriber list: selected account inspector"}
+
+  - {id: ui.catalog.inspector, area: ui, stage: 5, title: "Catalog: selected offering inspector"}
+  - {id: ui.subscriber.prepaid.available, area: ui, stage: 5, title: "Prepaid balance: available funds"}
+  - {id: ui.subscriber.prepaid.reserved, area: ui, stage: 5, title: "Prepaid balance: reserved funds"}
+  - {id: ui.subscriber.usage.data, area: ui, stage: 5, title: "Subscriber data allowance"}
+  - {id: ui.subscriber.usage.sms, area: ui, stage: 5, title: "Subscriber SMS allowance"}
+  - {id: ui.subscriber.usage.voice, area: ui, stage: 5, title: "Subscriber voice allowance"}
+
 excluded:
   - {id: api.service.root, area: api, method: GET, path: /, reason: "template status root, not a product feature"}
   - {id: api.internal.sim.batches, area: api, method: GET, path: /internal/v1/sim/batch, reason: "SIM stock batches are an operator UI view (186b); MCP reads the SIMs through TMF639 list_resources"}
@@ -699,8 +713,6 @@ excluded:
   - {id: api.internal.notification.consentGet, area: api, method: GET, path: /internal/v1/notification/consent, reason: "marketing consent is an operator screen on the customer (192b), not a model tool"}
   - {id: api.internal.notification.consentPost, area: api, method: POST, path: /internal/v1/notification/consent, reason: "recording a customer's consent is an operator action (192b); a model must not opt a customer in"}
   - {id: api.internal.notification.resend, area: api, method: POST, path: "/internal/v1/notification/message/{message_id}/resend", reason: "resending a customer message is an operator UI action (192b)"}
-  - {id: ui.notFound, area: ui, reason: "not-found page, not a product feature"}
-  - {id: ui.users.denied, area: ui, stage: 5, title: "Users: not allowed for non-administrators"}
   - {id: api.internal.security.pinGet, area: api, method: GET, path: "/internal/v1/security/pin/{customer_id}", reason: "the account PIN status is an operator screen (193b), not a model tool"}
   - {id: api.internal.security.pinPut, area: api, method: PUT, path: "/internal/v1/security/pin/{customer_id}", reason: "setting or resetting a customer's PIN is an operator action: the PIN is a secret a model must not choose or see"}
   - {id: api.internal.security.lockGet, area: api, method: GET, path: "/internal/v1/security/lock/{product_id}", reason: "line locks are an operator screen (193b)"}

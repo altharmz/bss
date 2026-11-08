@@ -13,7 +13,7 @@ surface is the **TM Forum Open APIs** (TMF6xx) - see [domain.md](domain.md).
 ## What exists, by stage
 
 The project was built in stages ([decisions/data-model.md](decisions/data-model.md), "Stage order"); progress is tracked from the
-code by `make progress` into [PROGRESS.md](PROGRESS.md) against
+code by `make progress` into `.progress/PROGRESS.md` (local report, not committed) against
 [progress/scope.yaml](progress/scope.yaml).
 
 | Stage | What | Status |
@@ -24,7 +24,8 @@ code by `make progress` into [PROGRESS.md](PROGRESS.md) against
 | 4 | Billing worker: daily runs, catch-up/retry, on-demand bills and documents | built ([billing-worker.md](billing-worker.md)); Billing runs UI built |
 | 5 | Admin UI (React) and its internal API | built, including Billing runs and bill settlement ([ui.md](ui.md)) |
 
-Implementation and test coverage are measured for all four areas in PROGRESS.md.
+Implementation and test coverage are measured by `make progress` in `.progress/PROGRESS.md`
+(local report, not committed).
 
 The input/read-completeness slice adds strict TMF write queries and type checks,
 historical order price quotes, product prices/navigation, and daily bill-cycle reads

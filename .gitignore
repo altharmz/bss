@@ -13,7 +13,7 @@ __pycache__/
 .venv/
 *.tar.gz
 backups/
-# make progress: the collectors' JSON (the generated docs/PROGRESS.md is committed)
+# make progress: local collectors' JSON and generated reports (not committed)
 .progress/
 # make docs: the collector's JSON (the generated docs/api/ and docs/db/ are committed)
 .docs/
