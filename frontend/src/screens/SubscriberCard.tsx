@@ -1259,6 +1259,26 @@ function ProductRow({
               <span className="bss-name">{name}</span>
               <div className="bss-code">{code}</div>
               <PlanFacts product={product} />
+              {product.lifecycle && (
+                <div className="bss-secondary" data-ui="ui.subscriber.productLifecycle">
+                  Lifecycle: {product.lifecycle.state}
+                  {product.lifecycle.nextTransition && (
+                    <span>
+                      {' '}
+                      ·{' '}
+                      {product.lifecycle.nextTransition.action === 'suspend'
+                        ? 'Suspend'
+                        : 'Deactivate'}{' '}
+                      on {product.lifecycle.nextTransition.date}
+                    </span>
+                  )}
+                </div>
+              )}
+              {product.suspensionCause === 'lifecycle' && (
+                <div className="bss-secondary" data-ui="ui.subscriber.lifecycleSuspension">
+                  Suspension: lifecycle
+                </div>
+              )}
               {fundingWait !== null && (
                 <div className="bss-secondary">
                   Waiting for funds: short {formatCents(toCents(fundingWait.shortfall))}

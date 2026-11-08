@@ -214,6 +214,45 @@ async function open(hash = '') {
   await screen.findByRole('heading', { name: /Olga Kuznetsova/ });
 }
 
+describe('product lifecycle projection', () => {
+  it.each([
+    ['active', null, null],
+    ['grace', { action: 'suspend', date: '2026-10-08' }, 'Suspend on 2026-10-08'],
+    ['suspended', { action: 'deactivate', date: '2026-11-07' }, 'Deactivate on 2026-11-07'],
+  ])(
+    'shows server lifecycle %s and its next action/date',
+    async (state, nextTransition, caption) => {
+      backend({
+        [`GET ${INTERNAL}/products`]: () =>
+          json([
+            product(P1, {
+              lifecycle: { state, nextTransition },
+              suspensionCause: state === 'suspended' ? 'lifecycle' : null,
+            }),
+          ]),
+      });
+      await open();
+      expect(await screen.findByText(`Lifecycle: ${state}`, { exact: false })).toBeTruthy();
+      expectUi('ui.subscriber.productLifecycle');
+      if (caption) expect(screen.getByText(caption, { exact: false })).toBeTruthy();
+      else expect(screen.queryByText(/Suspend on|Deactivate on/)).toBeNull();
+      if (state === 'suspended') {
+        expect(screen.getByText('Suspension: lifecycle')).toBeTruthy();
+        expectUi('ui.subscriber.lifecycleSuspension');
+      }
+    },
+  );
+
+  it('omits lifecycle for null and absent projections', async () => {
+    backend({
+      [`GET ${INTERNAL}/products`]: () => json([product(P1, { lifecycle: null }), product(P2, {})]),
+    });
+    await open();
+    await screen.findAllByText('MOB-L · Mobile Voice & Data');
+    expect(screen.queryByText(/Lifecycle:/)).toBeNull();
+  });
+});
+
 function selectTab(name: string) {
   const tab = screen.getByRole('tab', { name: new RegExp(`^${name}`) });
   if (tab.getAttribute('aria-selected') !== 'true') fireEvent.click(tab);

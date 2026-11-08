@@ -146,6 +146,10 @@ items:
   - {id: ui.accounts.settlement.delete, area: ui, stage: 5, title: "Delete a settlement account"}
   - {id: ui.accounts.settlement.confirmDelete, area: ui, stage: 5, title: "Confirm deleting a settlement account"}
   - {id: ui.accounts.settlement.financialLink, area: ui, stage: 5, title: "Link or unlink a financial account on a settlement account"}
+  - {id: ui.billingSettings.lifecycle, area: ui, stage: 5, title: "Prepaid lifecycle durations in Billing settings"}
+  - {id: ui.billingSettings.lifecycle.form, area: ui, stage: 5, title: "Edit prepaid lifecycle durations"}
+  - {id: ui.subscriber.productLifecycle, area: ui, stage: 5, title: "Product lifecycle state and next transition"}
+  - {id: ui.subscriber.lifecycleSuspension, area: ui, stage: 5, title: "Product suspension caused by lifecycle"}
   - {id: ui.billingSettings.cycles, area: ui, stage: 5, title: "Billing settings: cycle specification tab"}
   - {id: ui.billingSettings.cycles.new, area: ui, stage: 5, title: "New cycle specification"}
   - {id: ui.billingSettings.cycles.form, area: ui, stage: 5, title: "Cycle specification create and edit dialog"}

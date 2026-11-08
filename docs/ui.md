@@ -531,6 +531,23 @@ is the financial-account form plus a **Financial account** select of the owner's
 `.edit`, `.delete`, `.confirmDelete`, `.financialLink`. API: `GET|POST|PATCH|DELETE
 .../partyAccount|settlementAccount`, `GET .../financialAccount?relatedParty.id=`.
 
+### Prepaid lifecycle (issue #218)
+
+The subscriber product row shows the server's `lifecycle.state` (active, grace or suspended)
+and its next transition action and business date. Null or absent lifecycle projections show
+no lifecycle detail. Lifecycle-caused suspension has an explicit label. Dates and actions
+come from `GET /internal/v1/billingAccount/{id}/products`; the browser derives no policy.
+
+Billing settings has a **Prepaid lifecycle** tab, loaded on selection from
+`GET /internal/v1/lifecycle/settings`. Edit changes grace days (0–365), suspension days
+(0–3650), number aging days (0–3650), and pay-as-you-go zero-balance days (0–365).
+Save sends only changed integer durations in a JSON PUT to the same endpoint. Zero is valid.
+The page explains that policy changes apply to transitions not yet taken and number aging
+is fixed at deactivation. Refusals retain values; uncertain writes require Refresh before
+another attempt. Successful saves reload the settings. Read failures offer Retry.
+Tests: `BillingSettings.test.tsx`, `SubscriberCard.test.tsx`, and the lifecycle settings
+request replay in `tests/test_ui_requests.py`.
+
 ### Billing settings (`ui.billingSettings.cycles|formats|media`) - `screens/BillingSettings.tsx`
 
 Built-in Monthly's Used by count includes loaded accounts without a cycle specification reference.
