@@ -1,0 +1,5 @@
+# CI only: the python job of .github/workflows/security.yml installs this to audit
+# constraints.txt and constraints-dev.txt. Not part of any image. Change the pin
+# deliberately (newest release at least two weeks old). Decision: docs/decisions/harness.md,
+# "Supply-chain scanning".
+pip-audit==2.10.1

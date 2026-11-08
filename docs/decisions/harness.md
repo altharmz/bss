@@ -171,6 +171,47 @@ Docker, 15 minutes at most), runs `make docs-links` on every pull request and pu
 hook, and the nightly full run covers the harness tests through `make test`. The web
 checks (`web-lint`, `web-test`, `web-e2e`) are not in CI. Branch protection is the human's.
 
+### Supply-chain scanning (2026-11-08)
+
+Issue #241. Known vulnerabilities in what we ship, with free tooling only: CodeQL, dependency
+review and secret scanning are paid on a private repository.
+
+- **A separate workflow**, `.github/workflows/security.yml`. It runs on pull requests that
+  change the dependency files, the `Dockerfile`, the ignore files, the gate or the workflow
+  itself. It also runs nightly at 01:45 UTC, after CI, and on `workflow_dispatch`, with
+  `contents: read`. It is not a required check, because a required check with a path filter
+  would hang on every other PR. On a PR it blocks through `make check-pr`. A red nightly run is
+  the signal for a new vulnerability ([operations.md](../operations.md#security-scan)).
+- **Three jobs, each fails on a finding.** `python`: pip-audit (pinned in
+  `requirements-security.txt`, CI only) checks `constraints.txt` and `constraints-dev.txt`,
+  and every finding blocks, since pip-audit reports no severity. `ui`: `npm audit --json` in
+  the pinned Node image (lockfile only, no install) blocks at `high` for production packages
+  and `critical` for dev-only ones. `image`: Trivy scans the `runtime` image for fixable HIGH
+  and CRITICAL findings. Trivy runs from its official image pinned by digest, not from a
+  third-party action, which keeps the supply-chain surface small. The image build reads CI's
+  layer cache and writes its own cache scope, so it does not evict the cache of CI's dev image.
+- **The gate**, `scripts/audit_gate.py`, is stdlib only and tested in `make runtime-check`.
+  It reads the tool's JSON on stdin. Exit 0: nothing blocks. Exit 1: a finding or an
+  ignore-file problem blocks. Exit 2: the input is JSON the gate doesn't understand (it never
+  passes silently). npm audit's report has no dev-only flag, so the gate reads `dev` from
+  `frontend/package-lock.json`. A finding counts as dev-only when every installed copy of the
+  package has the flag. A copy missing from the lockfile counts as production (decided on the
+  issue).
+- **Accepting a finding is explicit and expires.** For pip and npm, an entry in
+  `ops/security/audit-ignore.txt` has the form `<id> <review-by> <reason>`. The gate fails on
+  an entry whose date has passed, on a date more than 60 days ahead, and on a malformed line.
+  For the image, `.trivyignore` uses Trivy's own `exp:` date, with a reason comment above each
+  entry.
+- **Dependabot only updates GitHub Actions** (`.github/dependabot.yml`): one grouped PR a
+  month that keeps the SHA pins. Python and UI pins change only deliberately
+  ([infra.md](infra.md), "Dependencies are pinned"), so there are no pip, npm or docker
+  version PRs. A fixable OS finding is handled by bumping the base image through its
+  documented procedure. Dependabot *alerts* for pip and npm are on through the dependency
+  graph. The human enables them in the repository settings; Dependabot *security updates*
+  stay off.
+- **The first run's findings** were not upgraded in #241. They were accepted with review-by
+  2026-12-08, and #263 tracks the fixes.
+
 ## Codex
 
 `AGENTS.md` points Codex at CLAUDE.md. `.codex/hooks.json` runs the shared guard for Bash

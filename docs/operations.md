@@ -248,6 +248,25 @@ Docker healthchecks are **informational only**: nothing restarts or replaces an
 external monitor polling `/healthz` and `/billing-status` (configured outside this
 repository).
 
+### Security scan
+
+`.github/workflows/security.yml` scans the Python packages, the UI packages and the runtime
+image every night at 01:45 UTC ([decisions/harness.md](decisions/harness.md#supply-chain-scanning-2026-11-08)).
+When a run is red:
+
+1. Read the failing job's log. The gate prints one line per blocking finding
+   (`package version id severity fix-versions`) and any ignore-file problem: an expired
+   review-by, a date more than 60 days ahead, or a malformed line. Trivy prints a table.
+2. **Fix it:** change the pin deliberately ([decisions/infra.md](decisions/infra.md), "Dependencies are
+   pinned"), or bump the base image digest for an OS package. Open an issue for the fix.
+3. **Or accept it for now:** add `<id> <review-by> <reason>` to
+   `ops/security/audit-ignore.txt` (pip, npm), or a `# reason` line plus `<id> exp:<date>` to
+   `.trivyignore` (image). The date is at most 60 days ahead, and the reason names the issue
+   that tracks the fix. An expired entry turns the run red again, which forces a new review.
+
+Exit code 2 from the gate means the tool's JSON changed shape or the tool crashed. Fix the
+gate or the tool pin; don't accept anything in that case.
+
 ## The agent harness
 
 Every regular operation is a `make` target and agents are told to use them
