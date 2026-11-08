@@ -173,7 +173,7 @@ change, and changes nothing.
 **Drill:** `BSS_DEPLOY_DRILL=fail-after-health make deploy` makes a deploy fail right after
 the health gate ("drill: forced failure after the health gate"), so the automatic
 rollback can be rehearsed on the VPS. It is printed loudly at the start and exists for
-the human's drill only.
+the human's drill only. The full drill runbook is issue #239.
 
 ## Prepaid: recovery and rollback
 
