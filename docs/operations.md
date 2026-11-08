@@ -114,6 +114,9 @@ What `deploy.sh` does, in order:
     **OAuth login smoke** (`scripts/mcp-oauth-smoke.py`) as the `mcp` smoke user from
     `.env.smoke` (`MCP_SMOKE_USER`, `MCP_SMOKE_PASSWORD`): read scope only, one read tool,
     a write tool refused, refresh, revoke. Without those lines it prints SKIPPED.
+    The web, MCP and OAuth smokes retry a request that got no answer (3 attempts, 3 s
+    apart, each retry logged) when that is safe - a GET, or a request that never reached
+    the server; a wrong answer fails at once ([decisions/infra.md](decisions/infra.md#smoke-retries-2026-11-08)).
 14. Every gate passed: the pointers move - `PREVIOUS` = the old `CURRENT`, `CURRENT` = this
     tag (a re-deploy of `CURRENT` leaves `PREVIOUS` alone). Then it prunes the smoke's MCP
     client registrations (a warning on failure), old `bss-app` images (the 3 newest, and

@@ -462,3 +462,23 @@ VPS) keeps the last two releases and goes back one by itself. Operator view:
 - **Tests:** `scripts/test_deploy_rollback.py` runs the real script with fake `ssh`,
   `rsync`, `docker`, `timeout` and `curl` that log their argv and answer from a rules file,
   and asserts on the order of the remote commands (in `make runtime-check`).
+
+## Smoke retries (2026-11-08)
+
+Issue #257. In the live rollback drill (#254) 3 of about 15 deploys rolled back a healthy
+release because one request of a public smoke hung - a TCP or proxy connect timing out
+after 15 s, once a TLS handshake - while every other request passed and the same checks
+passed a minute later. The SSH-run smokes never failed; the workstation reaches the public
+URLs through a local HTTP(S) proxy. A rollback for a single stalled connection costs more
+than it protects.
+
+- `scripts/smoke-retry.sh` (sourced by `web-smoke.sh` and `mcp-smoke.sh`) and `send()` in
+  `mcp-oauth-smoke.py` try a request again - 3 attempts, 3 s apart, each retry logged -
+  only when it got **no answer** and repeating it is **safe**: a GET, or a request that
+  provably never reached the server (curl `time_pretransfer` 0; in Python a refused
+  connection, a failed proxy tunnel or a TLS handshake error).
+- **Never retried:** an HTTP status (a wrong answer fails at once), and a POST that may
+  have been sent - the OAuth code exchange and the refresh rotation are single-use, so a
+  repeat could only fail differently or hide a double effect.
+- **Tests:** `scripts/test_smoke_retry.py` (the helper, with a fake request) and
+  `RetryTests` in `scripts/test_mcp_oauth_smoke.py`.
