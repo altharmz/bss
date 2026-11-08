@@ -222,15 +222,29 @@ review and secret scanning are paid on a private repository.
   an entry whose date has passed, on a date more than 60 days ahead, and on a malformed line.
   For the image, `.trivyignore` uses Trivy's own `exp:` date, with a reason comment above each
   entry.
-- **Dependabot only updates GitHub Actions** (`.github/dependabot.yml`): one grouped PR a
-  month that keeps the SHA pins. Python and UI pins change only deliberately
-  ([infra.md](infra.md), "Dependencies are pinned"), so there are no pip, npm or docker
-  version PRs. A fixable OS finding is handled by bumping the base image through its
-  documented procedure. Dependabot *alerts* for pip and npm are on through the dependency
-  graph. The human enables them in the repository settings; Dependabot *security updates*
-  stay off.
+- **Dependabot version updates cover the GitHub Actions only** (`.github/dependabot.yml`):
+  one grouped PR a month that keeps the SHA pins. Python and UI pins change only
+  deliberately ([infra.md](infra.md), "Dependencies are pinned"), so there are no routine
+  pip, npm or docker version PRs. A fixable OS finding is handled by bumping the base image
+  through its documented procedure.
+- **Dependabot alerts and security updates are on** (repository settings, enabled by the
+  human; checked 2026-11-08, #268). When an advisory hits a dependency GitHub knows,
+  Dependabot raises an alert and opens a fix PR. GitHub's dependency graph reads
+  `requirements*.txt`, `pyproject.toml` and `frontend/package*.json`, **not
+  `constraints*.txt`**: a vulnerable transitive Python package (like `opentelemetry-api` and
+  `certifi` in #263) gets no alert and no PR. The `Security` workflow's pip-audit, which
+  reads the constraints files, is the check for those. Trivy covers the image.
+- **A Dependabot security PR is a signal, never merged as it is**, like a red nightly
+  `Security` run. It touches only the manifest, so a Python bump leaves `constraints*.txt`
+  at the old version and the `-c` install cannot resolve. Handle it as a task: an issue that
+  links the PR, the fix in a task branch (Python: the documented pin change with
+  constraints regenerated from `pip freeze`; npm: Dependabot's `frontend/package*.json`
+  change may be taken over as is, checked with `make web-install` and the UI checks), and
+  the Dependabot PR closed with a link to the task PR.
 - **The first run's findings** were not upgraded in #241. They were accepted with review-by
-  2026-12-08, and #263 tracks the fixes.
+  2026-12-08, and #263 fixed them: Python pins bumped, pip removed from the runtime venv
+  ([infra.md](infra.md), "No pip in the runtime venv"), base image digest bumped. Only
+  the two zlib1g CVEs remain accepted, renewed, because no base image ships the fix yet.
 
 ## Codex
 
