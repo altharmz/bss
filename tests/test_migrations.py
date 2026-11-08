@@ -376,7 +376,7 @@ def test_cloned_test_databases_are_at_the_current_head(db_conn):
     tables = db_conn.execute(
         "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"
     ).fetchone()[0]
-    assert tables == 79  # 78 domain tables + alembic_version
+    assert tables == 78  # 77 domain tables + alembic_version
 
 
 def test_0027_offering_changes(temp_db_url):
@@ -1122,10 +1122,10 @@ def test_migration_drill_rolls_back_an_upgrade_and_a_downgrade(temp_db_url, monk
     command.upgrade(cfg, "0063")
     monkeypatch.setenv("BSS_MIGRATION_DRILL", mode)
     with pytest.raises(RuntimeError, match=f"BSS_MIGRATION_DRILL={mode}"):
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "0064")
     assert _revision_and_drill_table(temp_db_url) == ("0063", False)
     monkeypatch.delenv("BSS_MIGRATION_DRILL")
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, "0064")
     monkeypatch.setenv("BSS_MIGRATION_DRILL", mode)
     with pytest.raises(RuntimeError, match=f"BSS_MIGRATION_DRILL={mode}"):
         command.downgrade(cfg, "0063")
@@ -1137,3 +1137,14 @@ def test_migration_drill_rejects_an_unknown_mode(temp_db_url, monkeypatch):
     monkeypatch.setenv("BSS_MIGRATION_DRILL", "sometimes")
     with pytest.raises(RuntimeError, match="unknown BSS_MIGRATION_DRILL"):
         command.upgrade(Config("alembic.ini"), "0001")
+
+
+def test_0065_drops_the_drill_table_and_its_downgrade_recreates_it_empty(temp_db_url):
+    cfg = Config("alembic.ini")
+    command.upgrade(cfg, "0065")
+    assert _revision_and_drill_table(temp_db_url) == ("0065", False)
+    command.downgrade(cfg, "0064")
+    assert _revision_and_drill_table(temp_db_url) == ("0064", True)
+    with psycopg.connect(temp_db_url) as conn:
+        assert conn.execute("SELECT count(*) FROM rollback_drill").fetchone() == (0,)
+    command.upgrade(cfg, "0065")

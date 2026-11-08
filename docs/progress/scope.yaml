@@ -43,7 +43,6 @@ items:
   - {id: api.tmf681.communicationMessage.patch, area: api, stage: 5, method: PATCH, path: "/tmf-api/communicationManagement/v4/communicationMessage/{message_id}", title: "TMF681 PATCH /communicationMessage/{id} (cancel an unsent message)"}
   - {id: worker.notifications, area: worker, stage: 5, title: "Detect prepaid events and send one customer SMS or email per event through the notify adapter, with consent, quiet hours and retries"}
   - {id: db.product_device, area: db, stage: 5, table: product_device, title: "The devices (IMEI) of a prepaid line with the network's compatibility answer; the open row is the current device"}
-  - {id: db.rollback_drill, area: db, stage: 5, table: rollback_drill, title: "Drill only (#254): gives the live rollback drill a schema downgrade to undo; dropped by 0065"}
   - {id: api.internal.device.list, area: api, stage: 5, method: GET, path: /internal/v1/device, title: "Device history of a prepaid line"}
   - {id: api.internal.device.check, area: api, stage: 5, method: GET, path: /internal/v1/device/check, title: "Ask the network whether a device (IMEI) works"}
   - {id: db.sim_batch, area: db, stage: 5, table: sim_batch, title: "Stocked SIM and eSIM batches"}
