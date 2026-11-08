@@ -25,6 +25,7 @@ targets; do not invent commands** (CLAUDE.md, "Commands").
 | `make docs` / `make docs-check` | regenerate [api/](api/README.md) and [db/](db/README.md) / fail if the committed ones differ |
 | `make clean` | stop the stack **and drop the local database volume** |
 | `make web-install` | the only step that downloads npm packages (`npm ci`, exactly the lockfile) |
+| `make deploy-web-install` | the same `npm ci`, **primary checkout only** (`web-install` is refused there): run it when `make deploy` fails its UI build with "run make deploy-web-install" after `package-lock.json` changed |
 | `make web-dev` / `web-build` / `web-lint` / `web-test` / `web-types` / `web-fmt` / `web-e2e` | the UI, always in the `web` / `web-offline` containers; offline targets fail with "run make web-install" if node_modules does not match the lockfile |
 | `make hooks` | install the shared pre-commit and pre-push hook dispatchers |
 | `make spec-verify-upstream` | re-fetch the spec blob SHAs from GitHub and compare with `spec/README.md` (network) |

@@ -295,7 +295,8 @@ The Caddy side is vps-infra's. What bss relies on (applied; vps-infra owns the c
 - **`deploy.sh`** builds the UI locally before any network step (the primary-only
   `./scripts/task-compose --deploy-web-build <tag>` uses the offline container with fixed,
   nonsecret settings and stamps `index.html`'s `bss-build` marker; normal development builds
-  remain task-only) and refuses to start without
+  remain task-only; `./scripts/task-compose --deploy-web-install`, `make deploy-web-install`,
+  runs `npm ci` there when the lockfile changed) and refuses to start without
   the web smoke's credential in **`.env.smoke`** - a local-only file, gitignored and never
   shipped. `.env.prod` is copied to the VPS as `~/bss/.env` (compose reads it only to fill
   `${...}`; the container gets just the variables listed under `environment:`, there is

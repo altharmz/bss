@@ -517,7 +517,7 @@ fi
 # The admin UI is built locally too, before anything touches the network, with the commit
 # as its bss-build marker - the web smoke test reads it back through Caddy.
 log "Building the admin UI (frontend/dist, build ${TAG})"
-./scripts/task-compose --deploy-web-build "${TAG}" </dev/null || fail "the UI build failed (run make web-install if node_modules is out of date)"
+./scripts/task-compose --deploy-web-build "${TAG}" </dev/null || fail "the UI build failed (run make deploy-web-install if node_modules is out of date)"
 grep -q "<meta name=\"bss-build\" content=\"${TAG}\"" frontend/dist/index.html \
   || fail "frontend/dist/index.html does not carry build ${TAG}"
 

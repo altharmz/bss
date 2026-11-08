@@ -193,14 +193,14 @@ def validate_inherited(values, root, own, common):
             )
 
 
-def deploy_web_build(args):
-    if len(args) != 1 or not args[0]:
-        raise InvalidRuntime("--deploy-web-build requires exactly one nonempty build tag")
+def offline_ui_run(mode, tail, extra=()):
+    """Run `tail` in a UI container of the primary checkout, with the fixed offline
+    environment shared by --deploy-web-build and --deploy-web-install; exits with its status."""
     root = Path(git("rev-parse", "--show-toplevel")).resolve()
     common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
     own = Path(git("rev-parse", "--absolute-git-dir")).resolve()
     if own != common:
-        raise InvalidRuntime("--deploy-web-build is allowed only from the primary checkout")
+        raise InvalidRuntime(f"{mode} is allowed only from the primary checkout")
     values = {
         "COMPOSE_PROJECT_NAME": "bss",
         "IMAGE_NAME": "bss-app",
@@ -234,24 +234,31 @@ def deploy_web_build(args):
     )
     if checked.returncode:
         raise InvalidRuntime("offline UI Compose validation failed")
-    result = subprocess.run(  # noqa: S603 - fixed offline build, no shell
-        command
-        + [
-            "run",
-            "--rm",
-            "--no-deps",
-            "-e",
-            f"VITE_BSS_BUILD={args[0]}",
-            "web-offline",
-            "sh",
-            "-c",
-            "sh scripts/check-deps.sh && npm run build",
-        ],
+    result = subprocess.run(  # noqa: S603 - fixed command, no shell
+        command + ["run", "--rm", "--no-deps", *extra, *tail],
         env=env,
         cwd=root,
         check=False,
     )
     sys.exit(result.returncode)
+
+
+def deploy_web_build(args):
+    if len(args) != 1 or not args[0]:
+        raise InvalidRuntime("--deploy-web-build requires exactly one nonempty build tag")
+    offline_ui_run(
+        "--deploy-web-build",
+        ["web-offline", "sh", "-c", "sh scripts/check-deps.sh && npm run build"],
+        ["-e", f"VITE_BSS_BUILD={args[0]}"],
+    )
+
+
+def deploy_web_install(args):
+    """npm ci in the primary checkout: `make web-install` is refused there, and the deploy's
+    UI build only checks node_modules against package-lock.json (the one step with network)."""
+    if args:
+        raise InvalidRuntime("--deploy-web-install takes no arguments")
+    offline_ui_run("--deploy-web-install", ["web", "sh", "scripts/install-deps.sh"])
 
 
 def context():
@@ -417,6 +424,8 @@ def main():
         args = sys.argv[1:]
         if args[:1] == ["--deploy-web-build"]:
             deploy_web_build(args[1:])
+        if args[:1] == ["--deploy-web-install"]:
+            deploy_web_install(args[1:])
         root, secret, values = context()
         if args == ["--check"]:
             return
