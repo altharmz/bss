@@ -454,7 +454,7 @@ items:
   - {id: ui.subscriber.changeOffering, area: ui, stage: 5, title: "Change offering menu item"}
   - {id: ui.subscriber.planFacts, area: ui, stage: 5, title: "Prepaid product row: offering kind, how it renews, an add-on's plan and end date"}
   - {id: ui.subscriber.renewalHistory, area: ui, stage: 5, title: "Renewal history of a prepaid product: period, amount, tax, funding and bill"}
-  - {id: ui.subscriber.usage, area: ui, stage: 5, title: "Usage tab of a prepaid subscriber: period allowance bars per kind (used, included, remaining, 80% and 100% marks), throttled and barred badges, pay-as-you-go balance, paged TMF635 usage records with roaming and throttled flags"}
+  - {id: ui.subscriber.usage, area: ui, stage: 5, title: "Usage tab of a prepaid subscriber: period allowance bars per kind (used, included, remaining, 80% and 100% marks), throttled and barred badges, pay-as-you-go balance and unrated count, paged TMF635 records with rating status, applied usage price, roaming and throttled flags"}
   - {id: ui.subscriber.buyAddOnItem, area: ui, stage: 5, title: "Buy add-on menu item on a plan product"}
   - {id: ui.subscriber.buyAddOn, area: ui, stage: 5, title: "Buy add-on dialog: add-on offerings and the TMF622 add order with an addOn relationship"}
   - {id: ui.subscriber.buyAddOn.quote, area: ui, stage: 5, title: "Add-on price with taxes and fees from the first-charge quote"}
@@ -531,7 +531,9 @@ items:
   - {id: ui.catalog.priceFigure, area: ui, stage: 5, title: "Offering price figure"}
   - {id: ui.catalog.offeringDetail, area: ui, stage: 5, title: "Offering detail dialog"}
   - {id: ui.catalog.lifecycle, area: ui, stage: 5, title: "Offering lifecycle step (Activate / Retire)"}
-  - {id: ui.catalog.addPrice, area: ui, stage: 5, title: "Add a one-time or monthly recurring price"}
+  - {id: ui.catalog.addPrice, area: ui, stage: 5, title: "Add a one-time, monthly recurring or pay-as-you-go usage price with its rounding block"}
+  - {id: ui.catalog.usagePrices, area: ui, stage: 5, title: "Usage prices in a pay-as-you-go offering detail"}
+  - {id: ui.catalog.usageUnit, area: ui, stage: 5, title: "Fixed rounding unit in a usage-price detail"}
   - {id: ui.catalog.offeringKind, area: ui, stage: 5, title: "Set the offering kind: plan, add-on or pay as you go"}
   - {id: ui.catalog.kind, area: ui, stage: 5, title: "Offering kind in the offering detail"}
   - {id: ui.catalog.oneTimePrices, area: ui, stage: 5, title: "One-time prices (activation fee) in the offering detail"}
@@ -688,6 +690,8 @@ items:
   - {id: ui.prepaidCommands.previous, area: ui, stage: 5, title: "Prepaid commands: previous page"}
   - {id: ui.subscriber.usage.barred, area: ui, stage: 5, title: "Usage allowance: service barred"}
   - {id: ui.subscriber.usage.throttled, area: ui, stage: 5, title: "Usage allowance: service throttled"}
+  - {id: ui.subscriber.usage.status, area: ui, stage: 5, title: "Subscriber usage record: rating status"}
+  - {id: ui.subscriber.usage.appliedPrice, area: ui, stage: 5, title: "Subscriber usage record: applied usage price and rounding unit"}
   - {id: ui.subscriber.usage.next, area: ui, stage: 5, title: "Subscriber usage: next page"}
   - {id: ui.subscriber.usage.previous, area: ui, stage: 5, title: "Subscriber usage: previous page"}
   - {id: ui.subscribers.inspector, area: ui, stage: 5, title: "Subscriber list: selected account inspector"}

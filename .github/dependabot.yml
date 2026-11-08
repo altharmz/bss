@@ -1,7 +1,9 @@
 # Dependabot version updates for the GitHub Actions only: one grouped PR a month that keeps
 # the SHA pins. Python and UI pins change only deliberately (docs/decisions/infra.md,
-# "Dependencies are pinned"), so pip, npm and docker are not listed here; their
-# vulnerabilities come from .github/workflows/security.yml and Dependabot alerts.
+# "Dependencies are pinned"), so pip, npm and docker are not listed here. Their
+# vulnerabilities come from .github/workflows/security.yml and from Dependabot alerts and
+# security updates, which are on in the repository settings and need no entry here; a
+# security update PR is handled as a task, never merged as it is.
 # Decision: docs/decisions/harness.md, "Supply-chain scanning".
 version: 2
 updates:

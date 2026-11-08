@@ -11,11 +11,16 @@ import {
   KIND_LABEL,
   loadOfferingDetail,
   loadOneTimePrices,
+  loadUsagePrices,
   hasOpenPrice,
   loadCatalog,
+  midnightOf,
   NEXT_LIFECYCLE,
   setLifecycle,
   shownPrice,
+  USAGE_UNIT_KIND,
+  USAGE_UNITS,
+  validUsageBlock,
   type Catalog,
   type CatalogOffering,
   type Lifecycle,
@@ -708,6 +713,9 @@ export function OfferingModal({
             </dd>
           </dl>
           {detail.status === 'ok' && <OneTimePrices detail={detail.data} />}
+          {detail.status === 'ok' && detail.data.kind === 'payAsYouGo' && (
+            <UsagePrices detail={detail.data} onOpen={setPrice} />
+          )}
           {detail.status === 'ok' && (
             <Button small onClick={() => setAddingPrice(true)}>
               Add price…
@@ -764,6 +772,37 @@ function OneTimePrices({ detail }: { detail: OfferingDetail }) {
   );
 }
 
+function UsagePrices({ detail, onOpen }: { detail: OfferingDetail; onOpen: (id: string) => void }) {
+  const context = useSystemContext();
+  const ids = detail.priceRefs.map((p) => p.id);
+  const prices = useResource(`usage-prices:${detail.id}:${ids.join(',')}`, (signal) =>
+    loadUsagePrices(ids, signal),
+  );
+  if (prices.status !== 'ok' || prices.data.length === 0) return null;
+  return (
+    <dl className="bss-details" data-ui="ui.catalog.usagePrices">
+      <dt>Usage prices</dt>
+      <dd>
+        {prices.data.map((p) => (
+          <div key={p.id} className="num">
+            <button
+              type="button"
+              className="bss-link"
+              aria-label={`Open price ${formatCents(p.cents)} ${p.unitOfMeasure?.units ?? ''}`}
+              onClick={() => onOpen(p.id)}
+            >
+              {formatCents(p.cents)} {p.currency} / {p.unitOfMeasure?.amount ?? 1}{' '}
+              {p.unitOfMeasure?.units ?? ''}
+            </button>{' '}
+            · from {businessDate(p.from, context.timeZone)}
+            {p.to === null ? '' : ` to ${lastValidDay(p.to, context.timeZone)}`}
+          </div>
+        ))}
+      </dd>
+    </dl>
+  );
+}
+
 function AddPriceModal({
   detail,
   onClose,
@@ -775,17 +814,46 @@ function AddPriceModal({
 }) {
   const context = useSystemContext();
   const today = context.businessDate;
-  const [priceType, setPriceType] = useState<'oneTime' | 'recurring'>('oneTime');
+  const [priceType, setPriceType] = useState<'oneTime' | 'recurring' | 'usage'>('oneTime');
   const [amount, setAmount] = useState('');
+  const [usageUnit, setUsageUnit] = useState<(typeof USAGE_UNITS)[number]>('MB');
+  const [blockAmount, setBlockAmount] = useState('1');
   const [validFrom, setValidFrom] = useState(today);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const ids = detail.priceRefs.map((price) => price.id);
+  const existingUsage = useResource(`add-usage-prices:${detail.id}:${ids.join(',')}`, (signal) =>
+    detail.kind === 'payAsYouGo' ? loadUsagePrices(ids, signal) : Promise.resolve([]),
+  );
   const parsed = amount.trim() ? parseAmount(amount) : null;
   const canonical = parsed !== null && parsed !== '0.00' ? parsed : null;
+  const block = Number(blockAmount);
+  const startsAt = validFrom === '' ? null : midnightOf(validFrom, context.timeZone);
+  const conflict =
+    priceType === 'usage' && startsAt !== null && existingUsage.status === 'ok'
+      ? existingUsage.data.find((price) => {
+          const units = price.unitOfMeasure?.units;
+          return (
+            price.currency === context.currency &&
+            units !== undefined &&
+            USAGE_UNITS.some((unit) => unit === units) &&
+            USAGE_UNIT_KIND[units as (typeof USAGE_UNITS)[number]] === USAGE_UNIT_KIND[usageUnit] &&
+            (price.to === null || Date.parse(price.to) > Date.parse(startsAt))
+          );
+        })
+      : undefined;
   let error: string | null = null;
   if (amount.trim() && canonical === null) error = 'Price must be a positive number';
   else if (validFrom && validFrom < today) error = `Valid from cannot be earlier than ${today}`;
-  const ready = error === null && canonical !== null && validFrom !== '';
+  else if (priceType === 'usage' && !validUsageBlock(block, usageUnit))
+    error = 'Block amount must be positive and a whole number of bytes, seconds or messages';
+  else if (conflict !== undefined)
+    error = `A ${USAGE_UNIT_KIND[usageUnit]} price in ${context.currency} already covers ${validFrom}`;
+  const ready =
+    error === null &&
+    canonical !== null &&
+    validFrom !== '' &&
+    (priceType !== 'usage' || existingUsage.status === 'ok');
 
   async function submit() {
     if (!ready || canonical === null) return;
@@ -800,7 +868,8 @@ function AddPriceModal({
           amount: canonical,
           currency: context.currency,
           validFrom,
-          existingPriceIds: detail.priceRefs.map((price) => price.id),
+          existingPriceIds: ids,
+          ...(priceType === 'usage' ? { unitOfMeasure: { amount: block, units: usageUnit } } : {}),
         },
         context.timeZone,
       );
@@ -841,12 +910,48 @@ function AddPriceModal({
         <SelectField
           id="add-price-type"
           value={priceType}
-          onChange={(event) => setPriceType(event.target.value as 'oneTime' | 'recurring')}
+          onChange={(event) =>
+            setPriceType(event.target.value as 'oneTime' | 'recurring' | 'usage')
+          }
         >
           <option value="oneTime">One time</option>
-          <option value="recurring">Monthly recurring</option>
+          {detail.kind === 'plan' && <option value="recurring">Monthly recurring</option>}
+          {detail.kind === 'payAsYouGo' && <option value="usage">Usage</option>}
         </SelectField>
-        <label htmlFor="add-price-amount">Amount, {context.currency}</label>
+        {priceType === 'usage' && (
+          <>
+            <label htmlFor="add-price-unit">Rounding unit</label>
+            <SelectField
+              id="add-price-unit"
+              value={usageUnit}
+              onChange={(event) => setUsageUnit(event.target.value as (typeof USAGE_UNITS)[number])}
+            >
+              {USAGE_UNITS.map((unit) => (
+                <option key={unit} value={unit}>
+                  {USAGE_UNIT_KIND[unit]} · {unit}
+                </option>
+              ))}
+            </SelectField>
+            <label htmlFor="add-price-block">Block amount</label>
+            <TextInput
+              id="add-price-block"
+              type="number"
+              min="0"
+              step="any"
+              value={blockAmount}
+              onChange={(event) => setBlockAmount(event.target.value)}
+            />
+            <span className="bss-secondary">
+              Usage is rounded up to whole blocks. One price per kind and currency.
+            </span>
+            {existingUsage.status === 'error' && (
+              <Note tone="negative">{existingUsage.error.message}</Note>
+            )}
+          </>
+        )}
+        <label htmlFor="add-price-amount">
+          {priceType === 'usage' ? 'Price per block' : 'Amount'}, {context.currency}
+        </label>
         <TextInput
           id="add-price-amount"
           mono

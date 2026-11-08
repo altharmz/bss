@@ -170,7 +170,7 @@ the PATCH).
 
 ### Usage tab (`ui.subscriber.usage`) - `screens/UsageTab.tsx`
 
-Prepaid-only tab, before Balance actions, on the subscriber card (`#usage`). It is mounted only while shown, so the card makes no usage request until it is opened. Lines are the account's plan and pay-as-you-go products (a select when there are several). Allowance panel from `GET /internal/v1/usage/summary?product.id=`: the period (end excluded), one bar per kind (data, voice, SMS) with used / included / remaining and the server's percent, a tick at 80%, the `80% reached` and `100% reached` badges from `thresholds`, a Throttled badge, and for a pay-as-you-go line the balance, unrated records and a Barred badge; a kind with nothing included shows only used. Nothing is computed in the UI. Records panel from TMF635 `GET /productUsage?product.id=` (newest first, 25 per page, Previous/Next by `X-Total-Count`): time in the business zone, kind, quantity, Roaming and Throttled tags. The summary and the records fail and retry independently. Read-only: no write request.
+Prepaid-only tab, before Balance actions, on the subscriber card (`#usage`). It is mounted only while shown, so the card makes no usage request until it is opened. Lines are the account's plan and pay-as-you-go products (a select when there are several). Allowance panel from `GET /internal/v1/usage/summary?product.id=`: the period (end excluded), one bar per kind (data, voice, SMS) with used / included / remaining and the server's percent, a tick at 80%, the `80% reached` and `100% reached` badges from `thresholds`, a Throttled badge, and for a pay-as-you-go line the balance, unrated records and a Barred badge; a kind with nothing included shows only used. Nothing is computed in the UI. Records panel from TMF635 `GET /productUsage?product.id=` (newest first, 25 per page, Previous/Next by `X-Total-Count`): time in the business zone, kind, quantity, rating status (`Not rated`, `Rated` or `Rejected`; `ui.subscriber.usage.status`), the first `usageProductPrice` as amount/currency, name and rounding unit when rated (`ui.subscriber.usage.appliedPrice`), and Roaming and Throttled tags. Rated charges and their ledger transactions use the applied usage-price name. The summary and the records fail and retry independently. Read-only: no write request.
 
 ### Balance actions (`ui.subscriber.prepaid.history`, `ui.subscriber.prepaid.historyDetail`) - `screens/PrepaidHistory.tsx`
 
@@ -398,10 +398,15 @@ changed fields among name, description, sellable, validity, code (the `offeringC
 other identifiers are sent as loaded), specification and categories (checkbox list). **Delete**
 (`ui.catalog.deleteOffering`, inline confirm) is offered for an In Design offering with no
 attached price; the server's 409 shows. **Add price…** (`ui.catalog.addPrice`) takes a one-time
-or monthly recurring charge, a positive amount in the UI currency and a valid-from date of today
-or later; it POSTs the price, then PATCHes the offering with every existing price reference plus
-the new one. A price line opens the price dialog (`ui.catalog.priceDetail`): edit name,
-description and amount (`ui.catalog.editPrice`; a 409 points to Change price), **End price**
+charge on any kind, monthly recurring on a plan, or Usage on pay as you go. Usage selects KB/MB/GB,
+second/minute or message, a positive block amount producing whole bytes/seconds/messages, and a
+price per block; an overlapping price of the same kind and currency is refused. Every type takes a
+positive amount in the UI currency and a valid-from date of today or later; it POSTs the price,
+then PATCHes the offering with every existing price reference plus the new one. Pay-as-you-go
+usage prices are listed in the detail (`ui.catalog.usagePrices`). A price line opens the price
+dialog (`ui.catalog.priceDetail`): edit name, description and amount (`ui.catalog.editPrice`; a
+409 points to Change price); usage type and rounding unit stay fixed (`ui.catalog.usageUnit`), with
+the amount labelled Price per block. **End price**
 (`ui.catalog.endPrice`, from tomorrow) and **Delete** (`ui.catalog.deletePrice`). API:
 `GET|PATCH|DELETE .../productOfferingPrice/{id}`, `POST .../productOfferingPrice`,
 `PATCH|DELETE .../productOffering/{id}`, `GET .../category`.

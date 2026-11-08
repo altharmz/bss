@@ -86,6 +86,9 @@ const cases: [StatusKind, string, string, string][] = [
   ['catalogJob', 'Failed', 'failed', 'Failed'],
   ['health', 'ok', 'live', 'OK'],
   ['health', 'error', 'failed', 'Error'],
+  ['usage', 'notRated', 'queued', 'Not rated'],
+  ['usage', 'rated', 'live', 'Rated'],
+  ['usage', 'rejected', 'failed', 'Rejected'],
 ];
 
 describe('D4 status families', () => {

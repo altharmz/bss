@@ -435,6 +435,76 @@ def test_add_price_preserves_the_complete_price_reference_list(api):
     assert monthly["recurringChargePeriodType"] == "monthly"
 
 
+def test_usage_price_writes_as_the_ui_sends_them(api):
+    """Catalog.test.tsx: a usage price POST, complete reference PATCH and editable fields."""
+    sms = api.post_raw(
+        f"{CATALOG}/productOfferingPrice",
+        '{"@type":"ProductOfferingPrice","name":"Metered sms usage","lifecycleStatus":"Active",'
+        '"priceType":"usage","unitOfMeasure":{"amount":1,"units":"message"},'
+        '"price":{"unit":"USD","value":0.10},'
+        '"validFor":{"startDateTime":"2026-10-02T00:00:00+03:00"}}',
+    )
+    assert sms.status_code == 201, sms.text
+    existing = sms.json()
+    offering = api.post(
+        f"{CATALOG}/productOffering",
+        {
+            "@type": "ProductOffering",
+            "name": "Metered",
+            "lifecycleStatus": "Active",
+            "productSpecification": {"id": spec(api)["id"], "@type": "ProductSpecificationRef"},
+            "productOfferingCharacteristic": [
+                {
+                    "@type": "CharacteristicSpecification",
+                    "name": "offeringKind",
+                    "valueType": "string",
+                    "characteristicValueSpecification": [
+                        {
+                            "@type": "StringCharacteristicValueSpecification",
+                            "valueType": "string",
+                            "isDefault": True,
+                            "value": "payAsYouGo",
+                        }
+                    ],
+                }
+            ],
+            "productOfferingPrice": [{"id": existing["id"], "@type": "ProductOfferingPriceRef"}],
+        },
+    )
+    assert offering.status_code == 201, offering.text
+    created = api.post_raw(
+        f"{CATALOG}/productOfferingPrice",
+        '{"@type":"ProductOfferingPrice","name":"Metered voice usage","lifecycleStatus":"Active",'
+        '"priceType":"usage","unitOfMeasure":{"amount":10,"units":"minute"},'
+        '"price":{"unit":"USD","value":0.25},'
+        '"validFor":{"startDateTime":"2026-10-02T00:00:00+03:00"}}',
+    )
+    assert created.status_code == 201, created.text
+    refs = [
+        {"id": existing["id"], "@type": "ProductOfferingPriceRef"},
+        {"id": created.json()["id"], "@type": "ProductOfferingPriceRef"},
+    ]
+    attached = api.patch(offering.json()["href"], {"productOfferingPrice": refs})
+    assert attached.status_code == 200, attached.text
+    assert [ref["id"] for ref in attached.json()["productOfferingPrice"]] == [
+        existing["id"],
+        created.json()["id"],
+    ]
+
+    changed = api.patch_raw(
+        created.json()["href"],
+        '{"name":"Metered voice 2","description":"New rounding description",'
+        '"price":{"unit":"USD","value":0.50}}',
+    )
+    assert changed.status_code == 200, changed.text
+    stored = decimals(api.get(created.json()["href"]))
+    assert stored["name"] == "Metered voice 2"
+    assert stored["description"] == "New rounding description"
+    assert stored["price"] == {"unit": "USD", "value": Decimal("0.50")}
+    assert stored["priceType"] == "usage"
+    assert stored["unitOfMeasure"] == {"amount": 10, "units": "minute"}
+
+
 def test_specification_writes_as_the_ui_sends_them(api):
     """createSpecification(), patchSpecification() and deleteSpecification(): bodies pinned
     in Catalog.test.tsx."""
