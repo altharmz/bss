@@ -210,7 +210,8 @@ review and secret scanning are paid on a private repository.
   graph. The human enables them in the repository settings; Dependabot *security updates*
   stay off.
 - **The first run's findings** were not upgraded in #241. They were accepted with review-by
-  2026-12-08, and #263 tracks the fixes.
+  2026-12-08, and #263 fixed them: Python pins bumped, pip removed from the runtime venv
+  ([infra.md](infra.md), "No pip in the runtime venv"), base image digest bumped.
 
 ## Codex
 

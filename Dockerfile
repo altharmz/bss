@@ -22,6 +22,13 @@ RUN python -m venv /opt/venv
 COPY requirements.txt constraints.txt ./
 RUN pip install pip==26.2.1 && pip install -r requirements.txt -c constraints.txt
 
+# ---------- runtime-venv ----------
+# The builder's venv without pip: production never runs pip, and pip vendors its own
+# certifi, msgpack, urllib3 and a setuptools listing that Trivy reports (#263). Uninstalled
+# in a stage of its own, so no runtime layer ever holds pip. The dev image keeps pip.
+FROM builder AS runtime-venv
+RUN python -m pip uninstall -y pip
+
 # ---------- dev ----------
 # Used only by compose.override.yaml. Adds test/lint tooling; source is bind-mounted.
 FROM base AS dev
@@ -41,7 +48,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload
 
 # ---------- runtime ----------
 FROM base AS runtime
-COPY --from=builder /opt/venv /opt/venv
+COPY --from=runtime-venv /opt/venv /opt/venv
 RUN useradd --uid 1000 --create-home appuser && install -d -o appuser -g appuser /data
 COPY --chown=appuser:appuser app ./app
 COPY --chown=appuser:appuser bss_mcp ./bss_mcp

@@ -155,6 +155,13 @@ would attach the prod container to both `lab` and `shared`).
   the constraints file from that container's `pip freeze` deliberately, review the diff
   of the constraints file, rebuild, `make lint && make test` - one commit. Never loosen a
   pin to `>=`. Do not `pip install` inside a running container.
+- **No pip in the runtime venv** (decided 2026-11-08, #263). The `runtime-venv` stage
+  uninstalls pip from the builder's `/opt/venv` before the runtime stage copies it:
+  production never runs pip, and pip vendors its own certifi, msgpack and urllib3 (and
+  lists setuptools in `vendor.txt`), which Trivy reported. Bumping pip alone would not
+  do: pip 26.3 still lists `setuptools==70.3.0`. The dev image keeps pip (it installs
+  the tooling); the base image's own `/usr/local` pip is untouched and Trivy did not
+  report it. Nothing in `app/` or `bss_mcp/` imports pip.
 - **Migrations already on `master` are immutable.** A fix to one - schema, data or
   comment text - goes into a new migration. Alembic records only the revision id, so a
   database already at that revision never sees an edit: it silently differs from a fresh
