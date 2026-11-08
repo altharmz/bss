@@ -29,7 +29,8 @@ Server instructions name the write-scope and read-scope tool counts, the API fam
 and searching by family when a client's discovery layer shows fewer. The inventory
 family no longer says read-only. The counts live only in `bss_mcp/server.py`, where a
 test checks them against the generated tools; this record deliberately does not repeat
-them, so adding a tool needs no edit here.
+them, so adding a tool needs no edit here. See the shared
+[documentation count rule](harness.md#documentation-no-hand-written-counts).
 The human subsequently approved same-day status undo and future-product termination
 (slices B/C); their decisions are recorded in `tmf-api.md` and `worker.md`.
 

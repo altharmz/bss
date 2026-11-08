@@ -18,11 +18,11 @@ code by `make progress` into [PROGRESS.md](PROGRESS.md) against
 
 | Stage | What | Status |
 |---|---|---|
-| 1 | Database schema and repository functions | built: 41 scoped database items, migrations through `0030` ([db/](db/README.md)) |
-| 2 | TMF Open API backend (8 APIs) | built: 152 scoped API items, including internal/service routes, in PROGRESS.md |
+| 1 | Database schema and repository functions | built ([db/](db/README.md)) |
+| 2 | TMF Open API backend | built, including internal/service routes ([api/](api/README.md)) |
 | 3 | Billing core (pure) and its database adapter | built ([domain.md](domain.md#billing)) |
-| 4 | Billing worker: daily runs, catch-up/retry, on-demand bills and documents | built: worker 15/15 proven ([billing-worker.md](billing-worker.md)); Billing runs UI built |
-| 5 | Admin UI (React) and its internal API | built: 27/27 UI items, including Billing runs and bill settlement ([ui.md](ui.md)) |
+| 4 | Billing worker: daily runs, catch-up/retry, on-demand bills and documents | built ([billing-worker.md](billing-worker.md)); Billing runs UI built |
+| 5 | Admin UI (React) and its internal API | built, including Billing runs and bill settlement ([ui.md](ui.md)) |
 
 Implementation and test coverage are measured for all four areas in PROGRESS.md.
 
@@ -35,8 +35,9 @@ membership ([decisions/catalog.md](decisions/catalog.md#categories-and-product-c
 Refunds, on-demand bills and presentation configuration extend the billing lifecycle
 ([decision](decisions/billing-completion.md)). Formats render detailed/summary JSON;
 external delivery and payment processing remain out of scope.
-Non-listener operation coverage across the eight vendored TMF APIs is 129/129 (100%);
-this counts operations, not complete conformance of every attribute or behavior.
+Served operations are cross-checked against the vendored TMF specs in
+[api/](api/README.md); operation coverage does not imply complete conformance of every
+attribute or behavior.
 
 ## Scope
 
