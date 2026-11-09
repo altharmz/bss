@@ -67,4 +67,5 @@ EXPOSE 8080
 # "Healthchecks").
 HEALTHCHECK --interval=60s --timeout=3s --start-period=30s --start-interval=2s --retries=3 \
   CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /healthz HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && IFS= read -r -t 2 line <&3 && [[ $line == *' 200 '* ]]"]
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
+# The process count is WEB_CONCURRENCY, uvicorn's own variable (compose sets it; 1 by default).
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
