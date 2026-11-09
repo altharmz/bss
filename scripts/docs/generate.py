@@ -273,7 +273,14 @@ AREAS = {
     "events": ("event_subscription", "event", "event_delivery"),
     "notifications": ("notification_message", "notification_consent"),
     "security": ("customer_pin", "line_lock", "account_audit"),
-    "users": ("app_user", "app_session", "app_user_audit", "log_setting", "log_setting_change"),
+    "users": (
+        "app_user",
+        "app_session",
+        "app_user_audit",
+        "log_setting",
+        "log_setting_change",
+        "sign_in_attempt",
+    ),
 }
 AREA_TITLES = {
     "party": "Party, customer, account (TMF632, TMF629, TMF666)",

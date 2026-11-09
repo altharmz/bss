@@ -15,9 +15,9 @@ services:
     ports:
       - "127.0.0.1:18081:8080"
     restart: unless-stopped
-    mem_limit: 384m
-    memswap_limit: 384m
-    cpus: 0.50
+    mem_limit: ${APP_MEM:-384m}
+    memswap_limit: ${APP_MEM:-384m}
+    cpus: ${APP_CPUS:-0.50}
     read_only: true
     tmpfs:
       - /tmp
@@ -45,6 +45,10 @@ services:
       # Caddy replaces X-Forwarded-For with the address it sees: the sign-in throttle keys
       # on its last entry, else the peer (loopback, the tunnel: trusted hosts anyway)
       APP_TRUST_FORWARDED: "true"
+      # uvicorn's own variable: app processes (#288); each has its own pool of DB_POOL_SIZE.
+      # WEB_CONCURRENCY x DB_POOL_SIZE + 1 + BILLING_PROCESSES + 3 <= max_connections
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
       BSS_METRICS_TOKEN: ${BSS_METRICS_TOKEN:-}
       BSS_BUILD: ${TAG:-dev}
       # Rollback drill only: scripts/deploy.sh sets it for the `up` of a release under
@@ -72,9 +76,9 @@ services:
     # SIGTERM (compose up/stop) finishes the account in hand, then exits; 60 s is far more
     # than one account takes, so Docker's SIGKILL never lands inside one (D-W11).
     stop_grace_period: 60s
-    mem_limit: 256m
-    memswap_limit: 256m
-    cpus: 0.25
+    mem_limit: ${WORKER_MEM:-256m}
+    memswap_limit: ${WORKER_MEM:-256m}
+    cpus: ${WORKER_CPUS:-0.25}
     read_only: true
     tmpfs:
       - /tmp
@@ -122,9 +126,9 @@ services:
     restart: unless-stopped
     # ~100 MB resident (the app's code is imported for the tool definitions), plus 16 MB
     # per password check in flight (scrypt)
-    mem_limit: 192m
-    memswap_limit: 192m
-    cpus: 0.25
+    mem_limit: ${MCP_MEM:-192m}
+    memswap_limit: ${MCP_MEM:-192m}
+    cpus: ${MCP_CPUS:-0.25}
     # Starting takes >30 s at 0.25 CPU (tool generation, identity check): keep the image's
     # probe at every 2 s for up to 2 minutes, so deploy.sh's wait sees "healthy" in time
     # (2026-10-12: with the image's 30 s the first probe after it came past the 90 s wait).

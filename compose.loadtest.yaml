@@ -66,6 +66,9 @@ services:
       BILL_PAYMENT_TERM_DAYS: "30"
       BSS_SERVICE_SECRET: ${BSS_SERVICE_SECRET:-}
       BSS_BUILD: loadtest
+      # the load-test budget (#288): 4 x 15 + worker + tools <= max_connections 80
+      WEB_CONCURRENCY: ${LOADTEST_WEB_CONCURRENCY:-4}
+      DB_POOL_SIZE: ${LOADTEST_DB_POOL_SIZE:-15}
     cpuset: ${LOADTEST_SUT_CPUS:-4-7}
     cpus: 3.0
     mem_limit: 1536m

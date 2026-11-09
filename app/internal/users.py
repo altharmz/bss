@@ -2,7 +2,6 @@
 
 import secrets
 from datetime import timedelta
-from threading import Lock
 from typing import Literal
 
 import psycopg
@@ -22,8 +21,6 @@ from app.users import audit, check_password, hash_password, lock_users, password
 router = APIRouter(prefix="/internal/v1")
 # One process; bounded window state, driven by the injected clock. A forwarded
 # address is trusted only with APP_TRUST_FORWARDED (client_address).
-_attempts: dict[tuple[str, ...], list] = {}
-_attempts_lock = Lock()
 
 
 class Body(BaseModel):
@@ -95,20 +92,30 @@ def client_address(request):
     return request.client.host if request.client else "unknown"
 
 
-def limit_login(request, username, now):
+def limit_login(tx, request, username, now):
+    """20 attempts a minute per (user, address) and per address, and at most 10000 distinct
+    keys in the last minute. Kept in `sign_in_attempt`, so every app process shares one count
+    (#288), in a transaction of its own committed before the credentials are checked: a
+    refused password still counts. Rows older than a minute go in the same transaction."""
     # No bare username key: nobody can lock a named user out from another address.
     address = client_address(request)
-    keys = [("user", username.casefold(), address), ("address", address)]
-    with _attempts_lock:
-        cutoff = now - timedelta(minutes=1)
-        for key in list(_attempts):
-            _attempts[key] = [at for at in _attempts[key] if at > cutoff]
-            if not _attempts[key]:
-                del _attempts[key]
-        if len(_attempts) > 10000 or any(len(_attempts.get(key, [])) >= 20 for key in keys):
+    keys = [f"user|{username.casefold()}|{address}", f"address|{address}"]
+    with tx() as conn:
+        # one address at a time, so two concurrent attempts cannot both see 19
+        conn.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))", (keys[1],))
+        conn.execute("DELETE FROM sign_in_attempt WHERE at <= %s", (now - timedelta(minutes=1),))
+        (distinct,) = conn.execute("SELECT count(DISTINCT key) FROM sign_in_attempt").fetchone()
+        counts = dict(
+            conn.execute(
+                "SELECT key, count(*) FROM sign_in_attempt WHERE key = ANY(%s) GROUP BY key",
+                (keys,),
+            ).fetchall()
+        )
+        if distinct > 10000 or any(counts.get(key, 0) >= 20 for key in keys):
             raise TmfError(429, "too many sign-in attempts", headers={"Retry-After": "60"})
-        for key in keys:
-            _attempts.setdefault(key, []).append(now)
+        conn.execute(
+            "INSERT INTO sign_in_attempt (key, at) SELECT unnest(%s::text[]), %s", (keys, now)
+        )
 
 
 @router.post("/session")
@@ -118,7 +125,7 @@ def create_session(request: Request, body: JsonBody, tx: Tx, clock: ClockDep):
         raise TmfError(403, "X-Bss-Request: 1 required")
     data = parse(Login, body)
     now = clock.now()
-    limit_login(request, data.username, now)
+    limit_login(tx, request, data.username, now)
     with tx() as conn:
         user = (
             conn.cursor(row_factory=dict_row)
@@ -190,7 +197,7 @@ def change_password(request: Request, body: JsonBody, tx: Tx, clock: ClockDep):
     data = parse(Password, body)
     username = request.state.operator
     password_policy(username, data.newPassword.get_secret_value())
-    limit_login(request, username, clock.now())
+    limit_login(tx, request, username, clock.now())
     with tx() as conn:
         lock_users(conn)
         user = (
@@ -328,7 +335,7 @@ def credential_check(request: Request, body: JsonBody, tx: Tx, clock: ClockDep):
         raise TmfError(403, "only the MCP service credential may check credentials")
     data = parse(Login, body)
     now = clock.now()
-    limit_login(request, data.username, now)
+    limit_login(tx, request, data.username, now)
     with tx() as conn:
         user = (
             conn.cursor(row_factory=dict_row)

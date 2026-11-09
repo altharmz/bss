@@ -1,3 +1,4 @@
+# ruff: noqa: E402 - PROMETHEUS_MULTIPROC_DIR must be set before prometheus_client loads
 """Prometheus metrics for the app (issue #240; docs/operations.md, "Metrics").
 
 One non-default registry with the process and platform collectors, the HTTP metrics of
@@ -9,11 +10,20 @@ not in the OpenAPI schema, so no MCP tool and no scope item.
 """
 
 import logging
+import os
 import threading
 import time as monotonic
 from collections.abc import Iterable
 from datetime import datetime, time, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
+
+# Multiprocess mode, always (one code path for 1 or WEB_CONCURRENCY processes, #288): each
+# process writes its values to files here and a scrape adds them up. prometheus_client picks
+# the mode when it is first imported, so this comes before that import. /tmp is the
+# container's tmpfs: empty at every start.
+MULTIPROC_DIR = os.environ.setdefault("PROMETHEUS_MULTIPROC_DIR", "/tmp/prometheus")  # noqa: S108
+Path(MULTIPROC_DIR).mkdir(parents=True, exist_ok=True)
 
 from fastapi import APIRouter, Depends, Response
 from prometheus_client import (
@@ -21,11 +31,10 @@ from prometheus_client import (
     Counter,
     Gauge,
     Histogram,
-    PlatformCollector,
-    ProcessCollector,
     generate_latest,
 )
 from prometheus_client.core import GaugeMetricFamily
+from prometheus_client.multiprocess import MultiProcessCollector
 from prometheus_client.registry import Collector
 from psycopg.rows import dict_row
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -43,27 +52,46 @@ CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 BUCKETS = (0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10)
 CACHE_SECONDS = 30
 
-REGISTRY = CollectorRegistry()
-ProcessCollector(registry=REGISTRY)
-PlatformCollector(registry=REGISTRY)
-
-BUILD_INFO = Gauge("bss_build_info", "Build version.", ["version"], registry=REGISTRY)
+# The process's own metrics are registered nowhere: their values live in MULTIPROC_DIR and
+# the scrape registry (below) reads every process's files. No ProcessCollector or
+# PlatformCollector: they describe one process and are wrong when summed (container CPU
+# and memory come from docker stats).
+BUILD_INFO = Gauge(
+    "bss_build_info", "Build version.", ["version"], registry=None, multiprocess_mode="livesum"
+)
 REQUESTS = Counter(
     "bss_http_requests_total",
     "HTTP requests by method, matched route template and status.",
     ["method", "route", "status"],
-    registry=REGISTRY,
+    registry=None,
 )
 DURATION = Histogram(
     "bss_http_request_duration_seconds",
     "HTTP request duration by method and matched route template.",
     ["method", "route"],
     buckets=BUCKETS,
-    registry=REGISTRY,
+    registry=None,
 )
 IN_PROGRESS = Gauge(
-    "bss_http_requests_in_progress", "HTTP requests being served.", registry=REGISTRY
+    "bss_http_requests_in_progress",
+    "HTTP requests being served.",
+    registry=None,
+    multiprocess_mode="livesum",
 )
+APP_METRICS = {"bss_build_info", "bss_http_requests", "bss_http_request_duration_seconds"}
+APP_METRICS |= {"bss_http_requests_in_progress"}
+
+
+class AppProcesses(Collector):
+    """Every app process's values from MULTIPROC_DIR, summed, and only the app's own
+    series: in tests the MCP connector's metrics share the process and the directory."""
+
+    def __init__(self) -> None:
+        self._all = MultiProcessCollector(None, MULTIPROC_DIR)
+
+    def collect(self) -> Iterable:
+        return [family for family in self._all.collect() if family.name in APP_METRICS]
+
 
 # Scrape and probe traffic is not request traffic.
 EXCLUDED = {METRICS_PATH, "/healthz"}
@@ -231,6 +259,8 @@ class DbCollector(Collector):
 
 
 DB_COLLECTOR = DbCollector()
+REGISTRY = CollectorRegistry()
+REGISTRY.register(AppProcesses())
 REGISTRY.register(DB_COLLECTOR)
 
 router = APIRouter()
