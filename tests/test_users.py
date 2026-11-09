@@ -145,10 +145,13 @@ def forwarded(client, value, username="i.petrova", password=PASSWORD):
     )
 
 
-def test_rate_limit_by_address_across_usernames(client, api):
-    from app.internal.users import _attempts
+def clear_attempts(conn):
+    conn.execute("DELETE FROM sign_in_attempt")
+    conn.commit()
 
-    _attempts.clear()  # The API fixture has already performed its own sign-in.
+
+def test_rate_limit_by_address_across_usernames(client, api, db_conn):
+    clear_attempts(db_conn)  # The API fixture has already performed its own sign-in.
     for _ in range(20):
         assert login(client, "missing", "wrong").status_code == 401
     assert login(client, "another", "wrong").status_code == 429
@@ -156,10 +159,8 @@ def test_rate_limit_by_address_across_usernames(client, api):
     assert login(client).status_code == 200
 
 
-def test_rate_limit_does_not_lock_a_user_out_from_elsewhere(client, monkeypatch):
-    from app.internal.users import _attempts
-
-    _attempts.clear()
+def test_rate_limit_does_not_lock_a_user_out_from_elsewhere(client, monkeypatch, db_conn):
+    clear_attempts(db_conn)
     monkeypatch.setattr(settings, "app_trust_forwarded", True)
     for _ in range(20):
         assert forwarded(client, "1.1.1.1", password="wrong").status_code == 401
@@ -167,10 +168,8 @@ def test_rate_limit_does_not_lock_a_user_out_from_elsewhere(client, monkeypatch)
     assert forwarded(client, "2.2.2.2").status_code == 200
 
 
-def test_rate_limit_keys_on_the_last_forwarded_entry(client, monkeypatch):
-    from app.internal.users import _attempts
-
-    _attempts.clear()
+def test_rate_limit_keys_on_the_last_forwarded_entry(client, monkeypatch, db_conn):
+    clear_attempts(db_conn)
     monkeypatch.setattr(settings, "app_trust_forwarded", True)
     # Caddy replaces the header; a client's own entries could only come first
     for i in range(20):
@@ -180,10 +179,8 @@ def test_rate_limit_keys_on_the_last_forwarded_entry(client, monkeypatch):
     assert forwarded(client, "5.6.7.8, 9.9.9.9").status_code == 200
 
 
-def test_rate_limit_ignores_forwarded_unless_trusted(client):
-    from app.internal.users import _attempts
-
-    _attempts.clear()
+def test_rate_limit_ignores_forwarded_unless_trusted(client, db_conn):
+    clear_attempts(db_conn)
     for i in range(20):
         assert forwarded(client, f"10.0.0.{i}", f"u{i}", "wrong").status_code == 401
     assert forwarded(client, "10.0.1.1").status_code == 429
@@ -709,3 +706,38 @@ def test_the_cli_keeps_the_last_admin_and_refuses_an_unknown_user(api, db_conn, 
     db_conn.rollback()
     row = db_conn.execute("SELECT disabled FROM app_user WHERE username = 'i.petrova'").fetchone()
     assert row[0] is False
+
+
+def test_the_throttle_counts_the_attempts_of_every_app_process(client, api, db_conn):
+    """The count lives in sign_in_attempt (#288): attempts another app process recorded
+    (rows written here directly) count, and the 21st within a minute is refused."""
+    clear_attempts(db_conn)
+    now = api.clock.now()
+    for i in range(10):  # another process's ten failed attempts from this address
+        db_conn.execute(
+            "INSERT INTO sign_in_attempt (key, at) VALUES (%s, %s), (%s, %s)",
+            (
+                "user|missing|testclient",
+                now - timedelta(seconds=30 - i),
+                "address|testclient",
+                now - timedelta(seconds=30 - i),
+            ),
+        )
+    db_conn.commit()
+    for _ in range(10):
+        assert login(client, "missing", "wrong").status_code == 401
+    assert login(client, "missing", "wrong").status_code == 429
+
+
+def test_the_throttle_deletes_attempts_older_than_a_minute(client, api, db_conn):
+    clear_attempts(db_conn)
+    old = api.clock.now() - timedelta(minutes=2)
+    db_conn.execute(
+        "INSERT INTO sign_in_attempt (key, at) SELECT 'address|elsewhere', %s"
+        " FROM generate_series(1, 30)",
+        (old,),
+    )
+    db_conn.commit()
+    assert login(client, "missing", "wrong").status_code == 401
+    keys = db_conn.execute("SELECT key, count(*) FROM sign_in_attempt GROUP BY key ORDER BY key")
+    assert keys.fetchall() == [("address|testclient", 1), ("user|missing|testclient", 1)]

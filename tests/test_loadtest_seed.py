@@ -24,15 +24,11 @@ class Killed(Exception):
 @pytest.fixture
 def seeding(monkeypatch):
     """What a generator run changes in this process, put back afterwards."""
-    from app.internal.users import _attempts
-
     monkeypatch.setattr(settings, "app_env", "test")
     monkeypatch.setattr(settings, "bss_service_secret", settings.bss_service_secret)
-    _attempts.clear()
     adapter().reset()
     yield
     adapter().reset()
-    _attempts.clear()
 
 
 def use(monkeypatch, url: str) -> None:

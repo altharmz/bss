@@ -127,3 +127,25 @@ def test_database_failure_gives_db_up_zero_and_no_other_database_series(client):
     assert "bss_queue_pending{" not in text
     assert "bss_products{" not in text
     assert "bss_billing_last_run_status{" not in text
+
+
+def test_a_scrape_sums_the_counters_of_every_app_process(client):
+    """WEB_CONCURRENCY app processes share PROMETHEUS_MULTIPROC_DIR (#288): another process
+    counts 3 requests on a route, this one 1, and one scrape shows 4."""
+    import os
+    import subprocess
+    import sys
+
+    route = "/test/another/process"
+    other = f"from app import metrics\nmetrics.REQUESTS.labels('GET', {route!r}, '200').inc(3)\n"
+    subprocess.run(  # noqa: S603 - a fixed child Python, same environment and directory
+        [sys.executable, "-c", other], check=True, env=os.environ.copy()
+    )
+    metrics.REQUESTS.labels("GET", route, "200").inc()
+    text = client.get("/metrics", headers=AUTH).text
+    assert sample(text, "bss_http_requests_total", route=route, status="200") == 4
+
+
+def test_no_per_process_collectors_are_exported(client):
+    text = client.get("/metrics", headers=AUTH).text
+    assert "process_resident_memory_bytes" not in text and "python_info" not in text
