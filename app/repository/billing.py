@@ -617,6 +617,22 @@ def account_balance(conn: psycopg.Connection, billing_account_id: UUID) -> Decim
     )
 
 
+def account_balances(conn: psycopg.Connection, ids: list[UUID]) -> dict[UUID, Decimal]:
+    """account_balance for a page of accounts in one statement (#285): the same sums,
+    evaluated per account."""
+    if not ids:
+        return {}
+    ledger = (
+        " + (" + BALANCE_ACTION_LEDGER.replace("%(id)s", "a.id") + ")"
+        if has_balance_ledger(conn)
+        else ""
+    )
+    # the module's own fixed SQL fragments, no input
+    payments = PAYMENTS_LESS_CHARGES.replace("%(id)s", "a.id")
+    query = f"SELECT a.id, ({payments}){ledger} FROM unnest(%s::uuid[]) AS a(id)"  # noqa: S608
+    return {uid: balance for uid, balance in conn.execute(query, (list(set(ids)),))}
+
+
 # Ledger L before balance actions: done payments less tax-inclusive ABRs and payouts.
 PAYMENTS_LESS_CHARGES = """
     (SELECT coalesce(sum(amount), 0) FROM payment
