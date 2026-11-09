@@ -58,6 +58,7 @@ TMF676 recorded refund and its consumed credit.
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON refund FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON refund FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `credit_usage_bounds`: `CREATE CONSTRAINT TRIGGER credit_usage_bounds AFTER INSERT ON refund DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION credit_usage_bounds()`
 - `refund_immutable`: `CREATE TRIGGER refund_immutable BEFORE DELETE OR UPDATE ON refund FOR EACH ROW EXECUTE FUNCTION refund_immutable()`

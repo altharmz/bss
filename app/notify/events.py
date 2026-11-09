@@ -45,13 +45,14 @@ def line(conn: psycopg.Connection, product_id: UUID | None) -> str:
 
 
 def detectors(
-    now: datetime, tz: ZoneInfo
+    now: datetime, tz: ZoneInfo, accounts: list[UUID] | None = None
 ) -> list[tuple[str, Callable[[psycopg.Connection], list[Event]]]]:
-    """The detectors, named, so one that fails does not stop the others."""
+    """The detectors, named, so one that fails does not stop the others. `accounts` limits
+    the per-account detector to those accounts (app/repository/account_review.py)."""
     today = now.astimezone(tz).date()
     since = now - timedelta(days=settings.notify_lookback_days)
     return [
-        ("accounts", lambda conn: _accounts(conn, today)),
+        ("accounts", lambda conn: _accounts(conn, today, accounts)),
         ("plan_expiring", lambda conn: _plan_expiring(conn, today)),
         ("renewals", lambda conn: _renewals(conn, since)),
         ("lifecycle", lambda conn: _lifecycle(conn, since)),
@@ -67,24 +68,24 @@ def detect(conn: psycopg.Connection, now: datetime, tz: ZoneInfo) -> list[Event]
     return [event for _, run in detectors(now, tz) for event in run(conn)]
 
 
-def _account_ids(conn: psycopg.Connection) -> list[UUID]:
+def _account_ids(conn: psycopg.Connection, only: list[UUID] | None) -> list[UUID]:
+    query = (
+        "SELECT DISTINCT a.id FROM billing_account a JOIN product p"
+        " ON p.billing_account_id = a.id WHERE a.rating_type = 'prepaid'"
+        " AND a.state = 'Active' AND p.status NOT IN ('terminated', 'cancelled', 'aborted')"
+        " AND p.termination_date IS NULL AND p.parent_product_id IS NULL"
+    )
+    if only is None:
+        return [row["id"] for row in fetch_all(conn, query + " ORDER BY a.id")]
     return [
-        row["id"]
-        for row in fetch_all(
-            conn,
-            "SELECT DISTINCT a.id FROM billing_account a JOIN product p"
-            " ON p.billing_account_id = a.id WHERE a.rating_type = 'prepaid'"
-            " AND a.state = 'Active' AND p.status NOT IN ('terminated', 'cancelled', 'aborted')"
-            " AND p.termination_date IS NULL AND p.parent_product_id IS NULL"
-            " ORDER BY a.id",
-        )
+        row["id"] for row in fetch_all(conn, query + " AND a.id = ANY(%s) ORDER BY a.id", (only,))
     ]
 
 
-def _accounts(conn: psycopg.Connection, today: date) -> list[Event]:
+def _accounts(conn: psycopg.Connection, today: date, only: list[UUID] | None) -> list[Event]:
     """Low balance and grace: both need the account's funding, read under its lock."""
     events: list[Event] = []
-    for account_id in _account_ids(conn):
+    for account_id in _account_ids(conn, only):
         with conn.transaction():
             billing.load_account(conn, account_id)
             account = fetch_one(conn, "SELECT * FROM billing_account WHERE id = %s", (account_id,))

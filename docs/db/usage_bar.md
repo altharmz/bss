@@ -50,3 +50,7 @@ The barring (suspend) and lifting (restore) a pay-as-you-go line gets from its b
 | `usage_bar_pending_idx` | `CREATE INDEX usage_bar_pending_idx ON usage_bar USING btree (next_attempt_at, id) WHERE (state = 'pending'::text)` | no |
 | `usage_bar_pkey` | `CREATE UNIQUE INDEX usage_bar_pkey ON usage_bar USING btree (id)` | yes |
 | `usage_bar_product_id_seq_key` | `CREATE UNIQUE INDEX usage_bar_product_id_seq_key ON usage_bar USING btree (product_id, seq)` | yes |
+
+## Triggers
+
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON usage_bar FOR EACH ROW EXECUTE FUNCTION account_review_by_product()`

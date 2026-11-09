@@ -68,6 +68,7 @@ SID ProductOrderItem (TMF622 productOrderItem): one add or delete of one product
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON product_order_item FOR EACH ROW EXECUTE FUNCTION account_review_by_product()`
 - `product_order_item_set_updated_at`: `CREATE TRIGGER product_order_item_set_updated_at BEFORE UPDATE ON product_order_item FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
 
 ## Referenced by

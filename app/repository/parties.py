@@ -117,13 +117,19 @@ def create_billing_account(
 ) -> Row:
     """`opened_at` comes from the injected clock (not the database's now()): a billing run
     for D covers the accounts opened before 00:00 of D."""
-    row = returning(
+    # rating_type is named only when it is not the default: migration tests call this on
+    # schemas older than 0034, always for postpaid. In the INSERT, not a later UPDATE, so
+    # the billing_account_mode_history guard (10 history lookups) never runs for a new
+    # account (#292).
+    mode = ", rating_type" if rating_type != "postpaid" else ""
+    return returning(
         conn,
-        """
+        f"""
         INSERT INTO billing_account
-            (id, customer_id, name, state, currency, bill_cycle_day, credit_limit, opened_at)
-        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s) RETURNING *
-        """,
+            (id, customer_id, name, state, currency, bill_cycle_day, credit_limit, opened_at{mode})
+        VALUES (COALESCE(%s::uuid, gen_random_uuid()), %s, %s, %s, %s, %s, %s, %s
+                {", %s" if mode else ""}) RETURNING *
+        """,  # noqa: S608 - fixed fragments only
         (
             id,
             customer_id,
@@ -133,12 +139,9 @@ def create_billing_account(
             bill_cycle_day,
             None if credit_limit is None else money(credit_limit),
             opened_at,
+            *((rating_type,) if mode else ()),
         ),
     )
-    if rating_type != "postpaid":
-        # not in the INSERT: migration tests call this on schemas older than 0034
-        row = update_billing_account(conn, row["id"], {"rating_type": rating_type})
-    return row
 
 
 def create_bucket(conn: psycopg.Connection, account_id: UUID, at: datetime) -> Row:

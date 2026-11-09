@@ -73,6 +73,7 @@ Immutable prepaid service grants. Persistence foundation only; the future billin
 | `funded_interval_billing_run_id_idx` | `CREATE INDEX funded_interval_billing_run_id_idx ON funded_interval USING btree (billing_run_id)` | no |
 | `funded_interval_command_id_product_id_key` | `CREATE UNIQUE INDEX funded_interval_command_id_product_id_key ON funded_interval USING btree (command_id, product_id)` | yes |
 | `funded_interval_id_product_key` | `CREATE UNIQUE INDEX funded_interval_id_product_key ON funded_interval USING btree (id, product_id)` | yes |
+| `funded_interval_latest_idx` | `CREATE INDEX funded_interval_latest_idx ON funded_interval USING btree (product_id, lower(period) DESC, authorized_at DESC)` | no |
 | `funded_interval_pkey` | `CREATE UNIQUE INDEX funded_interval_pkey ON funded_interval USING btree (id)` | yes |
 | `funded_interval_product_id_anchor_date_interval_index_key` | `CREATE UNIQUE INDEX funded_interval_product_id_anchor_date_interval_index_key ON funded_interval USING btree (product_id, anchor_date, interval_index) WHERE (supersedes_interval_id IS NULL)` | no |
 | `funded_interval_product_id_period_excl` | `CREATE INDEX funded_interval_product_id_period_excl ON funded_interval USING gist (product_id, period) WHERE (supersedes_interval_id IS NULL)` | yes |
@@ -80,4 +81,5 @@ Immutable prepaid service grants. Persistence foundation only; the future billin
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON funded_interval FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `funded_interval_retained`: `CREATE TRIGGER funded_interval_retained BEFORE DELETE OR UPDATE ON funded_interval FOR EACH ROW EXECUTE FUNCTION funded_interval_retained()`

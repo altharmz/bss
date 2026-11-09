@@ -71,6 +71,7 @@ SID Product (TMF637 product): an instance of an offering on a billing account. W
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON product FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `product_default_name`: `CREATE TRIGGER product_default_name BEFORE INSERT ON product FOR EACH ROW EXECUTE FUNCTION product_default_name()`
 - `product_set_updated_at`: `CREATE TRIGGER product_set_updated_at BEFORE UPDATE ON product FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
 

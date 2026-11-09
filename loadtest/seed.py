@@ -936,6 +936,9 @@ def run(
                         chunks = [(lines[i::processes], day) for i in range(processes)]
                         report.counts["usageRecords"] += sum(pool.starmap(_usage_chunk, chunks))
                     report.timed("usage", t)
+                # fresh statistics every day: the tables grow from empty, and plans made on
+                # stale ones (cached in these long sessions) scan whole tables (#292)
+                conn.execute("ANALYZE")
                 conn.execute("INSERT INTO loadtest_progress (day) VALUES (%s)", (day,))
                 report.days_run += 1
                 if stop_after is not None and report.days_run >= stop_after:

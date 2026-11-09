@@ -31,7 +31,7 @@ import psycopg
 
 from app.clock import Clock
 from app.events import deliver
-from app.repository import billing
+from app.repository import account_review, billing
 from app.worker.lifecycle import process_lifecycle
 from app.worker.notify import process_notifications
 from app.worker.plan import scheduled
@@ -64,6 +64,7 @@ class Tick:
     prepaid_renewals: list[UUID] = field(default_factory=list)
     prepaid_commands: list[UUID] = field(default_factory=list)
     deliveries: int = 0  # event POSTs tried (step 6)
+    reviewed: int | None = None  # accounts the per-account passes looked at; None: all
     stopped: bool = False
 
 
@@ -129,12 +130,39 @@ def tick(
         result.prepaid_renewals = produce_renewals(
             conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
         )
-        process_lifecycle(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
+        # the per-account passes look at every prepaid account once per business date and
+        # otherwise only at the accounts whose money or products changed (#292)
+        review = account_review.begin(conn, clock.now().astimezone(tz).date())
+        result.reviewed = None if review.full else len(review.marks)
+        process_lifecycle(
+            conn,
+            clock=clock,
+            tz=tz,
+            checkpoint=checkpoint,
+            heartbeat=heartbeat,
+            accounts=review.accounts,
+        )
         result.prepaid_commands = process_commands(
             conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat
         )
-        observe_entitlements(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
-        process_notifications(conn, clock=clock, tz=tz, checkpoint=checkpoint, heartbeat=heartbeat)
+        observe_entitlements(
+            conn,
+            clock=clock,
+            tz=tz,
+            checkpoint=checkpoint,
+            heartbeat=heartbeat,
+            accounts=review.accounts,
+        )
+        process_notifications(
+            conn,
+            clock=clock,
+            tz=tz,
+            checkpoint=checkpoint,
+            heartbeat=heartbeat,
+            accounts=review.accounts,
+        )
+        if checkpoint is None or not checkpoint():  # a stopped pass is evaluated again
+            account_review.finish(conn, review)
         sent = deliver.process(conn, clock=clock, checkpoint=checkpoint, heartbeat=heartbeat)
         result.deliveries = len(sent.delivered) + len(sent.retrying) + len(sent.failed)
         deliver.purge(conn, clock=clock)
