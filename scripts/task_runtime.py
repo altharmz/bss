@@ -433,6 +433,11 @@ def main():
             port = values[f"{args[1].upper()}_PORT"]
             print(f"http://localhost:{port}")
             return
+        # --loadtest adds the load-test stack (compose.loadtest.yaml, docs/loadtest.md): its
+        # own lt-* services and database volume, beside the unchanged dev services.
+        loadtest = args[:1] == ["--loadtest"]
+        if loadtest:
+            args = args[1:]
         profiles, args = compose_args(args)
         env = dict(os.environ, **values)
         # --env-file prevents discovery of checkout .env files. Explicit identity values
@@ -452,6 +457,7 @@ def main():
             str(root / "compose.yaml"),
             "-f",
             str(root / "compose.override.yaml"),
+            *(["-f", str(root / "compose.loadtest.yaml")] if loadtest else []),
         ]
         checked = subprocess.run(  # noqa: S603 - fixed quiet validation, no shell
             command + ["config", "--quiet"], env=env, cwd=root, capture_output=True, check=False

@@ -131,6 +131,65 @@ testmon-dir:
 seed: ## LOCAL demo data through the public TMF API (tests/seed.py); refuses APP_ENV=prod; a second run is a no-op
 	./scripts/task-compose run --rm app python -m tests.seed
 
+# --- the local load-test stack (compose.loadtest.yaml, docs/loadtest.md) ---
+LT := ./scripts/task-compose --loadtest
+LT_SERVICES := lt-db lt-app lt-worker lt-mcp
+LT_SECRET := $(or $(XDG_CONFIG_HOME),$(HOME)/.config)/bss/loadtest/operator-password
+LT_PSQL := $(LT) exec -T lt-db sh -c 'exec psql -X -q -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -f -'
+N ?=
+PROCESSES ?= 4
+DAYS ?= 90
+USAGE_DAYS ?= 30
+.PHONY: loadtest-up loadtest-down loadtest-ps loadtest-logs loadtest-migrate loadtest-reset loadtest-secret loadtest-seed loadtest-pg-stats-reset loadtest-pg-stats
+
+loadtest-up: ## Start the load-test stack (lt-db, lt-app, lt-worker, lt-mcp; pinned to LOADTEST_SUT_CPUS, default 4-7), migrated
+	./scripts/task-compose build app
+	$(LT) build lt-app
+	$(LT) up -d --wait lt-db
+	@$(MAKE) --no-print-directory loadtest-migrate
+	$(LT) up -d --wait $(LT_SERVICES)
+
+loadtest-down: ## Stop and remove the load-test containers (its database volume is kept)
+	$(LT) rm --stop --force $(LT_SERVICES) lt-tools
+
+loadtest-ps: ## Load-test containers, their health and limits
+	$(LT) ps $(LT_SERVICES)
+
+loadtest-logs: ## Last 5 minutes of the load-test app and worker logs
+	$(LT) logs --since=5m --tail=200 lt-app lt-worker
+
+loadtest-migrate: ## Apply Alembic migrations to the load-test database
+	@mkdir -p loadtest/out
+	$(LT) run --rm lt-tools alembic upgrade head
+
+loadtest-reset: ## Empty the load-test database (drop, create, migrate); the app and worker are stopped first
+	$(LT) rm --stop --force lt-app lt-worker lt-mcp
+	$(LT) up -d --wait lt-db
+	$(LT) exec -T lt-db sh -c 'dropdb -U "$$POSTGRES_USER" --force --if-exists "$$POSTGRES_DB" && createdb -U "$$POSTGRES_USER" "$$POSTGRES_DB"'
+	@$(MAKE) --no-print-directory loadtest-migrate
+
+loadtest-secret: ## Create the load-test operators' password file outside the repo (once; never printed)
+	@if [ -s "$(LT_SECRET)" ]; then echo "loadtest-secret: $(LT_SECRET) exists"; else \
+	  mkdir -p "$$(dirname "$(LT_SECRET)")" && umask 077 && \
+	  python3 -c 'import secrets; print(secrets.token_urlsafe(24))' > "$(LT_SECRET)" && \
+	  echo "loadtest-secret: created $(LT_SECRET)"; fi
+
+loadtest-seed: ## Build the load-test dataset in lt-db (N=<subscribers> [PROCESSES=4] [DAYS=90] [USAGE_DAYS=30]); resumable
+	@test -n "$(N)" || { echo "loadtest-seed: N=<subscribers> is required" >&2; exit 2; }
+	@test -s "$(LT_SECRET)" || { echo "loadtest-seed: run make loadtest-secret first" >&2; exit 2; }
+	@mkdir -p loadtest/out
+	$(LT) rm --stop --force lt-worker
+	$(LT) up -d --wait lt-db
+	LOADTEST_OPERATOR_PASSWORD="$$(cat "$(LT_SECRET)")" $(LT) run --rm lt-tools \
+	  python -m loadtest.seed --n $(N) --processes $(PROCESSES) --days $(DAYS) --usage-days $(USAGE_DAYS)
+
+loadtest-pg-stats-reset: ## Reset pg_stat_statements in the load-test database
+	$(LT_PSQL) < loadtest/pg-stats-reset.sql
+
+loadtest-pg-stats: ## Top 20 statements by total time since the last reset, also to loadtest/out/pg-stats-<time>.txt
+	@mkdir -p loadtest/out
+	$(LT_PSQL) < loadtest/pg-stats.sql | tee "loadtest/out/pg-stats-$$(date +%Y%m%dT%H%M%S).txt"
+
 worker-once: ## One wake-up of the billing worker against the local stack (due dates, queue, flips), then exit
 	./scripts/task-compose run --rm app python -m app.worker --once
 
