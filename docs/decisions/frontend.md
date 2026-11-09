@@ -791,3 +791,7 @@ Deviations:
 - TEST-CHANGE: `App.test.tsx` expects the System section in the sidebar.
 
 Ledger v2 slice 13 (R13): Prepaid commands (dense table, `Dialog` + `KeyValue`), Bills, Global bills, Payments, Balances and Prepaid history print billing-account, command, payment, balance-action and bill-link ids as `Id` (never `accountLabel`/`shortId` text); payment and balance movements use `Amount` (payments and balance actions `signed`, refunds negative). Deviation: financial, party and settlement accounts, and buckets have no D5 prefix, so their ids stay plain text; "Built in" was already a `Tag`; the order and product ids in the command dialog are no longer links (an `Id` is a copy button).
+
+## Logging settings UI (2026-11-09, issue #275)
+
+- `/settings/logging` is an admin-only System entry with no client-side guard (the API's 403 is the error state); the three debug durations (15/30/60 min) and Stop are fixed buttons, no free-form duration; the countdown is local and display-only, the state re-reads every 30 s and after each PUT; its PUT bodies are pinned on both sides.

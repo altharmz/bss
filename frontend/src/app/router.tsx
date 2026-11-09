@@ -20,6 +20,7 @@ export type Route =
   | { name: 'signIn' }
   | { name: 'password' }
   | { name: 'users' }
+  | { name: 'logging' }
   | { name: 'numbers' }
   | { name: 'sims' }
   | { name: 'ports' }
@@ -67,6 +68,7 @@ export function parseRoute(path: string): Route {
   if (path === '/billing-settings' || path === '/billing-settings/') {
     return { name: 'billingSettings' };
   }
+  if (path === '/settings/logging' || path === '/settings/logging/') return { name: 'logging' };
   if (path === '/payments' || path === '/payments/') return { name: 'payments' };
   if (path === '/bills' || path === '/bills/') return { name: 'bills' };
   if (path === '/balances' || path === '/balances/') return { name: 'balances' };
@@ -85,6 +87,8 @@ export function hrefOf(route: Exclude<Route, { name: 'notFound' }>): string {
       return '/users';
     case 'integrations':
       return '/integrations';
+    case 'logging':
+      return '/settings/logging';
     case 'numbers':
       return '/numbers';
     case 'sims':

@@ -146,6 +146,11 @@ export function Sidebar({ context }: { context: SystemContext }) {
                 href: '/users',
                 active: (r: Route) => r.name === 'users',
               },
+              {
+                label: 'Logging',
+                href: '/settings/logging',
+                active: (r: Route) => r.name === 'logging',
+              },
             ]
           : []),
       ],

@@ -28,6 +28,7 @@ import {
 import { RouterProvider, useRouter } from './router';
 import { Shell } from './Shell';
 import { SessionGate } from './session';
+import { LoggingSettingsScreen } from '../screens/LoggingSettings';
 import { UsersScreen } from '../screens/Users';
 import { IntegrationsScreen } from '../screens/Integrations';
 import { NumbersScreen } from '../screens/Numbers';
@@ -74,6 +75,8 @@ function Screen() {
       return <PartiesScreen />;
     case 'billingSettings':
       return <BillingSettingsScreen />;
+    case 'logging':
+      return <LoggingSettingsScreen />;
     case 'payments':
       return <PaymentsScreen />;
     case 'bills':

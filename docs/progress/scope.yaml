@@ -402,6 +402,7 @@ items:
   - {id: ui.shell.theme, area: ui, stage: 5, title: "Theme choice (System / Light / Dark) in the operator menu"}
   - {id: ui.notFound, area: ui, stage: 5, title: "Page not found: heading, a sentence and a link to Subscribers"}
   - {id: ui.users.denied, area: ui, stage: 5, title: "Users: not allowed for non-administrators"}
+  - {id: ui.logging.settings, area: ui, stage: 5, title: "Logging settings: base level and temporary debug"}
   - {id: ui.shell, area: ui, stage: 5, title: "Shell: sidebar, top bar with business date and zone"}
   - {id: ui.subscribers.list, area: ui, stage: 5, title: "Subscribers list"}
   - {id: ui.subscribers.prepaid, area: ui, stage: 5, title: "Subscribers prepaid account mode"}

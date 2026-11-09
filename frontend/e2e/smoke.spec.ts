@@ -341,6 +341,13 @@ test('user changes the initial password, signs in again and cannot manage users'
   await page.goto('/users');
   await expect(page.getByRole('heading', { name: 'Not allowed' })).toBeVisible();
   expect((await page.request.get('/internal/v1/users')).status()).toBe(403);
+  // no Logging entry for a user; the route itself shows the API's refusal (no client-side guard)
+  await expect(
+    page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Logging' }),
+  ).toHaveCount(0);
+  await page.goto('/settings/logging');
+  await expect(page.getByText('Failed to load the log level')).toBeVisible();
+  expect((await page.request.get('/internal/v1/logging')).status()).toBe(403);
   await page.locator('.bss-operator summary').click();
   await expect(page.getByRole('link', { name: 'Users', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Sign out' }).click();
