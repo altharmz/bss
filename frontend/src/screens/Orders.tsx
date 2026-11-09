@@ -47,6 +47,7 @@ import {
   useToast,
 } from '../ui/kit';
 import { AddProductModal, type DraftToEdit } from './AddProduct';
+import { NetworkCommands } from './NetworkCommands';
 import { OrderWatch } from './PrepaidOrderWatch';
 import { watch, type Watched } from './watched';
 import { ErrorBlock } from '../ui/states';
@@ -848,6 +849,7 @@ export function OrderModal({
             />
           ))}
         </div>
+        {orderId !== '' && <NetworkCommands owner={{ orderId }} />}
         <h3 className="bss-subhead">Cancellations</h3>
         {cancellations.status === 'loading' && <div className="bss-caption">Loading…</div>}
         {cancellations.status === 'error' && (

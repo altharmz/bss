@@ -1,4 +1,5 @@
 import { submitDialogPrimary } from '../ui/kit';
+import { NetworkCommands } from './NetworkCommands';
 import { useState } from 'react';
 import { loadNumbers } from '../api/numbers';
 import { loadProduct, loadProducts, PRODUCT_STATES, type InventoryProduct } from '../api/products';
@@ -273,6 +274,7 @@ function ProductDetail({ product, onClose }: { product: InventoryProduct; onClos
           </div>
         )}
       </section>
+      {id !== '' && <NetworkCommands owner={{ productId: id }} />}
       <section className="bss-dialog-section" data-ui="ui.products.resource">
         <h3>Realizing resource</h3>
         {resources.length === 0 && <p>None.</p>}

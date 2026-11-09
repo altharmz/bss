@@ -103,6 +103,45 @@ describe('products screen', () => {
     );
   });
 
+  it('shows the network commands of a product, without a Retry for a confirmed one', async () => {
+    const NET = '/internal/v1/network/command';
+    backend({
+      [`GET ${PRODUCTS}?${PAGE}`]: () => json([first, second], { total: 2 }),
+      [`GET ${PRODUCTS}/${P1}`]: () => json(first),
+      [`GET ${NET}?product.id=${P1}&offset=0&limit=100`]: () =>
+        json(
+          [
+            {
+              id: 'b0000001-0000-4000-8000-000000000001',
+              kind: 'activate',
+              state: 'confirmed',
+              productOrder: { id: 'c0000001-0000-4000-8000-000000000001' },
+              productOrderItem: { id: 'f0000001-0000-4000-8000-000000000001' },
+              product: { id: P1 },
+              dueDate: '2026-08-01',
+              profile: {},
+              request: null,
+              attempts: 1,
+              attemptedAt: '2026-08-01T09:00:00Z',
+              nextAttemptAt: null,
+              lastError: null,
+              refusalCode: null,
+              confirmedAt: '2026-08-01T09:00:01Z',
+              createdAt: '2026-08-01T08:00:00Z',
+            },
+          ],
+          { total: 1 },
+        ),
+    });
+    open('/products');
+    fireEvent.click(await screen.findByText('Basic 10'));
+    const detail = await screen.findByRole('dialog');
+    expect((await within(detail).findAllByText('Confirmed')).length).toBeGreaterThan(0);
+    expectUi('ui.network.commands');
+    expect(within(detail).getByText('Activate')).toBeTruthy();
+    expect(within(detail).queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
   it('maps product states to their pill families and shows PRD- ids', async () => {
     backend({ [`GET ${PRODUCTS}?${PAGE}`]: () => json([first, second], { total: 2 }) });
     open('/products');

@@ -19,6 +19,7 @@ from tests import apidata
 from tests.apiclient import decimals
 from tests.apidata import CATALOG, ORDER
 from tests.test_api_transfer import pair
+from tests.test_network_provisioning import make_line
 from tests.test_prepaid_command_api import failed
 from tests.test_prepaid_orders import purchase, shop
 from tests.test_prepaid_renewal_producer import tick
@@ -1621,6 +1622,81 @@ def test_balances_screen_reads_as_the_ui_makes_them(api, db_conn):
     assert one["@type"] == "TransferBalance" and one["receiverBucket"]["id"] == rx.bucket
     owner = api.get(f"{prepay}/bucket/{rx.bucket}").json()["partyAccount"]
     assert owner["id"] == rx.id and owner["name"]
+
+
+def _profile_document(name, values):
+    """networkDocuments() in api/bss.ts: an integer characteristic, no description."""
+    return {
+        "@type": "CharacteristicSpecification",
+        "name": name,
+        "valueType": "integer",
+        "configurable": False,
+        "characteristicValueSpecification": [
+            {
+                "@type": "IntegerCharacteristicValueSpecification",
+                "valueType": "integer",
+                "isDefault": index == 0,
+                "value": value,
+            }
+            for index, value in enumerate(values)
+        ],
+    }
+
+
+def test_network_profile_and_narrowing_as_the_ui_sends_them(api):
+    """The specification's Network profile section and the offering's narrowing selects
+    (docs/decisions/network.md), pinned in Catalog.test.tsx."""
+    offering = create_offering(api)
+    spec_url = offering["productSpecification"]["href"]
+    profile = [
+        _profile_document("dataAllowanceMb", [5000, 10000]),
+        _profile_document("hotspot", [1, 0]),
+    ]
+    changed = api.patch(spec_url, {"productSpecCharacteristic": profile})
+    assert changed.status_code == 200, changed.text
+    # a flag outside 0/1 is the 400 the dialog also prevents
+    bad = api.patch(spec_url, {"productSpecCharacteristic": [_profile_document("hotspot", [2])]})
+    assert bad.status_code == 400
+    use = {
+        "@type": "ProductSpecificationCharacteristicValueUse",
+        "name": "dataAllowanceMb",
+        "valueType": "integer",
+        "productSpecCharacteristicValue": [
+            {
+                "@type": "IntegerCharacteristicValueSpecification",
+                "valueType": "integer",
+                "value": 10000,
+            }
+        ],
+    }
+    narrowed = api.patch(offering["href"], {"prodSpecCharValueUse": [use]})
+    assert narrowed.status_code == 200, narrowed.text
+    assert narrowed.json()["prodSpecCharValueUse"][0]["name"] == "dataAllowanceMb"
+    use["productSpecCharacteristicValue"][0]["value"] = 7
+    refused = api.patch(offering["href"], {"prodSpecCharValueUse": [use]})
+    assert refused.status_code == 400  # not one of the specification's values
+
+
+def test_network_command_reads_and_retry_as_the_ui_makes_them(api, db_conn):
+    """NetworkCommands (api/network.ts): the list per order and per product with the
+    query it sends, and Retry as a POST without a body (409 unless exhausted)."""
+    off, account = shop(api, db_conn)
+    make_line(api, off)
+    order = purchase(api, off, account)
+    listed = api.get(
+        f"/internal/v1/network/command?productOrder.id={order['id']}&offset=0&limit=100"
+    )
+    assert listed.status_code == 200, listed.text
+    rows = listed.json()
+    assert rows and int(listed.headers["X-Total-Count"]) == len(rows)
+    command = rows[0]
+    assert command["state"] == "pending" and command["attempts"] == 0
+    products = api.get(
+        f"/internal/v1/network/command?product.id={command['product']['id']}&offset=0&limit=100"
+    )
+    assert command["id"] in [c["id"] for c in products.json()]
+    retried = api.request("POST", f"/internal/v1/network/command/{command['id']}/retry")
+    assert retried.status_code == 409
 
 
 def test_prepaid_order_and_command_reads_as_the_ui_makes_them(api, db_conn, monkeypatch):

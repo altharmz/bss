@@ -7,6 +7,9 @@ import { uncertain } from './submissionKey';
 import {
   createSpecification,
   characteristicFields,
+  networkFields,
+  NETWORK_PROFILE,
+  validNetwork,
   deleteSpecification,
   NEXT_LIFECYCLE,
   patchSpecification,
@@ -138,6 +141,7 @@ function fieldsOf(spec: Specification | null): SpecificationFields {
     requiresNumber: (spec?.resourceSpecification ?? []).some((ref) => ref.id === 'msisdn'),
     requiresImsi: (spec?.resourceSpecification ?? []).some((ref) => ref.id === 'imsi'),
     characteristics: characteristicFields(spec),
+    network: networkFields(spec),
   };
 }
 
@@ -188,8 +192,12 @@ export function SpecificationModal({
                 : value.trim() !== '',
           )),
   );
+  const validProfile = validNetwork(form.network);
   const ready =
-    form.name.trim() !== '' && validCharacteristics && (spec === null || changes !== null);
+    form.name.trim() !== '' &&
+    validCharacteristics &&
+    validProfile &&
+    (spec === null || changes !== null);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -296,6 +304,32 @@ export function SpecificationModal({
               label="Requires an IMSI"
             />
           </div>
+          <section data-ui="ui.catalog.networkProfile" className="bss-form">
+            <h3>Network profile</h3>
+            <p className="bss-secondary">
+              Offerings of a specification with any of these are network lines: the network is told
+              their profile when an order is accepted. Values are comma-separated whole numbers, the
+              first is the default; leave a field empty to not declare it.
+            </p>
+            {NETWORK_PROFILE.map(({ name, label, flag }) => (
+              <Field key={name} label={label}>
+                <TextInput
+                  mono
+                  aria-label={`Network ${name}`}
+                  placeholder={flag ? '0, 1' : ''}
+                  value={form.network?.[name] ?? ''}
+                  onChange={(e) =>
+                    setForm({ ...form, network: { ...form.network, [name]: e.target.value } })
+                  }
+                />
+              </Field>
+            ))}
+            {!validProfile && (
+              <Note tone="negative">
+                Network values are whole numbers of zero or more; the flags take 0 or 1.
+              </Note>
+            )}
+          </section>
           <section data-ui="ui.catalog.specificationCharacteristics" className="bss-form">
             <h3>Characteristics</h3>
             <p className="bss-secondary">

@@ -119,5 +119,5 @@ approved by the human's standing delegation (decided following TMF). The UI half
 ## Not in this slice
 
 The admin UI (network profile editor, network step and state on order and product, Retry
-button) is issue 183b; later slices add commands (SIM swap is #186, number pool, porting, usage feed; the
+button) is issue 183b (#205, [frontend.md](frontend.md#network-provisioning-ui-2026-11-09-issue-205)); later slices add commands (SIM swap is #186, number pool, porting, usage feed; the
 device check is a query, below).
