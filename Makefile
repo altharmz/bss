@@ -199,6 +199,8 @@ loadtest-restore: ## Replace the load-test database with ~/.local/share/bss/load
 	$(LT) exec -T lt-db sh -c 'dropdb -U "$$POSTGRES_USER" --force --if-exists "$$POSTGRES_DB" && createdb -U "$$POSTGRES_USER" "$$POSTGRES_DB"'
 	$(LT) exec -T lt-db sh -c 'exec pg_restore -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --no-owner -j 1' < "$(LT_DATA)/$(NAME).dump"
 	@$(MAKE) --no-print-directory loadtest-migrate
+	@# pg_restore leaves no statistics: plans without them scan whole tables
+	$(LT) exec -T lt-db sh -c 'exec psql -X -q -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -c ANALYZE'
 
 loadtest-pg-stats-reset: ## Reset pg_stat_statements in the load-test database
 	$(LT_PSQL) < loadtest/pg-stats-reset.sql

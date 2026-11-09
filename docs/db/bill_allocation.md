@@ -60,6 +60,7 @@ An amount applied to a customer bill (ours; TMF678 appliedPayment, TMF676 paymen
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON bill_allocation FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON bill_allocation DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
 - `bill_allocation_bounds`: `CREATE CONSTRAINT TRIGGER bill_allocation_bounds AFTER INSERT ON bill_allocation DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION bill_allocation_bounds()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON bill_allocation FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`

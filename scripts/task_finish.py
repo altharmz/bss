@@ -278,9 +278,11 @@ def runtime_inventory(root, task):
     return containers, networks
 
 
-# Ignored build and test output of Make targets (web-build, web-shots, web-types, web-e2e).
+# Ignored build and test output of Make targets (web-build, web-shots, web-types, web-e2e,
+# loadtest-*: reports and profiles; datasets live outside the worktree, docs/loadtest.md).
 DISPOSABLE = (
     ".testmon/",
+    "loadtest/out/",
     ".docs/",
     ".progress/",
     "frontend/dist/",

@@ -57,6 +57,7 @@ Durable internal prepaid command journal; no runtime dispatcher or public API ye
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON prepaid_command FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON prepaid_command FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `prepaid_command_hold_owner`: `CREATE CONSTRAINT TRIGGER prepaid_command_hold_owner AFTER INSERT ON prepaid_command DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION prepaid_command_hold_owner()`
 - `prepaid_command_retained`: `CREATE TRIGGER prepaid_command_retained BEFORE DELETE OR UPDATE ON prepaid_command FOR EACH ROW EXECUTE FUNCTION prepaid_command_retained()`

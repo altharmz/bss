@@ -73,6 +73,7 @@ SID BillingAccount (TMF666 billingAccount, served as the BssBillingAccount exten
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER UPDATE ON billing_account FOR EACH ROW EXECUTE FUNCTION account_review_by_account()`
 - `billing_account_financial_owner`: `CREATE TRIGGER billing_account_financial_owner BEFORE INSERT OR UPDATE OF financial_account_id, customer_id ON billing_account FOR EACH ROW EXECUTE FUNCTION billing_account_financial_owner()`
 - `billing_account_mode_history`: `CREATE TRIGGER billing_account_mode_history BEFORE UPDATE OF rating_type ON billing_account FOR EACH ROW EXECUTE FUNCTION billing_account_mode_history()`
 - `billing_account_set_updated_at`: `CREATE TRIGGER billing_account_set_updated_at BEFORE UPDATE ON billing_account FOR EACH ROW EXECUTE FUNCTION set_updated_at()`

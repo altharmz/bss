@@ -35,7 +35,8 @@ def held(conn):
 def grants(conn, product):
     return conn.execute(
         "SELECT lower(period), upper(period), amount, tax_amount, supersedes_interval_id"
-        " FROM funded_interval WHERE product_id = %s ORDER BY lower(period), authorized_at",
+        " FROM funded_interval WHERE product_id = %s"
+        " ORDER BY lower(period), authorized_at, supersedes_interval_id NULLS FIRST",
         (product["id"],),
     ).fetchall()
 

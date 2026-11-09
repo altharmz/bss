@@ -87,6 +87,7 @@ TMF654 top-up, reservation, adjustment and transfer actions; balanceActionHistor
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON balance_action FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id', 'receiver_billing_account_id')`
 - `balance_action_retained`: `CREATE TRIGGER balance_action_retained BEFORE DELETE OR UPDATE ON balance_action FOR EACH ROW EXECUTE FUNCTION balance_action_retained()`
 - `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON balance_action DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT OR UPDATE ON balance_action FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`

@@ -37,4 +37,5 @@ Retained needs-top-up observations; current only while the command is pending. N
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT ON prepaid_funding_shortfall FOR EACH ROW EXECUTE FUNCTION account_review_by_command()`
 - `prepaid_shortfall_retained`: `CREATE TRIGGER prepaid_shortfall_retained BEFORE DELETE OR UPDATE ON prepaid_funding_shortfall FOR EACH ROW EXECUTE FUNCTION prepaid_shortfall_retained()`

@@ -46,4 +46,5 @@ TMF622 modify items: the product's offering from change_date on (billed prorated
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON product_offering_change FOR EACH ROW EXECUTE FUNCTION account_review_by_product()`
 - `product_offering_change_set_updated_at`: `CREATE TRIGGER product_offering_change_set_updated_at BEFORE UPDATE ON product_offering_change FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
