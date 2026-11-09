@@ -413,13 +413,22 @@ def _complete_transfer(conn, cmd, action_id, now, tz) -> None:
     commands.complete(conn, cmd["id"], result, now=now)
 
 
-def observe_entitlements(conn, *, clock, tz, checkpoint=None, heartbeat=None):
-    """Persist observed entitlement transitions once, under account/product locks."""
+def observe_entitlements(conn, *, clock, tz, checkpoint=None, heartbeat=None, accounts=None):
+    """Persist observed entitlement transitions once, under account/product locks.
+    `accounts` limits the pass to those accounts (app/repository/account_review.py)."""
     ensure_ownership(conn)
-    accounts = fetch_all(
-        conn, "SELECT id FROM billing_account WHERE rating_type = 'prepaid' ORDER BY id"
-    )
-    for account in accounts:
+    if accounts is None:
+        rows = fetch_all(
+            conn, "SELECT id FROM billing_account WHERE rating_type = 'prepaid' ORDER BY id"
+        )
+    else:
+        rows = fetch_all(
+            conn,
+            "SELECT id FROM billing_account WHERE rating_type = 'prepaid' AND id = ANY(%s)"
+            " ORDER BY id",
+            (accounts,),
+        )
+    for account in rows:
         if checkpoint is not None and checkpoint():
             break
         with conn.transaction():

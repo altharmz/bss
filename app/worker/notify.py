@@ -34,12 +34,14 @@ def process_notifications(
     tz: ZoneInfo,
     checkpoint: Checkpoint | None = None,
     heartbeat: Heartbeat | None = None,
+    accounts: list[UUID] | None = None,
 ) -> list[UUID]:
-    """One pass; returns the ids of the messages queued or sent."""
+    """One pass; returns the ids of the messages queued or sent. `accounts` limits the
+    per-account detector (low balance, grace) to those accounts; None: all."""
     ensure_ownership(conn)
     now = clock.now()
     acted: list[UUID] = []
-    for name, run in events.detectors(now, tz):
+    for name, run in events.detectors(now, tz, accounts):
         if checkpoint is not None and checkpoint():
             return acted
         try:

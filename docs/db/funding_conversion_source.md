@@ -39,6 +39,7 @@ Retained internal command hold conversion; no runtime caller.
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `funding_conversion_source_allocation_id_key` | `CREATE UNIQUE INDEX funding_conversion_source_allocation_id_key ON funding_conversion_source USING btree (allocation_id)` | yes |
+| `funding_conversion_source_billing_account_id_idx` | `CREATE INDEX funding_conversion_source_billing_account_id_idx ON funding_conversion_source USING btree (billing_account_id)` | no |
 | `funding_conversion_source_hold_id_idx` | `CREATE INDEX funding_conversion_source_hold_id_idx ON funding_conversion_source USING btree (hold_id)` | no |
 | `funding_conversion_source_pkey` | `CREATE UNIQUE INDEX funding_conversion_source_pkey ON funding_conversion_source USING btree (hold_source_id, allocation_id)` | yes |
 

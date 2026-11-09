@@ -83,6 +83,7 @@ SID AppliedCustomerBillingRate, ABR (TMF678 appliedCustomerBillingRate): a recur
 ## Triggers
 
 - `abr_default_offering`: `CREATE TRIGGER abr_default_offering BEFORE INSERT ON applied_customer_billing_rate FOR EACH ROW EXECUTE FUNCTION abr_default_offering()`
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON applied_customer_billing_rate FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `applied_customer_billing_rate_set_updated_at`: `CREATE TRIGGER applied_customer_billing_rate_set_updated_at BEFORE UPDATE ON applied_customer_billing_rate FOR EACH ROW EXECUTE FUNCTION set_updated_at()`
 
 ## Referenced by

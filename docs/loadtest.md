@@ -110,6 +110,8 @@ It refuses any `APP_ENV` but `test`.
 
 **Profiling.** `SEED_ARGS="--stop-after 1 --profile loadtest/out/day.prof"` runs one more day and writes a cProfile of the main process. With `PROCESSES=1` that covers everything.
 
+Each simulated day ends with `ANALYZE`. The tables grow from empty, and plans made on stale statistics, cached in the generator's long sessions, scanned whole tables. `make loadtest-restore` analyzes too, since `pg_restore` leaves no statistics.
+
 **Report.** `loadtest/out/seed-report.json` holds the seconds per phase, the counts, the
 rates (subscribers/s, billed accounts/s, usage records/s, rows/s), the database size and
 the rows per table.
@@ -121,4 +123,5 @@ pinned).
 
 | Run | Duration | Database | Notes |
 |---|---|---|---|
+| Day 7 of the 100k seed (about 20k subscribers), PROCESSES=1, before / after #292's first fixes | 1,960 s / 1,474 s (tick 1,050 / 665 s, creation 824 / 731 s) | | full table scans gone; `balance_ledger_check` 4.26 / 1.40 ms; the rest is about 1.2M queries a day at about 0.6 ms round trip each |
 | N=1000, DAYS=10, USAGE_DAYS=3, PROCESSES=4 | 9 min 6 s (billing 70 s, subscribers 65 s, ticks 162 s, usage 221 s) | 59 MB | 64.7 billed accounts/s, 15.3 subscribers/s, 282 usage records/s; the database used about half of its 4 CPUs: the generator's serial Python path is the limit |

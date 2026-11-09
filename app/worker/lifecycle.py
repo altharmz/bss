@@ -32,7 +32,7 @@ ACCOUNTS = (
     "SELECT DISTINCT a.id FROM billing_account a JOIN product p ON p.billing_account_id = a.id"
     " WHERE a.rating_type = 'prepaid' AND a.state = 'Active'"
     " AND p.status NOT IN ('terminated', 'cancelled', 'aborted') AND p.termination_date IS NULL"
-    " AND (p.parent_product_id IS NULL) ORDER BY a.id"
+    " AND (p.parent_product_id IS NULL)"
 )
 
 
@@ -47,11 +47,17 @@ def process_lifecycle(
     tz: ZoneInfo,
     checkpoint: Checkpoint | None = None,
     heartbeat: Heartbeat | None = None,
+    accounts: list[UUID] | None = None,
 ) -> list[UUID]:
-    """Take every due lifecycle transition once; returns the products acted on."""
+    """Take every due lifecycle transition once; returns the products acted on. `accounts`
+    limits the pass to those accounts (app/repository/account_review.py); None: all."""
     ensure_ownership(conn)
     acted: list[UUID] = []
-    for row in fetch_all(conn, ACCOUNTS):
+    if accounts is None:
+        rows = fetch_all(conn, ACCOUNTS + " ORDER BY a.id")
+    else:
+        rows = fetch_all(conn, ACCOUNTS + " AND a.id = ANY(%s) ORDER BY a.id", (accounts,))
+    for row in rows:
         if checkpoint is not None and checkpoint():
             break
         with conn.transaction():

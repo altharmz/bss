@@ -44,6 +44,7 @@ Compensating ledger entry of a cancelled top-up or adjustment; at most one per a
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON balance_action_reversal FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON balance_action_reversal DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
 - `balance_ledger_retained`: `CREATE TRIGGER balance_ledger_retained BEFORE DELETE OR UPDATE ON balance_action_reversal FOR EACH ROW EXECUTE FUNCTION balance_ledger_retained()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT ON balance_action_reversal FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`

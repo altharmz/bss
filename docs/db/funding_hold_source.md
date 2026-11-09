@@ -45,12 +45,14 @@ Internal source-pinned funding hold foundation; no public API.
 | `funding_hold_source_funding_source_id_idx` | `CREATE INDEX funding_hold_source_funding_source_id_idx ON funding_hold_source USING btree (funding_source_id) WHERE (funding_source_id IS NOT NULL)` | no |
 | `funding_hold_source_hold_id_credit_bill_id_idx` | `CREATE UNIQUE INDEX funding_hold_source_hold_id_credit_bill_id_idx ON funding_hold_source USING btree (hold_id, credit_bill_id) WHERE (credit_bill_id IS NOT NULL)` | no |
 | `funding_hold_source_hold_id_funding_source_id_idx` | `CREATE UNIQUE INDEX funding_hold_source_hold_id_funding_source_id_idx ON funding_hold_source USING btree (hold_id, funding_source_id) WHERE (funding_source_id IS NOT NULL)` | no |
+| `funding_hold_source_hold_id_idx` | `CREATE INDEX funding_hold_source_hold_id_idx ON funding_hold_source USING btree (hold_id)` | no |
 | `funding_hold_source_hold_id_payment_id_idx` | `CREATE UNIQUE INDEX funding_hold_source_hold_id_payment_id_idx ON funding_hold_source USING btree (hold_id, payment_id) WHERE (payment_id IS NOT NULL)` | no |
 | `funding_hold_source_payment_id_idx` | `CREATE INDEX funding_hold_source_payment_id_idx ON funding_hold_source USING btree (payment_id)` | no |
 | `funding_hold_source_pkey` | `CREATE UNIQUE INDEX funding_hold_source_pkey ON funding_hold_source USING btree (id)` | yes |
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON funding_hold_source FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`
 - `balance_ledger_bounds`: `CREATE CONSTRAINT TRIGGER balance_ledger_bounds AFTER INSERT OR UPDATE ON funding_hold_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION balance_ledger_bounds()`
 - `credit_account_lock`: `CREATE TRIGGER credit_account_lock BEFORE INSERT OR UPDATE ON funding_hold_source FOR EACH ROW EXECUTE FUNCTION credit_account_lock()`
 - `funding_hold_bounds`: `CREATE CONSTRAINT TRIGGER funding_hold_bounds AFTER INSERT OR UPDATE ON funding_hold_source DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION funding_hold_bounds()`

@@ -48,4 +48,5 @@ TMF622 modify items with product.status: the product is suspended (or active aga
 
 ## Triggers
 
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON product_status_change FOR EACH ROW EXECUTE FUNCTION account_review_by_product()`
 - `product_status_change_set_updated_at`: `CREATE TRIGGER product_status_change_set_updated_at BEFORE UPDATE ON product_status_change FOR EACH ROW EXECUTE FUNCTION set_updated_at()`

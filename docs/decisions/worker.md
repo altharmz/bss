@@ -161,3 +161,33 @@ Moved from CLAUDE.md's old "Open questions".
   override (`WORKER_FAKE_NOW`, Q14) needs an explicit `APP_ENV=test`. compose always sets
   it (`dev` locally); **`compose.prod.yaml` sets `staging`** for app and worker - decided
   in slice f (2026-10-05): `vps-test` is a verification host, so it stays `staging`.
+
+## Account review (2026-11-09, #292)
+
+The prepaid lifecycle (`process_lifecycle`), entitlement (`observe_entitlements`) and
+low-balance/grace notification (`events._accounts`) passes locked and evaluated every
+prepaid account on every tick. Measured on the load-test seed: about 9 ms per account per
+pass, so at 70k prepaid accounts one pass alone would take about 10 minutes, on a worker
+that wakes every minute. The design was approved by the human on 2026-11-09:
+
+- **When an outcome can change.** The outcome of these passes changes only with the
+  business date (grace, suspension, deactivation and plan expiry are date-granular) or with
+  the account's money and products.
+- **Change marks.** Triggers (migration 0068) mark a prepaid account in `account_review`
+  whenever a row those passes read changes. The tables are: payments, balance actions and
+  reversals, allocations, bills, ABRs, grants, holds and their sources, funding sources and
+  consumptions, refunds, prepaid commands and shortfalls, usage charges and bars, products
+  and their status changes, order items and offering changes, and the account row. They are
+  triggers rather than calls in each write path, so no path can forget. Postpaid accounts
+  are never marked.
+- **Which accounts a tick evaluates.** Every prepaid account (a full sweep) on the first
+  tick of a business date and after a change of the lifecycle settings or of
+  `NOTIFY_LOW_BALANCE` / `NOTIFY_EXPIRING_DAYS`. Otherwise only the marked ones. The date
+  and settings of the last sweep are one row in `account_review_sweep`. It lives in the
+  database, so a restart needs no sweep of its own.
+- **Clearing the marks.** Each mark carries a version from a sequence. After all three
+  passes, the tick deletes the marks at the versions it read. A change made during the tick
+  has a newer version and is evaluated on the next one, so "at most one tick later". A tick
+  stopped by SIGTERM deletes nothing and records no sweep.
+- **The passes keep their rules.** Only the set of accounts they look at changes.
+  `accounts=None` (tests and direct calls) still means every account.

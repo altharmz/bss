@@ -45,3 +45,7 @@ The rating of one usage record of a pay-as-you-go line: the pass that rated it (
 | `usage_charge_abr_idx` | `CREATE INDEX usage_charge_abr_idx ON usage_charge USING btree (abr_id) WHERE (abr_id IS NOT NULL)` | no |
 | `usage_charge_command_idx` | `CREATE INDEX usage_charge_command_idx ON usage_charge USING btree (command_id)` | no |
 | `usage_charge_pkey` | `CREATE UNIQUE INDEX usage_charge_pkey ON usage_charge USING btree (usage_record_id)` | yes |
+
+## Triggers
+
+- `account_review`: `CREATE TRIGGER account_review AFTER INSERT OR DELETE OR UPDATE ON usage_charge FOR EACH ROW EXECUTE FUNCTION account_review_by_column('billing_account_id')`

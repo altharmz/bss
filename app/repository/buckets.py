@@ -41,11 +41,13 @@ _FIGURES = sql.SQL(
 def page(
     conn: psycopg.Connection, where: dict[str, Any], offset: int, limit: int
 ) -> tuple[list[Row], int]:
+    # typed comparisons (the filters convert their values: uuid or text), so the account
+    # and id filters use their indexes instead of casting every row to text (#292)
     conditions = sql.SQL(" AND ").join(
-        sql.SQL("{}::text = %s").format(sql.Identifier(key)) for key in where
+        sql.SQL("{} = %s").format(sql.Identifier(key)) for key in where
     )
     clause = sql.SQL(" WHERE ") + conditions if where else sql.SQL("")
-    params = [str(value) for value in where.values()]
+    params = list(where.values())
     total = fetch_one(conn, _BUCKETS + sql.SQL("SELECT count(*) AS n FROM bucket") + clause, params)
     assert total is not None
     rows = fetch_all(

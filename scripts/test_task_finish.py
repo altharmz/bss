@@ -27,7 +27,8 @@ class LifecycleFixture(unittest.TestCase):
         fixtures.PrTests.setUp(self)
         ignore = self.work / ".gitignore"
         ignore.write_text(
-            ignore.read_text() + "__pycache__/\nfrontend/.shots/\nfrontend/src/api/generated/\n"
+            ignore.read_text()
+            + "__pycache__/\nfrontend/.shots/\nfrontend/src/api/generated/\nloadtest/out/\n"
         )
         self.call(["git", "add", ".gitignore"])
         self.call(["git", "commit", "-m", "ignore generated cache"])
@@ -559,7 +560,11 @@ if a[0] == 'ps' and any(x.startswith('ancestor=') for x in a):
         self.assertTrue(self.work.exists())
 
     def test_make_target_output_is_removed_with_the_worktree(self):
-        for name in ("frontend/.shots/a.png", "frontend/src/api/generated/types.ts"):
+        for name in (
+            "frontend/.shots/a.png",
+            "frontend/src/api/generated/types.ts",
+            "loadtest/out/seed-report.json",
+        ):
             (self.work / name).parent.mkdir(parents=True, exist_ok=True)
             (self.work / name).touch()
         self.assertEqual(self.finish()["status"], "finished")
