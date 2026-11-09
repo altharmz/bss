@@ -333,3 +333,25 @@ Built to the plan above, which the human confirmed ("continue").
 - **Not changed:** `worker_request.requested_by`'s column comment still says "from
   X-Remote-User" (migrations on `master` are immutable; a comment-only migration can fix
   it when the next one is due).
+
+## Session checks without locks (2026-11-09, #287)
+
+Decided by the human for the load-test programme. `authenticate()` (app/auth.py) runs on
+every request made with a UI session:
+
+1. **No row lock on the request path.** The session lookup is a plain `SELECT`. It used
+   to be `FOR UPDATE OF u, s`, which serialized every request of an operator (a screen
+   fires several) and of every session of the same user. A revoke, disable or password
+   change committed before the request's query is seen at once. A request whose lookup
+   ran just before such a commit finishes, like a request already in flight; no stronger
+   guarantee is required. `FOR UPDATE` stays where this document needs it: user
+   management, the last-administrator invariant, sign-in and sign-out.
+2. **`last_seen_at` is written at most once a minute**, and only when it is older than
+   60 s. A read stays a read: no write, no WAL and no dead row per request.
+3. **The idle expiry is accurate to 60 s.** Because `last_seen_at` can lag the last
+   request by up to 60 s, the idle check allows `SESSION_IDLE_SECONDS + 60`. A session
+   ends between the idle limit and 60 s later, never early. The absolute expiry is
+   unchanged and exact.
+
+The MCP path (`check_principal`) is one indexed `SELECT` on `app_user` without a lock;
+checked, unchanged.

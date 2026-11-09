@@ -194,8 +194,58 @@ def test_session_expiry(client, api, seconds):
             api.clock.set(api.clock.now() + timedelta(hours=7))
             assert client.get(SESSION).status_code == 200
         seconds -= 23 * 7 * 3600
+    else:
+        seconds += 60  # the idle expiry is accurate to 60 s (#287); the absolute one exact
     api.clock.set(api.clock.now() + timedelta(seconds=seconds))
     assert client.get(SESSION).status_code == 401
+
+
+def test_a_request_reads_the_session_without_waiting_for_a_lock_on_the_user(client, api, db_conn):
+    """#287: while another transaction holds FOR UPDATE on the user's row (user management,
+    sign-in, a password change), an authenticated GET does not wait for it."""
+    import threading
+
+    assert login(client).status_code == 200
+    db_conn.execute("SELECT 1 FROM app_user WHERE username = 'i.petrova' FOR UPDATE")
+    answers = []
+    reader = threading.Thread(target=lambda: answers.append(client.get(SESSION).status_code))
+    reader.start()
+    reader.join(timeout=2)
+    waited = reader.is_alive()  # still blocked on the lock after 2 s
+    db_conn.rollback()
+    reader.join()
+    assert not waited
+    assert answers == [200]
+
+
+def last_seen(db_conn):
+    db_conn.commit()
+    return db_conn.execute("SELECT last_seen_at FROM app_session").fetchone()[0]
+
+
+def test_fifty_requests_within_a_minute_write_last_seen_once(client, api, db_conn):
+    db_conn.execute("DELETE FROM app_session")
+    db_conn.commit()
+    assert login(client).status_code == 200
+    api.clock.set(api.clock.now() + timedelta(seconds=61))
+    first = api.clock.now()
+    for second in range(50):
+        api.clock.set(first + timedelta(seconds=second))
+        assert client.get(SESSION).status_code == 200
+    assert last_seen(db_conn) == first  # the first of the 50 wrote; the other 49 did not
+
+
+def test_the_idle_expiry_never_ends_a_session_early(client, api, db_conn):
+    db_conn.execute("DELETE FROM app_session")
+    db_conn.commit()
+    assert login(client).status_code == 200
+    start = api.clock.now()
+    api.clock.set(start + timedelta(seconds=59))
+    assert client.get(SESSION).status_code == 200  # not written: under a minute
+    assert last_seen(db_conn) == start
+    idle = settings.session_idle_seconds
+    api.clock.set(start + timedelta(seconds=59 + idle - 1))  # idle since that request: not yet
+    assert client.get(SESSION).status_code == 200
 
 
 def test_must_change_password_and_user_role(client):
