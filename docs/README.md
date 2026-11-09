@@ -34,6 +34,7 @@ agent - stay in [CLAUDE.md](../CLAUDE.md), the decisions and their rationale by 
 | [progress/](progress/) | implementation scope; run `make progress` for the local `.progress/PROGRESS.md` report (not committed) |
 | [archive/stage4-design.md](archive/stage4-design.md) | the billing worker's design and decisions (Q1-Q14, D-W*) |
 | [worktrees.md](worktrees.md), [decisions/harness.md](decisions/harness.md) | the agent workflow (Make targets, worktrees, slots) and the hooks |
+| [loadtest.md](loadtest.md) | the local load-test stack (`make loadtest-*`) and the 100k-subscriber dataset generator |
 
 ## Generated vs hand-written
 

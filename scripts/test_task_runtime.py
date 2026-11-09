@@ -140,6 +140,26 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn(str(self.work / "compose.override.yaml"), args)
         self.assertNotIn("fixture-secret-never-output", result.stdout)
 
+    def test_loadtest_adds_only_the_loadtest_file(self):
+        plain = json.loads(self.wrapper("ps").stdout)["args"]
+        self.assertNotIn(str(self.work / "compose.loadtest.yaml"), plain)
+        result = self.wrapper("--loadtest", "ps")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = json.loads(result.stdout)["args"]
+        files = [args[i + 1] for i, arg in enumerate(args) if arg == "-f"]
+        self.assertEqual(
+            files,
+            [
+                str(self.work / "compose.yaml"),
+                str(self.work / "compose.override.yaml"),
+                str(self.work / "compose.loadtest.yaml"),
+            ],
+        )
+        self.assertEqual(args[-1], "ps")
+        self.assertNotIn("--loadtest", args)
+        # the command checks still apply after the flag
+        self.rejected(self.wrapper("--loadtest", "config"), "only config --quiet")
+
     def test_workflow_result_survives_telemetry_failure(self):
         (self.bin / "docker").write_text(
             "#!/usr/bin/env python3\nimport sys\n"

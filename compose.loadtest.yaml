@@ -1,0 +1,164 @@
+# The local load-test stack (#281-#289, docs/loadtest.md). Applied only by
+# `scripts/task-compose --loadtest` (make loadtest-*), on top of compose.yaml and
+# compose.override.yaml. Its services have their own names and their own database volume,
+# so the dev stack, `make test` and the pre-commit hook (which use `db`) never touch it,
+# and it never touches them. No host ports: k6 (#281) reaches lt-app on the `lab` network.
+#
+# The system under test (lt-db, lt-app, lt-worker, lt-mcp) shares one cpuset,
+# LOADTEST_SUT_CPUS (4 logical CPUs, emulating a 4-core host; default 4-7 = cores 2 and 3
+# of the workstation). k6 gets LOADTEST_K6_CPUS (#281). Limits are the load-test budget
+# from the programme's shared facts. All services are in the `loadtest` profile, so a
+# plain `up` never starts them.
+services:
+  lt-db:
+    image: postgres:16-alpine
+    profiles: [loadtest]
+    # Production-like durability (fsync on), unlike the test database `db`. Settings of the
+    # load-test profile: 80 connections, 2 GB shared buffers, pg_stat_statements.
+    command:
+      - postgres
+      - -c
+      - max_connections=80
+      - -c
+      - shared_buffers=2GB
+      - -c
+      - effective_cache_size=2GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_wal_size=4GB
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=top
+      - -c
+      - pg_stat_statements.max=10000
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    cpuset: ${LOADTEST_SUT_CPUS:-4-7}
+    mem_limit: 3g
+    memswap_limit: 3g
+    shm_size: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB && PGPASSWORD=$$POSTGRES_PASSWORD psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c 'SELECT 1' -tAq >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - lt_pgdata:/var/lib/postgresql/data
+    networks: [lab]
+
+  lt-app:
+    build:
+      context: .
+      target: runtime
+    image: ${IMAGE_NAME:?use scripts/task-compose}:loadtest
+    profiles: [loadtest]
+    environment: &lt-env
+      APP_ENV: test
+      LOG_LEVEL: info
+      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@lt-db:5432/${POSTGRES_DB:-app}
+      BILL_PAYMENT_TERM_DAYS: "30"
+      BSS_SERVICE_SECRET: ${BSS_SERVICE_SECRET:-}
+      BSS_BUILD: loadtest
+    cpuset: ${LOADTEST_SUT_CPUS:-4-7}
+    cpus: 3.0
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    read_only: true
+    tmpfs:
+      - /tmp
+    depends_on:
+      lt-db:
+        condition: service_healthy
+    networks: [lab]
+
+  lt-worker:
+    image: ${IMAGE_NAME:?use scripts/task-compose}:loadtest
+    profiles: [loadtest]
+    command: ["python", "-m", "app.worker"]
+    stop_grace_period: 60s
+    environment: *lt-env
+    cpuset: ${LOADTEST_SUT_CPUS:-4-7}
+    cpus: 3.0
+    mem_limit: 1024m
+    memswap_limit: 1024m
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "bash", "-c", "[[ -n $$(find /tmp/worker-alive -mmin -3 2>/dev/null) ]]"]
+      interval: 60s
+      timeout: 3s
+      start_period: 30s
+      start_interval: 2s
+      retries: 3
+    depends_on:
+      lt-app:
+        condition: service_healthy
+    networks: [lab]
+
+  lt-mcp:
+    image: ${IMAGE_NAME:?use scripts/task-compose}:loadtest
+    profiles: [loadtest]
+    command: ["uvicorn", "bss_mcp.main:app", "--host", "0.0.0.0", "--port", "8080",
+              "--workers", "1", "--limit-concurrency", "32"]
+    environment:
+      APP_ENV: test
+      LOG_LEVEL: info
+      BSS_API_URL: http://lt-app:8080
+      # the OAuth issuer must be HTTPS or localhost; k6 uses the service credential, not OAuth
+      MCP_PUBLIC_URL: http://localhost:8080
+      MCP_STORE: /data/mcp.db
+      BSS_SERVICE_SECRET: ${BSS_SERVICE_SECRET:-}
+    cpuset: ${LOADTEST_SUT_CPUS:-4-7}
+    cpus: 0.5
+    mem_limit: 256m
+    memswap_limit: 256m
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - lt_mcp_data:/data
+    depends_on:
+      lt-app:
+        condition: service_healthy
+    networks: [lab]
+
+  # One-off tooling against lt-db: migrations, the dataset generator (python -m
+  # loadtest.seed) and the pg_stat_statements helpers. The dev image with the sources
+  # mounted read-only (the runtime image has no tests/ or loadtest/); only loadtest/out/ is
+  # writable. Not pinned: it is not part of the system under test.
+  lt-tools:
+    image: ${IMAGE_NAME:?use scripts/task-compose}:${TAG:-dev}
+    profiles: [loadtest]
+    command: ["python", "-c", "print('lt-tools: run a command')"]
+    environment:
+      <<: *lt-env
+      LOG_LEVEL: warning
+      LOADTEST_OPERATOR_PASSWORD: ${LOADTEST_OPERATOR_PASSWORD:-}
+    healthcheck:
+      disable: true
+    volumes:
+      - ./app:/app/app:ro
+      - ./bss_mcp:/app/bss_mcp:ro
+      - ./tests:/app/tests:ro
+      - ./loadtest:/app/loadtest:ro
+      - ./loadtest/out:/app/loadtest/out
+      - ./spec:/app/spec:ro
+      - ./alembic:/app/alembic:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
+    depends_on:
+      lt-db:
+        condition: service_healthy
+    networks: [lab]
+
+volumes:
+  lt_pgdata:
+  lt_mcp_data:

@@ -107,7 +107,8 @@ class StubNetwork:
 
     def ack_usage(self, ids: list[str]) -> None:
         self.usage_acked.extend(ids)
-        self.usage_queue = [r for r in self.usage_queue if r.id not in set(ids)]
+        acked = set(ids)  # once, not per queued record: the load-test feed acks 500 at a time
+        self.usage_queue = [r for r in self.usage_queue if r.id not in acked]
 
     def complete_port_in(self, msisdn: str) -> None:
         self.port_completed.add(msisdn)

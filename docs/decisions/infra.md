@@ -537,3 +537,31 @@ than it protects.
   repeat could only fail differently or hide a double effect.
 - **Tests:** `scripts/test_smoke_retry.py` (the helper, with a fake request) and
   `RetryTests` in `scripts/test_mcp_oauth_smoke.py`.
+
+## Local load-test stack (2026-11-09, #289)
+
+The load-test programme (#281-#289) runs on the workstation; the human dropped the
+dedicated VPS on 2026-11-09. How to use it: [loadtest.md](../loadtest.md).
+
+- **Its own services, not an overlay of the dev ones.** `compose.loadtest.yaml` defines
+  `lt-db`, `lt-app`, `lt-worker`, `lt-mcp` and `lt-tools` with their own database volume
+  and no host ports. Overriding `db` and `app` instead would let `make test` or the
+  pre-commit hook recreate the database container in the middle of a multi-hour seed.
+  The services are in the `loadtest` profile, and the file is passed only by
+  `scripts/task-compose --loadtest`.
+- **Production-shaped where it matters for the numbers:** the runtime image, `APP_ENV=test`
+  (which the stub usage generator of #281 requires), fsync on, the load-test budget from
+  the shared facts, and one cpuset of 4 logical CPUs (`LOADTEST_SUT_CPUS`, default `4-7`)
+  for the system under test.
+- **The generator is not in the runtime image.** `loadtest/` runs in `lt-tools`, the dev
+  image with the sources mounted read-only. The Dockerfile `loadtest` stage that was
+  planned for the VPS is not built.
+- **The operators' password** lives in `~/.config/bss/loadtest/operator-password`, outside
+  every worktree, because the task secret file accepts only its four keys. It is passed to
+  `lt-tools` as `LOADTEST_OPERATOR_PASSWORD`.
+- **Users are created the real way:** `lt-admin` by `python -m app.users create`, the
+  operators by the Users API as `lt-admin`, each followed by its first-sign-in password
+  change. The generator never writes users with SQL.
+- **The generator reads the database, never writes domain rows directly.** It uses SQL only
+  to find what an interrupted day already created, and for its own `loadtest_config` and
+  `loadtest_progress` tables.
