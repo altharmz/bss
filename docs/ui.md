@@ -75,7 +75,19 @@ status).
 The sidebar is one `<nav aria-label="Main">` with four labelled sections
 (`ui.shell.section.customers|products|billing|system`): Customers (Subscribers, Parties), Products (Product
 catalog, Orders, Numbers) and Billing (Billing runs, Prepaid commands, Financial accounts,
-Bills, Payments, Balances, Billing settings, without a count or count request) and System (Integrations, and Users for an admin). No item has a count or a count request (G8; it replaces epic D6's counts). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
+Bills, Payments, Balances, Billing settings, without a count or count request) and System (Integrations, and Users and Logging for an admin). No item has a count or a count request (G8; it replaces epic D6's counts). Design: [frontend.md](decisions/frontend.md#sidebar-grouped-by-tmf-area-global-orders-screen-2026-10-21).
+
+### Logging settings
+
+`/settings/logging` (System, admin only in the navigation) shows the effective log level (badge), the base
+level (`WARNING`, `INFO` or "Default (`<envLevel>`)"), the debug state ("Debug until 14:35:00, 23 min left"
+or "off") and the last change (`updatedBy`, time in the business zone), from `GET /internal/v1/logging`.
+The base level is a select (Default, INFO, WARNING) with Save, sent as `PUT {baseLevel}` (`null` for Default).
+"Debug 15 min", "Debug 30 min" and "Debug 60 min" send `PUT {debugMinutes: n}`; "Stop debug" (shown only while
+debug is active) sends `{debugMinutes: 0}`. The time left counts down locally (display only); the screen
+re-reads every 30 s and after each PUT. There is no client-side role guard: a `user` opening the route gets the
+API's refusal in the usual error state. The PUT bodies are pinned in `LoggingSettings.test.tsx` and
+`tests/test_ui_requests.py`; the operations are excluded from the MCP parity check.
 
 ### Sign-in, operator menu and users
 

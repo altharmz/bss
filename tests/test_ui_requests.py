@@ -43,6 +43,21 @@ def test_ui_lifecycle_settings(api):
     assert saved["updatedAt"] is not None
 
 
+def test_ui_logging_settings(api):
+    """The three PUT bodies pinned by LoggingSettings.test.tsx: base level (and null), the
+    three debug durations, and Stop (0)."""
+    path = "/internal/v1/logging"
+    for minutes in (15, 30, 60):
+        body = api.put(path, {"debugMinutes": minutes}).json()
+        assert body["effectiveLevel"] == "DEBUG" and body["debugUntil"] is not None
+    stopped = api.put(path, {"debugMinutes": 0}).json()
+    assert stopped["debugUntil"] is None
+    assert api.put(path, {"baseLevel": "WARNING"}).json()["effectiveLevel"] == "WARNING"
+    reset = api.put(path, {"baseLevel": None}).json()
+    assert reset["baseLevel"] is None
+    assert reset["effectiveLevel"] == reset["envLevel"]
+
+
 def test_ui_number_inventory_and_orders(api):
     """Exact inventory/add/modify bodies pinned in Numbers.test.tsx."""
     url = "/tmf-api/resourceInventory/v5/resource"

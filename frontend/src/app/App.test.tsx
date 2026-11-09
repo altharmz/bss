@@ -89,6 +89,7 @@ describe('routes', () => {
     ['/financial-accounts', { name: 'financialAccounts' }],
     ['/parties', { name: 'parties' }],
     ['/billing-settings', { name: 'billingSettings' }],
+    ['/settings/logging', { name: 'logging' }],
     ['/bills', { name: 'bills' }],
     ['/payments', { name: 'payments' }],
     ['/balances', { name: 'balances' }],
@@ -169,6 +170,7 @@ describe('shell', () => {
       '/billing-settings',
       '/integrations',
       '/users',
+      '/settings/logging',
     ]);
     // four labelled sections in the TMF order, each item under its own label
     const labels = Array.from(nav.children).map((el) =>
@@ -196,6 +198,7 @@ describe('shell', () => {
       '# System',
       '/integrations',
       '/users',
+      '/settings/logging',
     ]);
     // no item carries a count: the link text is the label alone
     for (const label of ['Subscribers', 'Product catalog', 'Orders']) {
