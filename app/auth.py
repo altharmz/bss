@@ -51,6 +51,8 @@ def check_principal(tx, principal: str, version: str) -> None:
 
 
 METRICS_PATH = "/metrics"
+# last_seen_at is refreshed at most this often; the idle expiry is accurate to it (#287)
+IDLE_SLACK_SECONDS = 60
 
 
 def check_metrics_token(request: Request) -> None:
@@ -116,16 +118,34 @@ def authenticate(request: Request, tx: Tx, clock: ClockDep) -> None:
                 "SELECT u.*, s.token_hash FROM app_session s JOIN app_user u USING (username)"
                 # an `mcp` user can hold no UI session (the sign-in refuses it too)
                 " WHERE s.token_hash = %s AND NOT u.disabled AND u.role <> 'mcp'"
-                " AND s.expires_at > %s AND s.last_seen_at > %s FOR UPDATE OF u, s",
-                (digest(token), now, now - timedelta(seconds=settings.session_idle_seconds)),
+                # No row lock (#287): concurrent requests of one operator, and every session
+                # of a user, run side by side. A revoke, disable or password change committed
+                # before this read is seen; one committed just after it lets this request
+                # finish, like a request already in flight (docs/decisions/users.md).
+                # last_seen_at is written at most once a minute (below), so it may lag the
+                # last request by up to 60 s: the idle limit gets those 60 s, and a session
+                # ends between SESSION_IDLE_SECONDS and 60 s later, never early.
+                " AND s.expires_at > %s AND s.last_seen_at > %s",
+                (
+                    digest(token),
+                    now,
+                    now - timedelta(seconds=settings.session_idle_seconds + IDLE_SLACK_SECONDS),
+                ),
             )
             .fetchone()
         )
         if user is None:
             raise TmfError(401, "session expired or revoked")
+        # At most one write per session a minute: a read stays a read. The idle expiry is
+        # therefore accurate to 60 s; the absolute expiry stays exact.
         conn.execute(
-            "UPDATE app_session SET last_seen_at = %s WHERE token_hash = %s",
-            (now, user["token_hash"]),
+            "UPDATE app_session SET last_seen_at = %(now)s WHERE token_hash = %(t)s"
+            " AND last_seen_at < %(stale)s",
+            {
+                "now": now,
+                "t": user["token_hash"],
+                "stale": now - timedelta(seconds=IDLE_SLACK_SECONDS),
+            },
         )
     request.state.operator = user["username"]
     request.state.role = user["role"]
