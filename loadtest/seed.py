@@ -849,6 +849,7 @@ def run(
     password: str,
     processes: int = 1,
     fast_commit: bool = False,
+    stop_after: int | None = None,
     on_subscriber: Callable[[int, int], None] | None = None,
 ) -> Report:
     """Seed (or continue seeding) the database of settings.database_url."""
@@ -937,6 +938,8 @@ def run(
                     report.timed("usage", t)
                 conn.execute("INSERT INTO loadtest_progress (day) VALUES (%s)", (day,))
                 report.days_run += 1
+                if stop_after is not None and report.days_run >= stop_after:
+                    break
                 log.warning(
                     "day %s (%d/%d) done: %s", day, index + 1, params.days, dict(report.counts)
                 )
@@ -1001,6 +1004,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--usage-days", type=int, default=30)
     parser.add_argument("--processes", type=int, default=4)
     parser.add_argument("--seed", type=int, default=289)
+    parser.add_argument("--stop-after", type=int, help="stop after this many finished days")
+    parser.add_argument(
+        "--profile", type=Path, help="write a cProfile of the main process to this file"
+    )
     parser.add_argument(
         "--fast-commit",
         action=argparse.BooleanOptionalAction,
@@ -1019,16 +1026,28 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         day0=SystemClock().today() - timedelta(days=args.days),
     )
+    profiler = None
+    if args.profile is not None:
+        import cProfile
+
+        profiler = cProfile.Profile()
+        profiler.enable()
     try:
         report = run(
             params,
             password=os.environ.get("LOADTEST_OPERATOR_PASSWORD", ""),
             processes=args.processes,
             fast_commit=args.fast_commit,
+            stop_after=args.stop_after,
         )
     except SeedError as error:
         print(f"loadtest seed: {error}", file=sys.stderr)
         return 1
+    finally:
+        if profiler is not None:
+            profiler.disable()
+            args.profile.parent.mkdir(parents=True, exist_ok=True)
+            profiler.dump_stats(args.profile)
     data = write_report(report, args.report)
     print(json.dumps({k: data[k] for k in ("daysRun", "seconds", "counts", "rates")}, indent=2))
     print(f"loadtest seed: report written to {args.report}")

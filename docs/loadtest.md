@@ -37,6 +37,7 @@ and the pre-commit hook (all on the dev `db`) neither see nor disturb them. Plai
 | `make loadtest-reset` | empties the database (drop, create, migrate) |
 | `make loadtest-secret` | creates the operators' password file (once) |
 | `make loadtest-seed N=...` | builds the dataset (below) |
+| `make loadtest-dump NAME=...` / `make loadtest-restore NAME=...` | save the database to `~/.local/share/bss/loadtest/<NAME>.dump`, outside every worktree, or replace it from there and migrate. This is how another task's worktree gets the dataset |
 | `make loadtest-pg-stats-reset` / `make loadtest-pg-stats` | reset `pg_stat_statements`; print the top 20 statements and save them to `loadtest/out/` |
 
 ## The dataset
@@ -106,6 +107,8 @@ without duplicates:
 
 Other parameters, or a database holding data the generator did not create, are refused.
 It refuses any `APP_ENV` but `test`.
+
+**Profiling.** `SEED_ARGS="--stop-after 1 --profile loadtest/out/day.prof"` runs one more day and writes a cProfile of the main process. With `PROCESSES=1` that covers everything.
 
 **Report.** `loadtest/out/seed-report.json` holds the seconds per phase, the counts, the
 rates (subscribers/s, billed accounts/s, usage records/s, rows/s), the database size and

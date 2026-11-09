@@ -140,7 +140,9 @@ N ?=
 PROCESSES ?= 4
 DAYS ?= 90
 USAGE_DAYS ?= 30
-.PHONY: loadtest-up loadtest-down loadtest-ps loadtest-logs loadtest-migrate loadtest-reset loadtest-secret loadtest-seed loadtest-pg-stats-reset loadtest-pg-stats
+SEED_ARGS ?=
+LT_DATA := $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/bss/loadtest
+.PHONY: loadtest-up loadtest-down loadtest-ps loadtest-logs loadtest-migrate loadtest-reset loadtest-secret loadtest-seed loadtest-dump loadtest-restore loadtest-pg-stats-reset loadtest-pg-stats
 
 loadtest-up: ## Start the load-test stack (lt-db, lt-app, lt-worker, lt-mcp; pinned to LOADTEST_SUT_CPUS, default 4-7), migrated
 	./scripts/task-compose build app
@@ -174,14 +176,29 @@ loadtest-secret: ## Create the load-test operators' password file outside the re
 	  python3 -c 'import secrets; print(secrets.token_urlsafe(24))' > "$(LT_SECRET)" && \
 	  echo "loadtest-secret: created $(LT_SECRET)"; fi
 
-loadtest-seed: ## Build the load-test dataset in lt-db (N=<subscribers> [PROCESSES=4] [DAYS=90] [USAGE_DAYS=30]); resumable
+loadtest-seed: ## Build the load-test dataset in lt-db (N=<subscribers> [PROCESSES=4] [DAYS=90] [USAGE_DAYS=30] [SEED_ARGS=...]); resumable
 	@test -n "$(N)" || { echo "loadtest-seed: N=<subscribers> is required" >&2; exit 2; }
 	@test -s "$(LT_SECRET)" || { echo "loadtest-seed: run make loadtest-secret first" >&2; exit 2; }
 	@mkdir -p loadtest/out
 	$(LT) rm --stop --force lt-worker
 	$(LT) up -d --wait lt-db
 	LOADTEST_OPERATOR_PASSWORD="$$(cat "$(LT_SECRET)")" $(LT) run --rm lt-tools \
-	  python -m loadtest.seed --n $(N) --processes $(PROCESSES) --days $(DAYS) --usage-days $(USAGE_DAYS)
+	  python -m loadtest.seed --n $(N) --processes $(PROCESSES) --days $(DAYS) --usage-days $(USAGE_DAYS) $(SEED_ARGS)
+
+loadtest-dump: ## Save the load-test database to ~/.local/share/bss/loadtest/<NAME>.dump (outside every worktree)
+	@test -n "$(NAME)" || { echo "loadtest-dump: NAME=<name> is required" >&2; exit 2; }
+	@mkdir -p "$(LT_DATA)"
+	$(LT) exec -T lt-db sh -c 'exec pg_dump -Fc -U "$$POSTGRES_USER" "$$POSTGRES_DB"' > "$(LT_DATA)/$(NAME).tmp"
+	mv "$(LT_DATA)/$(NAME).tmp" "$(LT_DATA)/$(NAME).dump"
+	@ls -lh "$(LT_DATA)/$(NAME).dump"
+
+loadtest-restore: ## Replace the load-test database with ~/.local/share/bss/loadtest/<NAME>.dump, then migrate it
+	@test -s "$(LT_DATA)/$(NAME).dump" || { echo "loadtest-restore: no $(LT_DATA)/$(NAME).dump" >&2; exit 2; }
+	$(LT) rm --stop --force lt-app lt-worker lt-mcp
+	$(LT) up -d --wait lt-db
+	$(LT) exec -T lt-db sh -c 'dropdb -U "$$POSTGRES_USER" --force --if-exists "$$POSTGRES_DB" && createdb -U "$$POSTGRES_USER" "$$POSTGRES_DB"'
+	$(LT) exec -T lt-db sh -c 'exec pg_restore -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" --no-owner -j 1' < "$(LT_DATA)/$(NAME).dump"
+	@$(MAKE) --no-print-directory loadtest-migrate
 
 loadtest-pg-stats-reset: ## Reset pg_stat_statements in the load-test database
 	$(LT_PSQL) < loadtest/pg-stats-reset.sql
