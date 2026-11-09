@@ -6,6 +6,7 @@ from typing import Any
 import anyio
 import httpx2
 
+from app.logsetup import REQUEST_ID_HEADER, request_id
 from bss_mcp.clock import Clock
 
 log = logging.getLogger("bss_mcp")
@@ -47,6 +48,8 @@ class Bss:
         headers = {**(headers or {}), "X-Remote-User": principal, "Accept": "application/json"}
         if self.service_secret:
             headers["X-Bss-Service"] = self.service_secret
+        if rid := request_id.get():
+            headers[REQUEST_ID_HEADER] = rid  # one MCP call and its app request share an ID
         if credential_version is not None:
             headers["X-Bss-Credential-Version"] = str(credential_version)
         if content_type:
@@ -60,7 +63,11 @@ class Bss:
         return await self.client.post(
             "/internal/v1/service/credential-check",
             json={"username": username, "password": password},
-            headers={"X-Bss-Service": self.service_secret, "Accept": "application/json"},
+            headers={
+                "X-Bss-Service": self.service_secret,
+                "Accept": "application/json",
+                **({REQUEST_ID_HEADER: rid} if (rid := request_id.get()) else {}),
+            },
         )
 
     async def identify(self, clock: Clock, wait: float) -> None:

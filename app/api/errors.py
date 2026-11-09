@@ -120,4 +120,6 @@ def install(app: FastAPI) -> None:
         # exc_info explicitly: Starlette calls a sync handler in a threadpool thread, where
         # sys.exc_info() is empty and log.exception() alone logs "NoneType: None"
         log.error("unhandled error on %s %s", request.method, request.url.path, exc_info=exc)
-        return error_response(500, "internal error")
+        rid = request.scope.get("state", {}).get("request_id")
+        # this response bypasses the request middleware (Starlette sends it from outside)
+        return error_response(500, "internal error", {"X-Request-Id": rid} if rid else None)

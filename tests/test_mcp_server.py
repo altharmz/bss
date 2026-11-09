@@ -87,7 +87,7 @@ def test_a_read_token_calling_a_write_tool_is_a_403_and_nothing_is_applied(api, 
     challenge = response.headers["www-authenticate"]
     assert 'error="insufficient_scope"' in challenge and 'scope="read write"' in challenge
     assert count(api, INDIVIDUALS) == before
-    [line] = [json.loads(r.getMessage()) for r in caplog.records]
+    [line] = [json.loads(r.getMessage()) for r in caplog.records if r.name == "bss_mcp.audit"]
     assert line["outcome"] == 403 and line["principal"] == "mcp-token:reader"
 
 
@@ -214,7 +214,7 @@ def test_the_audit_log_has_one_line_per_call_and_no_secrets(api, mcp, caplog):
     mcp.result(token, "create_individual", {"body": GIVEN})
     mcp.result(token, "create_payment", payment_arguments(api, 10.5))
     mcp.rpc("tools/list", None, token)  # not a tool call: no line
-    lines = [json.loads(r.getMessage()) for r in caplog.records]
+    lines = [json.loads(r.getMessage()) for r in caplog.records if r.name == "bss_mcp.audit"]
     assert [(line["tool"], line["outcome"]) for line in lines] == [
         ("create_individual", 201),
         ("create_payment", "invalid_arguments"),

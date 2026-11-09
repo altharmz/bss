@@ -15,11 +15,13 @@ import os
 import signal
 import sys
 import threading
+import uuid
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import psycopg
 
+from app import logsetup
 from app.config import settings
 from app.worker import db
 from app.worker.loop import tick
@@ -35,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.worker")
     parser.add_argument("--once", action="store_true", help="one wake-up, then exit")
     args = parser.parse_args(argv)
-    logging.basicConfig(level=settings.log_level.upper())
+    logsetup.configure("worker")
     try:
         run_at = check_run_at(settings.billing_run_at)
         clock = clock_from_environment()
@@ -62,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     failed = False
     try:
         while True:
+            logsetup.request_id.set(f"wake-{uuid.uuid4().hex[:8]}")  # one tick, one ID
             try:
                 if conn is None or conn.closed:
                     conn = db.connect()

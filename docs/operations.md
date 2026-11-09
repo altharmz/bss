@@ -241,7 +241,17 @@ monitoring, if any, belongs to vps-infra.
 | `GET /metrics` | app and mcp, bearer token ([ops/monitoring/](../ops/monitoring/README.md)) | Prometheus text format; 404 until `BSS_METRICS_TOKEN` is set. HTTP rate/latency by route template, queue depth and age, billing freshness, product counts (database series cached 30 s, `bss_db_up 0` when the read fails). Worker health shows through the queue and billing series |
 | app healthcheck | `Dockerfile` | bash `/dev/tcp` probe of `/healthz` every 60 s |
 | worker healthcheck | `compose.prod.yaml` | `/tmp/worker-alive` younger than 180 s |
-| logs | `make logs` (local), json-file with rotation on the VPS | 500s are logged with their traceback |
+| logs | `make logs` (local), json-file with rotation on the VPS | JSON lines, one per request; 500s with their traceback; see "Finding a request by its ID" |
+
+### Finding a request by its ID
+
+Every response carries `X-Request-Id` (a valid inbound one is echoed). Every log line of that
+request has the same `request_id`, the app's unhandled-error log included; a worker wake-up
+uses `wake-<8 hex>`, and an MCP tool call passes its ID on to the app request it makes.
+
+```
+make logs | jq 'select(.request_id=="<id>")'
+```
 
 Docker healthchecks are **informational only**: nothing restarts or replaces an
 `unhealthy` container (`restart: unless-stopped` reacts to exits). Real alerting is the

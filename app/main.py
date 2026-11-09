@@ -3,11 +3,11 @@ import logging
 from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
-from app import api, db, internal, metrics, status
+from app import api, db, internal, logsetup, metrics, status
 from app.auth import authenticate
 from app.config import settings
 
-logging.basicConfig(level=settings.log_level.upper())
+logsetup.configure("app")
 log = logging.getLogger("app")
 
 # operationId = the handler's function name (e.g. create_payment), not FastAPI's
@@ -27,6 +27,7 @@ internal.install(app)
 app.include_router(status.router)
 app.include_router(metrics.router)
 app.add_middleware(metrics.HttpMetricsMiddleware)
+app.add_middleware(logsetup.RequestLogMiddleware)  # added last = outermost
 metrics.set_build_info()
 
 

@@ -178,6 +178,29 @@ would attach the prod container to both `lab` and `shared`).
 - Before every commit: the pre-commit hook (`make lint`, smoke and affected tests); the
   full `make test` before a PR that touches billing, migrations or the API. Small, focused
   commits.
+- **Logging** (issue #273; `app/logsetup.py`, used by the app, the worker and MCP).
+  - JSON lines on stdout, stdlib only, one format everywhere (`make logs | jq`). Fields:
+    `ts` (UTC, ms, from logging's own timestamp), `level`, `logger`, `msg`, `process`
+    (`app`/`worker`/`mcp`), `request_id` when set, `exc` (traceback), and the whitelisted
+    extras `method`, `route`, `status`, `duration_ms`, `operator`.
+  - Levels: root at `WARNING` with the one handler; `OUR_LOGGERS` (`app`, `bss_mcp`,
+    `uvicorn.error`) at `LOG_LEVEL`. Third-party loggers (`psycopg`, `httpx`, `asyncio` ...)
+    inherit `WARNING` and are never raised: their DEBUG output can carry SQL parameters and
+    headers. uvicorn's handlers are removed and `uvicorn.access` is disabled.
+  - `RequestLogMiddleware` (pure ASGI, outermost) takes an inbound `X-Request-Id` only if it
+    matches `^[A-Za-z0-9._-]{1,64}$`, else makes `uuid4().hex`; returns it on every response
+    (the 500 handler adds it itself: Starlette sends that response from outside the
+    middleware); logs one line per request (INFO, 5xx ERROR, `/healthz` and `/metrics` at
+    DEBUG). Never the query string, headers or body.
+  - The ID is a `ContextVar`, read by a handler filter, so every line of the request carries
+    it. It is not reset after the request (each request is its own task; the 500 handler runs
+    after the middleware has left). A worker wake-up sets `wake-<8 hex>`. MCP runs the same
+    middleware and `Bss` forwards the ID as `X-Request-Id`, so a tool call and its app request
+    share one ID.
+  - Redaction: no code passes headers, cookies, bodies, passwords or tokens to a log call.
+    `RedactFilter` is the net under that rule: it masks `Authorization`, `Cookie`,
+    `Set-Cookie`, `X-Bss-Service`, `Bearer <x>` and `password|token|secret|pin|code=<x>`
+    in the message, string extras and tracebacks (`[redacted]`).
 
 ## DB connection pool
 
