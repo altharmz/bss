@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=None, extra="ignore")
 
     log_level: str = "info"
+    # Seconds between reads of the runtime log level from the app; 0 = never (the tests).
+    log_poll_seconds: int = Field(default=15, ge=0)
     # The bss app. In prod `http://bss:8080` (the alias on `shared`, where every project's
     # service is called `app`); locally `http://app:8080`.
     bss_api_url: str = "http://app:8080"

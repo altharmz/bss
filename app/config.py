@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     # needs an explicit "test"). compose sets it everywhere: dev locally, staging on the VPS.
     app_env: str = "prod"
     log_level: str = "info"
+    # Seconds between reads of the runtime log level (app/logsetup.py, LevelPoller); 0 = never
+    # (the tests set it). Only OUR_LOGGERS follow it.
+    log_poll_seconds: int = Field(default=15, ge=0)
     # Rollback drill only (docs/operations.md "Rollback"): "unhealthy" makes /healthz answer
     # 503, so the release scripts/deploy.sh starts under BSS_DEPLOY_DRILL=unhealthy really
     # fails the health gate. Empty everywhere else.

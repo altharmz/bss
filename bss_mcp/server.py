@@ -22,8 +22,10 @@ import math
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Any
 
+import anyio
 import httpx2
 import mcp_types as types
 from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
@@ -41,7 +43,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.logsetup import RequestLogMiddleware
+from app.logsetup import LevelPoller, RequestLogMiddleware
 from bss_mcp import metrics, schema
 from bss_mcp.audit import audit
 from bss_mcp.auth import WRITE, TokenVerifier, caller
@@ -373,6 +375,16 @@ def build_app(
             return JSONResponse({"status": "degraded"}, status_code=503)
         return JSONResponse({"status": "ok"})
 
+    async def poll_log_level() -> None:
+        """The runtime log level (#274): the app has the database, this process does not."""
+        poller = LevelPoller(lambda: datetime.fromtimestamp(clock.now(), UTC), settings.log_level)
+        while True:
+            try:
+                poller.observe(*await bss.log_level())
+            except Exception as exc:  # noqa: BLE001 - any failure keeps the level
+                poller.outage(exc)
+            await anyio.sleep(settings.log_poll_seconds)
+
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
         if not given_tools:
@@ -382,8 +394,11 @@ def build_app(
             log.info("tools: %d generated from the app's operations", len(tools))
         await bss.identify(clock, settings.mcp_identity_wait)
         log.info("identity check: %s is bss", settings.bss_api_url)
-        async with manager.run():
+        async with anyio.create_task_group() as tasks, manager.run():
+            if settings.log_poll_seconds:
+                tasks.start_soon(poll_log_level)
             yield
+            tasks.cancel_scope.cancel()
         await bss.aclose()
 
     provider = Provider(store, clock, settings)

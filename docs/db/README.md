@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0065**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0066**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -83,6 +83,8 @@ PostgreSQL schema at Alembic head **0065**, read from `pg_catalog` of a throwawa
 | [`app_user`](app_user.md) | users | Application identity: admin or user (UI), mcp (MCP login only); disabled, never deleted. |
 | [`app_session`](app_session.md) | users | Revocable sessions; SHA-256 tokens only, never raw cookies. |
 | [`app_user_audit`](app_user_audit.md) | users | Security changes only: operator, target, action and injected clock; no secrets. |
+| [`log_setting`](log_setting.md) | users | The runtime log level (one row), polled every 15 s by the app, the worker and the MCP connector. Effective level: DEBUG while now < debug_until, else base_level, else the LOG_LEVEL environment value. |
+| [`log_setting_change`](log_setting_change.md) | users | Append-only audit of log_setting changes: who, the level and debug expiry before and after, and when. |
 
 ## Overview
 
@@ -186,6 +188,8 @@ flowchart LR
     app_user[app_user]
     app_session[app_session]
     app_user_audit[app_user_audit]
+    log_setting[log_setting]
+    log_setting_change[log_setting_change]
   end
   account_presentation_media -->|"billing_account_id"| billing_account
   account_presentation_media -->|"media_id"| bill_presentation_media
@@ -1640,6 +1644,22 @@ erDiagram
     text operator
     text action
     timestamptz occurred_at
+  }
+  log_setting {
+    boolean id PK
+    text base_level
+    timestamptz debug_until
+    timestamptz updated_at
+    text updated_by
+  }
+  log_setting_change {
+    uuid id PK
+    text operator
+    text old_base_level
+    text new_base_level
+    timestamptz old_debug_until
+    timestamptz new_debug_until
+    timestamptz changed_at
   }
   app_user ||--o{ app_session : "username"
   app_user ||--o{ app_user_audit : "username"
