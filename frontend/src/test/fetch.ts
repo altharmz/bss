@@ -53,6 +53,18 @@ function paymentPanelDefault(key: string): Handler | undefined {
   return undefined;
 }
 
+// The order and product dialogs list the network commands of the order or product
+// (issue 205); a test that is not about them gets an empty answer.
+function networkDefault(key: string): Handler | undefined {
+  if (
+    /^GET \/internal\/v1\/network\/command\?(productOrder|product)\.id=[^&]+&offset=0&limit=100$/.test(
+      key,
+    )
+  )
+    return () => json([], { total: 0 });
+  return undefined;
+}
+
 export function stubFetch(routes: Record<string, Handler>) {
   const calls: string[] = [];
   routes = { [NAV_COMMANDS]: noCommands, ...routes };
@@ -60,7 +72,7 @@ export function stubFetch(routes: Record<string, Handler>) {
     const url = typeof input === 'string' ? input : input.toString();
     const key = `${init?.method ?? 'GET'} ${url}`;
     calls.push(key);
-    const handler = routes[key] ?? paymentPanelDefault(key);
+    const handler = routes[key] ?? paymentPanelDefault(key) ?? networkDefault(key);
     if (!handler) {
       unexpected.push(key);
       throw new Error(`unexpected request in test: ${key}`);

@@ -67,6 +67,13 @@ export const STATUS_MAP = {
     completed: ['live', 'Completed'],
     failedTechnical: ['failed', 'Failed (technical)'],
   },
+  network: {
+    pending: ['queued', 'Pending'],
+    confirmed: ['live', 'Confirmed'],
+    refused: ['failed', 'Refused'],
+    exhausted: ['failed', 'Exhausted'],
+    cancelled: ['ended', 'Cancelled'],
+  },
   bill: {
     new: ['draft', 'New'],
     validated: ['queued', 'Ready to send'],

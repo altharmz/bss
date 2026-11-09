@@ -2,7 +2,9 @@ import { submitDialogPrimary } from '../ui/kit';
 import { Note } from '../ui/Note';
 import { useState } from 'react';
 import {
+  declaredProfile,
   deletePrice,
+  NETWORK_PROFILE,
   endPrice,
   KIND_LABEL,
   OFFERING_KINDS,
@@ -78,6 +80,7 @@ export function OfferingEditModal({
     }
   }
 
+  const declared = declaredProfile(specifications.find((s) => s.id === form.specificationId));
   const message = problem ?? error;
   const toggle = (id: string) =>
     set(
@@ -133,7 +136,23 @@ export function OfferingEditModal({
           Specification
           <SelectField
             value={form.specificationId}
-            onChange={(e) => set('specificationId', e.target.value)}
+            onChange={(e) =>
+              setForm((f) => {
+                const declared = declaredProfile(
+                  specifications.find((x) => x.id === e.target.value),
+                );
+                return {
+                  ...f,
+                  specificationId: e.target.value,
+                  // a narrowing the new specification does not declare would be refused
+                  network: Object.fromEntries(
+                    Object.entries(f.network).filter(
+                      ([name, value]) => declared[name]?.includes(value) ?? false,
+                    ),
+                  ),
+                };
+              })
+            }
           >
             {form.specificationId === '' && <option value="">—</option>}
             {specifications.map((spec) => (
@@ -164,6 +183,34 @@ export function OfferingEditModal({
             uses its one-time price.
           </span>
         </label>
+        {Object.keys(declared).length > 0 && (
+          <section className="bss-form" data-ui="ui.catalog.offeringNetworkProfile">
+            <h3>Network profile</h3>
+            <p className="bss-secondary">
+              The network is sent the specification&apos;s default of each value unless you narrow
+              it here to one of its listed values.
+            </p>
+            {NETWORK_PROFILE.filter((p) => declared[p.name] !== undefined).map(
+              ({ name, label }) => (
+                <label key={name}>
+                  {label}
+                  <SelectField
+                    aria-label={`Network ${name}`}
+                    value={form.network[name] ?? ''}
+                    onChange={(e) => set('network', { ...form.network, [name]: e.target.value })}
+                  >
+                    <option value="">Default ({declared[name]?.[0]})</option>
+                    {(declared[name] ?? []).map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </SelectField>
+                </label>
+              ),
+            )}
+          </section>
+        )}
         <Checkbox
           checked={form.isSellable}
           onChange={(e) => set('isSellable', e.target.checked)}

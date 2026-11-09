@@ -322,6 +322,96 @@ describe('orders list', () => {
     expect(within(dialog).queryByText(/Open its command/)).toBeNull(); // not inProgress
   });
 
+  const NET = '/internal/v1/network/command';
+  const netCommand = (id: string, state: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    kind: 'activate',
+    state,
+    productOrder: { id: O2, href: `${ORDERS}/${O2}` },
+    productOrderItem: { id: 'f0000001-0000-4000-8000-000000000001' },
+    product: { id: P1 },
+    dueDate: '2026-10-05',
+    profile: { dataAllowanceMb: 5000 },
+    request: null,
+    attempts: 0,
+    attemptedAt: null,
+    nextAttemptAt: null,
+    lastError: null,
+    refusalCode: null,
+    confirmedAt: null,
+    createdAt: '2026-10-01T10:00:00Z',
+    ...extra,
+  });
+  const NETWORK_A = 'b0000001-0000-4000-8000-000000000001';
+  const NETWORK_B = 'b0000002-0000-4000-8000-000000000002';
+
+  it('shows the network step of an order and retries an exhausted command with no body', async () => {
+    let state = 'exhausted';
+    const { fetchMock } = backend({
+      [`GET ${ORDERS}?offset=0&limit=50`]: () => json([PENDING], { total: 1 }),
+      [`GET ${CANCELS}?productOrder.id=${O2}&offset=0&limit=100`]: () => json([], { total: 0 }),
+      [`GET /internal/v1/prepaid/command?billingAccount.id=${A1}&offset=0&limit=100`]: () =>
+        json([], { total: 0 }),
+      [`GET ${NET}?productOrder.id=${O2}&offset=0&limit=100`]: () =>
+        json(
+          [
+            state === 'exhausted'
+              ? netCommand(NETWORK_A, 'exhausted', {
+                  attempts: 5,
+                  attemptedAt: '2026-10-01T12:00:00Z',
+                  lastError: 'connection reset',
+                })
+              : netCommand(NETWORK_A, 'pending', { attempts: 5 }),
+            netCommand(NETWORK_B, 'refused', {
+              kind: 'suspend',
+              refusalCode: 'LINE_BARRED',
+              lastError: 'line is barred',
+            }),
+          ],
+          { total: 2 },
+        ),
+      [`POST ${NET}/${NETWORK_A}/retry`]: () => {
+        state = 'pending';
+        return json(netCommand(NETWORK_A, 'pending', { attempts: 5 }), { status: 202 });
+      },
+    });
+    open();
+    fireEvent.click((await screen.findByText('C0000002')).closest('[role="row"]') as HTMLElement);
+    await screen.findByRole('dialog');
+    expectUi('ui.network.commands');
+    const rows = await screen.findAllByText('connection reset');
+    expect(rows).toHaveLength(1);
+    expect(screen.getByText('LINE_BARRED')).toBeTruthy();
+    // a refusal is final: its note, and exactly one Retry (the exhausted one)
+    expect(screen.getByText(/A refusal is final: place a new order/)).toBeTruthy();
+    expectUi('ui.network.refused');
+    const retry = screen.getAllByRole('button', { name: 'Retry' });
+    expect(retry).toHaveLength(1);
+    fireEvent.click(retry[0] as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull());
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(post?.[0]).toBe(`${NET}/${NETWORK_A}/retry`);
+    expect(post?.[1]?.body).toBeUndefined();
+    expect(await screen.findByText('Pending')).toBeTruthy();
+  });
+
+  it('shows a 409 from Retry and keeps the button', async () => {
+    backend({
+      [`GET ${ORDERS}?offset=0&limit=50`]: () => json([PENDING], { total: 1 }),
+      [`GET ${CANCELS}?productOrder.id=${O2}&offset=0&limit=100`]: () => json([], { total: 0 }),
+      [`GET /internal/v1/prepaid/command?billingAccount.id=${A1}&offset=0&limit=100`]: () =>
+        json([], { total: 0 }),
+      [`GET ${NET}?productOrder.id=${O2}&offset=0&limit=100`]: () =>
+        json([netCommand(NETWORK_A, 'exhausted', { attempts: 5 })], { total: 1 }),
+      [`POST ${NET}/${NETWORK_A}/retry`]: () => tmfError(409, 'only an exhausted command'),
+    });
+    open();
+    fireEvent.click((await screen.findByText('C0000002')).closest('[role="row"]') as HTMLElement);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText(/only an exhausted command/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
+  });
+
   it('links an in-progress order to its prepaid command', async () => {
     backend({
       [`GET ${ORDERS}?offset=0&limit=50`]: () => json([PENDING], { total: 1 }),

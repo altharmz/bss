@@ -1006,6 +1006,92 @@ describe('specifications', () => {
     );
   });
 
+  const profileEntry = (name: string, values: number[]) => ({
+    '@type': 'CharacteristicSpecification',
+    name,
+    valueType: 'integer',
+    configurable: false,
+    characteristicValueSpecification: values.map((value, index) => ({
+      '@type': 'IntegerCharacteristicValueSpecification',
+      valueType: 'integer',
+      isDefault: index === 0,
+      value,
+    })),
+  });
+
+  it('creates a specification with the network profile as integer characteristics', async () => {
+    const { fetchMock } = specBackend({
+      [`POST ${CAT}/productSpecification`]: () =>
+        json({ id: 's9', name: 'Roaming' }, { status: 201 }),
+    });
+    await openTab();
+    fireEvent.click(screen.getByRole('button', { name: '+ New specification' }));
+    const dialog = screen.getByRole('dialog', { name: 'New product specification' });
+    expectUi('ui.catalog.networkProfile');
+    fireEvent.change(field(dialog, /^Name/), { target: { value: 'Roaming' } });
+    fireEvent.change(field(dialog, /^Network dataAllowanceMb/), {
+      target: { value: '5000, 10000' },
+    });
+    fireEvent.change(field(dialog, /^Network hotspot/), { target: { value: '2' } });
+    const create = within(dialog).getByRole('button', { name: 'Create' }) as HTMLButtonElement;
+    expect(create.disabled).toBe(true); // a flag is 0 or 1
+    fireEvent.change(field(dialog, /^Network hotspot/), { target: { value: '1, 0' } });
+    fireEvent.click(create);
+    await screen.findByRole('status');
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+      '@type': 'ProductSpecification',
+      name: 'Roaming',
+      lifecycleStatus: 'In Design',
+      productSpecCharacteristic: [
+        { ...profileEntry('dataAllowanceMb', [5000, 10000]), description: undefined },
+        { ...profileEntry('hotspot', [1, 0]), description: undefined },
+      ].map((entry) => JSON.parse(JSON.stringify(entry))),
+    });
+  });
+
+  it('edits the network profile in place and keeps the other characteristics as loaded', async () => {
+    const color = {
+      '@type': 'CharacteristicSpecification',
+      name: 'Color',
+      valueType: 'string',
+      characteristicValueSpecification: [
+        { '@type': 'StringCharacteristicValueSpecification', value: 'blue', isDefault: true },
+      ],
+    };
+    const cap = profileEntry('dataCapMb', [20000]);
+    const { fetchMock } = specBackend({
+      [SPECS_URL]: () =>
+        json([{ ...SPEC_ROWS[0], productSpecCharacteristic: [color, cap] }], { total: 1 }),
+      [`PATCH ${CAT}/productSpecification/s1`]: () => json({ id: 's1', name: 'Mobile' }),
+    });
+    await openTab();
+    fireEvent.click(specRow('Mobile Voice & Data'));
+    const dialog = screen.getByRole('dialog', { name: 'Mobile Voice & Data' });
+    // the profile entry is in its own section, not in the generic list
+    expect(within(dialog).getAllByRole('group', { name: /^Characteristic \d/ })).toHaveLength(1);
+    expect((field(dialog, /^Network dataCapMb/) as HTMLInputElement).value).toBe('20000');
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toHaveProperty('disabled', true);
+    fireEvent.change(field(dialog, /^Network dataCapMb/), { target: { value: '30000' } });
+    fireEvent.change(field(dialog, /^Network voiceMinutes/), { target: { value: '300' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    const sent = JSON.parse(String(call?.[1]?.body)).productSpecCharacteristic;
+    expect(sent.map((c: { name: string }) => c.name)).toEqual([
+      'Color',
+      'dataCapMb',
+      'voiceMinutes',
+    ]);
+    expect(sent[0]).toEqual(color);
+    expect(sent[1].characteristicValueSpecification.map((v: { value: number }) => v.value)).toEqual(
+      [30000],
+    );
+    expect(sent[2].characteristicValueSpecification.map((v: { value: number }) => v.value)).toEqual(
+      [300],
+    );
+  });
+
   it.each(['string', 'integer', 'boolean'])(
     'creates numbered specifications with %s characteristics',
     async (valueType) => {
@@ -1320,6 +1406,68 @@ describe('offering detail, edit and delete', () => {
     expect(within(dialog).getByText('TV-BASE')).toBeTruthy();
     expect(within(dialog).getByText('TV')).toBeTruthy();
     expect(within(dialog).getByText('yes')).toBeTruthy();
+  });
+
+  it('narrows a network profile value per offering and keeps the other value uses', async () => {
+    const other = { name: 'Color', '@type': 'ProductSpecificationCharacteristicValueUse' };
+    const { fetchMock } = tvBackend({
+      [`GET ${CAT}/productSpecification?offset=0&limit=100`]: () =>
+        json(
+          [
+            ...SPECS.slice(0, 2),
+            {
+              id: 's3',
+              name: 'TV',
+              productSpecCharacteristic: [
+                {
+                  '@type': 'CharacteristicSpecification',
+                  name: 'dataAllowanceMb',
+                  valueType: 'integer',
+                  characteristicValueSpecification: [5000, 10000].map((value, index) => ({
+                    '@type': 'IntegerCharacteristicValueSpecification',
+                    valueType: 'integer',
+                    isDefault: index === 0,
+                    value,
+                  })),
+                },
+              ],
+            },
+          ],
+          { total: 3 },
+        ),
+      [`GET ${CAT}/productOffering/${ids(3)}`]: () =>
+        json({ ...DETAIL, prodSpecCharValueUse: [other] }),
+      [`PATCH ${CAT}/productOffering/${ids(3)}`]: () => json({ id: ids(3) }),
+    });
+    const dialog = await details('TV Basic');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Offering actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit offering' }));
+    const edit = screen.getByRole('dialog', { name: 'Edit TV Basic' });
+    expectUi('ui.catalog.offeringNetworkProfile');
+    const select = within(edit).getByLabelText('Network dataAllowanceMb') as HTMLSelectElement;
+    expect(select.value).toBe('');
+    expect(within(select).getByRole('option', { name: 'Default (5000)' })).toBeTruthy();
+    expect(within(edit).queryByLabelText('Network dataCapMb')).toBeNull(); // not declared
+    fireEvent.change(select, { target: { value: '10000' } });
+    fireEvent.click(within(edit).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('status');
+    expect(JSON.parse(bodyOf(fetchMock, 'PATCH'))).toEqual({
+      prodSpecCharValueUse: [
+        other,
+        {
+          '@type': 'ProductSpecificationCharacteristicValueUse',
+          name: 'dataAllowanceMb',
+          valueType: 'integer',
+          productSpecCharacteristicValue: [
+            {
+              '@type': 'IntegerCharacteristicValueSpecification',
+              valueType: 'integer',
+              value: 10000,
+            },
+          ],
+        },
+      ],
+    });
   });
 
   it('patches only the changed fields and keeps the other identifiers', async () => {

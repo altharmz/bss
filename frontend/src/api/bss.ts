@@ -1202,6 +1202,7 @@ export interface OfferingDetail {
   priceRefs: { id: string; name: string }[]; // every attached price, of any type
   kind: OfferingKind;
   characteristics: Characteristic[]; // every productOfferingCharacteristic, as loaded
+  valueUse: { name?: string; [key: string]: unknown }[]; // every prodSpecCharValueUse, as loaded
 }
 
 export async function loadOfferingDetail(id: string, signal: AbortSignal): Promise<OfferingDetail> {
@@ -1226,7 +1227,28 @@ export async function loadOfferingDetail(id: string, signal: AbortSignal): Promi
     ),
     kind: kindOf(body),
     characteristics: (body.productOfferingCharacteristic ?? []) as Characteristic[],
+    valueUse: (body.prodSpecCharValueUse ?? []) as OfferingDetail['valueUse'],
   };
+}
+
+/** The value an offering narrows a network profile name to ('' = the specification's
+ * default), by name. */
+export function narrowedProfile(o: Pick<OfferingDetail, 'valueUse'>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const use of o.valueUse) {
+    if (!PROFILE_NAMES.includes(use.name ?? '')) continue;
+    const first = (use.productSpecCharacteristicValue as { value?: unknown }[] | undefined)?.[0];
+    if (first?.value !== undefined) out[use.name as string] = String(first.value);
+  }
+  return out;
+}
+
+/** The values a specification declares for a profile name, the default first. */
+export function declaredProfile(spec: Specification | undefined): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [name, text] of Object.entries(networkFields(spec ?? null)))
+    if (text !== '') out[name] = text.split(',').map((v) => v.trim());
+  return out;
 }
 
 async function loadAttachedPrices(
@@ -1269,6 +1291,8 @@ export interface OfferingEditFields {
   specificationId: string;
   categoryIds: string[];
   kind: OfferingKind;
+  /** narrowed network profile values by name; a name left out uses the default */
+  network: Record<string, string>;
 }
 
 /** The last valid day of an exclusive end instant, as a business date. */
@@ -1287,6 +1311,7 @@ export function offeringEditFields(o: OfferingDetail, timeZone: string): Offerin
     specificationId: o.specification?.id ?? '',
     categoryIds: o.categories.map((c) => c.id),
     kind: o.kind,
+    network: narrowedProfile(o),
   };
 }
 
@@ -1343,6 +1368,31 @@ export function offeringChanges(
     };
   if ([...form.categoryIds].sort().join() !== [...was.categoryIds].sort().join())
     changes.category = form.categoryIds.map((id) => ({ id, '@type': 'CategoryRef' }));
+  const narrowed = (network: Record<string, string>) =>
+    JSON.stringify(
+      Object.entries(network)
+        .filter(([, v]) => v !== '')
+        .sort(),
+    );
+  if (narrowed(form.network) !== narrowed(was.network))
+    changes.prodSpecCharValueUse = [
+      ...before.valueUse.filter((use) => !PROFILE_NAMES.includes(use.name ?? '')),
+      ...Object.entries(form.network)
+        .filter(([, value]) => value !== '')
+        .sort(([a], [b]) => PROFILE_NAMES.indexOf(a) - PROFILE_NAMES.indexOf(b))
+        .map(([name, value]) => ({
+          '@type': 'ProductSpecificationCharacteristicValueUse',
+          name,
+          valueType: 'integer',
+          productSpecCharacteristicValue: [
+            {
+              '@type': 'IntegerCharacteristicValueSpecification',
+              valueType: 'integer',
+              value: Number(value),
+            },
+          ],
+        })),
+    ];
   if (form.kind !== was.kind)
     changes.productOfferingCharacteristic = withKind(before.characteristics, form.kind);
   return Object.keys(changes).length === 0 ? null : changes;
@@ -1439,6 +1489,9 @@ export async function deletePrice(id: string): Promise<void> {
 /** Text, subscriber-number requirement and descriptive characteristics edited by the UI.
  * An empty optional text is null on edit (merge patch removes it) and left out on create. */
 export interface SpecificationFields {
+  /** The network profile (docs/decisions/network.md): comma-separated values per profile
+   * name, the first the default; '' = the specification does not declare it. */
+  network?: Record<string, string>;
   name: string;
   description: string;
   brand: string;
@@ -1459,17 +1512,109 @@ export interface CharacteristicFields {
   original?: NonNullable<SpecBody['productSpecCharacteristic']>[number];
 }
 
+/** The network profile characteristics (app/network/profile.py): integers of zero or more,
+ * flags 0 or 1. A specification declaring any makes its offerings network lines. */
+export const NETWORK_PROFILE: { name: string; label: string; flag: boolean }[] = [
+  { name: 'dataAllowanceMb', label: 'Data allowance (MB)', flag: false },
+  { name: 'dataCapMb', label: 'Data cap (MB)', flag: false },
+  { name: 'throttleKbps', label: 'Throttle speed (kbps)', flag: false },
+  { name: 'voiceMinutes', label: 'Voice minutes', flag: false },
+  { name: 'smsCount', label: 'SMS count', flag: false },
+  { name: 'hotspot', label: 'Hotspot (0 or 1)', flag: true },
+  { name: 'international', label: 'International (0 or 1)', flag: true },
+  { name: 'voicemail', label: 'Voicemail (0 or 1)', flag: true },
+];
+const PROFILE_NAMES = NETWORK_PROFILE.map((p) => p.name);
+
+type SpecCharacteristic = NonNullable<SpecBody['productSpecCharacteristic']>[number];
+
+function valuesOf(c: Partial<SpecCharacteristic>): string {
+  return (c.characteristicValueSpecification ?? [])
+    .map((v) => String('value' in v ? v.value : ''))
+    .join(', ');
+}
+
+/** The profile values the specification declares, by name ('' = not declared). */
+export function networkFields(spec: Specification | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const { name } of NETWORK_PROFILE)
+    out[name] = valuesOf(
+      (spec?.productSpecCharacteristic ?? []).find((c) => c.name === name) ?? {},
+    );
+  return out;
+}
+
+/** Each filled value is an integer, 0 or 1 for a flag; at least one when filled. */
+export function validNetwork(network: Record<string, string> | undefined): boolean {
+  return NETWORK_PROFILE.every(({ name, flag }) => {
+    const text = (network?.[name] ?? '').trim();
+    return (
+      text === '' ||
+      text.split(',').every((value) => {
+        const v = value.trim();
+        return (
+          /^\d+$/.test(v) && Number.isSafeInteger(Number(v)) && (!flag || v === '0' || v === '1')
+        );
+      })
+    );
+  });
+}
+
+function networkDocuments(
+  network: Record<string, string> | undefined,
+  before: Specification | null,
+) {
+  return NETWORK_PROFILE.flatMap(({ name }) => {
+    const text = (network?.[name] ?? '').trim();
+    if (text === '') return [];
+    const original = (before?.productSpecCharacteristic ?? []).find((c) => c.name === name);
+    if (
+      original !== undefined &&
+      valuesOf(original) ===
+        text
+          .split(',')
+          .map((v) => v.trim())
+          .join(', ')
+    )
+      return [original];
+    return [
+      {
+        ...(original ?? {}),
+        '@type': 'CharacteristicSpecification',
+        name,
+        valueType: 'integer',
+        configurable: false,
+        characteristicValueSpecification: text.split(',').map((value, index) => ({
+          '@type': 'IntegerCharacteristicValueSpecification',
+          valueType: 'integer',
+          isDefault: index === 0,
+          value: Number(value.trim()),
+        })),
+      },
+    ];
+  });
+}
+
+function allCharacteristicDocuments(form: SpecificationFields, before: Specification | null) {
+  return [
+    ...characteristicDocuments(form.characteristics),
+    ...networkDocuments(form.network, before),
+  ];
+}
+
 export function characteristicFields(spec: Specification | null): CharacteristicFields[] {
-  return (spec?.productSpecCharacteristic ?? []).map((c) => ({
-    name: c.name ?? '',
-    valueType: c.valueType ?? 'string',
-    description: c.description ?? '',
-    configurable: c.configurable ?? false,
-    values: (c.characteristicValueSpecification ?? [])
-      .map((v) => String('value' in v ? v.value : ''))
-      .join(', '),
-    original: c,
-  }));
+  return (spec?.productSpecCharacteristic ?? [])
+    .filter((c) => !PROFILE_NAMES.includes(c.name ?? ''))
+    .map((c) => ({
+      name: c.name ?? '',
+      valueType: c.valueType ?? 'string',
+      description: c.description ?? '',
+      configurable: c.configurable ?? false,
+      values: (c.characteristicValueSpecification ?? [])
+        .map((v) => String('value' in v ? v.value : ''))
+        .join(', '),
+      original: c,
+    }));
 }
 
 export function characteristicDocuments(rows: CharacteristicFields[]) {
@@ -1525,8 +1670,8 @@ export async function createSpecification(form: SpecificationFields): Promise<Sp
       id,
       '@type': 'ResourceSpecificationRef',
     }));
-  if (form.characteristics.length)
-    body.productSpecCharacteristic = characteristicDocuments(form.characteristics);
+  const documents = allCharacteristicDocuments(form, null);
+  if (documents.length) body.productSpecCharacteristic = documents;
   return toSpecification(await postJson<SpecBody>(PATHS.specifications, body));
 }
 
@@ -1553,8 +1698,20 @@ export function specificationChanges(
         .filter((id) => wanted[id])
         .map((id) => ({ id, '@type': 'ResourceSpecificationRef' })),
     ];
-  if (JSON.stringify(form.characteristics) !== JSON.stringify(characteristicFields(before)))
-    changes.productSpecCharacteristic = characteristicDocuments(form.characteristics);
+  const networkChanged =
+    form.network !== undefined &&
+    JSON.stringify(NETWORK_PROFILE.map((p) => (form.network?.[p.name] ?? '').trim())) !==
+      JSON.stringify(NETWORK_PROFILE.map((p) => networkFields(before)[p.name]));
+  if (
+    networkChanged ||
+    JSON.stringify(form.characteristics) !== JSON.stringify(characteristicFields(before))
+  ) {
+    // keep the entries the form does not edit (and the unchanged profile ones) as loaded
+    changes.productSpecCharacteristic = allCharacteristicDocuments(
+      { ...form, network: form.network ?? networkFields(before) },
+      before,
+    );
+  }
   return Object.keys(changes).length === 0 ? null : changes;
 }
 

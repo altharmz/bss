@@ -556,6 +556,8 @@ items:
   - {id: ui.catalog.specificationCharacteristic, area: ui, stage: 5, title: "Specification characteristic fields"}
   - {id: ui.catalog.addCharacteristic, area: ui, stage: 5, title: "Add a specification characteristic"}
   - {id: ui.catalog.removeCharacteristic, area: ui, stage: 5, title: "Remove a specification characteristic"}
+  - {id: ui.catalog.networkProfile, area: ui, stage: 5, title: "Specification network profile section (issue 205)"}
+  - {id: ui.catalog.offeringNetworkProfile, area: ui, stage: 5, title: "Offering network profile narrowing (issue 205)"}
   - {id: ui.catalog.deleteSpecification, area: ui, stage: 5, title: "Delete an unused product specification"}
   - {id: ui.catalog.categories, area: ui, stage: 5, title: "Catalog tab: categories tree"}
   - {id: ui.catalog.newCategory, area: ui, stage: 5, title: "New category"}
@@ -617,6 +619,10 @@ items:
   - {id: ui.orders.detail, area: ui, stage: 5, title: "Order dialog"}
   - {id: ui.orders.items, area: ui, stage: 5, title: "Order dialog items table"}
   - {id: ui.orders.cancellations, area: ui, stage: 5, title: "Order dialog cancellations"}
+  - {id: ui.network.commands, area: ui, stage: 5, title: "Network step of an order or product: commands, state, attempts, last error (issue 205)"}
+  - {id: ui.network.command, area: ui, stage: 5, title: "One network command"}
+  - {id: ui.network.retry, area: ui, stage: 5, title: "Retry an exhausted network command"}
+  - {id: ui.network.refused, area: ui, stage: 5, title: "A refused network command is final: place a new order"}
   - {id: ui.orders.command, area: ui, stage: 5, title: "Link from an in-progress order to its prepaid command"}
   - {id: ui.orders.errors, area: ui, stage: 5, title: "Order dialog rejection reasons"}
   - {id: ui.subscriber.orders, area: ui, stage: 5, title: "Orders link on the subscriber card"}

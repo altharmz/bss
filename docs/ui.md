@@ -439,6 +439,10 @@ the error is shown. API: `GET .../category`, `POST .../productOfferingPrice`,
 (`frontend/src/screens/*.test.tsx`), and `tests/test_ui_requests.py` replays the same
 bodies against the real API.
 
+### Network provisioning (`ui.network.commands`, `ui.network.command`, `ui.network.retry`, `ui.network.refused`, `ui.catalog.networkProfile`, `ui.catalog.offeringNetworkProfile`) - `screens/NetworkCommands.tsx`
+
+Issue #205 ([decisions](decisions/network.md)). A *Network* section in the order and product dialogs lists the network commands of that order or product (kind, state pill, due, attempts, last attempt, next attempt, last error, refusal code); it is absent when there are none. **Retry** only on an `exhausted` command; a refused one shows that it is final. The specification dialog's *Network profile* section edits the eight profile characteristics; the offering edit dialog narrows each declared value.
+
 ### Products (`ui.products`, `ui.products.status`, `ui.products.accountChip`, `ui.products.detail`, `ui.products.orderItems`, `ui.products.resource`) - `screens/Products.tsx`
 
 Ledger v2 slice 3b2b2b2: inline information, warning and validation messages use shared Notes with their existing text and markers.

@@ -31,11 +31,7 @@ healthz: the liveness probe for the proxy and the deploy checks, no screen
 billing_status: the worker's own status probe (scripts/billing-status-check.sh), the UI reads billing runs
 extension_schema: a static JSON schema; the Integrations screen links to it, which is not a request
 
-# Network provisioning commands (#183): the UI for them is issue #205.
-list_network_commands: the UI screens are issue #205
-get_network_command: the UI screens are issue #205
-retry_network_command: the UI screens are issue #205
-
+get_network_command: the order and product dialogs read the list, whose rows carry every field shown
 get_payment_method: the card list carries every field the UI shows; there is no card detail screen
 get_payment_command: the dialog reads the account's charges (list_card_topups); no single-charge screen
 list_payment_commands: the dialog reads one account's charges (list_card_topups); no cross-account list

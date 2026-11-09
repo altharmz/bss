@@ -795,3 +795,13 @@ Ledger v2 slice 13 (R13): Prepaid commands (dense table, `Dialog` + `KeyValue`),
 ## Logging settings UI (2026-11-09, issue #275)
 
 - `/settings/logging` is an admin-only System entry with no client-side guard (the API's 403 is the error state); the three debug durations (15/30/60 min) and Stop are fixed buttons, no free-form duration; the countdown is local and display-only, the state re-reads every 30 s and after each PUT; its PUT bodies are pinned on both sides.
+
+## Network provisioning UI (2026-11-09, issue #205)
+
+Design: [network.md](network.md). No backend change; the UI reads and writes what #183 built.
+
+- **Profile editor.** The specification dialog has a *Network profile* section (`ui.catalog.networkProfile`): one comma-separated field per profile name (the first value is the default), written as integer `productSpecCharacteristic` entries; an empty field does not declare the name. The names are taken out of the generic *Characteristics* rows so one entry is never edited twice; an unchanged entry (and every other characteristic) is sent as loaded. Flags are 0 or 1 and Save is disabled for anything else (the server's 400 stays the last word).
+- **Narrowing.** The offering edit dialog shows, for each name the offering's specification declares (`ui.catalog.offeringNetworkProfile`), a select of its listed values, "Default (v)" meaning no `prodSpecCharValueUse` entry. The PATCH sends the whole `prodSpecCharValueUse` array: entries for other characteristics as loaded, the narrowed profile ones rebuilt. Changing the specification drops narrowings the new one does not list.
+- **Network step.** `NetworkCommands` (`screens/NetworkCommands.tsx`, `api/network.ts`) is a section of the order dialog (`productOrder.id=`) and the product dialog (`product.id=`); it is **hidden when there are no commands** (offerings that are not network lines send nothing) and shows kind, state (`network` status family), due date, attempts, last attempt, next attempt (pending), last error and refusal code.
+- **Retry** (`ui.network.retry`) is a bodiless POST, offered only for `exhausted`; a refusal shows a note that it is final (a new order is the fix), and a 409 is shown with the button kept. The API never sends: the worker does on its next tick, so the panel re-reads and shows `pending`.
+- Tests: `Catalog.test.tsx` (profile and narrowing bodies), `Orders.test.tsx`, `Products.test.tsx`; `test/fetch.ts` answers the two list queries with an empty list by default; `tests/test_ui_requests.py` replays the bodies and reads. `list_network_commands` and `retry_network_command` left `tests/ui-mcp-allowlist.txt` (the UI calls them); `get_network_command` stays, the list rows carry every field shown.
