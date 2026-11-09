@@ -501,6 +501,61 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/LifecycleSettings'}
         '400': {$ref: '#/components/responses/Error'}
+  /logging:
+    get:
+      summary: The runtime log level (issue 274); administrators only.
+      description: >-
+        `baseLevel` is WARNING, INFO or null (follow `envLevel`, the LOG_LEVEL of the
+        environment). DEBUG exists only as `debugUntil`, an instant at most 120 minutes ahead;
+        `effectiveLevel` is DEBUG while now < `debugUntil`, else the base level, else `envLevel`.
+        The app, the worker and the MCP connector re-read it every 15 s.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LogSettings'}
+        '403': {$ref: '#/components/responses/Error'}
+    put:
+      summary: Set the base log level and/or start or end a temporary DEBUG.
+      description: >-
+        `baseLevel` WARNING, INFO or null (follow LOG_LEVEL); `debugMinutes` 0..120 starts DEBUG
+        for that long from now (0 ends it now). At least one field; the other keeps its value.
+        Every change is audited and logged at WARNING. A bad value is a 400.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                baseLevel: {type: string, enum: [WARNING, INFO, null], nullable: true}
+                debugMinutes: {type: integer, minimum: 0, maximum: 120}
+      responses:
+        '200':
+          description: The setting now in force
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LogSettings'}
+        '400': {$ref: '#/components/responses/Error'}
+        '403': {$ref: '#/components/responses/Error'}
+  /service/log-level:
+    get:
+      summary: The MCP connector's poll of the runtime log level (service credential only).
+      description: >-
+        Accepted only with the MCP service credential (X-Bss-Service) and no principal; a
+        session or the smoke credential gets 403. The connector has no database, so it reads
+        the setting here and computes its own effective level.
+      security:
+        - ServiceCredential: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceLogLevel'}
+        '403': {$ref: '#/components/responses/Error'}
   /device:
     get:
       summary: The devices of a prepaid line, newest first (issue 194).
@@ -1682,6 +1737,25 @@ components:
         numberAgingDays: {type: integer, minimum: 0, maximum: 3650}
         paygZeroBalanceDays: {type: integer, minimum: 0, maximum: 365}
         updatedAt: {type: string, format: date-time, nullable: true}
+    LogSettings:
+      type: object
+      additionalProperties: false
+      required: [baseLevel, envLevel, effectiveLevel, debugUntil, updatedAt, updatedBy]
+      properties:
+        baseLevel: {type: string, enum: [WARNING, INFO, null], nullable: true}
+        envLevel: {type: string}
+        effectiveLevel: {type: string}
+        debugUntil: {type: string, format: date-time, nullable: true}
+        updatedAt: {type: string, format: date-time, nullable: true}
+        updatedBy: {type: string, nullable: true}
+    ServiceLogLevel:
+      type: object
+      additionalProperties: false
+      required: [baseLevel, effectiveLevel, debugUntil]
+      properties:
+        baseLevel: {type: string, enum: [WARNING, INFO, null], nullable: true}
+        effectiveLevel: {type: string}
+        debugUntil: {type: string, format: date-time, nullable: true}
     AccountProduct:
       type: object
       additionalProperties: false

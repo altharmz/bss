@@ -33,6 +33,8 @@ FastAPI's `/openapi.json`). OAS 3.0 cannot make a `$ref` nullable (`nullable` ne
 | `GET /billingRun` | stage 4: runs newest first - status, failureKind, trigger, attempt, times, accounts {total, ok, failed, blocked} (derived: members = accounts opened before 00:00 of the date), charges {count, amounts per currency}, error, isLatest |
 | `GET /billingRun/{id}` / `.../accounts?status=` | one run; its per-account outcomes (account, status, error, waitsFor run, attempts) |
 | `POST /billingRun/catchUp {upTo}` | queues a catch-up; **the API never bills**. upTo after the business date, or today before `BILLING_RUN_AT` (Q5) -> 422. 202 `{request, dates}` (a run that failed as a whole first, then every date after the latest run); 200 `{dates: []}` and nothing queued when nothing is due |
+| `GET`/`PUT /logging` | issue #274, administrators only: the runtime log level `{baseLevel, envLevel, effectiveLevel, debugUntil, updatedAt, updatedBy}`. PUT `{baseLevel?: WARNING\|INFO\|null, debugMinutes?: 0..120}` (strict ints, at least one field, a bad value or unknown attribute is a 400; `debugMinutes: 0` ends debug now); writes one `log_setting_change` row and one WARNING log line in the transaction. Not a model tool |
+| `GET /service/log-level` | the MCP connector's poll (it has no database): `{baseLevel, effectiveLevel, debugUntil}`. The service credential alone, no principal; a session, the smoke credential or a principal get 403. In `AUTH_OPERATIONS`, never a tool. See [infra.md](infra.md#conventions), "Logging" |
 | `POST /billingRun/{id}/retry` | queues a retry of any failed run (Q3); 409 if not failed or a retry is already queued; 202 `{request}` |
 
 "The TMF620 deviation above" is D-W21 in [catalog.md](catalog.md#tmf620-mapping).

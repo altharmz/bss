@@ -1,6 +1,7 @@
 """The bss app over HTTP - the connector's only way to bss (never the database)."""
 
 import logging
+from datetime import datetime
 from typing import Any
 
 import anyio
@@ -55,6 +56,18 @@ class Bss:
         if content_type:
             headers["Content-Type"] = content_type
         return await self.client.request(method, path, params=params, content=body, headers=headers)
+
+    async def log_level(self) -> tuple[str | None, datetime | None]:
+        """The runtime log setting (GET /internal/v1/service/log-level): the base level and
+        the end of a temporary DEBUG. The service credential alone, no principal."""
+        response = await self.client.get(
+            "/internal/v1/service/log-level",
+            headers={"X-Bss-Service": self.service_secret, "Accept": "application/json"},
+        )
+        response.raise_for_status()
+        body = response.json()
+        until = body.get("debugUntil")
+        return body.get("baseLevel"), None if until is None else datetime.fromisoformat(until)
 
     async def credential_check(self, username: str, password: str) -> httpx2.Response:
         """The app's answer to "is this an active `mcp` user's password?" (the OAuth login).

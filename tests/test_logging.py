@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import logging
+from types import SimpleNamespace
 
 import httpx2
 import pytest
@@ -222,7 +223,9 @@ def test_the_worker_sets_one_id_per_wake_up(monkeypatch, lines, capsys):
     monkeypatch.setattr(worker_main.db, "connect", lambda: Conn())
     monkeypatch.setattr(worker_main, "tick", fake_tick)
     monkeypatch.setattr(worker_main, "check_run_at", lambda value: None)
-    monkeypatch.setattr(worker_main, "clock_from_environment", lambda: None)
+    monkeypatch.setattr(
+        worker_main, "clock_from_environment", lambda: SimpleNamespace(now=lambda: None)
+    )
     assert worker_main.main(["--once"]) == 0
     assert worker_main.main(["--once"]) == 0
     assert all(i and i.startswith("wake-") and len(i) == 13 for i in seen)

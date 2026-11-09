@@ -62,6 +62,8 @@ def main(argv: list[str] | None = None) -> int:
 
     conn: psycopg.Connection | None = None
     failed = False
+    # independent of the tick: a long billing run still sees a log level change (#274)
+    poller = logsetup.start_db_poller(clock.now)
     try:
         while True:
             logsetup.request_id.set(f"wake-{uuid.uuid4().hex[:8]}")  # one tick, one ID
@@ -91,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.once or stop.is_set() or stop.wait(WAKE_SECONDS):
                 break
     finally:
+        if poller is not None:
+            poller.stop()
         if conn is not None:
             conn.close()  # releases the ownership lock
     return 1 if args.once and failed else 0

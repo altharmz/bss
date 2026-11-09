@@ -29,6 +29,9 @@ hypothesis.settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "dev"))
 # Captured at import: the `api` fixture points settings.database_url at the test database,
 # and creating or dropping databases must not connect to the one being dropped.
 ADMIN_URL = settings.database_url
+# no log-level poller thread in the lifespan of every TestClient (tests/test_log_level.py
+# drives LevelPoller itself)
+settings.log_poll_seconds = 0
 
 # --- "tested" for the progress tracker (make progress; tests/progress_collect.py) ---
 # Set by the collector only, so make test is unchanged. Per test, it records the requests
@@ -276,6 +279,7 @@ def mcp_settings(tmp_path):
         mcp_public_url="https://mcp.test",
         mcp_store=str(tmp_path / "mcp.db"),
         mcp_identity_wait=0,
+        log_poll_seconds=0,
     )
 
 

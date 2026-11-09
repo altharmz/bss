@@ -22,6 +22,8 @@ items:
   - {id: db.prepaid_command, area: db, stage: 5, table: prepaid_command, title: "Durable prepaid command requests, results and retry state"}
   - {id: db.network_command, area: db, stage: 5, table: network_command, title: "Durable network provisioning commands of prepaid order items"}
   - {id: db.prepaid_lifecycle_setting, area: db, stage: 5, table: prepaid_lifecycle_setting, title: "The prepaid lifecycle durations: grace, suspension, number aging and the pay-as-you-go zero-balance trigger"}
+  - {id: db.log_setting, area: db, stage: 5, table: log_setting, title: "The runtime log level: base level and the expiry of a temporary DEBUG"}
+  - {id: db.log_setting_change, area: db, stage: 5, table: log_setting_change, title: "Append-only audit of log level changes: who, before, after, when"}
   - {id: db.prepaid_lifecycle_event, area: db, stage: 5, table: prepaid_lifecycle_event, title: "The lifecycle transitions the worker took or tried per product and business date"}
   - {id: db.port_request, area: db, stage: 5, table: port_request, title: "Port-in and port-out requests with their state, rejection reason and carrier reference"}
   - {id: db.number_transfer_pin, area: db, stage: 5, table: number_transfer_pin, title: "Time-limited single-use Number Transfer PINs (hashed) validated at port-out"}
@@ -710,6 +712,9 @@ excluded:
   - {id: api.internal.sim.generate, area: api, method: POST, path: /internal/v1/sim/esim-generate, reason: "eSIM profile generation is an operator UI action, not a model tool"}
   - {id: api.internal.lifecycle.settings.get, area: api, method: GET, path: /internal/v1/lifecycle/settings, reason: "the lifecycle durations are an operator settings screen (188b), not a model tool"}
   - {id: api.internal.lifecycle.settings.put, area: api, method: PUT, path: /internal/v1/lifecycle/settings, reason: "changing the lifecycle durations is an operator settings action (188b), not a model tool"}
+  - {id: api.internal.logging.get, area: api, method: GET, path: /internal/v1/logging, reason: "the runtime log level is an administrator settings screen (#275), not a model tool"}
+  - {id: api.internal.logging.put, area: api, method: PUT, path: /internal/v1/logging, reason: "changing the log level or starting DEBUG is an administrator settings action, not a model tool"}
+  - {id: api.internal.service.logLevel, area: api, method: GET, path: /internal/v1/service/log-level, reason: "the connector's own poll of the runtime log level (service credential only), never a tool"}
   - {id: api.internal.number.pool, area: api, method: POST, path: /internal/v1/number/pool, reason: "requesting numbers from the carrier is an operator UI action (189b), not a model tool"}
   - {id: api.internal.port.list, area: api, method: GET, path: /internal/v1/port, reason: "port requests are an operator UI view (189b); the MCP connector does not handle porting"}
   - {id: api.internal.port.get, area: api, method: GET, path: "/internal/v1/port/{port_id}", reason: "port requests are an operator UI view (189b)"}

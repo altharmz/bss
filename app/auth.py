@@ -25,6 +25,8 @@ def digest(token: str) -> str:
 
 
 CREDENTIAL_CHECK_PATH = "/internal/v1/service/credential-check"
+LOG_LEVEL_PATH = "/internal/v1/service/log-level"
+SERVICE_POLL_OPERATOR = "mcp-poll"
 # The two principal forms the MCP connector sends with the service secret: an OAuth
 # grant's app user, whose credential version is checked on every request, and a static
 # token's name, which is not a user.
@@ -85,6 +87,13 @@ def authenticate(request: Request, tx: Tx, clock: ClockDep) -> None:
             if not mcp:
                 raise TmfError(403, "only the MCP service credential may check credentials")
             request.state.operator = "mcp-login"
+            request.state.role = "service"
+            return
+        if path == LOG_LEVEL_PATH:
+            # the connector's log-level poll: the service credential alone, read-only
+            if not mcp or request.method != "GET":
+                raise TmfError(403, "only the MCP service credential may read the log level")
+            request.state.operator = SERVICE_POLL_OPERATOR
             request.state.role = "service"
             return
         if path.startswith((SESSION_PATH, "/internal/v1/users")):

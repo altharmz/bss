@@ -201,6 +201,24 @@ would attach the prod container to both `lab` and `shared`).
     `RedactFilter` is the net under that rule: it masks `Authorization`, `Cookie`,
     `Set-Cookie`, `X-Bss-Service`, `Bearer <x>` and `password|token|secret|pin|code=<x>`
     in the message, string extras and tracebacks (`[redacted]`).
+  - **Runtime level** (issue #274). `effective = DEBUG` while `now < log_setting.debug_until`
+    (half-open: at the instant it is over), else `base_level` (`WARNING`/`INFO`), else the env
+    `LOG_LEVEL`, which is also the level until the first successful poll and whenever the
+    database cannot be read. DEBUG exists only as `debug_until`, at most **120 minutes**
+    ahead (enforced by the endpoint: a CHECK cannot express a duration relative to the
+    change time), so it always expires by itself. `log_setting` is a singleton like
+    `prepaid_lifecycle_setting`; `log_setting_change` is the append-only audit (who, old and
+    new base level and expiry, when). Time is the injected clock.
+  - **Polling every 15 s** (`LOG_POLL_SECONDS`, 0 = never; the tests set 0), one `LevelPoller`
+    (`app/logsetup.py`) that calls `setLevel` on `OUR_LOGGERS` only: the app (a daemon thread
+    in the lifespan, own autocommit connection), the worker (the same thread, independent of
+    the tick, so a long billing run still sees a change) and MCP (an anyio task in its
+    lifespan: it has no database, so it reads `GET /internal/v1/service/log-level`, which
+    answers `{baseLevel, effectiveLevel, debugUntil}` and computes its own effective level).
+    A failed poll keeps the level, except that an expired `debug_until` still drops to the
+    base by the process's own clock; one WARNING per outage, one per level change and process.
+    Third-party loggers are never raised: #273's redaction test is re-run with DEBUG raised
+    through the database row.
 
 ## DB connection pool
 

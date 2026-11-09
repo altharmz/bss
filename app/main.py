@@ -1,14 +1,29 @@
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
 from app import api, db, internal, logsetup, metrics, status
 from app.auth import authenticate
+from app.clock import SystemClock
 from app.config import settings
 
 logsetup.configure("app")
 log = logging.getLogger("app")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """The runtime log level: a thread re-reads it every LOG_POLL_SECONDS (issue #274)."""
+    poller = logsetup.start_db_poller(SystemClock().now)
+    try:
+        yield
+    finally:
+        if poller is not None:
+            poller.stop()
+
 
 # operationId = the handler's function name (e.g. create_payment), not FastAPI's
 # name+path+method: the MCP connector names its tools after it, and clients cap tool
@@ -17,6 +32,7 @@ app = FastAPI(
     title="bss",
     version="0.1.0",
     generate_unique_id_function=lambda route: route.name,
+    lifespan=lifespan,
     dependencies=[Depends(authenticate)],
     docs_url=None,
     redoc_url=None,

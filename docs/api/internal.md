@@ -4,7 +4,7 @@
 
 - Base path here: `/internal/v1`
 - Contract: [`spec/internal/bss-internal.oas.yaml`](../../spec/internal/bss-internal.oas.yaml) - BSS internal API (admin UI) version 1.0.0; the spec's server URL is `/internal/v1`
-- Operations exposed: 59
+- Operations exposed: 62
 
 
 ## Operations
@@ -32,6 +32,8 @@
 | GET | `/internal/v1/eventSubscription` | query: `offset`, `limit`, `api` | - | 200 `array of EventSubscription` | [`app/main.py`](../../app/main.py) |
 | GET | `/internal/v1/lifecycle/settings` | - | - | 200 `LifecycleSettings` | [`app/internal/lifecycle.py`](../../app/internal/lifecycle.py) |
 | PUT | `/internal/v1/lifecycle/settings` | - | `object` | 200 `LifecycleSettings` | [`app/internal/lifecycle.py`](../../app/internal/lifecycle.py) |
+| GET | `/internal/v1/logging` | - | - | 200 `LogSettings` | [`app/main.py`](../../app/main.py) |
+| PUT | `/internal/v1/logging` | - | `object` | 200 `LogSettings` | [`app/main.py`](../../app/main.py) |
 | GET | `/internal/v1/network/command` | query: `offset`, `limit`, `productOrder.id`, `product.id`, `state` | - | 200 `array of NetworkCommand` | [`app/internal/network_commands.py`](../../app/internal/network_commands.py) |
 | GET | `/internal/v1/network/command/{command_id}` | path: `command_id` | - | 200 `NetworkCommand` | [`app/internal/network_commands.py`](../../app/internal/network_commands.py) |
 | POST | `/internal/v1/network/command/{command_id}/retry` | path: `command_id`; body: `application/json` | - | 202 `NetworkCommand` | [`app/internal/network_commands.py`](../../app/internal/network_commands.py) |
@@ -59,6 +61,7 @@
 | GET | `/internal/v1/security/pin/{customer_id}` | path: `customer_id` | - | 200 `AccountPin` | [`app/internal/security.py`](../../app/internal/security.py) |
 | PUT | `/internal/v1/security/pin/{customer_id}` | path: `customer_id` | `object` | 200 `AccountPin` | [`app/internal/security.py`](../../app/internal/security.py) |
 | POST | `/internal/v1/service/credential-check` | body: `application/json` | `SignIn` | 200 `CredentialCheck` | [`app/main.py`](../../app/main.py) |
+| GET | `/internal/v1/service/log-level` | - | - | 200 `ServiceLogLevel` | [`app/main.py`](../../app/main.py) |
 | DELETE | `/internal/v1/session` | - | - | 204 (no body) | [`app/internal/users.py`](../../app/internal/users.py) |
 | GET | `/internal/v1/session` | - | - | 200 `Session` | [`app/internal/users.py`](../../app/internal/users.py) |
 | POST | `/internal/v1/session` | body: `application/json` | `SignIn` | 200 `Session` | [`app/internal/users.py`](../../app/internal/users.py) |
