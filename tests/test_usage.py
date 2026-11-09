@@ -19,6 +19,20 @@ from tests.test_prepaid_offering_changes import switch
 from tests.test_prepaid_renewal_producer import tick
 
 USAGE = "/tmf-api/productUsageManagement/v5/productUsage"
+
+
+def rejected_records(api, db_conn):
+    """The rejected records (no line), read one by one: a list needs product.id or id."""
+    db_conn.commit()
+    ids = [
+        r[0]
+        for r in db_conn.execute(
+            "SELECT id FROM usage_record WHERE status = 'rejected' ORDER BY event_at DESC, id"
+        )
+    ]
+    return [api.get(f"{USAGE}?id={i}").json()[0] for i in ids]
+
+
 SUMMARY = "/internal/v1/usage/summary"
 MIB = 1024 * 1024
 MSISDN = "79991234500"
@@ -135,7 +149,7 @@ def test_records_map_to_the_product_that_held_the_number_across_a_number_change(
     )
     mine = {r["usageCharacteristic"][0]["value"] for r in records(api, product)}
     assert mine == {MIB, 2 * MIB}
-    rejected = api.get(f"{USAGE}?status=rejected").json()
+    rejected = rejected_records(api, db_conn)
     assert sorted(r["usageCharacteristic"][0]["value"] for r in rejected) == [4 * MIB, 8 * MIB]
     assert all("product" not in r for r in rejected)
     reasons = {
@@ -164,7 +178,7 @@ def test_the_imsi_names_the_line_when_there_is_no_msisdn(api, db_conn, world, st
     assert sim.status_code == 201, sim.text
     feed(stub, db_conn, api, ("sms", 3, when(api), {"imsi": "001010000000001"}))
     assert len(records(api, product)) == 0  # an unassigned IMSI is nobody's
-    assert len(api.get(f"{USAGE}?status=rejected").json()) == 1
+    assert len(rejected_records(api, db_conn)) == 1
 
 
 @pytest.mark.capability("worker.usageFeed")
@@ -304,18 +318,25 @@ def test_tmf635_reads_validate_against_the_vendored_spec(api, db_conn, world, st
         ("voice", 61, when(api, hour=13), {"msisdn": MSISDN}),
         ("sms", 1, when(api, hour=14), {"msisdn": "79990000000"}),  # nobody's: rejected
     )
-    listed = api.get(f"{USAGE}?limit=100")
-    assert listed.status_code == 200 and listed.headers["X-Total-Count"] == "3"
-    body = listed.json()
+    line = f"{USAGE}?product.id={product['id']}"
+    listed = api.get(f"{line}&limit=100")
+    assert listed.status_code == 200 and listed.headers["X-Total-Count"] == "2"
+    body = listed.json() + rejected_records(api, db_conn)
     assert len(body) == 3
     for item in body:
         contract.assert_valid("TMF635", "ProductUsage", item)
         one = api.get(item["href"])
         assert one.status_code == 200 and one.json() == item
-    assert [r["usageType"] for r in api.get(f"{USAGE}?usageType=voice").json()] == ["voice"]
-    assert len(api.get(f"{USAGE}?product.id={product['id']}").json()) == 2
-    assert api.get(f"{USAGE}?status=rejected").headers["X-Total-Count"] == "1"
-    assert api.get(f"{USAGE}?limit=1&offset=1").headers["X-Result-Count"] == "1"
+    assert [r["usageType"] for r in api.get(f"{line}&usageType=voice").json()] == ["voice"]
+    assert api.get(f"{line}&status=rejected").headers["X-Total-Count"] == "0"
+    assert api.get(f"{line}&limit=1&offset=1").headers["X-Result-Count"] == "1"
+    only = api.get(f"{USAGE}?id={body[2]['id']}")
+    assert only.headers["X-Total-Count"] == "1" and only.json() == [body[2]]
+    # a list across every line is refused (#286)
+    for query in ("", "?limit=100", "?status=rejected", "?usageType=voice"):
+        refused = api.get(f"{USAGE}{query}")
+        assert refused.status_code == 400, query
+        assert refused.json()["message"] == "productUsage list needs product.id or id"
     selected = api.get(f"{USAGE}/{body[0]['id']}?fields=status").json()
     assert set(selected) == {"id", "href", "@type", "status"}
     assert api.get(f"{USAGE}?bogus=1").status_code == 400

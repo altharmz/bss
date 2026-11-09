@@ -710,8 +710,8 @@ OPERATIONS: dict[str, Op] = {
     # --- TMF635 usage ---
     "list_usage": Op(
         "Usage records the network reported for lines (data bytes, voice seconds, sms messages),"
-        " newest first; filter by product.id, usageType (data, voice, sms), status (notRated,"
-        " rejected) or id.",
+        " newest first; product.id or id is required (a list across every line is refused),"
+        " then filter by usageType (data, voice, sms) or status (notRated, rejected).",
         query=LIST,
     ),
     "get_usage": Op("One usage record with its characteristics and product.", query=FIELDS),

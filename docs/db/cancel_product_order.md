@@ -39,5 +39,6 @@ TMF622 cancelProductOrder: done on insert (a refused one is not stored); one per
 
 | Name | Definition | Backs a constraint |
 |---|---|---|
+| `cancel_product_order_created_at_id_idx` | `CREATE INDEX cancel_product_order_created_at_id_idx ON cancel_product_order USING btree (created_at, id)` | no |
 | `cancel_product_order_pkey` | `CREATE UNIQUE INDEX cancel_product_order_pkey ON cancel_product_order USING btree (id)` | yes |
 | `cancel_product_order_product_order_id_key` | `CREATE UNIQUE INDEX cancel_product_order_product_order_id_key ON cancel_product_order USING btree (product_order_id)` | yes |

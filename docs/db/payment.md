@@ -55,6 +55,7 @@ SID Payment (TMF676 v4 payment): money received on a billing account. Never chan
 | Name | Definition | Backs a constraint |
 |---|---|---|
 | `payment_billing_account_id_idx` | `CREATE INDEX payment_billing_account_id_idx ON payment USING btree (billing_account_id)` | no |
+| `payment_created_at_id_idx` | `CREATE INDEX payment_created_at_id_idx ON payment USING btree (created_at, id)` | no |
 | `payment_id_billing_account_id_key` | `CREATE UNIQUE INDEX payment_id_billing_account_id_key ON payment USING btree (id, billing_account_id)` | yes |
 | `payment_pkey` | `CREATE UNIQUE INDEX payment_pkey ON payment USING btree (id)` | yes |
 

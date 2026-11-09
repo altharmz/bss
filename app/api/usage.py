@@ -29,7 +29,7 @@ from app.api.common import (
     without_nulls,
 )
 from app.api.deps import ClockDep, JsonBody, Tx
-from app.api.errors import conflict, not_found, unprocessable
+from app.api.errors import bad_request, conflict, not_found, unprocessable
 from app.api.inventory import product_href
 from app.api.prices import unit_text
 from app.api.tmfjson import TmfJSONResponse
@@ -189,6 +189,10 @@ FILTERS = {
 @router.get("/productUsage")
 def list_usage(request: Request, tx: Tx) -> TmfJSONResponse:
     query = listing.parse_list_query(request, filters=FILTERS, attributes=ATTRIBUTES)
+    # usage is listed per line (#286; docs/decisions/usage.md): a list across every
+    # subscriber is not a use case, and counting it would read the whole table
+    if "product_id" not in query.where and "id" not in query.where:
+        raise bad_request("productUsage list needs product.id or id")
     with tx() as conn:
         rows, total = repo.page(conn, query.where, query.offset, query.limit)
         bodies = [usage_body(conn, row) for row in rows]
