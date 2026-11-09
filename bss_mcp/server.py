@@ -41,6 +41,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.logsetup import RequestLogMiddleware
 from bss_mcp import metrics, schema
 from bss_mcp.audit import audit
 from bss_mcp.auth import WRITE, TokenVerifier, caller
@@ -397,6 +398,7 @@ def build_app(
             *oauth_routes(provider, login),
         ],
         middleware=[
+            Middleware(RequestLogMiddleware, logger_name="bss_mcp.request"),
             Middleware(BodyLimit, limit=settings.mcp_max_body),
             Middleware(
                 AuthIpLimit,

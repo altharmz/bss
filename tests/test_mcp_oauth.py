@@ -178,7 +178,7 @@ def test_the_full_flow_from_discovery_to_revocation(oauth, caplog):
     )
     assert after.status_code == 400
 
-    lines = [json.loads(r.getMessage()) for r in caplog.records]
+    lines = [json.loads(r.getMessage()) for r in caplog.records if r.name == "bss_mcp.audit"]
     events = [(line["event"], line["outcome"]) for line in lines]
     assert ("register", "ok") in events and ("login", "ok, scope write") in events
     assert ("token", "issued") in events and ("refresh", "issued") in events
