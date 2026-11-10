@@ -229,20 +229,19 @@ def page(
     number: str | None,
     offset: int,
     limit: int,
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     where = (  # noqa: S608 - fixed text, the values are parameters
         " FROM port_request WHERE (%(d)s::text IS NULL OR direction = %(d)s)"
         " AND (%(s)s::text IS NULL OR state = %(s)s)"
         " AND (%(n)s::text IS NULL OR number_value = %(n)s)"
     )
-    args = {"d": direction, "s": state, "n": number, "off": offset, "lim": limit}
-    total = fetch_one(conn, f"SELECT count(*) AS n{where}", args)["n"]  # noqa: S608
+    args = {"d": direction, "s": state, "n": number, "off": offset, "lim": limit + 1}
     rows = fetch_all(
         conn,
         f"SELECT *{where} ORDER BY created_at DESC, id LIMIT %(lim)s OFFSET %(off)s",  # noqa: S608
         args,
     )
-    return rows, total
+    return rows[:limit], len(rows) > limit
 
 
 def claimed(conn: psycopg.Connection, number_id: UUID) -> bool:

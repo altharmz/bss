@@ -32,24 +32,20 @@ def get(conn: psycopg.Connection, uid: UUID, *, lock: bool = False) -> Row | Non
 
 def page(
     conn: psycopg.Connection, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     conditions = sql.SQL(" AND ").join(
         sql.SQL("{} = %s").format(sql.Identifier(_COLUMNS[key])) for key in where
     )
     clause = sql.SQL(" WHERE ") + conditions if where else sql.SQL("")
     params = list(where.values())
-    total = fetch_one(
-        conn, sql.SQL("SELECT count(*) AS n FROM notification_message") + clause, params
-    )
-    assert total is not None
     rows = fetch_all(
         conn,
         sql.SQL("SELECT * FROM notification_message")
         + clause
         + sql.SQL(" ORDER BY created_at DESC, id OFFSET %s LIMIT %s"),
-        [*params, offset, limit],
+        [*params, offset, limit + 1],
     )
-    return rows, total["n"]
+    return rows[:limit], len(rows) > limit
 
 
 def insert(

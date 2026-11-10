@@ -274,11 +274,11 @@ def list_categories(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=CATEGORY_ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = select_page(
+        rows, more = select_page(
             conn, "category", where=query.where, offset=query.offset, limit=query.limit
         )
         items = [organization_body(conn, row, True) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/category/{category_id}")
@@ -370,11 +370,11 @@ def list_catalogs(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=CATALOG_ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = select_page(
+        rows, more = select_page(
             conn, "product_catalog", where=query.where, offset=query.offset, limit=query.limit
         )
         items = [organization_body(conn, row, False) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/productCatalog/{catalog_id}")

@@ -94,7 +94,7 @@ export function CategoriesTab({
           columns={CATEGORY_COLUMNS}
           errorTitle="Failed to load the categories"
           empty={{ title: 'No categories yet', text: 'Create the first category.' }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) =>
             categoryTree(data).filter((r) => !q || r.category.name.toLowerCase().includes(q))
           }
@@ -164,7 +164,7 @@ export function CatalogsTab({ query, newRequests }: { query: string; newRequests
           columns={CATALOG_COLUMNS}
           errorTitle="Failed to load the catalogs"
           empty={{ title: 'No catalogs yet', text: 'Create the first product catalog.' }}
-          total={(data) => data.catalogs.length}
+          count={(data) => data.catalogs.length}
           rows={(data) => data.catalogs.filter((c) => !q || c.name.toLowerCase().includes(q))}
           onResetFilters={() => undefined}
         >

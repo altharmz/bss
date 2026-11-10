@@ -91,7 +91,7 @@ export function NumbersScreen() {
           columns={COLUMNS}
           errorTitle="Failed to load numbers"
           empty={{ title: 'No numbers yet', text: 'Add an E.164 number to the inventory.' }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) =>
             data.filter(
               (n) => (n.value ?? '').includes(query.trim()) && (!kind || kindOf(n) === kind),

@@ -253,7 +253,7 @@ function PartiesList({
         columns={PARTY_COLUMNS}
         errorTitle="Failed to load parties"
         empty={{ title: `No ${tab} yet`, text: 'Subscribers create their party.' }}
-        total={(d) => all(d).length}
+        count={(d) => all(d).length}
         rows={(d) =>
           all(d).filter(
             (p) =>
@@ -316,7 +316,7 @@ function CustomersList({
         columns={CUSTOMER_COLUMNS}
         errorTitle="Failed to load customers"
         empty={{ title: 'No customers yet', text: 'Subscribers create their customer.' }}
-        total={(d) => d.customers.length}
+        count={(d) => d.customers.length}
         rows={(d) =>
           d.customers.filter(
             (c) =>

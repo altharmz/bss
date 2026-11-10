@@ -144,7 +144,7 @@ function SettingsTab({ kind, tabs }: { kind: SettingKind; tabs: React.ReactNode 
           columns={COLUMNS}
           errorTitle={`Failed to load ${tab.plural}`}
           empty={{ title: `No ${tab.plural} yet`, text: tab.empty }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) => data}
           onResetFilters={() => {}}
         >

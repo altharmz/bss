@@ -26,7 +26,7 @@ from pydantic import field_validator
 from app.api.common import TmfModel, money, parse, parse_id, utc
 from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import bad_request, conflict, not_found, unprocessable
-from app.api.listing import parse_page
+from app.api.listing import page_response, parse_page
 from app.api.tmfjson import TmfJSONResponse
 from app.config import settings
 from app.internal.context import no_query, operator_of
@@ -84,19 +84,19 @@ def request_body(row: Row, run: Row | None) -> dict[str, Any]:
     }
 
 
-def _page(items: list[dict[str, Any]], total: int) -> TmfJSONResponse:
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(total), "X-Result-Count": str(len(items))}
-    )
+def _page(
+    request: Request, items: list[dict[str, Any]], more: bool, offset: int, limit: int
+) -> TmfJSONResponse:
+    return page_response(request, items, more, offset, limit)
 
 
 @router.get("")
 def list_runs(request: Request, tx: Tx) -> TmfJSONResponse:
     offset, limit = parse_page(request)
     with tx() as conn:
-        rows, total = billing.page_runs(conn, offset=offset, limit=limit)
+        rows, more = billing.page_runs(conn, offset=offset, limit=limit)
         charges = billing.run_charges(conn, [row["id"] for row in rows])
-    return _page([run_body(row, charges[row["id"]]) for row in rows], total)
+    return _page(request, [run_body(row, charges[row["id"]]) for row in rows], more, offset, limit)
 
 
 @router.get("/{run_id}")
@@ -123,9 +123,7 @@ def run_accounts(run_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
         uid = parse_id("billingRun", run_id)
         if billing.get_daily_run_by_id(conn, uid) is None:
             raise not_found("billingRun", run_id)
-        rows, total = billing.page_run_outcomes(
-            conn, uid, status=status, offset=offset, limit=limit
-        )
+        rows, more = billing.page_run_outcomes(conn, uid, status=status, offset=offset, limit=limit)
     items = [
         {
             "billingAccount": {"id": str(r["billing_account_id"]), "name": r["account_name"]},
@@ -139,7 +137,7 @@ def run_accounts(run_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
         }
         for r in rows
     ]
-    return _page(items, total)
+    return _page(request, items, more, offset, limit)
 
 
 class CatchUp(TmfModel):

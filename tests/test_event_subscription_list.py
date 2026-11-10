@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.events.types import BASES
 from app.main import app
+from tests.apiclient import total
 from tests.test_api_hub import CALLBACK, hub
 
 URL = "/internal/v1/eventSubscription"
@@ -20,7 +21,7 @@ def test_live_hubs_newest_first_with_types_and_names(api, db_conn):
     db_conn.commit()
     listed = api.get(URL)
     assert listed.status_code == 200, listed.text
-    assert listed.headers["X-Total-Count"] == "2"
+    assert total(listed, api) == "2"
     body = listed.json()
     assert [h["id"] for h in body] == [new["id"], old["id"]]
     by_id = {h["id"]: h for h in body}
@@ -46,9 +47,9 @@ def test_filter_paging_and_deleted_hubs_are_excluded(api):
     assert {h["id"] for h in api.get(URL).json()} == {pay["id"], other["id"]}
     only = api.get(f"{URL}?api=TMF622")
     assert [h["id"] for h in only.json()] == [other["id"]]
-    assert only.headers["X-Total-Count"] == "1"
+    assert total(only, api) == "1"
     page = api.get(f"{URL}?limit=1&offset=1")
-    assert len(page.json()) == 1 and page.headers["X-Total-Count"] == "2"
+    assert len(page.json()) == 1 and total(page, api) == "2"
     assert api.get(f"{URL}?api=TMF999").status_code == 400
     assert api.get(f"{URL}?api=TMF622&api=TMF676").status_code == 400
     assert api.get(f"{URL}?nope=1").status_code == 400

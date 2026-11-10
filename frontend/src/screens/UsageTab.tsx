@@ -143,7 +143,7 @@ function Records({ product, timeZone }: { product: string; timeZone: string }) {
         columns={RECORD_COLUMNS}
         errorTitle="Failed to load usage records"
         empty={{ title: 'No usage', text: 'The network has reported no usage for this line.' }}
-        total={(data) => data.total}
+        count={(data) => data.items.length}
         rows={(data) => data.items}
         onResetFilters={() => {}}
       >
@@ -185,7 +185,7 @@ function Records({ product, timeZone }: { product: string; timeZone: string }) {
             ))}
             {records.status === 'ok' && (
               <TableFooter
-                left={`Showing ${formatInt(offset + 1)}–${formatInt(offset + rows.length)} of ${formatInt(records.data.total)}`}
+                left={`Showing ${formatInt(offset + 1)}–${formatInt(offset + rows.length)}`}
                 right={
                   <span className="bss-table-pager">
                     <Button
@@ -199,7 +199,7 @@ function Records({ product, timeZone }: { product: string; timeZone: string }) {
                     <Button
                       small
                       data-ui="ui.subscriber.usage.next"
-                      disabled={offset + USAGE_PAGE >= records.data.total}
+                      disabled={!records.data.more}
                       onClick={() => setOffset(offset + USAGE_PAGE)}
                     >
                       Next

@@ -372,7 +372,7 @@ The Caddy side is vps-infra's. What bss relies on (applied; vps-infra owns the c
   link answered by `index.html` and a hashed asset, all without credentials;
   **`/internal/v1/context` 401 JSON from the app without them** (not the index.html
   fallback), and with the secret 200 JSON with `operator` = `smoke`; a `/tmf-api` list
-  as JSON with `X-Total-Count`; `POST` with the secret -> 403 from the app; `/healthz`
+  as JSON with `X-Result-Count` (no `X-Total-Count` since #312); `POST` with the secret -> 403 from the app; `/healthz`
   open. A failure there leaves the app deployed and healthy; fix the Caddy side and
   re-run `make deploy`.
 - **`make web-e2e`**: Playwright (official image, pinned by digest, same version as

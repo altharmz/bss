@@ -17,7 +17,7 @@ from app.worker.on_demand import process_demands
 from app.worker.process import bill_date
 from app.worker.queue import process_requests
 from tests import apidata
-from tests.apiclient import decimals
+from tests.apiclient import decimals, total
 from tests.test_api_bill_settlement import check_invariant, pay, summary
 from tests.test_billing_db import add, at, delete
 from tests.timeline import TZ
@@ -316,7 +316,7 @@ def test_presentation_crud_validation_and_queries(api, path, name, typ):
     row = response.json()
     assert set(row) == {"id", "href", "@type", "name"}
     assert api.get(row["href"]).json()["name"] == name
-    assert api.get(f"{path}?name={name}&limit=1").headers["X-Total-Count"] == "1"
+    assert total(api.get(f"{path}?name={name}&limit=1"), api) == "1"
     assert api.get(f"{path}?offset=1").json() == []
     assert api.patch(row["href"], {"description": "Updated"}).json()["description"] == "Updated"
     assert "description" not in api.patch(row["href"], {"description": None}).json()
@@ -421,7 +421,7 @@ def test_failed_demand_rolls_back_bill_and_finishes_with_error(api, worker, monk
     assert result["state"] == "terminatedWithError"
     assert "private" not in result["description"]
     assert api.get(apidata.BILL).json() == []
-    assert api.get(f"{apidata.RATE}?isBilled=false").headers["X-Total-Count"] == "1"
+    assert total(api.get(f"{apidata.RATE}?isBilled=false"), api) == "1"
 
 
 def test_blocked_demand_waits_and_can_be_recovered(api, worker):

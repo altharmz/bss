@@ -360,7 +360,7 @@ export function BillingRunsScreen() {
                 title: 'No runs yet',
                 text: `The worker bills the first date at ${context.billingRunAt} ${utcLabel(context.utcOffset)}. You can also catch up to a date.`,
               }}
-              total={(data: Page<BillingRun>) => data.items.length}
+              count={(data: Page<BillingRun>) => data.items.length}
               rows={(data: Page<BillingRun>) => data.items}
               onResetFilters={() => {}}
             >
@@ -378,7 +378,7 @@ export function BillingRunsScreen() {
                     />
                   ))}
                   <TableFooter
-                    left={`Showing ${formatInt(offset + 1)}–${formatInt(offset + rows.length)} of ${formatInt(data.total)}`}
+                    left={`Showing ${formatInt(offset + 1)}–${formatInt(offset + rows.length)}`}
                     right={
                       <span className="bss-toolbar">
                         <Button
@@ -392,7 +392,7 @@ export function BillingRunsScreen() {
                         <Button
                           small
                           data-ui="ui.billingRuns.next"
-                          disabled={offset + RUN_HISTORY >= data.total}
+                          disabled={!data.more}
                           onClick={() => setOffset(offset + RUN_HISTORY)}
                         >
                           Next
@@ -726,7 +726,7 @@ function RunOutcomes({
                   ? 'Accounts appear as the run bills them.'
                   : 'Nothing in this run has this outcome.',
             }}
-            total={(data) => data.items.length}
+            count={(data) => data.items.length}
             rows={(data) => data.items}
             onResetFilters={() => setFilter('all')}
           >
@@ -775,7 +775,7 @@ function RunOutcomes({
                   />
                 ))}
                 <TableFooter
-                  left={`Showing ${formatInt(rows.length)} of ${formatInt(data.total)}`}
+                  left={`Showing ${formatInt(rows.length)}${data.more ? ' (more follow)' : ''}`}
                 />
               </>
             )}

@@ -178,7 +178,7 @@ function ActionsPanel({
             title: 'No balance actions',
             text: 'Top-ups, holds, adjustments and transfers appear here.',
           }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) => data}
           onResetFilters={() => {}}
         >

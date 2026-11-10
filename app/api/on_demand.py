@@ -87,7 +87,7 @@ def list_bill_demands(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = select_page(
+        rows, more = select_page(
             conn,
             "customer_bill_on_demand",
             where=query.where,
@@ -95,7 +95,7 @@ def list_bill_demands(request: Request, tx: Tx) -> TmfJSONResponse:
             limit=query.limit,
         )
         items = [demand_body(conn, r) for r in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/customerBillOnDemand/{demand_id}")

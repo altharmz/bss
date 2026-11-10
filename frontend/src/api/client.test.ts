@@ -55,23 +55,23 @@ describe('jsonWithAmount', () => {
 });
 
 describe('pages', () => {
-  it('reads X-Total-Count', async () => {
-    stubFetch({ [`GET ${PATH}?limit=1`]: () => json([{ id: 'a' }], { total: 42 }) });
-    expect(await getPage(`${PATH}?limit=1`)).toEqual({ items: [{ id: 'a' }], total: 42 });
+  it('reads whether more rows follow from Link rel="next" (#312: lists carry no total)', async () => {
+    stubFetch({ [`GET ${PATH}?limit=1`]: () => json([{ id: 'a' }], { more: true }) });
+    expect(await getPage(`${PATH}?limit=1`)).toEqual({ items: [{ id: 'a' }], more: true });
   });
 
-  it('refuses a list without X-Total-Count', async () => {
-    stubFetch({ [`GET ${PATH}`]: () => json([]) });
-    await expect(getPage(PATH)).rejects.toThrow('missing X-Total-Count');
+  it('a list without a Link header is its last page', async () => {
+    stubFetch({ [`GET ${PATH}`]: () => json([{ id: 'a' }], { more: false }) });
+    expect(await getPage(PATH)).toEqual({ items: [{ id: 'a' }], more: false });
   });
 
-  it('getAll walks the pages 100 at a time', async () => {
+  it('getAll walks the pages 100 at a time until no Link follows', async () => {
     const rows = Array.from({ length: 150 }, (_, i) => ({ id: i }));
     const { calls } = stubFetch({
       [`GET ${PATH}?state=Active&offset=0&limit=100`]: () =>
-        json(rows.slice(0, 100), { total: 150 }),
+        json(rows.slice(0, 100), { more: true }),
       [`GET ${PATH}?state=Active&offset=100&limit=100`]: () =>
-        json(rows.slice(100), { total: 150 }),
+        json(rows.slice(100), { more: false }),
     });
     expect(await getAll(`${PATH}?state=Active`)).toEqual(rows);
     expect(calls).toHaveLength(2);

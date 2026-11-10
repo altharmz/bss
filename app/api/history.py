@@ -86,9 +86,9 @@ def list_history(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = repo.page(conn, query.where, query.offset, query.limit, kind=None)
+        rows, more = repo.page(conn, query.where, query.offset, query.limit, kind=None)
         bodies = [history_body(conn, row) for row in rows]
-    return listing.list_response(bodies, total, query)
+    return listing.list_response(bodies, more, query)
 
 
 @router.get(f"/{RESOURCE}/{{history_id}}")

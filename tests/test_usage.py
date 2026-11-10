@@ -7,6 +7,7 @@ import pytest
 
 from app.config import settings
 from tests import apidata, contract, timeline
+from tests.apiclient import total
 from tests.apidata import ORDER
 from tests.test_api_resource_inventory import number
 from tests.test_network_provisioning import (  # noqa: F401 - fixtures
@@ -320,7 +321,7 @@ def test_tmf635_reads_validate_against_the_vendored_spec(api, db_conn, world, st
     )
     line = f"{USAGE}?product.id={product['id']}"
     listed = api.get(f"{line}&limit=100")
-    assert listed.status_code == 200 and listed.headers["X-Total-Count"] == "2"
+    assert listed.status_code == 200 and total(listed, api) == "2"
     body = listed.json() + rejected_records(api, db_conn)
     assert len(body) == 3
     for item in body:
@@ -328,10 +329,10 @@ def test_tmf635_reads_validate_against_the_vendored_spec(api, db_conn, world, st
         one = api.get(item["href"])
         assert one.status_code == 200 and one.json() == item
     assert [r["usageType"] for r in api.get(f"{line}&usageType=voice").json()] == ["voice"]
-    assert api.get(f"{line}&status=rejected").headers["X-Total-Count"] == "0"
+    assert total(api.get(f"{line}&status=rejected"), api) == "0"
     assert api.get(f"{line}&limit=1&offset=1").headers["X-Result-Count"] == "1"
     only = api.get(f"{USAGE}?id={body[2]['id']}")
-    assert only.headers["X-Total-Count"] == "1" and only.json() == [body[2]]
+    assert total(only, api) == "1" and only.json() == [body[2]]
     # a list across every line is refused (#286)
     for query in ("", "?limit=100", "?status=rejected", "?usageType=voice"):
         refused = api.get(f"{USAGE}{query}")

@@ -23,7 +23,7 @@ from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import TmfError, bad_request, conflict, not_found, unprocessable
 from app.api.guards import actor_of
 from app.api.inventory import order_href, product_href
-from app.api.listing import parse_page
+from app.api.listing import page_response, parse_page, split_page
 from app.api.resource_inventory import API as RESOURCE_API
 from app.api.resource_inventory import BASE as RESOURCE_BASE
 from app.api.resource_inventory import resource_body
@@ -291,13 +291,13 @@ def pin_body(row: Row, value: str, now) -> dict[str, Any]:
 
 @router.get("/port/pin")
 def list_pins(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
-    parse_page(request, extra=("product.id",))
+    offset, limit = parse_page(request, extra=("product.id",))
     given = request.query_params.getlist("product.id")
     if len(given) != 1:
         raise bad_request("product.id is required, once")
     product_id = parse_id("product", given[0])
     with tx() as conn:
-        rows = repo.pins_of(conn, product_id)
+        rows, more = split_page(repo.pins_of(conn, product_id)[offset:], limit)
         items = []
         for row in rows:
             value = fetch_one(
@@ -306,9 +306,7 @@ def list_pins(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
                 (row["subscriber_number_id"],),
             )["value"]
             items.append(pin_body(row, value, clock.now()))
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(len(items)), "X-Result-Count": str(len(items))}
-    )
+    return page_response(request, items, more, offset, limit)
 
 
 # --- port requests ---
@@ -359,13 +357,11 @@ def list_ports(request: Request, tx: Tx) -> TmfJSONResponse:
     if state is not None and state not in repo.STATES:
         raise bad_request(f"state must be one of {', '.join(repo.STATES)}")
     with tx() as conn:
-        rows, total = repo.page(
+        rows, more = repo.page(
             conn, direction=direction, state=state, number=number, offset=offset, limit=limit
         )
     items = [port_body(row) for row in rows]
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(total), "X-Result-Count": str(len(items))}
-    )
+    return page_response(request, items, more, offset, limit)
 
 
 @router.get("/port/{port_id}")

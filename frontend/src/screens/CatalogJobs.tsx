@@ -81,7 +81,7 @@ export function JobsTab() {
           columns={COLUMNS}
           errorTitle="Failed to load the import and export jobs"
           empty={{ title: 'No jobs yet', text: 'Export the catalog or import a document.' }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) => data}
           onResetFilters={() => undefined}
         >

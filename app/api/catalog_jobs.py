@@ -520,10 +520,10 @@ def _list(request: Request, tx: Tx, kind: catalog_jobs.Kind, attributes) -> TmfJ
         request, filters={"status": ("status", listing.as_str)}, attributes=attributes
     )
     with tx() as conn:
-        rows, total = catalog_jobs.page(
+        rows, more = catalog_jobs.page(
             conn, kind, where=query.where, offset=query.offset, limit=query.limit
         )
-    return listing.list_response([job_body(r) for r in rows], total, query)
+    return listing.list_response([job_body(r) for r in rows], more, query)
 
 
 def _get(job_id: str, request: Request, tx: Tx, kind: catalog_jobs.Kind, attributes):

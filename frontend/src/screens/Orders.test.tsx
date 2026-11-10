@@ -117,23 +117,23 @@ describe('orders list', () => {
     );
   });
 
-  it('reads the last page first and walks backwards without replacing rows with skeletons', async () => {
+  it('pages forward, newest first as served, without replacing rows with skeletons', async () => {
+    // the API lists orders newest first and sends Link rel="next" while more follow (#312)
     let finish: (() => void) | undefined;
     const { calls } = backend({
-      [`GET ${ORDERS}?offset=0&limit=1&fields=id`]: () => json([{ id: O1 }], { total: 52 }),
-      [`GET ${ORDERS}?offset=2&limit=50`]: () =>
+      [`GET ${ORDERS}?offset=0&limit=50`]: () =>
         json(
           [
+            PENDING,
+            ADD,
             ...Array.from({ length: 48 }, (_, i) => ({
               ...ADD,
               id: `${(i + 100).toString(16).padStart(8, '0')}-0000-4000-8000-000000000001`,
             })),
-            ADD,
-            PENDING,
           ],
-          { total: 52 },
+          { more: true },
         ),
-      [`GET ${ORDERS}?offset=0&limit=2`]: () =>
+      [`GET ${ORDERS}?offset=50&limit=50`]: () =>
         new Promise((resolve) => {
           finish = () =>
             resolve(
@@ -142,22 +142,21 @@ describe('orders list', () => {
                   { ...ADD, id: O1.replace('c0000001', 'c0000003') },
                   { ...ADD, id: O1.replace('c0000001', 'c0000004') },
                 ],
-                { total: 52 },
+                { more: false },
               ),
             );
         }),
     });
     open();
-    await screen.findByText('Showing 1–50 of 52');
+    await screen.findByText('Showing 1–50');
     const rows = screen.getAllByRole('row');
-    // The newest fixture is presented before the older one.
+    // shown in the order served: the newest first
     expect(
       screen.getByText('C0000002').compareDocumentPosition(screen.getByText('C0000001')) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(calls.filter((call) => call.includes('productOrder?offset'))).toEqual([
-      `GET ${ORDERS}?offset=0&limit=1&fields=id`,
-      `GET ${ORDERS}?offset=2&limit=50`,
+      `GET ${ORDERS}?offset=0&limit=50`,
     ]);
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     await waitFor(() => expect(finish).toBeTypeOf('function'));
@@ -166,10 +165,10 @@ describe('orders list', () => {
     expect(screen.getAllByRole('row').length).toBe(rows.length);
     if (!finish) throw new Error('Older page was not requested');
     finish();
-    await screen.findByText('Showing 51–52 of 52');
+    await screen.findByText('Showing 51–52');
     expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
-    await screen.findByText('Showing 1–50 of 52');
+    await screen.findByText('Showing 1–50');
   });
 
   it('looks up each unnamed product only once in the dialog and shows its target status', async () => {
@@ -245,10 +244,9 @@ describe('orders list', () => {
     expect(within(row).getByText('Add Basic 10')).toBeTruthy();
     expect(within(row).getByText('2026-10-05')).toBeTruthy();
     expect(screen.getByText('End product D0000001')).toBeTruthy();
-    expect(screen.getByText('Showing 1–2 of 2')).toBeTruthy();
+    expect(screen.getByText('Showing 1–2')).toBeTruthy();
     expect(calls.filter((c) => c.includes('productOrder?offset'))).toEqual([
-      `GET ${ORDERS}?offset=0&limit=1&fields=id`,
-      `GET ${ORDERS}?offset=0&limit=2`,
+      `GET ${ORDERS}?offset=0&limit=50`,
     ]);
   });
 
@@ -271,13 +269,13 @@ describe('orders list', () => {
       'inProgress',
     );
     fireEvent.click(screen.getByRole('button', { name: 'In progress' }));
-    await screen.findByText('Showing 1–1 of 1');
+    await screen.findByText('Showing 1–1');
     expect(screen.queryByText('C0000001')).toBeNull();
     fireEvent.click(within(chip).getByRole('button', { name: 'Remove the account filter' }));
     await screen.findByText('C0000002'); // still filtered by state, no longer by account
     expect(window.location.search).toBe('');
     expect(calls).toContain(
-      `GET ${ORDERS}?billingAccount.id=${A1}&state=inProgress&offset=0&limit=1`,
+      `GET ${ORDERS}?billingAccount.id=${A1}&state=inProgress&offset=0&limit=50`,
     );
   });
 

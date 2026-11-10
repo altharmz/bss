@@ -31,7 +31,7 @@ function renderList(res: ResourceWithRetry<Data>, filter = '', onReset = vi.fn()
         text: 'Subscribers appear after registration via CRM or import.',
         action: <Button>+ Add</Button>,
       }}
-      total={(data) => data.names.length}
+      count={(data) => data.names.length}
       rows={(data) => data.names.filter((n) => n.includes(filter))}
       onResetFilters={onReset}
     >

@@ -183,7 +183,7 @@ describe('refunds', () => {
               description: 'Returned deposit',
             },
           ],
-          { total: 2 },
+          { more: true },
         ),
       [`GET ${REFUNDS}?account.id=${A}&offset=1&limit=100`]: () =>
         json(
@@ -195,7 +195,7 @@ describe('refunds', () => {
               paymentMethod: { name: 'card' },
             },
           ],
-          { total: 2 },
+          { more: false },
         ),
     });
     render(

@@ -154,12 +154,13 @@ class Tool:
 
 
 def result_text(status: int, headers: dict[str, str], content: bytes) -> str:
-    """The app's answer for the model: status, list counts, and the body with every
-    amount exact (parsed and re-encoded without float)."""
+    """The app's answer for the model: status, paging (resultCount, and hasMore when the
+    app announced a next page with Link rel=next; lists carry no total, #312), and the
+    body with every amount exact (parsed and re-encoded without float)."""
     out: dict[str, Any] = {"status": status}
-    for header, key in (("x-total-count", "totalCount"), ("x-result-count", "resultCount")):
-        if header in headers:
-            out[key] = int(headers[header])
+    if "x-result-count" in headers:
+        out["resultCount"] = int(headers["x-result-count"])
+        out["hasMore"] = 'rel="next"' in headers.get("link", "")
     if content:
         try:
             out["body"] = loads(content)
@@ -240,12 +241,12 @@ async def _query(app: Any, path: str, op: Op) -> tuple[dict[str, Any], str]:
                 "description": "Equality filters, attribute -> value.",
             },
         }
-        hint = " Paged (totalCount, resultCount)." + (
+        hint = " Paged (resultCount, hasMore: ask again with offset + limit while hasMore)." + (
             f" Filters: {', '.join(filters)}." if filters else ""
         )
     elif op.query == PAGE:
         query = dict(PAGING)
-        hint = " Paged (totalCount, resultCount)."
+        hint = " Paged (resultCount, hasMore: ask again with offset + limit while hasMore)."
     elif op.query == FIELDS:
         query = {"fields": FIELDS_ARG}
     query.update(op.extra)

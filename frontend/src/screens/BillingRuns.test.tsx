@@ -182,7 +182,7 @@ describe('billing runs: latest run and history', () => {
     expect(within(failed).getByTitle('1 of 3 accounts not billed (1 failed)')).toBeTruthy();
     expect(within(failed).getByRole('button', { name: 'Retry' })).toBeTruthy();
     expect(within(rowOf('2026-09-30') as HTMLElement).queryByRole('button')).toBeNull();
-    expect(screen.getByText('Showing 1–3 of 9')).toBeTruthy();
+    expect(screen.getByText('Showing 1–3')).toBeTruthy();
     expect(screen.getByText('20 per page · Times in UTC+3')).toBeTruthy();
     // nothing running, nothing queued: no polling
     expect(count(calls, LIST)).toBe(1);
@@ -197,16 +197,16 @@ describe('billing runs: latest run and history', () => {
     }));
     const secondPage = `GET ${RUNS}?offset=20&limit=20`;
     const { calls } = backend(() => page(runs.slice(0, 20), 23), {
-      [secondPage]: () => page(runs.slice(20), 23),
+      [secondPage]: () => page(runs.slice(20), 3),
     });
     await open();
-    await screen.findByText('Showing 1–20 of 23');
+    await screen.findByText('Showing 1–20');
     expect(historyRows()).toHaveLength(20);
     expect((expectUi('ui.billingRuns.previous') as HTMLButtonElement).disabled).toBe(true);
     expect((expectUi('ui.billingRuns.next') as HTMLButtonElement).disabled).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText('Showing 21–23 of 23')).toBeTruthy();
+    expect(await screen.findByText('Showing 21–23')).toBeTruthy();
     expect(rowOf('2026-09-11')).toBeDefined();
     expect(historyRows()).toHaveLength(3);
     expect(within(latestPanel()).getByText('2026-10-01')).toBeTruthy();
@@ -215,7 +215,7 @@ describe('billing runs: latest run and history', () => {
     expect((expectUi('ui.billingRuns.next') as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
-    expect(await screen.findByText('Showing 1–20 of 23')).toBeTruthy();
+    expect(await screen.findByText('Showing 1–20')).toBeTruthy();
     expect(rowOf('2026-10-01')).toBeDefined();
   });
 
@@ -780,7 +780,7 @@ describe('billing runs: one run and its accounts', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: /Waiting/ }));
     expect(await within(dialog).findByText('Waits for the run of 2026-09-29')).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: /All/ }));
-    expect(await within(dialog).findByText('Showing 2 of 3')).toBeTruthy();
+    expect(await within(dialog).findByText('Showing 2 (more follow)')).toBeTruthy();
     expect(calls).toContain(`GET ${RUNS}/${RUN.id}`);
   });
 

@@ -6,6 +6,7 @@ import pytest
 
 from app.repository import _sql
 from tests import apidata
+from tests.apiclient import total
 
 PAGED = (
     "party",
@@ -79,12 +80,12 @@ def test_an_enum_value_that_is_no_label_is_an_empty_page_without_a_query(api, mo
     ):
         response = api.get(url)
         assert response.status_code == 200, (url, response.text)
-        assert response.json() == [] and response.headers["X-Total-Count"] == "0", url
+        assert response.json() == [] and total(response, api) == "0", url
 
 
 def test_a_known_enum_value_and_a_text_filter_still_filter(api):
     acc = apidata.account(api, name="Typed filter")
     assert [a["id"] for a in api.get(f"{apidata.ACCOUNT}?state=Active").json()] == [acc["id"]]
-    assert api.get(f"{apidata.ACCOUNT}?state=Closed").headers["X-Total-Count"] == "0"
+    assert total(api.get(f"{apidata.ACCOUNT}?state=Closed"), api) == "0"
     found = api.get(f"{apidata.ACCOUNT}?name=Typed%20filter")
-    assert found.headers["X-Total-Count"] == "1"
+    assert total(found, api) == "1"

@@ -299,7 +299,7 @@ export function RefundsPanel({
           columns={REFUND_COLUMNS}
           errorTitle="Failed to load refunds"
           empty={{ title: 'No recorded refunds', text: 'Completed payouts appear here.' }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) => data}
           onResetFilters={() => {}}
         >
@@ -458,7 +458,7 @@ export function AccountBills({
               title: 'No bill requests',
               text: 'Use Bill now to request a bill for unbilled charges.',
             }}
-            total={(data) => data.length}
+            count={(data) => data.length}
             rows={(data) => data}
             onResetFilters={() => {}}
           >

@@ -34,9 +34,9 @@ def default_of(conn: psycopg.Connection, account_id: UUID) -> Row | None:
 
 def page(
     conn: psycopg.Connection, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     clauses = ["status = 'active'"]
-    args: dict[str, Any] = {"off": offset, "lim": limit}
+    args: dict[str, Any] = {"off": offset, "lim": limit + 1}
     if "billing_account_id" in where:
         clauses.append("billing_account_id = %(account)s")
         args["account"] = where["billing_account_id"]
@@ -47,14 +47,13 @@ def page(
         clauses.append("is_default = %(default)s")
         args["default"] = where["is_default"]
     clause = " WHERE " + " AND ".join(clauses)
-    total = fetch_one(conn, f"SELECT count(*) AS n FROM payment_method{clause}", args)["n"]  # noqa: S608
     rows = fetch_all(
         conn,
         f"SELECT * FROM payment_method{clause} ORDER BY created_at, id"  # noqa: S608
         " LIMIT %(lim)s OFFSET %(off)s",
         args,
     )
-    return rows, total
+    return rows[:limit], len(rows) > limit
 
 
 def insert(

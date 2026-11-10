@@ -1,5 +1,10 @@
 """TMF630 list conventions: offset/limit paging, fields= selection, equality filters and
-the X-Total-Count / X-Result-Count headers.
+the X-Result-Count header.
+
+No list counts its matching rows (#312, decided by the human 2026-11-10; a deliberate
+deviation from TMF630's X-Total-Count, docs/decisions/tmf-api.md). A list reads limit + 1
+rows and, when there are more, answers `Link: <the same request at the next offset>;
+rel="next"` (RFC 8288).
 
 Lists always answer 200, including partial pages: none of the vendored specs declares 206
 for a list operation.
@@ -8,6 +13,7 @@ for a list operation.
 from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import Request
@@ -46,6 +52,19 @@ class ListQuery:
     limit: int
     where: dict[str, Any]
     fields: frozenset[str] | None
+    next_link: str | None = None  # the Link header value when there is a next page
+
+
+def next_link(request: Request, offset: int, limit: int) -> str:
+    """`Link` value for the next page: the same request with offset moved by limit."""
+    params = [(k, v) for k, v in request.query_params.multi_items() if k != "offset"]
+    params.append(("offset", str(offset + limit)))
+    return f'<{request.url.path}?{urlencode(params)}>; rel="next"'
+
+
+def split_page(rows: list[Any], limit: int) -> tuple[list[Any], bool]:
+    """Rows read with LIMIT limit + 1: the page, and whether there are more."""
+    return rows[:limit], len(rows) > limit
 
 
 def _int_param(request: Request, name: str, default: int, minimum: int) -> int:
@@ -106,11 +125,13 @@ def parse_list_query(
             where[column] = convert(raw)
         except ValueError:
             raise bad_request(f"invalid value for {name}") from None
+    offset = _int_param(request, "offset", 0, 0)
     return ListQuery(
-        offset=_int_param(request, "offset", 0, 0),
+        offset=offset,
         limit=limit,
         where=where,
         fields=parse_fields(request, attributes),
+        next_link=next_link(request, offset, limit),
     )
 
 
@@ -147,8 +168,25 @@ def select_fields(body: dict[str, Any], fields: frozenset[str] | None) -> dict[s
     return {key: value for key, value in body.items() if key in fields or key in ALWAYS}
 
 
-def list_response(items: list[dict[str, Any]], total: int, query: ListQuery) -> TmfJSONResponse:
+def paging_headers(count: int, more: bool, link: str | None) -> dict[str, str]:
+    headers = {"X-Result-Count": str(count)}
+    if more and link:
+        headers["Link"] = link
+    return headers
+
+
+def list_response(items: list[dict[str, Any]], more: bool, query: ListQuery) -> TmfJSONResponse:
+    """A page of a list: `more` says whether rows follow it (no total is ever counted)."""
     return TmfJSONResponse(
         [select_fields(item, query.fields) for item in items],
-        headers={"X-Total-Count": str(total), "X-Result-Count": str(len(items))},
+        headers=paging_headers(len(items), more, query.next_link),
+    )
+
+
+def page_response(
+    request: Request, items: list[Any], more: bool, offset: int, limit: int
+) -> TmfJSONResponse:
+    """The same for lists that take no fields= (parse_page)."""
+    return TmfJSONResponse(
+        items, headers=paging_headers(len(items), more, next_link(request, offset, limit))
     )

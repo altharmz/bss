@@ -317,9 +317,9 @@ def list_topup_balances(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = repo.page(conn, query.where, query.offset, query.limit)
+        rows, more = repo.page(conn, query.where, query.offset, query.limit)
         bodies = [topup_body(conn, row) for row in rows]
-    return listing.list_response(bodies, total, query)
+    return listing.list_response(bodies, more, query)
 
 
 @router.get(f"/{RESOURCE}/{{topup_id}}")

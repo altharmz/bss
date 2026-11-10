@@ -275,7 +275,7 @@ export function CatalogScreen() {
                   text: 'Create the first product offering. It starts in In design.',
                   action: newButton,
                 }}
-                total={(data) => data.offerings.length}
+                count={(data) => data.offerings.length}
                 rows={(data) =>
                   data.offerings.filter(
                     (o) =>

@@ -266,11 +266,11 @@ def list_payments(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = payments.list_payments(
+        rows, more = payments.list_payments(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
         items = [payment_body(conn, row) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/payment/{payment_id}")

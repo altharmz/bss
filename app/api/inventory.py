@@ -297,12 +297,12 @@ def list_products(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = products.list_products(
+        rows, more = products.list_products(
             conn, where=query.where, offset=query.offset, limit=query.limit, today=clock.today()
         )
         today = clock.today()
         items = [product_body(conn, row, today) for row in rows]
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/product/{product_id}")

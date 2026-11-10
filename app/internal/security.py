@@ -21,7 +21,7 @@ from app.api.deps import ClockDep, JsonBody, Tx
 from app.api.errors import bad_request, not_found
 from app.api.guards import actor_of
 from app.api.inventory import product_href
-from app.api.listing import parse_page
+from app.api.listing import page_response, parse_page
 from app.api.tmfjson import TmfJSONResponse
 from app.internal.context import no_query
 from app.repository import security as repo
@@ -242,8 +242,6 @@ def list_audit(request: Request, tx: Tx) -> TmfJSONResponse:
     if "operator" in request.query_params:
         where["operator"] = request.query_params["operator"]
     with tx() as conn:
-        rows, total = repo.audit_page(conn, where, offset, limit)
+        rows, more = repo.audit_page(conn, where, offset, limit)
     items = [audit_body(row) for row in rows]
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(total), "X-Result-Count": str(len(items))}
-    )
+    return page_response(request, items, more, offset, limit)

@@ -142,11 +142,11 @@ def list_customers(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = parties.list_customers(
+        rows, more = parties.list_customers(
             conn, where=query.where, offset=query.offset, limit=query.limit
         )
         items = customer_bodies(conn, rows)
-    return listing.list_response(items, total, query)
+    return listing.list_response(items, more, query)
 
 
 @router.get("/customer/{customer_id}")

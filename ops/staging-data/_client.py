@@ -87,8 +87,9 @@ class Client:
             if status != 200:
                 raise ScriptError(f"GET {path} -> {status} {body}")
             items += body
-            total = {k.lower(): v for k, v in headers.items()}.get("x-total-count")
-            if not body or len(items) >= int(total or 0):
+            # no total is sent (#312): the last page has no Link rel="next"
+            link = {k.lower(): v for k, v in headers.items()}.get("link", "")
+            if not body or 'rel="next"' not in link:
                 return items
 
     def write(self, method: str, path: str, body: dict[str, Any], what: str) -> Any:

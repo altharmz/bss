@@ -14,13 +14,21 @@ export function takeUnexpectedRequests(): string[] {
 
 export type Handler = () => Response | Promise<Response>;
 
-export function json(body: unknown, init: ResponseInit & { total?: number } = {}): Response {
-  const { total, ...rest } = init;
+/** A JSON answer. `total` describes a list: the rows the server holds beyond this page
+ * make it send `Link: rel="next"` (the app sends no total, #312); `more` says so directly. */
+export function json(
+  body: unknown,
+  init: ResponseInit & { total?: number; more?: boolean } = {},
+): Response {
+  const { total, more, ...rest } = init;
   const headers = new Headers(rest.headers);
   headers.set('Content-Type', 'application/json');
-  if (total !== undefined) {
-    headers.set('X-Total-Count', String(total));
-    headers.set('X-Result-Count', String(Array.isArray(body) ? body.length : 1));
+  if (total !== undefined || more !== undefined) {
+    const count = Array.isArray(body) ? body.length : 1;
+    headers.set('X-Result-Count', String(count));
+    if (more ?? (total !== undefined && total > count)) {
+      headers.set('Link', '</next>; rel="next"');
+    }
   }
   return new Response(JSON.stringify(body), { status: 200, ...rest, headers });
 }

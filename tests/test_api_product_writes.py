@@ -194,11 +194,12 @@ def test_delete_ends_the_product_today_and_it_stays_readable(api, shop):
     assert api.delete(future.json()["href"]).status_code == 204
     assert api.get(future.json()["href"]).json()["status"] == "cancelled"
     assert api.delete(f"{PRODUCT}/{apidata.NIL}").status_code == 404
+    # orders are listed newest first (#312)
     assert [o["productOrderItem"][0]["action"] for o in orders_of(api, account)] == [
-        "add",
         "delete",
         "add",
         "delete",
+        "add",
     ]
 
 

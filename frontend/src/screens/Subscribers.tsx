@@ -264,7 +264,7 @@ export function SubscribersScreen() {
               title: 'No subscribers yet',
               text: 'Create one with New subscriber.',
             }}
-            total={(data) => data.accounts.length}
+            count={(data) => data.accounts.length}
             rows={() => visibleAccounts}
             query={query}
             filters={[

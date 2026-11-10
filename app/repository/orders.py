@@ -263,8 +263,11 @@ def get_cancellation(conn: psycopg.Connection, uid: UUID) -> Row | None:
 
 def list_cancellations(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
-    return select_page(conn, "cancel_product_order", where=where, offset=offset, limit=limit)
+) -> tuple[list[Row], bool]:
+    """Newest first (the human's decision 2026-11-10, #312: no count to read from the end)."""
+    return select_page(
+        conn, "cancel_product_order", where=where, offset=offset, limit=limit, newest_first=True
+    )
 
 
 def set_order_item_state(conn: psycopg.Connection, order_item_id: UUID, state: str) -> Row:
@@ -281,9 +284,12 @@ def get_order_item(conn: psycopg.Connection, order_item_id: UUID) -> Row | None:
 
 def list_orders(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
-    """A page of orders (without items; see `items_of`)."""
-    return select_page(conn, "product_order", where=where, offset=offset, limit=limit)
+) -> tuple[list[Row], bool]:
+    """A page of orders (without items; see `items_of`), newest first (the human's decision
+    2026-11-10, #312: lists have no count to read from the end)."""
+    return select_page(
+        conn, "product_order", where=where, offset=offset, limit=limit, newest_first=True
+    )
 
 
 def items_of(conn: psycopg.Connection, order_id: UUID) -> list[Row]:

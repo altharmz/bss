@@ -84,7 +84,7 @@ export function IntegrationsScreen() {
               title: 'No event subscriptions',
               text: 'A subscription sends the events of one API to a callback URL.',
             }}
-            total={(data) => data.length}
+            count={(data) => data.length}
             rows={(data) => data}
             onResetFilters={() => {}}
           >

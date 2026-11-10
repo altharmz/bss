@@ -16,7 +16,7 @@ import pytest
 from app.worker import db as worker_db
 from app.worker.queue import process_requests
 from tests import apidata
-from tests.apiclient import decimals
+from tests.apiclient import decimals, total
 from tests.apidata import CATALOG, ORDER
 from tests.test_api_transfer import pair
 from tests.test_network_provisioning import make_line
@@ -1688,7 +1688,7 @@ def test_network_command_reads_and_retry_as_the_ui_makes_them(api, db_conn):
     )
     assert listed.status_code == 200, listed.text
     rows = listed.json()
-    assert rows and int(listed.headers["X-Total-Count"]) == len(rows)
+    assert rows and int(total(listed, api)) == len(rows)
     command = rows[0]
     assert command["state"] == "pending" and command["attempts"] == 0
     products = api.get(
@@ -1736,9 +1736,9 @@ def test_prepaid_order_and_command_reads_as_the_ui_makes_them(api, db_conn, monk
         "&offset=0&limit=50"
     )
     assert [c["id"] for c in page.json()] == [str(stuck["id"])]
-    assert page.headers["X-Total-Count"] == "1"
+    assert total(page, api) == "1"
     badge = api.get("/internal/v1/prepaid/command?state=failedTechnical&limit=1")
-    assert len(badge.json()) == 1 and int(badge.headers["X-Total-Count"]) >= 1
+    assert len(badge.json()) == 1 and int(total(badge, api)) >= 1
     everything = api.get("/internal/v1/prepaid/command?offset=0&limit=50")
     assert everything.status_code == 200 and str(stuck["id"]) in [
         c["id"] for c in everything.json()
@@ -1992,7 +1992,7 @@ def test_orders_screen_reads_as_the_ui_makes_them(api):
         },
     ).json()
     page = api.get(f"{ORDER}?billingAccount.id={account['id']}&state=completed&offset=0&limit=50")
-    assert [o["id"] for o in page.json()] == [added["id"]] and page.headers["X-Total-Count"] == "1"
+    assert [o["id"] for o in page.json()] == [added["id"]] and total(page, api) == "1"
     item = page.json()[0]["productOrderItem"][0]
     assert item["productOffering"]["name"] and page.json()[0]["billingAccount"]["name"]
     assert item["itemTotalPrice"][0]["price"]["taxIncludedAmount"]["value"] is not None
@@ -2001,7 +2001,7 @@ def test_orders_screen_reads_as_the_ui_makes_them(api):
     probe = api.get(
         f"{ORDER}?billingAccount.id={account['id']}&state=completed&offset=0&limit=1&fields=id"
     )
-    assert probe.status_code == 200 and probe.headers["X-Total-Count"] == "1"
+    assert probe.status_code == 200 and total(probe, api) == "1"
     tail = api.get(f"{ORDER}?billingAccount.id={account['id']}&state=completed&offset=0&limit=1")
     assert [o["id"] for o in reversed(tail.json())] == [added["id"]]
     detail = api.get(f"{ORDER}/{added['id']}")
@@ -2497,7 +2497,7 @@ def test_payment_and_refund_history_reads_as_the_ui_makes_them(api):
     page = "offset=0&limit=100"
     mine = api.get(f"{PAYMENT}?account.id={a}&status=done&{page}")
     assert [p["id"] for p in mine.json()] == [made.json()["id"]]
-    assert mine.headers["X-Total-Count"] == "1"
+    assert total(mine, api) == "1"
     row = mine.json()[0]
     assert row["paymentDate"] and row["status"] == "done"
     assert row["account"]["id"] == a and row["account"]["name"]
@@ -2511,7 +2511,7 @@ def test_payment_and_refund_history_reads_as_the_ui_makes_them(api):
     only = refunds.json()[0]
     assert only["refundDate"] and only["status"] == "done"
     assert only["account"]["id"] == a and only["description"] == "Returned deposit"
-    assert api.get(f"/tmf-api/payment/v4/refund?{page}").headers["X-Total-Count"] == "1"
+    assert total(api.get(f"/tmf-api/payment/v4/refund?{page}"), api) == "1"
 
 
 def test_product_inventory_reads_and_number_delete_as_the_ui_sends_them(api):

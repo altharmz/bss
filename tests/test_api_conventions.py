@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from app.api import tmfjson
 from app.repository import catalog
 from tests import apidata, contract, timeline
-from tests.apiclient import decimals
+from tests.apiclient import decimals, total
 from tests.timeline import iso, z
 
 BASE = "/tmf-api/productCatalogManagement/v5"
@@ -179,7 +179,7 @@ def test_list_defaults_and_count_headers(api):
     response = api.get(SPEC)
     assert response.status_code == 200
     assert [item["name"] for item in response.json()] == ["A", "B", "C"]
-    assert response.headers["X-Total-Count"] == "3"
+    assert total(response, api) == "3"
     assert response.headers["X-Result-Count"] == "3"
 
 
@@ -188,10 +188,10 @@ def test_partial_page_is_200_with_both_counts(api):
     response = api.get(f"{SPEC}?offset=1&limit=1")
     assert response.status_code == 200
     assert [item["name"] for item in response.json()] == ["B"]
-    assert response.headers["X-Total-Count"] == "3"
+    assert total(response, api) == "3"
     assert response.headers["X-Result-Count"] == "1"
-    beyond = api.get(f"{SPEC}?offset=10")
-    assert beyond.json() == [] and beyond.headers["X-Total-Count"] == "3"
+    beyond = api.get(f"{SPEC}?offset=10")  # past the end: empty, nothing follows (#312)
+    assert beyond.json() == [] and "Link" not in beyond.headers
 
 
 def test_default_and_maximum_limit(api, db_conn):
@@ -211,7 +211,7 @@ def test_equality_filters(api):
     assert [i["name"] for i in api.get(f"{SPEC}?lifecycleStatus=Retired").json()] == ["C"]
     assert [i["name"] for i in api.get(f"{SPEC}?name=B&lifecycleStatus=Active").json()] == ["B"]
     filtered = api.get(f"{SPEC}?lifecycleStatus=Active&limit=1")
-    assert filtered.headers["X-Total-Count"] == "2" and filtered.headers["X-Result-Count"] == "1"
+    assert total(filtered, api) == "2" and filtered.headers["X-Result-Count"] == "1"
     # not an enum member: matches nothing, and must not surface as a database error
     assert api.get(f"{SPEC}?lifecycleStatus=nope").json() == []
 

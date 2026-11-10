@@ -215,7 +215,7 @@ export function BalancesScreen() {
                 title: 'No account totals',
                 text: 'Prepaid account totals appear here once enabled.',
               }}
-              total={(data) => data.length}
+              count={(data) => data.length}
               rows={(data) => data}
               onResetFilters={reset}
             >
@@ -246,7 +246,7 @@ export function BalancesScreen() {
               columns={BUCKET_COLUMNS}
               errorTitle="Failed to load the buckets"
               empty={{ title: 'No buckets', text: 'Prepaid accounts appear here once enabled.' }}
-              total={(data) => data.length}
+              count={(data) => data.length}
               rows={(data) => data}
               onResetFilters={reset}
             >
@@ -279,7 +279,7 @@ export function BalancesScreen() {
               columns={ACTION_COLUMNS}
               errorTitle="Failed to load the list"
               empty={{ title: 'Nothing here', text: 'No matching requests.' }}
-              total={(data) => data.length}
+              count={(data) => data.length}
               rows={(data) => data}
               onResetFilters={reset}
             >

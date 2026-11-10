@@ -1859,8 +1859,8 @@ describe('usage tab', () => {
     const second = `GET /tmf-api/productUsageManagement/v5/productUsage?product.id=${P1}&offset=25&limit=25`;
     lazy({
       [SUMMARY]: () => json(summary({ throttled: false })),
-      [RECORDS]: () => json([record('u1')], { total: 26 }),
-      [second]: () => json([record('u2', { usageType: 'sms' })], { total: 26 }),
+      [RECORDS]: () => json([record('u1')], { more: true }),
+      [second]: () => json([record('u2', { usageType: 'sms' })], { more: false }),
     });
     await open('#usage');
     expect(await screen.findByText('Roaming')).toBeTruthy();
@@ -1868,7 +1868,7 @@ describe('usage tab', () => {
     expect(screen.getByText('5.0 MB')).toBeTruthy();
     expect(screen.queryByText('Throttled', { selector: '.bss-badge' })).toBeNull();
     fireEvent.click(expectUi('ui.subscriber.usage.next'));
-    expect(await screen.findByText('Showing 26–26 of 26')).toBeTruthy();
+    expect(await screen.findByText('Showing 26–26')).toBeTruthy();
     expect(expectUi('ui.subscriber.usage.next').hasAttribute('disabled')).toBe(true);
   });
 

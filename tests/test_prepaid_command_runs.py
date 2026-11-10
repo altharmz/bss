@@ -73,7 +73,7 @@ def test_command_states_never_anchor_daily_queries_or_apis(db_conn, api, status,
     assert billing.held_back_by(db_conn) is None
     assert billing.unfinished_run(db_conn) is None
     assert billing.failed_account_runs(db_conn) == []
-    assert billing.page_runs(db_conn, offset=0, limit=10) == ([], 0)
+    assert billing.page_runs(db_conn, offset=0, limit=10) == ([], False)
     assert billing.run_view(db_conn, run["id"]) is None
     assert api.client.get("/billing-status").json()["status"] == "none"
     base = "/internal/v1/billingRun"
@@ -89,8 +89,8 @@ def test_command_states_never_anchor_daily_queries_or_apis(db_conn, api, status,
     )
     db_conn.commit()
     assert billing.latest_run_date(db_conn) == daily["run_date"]
-    rows, total = billing.page_runs(db_conn, offset=0, limit=10)
-    assert total == 1 and rows[0]["id"] == daily["id"] and rows[0]["is_latest"]
+    rows, more = billing.page_runs(db_conn, offset=0, limit=10)
+    assert len(rows) == 1 and not more and rows[0]["id"] == daily["id"] and rows[0]["is_latest"]
 
 
 def test_command_identity_and_daily_references_are_database_guarded(db_conn):

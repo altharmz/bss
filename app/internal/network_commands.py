@@ -17,7 +17,7 @@ from app.api.common import parse_id, utc
 from app.api.deps import Tx
 from app.api.errors import bad_request, conflict, not_found
 from app.api.inventory import order_href, product_href
-from app.api.listing import parse_page
+from app.api.listing import page_response, parse_page
 from app.api.tmfjson import TmfJSONResponse
 from app.internal.context import no_query
 from app.repository import network_commands as repo
@@ -77,13 +77,11 @@ def list_network_commands(request: Request, tx: Tx) -> TmfJSONResponse:
     if state is not None and state not in STATES:
         raise bad_request(f"state must be one of {', '.join(STATES)}")
     with tx() as conn:
-        rows, total = repo.page(
+        rows, more = repo.page(
             conn, order_id=order, product_id=product, state=state, offset=offset, limit=limit
         )
     items = [command_body(row) for row in rows]
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(total), "X-Result-Count": str(len(items))}
-    )
+    return page_response(request, items, more, offset, limit)
 
 
 @router.get("/{command_id}")

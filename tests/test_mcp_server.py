@@ -18,6 +18,7 @@ from bss_mcp.clock import FixedClock
 from bss_mcp.server import build_app
 from bss_mcp.store import Store
 from tests import apidata
+from tests.apiclient import total
 from tests.apidata import PARTY, PAYMENT
 from tests.test_api_bill_settlement import account_with_bills, bills
 from tests.test_billing_db import at
@@ -27,7 +28,7 @@ GIVEN = {"givenName": "Zoya", "familyName": "Kosmodemyanskaya"}
 
 
 def count(api, url: str) -> int:
-    return int(api.get(url).headers["x-total-count"])
+    return int(total(api.get(url), api))
 
 
 # --- authentication ---
@@ -98,7 +99,7 @@ def test_a_write_token_writes_and_reads(api, mcp):
     assert answer["body"]["givenName"] == "Zoya"
     apidata.customer(api, answer["body"])
     is_error, listing = mcp.result(mcp.token("reader", "read"), "list_customers", {"limit": 5})
-    assert not is_error and listing["status"] == 200 and listing["totalCount"] == 1
+    assert not is_error and listing["status"] == 200 and listing["resultCount"] == 1
 
 
 def test_the_app_refusing_a_call_is_a_tool_error_not_an_http_one(mcp):

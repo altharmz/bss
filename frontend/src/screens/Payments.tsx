@@ -141,7 +141,7 @@ export function PaymentsPanel({
           columns={PAYMENT_COLUMNS}
           errorTitle="Failed to load payments"
           empty={{ title: 'No payments', text: 'Received payments appear here.' }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) => newestFirst(data, (p) => p.paymentDate)}
           onResetFilters={() => {}}
         >
@@ -384,7 +384,7 @@ export function PaymentsScreen() {
               columns={GLOBAL_PAYMENT_COLUMNS}
               errorTitle="Failed to load payments"
               empty={{ title: 'No payments', text: 'Received payments appear here.' }}
-              total={(data) => data.length}
+              count={(data) => data.length}
               rows={(data) =>
                 newestFirst(
                   data.filter((p) => inRange(p.paymentDate, from, to, timeZone)),
@@ -429,7 +429,7 @@ export function PaymentsScreen() {
               columns={REFUND_COLUMNS}
               errorTitle="Failed to load refunds"
               empty={{ title: 'No recorded refunds', text: 'Completed payouts appear here.' }}
-              total={(data) => data.length}
+              count={(data) => data.length}
               rows={(data) =>
                 newestFirst(
                   data.filter((r) => inRange(r.refundDate, from, to, timeZone)),

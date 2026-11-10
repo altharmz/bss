@@ -181,7 +181,7 @@ def list_products(
     offset: int,
     limit: int,
     today: date | None = None,
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     where = dict(where)
     number_id = where.pop("realizingResource.id", None)
     if number_id is None:
@@ -198,15 +198,14 @@ def list_products(
         conditions.append(sql.SQL("{}::text = %s").format(sql.Identifier(key)))
         params.append(str(value))
     clause = sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
-    total = fetch_one(conn, sql.SQL("SELECT count(*) AS n FROM product") + clause, params)["n"]
     rows = fetch_all(
         conn,
         sql.SQL("SELECT * FROM product")
         + clause
         + sql.SQL(" ORDER BY created_at, id OFFSET %s LIMIT %s"),
-        [*params, offset, limit],
+        [*params, offset, limit + 1],
     )
-    return rows, total
+    return rows[:limit], len(rows) > limit
 
 
 def lock_products(conn: psycopg.Connection, product_ids: list[UUID]) -> dict[UUID, Row]:

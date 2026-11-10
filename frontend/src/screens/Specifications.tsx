@@ -71,7 +71,7 @@ export function SpecificationsTab({
             title: 'No specifications yet',
             text: 'Create the first product specification.',
           }}
-          total={(data) => data.specifications.length}
+          count={(data) => data.specifications.length}
           rows={(data) =>
             data.specifications.filter(
               (s) =>

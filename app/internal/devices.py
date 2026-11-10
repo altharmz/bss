@@ -16,6 +16,7 @@ from app.api.common import utc
 from app.api.deps import Tx
 from app.api.errors import bad_request, not_found, unprocessable
 from app.api.inventory import product_href
+from app.api.listing import page_response, parse_page, split_page
 from app.api.tmfjson import TmfJSONResponse
 from app.network import device
 from app.ordering.devices import asked
@@ -44,9 +45,7 @@ def device_body(row: Row) -> dict[str, Any]:
 
 @router.get("")
 def list_devices(request: Request, tx: Tx) -> TmfJSONResponse:
-    for name in request.query_params:
-        if name != "product.id":
-            raise bad_request(f"unknown query parameter {name}")
+    offset, limit = parse_page(request, extra=("product.id",))
     raw = request.query_params.get("product.id")
     if raw is None:
         raise bad_request("product.id is required")
@@ -57,11 +56,9 @@ def list_devices(request: Request, tx: Tx) -> TmfJSONResponse:
     with tx() as conn:
         if products.get_product(conn, product_id) is None:
             raise not_found("product", raw)
-        rows = repo.history(conn, product_id)
+        rows, more = split_page(repo.history(conn, product_id)[offset:], limit)
     items = [device_body(row) for row in rows]
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(len(items)), "X-Result-Count": str(len(items))}
-    )
+    return page_response(request, items, more, offset, limit)
 
 
 @router.get("/check")

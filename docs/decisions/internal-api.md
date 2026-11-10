@@ -12,7 +12,7 @@ Index: [README.md](README.md).
 `app/internal/`, mounted at `/internal/v1`, serves what the admin UI cannot get from the
 TMF APIs without re-implementing billing rules. Ours, not TMF; same conventions as
 `app/api` (TMF `Error` bodies, Decimal-exact Money `{unit, value}`, one transaction per
-request, the injected clock, offset/limit paging with `X-Total-Count`/`X-Result-Count`,
+request, the injected clock, offset/limit paging with `X-Result-Count` and `Link: rel="next"` (no `X-Total-Count` since #312),
 unknown query parameters are a 400), except that **dates are plain business dates**
 (`YYYY-MM-DD` in BILLING_TZ). The contract is `spec/internal/bss-internal.oas.yaml`:
 strict schemas (`additionalProperties: false`), validated for every response in the

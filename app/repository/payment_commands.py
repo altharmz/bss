@@ -151,20 +151,19 @@ def page(
     state: str | None,
     offset: int,
     limit: int,
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     where = (  # noqa: S608 - fixed text, the values are parameters
         " WHERE (%(a)s::uuid IS NULL OR billing_account_id = %(a)s)"
         " AND (%(s)s::text IS NULL OR state = %(s)s)"
     )
-    args = {"a": account_id, "s": state, "off": offset, "lim": limit}
-    total = fetch_one(conn, f"SELECT count(*) AS n FROM payment_command{where}", args)["n"]  # noqa: S608
+    args = {"a": account_id, "s": state, "off": offset, "lim": limit + 1}
     rows = fetch_all(
         conn,
         f"SELECT * FROM payment_command{where} ORDER BY created_at DESC, id"  # noqa: S608
         " LIMIT %(lim)s OFFSET %(off)s",
         args,
     )
-    return rows, total
+    return rows[:limit], len(rows) > limit
 
 
 def auto_candidates(conn: psycopg.Connection) -> list[Row]:

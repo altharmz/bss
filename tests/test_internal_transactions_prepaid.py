@@ -6,7 +6,7 @@ from uuid import UUID
 
 from app.repository import billing
 from tests import apidata
-from tests.apiclient import decimals
+from tests.apiclient import decimals, total
 from tests.test_api_adjust import ADJUST
 from tests.test_api_adjust import post as adjust
 from tests.test_api_transfer import pair
@@ -20,7 +20,7 @@ BASE = "/internal/v1/billingAccount"
 def rows(api, account_id):
     response = api.get(f"{BASE}/{account_id}/transactions?limit=100")
     assert response.status_code == 200, response.text
-    return decimals(response), int(response.headers["X-Total-Count"])
+    return decimals(response), int(total(response, api))
 
 
 def test_every_balance_action_is_a_transaction_and_the_newest_balance_is_the_ledger(api, db_conn):

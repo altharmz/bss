@@ -7,7 +7,7 @@ from decimal import Decimal as D
 
 from app.repository import funding
 from tests import apidata
-from tests.apiclient import decimals
+from tests.apiclient import decimals, total
 from tests.factories import offering, product
 from tests.test_balance_actions import credit, debit, hold, prepaid, reverse, topup, transfer
 from tests.test_number_persistence import assignment, number
@@ -153,7 +153,7 @@ def test_lists_filter_page_and_select(api, db_conn):
     db_conn.commit()
 
     listed = api.get(f"{BASE}/bucket")
-    assert listed.headers["X-Total-Count"] == "2"
+    assert total(listed, api) == "2"
     assert {b["id"] for b in listed.json()} == {str(first.bucket), str(second.bucket)}
     only = api.get(f"{BASE}/bucket?partyAccount.id={second.id}").json()
     assert [b["id"] for b in only] == [str(second.bucket)]
@@ -161,7 +161,7 @@ def test_lists_filter_page_and_select(api, db_conn):
     assert [b["id"] for b in suspended] == [str(second.bucket)]
     assert api.get(f"{BASE}/bucket?partyAccount.id={postpaid['id']}").json() == []
     paged = api.get(f"{BASE}/bucket?offset=1&limit=1")
-    assert paged.headers["X-Result-Count"] == "1" and paged.headers["X-Total-Count"] == "2"
+    assert paged.headers["X-Result-Count"] == "1" and total(paged, api) == "2"
     assert api.get(f"{BASE}/bucket?owner=x").status_code == 400
 
     selected = api.get(f"{BASE}/bucket/{first.bucket}?fields=remainingValue").json()
@@ -170,7 +170,7 @@ def test_lists_filter_page_and_select(api, db_conn):
 
     totals = api.get(f"{BASE}/accumulatedBalance?partyAccount.id={first.id}").json()
     assert [t["id"] for t in totals] == [str(accumulated_id(db_conn, first))]
-    assert api.get(f"{BASE}/accumulatedBalance").headers["X-Total-Count"] == "2"
+    assert total(api.get(f"{BASE}/accumulatedBalance"), api) == "2"
 
 
 def test_unknown_ids_are_404_and_reads_write_nothing(api, db_conn):

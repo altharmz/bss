@@ -71,5 +71,5 @@ def get_payment(conn: psycopg.Connection, payment_id: UUID) -> Row | None:
 
 def list_payments(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(conn, "payment", where=where, offset=offset, limit=limit)

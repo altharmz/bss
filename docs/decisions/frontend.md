@@ -261,7 +261,7 @@ Deviations:
 Built as designed, frontend only.
 Route `/prepaid-commands`, `screens/PrepaidCommands.tsx` (`ui.prepaidCommands`), sidebar item
 after Billing runs with a red `failed` badge from `?state=failedTechnical&limit=1` and
-`X-Total-Count` (`countFailedCommands`; refreshed after a Retry). List: pages of 50 as served,
+one row (`countFailedCommands`; since #312 the badge checks that a row exists, no count; refreshed after a Retry). List: pages of 50 as served,
 state filter, `?account=<id>` chip (`ui.prepaidCommands.accountChip`, removing it rewrites the URL).
 The row opens `ui.prepaidCommands.detail` (every field, `needs_topup` block, Retry
 `ui.prepaidCommands.retry` only for `failedTechnical`, 409 shown). The prepaid KPI area of the card
@@ -368,7 +368,7 @@ section label has the same style as the old "Operations" label. Each section is 
   The sidebar's `financialAccount?limit=1` request goes away. The screen, its route and the
   card's link to it stay as they are.
 - **Orders** is a new item (below). Its count uses `productOrder?limit=1&fields=id`
-  and `X-Total-Count`, like the other lists. A loading or failed count stays blank.
+  and `X-Total-Count`, like the other lists. A loading or failed count stays blank. (No count since #312.)
 - A later global **Bills** list belongs under Billing. It is not part of this change.
 - Tests: the sidebar test asserts the three section labels, the item order per section,
   the Orders count, and that Financial accounts has no count and makes no count request.
@@ -675,8 +675,8 @@ self-hosted (`@fontsource`), no CDN at runtime. Every dependency needs a stated 
   enforces this by hook, the CLAUDE.md rule stands. `settings.json` denies edits under
   `design-ref/`. The format hook runs prettier (in `web-offline`) on edited UI files.
 - **Structure** (`frontend/src/`): `api/` (fetch client: every failure is an `ApiError`
-  whose message is the call, "GET /path → 503 Service Unavailable"; `getPage` requires
-  `X-Total-Count`; `getAll` pages by 100; `useResource` = loading/error/ok + retry, never
+  whose message is the call, "GET /path → 503 Service Unavailable"; `getPage` returns the
+  page and `more` (from `Link: rel="next"`, #312; no total); `getAll` pages by 100 while `more`; `useResource` = loading/error/ok + retry, never
   shows a stale or other key's result), `app/` (router, shell, system context and
   breadcrumbs), `ui/` (tokens, kit, `Table` on CSS grid, the four list states),
   `screens/`, `format/`. **Every list renders through `ListState`**: skeleton (8 rows

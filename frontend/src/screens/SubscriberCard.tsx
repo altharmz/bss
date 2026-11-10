@@ -558,7 +558,7 @@ function Card({
                   text: 'Add an offering from the catalog to start charging.',
                   ...(canAdd ? { action: addButton } : {}),
                 }}
-                total={(data) => data.length}
+                count={(data) => data.length}
                 rows={(data) => data}
                 onResetFilters={() => {}}
               >
@@ -1530,7 +1530,7 @@ function SimpleList<T extends { id: string }>({
       columns={columns}
       errorTitle={errorTitle}
       empty={empty}
-      total={(data) => data.length}
+      count={(data) => data.length}
       rows={(data) => data}
       onResetFilters={() => {}}
     >

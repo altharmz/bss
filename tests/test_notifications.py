@@ -17,6 +17,7 @@ from app.integrations import notify as notify_module
 from app.integrations.notify import adapter as sender
 from app.notify import templates
 from tests import timeline
+from tests.apiclient import total
 from tests.test_api_topup import prepaid
 from tests.test_network_provisioning import stub, world  # noqa: F401 - fixtures
 from tests.test_number_orders import refs  # noqa: F401
@@ -525,7 +526,7 @@ def test_the_message_list_filters_and_fields(api, db_conn):
     } or set(api.get(f"{one['href']}?fields=state,content").json()) >= {"state", "content"}
     assert api.get(f"{MSG}/00000000-0000-4000-8000-000000000000").status_code == 404
     page = api.get(f"{MSG}?limit=1")
-    assert page.headers["X-Total-Count"] == "2" and len(page.json()) == 1
+    assert total(page, api) == "2" and len(page.json()) == 1
 
 
 def test_a_message_can_be_cancelled_until_it_is_sent(api, db_conn):

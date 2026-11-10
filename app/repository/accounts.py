@@ -23,7 +23,7 @@ def get_financial(conn: psycopg.Connection, uid: UUID, *, lock: bool = False) ->
 
 def page_financial(
     conn: psycopg.Connection, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(conn, FINANCIAL, where=where, offset=offset, limit=limit)
 
 
@@ -57,7 +57,7 @@ def get_party_account(
 
 def page_party_accounts(
     conn: psycopg.Connection, kind: str, *, where: dict[str, Any], offset: int, limit: int
-) -> tuple[list[Row], int]:
+) -> tuple[list[Row], bool]:
     return select_page(
         conn, "party_account", where={**where, "kind": kind}, offset=offset, limit=limit
     )

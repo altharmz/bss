@@ -127,8 +127,8 @@ def list_refunds(request: Request, tx: Tx) -> TmfJSONResponse:
         attributes=ATTRIBUTES,
     )
     with tx() as conn:
-        rows, total = refunds.page(conn, where=query.where, offset=query.offset, limit=query.limit)
-    return listing.list_response([refund_body(r) for r in rows], total, query)
+        rows, more = refunds.page(conn, where=query.where, offset=query.offset, limit=query.limit)
+    return listing.list_response([refund_body(r) for r in rows], more, query)
 
 
 @router.get("/refund/{refund_id}")

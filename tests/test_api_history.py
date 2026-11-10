@@ -9,6 +9,7 @@ import pytest
 
 from app.events.types import EVENT_TYPES
 from tests import apidata
+from tests.apiclient import total
 from tests.test_api_adjust import ADJUST
 from tests.test_api_adjust import post as adjust
 from tests.test_api_reserve import RESERVE
@@ -43,7 +44,7 @@ def test_history_lists_every_action_once_with_its_id(api, db_conn):
     assert len(ids) == len(set(ids)) == 6
     rows = db_conn.execute("SELECT id::text FROM balance_action").fetchall()
     assert sorted(ids) == sorted(r[0] for r in rows)
-    assert listed.headers["X-Total-Count"] == "6"
+    assert total(listed, api) == "6"
     by_id = {e["id"]: e for e in entries}
     for action, kind in (
         (first, "TopupBalance"),
@@ -70,7 +71,7 @@ def test_history_filters_pages_and_selects_fields(api, db_conn):
     adjust(api, acc, 5)
     reserve(api, acc, 3)
     page = api.get(HISTORY, params={"limit": 2})
-    assert len(page.json()) == 2 and page.headers["X-Total-Count"] == "3"
+    assert len(page.json()) == 2 and total(page, api) == "3"
     rest = api.get(HISTORY, params={"limit": 2, "offset": 2})
     assert len(rest.json()) == 1
     assert {e["id"] for e in page.json() + rest.json()} == {

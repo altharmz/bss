@@ -173,9 +173,9 @@ def list_buckets(request: Request, tx: Tx, clock: ClockDep) -> TmfJSONResponse:
     query = listing.parse_list_query(request, filters=FILTERS, attributes=BUCKET_ATTRIBUTES)
     today = clock.today()
     with tx() as conn:
-        rows, total = repo.page(conn, query.where, query.offset, query.limit)
+        rows, more = repo.page(conn, query.where, query.offset, query.limit)
         bodies = [bucket_body(conn, row, today) for row in rows]
-    return listing.list_response(bodies, total, query)
+    return listing.list_response(bodies, more, query)
 
 
 @router.get("/bucket/{bucket_id}")
@@ -201,9 +201,9 @@ def list_accumulated_balances(request: Request, tx: Tx, clock: ClockDep) -> TmfJ
     )
     today = clock.today()
     with tx() as conn:
-        rows, total = repo.page(conn, query.where, query.offset, query.limit)
+        rows, more = repo.page(conn, query.where, query.offset, query.limit)
         bodies = [accumulated_body(conn, row, today) for row in rows]
-    return listing.list_response(bodies, total, query)
+    return listing.list_response(bodies, more, query)
 
 
 @router.get("/accumulatedBalance/{balance_id}")

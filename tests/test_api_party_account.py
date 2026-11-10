@@ -5,6 +5,7 @@ import pytest
 from psycopg import errors
 
 from tests import apidata
+from tests.apiclient import total
 from tests.apidata import NIL
 from tests.test_api_financial_account import FINANCIAL, financial, link, owner
 
@@ -174,7 +175,7 @@ def test_validation(api, resource, typ):
         ({"contact": "x"}, 422),
     ]:
         assert api.patch(acc["href"], body).status_code == status, body
-    assert api.get(f"{url}?relatedParty.id={person['id']}").headers["X-Total-Count"] == "1"
+    assert total(api.get(f"{url}?relatedParty.id={person['id']}"), api) == "1"
     assert api.get(f"{url}?state=Active").json() == []
     assert len(api.get(f"{url}?accountType=Wholesale&name=Partner%20payouts").json()) == 1
     assert api.get(f"{url}?accountType=Wholesale&name=x").json() == []

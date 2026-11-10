@@ -106,7 +106,7 @@ function FinancialTab({ tabs }: { tabs: React.ReactNode }) {
             title: 'No financial accounts yet',
             text: 'Create one, then link billing accounts to it in the subscriber Edit form.',
           }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) => data}
           onResetFilters={() => {}}
         >
@@ -276,7 +276,7 @@ function PartyTab({ kind, tabs }: { kind: PartyAccountKind; tabs: React.ReactNod
             title: `No ${word} accounts yet`,
             text: `Create one with + New ${word} account.`,
           }}
-          total={(data) => data.length}
+          count={(data) => data.length}
           rows={(data) => data}
           onResetFilters={() => {}}
         >

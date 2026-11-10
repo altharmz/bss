@@ -17,7 +17,7 @@ from app.api.common import money, parse_id
 from app.api.deps import ClockDep, Tx
 from app.api.errors import TmfError, bad_request, not_found, unprocessable
 from app.api.inventory import order_href, product_href
-from app.api.listing import parse_page
+from app.api.listing import page_response, parse_page, split_page
 from app.api.tmfjson import TmfJSONResponse
 from app.billing import entitlement, lifecycle
 from app.billing.core import compute, cycle_period, price_at, product_charge_period
@@ -107,10 +107,10 @@ def _first_cycle_day_from(day: date, cycle_day: int) -> date:
     return period.start if period.start == day else period.end
 
 
-def _page(items: list[dict[str, Any]], total: int) -> TmfJSONResponse:
-    return TmfJSONResponse(
-        items, headers={"X-Total-Count": str(total), "X-Result-Count": str(len(items))}
-    )
+def _page(
+    request: Request, items: list[dict[str, Any]], more: bool, offset: int, limit: int
+) -> TmfJSONResponse:
+    return page_response(request, items, more, offset, limit)
 
 
 @router.get("/{account_id}/firstCharge")
@@ -450,14 +450,15 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
     pendingTerminate, suspended), oldest start first. `price` is the recurring price in
     the account's currency valid today, or on the start date for a product that has not
     started; null if there is none. `undoableStatusChange` is an applied status change
-    today whose completed order can still be cancelled; null otherwise."""
-    _params(request)
+    today whose completed order can still be cancelled; null otherwise. Paged with
+    offset/limit like every list (#312)."""
+    offset, limit = parse_page(request)
     tz = ZoneInfo(settings.billing_tz)
     today = clock.today()
     with tx() as conn:
         row = _account(conn, account_id)
         account = _core_account(row)
-        rows = products.list_open_products(conn, row["id"], today)
+        rows, more = split_page(products.list_open_products(conn, row["id"], today)[offset:], limit)
         prepaid_views = (
             {p["id"]: entitlement.view(conn, p, row, today) for p in rows}
             if row["rating_type"] == "prepaid"
@@ -553,7 +554,7 @@ def open_products(account_id: str, request: Request, tx: Tx, clock: ClockDep) ->
                 ),
             }
         )
-    return _page(items, len(items))
+    return _page(request, items, more, offset, limit)
 
 
 @router.get("/{account_id}/settlement")
@@ -592,7 +593,7 @@ def charges(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
     offset, limit = parse_page(request)
     with tx() as conn:
         row = _account(conn, account_id)
-        rows, total = billing.page_account_charges(conn, row["id"], offset=offset, limit=limit)
+        rows, more = billing.page_account_charges(conn, row["id"], offset=offset, limit=limit)
         periods = {}
         for a in rows:
             if a["product_id"] is None:
@@ -634,7 +635,7 @@ def charges(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
                 },
             }
         )
-    return _page(items, total)
+    return _page(request, items, more, offset, limit)
 
 
 def _transaction_href(t: Row) -> str:
@@ -653,7 +654,7 @@ def transactions(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
     offset, limit = parse_page(request)
     with tx() as conn:
         row = _account(conn, account_id)
-        rows, total = billing.page_account_transactions(
+        rows, more = billing.page_account_transactions(
             conn, row["id"], tz=settings.billing_tz, offset=offset, limit=limit
         )
     currency = row["currency"]
@@ -672,4 +673,4 @@ def transactions(account_id: str, request: Request, tx: Tx) -> TmfJSONResponse:
         }
         for t in rows
     ]
-    return _page(items, total)
+    return _page(request, items, more, offset, limit)
