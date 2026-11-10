@@ -1,4 +1,15 @@
+# ruff: noqa: E402 - PROMETHEUS_MULTIPROC_DIR must be set before the imports below
 import os
+import tempfile
+
+# app/metrics.py counts in Prometheus multiprocess mode (#288). Each test process (xdist
+# worker) gets its own directory, set before anything imports prometheus_client, so one
+# process's counters never show up in another's scrape. Once per process: a second import
+# of this file (as tests.conftest) must not move the directory under the open metrics.
+if os.environ.get("BSS_PROMETHEUS_PID") != str(os.getpid()):
+    os.environ["PROMETHEUS_MULTIPROC_DIR"] = tempfile.mkdtemp(prefix="bss-prometheus-")
+    os.environ["BSS_PROMETHEUS_PID"] = str(os.getpid())
+
 import time
 from collections.abc import Iterator
 from functools import cache
@@ -242,9 +253,6 @@ def api(db_conn, migrated_db_url, monkeypatch):
     monkeypatch.setattr(settings, "database_url", migrated_db_url)
     monkeypatch.setattr(settings, "app_env", "test")
     monkeypatch.setattr(settings, "bss_service_secret", "test-service-credential")
-    from app.internal.users import _attempts
-
-    _attempts.clear()
     install_test_user(db_conn)
     app.dependency_overrides[get_clock] = lambda: clock
     # Inside `with`, the client keeps one event-loop thread for all its requests; without

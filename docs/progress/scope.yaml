@@ -24,6 +24,7 @@ items:
   - {id: db.prepaid_lifecycle_setting, area: db, stage: 5, table: prepaid_lifecycle_setting, title: "The prepaid lifecycle durations: grace, suspension, number aging and the pay-as-you-go zero-balance trigger"}
   - {id: db.account_review, area: db, stage: 5, table: account_review, title: "Prepaid accounts whose money or products changed since the worker last evaluated them (trigger-written)"}
   - {id: db.account_review_sweep, area: db, stage: 5, table: account_review_sweep, title: "The business date and settings of the last full sweep of the per-account prepaid passes"}
+  - {id: db.sign_in_attempt, area: db, stage: 5, table: sign_in_attempt, title: "Sign-in attempts of the last minute, shared by every app process (the throttle)"}
   - {id: db.log_setting, area: db, stage: 5, table: log_setting, title: "The runtime log level: base level and the expiry of a temporary DEBUG"}
   - {id: db.log_setting_change, area: db, stage: 5, table: log_setting_change, title: "Append-only audit of log level changes: who, before, after, when"}
   - {id: db.prepaid_lifecycle_event, area: db, stage: 5, table: prepaid_lifecycle_event, title: "The lifecycle transitions the worker took or tried per product and business date"}

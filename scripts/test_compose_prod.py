@@ -65,6 +65,25 @@ class ComposeProd(unittest.TestCase):
     def test_mcp(self):
         self.assertEqual(networks_of("mcp"), {"bss-edge": ["bss-mcp"]})
 
+    def test_limits_and_processes_default_to_the_current_values(self):
+        """#288: limits and process counts come from the environment, with today's values as
+        defaults, so the current VPS keeps exactly what it runs."""
+        text = TEXT
+        for expected in (
+            "cpus: ${APP_CPUS:-0.50}",
+            "mem_limit: ${APP_MEM:-384m}",
+            "memswap_limit: ${APP_MEM:-384m}",
+            "cpus: ${WORKER_CPUS:-0.25}",
+            "mem_limit: ${WORKER_MEM:-256m}",
+            "memswap_limit: ${WORKER_MEM:-256m}",
+            "cpus: ${MCP_CPUS:-0.25}",
+            "mem_limit: ${MCP_MEM:-192m}",
+            "memswap_limit: ${MCP_MEM:-192m}",
+            "WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}",
+            "DB_POOL_SIZE: ${DB_POOL_SIZE:-10}",
+        ):
+            self.assertIn(expected, text)
+
     def test_worker(self):
         self.assertEqual(networks_of("worker"), {"bss-db": []})
 

@@ -1059,3 +1059,18 @@ allocates `amount + taxAmount`, which `totalAmount` (if sent) must equal
   `::test_post_future_product_with_end_and_cancel`.
   Negative proof (review C): restoring unconditional cancellation of unstarted products
   makes the after-start delete case fail (`cancelled` instead of `created`); reverted.
+
+## List paging and filters (2026-11-09, #286)
+
+- **`X-Total-Count` stays exact** (TMF630; the UI requires it). It is kept cheap by indexes,
+  and for productUsage by requiring a line (docs/decisions/usage.md), not by estimates.
+- **Offset paging stays** (`offset` / `limit`). Every list pages `ORDER BY created_at, id`,
+  served by a `(created_at, id)` index on each table that grows with subscribers
+  (migration 0070). The catalog stays small and has none.
+- **Typed filters.** `select_page` compares each value with the column's own type, so the
+  filter indexes apply. A string for an enum column is checked against the enum's labels
+  (loaded once per process). One that is no label answers an empty page with
+  `X-Total-Count: 0` and no query, as before ("an unknown value matches nothing").
+- **Filter indexes by rule:** a reference (`*_id`) filter without an index gets a btree, as
+  does a name filter; status/state filters get none (low selectivity). Each list's filters
+  and the index serving them are listed in the PR of #286.

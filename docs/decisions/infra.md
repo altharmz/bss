@@ -565,3 +565,24 @@ dedicated VPS on 2026-11-09. How to use it: [loadtest.md](../loadtest.md).
 - **The generator reads the database, never writes domain rows directly.** It uses SQL only
   to find what an interrupted day already created, and for its own `loadtest_config` and
   `loadtest_progress` tables.
+
+## App processes and pools (2026-11-09, #288)
+
+- **Processes.** `WEB_CONCURRENCY`, uvicorn's own variable, sets the number of app
+  processes. The runtime image no longer passes `--workers 1`. `compose.prod.yaml` sets
+  `WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}`, so the current VPS keeps one. The load-test
+  overlay runs 4.
+- **Pools.** Every process has its own pool of `DB_POOL_SIZE` connections (default 10; the
+  load test uses 15). Rule: `WEB_CONCURRENCY x DB_POOL_SIZE + 1 + BILLING_PROCESSES + 3 <=
+  max_connections`. The 1 is the worker's connection and the 3 cover pg_dump, a migration
+  and a superuser session.
+- **Limits from the environment** in `compose.prod.yaml`, today's values as defaults:
+  `APP_CPUS` / `APP_MEM` (0.50 / 384m), `WORKER_CPUS` / `WORKER_MEM` (0.25 / 256m),
+  `MCP_CPUS` / `MCP_MEM` (0.25 / 192m).
+- **Nothing assumes one process.**
+  - The sign-in throttle moved to the database (`sign_in_attempt`; keys, limits and
+    messages unchanged).
+  - Metrics run in Prometheus multiprocess mode, always (`docs/operations.md`, "Metrics").
+  - What stays per process, accepted: the DB pools, the log-level poller (one cheap query
+    every 15 s), the metrics database collector's 30 s cache, and the in-memory stub
+    adapters (deterministic per call).

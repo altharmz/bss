@@ -57,6 +57,7 @@ One usage record from the network feed (TMF635 ProductUsage): data, voice or SMS
 | `usage_record_network_record_id_key` | `CREATE UNIQUE INDEX usage_record_network_record_id_key ON usage_record USING btree (network_record_id)` | yes |
 | `usage_record_pkey` | `CREATE UNIQUE INDEX usage_record_pkey ON usage_record USING btree (id)` | yes |
 | `usage_record_product_date_idx` | `CREATE INDEX usage_record_product_date_idx ON usage_record USING btree (product_id, event_date)` | no |
+| `usage_record_product_event_idx` | `CREATE INDEX usage_record_product_event_idx ON usage_record USING btree (product_id, event_at DESC, id)` | no |
 | `usage_record_product_idx` | `CREATE INDEX usage_record_product_idx ON usage_record USING btree (product_id, event_at)` | no |
 
 ## Referenced by

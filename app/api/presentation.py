@@ -94,7 +94,11 @@ def resource_body(row, resource):
 
 
 def structure_body(conn, uid):
-    pref = repo.preferences(conn, uid)
+    return structure_from(repo.preferences(conn, uid))
+
+
+def structure_from(pref):
+    """A bill structure from an account's preferences (repo.preferences / preferences_of)."""
     body = {}
     if pref["format"]:
         f = pref["format"]

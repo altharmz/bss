@@ -142,3 +142,13 @@ line barred. Internal `GET /internal/v1/usage/summary` carries `payAsYouGo` for 
   lowers the balance the same way but leaves the bill open until a payment arrives (the ledger
   is right either way).
 - TMF635 PATCH, export jobs and hub stay out (usage.md above).
+
+## productUsage lists need a line (2026-11-09, #286)
+
+A deliberate deviation from TMF635, approved by the human for the load-test programme.
+`GET /productUsage` without `product.id` or `id` is a 400: "productUsage list needs
+product.id or id". A list across every subscriber is not a use case (the UI and MCP always
+list per line), and at 2M records a day counting it would read the whole table. Per line
+it is bounded (about 600 records a month) and served by `usage_record (product_id,
+event_at DESC, id)` (migration 0070). Rejected records have no line; they are read by
+`id`.

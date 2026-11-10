@@ -2,7 +2,7 @@
 
 # Database reference
 
-PostgreSQL schema at Alembic head **0068**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
+PostgreSQL schema at Alembic head **0070**, read from `pg_catalog` of a throwaway database migrated to head (`tests/docs_collect.py`). Descriptions are the tables' and columns' `COMMENT`s (migration `alembic/versions/0005_schema_comments.py`). Migrations live in [`alembic/versions/`](../../alembic/versions/); the schema rules behind them are explained in [domain.md](../domain.md).
 
 | Table | Area | Description |
 |---|---|---|
@@ -87,6 +87,7 @@ PostgreSQL schema at Alembic head **0068**, read from `pg_catalog` of a throwawa
 | [`app_user_audit`](app_user_audit.md) | users | Security changes only: operator, target, action and injected clock; no secrets. |
 | [`log_setting`](log_setting.md) | users | The runtime log level (one row), polled every 15 s by the app, the worker and the MCP connector. Effective level: DEBUG while now < debug_until, else base_level, else the LOG_LEVEL environment value. |
 | [`log_setting_change`](log_setting_change.md) | users | Append-only audit of log_setting changes: who, the level and debug expiry before and after, and when. |
+| [`sign_in_attempt`](sign_in_attempt.md) | users | Sign-in attempts of the last minute, one row per throttle key and attempt (20 a minute per user and address and per address). Rows older than a minute are deleted with each attempt. |
 
 ## Overview
 
@@ -194,6 +195,7 @@ flowchart LR
     app_user_audit[app_user_audit]
     log_setting[log_setting]
     log_setting_change[log_setting_change]
+    sign_in_attempt[sign_in_attempt]
   end
   account_presentation_media -->|"billing_account_id"| billing_account
   account_presentation_media -->|"media_id"| bill_presentation_media
@@ -1673,6 +1675,10 @@ erDiagram
     timestamptz old_debug_until
     timestamptz new_debug_until
     timestamptz changed_at
+  }
+  sign_in_attempt {
+    text key
+    timestamptz at
   }
   app_user ||--o{ app_session : "username"
   app_user ||--o{ app_user_audit : "username"
